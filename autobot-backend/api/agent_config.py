@@ -829,7 +829,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 async def list_specialized_agents(
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """List all AutoBot specialized agents from .claude/agents/ (#1794).
+    """List the host's Claude Code agents from the configured agents dir (#1794).
 
     Returns agent definitions parsed from markdown files including
     name, description, tools, color, model, and category.

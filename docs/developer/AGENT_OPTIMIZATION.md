@@ -3,8 +3,8 @@
 > **Moved (#21718, #21719):** the dev agent definitions this tool optimizes no longer live in
 > this repository. They ship from the `autobot-dev-skills` plugin as 7 role routers
 > (`autobot-dev-skills:<role>`) with their domain content in `engineering`/`review` lens
-> references, so `.claude/agents/` does not exist here and the default `--agent-dir` is empty.
-> The sections below describe the tool as built; paths under `.claude/agents/` refer to the
+> references, so the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) does not exist here and the default `--agent-dir` is empty.
+> The sections below describe the tool as built; paths under the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) refer to the
 > former layout.
 
 ## Overview
@@ -40,7 +40,7 @@ The Agent Optimization system reduces token usage from agent files by **20-30%**
 
 ### Optimization Process
 
-1. **Read original agent** from `.claude/agents/`
+1. **Read original agent** from the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`)
 2. **Extract YAML frontmatter** (preserved completely)
 3. **Strip code blocks** from body:
    ```markdown
@@ -57,15 +57,15 @@ The Agent Optimization system reduces token usage from agent files by **20-30%**
    ```
 
 4. **Preserve all structure** (headers, sections, descriptions)
-5. **Write optimized agent** to `.claude/agents-optimized/`
+5. **Write optimized agent** to `the configured agents directory-optimized/`
 6. **Cache file hash** to skip unchanged files next time
 
 ### Safety Features
 
 **Original Files Protected:**
-- Original agent files in `.claude/agents/` are **READ-ONLY**
+- Original agent files in the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) are **READ-ONLY**
 - Optimization tool has **NO write access** to originals
-- All changes go to separate `.claude/agents-optimized/` directory
+- All changes go to separate `the configured agents directory-optimized/` directory
 - Deleting optimized directory reverts everything
 
 **Validation:**
@@ -124,9 +124,9 @@ This creates a symlink and sets up environment for Claude CLI.
 ========================================
 Agent Optimization Status
 ========================================
-✓ Optimized agents: 23 files in .claude/agents-optimized
-✓ Optimized agents ENABLED via symlink: .claude/agents-active -> agents-optimized
-ℹ CLAUDE_AGENT_DIR is set to: .claude/agents-optimized
+✓ Optimized agents: 23 files in the configured agents directory-optimized
+✓ Optimized agents ENABLED via symlink: the configured agents directory-active -> agents-optimized
+ℹ CLAUDE_AGENT_DIR is set to: the configured agents directory-optimized
 ```
 
 ## Command Reference
@@ -169,7 +169,7 @@ Agent Optimization Status
 
 ```bash
 # Override agent directory for Claude CLI
-export CLAUDE_AGENT_DIR=".claude/agents-optimized"
+export CLAUDE_AGENT_DIR="the configured agents directory-optimized"
 
 # Add to ~/.bashrc or ~/.zshrc for persistence
 echo 'export CLAUDE_AGENT_DIR="$HOME/.config/claude/agents-optimized"' >> ~/.bashrc
@@ -235,7 +235,7 @@ Add to GitHub Actions workflow:
 - name: Optimize Agent Files
   run: |
     ./scripts/utilities/agent-optimize.sh --force
-    git add .claude/agents-optimized/
+    git add the configured agents directory-optimized/
 ```
 
 ### Startup Integration
@@ -262,7 +262,7 @@ fi
 ./scripts/utilities/agent-optimize.sh --status
 
 # Verify symlink
-ls -la .claude/agents-active
+ls -la the configured agents directory-active
 
 # Ensure environment variable is set
 echo $CLAUDE_AGENT_DIR
@@ -281,8 +281,8 @@ echo $CLAUDE_AGENT_DIR
 ./scripts/utilities/agent-optimize.sh --disable
 
 # Compare original vs optimized
-diff .claude/agents/senior-backend-engineer.md \
-     .claude/agents-optimized/senior-backend-engineer.md
+diff the configured agents directory/senior-backend-engineer.md \
+     the configured agents directory-optimized/senior-backend-engineer.md
 
 # If issue persists, report and use originals
 unset CLAUDE_AGENT_DIR
@@ -298,7 +298,7 @@ unset CLAUDE_AGENT_DIR
 ./scripts/utilities/agent-optimize.sh --force
 
 # Or manually clear cache
-rm .claude/agents/.optimization_cache.json
+rm the configured agents directory/.optimization_cache.json
 ```
 
 ## Advanced Usage
@@ -320,7 +320,7 @@ from pathlib import Path
 from optimize_agents import OptimizeOptions, process_agent_files
 
 options = OptimizeOptions(collapse_policy=False, strip_code_blocks=True)
-files = sorted(Path('.claude/agents').glob('*.md'))
+files = sorted(Path('the configured agents directory').glob('*.md'))
 
 # Dry run: reports what would change, writes nothing.
 summary = process_agent_files(files, apply_changes=False, options=options)
@@ -393,10 +393,10 @@ unset CLAUDE_AGENT_DIR
 **Complete Removal:**
 ```bash
 # Remove optimized directory
-rm -rf .claude/agents-optimized
+rm -rf the configured agents directory-optimized
 
 # Remove symlink
-rm -f .claude/agents-active
+rm -f the configured agents directory-active
 
 # Unset environment
 unset CLAUDE_AGENT_DIR
@@ -406,11 +406,11 @@ unset CLAUDE_AGENT_DIR
 
 ```bash
 # Verify originals are intact
-ls -lh .claude/agents/
+ls -lh the configured agents directory/
 
 # Verify no lingering optimized references
 echo $CLAUDE_AGENT_DIR  # Should be empty
-ls -la .claude/agents-active  # Should not exist
+ls -la the configured agents directory-active  # Should not exist
 ```
 
 ## Best Practices

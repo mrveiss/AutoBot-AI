@@ -5,24 +5,25 @@
 """
 Specialized Agent Service (#1794)
 
-Parses .claude/agents/*.md files to surface AutoBot specialized agent
-definitions in the web UI.  Each .md file uses YAML frontmatter
-(name, description, model, color, tools) followed by a markdown system
-prompt.
+Parses the host's Claude Code user-level agent definitions (``*.md``) to
+surface them in the web UI.  The directory comes from SSOT config
+(``claude_agents_dir()``), never from the source tree.  Each
+.md file uses YAML frontmatter (name, description, model, color, tools, and an
+optional ``tier``) followed by a markdown system prompt.  Agents are arbitrary
+user content: a ``tier`` that names an AgentTier wins, any other agent gets
+the classifier's default tier.
 """
 
 from pathlib import Path
 from typing import Any, Dict, List
 
+from agent_tier_classifier import AgentTier, get_agent_tier
+from autobot_shared.claude_config import claude_agents_dir
 from autobot_shared.frontmatter import split_frontmatter, strip_frontmatter
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
-
-# Repository root — two levels up from services/
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_AGENTS_DIR = _REPO_ROOT / ".claude" / "agents"
 
 # Agent categories inferred from name + description keywords.
 _CATEGORY_RULES: List[tuple] = [
@@ -82,7 +83,7 @@ def _categorize_agent(name: str, description: str) -> str:
 def _parse_frontmatter(content: str) -> Dict[str, Any]:
     """Parse YAML frontmatter from an agent .md file (#1794).
 
-    Supports: name, description, model, color, tools (comma-separated).
+    Supports: name, description, model, color, tier, tools (comma-separated).
     """
     result: Dict[str, Any] = {
         "name": "",
@@ -90,6 +91,7 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
         "tools": [],
         "color": "gray",
         "model": None,
+        "tier": None,
     }
 
     raw, _ = split_frontmatter(content)
@@ -113,8 +115,17 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
             result["color"] = value
         elif key == "model":
             result["model"] = value
+        elif key == "tier":
+            result["tier"] = value
 
     return result
+
+
+def _resolve_tier(stem: str, declared: str | None) -> str:
+    """Tier value for an agent: a valid declared ``tier``, else the classifier default."""
+    if declared and declared in {t.value for t in AgentTier}:
+        return declared
+    return get_agent_tier(stem).value
 
 
 def _extract_system_prompt_excerpt(content: str, max_chars: int = 300) -> str:
@@ -126,10 +137,10 @@ def _extract_system_prompt_excerpt(content: str, max_chars: int = 300) -> str:
 
 
 class SpecializedAgentService:
-    """Read-only service that discovers AutoBot specialized agents (#1794)."""
+    """Read-only service that discovers the host's Claude Code agents (#1794)."""
 
     def __init__(self, agents_dir: Path | None = None) -> None:
-        self.agents_dir = agents_dir or _AGENTS_DIR
+        self.agents_dir = agents_dir or claude_agents_dir()
 
     # ------------------------------------------------------------------
     # Public API
@@ -195,7 +206,8 @@ class SpecializedAgentService:
             "color": frontmatter["color"],
             "tools": frontmatter["tools"],
             "category": _categorize_agent(name, description),
-            "source_file": str(md_file.relative_to(_REPO_ROOT)),
+            "source_file": md_file.name,
+            "tier": _resolve_tier(md_file.stem, frontmatter["tier"]),
             "type": "specialized",
             "excerpt": _extract_system_prompt_excerpt(content),
         }

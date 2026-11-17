@@ -3,8 +3,8 @@
 > **Moved (#21718, #21719):** the dev agent definitions this tool optimizes no longer live in
 > this repository. They ship from the `autobot-dev-skills` plugin as 7 role routers
 > (`autobot-dev-skills:<role>`) with their domain content in `engineering`/`review` lens
-> references, so `.claude/agents/` does not exist here and the default `--agent-dir` is empty.
-> The sections below describe the tool as built; paths under `.claude/agents/` refer to the
+> references, so the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) does not exist here and the default `--agent-dir` is empty.
+> The sections below describe the tool as built; paths under the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) refer to the
 > former layout.
 
 ## Overview
@@ -50,7 +50,7 @@ Average Reduction:      39.3%
 
 **Safety Guarantees:**
 - Dry run by default: the Python tool writes only with `--apply` (the `agent-optimize.sh` wrapper passes it); writes are atomic and keep the file mode (#15580)
-- With `--apply` the agent files in `.claude/agents/` are rewritten **in place**; there is no separate output directory
+- With `--apply` the agent files in the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`) are rewritten **in place**; there is no separate output directory
 - With `--git-backup` (the wrapper passes it) the pre-write state is tagged `agents-pre-optimization-<timestamp>` and the rewrite is committed, scoped to the agent files only
 - Reversible through git: `--restore [TAG]` restores the agent files from a backup tag (latest by default)
 
@@ -109,14 +109,14 @@ Total savings:          138,065 bytes (39.3%)
 ./scripts/utilities/agent-optimize.sh --status
 
 # Compare the rewrite with the pre-write backup tag
-git diff "$(git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -1)" -- .claude/agents/
+git diff "$(git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -1)" -- the configured agents directory/
 ```
 
 ## Technical Details
 
 ### Optimization Process
 
-1. **Read Original Agent** from `.claude/agents/`
+1. **Read Original Agent** from the configured Claude Code agents directory (`AUTOBOT_CLAUDE_CONFIG_DIR`, default `~/the configured agents directory`)
 2. **Parse YAML Frontmatter** (preserved completely)
 3. **Identify Code Blocks** via regex pattern ````...```
 4. **Replace Code Blocks** with preservation markers:
@@ -147,7 +147,7 @@ git diff "$(git tag --list 'agents-pre-optimization-*' --sort=-creatordate | hea
 ./scripts/utilities/agent-optimize.sh --force
 
 # Manual cache clear
-rm .claude/agents/.optimization_cache.json
+rm the configured agents directory/.optimization_cache.json
 ```
 
 ## Safety and Reversibility

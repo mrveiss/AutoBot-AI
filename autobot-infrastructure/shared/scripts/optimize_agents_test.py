@@ -6,7 +6,7 @@ This is the ONLY optimize_agents test (#14873): the older class-based ``AgentOpt
 module was merged into ``optimize_agents.py`` and its useful cases live at the end of this
 file (code-block stripping, front matter, cache, statistics, git backup).
 
-``optimize_agents.py`` rewrites hand-written ``.claude/agents/*.md`` files in
+``optimize_agents.py`` rewrites hand-written Claude Code agent ``*.md`` files in
 place with no preview and no ``--dry-run`` before this issue. The guard this
 suite exists for: :func:`process_agent_files` with ``apply_changes=False``
 must perform **zero writes** — every fixture file's mtime and content must be
@@ -22,6 +22,7 @@ import subprocess
 import sys
 
 import pytest
+
 from autobot_shared.paths import scrubbed_git_env
 
 _MODULE_PATH = pathlib.Path(__file__).with_name("optimize_agents.py")
@@ -65,7 +66,7 @@ optimize_agents = _load_module()
 
 @pytest.fixture
 def agent_dir(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A scratch ``.claude/agents``-shaped directory — never the real tree."""
+    """A scratch agents directory — never the real tree."""
     directory = tmp_path / "agents"
     directory.mkdir()
     (directory / "needs-change.md").write_text(_FIXTURE_WITH_SECTION, encoding="utf-8")
@@ -180,11 +181,39 @@ def test_empty_directory_is_loud_not_silent():
     # files) — covered by test_main_errors_on_empty_agent_dir below.
 
 
+def _use_agents_dir(monkeypatch: pytest.MonkeyPatch, directory: pathlib.Path) -> None:
+    """Point the configured Claude Code agents dir (SSOT) at a scratch directory."""
+    monkeypatch.setattr(optimize_agents, "claude_agents_dir", lambda: directory)
+
+
+def test_default_agents_dir_comes_from_ssot_not_the_source_tree(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys):
+    """With no --agent-dir the tool reads the configured dir and rewrites nothing in a dry run."""
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    (agents / "a.md").write_text(_FIXTURE_WITH_SECTION, encoding="utf-8")
+    _use_agents_dir(monkeypatch, agents)
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py"])
+    assert optimize_agents.main() == 0
+    assert (agents / "a.md").read_text(encoding="utf-8") == _FIXTURE_WITH_SECTION
+    assert "a.md" in capsys.readouterr().out
+
+
+def test_agent_dir_flag_overrides_the_configured_dir(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    configured = tmp_path / "configured"
+    configured.mkdir()  # empty: reading it would fail with exit 1
+    chosen = tmp_path / "chosen"
+    chosen.mkdir()
+    (chosen / "a.md").write_text(_FIXTURE_WITH_SECTION, encoding="utf-8")
+    _use_agents_dir(monkeypatch, configured)
+    monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--agent-dir", str(chosen)])
+    assert optimize_agents.main() == 0
+
+
 def test_main_errors_on_empty_agent_dir(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys):
     """main() must exit non-zero and print an explicit error, never a quiet 0."""
-    empty_agents_dir = tmp_path / ".claude" / "agents"
+    empty_agents_dir = tmp_path / "agents"
     empty_agents_dir.mkdir(parents=True)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: tmp_path)
+    _use_agents_dir(monkeypatch, tmp_path / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py"])
 
     exit_code = optimize_agents.main()
@@ -339,10 +368,10 @@ def test_cache_from_other_options_is_not_trusted(tmp_path: pathlib.Path):
 
 
 def test_main_cache_is_written_only_on_apply(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys):
-    agents = tmp_path / ".claude" / "agents"
+    agents = tmp_path / "agents"
     agents.mkdir(parents=True)
     (agents / "a.md").write_text(_FIXTURE_WITH_SECTION, encoding="utf-8")
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: tmp_path)
+    _use_agents_dir(monkeypatch, tmp_path / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--cache", "--stats"])
     assert optimize_agents.main() == 0
     assert not (agents / ".optimization_cache.json").exists()
@@ -353,7 +382,7 @@ def test_main_cache_is_written_only_on_apply(tmp_path: pathlib.Path, monkeypatch
 
 
 def _git_repo(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
-    agents = tmp_path / ".claude" / "agents"
+    agents = tmp_path / "agents"
     agents.mkdir(parents=True)
     (agents / "a.md").write_text(_CODE_DOC, encoding="utf-8")
     for cmd in (
@@ -371,7 +400,7 @@ def _git_repo(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 
 def test_git_backup_tags_commits_and_restores(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys):
     root, agents = _git_repo(tmp_path)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     args = ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks", "--no-collapse-policy"]
     monkeypatch.setattr(sys, "argv", args)
     assert optimize_agents.main() == 0
@@ -392,7 +421,7 @@ def test_git_backup_tags_commits_and_restores(tmp_path: pathlib.Path, monkeypatc
 
 def test_apply_without_git_backup_makes_no_tag_or_commit(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     root, _ = _git_repo(tmp_path)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     assert optimize_agents._backup_tags(root) == []
@@ -402,7 +431,7 @@ def test_apply_without_git_backup_makes_no_tag_or_commit(tmp_path: pathlib.Path,
 
 def test_git_backup_dry_run_makes_no_tag(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     root, _ = _git_repo(tmp_path)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--git-backup", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     assert optimize_agents._backup_tags(root) == []
@@ -410,7 +439,7 @@ def test_git_backup_dry_run_makes_no_tag(tmp_path: pathlib.Path, monkeypatch: py
 
 def test_restore_without_any_backup_tag_fails_loudly(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     root, _ = _git_repo(tmp_path)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--restore"])
     assert optimize_agents.main() == 1
 
@@ -432,11 +461,11 @@ def test_git_backup_commit_is_scoped_to_the_agent_files(tmp_path: pathlib.Path, 
     root, _ = _git_repo(tmp_path)
     (root / "unrelated.txt").write_text("staged elsewhere\n", encoding="utf-8")
     _git_out(root, "add", "unrelated.txt")
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--cache", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     committed = _git_out(root, "show", "--name-only", "--format=", "HEAD").split()
-    assert committed == [".claude/agents/a.md"]
+    assert committed == ["agents/a.md"]
     assert "A  unrelated.txt" in _git_out(root, "status", "--porcelain")  # still staged, not swept in
 
 
@@ -445,7 +474,7 @@ def test_a_rejected_commit_returns_1_and_names_the_backup_tag(tmp_path: pathlib.
     hook = root / ".git" / "hooks" / "pre-commit"
     hook.write_text("#!/bin/sh\necho rejected-by-hook >&2\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
     assert optimize_agents.main() == 1
     tag = optimize_agents._backup_tags(root)[0]
@@ -455,7 +484,7 @@ def test_a_rejected_commit_returns_1_and_names_the_backup_tag(tmp_path: pathlib.
 
 def test_a_failed_backup_tag_returns_1_before_writing(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, caplog):
     root, agents = _git_repo(tmp_path)
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     real_git = optimize_agents._git
 
     def failing_tag(r, *args, check=True):
@@ -515,7 +544,7 @@ def test_git_backup_refuses_when_the_agent_dir_has_uncommitted_changes(
     root, agents = _git_repo(tmp_path)
     dirty = _CODE_DOC + "\nuncommitted edit\n"
     (agents / "a.md").write_text(dirty, encoding="utf-8")
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
     assert optimize_agents.main() == 1
     assert optimize_agents._backup_tags(root) == []
@@ -526,7 +555,7 @@ def test_git_backup_refuses_when_the_agent_dir_has_uncommitted_changes(
 def test_contrast_an_untracked_run_cache_does_not_block_the_backup(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     root, agents = _git_repo(tmp_path)
     (agents / optimize_agents._CACHE_FILENAME).write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(optimize_agents, "project_root", lambda: root)
+    _use_agents_dir(monkeypatch, root / "agents")
     monkeypatch.setattr(sys, "argv", ["optimize_agents.py", "--apply", "--git-backup", "--strip-code-blocks"])
     assert optimize_agents.main() == 0
     assert len(optimize_agents._backup_tags(root)) == 1

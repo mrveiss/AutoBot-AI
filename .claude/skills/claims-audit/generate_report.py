@@ -230,7 +230,8 @@ def generate_report(inventory: Dict[str, Any]) -> str:
             "claude /claims-audit",
             "```\n",
             "The `/claims-audit` skill at "
-            "[`.claude/skills/claims-audit/SKILL.md`](../.claude/skills/claims-audit/SKILL.md):",
+            "[`autobot-backend/skills/builtin/claims_audit/SKILL.md`]"
+            "(../autobot-backend/skills/builtin/claims_audit/SKILL.md):",
             "1. Walks `README.md`, `docs/` for capability claims",
             "2. For each claim, greps for endpoint declarations, test files, and Docker service definitions",
             "3. Writes `docs/verification.md` and `docs/verification-inventory.json` with current status",

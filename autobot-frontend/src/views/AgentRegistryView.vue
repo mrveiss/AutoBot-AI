@@ -7,7 +7,7 @@
  * AgentRegistryView — Agent Registry dashboard (#1794, #1822)
  *
  * Three-tab view: Backend Agents (AutoBot workers), Specialized Agents
- * (parsed from .claude/agents/*.md files), and Settings (runtime config).
+ * (the host's Claude Code agent definitions), and Settings (runtime config).
  */
 
 import { ref, onMounted, computed } from 'vue'
@@ -399,6 +399,9 @@ onMounted(async () => {
               <div class="flex flex-wrap gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 capitalize">
                   {{ selectedAgent.category }}
+                </span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary">
+                  {{ selectedAgent.tier }}
                 </span>
                 <span v-for="tool in selectedAgent.tools" :key="tool"
                   class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"

@@ -17223,7 +17223,7 @@ export interface paths {
         };
         /**
          * List Specialized Agents
-         * @description List all AutoBot specialized agents from .claude/agents/ (#1794).
+         * @description List the host's Claude Code agents from the configured agents dir (#1794).
          *
          *     Returns agent definitions parsed from markdown files including
          *     name, description, tools, color, model, and category.

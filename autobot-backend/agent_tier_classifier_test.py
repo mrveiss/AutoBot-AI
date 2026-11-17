@@ -42,6 +42,7 @@ from agent_tier_classifier import AGENT_TIER_MAP
 _BACKEND_ROOT = Path(__file__).resolve().parent
 _AGENT_TYPES_FILE = _BACKEND_ROOT / "agents" / "agent_orchestration" / "types.py"
 
+
 def _agent_orchestration_type_values() -> set[str]:
     """AgentType's string values, loaded without importing the ``agents`` package."""
     name = "_agent_orchestration_types_isolated"

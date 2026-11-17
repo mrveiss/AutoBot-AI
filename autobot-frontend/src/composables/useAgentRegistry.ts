@@ -45,6 +45,7 @@ export interface SpecializedAgent {
   color: string
   tools: string[]
   category: string
+  tier: string
   source_file: string
   excerpt: string
   system_prompt?: string

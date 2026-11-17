@@ -188,7 +188,7 @@ grep for `sarif|partialFingerprints`, which found nothing. Also unread: `.semgre
 | `review-fleet/SKILL.md` (skills repo) | Phase 2: replace "drop" with the closure-state enum; add a Coverage section; extend the finding JSON (A1–A3) |
 | `.claude/skills/secreview/SKILL.md` | Closure states, coverage rows, the four diff-scope rules, per-family sweep checklists (A1, A2, A4, A5) |
 | `gap-audit/SKILL.md` (skills repo) | Repo-wide family sweep in place of the same-directory glob; one issue listing every instance (A5) |
-| `.claude/skills/bugfix/SKILL.md`, `implement` plugin skill | Ordered security-fix gates with withhold (A6) |
+| `autobot-backend/skills/builtin/bugfix/SKILL.md`, `implement` plugin skill | Ordered security-fix gates with withhold (A6) |
 | `docs/developer/CLAUDE_REVIEW.md` | Point to the closure states and the schema; no duplicate rule text (A1, A3) |
 | `.github/workflows/security.yml`, `ai-security-review.yml` | Bandit SARIF upload; fingerprinted LLM findings (A7) |
 

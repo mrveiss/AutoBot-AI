@@ -328,8 +328,8 @@ def mock_redis_client():
 
 ## Next Steps After Tests Pass
 
-1. ✅ Run code review (Task 4.1): Use `code-reviewer` agent
-2. ⏳ Run performance tests (Task 4.3): Use `performance-engineer` agent
+1. ✅ Run code review (Task 4.1): Use `code reviewer` agent
+2. ⏳ Run performance tests (Task 4.3): Use `performance engineer` agent
 3. ⏳ Generate coverage report: `pytest --cov-report=html`
 4. ⏳ Add to CI/CD: GitHub Actions workflow
 5. ⏳ Document coverage gaps: Create follow-up issues if needed

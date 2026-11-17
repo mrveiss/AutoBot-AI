@@ -303,7 +303,6 @@ EXEMPT: dict[str, str] = {
 #: path -> occurrences permitted today. **This may only SHRINK.**
 #: No address appears here by design -- see the module docstring.
 BASELINE: dict[str, int] = {
-    ".claude/skills/bugfix/SKILL.md": 3,
     "CHANGELOG.md": 11,
     "autobot-backend/README.md": 1,
     "autobot-backend/resources/prompts/chat/installation_help.md": 1,

@@ -5,7 +5,7 @@
 # Agent Optimization Wrapper Script - In-Place Edition
 #
 # Provides easy access to agent optimization functionality with git-based backup.
-# Optimizes .claude/agents/ in-place using git for version control and rollback.
+# Optimizes the agents directory in-place using git for version control and rollback.
 #
 # Usage:
 #   ./scripts/utilities/agent-optimize.sh [OPTIONS]
@@ -36,7 +36,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 # Paths
-AGENT_DIR="$PROJECT_ROOT/.claude/agents"
+# The host's Claude Code user-level agents dir, same resolution as autobot_shared.claude_config.claude_agents_dir()
+AGENT_DIR="${AUTOBOT_CLAUDE_CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}/agents"
 OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"
 
 # Functions
@@ -154,7 +155,7 @@ show_status() {
     echo ""
     print_info "Git status of agents directory:"
     cd "$PROJECT_ROOT"
-    git status --short .claude/agents/ || print_info "No changes"
+    git -C "$AGENT_DIR" status --short . || print_info "No changes"
 
     # Show recent backup tags
     echo ""
@@ -213,12 +214,12 @@ EXAMPLES:
 
 HOW IT WORKS:
     1. Creates timestamped git tag before optimization
-    2. Optimizes .claude/agents/ files in-place
+    2. Optimizes $AGENT_DIR/ files in-place
     3. Commits optimized files to git with statistics
     4. Fully reversible via git restore
 
 NOTES:
-    - Agents are optimized IN-PLACE in .claude/agents/
+    - Agents are optimized IN-PLACE in $AGENT_DIR/
     - Git tags provide backup and rollback capability
     - Original files preserved in git history
     - Cache prevents unnecessary reprocessing
