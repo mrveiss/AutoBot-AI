@@ -243,12 +243,6 @@ route:autobot-backend/api/knowledge_audit.py:GET /compliance-summary
 route:autobot-backend/api/knowledge_audit.py:GET /permission-changes
 route:autobot-backend/api/knowledge_audit.py:GET /user-activity
 route:autobot-backend/api/knowledge_audit.py:POST /compliance-report
-route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /{upload_id}
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /expired
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /limits
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /{upload_id}
-route:autobot-backend/api/knowledge_chunked_upload.py:POST /{upload_id}/complete
-route:autobot-backend/api/knowledge_chunked_upload.py:PUT /{upload_id}/chunks
 route:autobot-backend/api/knowledge_claude_memory.py:POST /import_claude_memory
 route:autobot-backend/api/knowledge_collections.py:GET /collections
 route:autobot-backend/api/knowledge_collections.py:POST /collections

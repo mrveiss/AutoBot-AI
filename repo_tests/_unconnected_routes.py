@@ -65,6 +65,7 @@ from types import ModuleType
 from repo_tests._unconnected_app_mounts import app_mounts
 from repo_tests._unconnected_clients import client_calls
 from repo_tests._unconnected_common import Tree
+from repo_tests._unconnected_helper_calls import helper_calls, reached_by_helper
 from repo_tests._unconnected_mounts import package_mounts
 
 from tools.lint._comment_syntax import code_lines
@@ -280,6 +281,12 @@ def _reached(mod: ModuleType, rel: str, cands: tuple[str, ...], index: _CallerIn
     return False
 
 
+def _reached_by_helper(rel: str, method: str, cands: tuple[str, ...], helpers) -> bool:
+    """The method-aware callers (#21307); a route whose first segment is a parameter is never reached by shape."""
+    mounted = tuple(c for c in cands if not _leads_with_parameter(c))
+    return reached_by_helper(rel, method, mounted, helpers, _toggle_api)
+
+
 def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str]:
     """Route keys ``"<file>:<METHOD> <raw path>"`` that no caller and no declared prefix reaches."""
     callers: dict[str, set[str]] = {}
@@ -291,11 +298,12 @@ def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str
     for path, files in client_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS).items():
         callers.setdefault(path, set()).update(files)
     index = _CallerIndex(callers)
+    helpers = helper_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS)
     out: set[str] = set()
     for rel, method, raw, cands in route_sites(tree, audit) if sites is None else sites:
         if any(c.startswith(audit.external) or ("/api" + c).startswith(audit.external) for c in cands):
             continue
-        if not _reached(audit.mod, rel, cands, index):
+        if not _reached(audit.mod, rel, cands, index) and not _reached_by_helper(rel, method, cands, helpers):
             out.add(f"{rel}:{method} {raw}")
     return sorted(out)
 

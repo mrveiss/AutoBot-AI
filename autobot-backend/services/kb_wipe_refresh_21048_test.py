@@ -39,7 +39,9 @@ def _session(pending):
 def _admins(*ids):
     session = MagicMock()
     result = MagicMock()
-    result.scalars.return_value.all.return_value = list(ids)
+    result.scalars.return_value.all.return_value = [
+        types.SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in ids
+    ]
     session.execute = AsyncMock(return_value=result)
     return session
 
