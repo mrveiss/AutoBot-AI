@@ -27,13 +27,14 @@ export interface Page<T> {
  */
 export class PartialListError<T> extends Error {
   readonly items: T[]
-  readonly total: number
+  /** What the server reported, or null when it reported none. */
+  readonly total: number | null
   /** Why the page could not be read, as text. */
   readonly reason: string
 
-  constructor(items: T[], total: number, cause: unknown) {
+  constructor(items: T[], total: number | null, cause: unknown) {
     const reason = cause instanceof Error ? cause.message : String(cause)
-    super(`Loaded ${items.length} of ${total}: ${reason}`)
+    super(`Loaded ${items.length} of ${total ?? 'an unknown number'}: ${reason}`)
     this.name = 'PartialListError'
     this.items = items
     this.total = total
@@ -41,27 +42,35 @@ export class PartialListError<T> extends Error {
   }
 }
 
+/** A runaway guard: 1000 pages of 100 is far beyond any fleet, and ends a server that never stops answering. */
+export const MAX_PAGES = 1000
+
 /**
  * Collect all pages, one request each, never above `perPage` items. A failure on the first page is
  * rethrown as is (nothing was read); a failure on a later page throws `PartialListError`.
+ *
+ * A missing or non-finite `total` means "unknown", not "none": paging then continues until an empty or
+ * short page, so a response without a total can never truncate the list after page 1.
  */
 export async function fetchAllPages<T>(
   getPage: (params: PageParams) => Promise<Page<T>>,
   perPage: number = MAX_PAGE_SIZE,
 ): Promise<T[]> {
+  const size = Math.min(perPage, MAX_PAGE_SIZE)
   const items: T[] = []
-  let total = Number.POSITIVE_INFINITY
-  for (let page = 1; items.length < total; page++) {
+  let total: number | null = null
+  for (let page = 1; page <= MAX_PAGES && (total === null || items.length < total); page++) {
     let result: Page<T>
     try {
-      result = await getPage({ page, per_page: Math.min(perPage, MAX_PAGE_SIZE) })
+      result = await getPage({ page, per_page: size })
     } catch (err) {
       if (page === 1) throw err
       throw new PartialListError(items, total, err)
     }
-    total = result.total
+    total = Number.isFinite(result.total) ? result.total : null
     if (result.items.length === 0) break // rows were removed while paging: nothing more to read
     items.push(...result.items)
+    if (total === null && result.items.length < size) break // unknown total: a short page is the last
   }
   return items
 }

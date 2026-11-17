@@ -7,7 +7,7 @@
 // through one fetch, with no request above the ceiling and a visible signal when a page could not be read.
 
 import { describe, it, expect, vi } from 'vitest'
-import { fetchAllPages, MAX_PAGE_SIZE, PartialListError } from './fetchAllPages'
+import { fetchAllPages, MAX_PAGE_SIZE, MAX_PAGES, PartialListError } from './fetchAllPages'
 import type { PageParams } from './fetchAllPages'
 
 /** A server holding `total` rows, answering any page window, recording every request. */
@@ -72,5 +72,51 @@ describe('fetchAllPages (#21584)', () => {
     })
     expect(await fetchAllPages(getPage, 2)).toEqual(['a', 'b'])
     expect(calls).toBe(2)
+  })
+})
+
+describe('fetchAllPages with no usable total (#21584)', () => {
+  /** A server whose responses carry the given `total` value, whatever it is. */
+  function noTotal(rowCount: number, total: unknown) {
+    const rows = Array.from({ length: rowCount }, (_, i) => i + 1)
+    const requests: PageParams[] = []
+    const getPage = async (params: PageParams) => {
+      requests.push(params)
+      const start = (params.page - 1) * params.per_page
+      return { items: rows.slice(start, start + params.per_page), total: total as number }
+    }
+    return { rows, requests, getPage }
+  }
+
+  it.each([undefined, Number.NaN, Number.POSITIVE_INFINITY, null])('a total of %s does not stop after page 1', async (total) => {
+    const s = noTotal(250, total)
+    expect(await fetchAllPages(s.getPage)).toEqual(s.rows)
+    expect(s.requests.map((r) => r.page)).toEqual([1, 2, 3])
+    expect(s.requests.every((r) => r.per_page <= MAX_PAGE_SIZE)).toBe(true)
+  })
+
+  it('an unknown total with an exact multiple of the page size ends on the empty page', async () => {
+    const s = noTotal(200, undefined)
+    expect(await fetchAllPages(s.getPage)).toHaveLength(200)
+    expect(s.requests).toHaveLength(3)
+  })
+
+  it('a server that never stops answering is cut off by the page guard', async () => {
+    const getPage = vi.fn(async () => ({ items: [1], total: undefined as unknown as number }))
+    const all = await fetchAllPages(getPage, 1)
+    expect(all).toHaveLength(MAX_PAGES)
+    expect(getPage).toHaveBeenCalledTimes(MAX_PAGES)
+  })
+
+  it('a later page that fails with an unknown total still reports what was read', async () => {
+    let n = 0
+    const getPage = async () => {
+      if (++n === 2) throw new Error('504')
+      return { items: Array.from({ length: 100 }, (_, i) => i), total: undefined as unknown as number }
+    }
+    const err = (await fetchAllPages(getPage).catch((e: unknown) => e)) as PartialListError<number>
+    expect(err).toBeInstanceOf(PartialListError)
+    expect(err.items).toHaveLength(100)
+    expect(err.total).toBeNull()
   })
 })
