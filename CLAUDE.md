@@ -108,8 +108,9 @@ it in the ledger first) — see the global worktree-mandate exception.
 ## Issue Filing
 
 Search open **and** closed issues (`gh issue list --search "<query>" --state all`) before
-filing — no duplicates. Scrub external vendor/product names from filed content (see the
-`/autobot-dev-skills:lifecycle research-to-issues` skill, run by the `autobot-dev-skills:researcher` agent). Link children to their umbrella with native GitHub relationships,
+filing — no duplicates. Scrub external vendor/product names from filed content; the
+`/autobot-dev-skills:lifecycle research-to-issues` skill, run by the `autobot-dev-skills:researcher`
+agent, does this. Link children to their umbrella with native GitHub relationships,
 not just the `- [ ]` checklist — full commands in [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md).
 
 ## Essential Patterns

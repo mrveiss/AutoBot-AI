@@ -5,29 +5,20 @@
 """
 Guard test for AGENT_TIER_MAP roster drift (#14194).
 
-AGENT_TIER_MAP (agent_tier_classifier.py) classifies TWO independent agent
-rosters for vLLM prefix-cache tiering, and neither roster can see the other:
-
-  1. Claude Code dev subagents -- formerly one ``.claude/agents/*.md`` file per
-     agent. Those definitions now ship from the ``autobot-dev-skills`` plugin
-     (#21718), so this repo can no longer enumerate them; their names are the
-     frozen ``_PLUGIN_DEV_SUBAGENT_NAMES`` below.
-  2. AutoBot's own internal task-agent taxonomy -- ``AgentType`` in
-     ``agents/agent_orchestration/types.py``, dispatched at runtime by
-     ``BaseModalityAgent`` subclasses (``agents/*_agent.py``) and the
-     orchestrator/workflow templates via
-     ``LLMService.chat_optimized(agent_type=...)``.
+AGENT_TIER_MAP (agent_tier_classifier.py) classifies AutoBot's internal
+task-agent taxonomy -- ``AgentType`` in ``agents/agent_orchestration/types.py``,
+dispatched at runtime by ``BaseModalityAgent`` subclasses
+(``agents/*_agent.py``) and the orchestrator/workflow templates via
+``LLMService.chat_optimized(agent_type=...)`` -- for vLLM prefix-cache tiering.
 
 An agent_type absent from AGENT_TIER_MAP does not error -- get_agent_tier()
 silently defaults it to TIER_1_DEFAULT (see agent_tier_classifier.py). This
-test makes that silent default loud in both directions: a roster member with
-no AGENT_TIER_MAP entry, and an AGENT_TIER_MAP entry with no roster member
-(a dead/orphan entry).
+test makes that silent default loud in both directions: an AgentType member
+with no AGENT_TIER_MAP entry, and an AGENT_TIER_MAP entry with no AgentType
+member (a dead/orphan entry).
 
-Both rosters are read here WITHOUT going through agent_tier_classifier or the
-``agents`` package:
-
-- ``AgentType`` via ``importlib.util.spec_from_file_location``, loading
+``AgentType`` is read here WITHOUT going through agent_tier_classifier or the
+``agents`` package: ``importlib.util.spec_from_file_location`` loads
   ``types.py`` in isolation. ``agents/__init__.py`` eagerly imports
   ``kb_librarian_agent`` (which imports ``services.llm_service``), and
   ``agents/agent_orchestration/__init__.py`` eagerly imports the distributed
@@ -38,7 +29,7 @@ Both rosters are read here WITHOUT going through agent_tier_classifier or the
   (``agent_tier_classifier`` is imported from inside
   ``services/llm_service.py``).
 
-get_agent_tier() normalizes '_' -> '-' before lookup, so both rosters are
+get_agent_tier() normalizes '_' -> '-' before lookup, so AgentType values are
 compared here in dash form to match AGENT_TIER_MAP's own key convention.
 """
 
@@ -49,42 +40,7 @@ from pathlib import Path
 from agent_tier_classifier import AGENT_TIER_MAP
 
 _BACKEND_ROOT = Path(__file__).resolve().parent
-_REPO_ROOT = _BACKEND_ROOT.parent
 _AGENT_TYPES_FILE = _BACKEND_ROOT / "agents" / "agent_orchestration" / "types.py"
-
-#: Dev-subagent names that AGENT_TIER_MAP still carries after the definitions moved to
-#: the ``autobot-dev-skills`` plugin (#21718). Frozen: the roster is no longer in this repo,
-#: so a new dev subagent cannot be detected here. Retiring these map entries is tracked
-#: with the agent-registry source (#21719).
-_PLUGIN_DEV_SUBAGENT_NAMES = frozenset(
-    {
-        "ai-ml-engineer",
-        "code-refactorer",
-        "code-reviewer",
-        "code-skeptic",
-        "content-writer",
-        "conversation-compacter",
-        "database-engineer",
-        "devops-engineer",
-        "documentation-engineer",
-        "frontend-designer",
-        "frontend-engineer",
-        "memory-curator",
-        "memory-monitor",
-        "multimodal-engineer",
-        "performance-engineer",
-        "prd-writer",
-        "project-manager",
-        "project-task-planner",
-        "repo-sweeper",
-        "research-to-issues",
-        "security-auditor",
-        "senior-backend-engineer",
-        "systems-architect",
-        "testing-engineer",
-    }
-)
-
 
 def _agent_orchestration_type_values() -> set[str]:
     """AgentType's string values, loaded without importing the ``agents`` package."""
@@ -134,15 +90,13 @@ def test_every_agent_orchestration_type_is_mapped():
 
 
 def test_agent_tier_map_has_no_orphan_entries():
-    """Every AGENT_TIER_MAP key traces to one of the two known rosters (#14194).
+    """Every AGENT_TIER_MAP key is an AgentType member (#14194).
 
-    Direction 2 (mapped, no definition anywhere): a dead entry -- the agent
-    was renamed or removed and AGENT_TIER_MAP was never updated.
+    Direction 2 (mapped, no definition): a dead entry -- the agent was renamed
+    or removed and AGENT_TIER_MAP was never updated.
     """
-    known_roster = _PLUGIN_DEV_SUBAGENT_NAMES | _agent_orchestration_type_values()
-    orphans = set(AGENT_TIER_MAP) - known_roster
+    orphans = set(AGENT_TIER_MAP) - _agent_orchestration_type_values()
     assert not orphans, (
-        f"AGENT_TIER_MAP entries with no matching dev-subagent name or "
-        f"AgentType member: {sorted(orphans)}. Remove the dead entry, or restore the "
-        "missing agent definition / AgentType member if it still exists elsewhere."
+        f"AGENT_TIER_MAP entries with no matching AgentType member: {sorted(orphans)}. "
+        "Remove the dead entry, or restore the AgentType member if it still exists."
     )
