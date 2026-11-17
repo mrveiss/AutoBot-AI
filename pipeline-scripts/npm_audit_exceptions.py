@@ -55,10 +55,27 @@ class AdvisoryException:
 #: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
 #: reminder to look again before 2026-11-14.
 #:
-#: The table is EMPTY by design when nothing is currently unfixable. GHSA-vfj7-8cjw-p6xm
-#: (braces, owner decision 2026-10-03, #13400) was retired once upstream stopped reporting
-#: it (2026-10-23): the stale-record check above is what demanded its removal.
-ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {}
+#: The table is EMPTY when nothing is currently unfixable, and the tests never depend on a real
+#: entry. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
+#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded
+#: its removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-18, #21736) is the
+#: current entry; it also covers the report-only SLM frontend lockfile (#17864), which reads
+#: this same table.
+ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
+    "GHSA-fc5q-39xc-vjpf": AdvisoryException(
+        expires="2026-12-18",
+        reason=(
+            "picomatch <= 4.0.7 ReDoS through single-branch repeated extglobs, with no patched "
+            "version (npm latest is 4.0.7; upstream fix PRs are open and unmerged), so no bump "
+            "or override exists. Reached through glob matching in build and dev tooling (vite, "
+            "vitest, vue-tsc, stylelint via micromatch, storybook, npm-run-all2). The lockfile "
+            "marks the vue-router, tinyglobby and unplugin-utils copies as non-dev because "
+            "vue-router declares them; no autobot-frontend source file imports picomatch, and "
+            "that those copies reach the browser bundle is not established. Owner decision "
+            "2026-11-18, recorded on #21736."
+        ),
+    ),
+}
 
 
 _LOWER_BOUND = re.compile(r">=?\s*(\d+(?:\.\d+)*)")
