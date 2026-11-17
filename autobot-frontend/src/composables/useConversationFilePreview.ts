@@ -53,6 +53,7 @@ export interface PreviewDeps {
     get: <T>(url: string) => Promise<T>
     rawRequest: (url: string, init: { method: string }) => Promise<Response>
   }
+  conversationApi: () => string
   currentSessionId: () => string
   files: Ref<PreviewFile[]>
   error: Ref<string | null>
@@ -69,7 +70,7 @@ export interface PreviewDeps {
 async function openAuthenticatedPreview(deps: PreviewDeps, fileId: string, shownType: string, isCurrent: () => boolean): Promise<void> {
   const tab = window.open('', '_blank')
   try {
-    const response = await deps.api.rawRequest(`${getApiBase()}/conversation-files/conversation/${deps.currentSessionId()}/download/${fileId}`, { method: 'GET' })
+    const response = await deps.api.rawRequest(`${deps.conversationApi()}/download/${fileId}`, { method: 'GET' })
     const blob = new Blob([await response.blob()], { type: shownType })
     if (!isCurrent()) {
       tab?.close()
