@@ -116,17 +116,14 @@ class ConfigRevisionService:
         revision that captures the rollback action.
         """
         target = await self._get_or_raise(revision_id)
-        await asyncio.to_thread(apply_snapshot, target.entity_type, target.entity_id, target.after_config or {})
-        current = await self._get_latest(target.entity_type, target.entity_id)
-
-        new_revision = await self.create_revision(
-            entity_type=target.entity_type,
-            entity_id=target.entity_id,
-            before_config=current.after_config if current else None,
-            after_config=target.after_config or {},
-            source="rollback",
-            created_by=created_by,
+        await asyncio.to_thread(
+            apply_snapshot,
+            target.entity_type,
+            target.entity_id,
+            target.after_config or {},
+            target.before_config,
         )
+        new_revision = await self._record_applied_rollback(target, revision_id, created_by)
         logger.info(
             "Rolled back %s/%s to revision %s (new revision %s)",
             target.entity_type,
@@ -135,6 +132,28 @@ class ConfigRevisionService:
             new_revision.id,
         )
         return new_revision
+
+    async def _record_applied_rollback(self, target: ConfigRevision, revision_id: uuid.UUID, created_by: str):
+        """Record a rollback whose snapshot is already live; a failed write is logged, then raised."""
+        try:
+            current = await self._get_latest(target.entity_type, target.entity_id)
+            return await self.create_revision(
+                entity_type=target.entity_type,
+                entity_id=target.entity_id,
+                before_config=current.after_config if current else None,
+                after_config=target.after_config or {},
+                source="rollback",
+                created_by=created_by,
+            )
+        except Exception:
+            logger.error(
+                "Rollback of %s/%s to revision %s was applied live but its audit row was not written",
+                target.entity_type,
+                target.entity_id,
+                revision_id,
+                exc_info=True,
+            )
+            raise
 
     # -- Read ----------------------------------------------------------
 

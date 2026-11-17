@@ -274,7 +274,11 @@ class HookRegistry:
 
     @staticmethod
     def _plugin_is_inactive(plugin_name: str | None) -> bool:
-        """True when the owning plugin is known and disabled, unloaded or errored (#19302)."""
+        """True when the owning plugin is known and disabled, unloaded or errored (#19302).
+
+        LOADED plugins still fire: the backend load route never calls ``enable()``.
+        Strict "only ENABLED" gating (#19302 AC1) awaits an owner decision.
+        """
         plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
         return plugin is not None and plugin.status in _INACTIVE_STATUSES
 

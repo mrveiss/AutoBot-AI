@@ -85,6 +85,7 @@ def test_agent_rollback_changes_the_live_agent_config(monkeypatch):
         set_nested=lambda k, v: calls.__setitem__(k, v),
         save_settings=lambda: calls.__setitem__("saved", True),
     )
+    fake.get_nested = lambda k, d=None: d
     monkeypatch.setattr(config_pkg, "config_manager", fake)
     monkeypatch.setattr(config_rollback.ConfigService, "clear_cache", lambda: None)
     from api.agent_config import DEFAULT_AGENT_CONFIGS
@@ -117,3 +118,46 @@ async def test_failed_apply_records_no_rollback_row(monkeypatch):
     with pytest.raises(UnsupportedRollbackTarget):
         await svc.rollback_to_revision(uuid.uuid4(), "tester")
     assert created == []
+
+
+def test_partial_snapshot_leaves_untouched_live_sections_intact(live):
+    live.config["other"] = {"keep": 1}
+    apply_snapshot("system", "settings", {"llm": {"model": "old"}})
+    cfg = live.get_full_config()
+    assert cfg["other"] == {"keep": 1}
+    assert cfg["llm"] == {"model": "old", "api_key": _LIVE}
+
+
+def test_only_keys_the_revision_changed_are_restored(live):
+    live.config["other"] = {"keep": "later-edit"}
+    before = {"llm": {"model": "a"}, "other": {"keep": "x"}}
+    after = {"llm": {"model": "old"}, "other": {"keep": "x"}}
+    apply_snapshot("system", "hardware_priority", after, before)
+    cfg = live.get_full_config()
+    assert cfg["llm"]["model"] == "old"
+    assert cfg["other"] == {"keep": "later-edit"}
+
+
+def test_keep_live_secrets_recurses_into_lists():
+    snap = {"hosts": [{"name": "a", "pw": REDACTED_PLACEHOLDER}]}
+    live = {"hosts": [{"name": "a", "pw": "live-pw"}]}  # pragma: allowlist secret
+    assert keep_live_secrets(snap, live) == {"hosts": [{"name": "a", "pw": "live-pw"}]}  # pragma: allowlist secret
+
+
+def test_agent_write_failure_restores_prior_values(monkeypatch):
+    import config as config_pkg
+    from api.agent_config import DEFAULT_AGENT_CONFIGS
+
+    agent = next(iter(DEFAULT_AGENT_CONFIGS))
+    store = {f"agents.{agent}.model": "old-model"}
+
+    def _set(k, v):
+        if k.endswith(".enabled"):
+            raise RuntimeError("boom")
+        store[k] = v
+
+    fake = SimpleNamespace(get_nested=lambda k, d=None: store.get(k, d), set_nested=_set, save_settings=lambda: None)
+    monkeypatch.setattr(config_pkg, "config_manager", fake)
+    with pytest.raises(RuntimeError):
+        apply_snapshot("agent", agent, {"model": "m2", "enabled": False})
+    assert store == {f"agents.{agent}.model": "old-model"}

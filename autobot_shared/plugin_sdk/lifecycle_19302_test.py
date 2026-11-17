@@ -96,3 +96,13 @@ async def test_reload_runs_changed_code_and_keeps_grants(loader_and_manifest):
     assert await _fire() == ["v2"]
     assert CapabilityChecker().get_granted_capabilities(manifest.name) == [PluginCapability.NETWORK_OUTBOUND]
     assert PluginRegistry().get_plugin(manifest.name).status == PluginStatus.ENABLED
+
+
+@pytest.mark.asyncio
+async def test_failed_reload_keeps_the_old_module_importable(loader_and_manifest):
+    loader, manifest, mod = loader_and_manifest
+    await loader.load_plugin(manifest)
+    old = sys.modules[manifest.entry_point]
+    await asyncio.to_thread(mod.write_text, "raise RuntimeError('broken')\n", encoding="utf-8")
+    assert not await loader.reload_plugin(manifest.name)
+    assert sys.modules[manifest.entry_point] is old

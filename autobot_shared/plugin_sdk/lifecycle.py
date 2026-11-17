@@ -29,10 +29,14 @@ def reverse_registrations(plugin_name: str) -> None:
     CapabilityChecker().revoke_capabilities(plugin_name)
 
 
-def forget_module(entry_point: str) -> None:
-    """Drop the plugin module (and its submodules) so the next import reads new code."""
-    for mod in [m for m in sys.modules if m == entry_point or m.startswith(entry_point + ".")]:
-        del sys.modules[mod]
+def _own_modules(entry_point: str) -> list[str]:
+    """The plugin's entry module and the modules beneath it; never its shared parent packages."""
+    return [m for m in sys.modules if m == entry_point or m.startswith(entry_point + ".")]
+
+
+def forget_module(entry_point: str) -> dict:
+    """Drop the plugin's own modules so the next import reads new code; return them for restore."""
+    return {m: sys.modules.pop(m) for m in _own_modules(entry_point)}
 
 
 async def reload_with_fresh_code(loader: "PluginLoader", plugin: BasePlugin) -> bool:
@@ -47,9 +51,10 @@ async def reload_with_fresh_code(loader: "PluginLoader", plugin: BasePlugin) -> 
     grants = CapabilityChecker().get_granted_capabilities(manifest.name)
     if not await loader.unload_plugin(manifest.name):
         return False
-    forget_module(manifest.entry_point)
+    old_modules = forget_module(manifest.entry_point)
     reloaded = await loader.load_plugin(manifest, config)
     if reloaded is None:
+        sys.modules.update(old_modules)  # keep the working code importable when the new load failed
         return False
     if grants:
         CapabilityChecker().grant_capabilities(manifest.name, grants)
