@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.api._common import http_refusal
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import assert_company_access
 from llc.models.template import (
     LLCTemplateSearchResponse,

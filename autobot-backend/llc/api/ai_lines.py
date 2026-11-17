@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.ai_lines import DEFAULT_LINE, SCOPE_COMPANY, SCOPE_USER, AiLine, LineScope
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import assert_company_access, get_session
 from llc.services.ai_lines import normalise_key
 from services.ai_line_change_action import register_ai_line_change_action
@@ -35,7 +36,7 @@ from services.ai_line_change_proposal import propose_line_change
 from services.ai_line_view import describe_lines
 from user_management.services import TenantContext
 
-from ._common import actor_id, http_refusal
+from ._common import actor_id
 
 router = APIRouter(prefix="/ai-lines", tags=["llc-ai-lines"])
 register_ai_line_change_action()  # the handler exists before any approval can name it

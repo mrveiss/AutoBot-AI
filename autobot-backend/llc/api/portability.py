@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.api._common import http_refusal
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import assert_company_access
 from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError

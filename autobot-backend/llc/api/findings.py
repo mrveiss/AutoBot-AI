@@ -19,8 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
-from llc.api._common import actor_id, http_refusal
+from llc.api._common import actor_id
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from llc.models.finding_proposal import LLCFindingProposal
