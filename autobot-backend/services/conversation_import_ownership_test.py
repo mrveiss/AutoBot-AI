@@ -73,9 +73,8 @@ def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = Fa
     manager = AsyncMock()
     manager.save_session = AsyncMock()
     manager.record_exists = exists
-    # `_session_exists` calls load_session and treats a non-empty message list
-    # as "exists" — mocking anything else makes every conflict test skip the
-    # branch it is meant to exercise.
+    # Existence comes from the stored record (`session_file_exists`, answered by the `stored_record`
+    # fixture from `record_exists`), not from the messages; `load_session` only matters for `empty`.
     manager.load_session = AsyncMock(
         return_value=[{"role": "user", "content": "existing"}] if exists and not empty else []
     )
@@ -190,9 +189,13 @@ async def test_a_merge_import_is_refused_when_the_owner_is_unreadable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session() -> None:
+async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session(monkeypatch) -> None:
     manager = _manager()
-    manager.load_session = AsyncMock(side_effect=OSError("disk gone"))
+
+    async def _gone(manager, session_id):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr(conversation_export, "session_file_exists", _gone)
 
     with pytest.raises(OSError):
         await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
@@ -280,4 +283,4 @@ async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_o
 
     assert refused.value.status_code == 404
     manager.save_session.assert_not_awaited()
-    assert await manager.get_session_owner("sess-abc") == "alice"
+    manager.set_session_owner.assert_not_called()
