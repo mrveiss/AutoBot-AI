@@ -104,3 +104,11 @@ def test_navigate_keeps_its_role_forbiddance_and_verifier_coverage():
     from orchestration.agent_registry import DEFAULT_FORBIDDEN_TOOLS
 
     assert "navigate" in SENSITIVE_TOOLS and "navigate" in DEFAULT_FORBIDDEN_TOOLS
+
+
+def test_a_work_item_can_still_ask_for_approval_before_navigating():
+    """The ruling lifts the baseline floor and the unset-line hold, not a work item's own declared gate (#17237)."""
+    msg, filed = run_guard(
+        {"name": "navigate", "params": {"url": "https://example.test"}}, _ctx(["browser actions"]), []
+    )
+    assert msg is not None and msg.type == "approval_required" and filed == 1

@@ -39,9 +39,7 @@ INJECTABLE_DESPITE_SENSITIVE: "dict[str, str]" = {}
 #: Tools plane 2 calls sensitive that plane 1 does not gate. Same rule.
 SANDBOX_SENSITIVE_UNGATED: "dict[str, str]" = {}
 #: Plane-1 tools reachable through no plane-3 approval category. Same rule.
-UNCATEGORISED_SENSITIVE: "dict[str, str]" = {
-    "navigate": "owner ruling 2026-11-17 (#17237): always available, so no approval category; roles and the verifier keep it",
-}
+UNCATEGORISED_SENSITIVE: "dict[str, str]" = {}
 
 
 def _policy():

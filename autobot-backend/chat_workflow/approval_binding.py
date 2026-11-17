@@ -42,6 +42,23 @@ def calls_summary(calls: Sequence[Mapping[str, Any]]) -> str:
     return f"{text} (+{len(calls) - 1} more)" if len(calls) > 1 else text
 
 
+def approval_card(state: Mapping[str, Any], shown: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """The interrupt payload the chat UI renders: every shown call, and a one-line command for a non-shell tool."""
+    pending, calls = shown[0], ai_line_calls_shown(shown)
+    return {
+        "type": "command_approval_request",
+        "content": pending.get("description", ""),
+        "metadata": {
+            "command": pending.get("command") or calls_summary(calls),  # #19957: a non-command tool has none
+            "host": pending.get("host", ""),
+            "risk_level": pending.get("risk_level", "medium"),
+            "session_id": state["session_id"],
+            "terminal_session_id": state["terminal_session_id"],
+            "calls": calls,
+        },
+    }
+
+
 def bind_decision(decision: Any, shown: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """The decision to keep in state: the client's yes/no, bound to the fingerprints of ``shown``."""
     answer = decision if isinstance(decision, Mapping) else {}

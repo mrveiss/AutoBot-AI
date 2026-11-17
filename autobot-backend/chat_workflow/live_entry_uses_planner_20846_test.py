@@ -87,6 +87,8 @@ async def _drive(manager):
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", _two_passes),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
+            # The harness scripts the inline model seam; the plan-only path (the gate default) calls another one.
+            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", False),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
         ):
             return [

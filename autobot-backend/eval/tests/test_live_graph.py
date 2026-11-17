@@ -120,6 +120,8 @@ async def _drive(script, workspace_root, graph_raises=False):
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", passes),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
+            # The harness scripts the inline model seam; the plan-only path (the gate default) calls another one.
+            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", False),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
             patch("chat_workflow.get_chat_workflow_manager", lambda: manager),
             patch("chat_workflow.graph.delete_thread_checkpoints", spy_delete),
@@ -220,7 +222,7 @@ async def test_a_session_id_the_eval_made_is_accepted_by_its_own_delete_guard():
 
 
 async def test_a_denied_approval_ends_the_turn_and_runs_no_tool():
-    """Chat's resume supports a terminal deny: the denied branch of execute_tools skips every call."""
+    """A deny runs none of the shown calls; the model is told they were refused and the turn goes on (#19957)."""
     state = {
         "session_id": "eval-g-1",
         "tool_calls": [{"name": "navigate", "params": {"url": "x"}, "needs_approval": True}],
@@ -230,8 +232,8 @@ async def test_a_denied_approval_ends_the_turn_and_runs_no_tool():
     }
     with patch.object(graph_module, "dispatch_approved_calls", AsyncMock(side_effect=AssertionError("ran a tool"))):
         update = await graph_module.execute_tools(state, {"configurable": {"manager": object()}})
-    assert update["should_continue"] is False and "execution_history" not in update
-    assert graph_module.route_after_execution({**state, **update}) == "persist_conversation"
+    assert update["should_continue"] is True and [r["status"] for r in update["execution_history"]] == ["refused"]
+    assert graph_module.route_after_execution({**state, **update}) == "generate_response"
 
 
 async def test_a_graph_that_raised_and_fell_back_to_legacy_is_not_run_and_is_still_cleaned_up(tmp_path):

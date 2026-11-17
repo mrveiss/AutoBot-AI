@@ -78,14 +78,11 @@ CODE_EXEC_TOOLS = ("code_interpreter",)
 # #18294: owner decision 2026-10-11 -- every mutating tool is gated by a category.
 PROCESS_EXEC_TOOLS = ("run_shell", "start_process", "stop_process", "manage_service")
 DATA_WRITE_TOOLS = ("set_redis_value", "insert_database")
-BROWSER_ACTION_TOOLS = ("click", "fill", "select", "evaluate")
-#: Owner ruling 2026-11-17 (#17237): navigate is always available. It loads a page and submits nothing, so it has no
-#: approval category and an unset line does not hold it. It stays a STATE effect below (the page later calls act on).
-BROWSER_NAVIGATION_TOOLS = ("navigate",)
+BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
 #: #18430: browser tools that only observe the page (and hover), and the index-addressed form of the actions.
 BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
 BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
-BROWSER_TOOLS = BROWSER_NAVIGATION_TOOLS + BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
+BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
@@ -108,14 +105,14 @@ SENSITIVE_TOOLS = frozenset(
     + CODE_EXEC_TOOLS
     + PROCESS_EXEC_TOOLS
     + DATA_WRITE_TOOLS
-    + BROWSER_NAVIGATION_TOOLS  # sensitive for roles and the verifier; only the AI-line hold is lifted (#17237)
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
 
-#: Mutating by effect, yet never held by the AI lines (owner ruling 2026-11-17, #17237, approval only): an unset
-#: line is left unmanaged, like a read; a stored line still applies. Role forbiddance and the verifier still cover them.
-ALWAYS_AVAILABLE_TOOLS = frozenset(BROWSER_NAVIGATION_TOOLS)
+#: Owner ruling 2026-11-17 (#17237, approval only): navigate is always available. It stays in "browser actions", a
+#: sensitive tool and a mutating effect, so a work item can still ask for approval and roles and the verifier still
+#: cover it; only the AI lines leave it unmanaged -- no baseline floor, no unset-line hold. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset({"navigate"})
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and
@@ -261,7 +258,7 @@ TOOL_EFFECTS: "dict[str, ToolEffect]" = {
     **_entries(CODE_EXEC_TOOLS, _E.EXEC | _E.STATE),
     **_entries(DATA_WRITE_TOOLS, _E.WRITE),
     **_entries(PROCESS_EXEC_TOOLS, _E.EXEC | _E.STATE),
-    **_entries(BROWSER_NAVIGATION_TOOLS + BROWSER_ACTION_TOOLS, _E.STATE),
+    **_entries(BROWSER_ACTION_TOOLS, _E.STATE),
     "evaluate": _E.EXEC | _E.STATE,
     **_entries(DELEGATION_TOOLS, _E.DELEGATE),
     **_entries(

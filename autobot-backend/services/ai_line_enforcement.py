@@ -60,7 +60,12 @@ from autobot_shared.logging_once import log_once
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import CommandRisk
-from autobot_shared.tool_catalogue import approval_category_for, valid_approval_categories
+from autobot_shared.tool_catalogue import (
+    ALWAYS_AVAILABLE_TOOLS,
+    approval_category_for,
+    canonical_tool_name,
+    valid_approval_categories,
+)
 from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
@@ -168,8 +173,10 @@ async def resolve_action_line(
     scope = resolve_scope(company_id, user_id)
     stored, unavailable = await _stored(scope, key)
     read_only = _is_read_only_command(tool_name, params)
-    # A work item's own declared gate still applies to a read; the baseline's "destructive" one cannot.
-    gated = list(declared_categories) if read_only else await gated_categories(declared_categories)
+    # A work item's own declared gate still applies to a read or to an always-available tool (#17237); the baseline's
+    # floor cannot.
+    unmanaged = read_only or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS
+    gated = list(declared_categories) if unmanaged else await gated_categories(declared_categories)
     category = approval_category_for(tool_name, gated)
     return resolve_line(
         key,
