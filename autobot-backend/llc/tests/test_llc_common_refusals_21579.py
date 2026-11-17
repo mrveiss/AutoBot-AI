@@ -8,6 +8,7 @@ import logging
 
 import pytest
 
+from autobot_shared.http_refusal import http_refusal
 from llc.api import _common
 from llc.services.work_item_hierarchy import HierarchyViolation
 
@@ -77,14 +78,14 @@ def test_a_public_exception_is_not_logged_as_a_refusal(caplog) -> None:
 
 
 def test_a_status_without_a_table_entry_gets_the_default_text() -> None:
-    got = _common.http_refusal(418, ValueError(_LEAKY), scope="test.scope")
+    got = http_refusal(418, ValueError(_LEAKY), scope="test.scope")
     assert (got.status_code, got.detail) == (418, "Request refused")
 
 
 def test_a_non_string_public_detail_is_ignored() -> None:
     exc = ValueError(_LEAKY)
     exc.public_detail = 5  # type: ignore[attr-defined]
-    assert _common.http_refusal(400, exc, scope="test.scope").detail == "Invalid request"
+    assert http_refusal(400, exc, scope="test.scope").detail == "Invalid request"
 
 
 class _Redacted(ValueError):
@@ -95,7 +96,7 @@ class _Redacted(ValueError):
 
 def test_a_public_exception_whose_detail_differs_from_its_message_logs_the_message_at_info(caplog) -> None:
     with caplog.at_level(logging.INFO):
-        got = _common.http_refusal(409, _Redacted(f"agent a-42 cannot run: {_LEAKY}"), scope="tests.redacted")
+        got = http_refusal(409, _Redacted(f"agent a-42 cannot run: {_LEAKY}"), scope="tests.redacted")
     assert got.detail == "Cannot run"
     assert "_Redacted" in caplog.text
     assert "agent a-42 cannot run" in caplog.text
