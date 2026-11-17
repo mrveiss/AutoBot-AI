@@ -100,3 +100,19 @@ async def test_the_success_is_audited_only_after_the_archive_is_built(monkeypatc
     await export_route.export_all_conversations(_request(), True, {"username": "root", "role": "admin"})
 
     assert order == ["build", "audit:success"]
+
+
+@pytest.mark.asyncio
+async def test_the_route_refuses_a_non_admin_all_users_export_and_builds_nothing(monkeypatch) -> None:
+    audit, build = MagicMock(), AsyncMock(return_value="{}")
+    monkeypatch.setattr(export_route, "audit_record", audit)
+    monkeypatch.setattr(export_route, "export_all_conversations_json", build)
+    monkeypatch.setattr(export_route, "get_chat_history_manager", lambda request: MagicMock())
+
+    with pytest.raises(HTTPException) as refused:
+        await export_route.export_all_conversations(_request(), True, {"username": "alice", "role": "user"})
+
+    assert refused.value.status_code == 403
+    build.assert_not_awaited()
+    audit.assert_called_once()
+    assert audit.call_args.kwargs["outcome"] == "denied"

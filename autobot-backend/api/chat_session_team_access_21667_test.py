@@ -64,9 +64,31 @@ async def test_an_undecidable_membership_refuses(membership, failure) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_user_with_no_user_id_is_refused() -> None:
-    with pytest.raises(HTTPException):
+async def test_a_user_with_no_user_id_is_refused_though_the_team_service_would_admit(monkeypatch) -> None:
+    """Database and TeamService both say yes, so only the missing user id can refuse."""
+    import contextlib
+
+    import user_management.database as database
+    import user_management.services as services
+
+    class _AlwaysMember:
+        def __init__(self, session, context):
+            pass
+
+        async def is_team_member(self, team_id, user_id, required_role=None):
+            return True
+
+    @contextlib.asynccontextmanager
+    async def _session():
+        yield object()
+
+    monkeypatch.setattr(services, "TeamService", _AlwaysMember)
+    monkeypatch.setattr(database, "db_session_context", _session)
+
+    with pytest.raises(HTTPException) as refused:
         await access.require_team_member({"username": "alice", "role": "user"}, _TEAM)
+
+    assert refused.value.status_code == 403
 
 
 @pytest.mark.asyncio

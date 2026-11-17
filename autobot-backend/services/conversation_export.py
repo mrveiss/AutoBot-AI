@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from chat_history.session_file import session_file_exists
 from chat_history.session_lease import session_lease
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_owner_index import index_owner_or_unmark
@@ -203,8 +204,8 @@ async def _session_exists(chat_history_manager, session_id: str) -> bool:
     Fails closed: a storage error propagates, because "could not tell" must never read as "no such
     session" when the answer decides whether an import may write into someone else's conversation.
     """
-    messages = await chat_history_manager.load_session(session_id)
-    return len(messages) > 0
+    # The stored record decides, not its message count: an owned session with no messages still exists (#21668).
+    return await session_file_exists(chat_history_manager, session_id)
 
 
 def _apply_suffix_to_session_id(session_id: str, suffix: str) -> str:

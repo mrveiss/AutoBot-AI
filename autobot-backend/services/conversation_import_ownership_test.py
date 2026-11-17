@@ -59,13 +59,26 @@ def owner_index(monkeypatch):
     return validator
 
 
-def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = False):
+@pytest.fixture(autouse=True)
+def stored_record(monkeypatch):
+    """``session_file_exists`` answers from the manager's ``record_exists`` flag instead of the disk."""
+
+    async def _exists(manager, session_id):
+        return manager.record_exists
+
+    monkeypatch.setattr(conversation_export, "session_file_exists", _exists)
+
+
+def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = False, empty: bool = False):
     manager = AsyncMock()
     manager.save_session = AsyncMock()
+    manager.record_exists = exists
     # `_session_exists` calls load_session and treats a non-empty message list
     # as "exists" — mocking anything else makes every conflict test skip the
     # branch it is meant to exercise.
-    manager.load_session = AsyncMock(return_value=[{"role": "user", "content": "existing"}] if exists else [])
+    manager.load_session = AsyncMock(
+        return_value=[{"role": "user", "content": "existing"}] if exists and not empty else []
+    )
     if owner_raises:
         manager.get_session_owner = AsyncMock(side_effect=SessionOwnerUnreadable("sess-abc"))
     else:
@@ -254,3 +267,17 @@ async def test_the_owner_skipping_their_own_session_still_reports_a_conflict() -
 
     assert result["success"] is False and result["conflict"] is True
     manager.save_session.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("on_conflict", ["skip", "replace", "merge"])
+async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_over(on_conflict) -> None:
+    """#21668: a stored record with an owner but no messages must not read as absent."""
+    manager = _manager(exists=True, owner="alice", empty=True)
+
+    with pytest.raises(HTTPException) as refused:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
+
+    assert refused.value.status_code == 404
+    manager.save_session.assert_not_awaited()
+    assert await manager.get_session_owner("sess-abc") == "alice"
