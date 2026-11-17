@@ -271,11 +271,11 @@ class TestListAgents:
     """Tests for SpecializedAgentService.list_agents (#1821)."""
 
     def test_happy_path(self, service, agents_dir):
-        """Returns all parseable .md files in sorted order."""
+        """Returns all parseable .md files, sorted by file name (backend-helper < quick-helper)."""
         agents = service.list_agents()
         assert len(agents) == 2
         ids = [a["id"] for a in agents]
-        assert ids == ["quick-helper", "backend-helper"]
+        assert ids == ["backend-helper", "quick-helper"]
 
     def test_missing_directory(self, tmp_path):
         """Returns empty list when agents directory does not exist."""

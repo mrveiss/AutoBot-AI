@@ -7,6 +7,7 @@
 from pathlib import Path
 
 from autobot_shared import claude_config
+from autobot_shared.isolated_git import make_repo
 from autobot_shared.ssot_config import PathConfig
 
 
@@ -33,23 +34,15 @@ def test_field_reads_the_cli_variable_and_autobot_wins(monkeypatch):
     assert PathConfig(_env_file=None).claude_config_dir == "/from-autobot"
 
 
-def _init_repo(path: Path) -> None:
-    import subprocess
-
-    from autobot_shared.paths import scrubbed_git_env
-
-    subprocess.run(["git", "-C", str(path), "init", "-q"], check=True, capture_output=True, env=scrubbed_git_env())
-
-
 def test_backup_repo_ok_when_the_dir_is_its_own_repo(tmp_path):
     agents = tmp_path / "agents"
     agents.mkdir()
-    _init_repo(agents)
+    make_repo(agents)
     assert claude_config.backup_repo_problem(agents, False) is None
 
 
 def test_backup_repo_refuses_an_enclosing_repo_unless_allowed(tmp_path):
-    _init_repo(tmp_path)
+    make_repo(tmp_path)
     agents = tmp_path / "agents"
     agents.mkdir()
     assert "unrelated repository" in claude_config.backup_repo_problem(agents, False)
