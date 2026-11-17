@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1189,
+    "autobot-backend/conversation_file_manager.py": 1187,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
@@ -237,7 +237,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1594,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1211,
-    "autobot-backend/llc/api/work_items.py": 1284,  # #18978: 1302 -> 1287; #19582: comment wake moved into the service
+    "autobot-backend/llc/api/work_items.py": 1253,  # #21559: was 1284; #18978: 1302 -> 1287; #19582: wake moved
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
     "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 995,  # #18978: -19; #20102, #20930: code moved out

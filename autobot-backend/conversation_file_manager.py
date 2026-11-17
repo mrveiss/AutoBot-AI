@@ -36,11 +36,10 @@ from autobot_shared.ssot_config import config
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
-from conversation_file_access_type_schema import ensure_access_type_schema
 from conversation_file_cleanup import deleted_file_stats, pending_cleanup_stats
 from conversation_file_quota import UploadRefused, abandon, file_too_large, insert_within_quota, resize_within_quota
-from conversation_file_quota_owner_schema import ensure_quota_owner_schema
 from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi, with_extension
+from conversation_file_schema_upgrades import apply_schema_upgrades
 from conversation_file_schema_version import query_schema_version
 from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
@@ -442,8 +441,7 @@ class ConversationFileManager(ConversationFileRouteApi):
                 raise ValueError("Schema SQL file is empty")
 
             connection.executescript(schema_sql)
-            ensure_quota_owner_schema(connection)  # a table made before #20678 gains the column
-            ensure_access_type_schema(connection)  # a log made before #21404 accepts 'reference'
+            apply_schema_upgrades(connection)  # a table made by an older release gains what it lacks
             logger.info("✅ Database schema initialized successfully")
 
         except Exception as e:
