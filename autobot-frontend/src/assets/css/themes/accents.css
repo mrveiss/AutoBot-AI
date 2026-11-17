@@ -25,7 +25,9 @@
    WCAG contrast on that accent's --color-primary: white (#FFFFFF) on purple and
    indigo, the dark ink of the dark theme (#0E1420) on the rest. Ratios, white vs
    ink: blue 3.68/5.01, green 2.54/7.26, purple 5.38/3.42, orange 2.80/6.57,
-   pink 3.53/5.22, teal 2.49/7.40, indigo 4.47/4.13, red 3.76/4.90. The contrast
+   pink 3.53/5.22, teal 2.49/7.40, indigo 4.52/4.10, red 3.76/4.90. The indigo fill
+   was #6366f1 (white 4.47, under AA) and is #6265f1, the least change that reaches 4.5;
+   the OKLCH block overrides the fill in current browsers and gives the same ratios. The contrast
    and mono themes own their primary and keep --on-primary (their files). */
 
 /* #18066: `:root` removed from this selector. design-tokens.css already
@@ -130,13 +132,13 @@
  * ============================================ */
 
 [data-accent="indigo"] {
-  --color-primary: #6366f1;
+  --color-primary: #6265f1;
   --color-primary-hover: #4f46e5;
   --color-primary-active: #4338ca;
   --color-primary-light: #818cf8;
   --color-primary-dark: #4338ca;
-  --color-primary-bg: rgba(99, 102, 241, 0.1);
-  --color-primary-bg-hover: rgba(99, 102, 241, 0.15);
+  --color-primary-bg: rgba(98, 101, 241, 0.1);
+  --color-primary-bg-hover: rgba(98, 101, 241, 0.15);
   --text-on-primary: #FFFFFF;
 }
 
@@ -230,13 +232,13 @@
 
   /* Indigo */
   [data-accent="indigo"] {
-    --color-primary: oklch(58.5% 0.204 277.1);
+    --color-primary: oklch(58.3% 0.205 277.0);
     --color-primary-hover: oklch(50.8% 0.220 278.6);
     --color-primary-active: oklch(45.7% 0.215 277.0);
     --color-primary-light: oklch(68.0% 0.158 276.9);
     --color-primary-dark: oklch(45.7% 0.215 277.0);
-    --color-primary-bg: oklch(58.5% 0.204 277.1 / 0.1);
-    --color-primary-bg-hover: oklch(58.5% 0.204 277.1 / 0.15);
+    --color-primary-bg: oklch(58.3% 0.205 277.0 / 0.1);
+    --color-primary-bg-hover: oklch(58.3% 0.205 277.0 / 0.15);
   }
 
   /* Red */
