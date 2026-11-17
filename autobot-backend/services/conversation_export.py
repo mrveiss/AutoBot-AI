@@ -23,7 +23,7 @@ from chat_history.session_lease import session_lease
 from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_owner_index import index_owner_or_unmark
 from security.session_ownership import SessionOwnershipValidator, build_owner_metadata
-from security.session_posture import session_not_found
+from security.session_posture import deny_unreadable_owner, session_not_found
 
 logger = get_logger(__name__)
 
@@ -217,11 +217,6 @@ def _apply_suffix_to_session_id(session_id: str, suffix: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-# Distinct from None: ownership could not be read, which must never be treated
-# as "unowned" when deciding whether an overwrite is allowed (#14033).
-_UNREADABLE_OWNER = object()
-
-
 async def import_conversation(
     chat_history_manager,
     document: Dict[str, Any],
@@ -268,14 +263,11 @@ async def _owner_refusal(chat_history_manager, session_id: str, user_data: Dict[
     session gets, as for a session another user owns (#21731);
     an admin is refused too, because its owner is assigned only through the approval queue (#17038).
     """
+    importer = (user_data or {}).get("username")
     try:
         existing_owner = await chat_history_manager.get_session_owner(session_id)
     except SessionOwnerUnreadable:
-        existing_owner = _UNREADABLE_OWNER
-    importer = (user_data or {}).get("username")
-    if existing_owner is _UNREADABLE_OWNER:
-        logger.warning("Import refused: owner of session %s is unreadable", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} belongs to another user"), existing_owner
+        raise deny_unreadable_owner(session_id, importer) from None  # as a read denies (#14033)
     if existing_owner is not None and existing_owner != importer:
         logger.warning("Import refused: %s may not write session %s", importer or "<anonymous>", session_id)
         raise session_not_found()  # #21731: a session that is not the caller's reads as a missing one

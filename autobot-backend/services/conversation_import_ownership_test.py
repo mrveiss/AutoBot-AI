@@ -34,6 +34,7 @@ from security.session_owner_errors import SessionOwnerUnreadable
 from security.session_owner_index import owned_session_ids
 from security.session_owner_index_21664_test import _Store
 from security.session_owner_index_21664_test import _validator as _index_validator
+from security.session_posture import UNREADABLE_OWNER_DETAIL
 from services import conversation_export
 from services.conversation_export import import_conversation
 
@@ -117,9 +118,10 @@ async def test_replace_refuses_when_ownership_cannot_be_read() -> None:
     """
     manager = _manager(exists=True, owner_raises=True)
 
-    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+    with pytest.raises(HTTPException) as denied:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
-    assert result["success"] is False
+    assert denied.value.status_code == 403 and denied.value.detail == UNREADABLE_OWNER_DETAIL
     manager.save_session.assert_not_awaited()
 
 
@@ -167,9 +169,10 @@ async def test_a_merge_import_into_another_users_session_is_refused() -> None:
 async def test_a_merge_import_is_refused_when_the_owner_is_unreadable() -> None:
     manager = _manager(exists=True, owner_raises=True)
 
-    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
+    with pytest.raises(HTTPException) as denied:
+        await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
 
-    assert result["success"] is False
+    assert denied.value.status_code == 403 and denied.value.detail == UNREADABLE_OWNER_DETAIL
     manager.save_session.assert_not_awaited()
 
 
