@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import mimetypes
+import re
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -40,6 +41,26 @@ def file_extension(name: str) -> str | None:
     return extension.lower() if dot and stem and extension else None
 
 
+_GENERIC_MIME = "application/octet-stream"
+_MIME_TOKEN = re.compile(r"^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$")
+
+
+def resolve_mime_type(filename: str, declared: str | None = None) -> str:
+    """The ONE rule for a conversation file's stored ``mime_type`` (#21403).
+
+    The filename's extension is authoritative: it already passed the upload extension allow-list, and the
+    preview and download routes branch on the stored type. The client-declared part type is untrusted input,
+    so it is only the fallback when the extension maps to no type, and only if it is one well-formed
+    ``type/subtype`` token (parameters dropped, lower-cased, never the generic octet-stream). Otherwise
+    ``application/octet-stream``.
+    """
+    guessed = mimetypes.guess_type(filename)[0]
+    if guessed:
+        return guessed
+    candidate = (declared or "").split(";", 1)[0].strip().lower()
+    return candidate if candidate != _GENERIC_MIME and _MIME_TOKEN.match(candidate) else _GENERIC_MIME
+
+
 def with_extension(row: Dict[str, Any]) -> Dict[str, Any]:
     """*row* (a ``FILE_INFO_COLUMNS`` row, or an upload result) with ``extension`` set from its ``filename``."""
     return {**row, "extension": file_extension(row["filename"])}
@@ -60,13 +81,15 @@ class ConversationFileRouteApi:
         user_id: str | None,
         description: str | None = None,
         file_hash: str | None = None,
+        content_type: str | None = None,
     ) -> Dict[str, Any]:
         """Store an uploaded file via ``add_file`` and return it shaped as ``ConversationFileInfo``.
 
         *file_hash* is the content's SHA-256 when the caller already has it; hashed once here (off the loop) if not.
+        *content_type* is the part type the client declared; ``resolve_mime_type`` decides how far it is trusted.
         """
         file_hash = file_hash or await self.hash_content(content)
-        mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        mime_type = resolve_mime_type(filename, content_type)
         stored = await self.add_file(
             session_id,
             content,
