@@ -162,16 +162,16 @@ class TestRawReadGuard:
     ``SCOPED_READ_ARGS`` by whoever adds the tool.
     """
 
-    def _user_readable_tools(self):
-        return [t for t in get_all_tools() if TOOL_ACCESS_MATRIX[t.name][0] is ToolAccess.READ]
+    def _user_reachable_tools(self):
+        return [t for t in get_all_tools() if TOOL_ACCESS_MATRIX[t.name][0] is not ToolAccess.BLOCKED]
 
     def test_every_key_like_schema_argument_of_a_user_readable_tool_is_scoped(self):
-        for tool in self._user_readable_tools():
-            like = {a for a in _schema_args(tool) if any(w in a for w in ("key", "pattern", "index"))}
+        for tool in self._user_reachable_tools():
+            like = {a for a in _schema_args(tool) if any(w in a for w in ("key", "pattern", "index", "prefix"))}
             assert like <= SCOPED_READ_ARGS | {"keys"}, f"{tool.name}: {like - SCOPED_READ_ARGS} not read-scoped"
 
     def test_every_user_readable_key_or_index_tool_is_denied_outside_the_scope(self):
-        for tool in self._user_readable_tools():
+        for tool in self._user_reachable_tools():
             props = _schema_args(tool)
             probe = {a: "outside:ns" for a in props & SCOPED_READ_ARGS}
             if probe:
@@ -182,3 +182,30 @@ class TestRawReadGuard:
         for name in VECTOR_TOOLS:
             tool = next(t for t in get_all_tools() if t.name == name)
             assert "index_name" in _schema_args(tool)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prefix", ["fact:", ["autobot:agent:ok", "fact:"], ""])
+async def test_non_admin_cannot_create_an_index_over_a_non_agent_prefix(prefix):
+    handler = AsyncMock()
+    args = {"index_name": "idx:agent_x", "prefix": prefix}
+    with patch.dict(router_module._TOOL_HANDLERS, {"redis_vector_create_index": handler}):
+        with pytest.raises(HTTPException) as exc:
+            await call_redis_mcp_tool(RedisToolCallRequest(tool_name="redis_vector_create_index", arguments=args), USER)
+    assert exc.value.status_code == 403
+    handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [None, ""])
+async def test_non_admin_explicit_empty_index_is_denied(value):
+    ok, _ = validate_read_scope({"index_name": value}, is_admin=False)
+    assert not ok
+
+
+@pytest.mark.asyncio
+async def test_non_admin_agent_prefix_index_creation_is_allowed():
+    args = {"index_name": "idx:agent_x", "prefix": "autobot:agent:x:"}
+    out, handler = await _call(USER, "redis_vector_create_index", args)
+    assert out == {"ok": True}
+    handler.assert_awaited_once()

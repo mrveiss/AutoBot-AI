@@ -109,7 +109,7 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
 ADMIN_ONLY_DATABASES = frozenset({"knowledge", "sessions", "agents"})
 
 # Tool arguments that name a key (or a key glob) the call reads, and the one naming a search index.
-_READ_KEY_ARGS = ("key", "pattern")
+_READ_KEY_ARGS = ("key", "pattern", "prefix")
 INDEX_ARG = "index_name"
 # Non-admins may query only agent-namespace indexes (default-deny); the tools' own default is inside it.
 AGENT_INDEX_PREFIX = "idx:agent_"
@@ -118,8 +118,7 @@ SCOPED_READ_ARGS = frozenset((*_READ_KEY_ARGS, INDEX_ARG))
 
 def is_agent_index(args: dict) -> bool:
     """True when the call names no index (the tool default is an agent index) or an agent-namespace one."""
-    name = args.get(INDEX_ARG)
-    return name is None or str(name).startswith(AGENT_INDEX_PREFIX)
+    return INDEX_ARG not in args or str(args[INDEX_ARG]).startswith(AGENT_INDEX_PREFIX)
 
 
 def _database_number(name: str) -> int | None:
@@ -137,8 +136,13 @@ def is_admin_only_database(name: str | None) -> bool:
 
 
 def read_keys(args: dict) -> list[str]:
-    """Every key or key glob a read tool call names."""
-    return [str(args[a]) for a in _READ_KEY_ARGS if args.get(a)]
+    """Every key, key glob or index prefix (string or list) a call names; an empty value is still named."""
+    named: list[str] = []
+    for arg in _READ_KEY_ARGS:
+        if arg in args:
+            value = args[arg]
+            named.extend(str(v) for v in value) if isinstance(value, (list, tuple)) else named.append(str(value))
+    return named
 
 
 def validate_read_scope(args: dict, is_admin: bool) -> tuple[bool, str | None]:

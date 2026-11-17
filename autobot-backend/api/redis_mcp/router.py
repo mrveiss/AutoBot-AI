@@ -40,6 +40,7 @@ from api.redis_mcp.ops_intelligence import (
     handle_redis_stream_health,
 )
 from api.redis_mcp.rbac import (
+    INDEX_ARG,
     ToolAccess,
     check_tool_permission,
     get_tool_access,
@@ -444,6 +445,7 @@ async def _enforce_read_scope(
         "tool": tool_name,
         "database": args.get("database"),
         "keys": read_keys(args),
+        "index": args.get(INDEX_ARG),
     }
     if not await audit_admin_read(user_id, details):
         raise audit_unavailable()
