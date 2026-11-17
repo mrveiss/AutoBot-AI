@@ -11,6 +11,7 @@
 
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
+import { fetchAllPages } from '@/utils/fetchAllPages'
 import type {
   SLMNode,
   NodeHealth,
@@ -100,15 +101,10 @@ import type {
   WizardStatusResponse,
 } from '@/types/api-responses'
 
-// =============================================================================
-// slmApiClient adapter (#12420 Phase 2 batch 5 → consolidated in #12654)
-//
-// useSlmApi historically owned its own axios instance; the Phase-2 migration
-// routed every call through the canonical `slmApiClient` via a thin axios-compat
-// adapter. That adapter now lives in `utils/slmApiCompat.ts` (shared with
-// useRoles). `textFallback: true` preserves this composable's behaviour of
-// returning `response.text()` for a non-JSON 2xx body (PEM cert downloads).
-// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 5 → consolidated in #12654): every call goes through the
+// canonical `slmApiClient` via the axios-compat adapter in `utils/slmApiCompat.ts` (shared with
+// useRoles). `textFallback: true` keeps this composable returning `response.text()` for a non-JSON
+// 2xx body (PEM cert downloads).
 
 const client = makeAxiosCompatClient({ textFallback: true })
 
@@ -199,8 +195,10 @@ interface ReplicationsResponse {
 export function useSlmApi() {
   // Nodes
   async function getNodes(): Promise<SLMNode[]> {
-    const response = await client.get<NodesResponse>('/nodes')
-    return response.data.nodes.map(mapBackendNode)
+    return fetchAllPages(async (params) => {
+      const { data } = await client.get<NodesResponse>('/nodes', { params })
+      return { items: data.nodes.map(mapBackendNode), total: data.total }
+    })
   }
 
   async function getNode(nodeId: string): Promise<SLMNode> {

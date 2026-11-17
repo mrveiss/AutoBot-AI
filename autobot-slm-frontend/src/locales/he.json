@@ -1052,6 +1052,7 @@
     "fleetNodesAria": "Fleet nodes",
     "fleetOverview": "Fleet Overview",
     "fleetViewTabsAria": "Fleet view tabs",
+    "incompleteList": "Showing {loaded} of {total} nodes. The rest could not be loaded: {message}",
     "infrastructure": "Infrastructure",
     "infrastructureSetupAria": "Infrastructure setup",
     "lastSeen": "Last seen:",

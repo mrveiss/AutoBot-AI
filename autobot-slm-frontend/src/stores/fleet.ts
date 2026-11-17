@@ -37,6 +37,7 @@ import type {
   NPUWorkerConfig,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { PartialListError } from '@/utils/fetchAllPages'
 
 export const useFleetStore = defineStore('fleet', () => {
   const api = useSlmApi()
@@ -239,13 +240,11 @@ export const useFleetStore = defineStore('fleet', () => {
     error.value = null
 
     try {
-      const nodeArray = await api.getNodes()
-      nodes.value.clear()
-      for (const node of nodeArray) {
-        nodes.value.set(node.node_id, node)
-      }
+      nodes.value = new Map((await api.getNodes()).map((n) => [n.node_id, n]))
       lastRefresh.value = new Date()
     } catch (err) {
+      // A later page failed (#21584): keep what was read; the caller says the list is partial.
+      if (err instanceof PartialListError) nodes.value = new Map((err.items as SLMNode[]).map((n) => [n.node_id, n]))
       error.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
       throw err
     } finally {

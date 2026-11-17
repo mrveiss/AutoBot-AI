@@ -5,9 +5,7 @@
 
 /**
  * FleetOverview - Main fleet management page.
- *
- * Issue #754: Added ARIA roles for tabs, dialogs, status indicators,
- * aria-labels for icon-only buttons, and role="dialog" for modals.
+ * Issue #754: ARIA roles for tabs, dialogs and status indicators; aria-labels on icon-only buttons.
  */
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -20,6 +18,7 @@ import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
+import { PartialListError } from '@/utils/fetchAllPages'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
@@ -176,6 +175,7 @@ async function refreshFleet(): Promise<void> {
     await fleetStore.fetchNodes()
   } catch (err) {
     logger.error('Failed to refresh fleet:', err)
+    if (err instanceof PartialListError) showToast(t('fleetOverview.incompleteList', { loaded: err.items.length, total: err.total, message: err.reason }), 'error')
   }
 }
 

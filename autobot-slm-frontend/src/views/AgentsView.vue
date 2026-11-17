@@ -15,6 +15,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import config from '@/config/ssot-config'
 import { slmApiClient } from '@/utils/ApiClient'
+import { useSlmApi } from '@/composables/useSlmApi'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -44,6 +45,7 @@ interface FleetNode {
 const OLLAMA_PORT = config.port.ollama
 const CUSTOM_VALUE = '__custom__'
 
+const slmApi = useSlmApi()
 const route = useRoute()
 const router = useRouter()
 
@@ -120,13 +122,8 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    // A non-OK response used to `return` silently; `get()` rejects, so it now
-    // lands in the catch below — the same outcome (fall back to Custom mode)
-    // reached by one code path instead of two.
-    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
-    nodes.value = (data.nodes || []).filter(
-      (n: FleetNode) => n.status === 'online',
-    )
+    // Every page of the fleet (#21584); a failed read rejects into the catch below (Custom mode).
+    nodes.value = (await slmApi.getNodes()).filter((n: FleetNode) => n.status === 'online')
   } catch {
     // Non-critical — fall back to Custom mode
   }
