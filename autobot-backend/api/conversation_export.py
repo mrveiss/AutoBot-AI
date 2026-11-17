@@ -167,13 +167,6 @@ def _audit_instance_export(request: Request, current_user: dict, outcome: str) -
     )
 
 
-def _require_admin_for_instance_export(request: Request, current_user: dict) -> None:
-    """The instance-wide export is admin-only: 403, audited as ``denied``, before anything is read (#21666)."""
-    if not is_admin_role(current_user.get("role")):
-        _audit_instance_export(request, current_user, "denied")
-        raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
-
-
 @router.get("/conversations/export-all", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -193,8 +186,10 @@ async def export_all_conversations(
     Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
     """
-    if all_users:
-        _require_admin_for_instance_export(request, current_user)
+    if all_users and not is_admin_role(current_user.get("role")):
+        # The instance-wide export is admin-only: 403, audited as denied, before anything is read (#21666).
+        _audit_instance_export(request, current_user, "denied")
+        raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
     chat_history_manager = get_chat_history_manager(request)
     archive = await export_all_conversations_json(
         chat_history_manager, current_user.get("username"), all_users=all_users

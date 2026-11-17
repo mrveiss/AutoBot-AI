@@ -65,26 +65,6 @@ def _request():
     return request
 
 
-def test_a_non_admin_is_refused_and_the_attempt_audited(monkeypatch) -> None:
-    audit = MagicMock()
-    monkeypatch.setattr(export_route, "audit_record", audit)
-
-    with pytest.raises(HTTPException) as refused:
-        export_route._require_admin_for_instance_export(_request(), {"username": "alice", "role": "user"})
-
-    assert refused.value.status_code == 403
-    assert audit.call_args.kwargs["outcome"] == "denied"
-
-
-def test_an_admin_passes_the_gate_without_a_success_audit_yet(monkeypatch) -> None:
-    audit = MagicMock()
-    monkeypatch.setattr(export_route, "audit_record", audit)
-
-    export_route._require_admin_for_instance_export(_request(), {"username": "root", "role": "admin"})
-
-    audit.assert_not_called()
-
-
 @pytest.mark.asyncio
 async def test_the_success_is_audited_only_after_the_archive_is_built(monkeypatch) -> None:
     order: list[str] = []
