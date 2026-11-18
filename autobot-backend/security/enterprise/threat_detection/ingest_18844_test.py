@@ -47,7 +47,9 @@ async def test_the_api_abuse_analyzer_ignores_an_agent_action_but_still_sees_a_r
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("user", "expected"), [("alice", "alice"), (None, enforcement.REQUESTER_PREFIX)])
+@pytest.mark.parametrize(
+    ("user", "expected"), [("alice", "alice"), (None, f"{enforcement.REQUESTER_PREFIX}:chat-session-1")]
+)
 async def test_the_report_names_the_user_not_the_session(user, expected) -> None:
     resolution = type("R", (), {"key": "k", "source": "s"})()
     verdict = LineVerdict(Outcome.RUN, resolution)
