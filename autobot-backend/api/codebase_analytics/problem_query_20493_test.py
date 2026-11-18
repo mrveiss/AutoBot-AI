@@ -62,6 +62,52 @@ class TestSelect:
         assert select_category(rows, "all") == rows
 
 
+class TestFetchReachesTheWhere:
+    """#21782: ``problem_type`` and the source clause are not dropped between the route and the read."""
+
+    def test_problem_type_and_source_reach_problem_where_and_the_fetch(self):
+        seen = {}
+
+        def fetch(_collection, where=None, include=None):
+            seen["where"] = where
+            return {"metadatas": []}
+
+        with patch.object(stats_mod, "get_all_paginated", fetch):
+            stats_mod._fetch_problems_from_chromadb(_Collection([]), "race_condition", "src-1", Path("."), "test")
+        clauses = seen["where"]["$and"]
+        assert {"source_id": "src-1"} in clauses
+        assert {"problem_type": "race_condition"} in clauses
+        assert {"file_category": "test"} in clauses
+
+    def test_problem_where_keeps_both_clauses(self):
+        clauses = problem_where("src-2", "debug_code", None)["$and"]
+        assert {"source_id": "src-2"} in clauses and {"problem_type": "debug_code"} in clauses
+
+
+class TestCategoryIsAppliedBeforeParsing:
+    def test_a_bad_line_number_in_another_category_does_not_fail_the_request(self):
+        """#21782: a test-file row with a non-numeric line must not 503 a ``code`` request."""
+        rows = [_row("long_function"), _row("debug_code", category="test", line="n/a")]
+        p1, p2 = _patched(rows)
+        with p1, p2:
+            out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, "s", Path("."), "code")
+        assert [p["type"] for p in out] == ["long_function"]
+
+    def test_a_non_numeric_line_is_no_line_when_every_category_is_read(self):
+        rows = [_row("debug_code", line="n/a")]
+        p1, p2 = _patched(rows)
+        with p1, p2:
+            out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, "s", Path("."), "all")
+        assert out[0]["line_number"] is None
+
+    def test_legacy_rows_without_a_category_still_read_as_code(self):
+        rows = [_row("long_function")]
+        p1, p2 = _patched(rows)
+        with p1, p2:
+            out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, "s", Path("."), "code")
+        assert len(out) == 1
+
+
 class TestWhereDedupRuns:
     def test_the_shared_fetch_stays_raw_for_other_readers(self):
         rows = [_row("long_function"), _row("code_smell_long_method", HIGH)]
