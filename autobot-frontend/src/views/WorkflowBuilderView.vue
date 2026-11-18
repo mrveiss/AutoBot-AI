@@ -810,7 +810,9 @@ const {
 const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
   t, showToast, navigateToRunner: () => navigateTo('runner'),
   activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+  companyAgrees: () => companyAgrees(),
 });
+const companyAgrees = (): boolean => companyContextAgrees(String(route.params.companyId ?? '')) || (showToast(t('workflow.builder.companySwitching'), 'warning'), false); // #21520: Save/Start wait for the route to follow the sidebar
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -987,7 +989,7 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
-  if (!companyContextAgrees(String(route.params.companyId ?? ''))) { showToast(t('workflow.builder.companySwitching'), 'warning'); return; }
+  if (!companyAgrees()) return;
 
   const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
@@ -1049,16 +1051,12 @@ function handleNodesDisconnected(sourceId: string, targetId: string): void {
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
+  if (!companyAgrees()) return;
   // #2182: Warn when unsupported node types will be dropped on save
-  const unsupportedNodes = workflowNodes.value.filter(
-    (n) => n.type !== 'step',
-  );
+  const unsupportedNodes = workflowNodes.value.filter((n) => n.type !== 'step');
   if (unsupportedNodes.length > 0) {
     const types = [...new Set(unsupportedNodes.map((n) => n.type))];
-    showToast(
-      t('workflow.builder.unsupportedNodes', { types: types.join(', ') }),
-      'warning',
-    );
+    showToast(t('workflow.builder.unsupportedNodes', { types: types.join(', ') }), 'warning');
   }
   const steps = exportCanvasToSteps();
   if (steps.length === 0) {
@@ -1108,6 +1106,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
+  if (!companyAgrees()) return;
   const result = await executeApiTemplate(template.id);
   if (result?.success) {
     showToast(t('workflow.builder.templateStarted', { name: template.name }), 'success');
@@ -1161,6 +1160,7 @@ async function openWorkflowFromQuery(): Promise<void> {
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {
+  if (!companyAgrees()) return;
   const existing =
     activeWorkflows.value.find((wf) => wf.workflow_id === workflowId) ??
     (await getWorkflowStatus(workflowId));
