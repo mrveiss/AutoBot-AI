@@ -13,6 +13,7 @@ through line 2 only if its fingerprint is among them. The client's resume payloa
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -47,10 +48,22 @@ def _card_command(pending: Mapping[str, Any], calls: Sequence[Mapping[str, Any]]
     return f"{text} (+{len(calls) - 1} more)" if len(calls) > 1 else text
 
 
+def card_id(state: Mapping[str, Any], shown: Sequence[Mapping[str, Any]]) -> str:
+    """A card id stable across re-emission: the session, the pass that planned the calls and what was shown (#19951).
+
+    The stream keeps it as the message id, so the same card never becomes a second prompt; a later pass or a
+    different set of calls is a different card.
+    """
+    prints = sorted(shown_call_fingerprint(tc.get("name", ""), _params(tc)) for tc in shown)
+    seed = json.dumps([state["session_id"], state.get("iteration_count", 0), prints])
+    return "approval-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
+
+
 def approval_card(state: Mapping[str, Any], shown: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """The interrupt payload the chat UI renders: every shown call, and a one-line command for a non-shell tool."""
     pending, calls = shown[0], ai_line_calls_shown(shown)
     return {
+        "id": card_id(state, shown),
         "type": "command_approval_request",
         "content": pending.get("description", ""),
         "metadata": {

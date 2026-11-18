@@ -2555,15 +2555,15 @@ before summarizing.
             )
             return False
 
-        # Issue #651: Log decision to continue
+        # #19951: a call waiting on a person has no result; another model call could only guess at one.
         logger.info(
-            "[Issue #651] Iteration %d: Completed with %d new result(s), "
-            "pending_approval=%s - continuing to next iteration",
+            "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - %s",
             iteration,
             len(new_results),
             has_pending_approval,
+            "stopping until it is decided" if has_pending_approval else "continuing to next iteration",
         )
-        return True
+        return not has_pending_approval
 
     async def _yield_llm_response_and_check_stop(
         self,

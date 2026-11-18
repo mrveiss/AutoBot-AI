@@ -806,13 +806,9 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     if not shown:
         return {"pending_approval": None, "approval_decision": None}
     pending = shown[0]
-    stream_cb = config["configurable"].get("stream_callback")
-    approval_request = approval_card(state, shown)  # emitted before the interrupt
-    if stream_cb:
-        stream_cb(approval_request)
-
-    # Interrupt — graph pauses here, resumes with Command(resume=decision)
-    decision = interrupt(approval_request)
+    # #19951: the card is emitted once, by the turn from the interrupt's value. This node re-runs from the top on
+    # resume, so emitting here would show an already-decided card a second time.
+    decision = interrupt(approval_card(state, shown))  # graph pauses here, resumes with Command(resume=decision)
 
     return {
         "pending_approval": pending,
