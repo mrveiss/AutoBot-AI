@@ -41,7 +41,7 @@ class FakeWindowRedis:
     def __init__(self) -> None:
         self.zsets: dict[str, list[float]] = {}
 
-    async def eval(self, script, numkeys, win_key, now, window, max_requests):
+    async def eval(self, script, numkeys, win_key, seq_key, now, window, max_requests):
         hits = [t for t in self.zsets.get(win_key, []) if t > now - window]
         self.zsets[win_key] = hits
         if len(hits) >= max_requests:
