@@ -24,7 +24,7 @@ const fakeStore = {
     if (card) Object.assign(card.metadata, updates)
     return !!card
   }),
-  hasPendingApproval: true,
+  isPendingApproval: vi.fn(() => true),
   setPendingApproval: vi.fn(),
   setTyping: vi.fn(),
 }
@@ -124,7 +124,7 @@ describe('graph-interrupt approval cards', () => {
     fetchWithAuth.mockResolvedValue({ ok: false, status: 409 })
     await expect(useApprovalRouting(vi.fn())('term-1', true, 'go')).rejects.toBeInstanceOf(ResumeRejectedError)
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
-    expect(store.setPendingApproval.mock.calls).toEqual([[false], [true]])
+    expect(store.setPendingApproval.mock.calls).toEqual([[false, 'chat-1'], [true, 'chat-1']])
   })
 })
 
@@ -198,15 +198,16 @@ describe('a card answered after the person opened another chat (#21357)', () => 
     expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1')
   })
 
-  it('leaves the open chat pending-approval flag alone, success and failure', async () => {
+  it('sets and restores the pending-approval flag on the card chat, not the open one', async () => {
     seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
     await useApprovalRouting(vi.fn())('term-1', true)
-    expect(fakeStore.setPendingApproval).not.toHaveBeenCalled()
+    expect(fakeStore.setPendingApproval.mock.calls).toEqual([[false, 'chat-1']])
+    fakeStore.setPendingApproval.mockClear()
 
     seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
     handleStreamingResponse.mockRejectedValue(new Error('reader failed'))
     await expect(useApprovalRouting(vi.fn())('term-1', true)).rejects.toThrow('reader failed')
-    expect(fakeStore.setPendingApproval).not.toHaveBeenCalled()
+    expect(fakeStore.setPendingApproval.mock.calls).toEqual([[false, 'chat-1'], [true, 'chat-1']])
     expect(fakeStore.updateMessageMetadata).toHaveBeenLastCalledWith('m1', expect.anything(), 'chat-1')
   })
 })

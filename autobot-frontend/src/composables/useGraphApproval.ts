@@ -120,17 +120,16 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
   async function resumeGraph(message: ChatMessage, approved: boolean, comment?: string): Promise<void> {
     const before = message.metadata as Record<string, unknown> | undefined
     const previous = { approval_status: before?.approval_status, approval_comment: before?.approval_comment }
-    const wasPending = store.hasPendingApproval
     const cardChat = cardChatId(message, store.currentSessionId)
+    const wasPending = store.isPendingApproval(cardChat)
     store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment }, cardChat)
-    const isOpen = () => store.currentSessionId === cardChat // #21357: the flag is the open chat's
-    if (isOpen()) store.setPendingApproval(false)
+    store.setPendingApproval(false, cardChat) // #21357: the card's chat, whichever is open
     try {
       await postResume(message, { approved, reason: comment || '' })
     } catch (error) {
       // The graph is still waiting: give the person the controls back so the decision can be retried (#21022).
       store.updateMessageMetadata(message.id, previous, cardChat)
-      if (isOpen()) store.setPendingApproval(wasPending)
+      store.setPendingApproval(wasPending, cardChat)
       throw error
     }
   }

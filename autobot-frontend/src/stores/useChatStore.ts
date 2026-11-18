@@ -8,6 +8,7 @@ import { createLogger } from '@/utils/debugUtils'
 import type { ChatMessage } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
+import { usePendingApproval } from './chatPendingApproval'
 import { debugPersistenceState as debugPersistenceStateCheck } from './chatPersistenceDebug'
 
 // Issue #2066: ChatMessage is now the canonical type from types/api.ts.
@@ -96,8 +97,8 @@ export const useChatStore = defineStore('chat', () => {
   }
   // Issue #691: Track streaming preview text for real-time feedback
   const streamingPreview = ref<string>('')
-  // Issue #680: Track pending approval state to prevent polling race conditions
-  const hasPendingApproval = ref(false)
+  // Issue #680: pending approval, per chat (#21357), to prevent polling race conditions
+  const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(currentSessionId)
   const sidebarCollapsed = ref(false)
   // Issue #671: Track initialization state for loading indicators
   const isInitializing = ref(false)
@@ -641,11 +642,6 @@ export const useChatStore = defineStore('chat', () => {
     streamingPreview.value = preview
   }
 
-  // Issue #680: Pending approval state management to prevent polling race conditions
-  function setPendingApproval(pending: boolean) {
-    hasPendingApproval.value = pending
-  }
-
   // Issue #671: Initialization state management for loading feedback
   function setInitializing(value: boolean) {
     isInitializing.value = value
@@ -1052,7 +1048,8 @@ export const useChatStore = defineStore('chat', () => {
     activeChatContext,       // #11690: request-context merged into sends
     setActiveChatContext,    // #11690
     streamingPreview,  // Issue #691: Streaming preview text
-    hasPendingApproval,  // Issue #680: Pending approval state
+    hasPendingApproval,  // Issue #680: the open chat's pending approval
+    isPendingApproval,   // #21357: any chat's
     sidebarCollapsed,
     settings,
     // Issue #671: Initialization state for loading indicators
@@ -1092,7 +1089,7 @@ export const useChatStore = defineStore('chat', () => {
     setTyping,
     setCurrentAgentType,
     setStreamingPreview,  // Issue #691: Streaming preview text management
-    setPendingApproval,  // Issue #680: Pending approval state management
+    setPendingApproval,  // Issue #680 / #21357: (pending, sessionId?)
     // Issue #671: Initialization state management
     setInitializing,
     setInitializationError,

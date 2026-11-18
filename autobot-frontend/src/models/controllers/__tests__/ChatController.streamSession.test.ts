@@ -98,7 +98,10 @@ describe('ChatController stream is bound to its originating chat (#21357)', () =
     await done
 
     expect(store.isTyping).toBe(true)
-    expect(store.hasPendingApproval).toBe(false)
+    expect(store.hasPendingApproval).toBe(false) // B is open and has no approval of its own
+    expect(store.isPendingApproval(a)).toBe(true) // the approval belongs to A and is waiting there
+    store.switchToSession(a)
+    expect(store.hasPendingApproval).toBe(true)
     expect(contents(b)).toEqual([])
   })
 
@@ -146,17 +149,24 @@ describe('ChatController stream is bound to its originating chat (#21357)', () =
   })
 
   it('shows a stream preview only while its chat is the open one', async () => {
-    const s = controlledStream()
+    const closed = controlledStream()
     store.setTyping(true)
-    const done = chat.handleStreamingResponse(s.response)
+    const doneClosed = chat.handleStreamingResponse(closed.response) // started in A
     store.switchToSession(b)
     store.setTyping(true) // B has its own turn in flight
-    s.push({ type: 'response', content: 'Thinking about the plan for A.', metadata: { message_id: 'm1' } })
+    closed.push({ type: 'response', content: 'Thinking about the plan for A.', metadata: { message_id: 'm1' } })
     await new Promise((r) => setTimeout(r, 260)) // past the 200ms preview throttle
-    expect(store.streamingPreview).toBe('')
+    expect(store.streamingPreview).toBe('') // A is not open: its preview stays out of B
 
-    s.close()
-    await done
+    const open = controlledStream()
+    const doneOpen = chat.handleStreamingResponse(open.response) // started in B, the open chat
+    open.push({ type: 'response', content: 'Working through the plan for B.', metadata: { message_id: 'm2' } })
+    await new Promise((r) => setTimeout(r, 260))
+    expect(store.streamingPreview).toContain('plan for B')
+
+    closed.close()
+    open.close()
+    await Promise.all([doneClosed, doneOpen])
   })
 
   it('keeps the typing indicator for a chat whose send is still in the request', async () => {

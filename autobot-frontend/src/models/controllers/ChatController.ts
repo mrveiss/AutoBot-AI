@@ -500,12 +500,10 @@ export class ChatController {
       }
 
       if (data.type === 'command_approval_request') {
-        // #21357: typing / pending-approval are the open chat's; a stream in another chat leaves them alone
-        if (this.isOpenChat(sid)) {
-          this.chatStore.setTyping(false)
-          // Issue #680: Set pending approval flag to prevent polling race conditions
-          this.chatStore.setPendingApproval(true)
-        }
+        // #21357: typing is the open chat's; the approval flag is per chat, so it lands on the stream's own
+        if (this.isOpenChat(sid)) this.chatStore.setTyping(false)
+        // Issue #680: Set pending approval flag to prevent polling race conditions
+        this.chatStore.setPendingApproval(true, sid)
         this.chatStore.updateMessage(frontendMessageId, {
           content: data.content || 'Command approval required',
           type: 'command_approval_request',
