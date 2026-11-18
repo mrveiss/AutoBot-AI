@@ -64,6 +64,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANSIBLE = "autobot-slm-backend/ansible"
@@ -236,7 +237,7 @@ def is_comment_line(line: str) -> bool:
     nothing, and used to read as live because the line still contained a
     `_WRONG` literal (#17444 review).
     """
-    return line.strip().startswith("#")
+    return bool(line.strip()) and not code_lines(line)
 
 
 def _sweep(root: Path) -> list[str]:

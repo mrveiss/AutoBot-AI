@@ -49,6 +49,10 @@ _ROOT = repo_root()
 #: Comment markers a hand-rolled stripper tests for.
 _MARKERS = frozenset({"#", "//", "/*"})
 
+#: Path prefixes that mark a `startswith` tuple as a URL/path check rather than a comment skip. Explicit, not a
+#: generic leading `/`: `/**` and `///` also start with `/` and are comment-adjacent markers.
+_URL_PATH_PREFIXES = frozenset({"/api"})
+
 #: Files that still carry their own comment skip, pending migration to
 #: `tools.lint._comment_syntax`. **This list only ever shrinks.** An entry is
 #: removed when that file adopts the shared helper; nothing may be added.
@@ -149,13 +153,13 @@ def _tuple_skips_comments(arg: ast.Tuple) -> bool:
 
     `startswith(("/api", "http", "//"))` tests for a path or protocol-relative
     URL: the `//` there is the start of a URL, not a comment. Such a tuple
-    carries a sibling that is itself a URL or path prefix (`http...` or a
-    single leading `/`). A bare `startswith("//")` or `("#", "!")` has none.
+    carries a sibling that is itself a URL (`http...`) or a path prefix from
+    `_URL_PATH_PREFIXES`; any other leading `/` is not enough. A bare `startswith("//")` or `("#", "!")` has none.
     """
     values = [e.value for e in arg.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
     if not any(v in _MARKERS for v in values):
         return False
-    url_like = any(v.startswith("http") or (v.startswith("/") and v not in _MARKERS) for v in values)
+    url_like = any(v.startswith("http") or v in _URL_PATH_PREFIXES for v in values)
     return not (url_like and "//" in values and not (set(values) & {"#", "/*"}))
 
 
@@ -218,6 +222,8 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a tuple of markers", 'if line.startswith(("#", "//")):\n    pass\n', True),
         ("a URL or path-prefix check", 'if p.startswith(("/api", "http", "//")):\n    pass\n', False),
         ("a tuple of comment markers beside a URL prefix", 'if p.startswith(("http", "#")):\n    pass\n', True),
+        ("a block-doc marker beside slash-slash", 'if p.startswith(("//", "/**")):\n    pass\n', True),
+        ("a triple slash beside slash-slash", 'if p.startswith(("//", "///")):\n    pass\n', True),
         ("a bare slash-slash skip stays a stripper", 'if p.startswith("//"):\n    pass\n', True),
         ("startswith on something else", 'if name.startswith("test_"):\n    pass\n', False),
         ("a comment naming the idiom", '# we used to call line.startswith("#") here\nx = 1\n', False),

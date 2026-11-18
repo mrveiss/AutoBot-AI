@@ -421,10 +421,25 @@ def _string_values(node: object):
             yield from _string_values(item)
 
 
+def _bootstrap_fact_uses(text: str) -> list[bool]:
+    """One entry per reference to `_sd_need_bootstrap` in a rendered value: True when filtered through `| bool`.
+
+    The assignment target is a mapping key, so it is never a value. Raises when the YAML loads to nothing, so a
+    moved or emptied target fails rather than reading as "no offenders".
+    """
+    loaded = yaml.safe_load(text)
+    assert loaded, "the target YAML loaded to an empty value -- the file moved or was emptied"
+    return [
+        match.group(1) is not None
+        for value in _string_values(loaded)
+        for line in value.splitlines()
+        for match in _BOOTSTRAP_FACT_USE.finditer(line)
+    ]
+
+
 def _unfiltered_bootstrap_fact_lines(text: str) -> list[str]:
     """Lines of rendered values that reference `_sd_need_bootstrap` where the
-    reference is NOT immediately filtered through `| bool`. The assignment
-    target is a mapping key, so it is never a value. Empty once the fix holds
+    reference is NOT immediately filtered through `| bool`. Empty once the fix holds
     everywhere."""
     offenders = []
     for value in _string_values(yaml.safe_load(text)):
@@ -436,6 +451,8 @@ def _unfiltered_bootstrap_fact_lines(text: str) -> list[str]:
 
 def test_bootstrap_fact_uses_are_bool_filtered() -> None:
     text = _SHARED_TASK_FILE.read_text(encoding="utf-8")
+    examined = _bootstrap_fact_uses(text)
+    assert examined, "no reference to _sd_need_bootstrap was examined -- the sweep looked at nothing"
     offenders = _unfiltered_bootstrap_fact_lines(text)
     assert not offenders, (
         f"_sd_need_bootstrap used without `| bool` on: {offenders} -- Ansible templating can hand this fact "
