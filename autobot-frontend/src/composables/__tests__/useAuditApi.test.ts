@@ -6,7 +6,8 @@
 // Tests for useAuditApi — GH#7538
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAuditApi } from '../useAuditApi'
+import { useAuditApi, useAuditState } from '../useAuditApi'
+import { calculateSuccessRate } from '@/types/audit'
 
 const mockGet = vi.fn()
 
@@ -113,5 +114,87 @@ describe('useAuditApi.getFailedOperations', () => {
     expect(mockGet).toHaveBeenCalledWith(
       '/api/audit/failures?hours=24&result_filter=denied'
     )
+  })
+})
+
+describe('useAuditApi figures over unfinished records (#20665)', () => {
+  const row = (id: string, result: string) => ({ id, operation: 'op', result, timestamp: 1 })
+
+  async function loaded(results: string[], statistics?: Record<string, unknown>) {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/audit/statistics')) {
+        return Promise.resolve({ success: true, statistics, vm_info: { vm_source: 'x', vm_name: 'y' } })
+      }
+      return Promise.resolve({
+        success: true,
+        total_returned: results.length,
+        has_more: false,
+        entries: results.map((r, i) => row(String(i), r)),
+        query: {},
+      })
+    })
+    const api = useAuditState()
+    await api.loadLogs()
+    if (statistics) await api.loadStatistics()
+    return api
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('an attempted row beside a success leaves 100% and no failure', async () => {
+    const api = await loaded(['attempted', 'success'])
+
+    expect(api.successRate.value).toBe(100)
+    expect(api.failedEntries.value).toHaveLength(0)
+  })
+
+  it('an attempted row beside a failure leaves 0% and one failure', async () => {
+    const api = await loaded(['attempted', 'failed'])
+
+    expect(api.successRate.value).toBe(0)
+    expect(api.failedEntries.value).toHaveLength(1)
+  })
+
+  it('a lone attempted row is 0% with no failure', async () => {
+    const api = await loaded(['attempted'])
+
+    expect(api.successRate.value).toBe(0)
+    expect(api.failedEntries.value).toHaveLength(0)
+  })
+
+  it('a statistics object that carries no success_rate does not hide the computed rate', async () => {
+    const api = await loaded(['success', 'denied', 'attempted'], { total_entries: 3 })
+
+    expect(api.statistics.value).not.toBeNull()
+    expect(api.successRate.value).toBe(50)
+  })
+
+  it('a numeric success_rate from the server is honoured', async () => {
+    const api = await loaded(['success', 'denied'], { success_rate: 87 })
+
+    expect(api.successRate.value).toBe(87)
+  })
+
+  it('a non-finite success_rate from the server falls back to the computed rate', async () => {
+    const api = await loaded(['success', 'failed'], { success_rate: NaN })
+
+    expect(api.successRate.value).toBe(50)
+  })
+})
+
+describe('calculateSuccessRate (#20665)', () => {
+  it('is 0 when no row is terminal', () => {
+    expect(calculateSuccessRate(0, 0)).toBe(0)
+  })
+
+  it('is 33 for 1 of 3', () => {
+    expect(calculateSuccessRate(1, 3)).toBe(33)
+  })
+
+  it('rounds half up and reaches 100', () => {
+    expect(calculateSuccessRate(2, 3)).toBe(67)
+    expect(calculateSuccessRate(4, 4)).toBe(100)
   })
 })

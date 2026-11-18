@@ -18,8 +18,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from api.knowledge_search_aggregator import _get_facts_for_graph, _search_facts, get_llm_context
+from api.knowledge_graph_facts import visible_facts_page
+from api.knowledge_search_aggregator import _search_facts, get_llm_context
 from api.schemas_knowledge import ContextRequest
+from knowledge.graph_limits import SCAN_BATCH
 from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
@@ -47,17 +49,9 @@ async def test_get_facts_for_graph_lists_facts_with_quarantined_ones_left_out():
     mock_kb = AsyncMock()
     mock_kb.get_all_facts.return_value = []
 
-    await _get_facts_for_graph(
-        mock_kb,
-        category_filter=None,
-        max_facts=25,
-        user_id=_USER_ID,
-        user_org_id=None,
-        user_group_ids=[],
-        is_admin=False,
-    )
+    await visible_facts_page(mock_kb, None, 25, 0, _USER_ID, None, [], False)
 
-    mock_kb.get_all_facts.assert_awaited_once_with(limit=25)
+    mock_kb.get_all_facts.assert_awaited_once_with(limit=SCAN_BATCH, offset=0)
     mock_kb.search.assert_not_called()
 
 
@@ -73,15 +67,7 @@ async def test_the_graph_has_facts_when_search_falls_back_and_star_matches_nothi
     mock_kb.get_all_facts.return_value = facts
     mock_kb.ownership_manager = KnowledgeOwnership(None)  # the real access check, as the read-path fakes use
 
-    got = await _get_facts_for_graph(
-        mock_kb,
-        category_filter=None,
-        max_facts=25,
-        user_id=_USER_ID,
-        user_org_id=None,
-        user_group_ids=[],
-        is_admin=True,
-    )
+    got = (await visible_facts_page(mock_kb, None, 25, 0, _USER_ID, None, [], True)).facts
 
     assert [fact["id"] for fact in got] == ["f1", "f2"], "the permission check needs the id search would give"
     assert [fact["category"] for fact in got] == ["docs", "general"]

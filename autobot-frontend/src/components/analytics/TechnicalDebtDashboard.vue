@@ -434,7 +434,7 @@
 </template>
 
 <script setup lang="ts">
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, watch } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
 import { BaseModal, BaseButton, saveTextFile } from '@autobot/ui'
@@ -706,7 +706,7 @@ async function loadTrends(): Promise<void> {
 async function exportReport(): Promise<void> {
   try {
     const markdownContent = await fetchReportBlob();
-    saveTextFile(markdownContent, `technical-debt-report-${new Date().toISOString().split('T')[0]}.md`, 'text/markdown');
+    saveTextFile(markdownContent, `technical-debt-report-${isoDateStamp()}.md`, 'text/markdown');
   } catch (error) {
     logger.error('Failed to export report:', error);
   }
