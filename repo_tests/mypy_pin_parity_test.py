@@ -169,3 +169,17 @@ def test_the_suite_requirements_pin_the_formatter_the_hook_runs(tool):
         f"{tool} is pinned to {suite[tool]} in {CI_TEST_REQUIREMENTS.name} but "
         f"{PRE_COMMIT_PINS[tool]} in {PRE_COMMIT.name}. Bump both, or neither."
     )
+
+
+def test_the_isort_hook_reads_the_project_settings_like_the_gate():
+    """The gate passes --settings-path=. so first-party classification matches; the hook must too (#16796)."""
+    config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
+    args = [
+        arg
+        for repo in config.get("repos", [])
+        for hook in repo.get("hooks", [])
+        if hook.get("id") == "isort"
+        for arg in hook.get("args", [])
+    ]
+    assert "--settings-path=." in args, f"isort hook args {args} lack --settings-path=."
+    assert "--settings-path=." in CODE_QUALITY.read_text(encoding="utf-8")

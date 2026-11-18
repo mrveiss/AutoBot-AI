@@ -60,6 +60,9 @@ repos:
     rev: 8.0.1
     hooks:
       - id: isort
+        # The hook runs on the changed files repo-wide (excluding autobot-infrastructure/); the gate
+        # checks autobot-backend/ autobot-slm-backend/ autobot_shared/ only, the code CI owns. The
+        # arguments match, so a file in both sets is sorted the same way by either.
         # Same invocation as _gate-code-quality.yml: read pyproject.toml (profile, src_paths,
         # known_first_party) so a single changed file classifies imports as the gate does (#16796).
         args: [--settings-path=., --line-length=120]

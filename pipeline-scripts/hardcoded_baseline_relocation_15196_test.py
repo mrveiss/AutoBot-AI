@@ -73,3 +73,15 @@ def test_a_still_matched_entry_is_not_offered_as_an_origin(tmp_path):
 
     assert "New violations:   1" in result.stdout, result.stdout
     assert _MOVED_NOTE not in result.stdout
+
+
+def test_a_scoped_audit_does_not_call_an_unscanned_files_entry_the_origin(tmp_path):
+    """A scoped audit never read svc.py, so its entry looks stranded; that is not evidence of a move."""
+    root = _FIXTURES._repo_claiming_two(tmp_path, 2)
+    (root / "autobot-backend" / "added.py").write_text(f'HOST = "{_FIXTURES._FLEET_IP}"\n', encoding="utf-8")
+
+    result = _FIXTURES._scoped(root, "autobot-backend/added.py")
+
+    assert result.returncode == 1, result.stdout
+    assert "not in pipeline-scripts/hardcoded_values_baseline.txt" in result.stdout
+    assert _MOVED_NOTE not in result.stdout

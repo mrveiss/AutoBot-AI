@@ -127,15 +127,18 @@ fi
 # Needs a completed hv_partition (HV_BASELINE_SEEN is read).
 hv_relocation_note() {
     local class="${1:?class required}" file="${2:?file required}" value="${3-}" key old
-    while IFS= read -r key; do
+    for key in "${HV_SORTED_KEYS[@]}"; do
         [[ $key == "${class}|"*"|${value}" ]] || continue
         old="${key#"${class}|"}"
         old="${old%"|${value}"}"
         [ "$old" != "$file" ] || continue
+        # A scoped audit (--paths-from) only scanned its own paths: an unscanned file's entry
+        # looks stranded but is simply unread, so it is no evidence of a move.
+        if [ "${#HV_ONLY_FILES[@]}" -gt 0 ] && [ -z "${HV_ONLY_FILES[$old]:-}" ]; then continue; fi
         [ "${HV_BASELINE_SEEN[$key]:-0}" -lt "${HV_BASELINE[$key]}" ] || continue
         printf ' (relocated? the baseline records this value under %s, which no longer has it: the value is old, not new; replace it with the SSOT constant rather than re-baselining it)' "$old"
         return 0
-    done < <(printf '%s\n' "${!HV_BASELINE[@]}" | LC_ALL=C sort)
+    done
     return 0
 }
 
@@ -150,6 +153,8 @@ trap 'rm -f "$RAW" "$NEWFILE"' EXIT
 # its counters die with it — see the note on the function.
 hv_partition < "$RAW" > "$NEWFILE"
 SUPPRESSED="$HV_SUPPRESSED"
+# Sorted once, here, because hv_relocation_note runs in a subshell per finding and cannot cache.
+mapfile -t HV_SORTED_KEYS < <(printf '%s\n' "${!HV_BASELINE[@]}" | LC_ALL=C sort)
 NEW=$(cat "$NEWFILE")
 
 count_of() { grep -c "$1" "$NEWFILE" || true; }
