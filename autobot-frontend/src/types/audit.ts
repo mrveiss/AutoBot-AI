@@ -220,6 +220,48 @@ export function calculateSuccessRate(successCount: number, terminalCount: number
   return Math.round((successCount / terminalCount) * 100)
 }
 
+/** A server-sent figure when it is a finite number, else undefined. */
+function served(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/**
+ * The figures the statistics panel shows (#20665 AC3, #21513). A count or rate the server sent is used
+ * as sent; one it did not send is derived from the loaded `entries`, which describes that window and
+ * not the whole log. An `attempted` row is neither a success nor a failure: it is in no result count
+ * and not in the rate's denominator ({@link isTerminalAuditResult}). Null when there is neither a
+ * statistics object nor a row to derive from.
+ */
+export function resolveAuditStatistics(
+  server: Partial<AuditStatistics> | null,
+  entries: ReadonlyArray<{ result: string }>
+): AuditStatistics | null {
+  if (!server && entries.length === 0) return null
+  const count = (result: AuditResult) => entries.filter((e) => e.result === result).length
+  const success = served(server?.success_count) ?? count('success')
+  const denied = served(server?.denied_count) ?? count('denied')
+  const failed = served(server?.failed_count) ?? count('failed')
+  const error = served(server?.error_count) ?? count('error')
+  // No count served: the rows alone decide the rate, over every FINAL outcome (timed_out included, attempted
+  // excluded). Counts the server did serve are the figures shown, so the rate is taken over those.
+  const anyServed = [server?.success_count, server?.denied_count, server?.failed_count, server?.error_count].some((v) => served(v) !== undefined)
+  const denominator = anyServed ? success + denied + failed + error : entries.filter((e) => isTerminalAuditResult(e.result)).length
+  return {
+    ...server,
+    operations_by_type: server?.operations_by_type ?? {},
+    entries_by_hour: server?.entries_by_hour ?? {},
+    top_users: server?.top_users ?? [],
+    top_operations: server?.top_operations ?? [],
+    total_entries: served(server?.total_entries) ?? entries.length,
+    success_count: success,
+    denied_count: denied,
+    failed_count: failed,
+    error_count: error,
+    // A rate the server did not send is derived from the counts shown beside it, or from the final rows; `attempted` is in neither.
+    success_rate: served(server?.success_rate) ?? calculateSuccessRate(success, denominator),
+  }
+}
+
 /**
  * Helper to get date range for filter
  */
