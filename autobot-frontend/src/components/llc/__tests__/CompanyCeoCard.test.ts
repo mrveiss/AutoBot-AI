@@ -20,42 +20,8 @@ vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, put, delete: del }
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
-// The kit's select menu is built on reka-ui, whose popper does not run in jsdom. A minimal
-// stand-in keeps the kit component real and makes its options clickable.
-vi.mock('reka-ui', async () => {
-  const { defineComponent, h, inject, provide } = await import('vue')
-  const passthrough = (name: string) =>
-    defineComponent({ name, setup: (_, { slots }) => () => h('div', slots.default?.()) })
-  const SelectRoot = defineComponent({
-    name: 'SelectRoot',
-    props: { modelValue: { type: String, default: '' } },
-    emits: ['update:modelValue'],
-    setup(_, { slots, emit }) {
-      provide('pick', (v: string) => emit('update:modelValue', v))
-      return () => h('div', slots.default?.())
-    },
-  })
-  const SelectItem = defineComponent({
-    name: 'SelectItem',
-    props: { value: { type: String, required: true } },
-    setup(props, { slots }) {
-      const pick = inject<(v: string) => void>('pick')!
-      return () => h('button', { type: 'button', 'data-option': props.value, onClick: () => pick(props.value) }, slots.default?.())
-    },
-  })
-  const SelectTrigger = defineComponent({
-    name: 'SelectTrigger',
-    setup: (_, { slots, attrs }) => () => h('button', { type: 'button', 'data-trigger': '', ...attrs }, slots.default?.()),
-  })
-  const names = [
-    'SelectContent', 'SelectItemText', 'SelectPortal', 'SelectValue', 'SelectViewport',
-    'PopoverContent', 'PopoverPortal', 'PopoverRoot', 'PopoverTrigger',
-    'TabsContent', 'TabsList', 'TabsRoot', 'TabsTrigger',
-    'AccordionContent', 'AccordionHeader', 'AccordionItem', 'AccordionRoot', 'AccordionTrigger',
-    'DropdownMenuContent', 'DropdownMenuItem', 'DropdownMenuPortal', 'DropdownMenuRoot', 'DropdownMenuSeparator', 'DropdownMenuTrigger',
-  ]
-  return Object.fromEntries([['SelectRoot', SelectRoot], ['SelectItem', SelectItem], ['SelectTrigger', SelectTrigger], ...names.map((n) => [n, passthrough(n)])])
-})
+// The kit's select menu is built on reka-ui, whose popper does not run in jsdom (shared stand-in).
+vi.mock('reka-ui', async () => (await import('@/test/rekaSelectStub')).rekaSelectStub())
 
 import CompanyCeoCard from '../CompanyCeoCard.vue'
 
@@ -69,7 +35,10 @@ const none = { company_id: 'c1', holder_exists: false }
 const live = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: true }
 const gone = { company_id: 'c1', holder_type: 'agent', holder_id: AGENT, holder_exists: false }
 
-function serve(designation: unknown, members: unknown[] = [{ user_id: USER, display_name: 'Ada', role: 'owner' }]) {
+function serve(
+  designation: unknown,
+  members: unknown = { members: [{ user_id: USER, display_name: 'Ada', role: 'owner' }], viewer_can_manage: true },
+) {
   get.mockImplementation((url: string) => {
     if (url.endsWith('/ceo')) return designation instanceof Error ? Promise.reject(designation) : Promise.resolve(designation)
     if (url.endsWith('/org-chart')) {
@@ -203,5 +172,61 @@ describe('CompanyCeoCard (#15945)', () => {
     const wrapper = await mountCard()
     expect(wrapper.find('[data-testid="ceo-people-failed"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="ceo-no-candidates"]').exists()).toBe(false)
+  })
+})
+
+// #20542: setting or clearing the CEO answers 403 unless the server lets the caller manage the
+// company, so the card offers those controls to no one else. The server's verdict is the members
+// response's `viewer_can_manage` (true for a platform admin with no membership too); the card never
+// derives it from a role, and reads it off the one members request the people load already makes.
+describe('CompanyCeoCard controls follow the server verdict (#20542)', () => {
+  beforeEach(() => {
+    get.mockReset()
+  })
+
+  const asViewer = (role: string | null, canManage: boolean, rows = [{ user_id: USER, display_name: 'Ada', role: 'member' }]) => ({
+    members: rows,
+    viewer_role: role,
+    viewer_can_manage: canManage,
+  })
+  const controls = ['ceo-change', 'ceo-set', 'ceo-clear']
+  const membersCalls = () => get.mock.calls.filter(([url]) => String(url).endsWith('/members')).length
+
+  it.each([['owner'], ['admin'], [null]])('offers set and clear when the server says yes (viewer role %s)', async (role) => {
+    serve(live, asViewer(role, true))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
+  })
+
+  it.each(['member', 'lead', 'guest', null])('hides set and clear when the server says no (viewer role %s) but shows the holder', async (role) => {
+    serve(live, asViewer(role, false))
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+  })
+
+  it('offers set and clear to a platform admin on a company with no member rows (#21096)', async () => {
+    serve(live, asViewer(null, true, []))
+    const wrapper = await mountCard()
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(true)
+  })
+
+  it('hides set and clear while the verdict cannot be read, and says the people did not load', async () => {
+    serve(live)
+    const answer = get.getMockImplementation()!
+    get.mockImplementation((url: string) =>
+      url.endsWith('/members') ? Promise.reject(new HttpError(503, 'down')) : answer(url),
+    )
+    const wrapper = await mountCard()
+    expect(wrapper.find('[data-testid="ceo-live"]').exists()).toBe(true)
+    for (const id of controls) expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ceo-people-failed"]').exists()).toBe(true)
+  })
+
+  it('makes one members request on mount, not one for the people and another for the verdict', async () => {
+    serve(live, asViewer('owner', true))
+    await mountCard()
+    expect(membersCalls()).toBe(1)
   })
 })

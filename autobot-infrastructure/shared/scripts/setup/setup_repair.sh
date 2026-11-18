@@ -434,9 +434,22 @@ run_repairs() {
     fi
 
     # Fix Python environment
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$SCRIPT_DIR/../../../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
+    if [ "${ISSUES_FOUND[venv_missing]}" != true ] && [ -d venv ] \
+        && ! python_floor_venv_matches "$SCRIPT_DIR/../../../.." venv; then
+        log_info "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
+        rm -rf venv
+        ISSUES_FOUND[venv_missing]=true
+    fi
     if [ "${ISSUES_FOUND[venv_missing]}" = true ]; then
         log_info "Creating Python virtual environment..."
-        python3 -m venv venv
+        # #20932: the floor interpreter from .python-version, never a bare python3
+        PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../../../..")" || exit 1
+        "$PYTHON_BIN" -m venv venv
     fi
 
     if [ "${ISSUES_FOUND[deps_need_update]}" = true ] || [ "${ISSUES_FOUND[venv_missing]}" = true ]; then

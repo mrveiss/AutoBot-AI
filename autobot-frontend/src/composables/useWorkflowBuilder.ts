@@ -17,10 +17,13 @@ import { ref, computed } from 'vue';
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import httpClient from '@/utils/ApiClient';
+import { isHttpError } from '@autobot/ui';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 import { useWebSocket } from '@/composables/useWebSocket';
+import { useStepAnswerState, stepSendResult } from '@/composables/useStepAnswerState';
+import { useWorkflowStatusRefresh } from '@/composables/workflow/useWorkflowStatusRefresh';
 import { refreshIfDisplayed, useWorkflowSocketNotices } from '@/composables/useWorkflowSocketNotices';
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl';
 import { useLoadingState } from '@/composables/useLoadingState';
@@ -266,8 +269,7 @@ class WorkflowBuilderApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    // Base URL resolved by httpClient/apiClient (#12363); `endpoint` is the
-    // getApiBase()-prefixed relative path proxied by nginx/Vite.
+    // Base URL resolved by httpClient (#12363); `endpoint` is the getApiBase()-prefixed relative path.
     try {
       const method = ((options.method as string) || 'GET').toUpperCase();
       let data: T;
@@ -281,7 +283,7 @@ class WorkflowBuilderApiClient {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('API request failed:', { endpoint, error: message });
-      return { success: false, error: message };
+      return { success: false, error: message, httpStatus: isHttpError(error) ? error.status : undefined };
     }
   }
 
@@ -569,6 +571,7 @@ const apiClient = new WorkflowBuilderApiClient();
 
 export function useWorkflowBuilder() {
   const { showWorkflowNotice } = useWorkflowSocketNotices();
+  const stepAnswers = useStepAnswerState();
   // ==================================================================================
   // STATE
   // ==================================================================================
@@ -590,6 +593,7 @@ export function useWorkflowBuilder() {
   const activeWorkflows = ref<ActiveWorkflow[]>([]);
   const completedWorkflows = ref<ActiveWorkflow[]>([]);
   const currentWorkflow = ref<ActiveWorkflow | null>(null);
+  const statusRefresh = useWorkflowStatusRefresh({ currentWorkflow, activeWorkflows, fetchStatus: (id) => stepAnswers.fetchStatus(id, () => apiClient.getWorkflowStatus(id)) });
   const workflowPlan = ref<OrchestratorWorkflowPlan | null>(null);
   const pendingApproval = ref<PlanApprovalRequest | null>(null);
 
@@ -648,6 +652,8 @@ export function useWorkflowBuilder() {
   const isWorkflowPaused = computed(() => currentWorkflow.value?.is_paused ?? false);
   const currentStepIndex = computed(() => currentWorkflow.value?.current_step ?? 0);
   const totalSteps = computed(() => currentWorkflow.value?.total_steps ?? 0);
+  /** Steps the server reports as waiting: the approval card derives from this, not from socket frames (#17677). */
+  const stepsAwaitingApproval = computed(() => currentWorkflow.value?.steps?.filter((s) => s.status === 'waiting_approval') ?? []);
   const progress = computed(() => {
     if (totalSteps.value === 0) return 0;
     return Math.round((currentStepIndex.value / totalSteps.value) * 100);
@@ -858,6 +864,7 @@ export function useWorkflowBuilder() {
     await wrapLoading(async () => {
       const response = await apiClient.getActiveWorkflows();
       if (response.success && response.data) {
+        stepAnswers.forgetRemoved(activeWorkflows.value, response.data.workflows);
         activeWorkflows.value = response.data.workflows;
         logger.debug('Active workflows loaded:', response.data);
       } else {
@@ -865,6 +872,7 @@ export function useWorkflowBuilder() {
         logger.warn('Active workflows unavailable:', response.error);
       }
     });
+    await statusRefresh.restoreWaitingWorkflow(); // a reload with no workflow query still shows waiting approvals (#21033)
   }
 
   /** Load completed workflow history (#1367) */
@@ -878,14 +886,7 @@ export function useWorkflowBuilder() {
   }
 
   /** Get workflow status */
-  async function getWorkflowStatus(workflowId: string): Promise<ActiveWorkflow | null> {
-    const response = await apiClient.getWorkflowStatus(workflowId);
-    if (response.success && response.data) {
-      currentWorkflow.value = response.data.workflow;
-      return response.data.workflow;
-    }
-    return null;
-  }
+  const getWorkflowStatus = (workflowId: string): Promise<ActiveWorkflow | null> => statusRefresh.readStatus(workflowId);
 
   /** Create workflow from template */
   async function createWorkflowFromTemplate(
@@ -992,27 +993,11 @@ export function useWorkflowBuilder() {
     return false;
   }
 
-  /** Approve workflow step */
-  async function approveStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'approve_step', stepId);
-    if (response.success) {
-      logger.info('Step approved:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
-  }
-
-  /** Skip workflow step */
-  async function skipStep(workflowId: string, stepId: string): Promise<boolean> {
-    const response = await apiClient.controlWorkflow(workflowId, 'skip_step', stepId);
-    if (response.success) {
-      logger.info('Step skipped:', { workflowId, stepId });
-      await getWorkflowStatus(workflowId);
-      return true;
-    }
-    return false;
-  }
+  /** Answer a waiting step (approve or skip), then re-read its server status; see `useStepAnswerState.answer`. */
+  const answerStep = (workflowId: string, stepId: string, action: 'approve_step' | 'skip_step') =>
+    stepAnswers.answer(workflowId, stepId, async () => stepSendResult(await apiClient.controlWorkflow(workflowId, action, stepId)), () => statusRefresh.refreshAfterAnswer(workflowId));
+  const approveStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'approve_step');
+  const skipStep = (workflowId: string, stepId: string) => answerStep(workflowId, stepId, 'skip_step');
 
   /** Approve plan */
   async function approvePlan(workflowId: string): Promise<boolean> {
@@ -1269,6 +1254,7 @@ export function useWorkflowBuilder() {
     pauseWorkflow,
     resumeWorkflow,
     cancelWorkflow,
+    stepsAwaitingApproval,
     approveStep,
     skipStep,
     approvePlan,

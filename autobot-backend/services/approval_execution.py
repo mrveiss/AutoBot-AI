@@ -77,6 +77,10 @@ _AUDIT_OPERATION = "approval.post_action_failed"
 #: approval's payload AND its requester, which defeats any rule about who may decide it.
 _SERVER_ONLY: set[str] = set()
 
+#: Actions whose approval needs the admin role on top of an interactive human (#20046, owner ruling 2026-11-06):
+#: approving the deletion of a stored credential is an admin decision, not any signed-in person's.
+_ADMIN_ONLY: set[str] = set()
+
 #: Attribute carrying the VERIFIED decider's user id from the decision route to the handler. Never persisted and
 #: never parsed from ``decided_by_user``, which is a display name on one route and a different shape on the other.
 _DECIDER_ATTR = "_verified_decider_id"
@@ -97,6 +101,11 @@ async def review_decision(approval: "Approval", session: "AsyncSession", decider
 def is_server_only_action(action: object) -> bool:
     """Whether *action* may be created only by its own server-side proposer, never through a create route."""
     return isinstance(action, str) and action in _SERVER_ONLY
+
+
+def action_needs_elevated_approver(action: object) -> bool:
+    """Whether approving *action* needs the admin role (#20046)."""
+    return isinstance(action, str) and action in _ADMIN_ONLY
 
 
 def set_verified_decider(approval: "Approval", user_id: "uuid.UUID | None") -> None:
@@ -138,6 +147,7 @@ def register_post_approval_action(
     *,
     proposed_by: str,
     server_only: bool = False,
+    admin_only: bool = False,
     free_text_keys: "frozenset[str]" = frozenset(),
     review: "DecisionReview | None" = None,
 ) -> None:
@@ -163,6 +173,8 @@ def register_post_approval_action(
     _PROPOSERS[action] = proposed_by.strip()
     if server_only:
         _SERVER_ONLY.add(action)
+    if admin_only:
+        _ADMIN_ONLY.add(action)
     _FREE_TEXT_KEYS[action] = frozenset(free_text_keys)
     if review is not None:
         _DECISION_REVIEWS[action] = review

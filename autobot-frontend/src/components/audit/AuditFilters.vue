@@ -72,6 +72,7 @@
           <option value="denied">{{ $t('audit.filters.denied') }}</option>
           <option value="failed">{{ $t('audit.filters.failed') }}</option>
           <option value="error">{{ $t('audit.filters.error') }}</option>
+          <option value="attempted">{{ $t('audit.filters.attempted') }}</option>
         </select>
       </div>
     </div>

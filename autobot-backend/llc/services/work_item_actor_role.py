@@ -11,6 +11,8 @@ from typing import Dict, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.auth.permissions import is_admin_role
+
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem
 
@@ -74,7 +76,15 @@ async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], com
     return "member"
 
 
-_COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
+# Roles beyond the platform admin that may manage co-working. The admin decision itself is the
+# one shared predicate (is_admin_role), never a local literal (#16333).
+_COWORKING_NON_ADMIN_ROLES: frozenset = frozenset({"owner", "lead"})
+_COWORKING_ROLES_DESCRIPTION = "owner/admin/lead"
+
+
+def _can_manage_coworking(role: Optional[str]) -> bool:
+    """True when *role* may enable/disable co-working: an admin (``is_admin_role``), owner or lead."""
+    return is_admin_role(role or "member") or (role or "") in _COWORKING_NON_ADMIN_ROLES
 
 
 def _coworking_state(item: LLCWorkItem) -> dict:
@@ -85,3 +95,10 @@ def _coworking_state(item: LLCWorkItem) -> dict:
         "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
         "co_working_enabled": item.co_working_enabled,
     }
+
+
+def coworking_denial(role: Optional[str]) -> Optional[str]:
+    """The refusal message when *role* may not manage co-working, else None."""
+    if _can_manage_coworking(role):
+        return None
+    return f"Role {role!r} does not have permission to manage co-working. " f"Required: {_COWORKING_ROLES_DESCRIPTION}"

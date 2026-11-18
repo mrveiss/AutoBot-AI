@@ -73,6 +73,7 @@ from api.schemas_knowledge import (
 from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.summarization_prompt import SummarizationFailed
 from constants.threshold_constants import CategoryDefaults
 from knowledge.search_filters import scoped_reader
 from security.upload_filename_policy import require_safe_upload
@@ -325,6 +326,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     except TranscriptRefused as e:
         # #15700: a refused transcript is the user's to fix, not a server fault.
         raise HTTPException(status_code=422, detail=str(e))
+    except SummarizationFailed as e:
+        logger.error("Chat summarisation failed (#20852): %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

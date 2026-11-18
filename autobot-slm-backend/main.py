@@ -66,6 +66,7 @@ from api import (
 )
 from api.code_source import router as code_source_router
 from api.memory_lifecycle_proxy import router as memory_lifecycle_router
+from api.node_ssh_password_internal import router as node_ssh_password_internal_router
 from api.performance import metrics_router as performance_metrics_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
@@ -73,6 +74,7 @@ from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.fastapi_validation_handlers import register_validation_error_handlers
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
+from autobot_shared.logging_manager import setup_logging
 from autobot_shared.stream_logging import (
     build_stderr_handler,
     build_stdout_handler,
@@ -115,6 +117,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[build_stdout_handler(), build_stderr_handler()],
 )
+setup_logging()  # service startup (uvicorn imports this module): file logging on (#20894)
 logger = logging.getLogger(__name__)
 
 
@@ -300,9 +303,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Reconfigure root logger AFTER uvicorn's setup so application
     # logs (code_sync, git_tracker, etc.) are visible in service logs.
-    # #12488: keep the same stdout/stderr level split as the module-level
-    # basicConfig() above — force=True replaces it, so it must be
-    # re-applied here too.
+    # #12488: the same stdout/stderr split as the module-level basicConfig(); force=True replaces it.
     logging.basicConfig(
         level=logging.DEBUG if settings.debug else logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -600,11 +601,8 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 #
 # Two routes below are declared here rather than moved into a router, because
 # the idiom itself — not the auth outcome — is what has to be visible:
-#   root (@app.get("/")) — service banner; no credentials exist yet to check,
-#       and it discloses only a static name/version string
-#   prometheus_registry_metrics (@app.get("/metrics")) — top-level prometheus
-#       scrape target (#10851); a scraper cannot authenticate, same reasoning
-#       as performance_metrics_router above
+#   root (@app.get("/")) — static name/version banner; no credentials exist yet to check
+#   prometheus_registry_metrics (@app.get("/metrics")) — top-level scrape target (#10851); a scraper cannot authenticate
 #
 # This list is enforced, not decorative: tests/api/
 # test_prometheus_scrape_is_unauthenticated_14339.py fails if any router is
@@ -662,6 +660,7 @@ app.include_router(errors_router, prefix="/api", dependencies=_SM)
 app.include_router(events_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(external_agents_router, prefix="/api", dependencies=_SM)
 app.include_router(node_rdp_router, prefix="/api", dependencies=_SM)
+app.include_router(node_ssh_password_internal_router, prefix="/api", dependencies=_SM_OR_AGENT)  # key-only, #20046
 app.include_router(rdp_router, prefix="/api", dependencies=_SM)
 app.include_router(node_vnc_router, prefix="/api", dependencies=_SM)
 app.include_router(vnc_router, prefix="/api", dependencies=_SM)
