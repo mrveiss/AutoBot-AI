@@ -58,9 +58,6 @@ _NOT_ORCHESTRABLE_SINGLETONS = {
     # A systemd template unit: instantiated per bridge (`autobot-mcp-bridge@x`),
     # so there is no single instance for a registry entry to describe.
     "autobot-mcp-bridge@": "systemd template unit, instantiated per bridge",
-    # A deployment variant of autobot-backend, not a service in its own right —
-    # the two are never both running.
-    "autobot-backend-single-worker": "single-worker variant of autobot-backend",
 }
 
 
@@ -171,3 +168,10 @@ def test_celery_declares_what_it_depends_on():
     celery = _SERVICE_DEFINITIONS["celery"]
 
     assert "backend" in celery.dependencies
+
+
+def test_chromadb_default_port_is_the_ssot_port():
+    # #19321: was a literal 8100 restating PortConfig.chromadb.
+    from autobot_shared.ssot_config import config
+
+    assert _SERVICE_DEFINITIONS["chromadb"].default_port == config.port.chromadb

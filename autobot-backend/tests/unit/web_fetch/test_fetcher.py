@@ -140,14 +140,14 @@ class TestFetchBS4SSRFPinning:
     @pytest.mark.asyncio
     async def test_blocks_private_ip_literal_no_network_call(self) -> None:
         with patch("aiohttp.ClientSession") as mock_session_cls:
-            html, status = await _fetch_bs4("http://10.0.0.5/secret", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("http://10.0.0.5/secret", timeout=5.0)
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_blocks_link_local_metadata_no_network_call(self) -> None:
         with patch("aiohttp.ClientSession") as mock_session_cls:
-            html, status = await _fetch_bs4("http://169.254.169.254/latest/meta-data/", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("http://169.254.169.254/latest/meta-data/", timeout=5.0)
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
 
@@ -167,7 +167,7 @@ class TestFetchBS4SSRFPinning:
             ),
             patch("aiohttp.ClientSession") as mock_session_cls,
         ):
-            html, status = await _fetch_bs4("https://rebind.example.com/page", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://rebind.example.com/page", timeout=5.0)
 
         assert (html, status) == (None, None)
         mock_session_cls.assert_not_called()
@@ -215,7 +215,7 @@ class TestFetchBS4SSRFPinning:
             patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
             patch("aiohttp.ClientSession", _FakeSession),
         ):
-            html, status = await _fetch_bs4("https://open-redirect.example.com/go", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://open-redirect.example.com/go", timeout=5.0)
 
         assert (html, status) == (None, None)
         # Only the first (legitimate) hop connected; hop 2 was blocked pre-connect.
@@ -228,6 +228,7 @@ class TestFetchBS4SSRFPinning:
 
         ok_resp = MagicMock()
         ok_resp.status = 200
+        ok_resp.headers = {"Content-Type": "text/html; charset=utf-8"}  # a real response's header map
 
         async def _iter_chunked(_size):
             yield b"<html><body>hi</body></html>"
@@ -248,7 +249,7 @@ class TestFetchBS4SSRFPinning:
             patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
             patch("aiohttp.ClientSession", _FakeSession),
         ):
-            html, status = await _fetch_bs4("https://real.example.com/page", timeout=5.0)
+            html, status, _content_type = await _fetch_bs4("https://real.example.com/page", timeout=5.0)
 
         assert status == 200
         assert "hi" in html
@@ -305,7 +306,7 @@ class TestRenderModeAuto:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200, "text/html")),
         ):
             result = await WebFetcher.fetch("https://example.com")
 
@@ -319,7 +320,7 @@ class TestRenderModeAuto:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200, "text/html")),
             patch("web_fetch.fetcher._fetch_playwright", return_value=playwright_html),
         ):
             result = await WebFetcher.fetch("https://spa.example.com")
@@ -355,7 +356,7 @@ class TestRenderModeFast:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_SPA_HTML, 200, "text/html")),
             patch("web_fetch.fetcher._fetch_playwright", side_effect=track_playwright),
         ):
             await WebFetcher.fetch("https://example.com", render=RenderMode.FAST)
@@ -417,7 +418,7 @@ class TestDispatchAndCacheWrite:
         with (
             patch("web_fetch.fetcher._is_public_url", return_value=True),
             patch("web_fetch.fetcher._fetch_jina", return_value=None),
-            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200)),
+            patch("web_fetch.fetcher._fetch_bs4", return_value=(_STATIC_HTML, 200, "text/html")),
         ):
             result = await WebFetcher.fetch(
                 "https://example.com/cached-path",
@@ -462,7 +463,7 @@ class TestCacheIntegration:
         redis, store = _make_redis()
         from web_fetch.cache import _content_cache_key
 
-        key = _content_cache_key("https://example.com", "auto")
+        key = _content_cache_key("https://example.com", "auto", "document")
         store[key] = json.dumps(cached_payload)
 
         jina_called = False
@@ -505,7 +506,7 @@ class TestFetchRawHtml:
     async def test_returns_html_and_status_tuple(self) -> None:
         with patch(
             "web_fetch.fetcher._fetch_bs4",
-            return_value=("<html><body>ok</body></html>", 200),
+            return_value=("<html><body>ok</body></html>", 200, "text/html"),
         ):
             html, status = await WebFetcher.fetch_raw_html("https://example.com")
 
@@ -514,7 +515,7 @@ class TestFetchRawHtml:
 
     @pytest.mark.asyncio
     async def test_returns_none_tuple_on_error(self) -> None:
-        with patch("web_fetch.fetcher._fetch_bs4", return_value=(None, None)):
+        with patch("web_fetch.fetcher._fetch_bs4", return_value=(None, None, None)):
             html, status = await WebFetcher.fetch_raw_html("https://example.com")
 
         assert html is None
@@ -527,7 +528,7 @@ class TestFetchRawHtml:
         async def _capture(url, timeout):
             captured["url"] = url
             captured["timeout"] = timeout
-            return ("<html/>", 200)
+            return ("<html/>", 200, "text/html")
 
         with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
             await WebFetcher.fetch_raw_html("https://example.com", timeout=7.5)
@@ -540,7 +541,7 @@ class TestFetchRawHtml:
 
         async def _capture(url, timeout):
             captured["timeout"] = timeout
-            return ("<html/>", 200)
+            return ("<html/>", 200, "text/html")
 
         with patch("web_fetch.fetcher._fetch_bs4", side_effect=_capture):
             await WebFetcher.fetch_raw_html("https://example.com")

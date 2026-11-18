@@ -14,7 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 SCRIPT = Path(__file__).resolve().parent / "session-stop-orphan-check.sh"
 SETTINGS = Path(__file__).resolve().parents[2] / ".claude" / "settings.json"
@@ -40,7 +40,7 @@ def test_outside_a_work_tree_exits_zero(tmp_path: Path) -> None:
 
 def test_inside_a_git_dir_exits_zero(tmp_path: Path) -> None:
     """The second field shape: cwd inside `.git`, which is a repo but no work tree."""
-    subprocess.run(["git", "init", "-q", str(tmp_path / "r")], check=True, env=scrubbed_git_env())
+    subprocess.run(["git", "init", "-q", str(tmp_path / "r")], check=True, env=isolated_git_env())
     res = _run(tmp_path / "r" / ".git", tmp_path)
     assert res.returncode == 0, res.stdout + res.stderr
 

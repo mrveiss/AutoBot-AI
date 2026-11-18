@@ -9,7 +9,7 @@
  *
  * Usage:
  *   const { discoverUrl, isLoading, error } = useServiceDiscovery();
- *   const redisUrl = await discoverUrl('redis');
+ *   const backendUrl = await discoverUrl('backend');
  */
 
 import { ref, computed } from 'vue'

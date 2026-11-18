@@ -19,11 +19,11 @@ Usage:
         AntiPatternSeverity,
         AntiPatternResult,
         AnalysisReport,
-        analyze_codebase,
+        analyze_codebase_anti_patterns,
     )
 
     # Quick analysis
-    report = analyze_codebase("/path/to/code")
+    report = analyze_codebase_anti_patterns("/path/to/code")
 
     # Custom analysis
     analyzer = AntiPatternSuiteAnalyzer()
@@ -31,7 +31,7 @@ Usage:
 """
 
 # Main analyzer
-from .analyzer import AntiPatternSuiteAnalyzer, analyze_codebase, analyze_codebase_async
+from .analyzer import AntiPatternSuiteAnalyzer, analyze_codebase_anti_patterns, analyze_codebase_async
 
 # Detectors
 from .detectors import (
@@ -44,8 +44,8 @@ from .detectors import (
 # Data models
 from .models import (
     AnalysisReport,
+    AnalyzedClassInfo,
     AntiPatternResult,
-    ClassInfo,
     FunctionInfo,
     ImportInfo,
 )
@@ -96,7 +96,7 @@ __all__ = [
     # Data models
     "AntiPatternResult",
     "AnalysisReport",
-    "ClassInfo",
+    "AnalyzedClassInfo",
     "FunctionInfo",
     "ImportInfo",
     # Severity utilities
@@ -118,7 +118,7 @@ __all__ = [
     "NamingDetector",
     # Main analyzer
     "AntiPatternSuiteAnalyzer",
-    "analyze_codebase",
+    "analyze_codebase_anti_patterns",
     "analyze_codebase_async",
     # Issue #554: Infrastructure
     "HAS_ANALYTICS_INFRASTRUCTURE",

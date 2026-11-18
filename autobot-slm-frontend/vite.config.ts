@@ -9,6 +9,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { shouldInjectInternalApiKey } from './src/config/devProxyAuth'
+import { autobotUiResolve } from '../libs/autobot-ui/vite-resolve'
 
 /** Best-effort check: are we co-located with the user frontend? */
 function isCoLocated(): boolean {
@@ -92,10 +93,13 @@ export default defineConfig(({ mode }) => {
       // from the real plugin path and never finds pinia/vue in the frontend's
       // own node_modules. Required for file: workspace packages (MVA-893).
       preserveSymlinks: true,
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@shared': fileURLToPath(new URL('../autobot_shared', import.meta.url))
-      }
+      // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
+      dedupe: autobotUiResolve().dedupe,
+      alias: [
+        ...autobotUiResolve().alias,
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+        { find: '@shared', replacement: fileURLToPath(new URL('../autobot_shared', import.meta.url)) },
+      ]
     },
     server: {
       host: '0.0.0.0',

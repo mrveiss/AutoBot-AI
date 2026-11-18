@@ -42,6 +42,7 @@ from typing import Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.slug import sanitize_token
 from services.agent_secrets_integration import (
     AgentSecretsIntegration,
     get_agent_secrets_integration,
@@ -103,7 +104,7 @@ class TerminalSecretsService:
     def _create_session_state(self, session_id: str, chat_id: str | None) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        safe_id = sanitize_token(session_id, allowed=r"\w-", replacement="_", collapse=False)
         state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{safe_id}_")
         return state
 
@@ -243,7 +244,7 @@ class TerminalSecretsService:
         key_value = key_data["value"]
 
         # Sanitize key name for filename
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in key_name)
+        safe_name = sanitize_token(key_name, allowed=r"\w-", replacement="_", collapse=False)
         key_path = str(validate_relative_path(safe_name, temp_dir))
 
         # Write key to file

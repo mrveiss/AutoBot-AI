@@ -11,7 +11,7 @@ _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
     _PROJECT_ROOT="$(dirname "$_PROJECT_ROOT")"
 done
-source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
+source "$_PROJECT_ROOT/autobot-infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true; : "${AUTOBOT_AI_STACK_PORT:?ssot-config.sh not loaded — AUTOBOT_AI_STACK_PORT unset}"
 cd "$SCRIPT_DIR"
 
 # Colors for output
@@ -110,7 +110,7 @@ main() {
     echo "• Terminal: http://${AUTOBOT_BACKEND_HOST:-localhost}:7681"
     echo "• noVNC Desktop: http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_VNC_PORT:-6080}"
     echo "• RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
-    echo "• AI Stack: http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}"
+    echo "• AI Stack: http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     echo "========================================================="
     echo
 }
@@ -174,9 +174,20 @@ configure_backend() {
     log "INFO" "Configuring WSL backend services..."
 
     # Install backend dependencies if needed
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$SCRIPT_DIR/../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
+    if [[ -f ../venv/bin/activate ]] && ! python_floor_venv_matches "$SCRIPT_DIR/../.." ../venv; then
+        log "WARN" "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
+        rm -rf ../venv
+    fi
     if [[ ! -f ../venv/bin/activate ]]; then
         log "INFO" "Creating Python virtual environment..."
-        python3 -m venv ../venv
+        # #20932: the floor interpreter from .python-version, never a bare python3
+        PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../..")" || { log "ERROR" "No floor Python interpreter available"; exit 1; }
+        "$PYTHON_BIN" -m venv ../venv
         source ../venv/bin/activate
         pip install -r ../requirements.txt
     fi
@@ -198,9 +209,9 @@ BACKEND_PORT=8001
 TERMINAL_PORT=7681
 NOVNC_PORT=6080
 REDIS_PORT=6379
-AI_STACK_PORT=8080
+AI_STACK_PORT=${AUTOBOT_AI_STACK_PORT}
 NPU_WORKER_PORT=8081
-BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT}
 EOF
 
     log "SUCCESS" "Backend configured for native deployment"
@@ -218,7 +229,7 @@ validate_deployment() {
     local services=(
         "${AUTOBOT_FRONTEND_HOST:-localhost}:80:Frontend"
         "${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}:Redis"
-        "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}:AI-Stack"
+        "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}:AI-Stack"
         "${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}:NPU-Worker"
         "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}:Browser"
     )

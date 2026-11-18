@@ -360,7 +360,7 @@ def memory_efficient_cache(maxsize: int = int(config.cache_size), typed: bool = 
     return decorator
 
 
-class MemoryMonitor:
+class ProcessMemoryMonitor:
     """Real-time memory usage monitoring (thread-safe)"""
 
     def __init__(
@@ -514,14 +514,14 @@ _memory_monitor = None
 _memory_monitor_lock = threading.Lock()
 
 
-def get_memory_monitor(threshold_mb: float = float(config.memory_threshold_mb)) -> MemoryMonitor:
+def get_memory_monitor(threshold_mb: float = float(config.memory_threshold_mb)) -> ProcessMemoryMonitor:
     """Get global memory monitor instance (thread-safe)"""
     global _memory_monitor
     if _memory_monitor is None:
         with _memory_monitor_lock:
             # Double-check after acquiring lock
             if _memory_monitor is None:
-                _memory_monitor = MemoryMonitor(threshold_mb)
+                _memory_monitor = ProcessMemoryMonitor(threshold_mb)
     return _memory_monitor
 
 
@@ -531,7 +531,7 @@ __all__ = [
     "MemoryPool",
     "WeakCache",
     "memory_efficient_cache",
-    "MemoryMonitor",
+    "ProcessMemoryMonitor",
     "SlottedClass",
     "optimize_memory_usage",
     "memory_usage_decorator",

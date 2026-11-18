@@ -158,7 +158,7 @@ class WindowQuota:
         """
         from autobot_shared.rate_limiter import RateLimiter  # noqa: PLC0415
 
-        return cls(RateLimiter(scope, window_failure_policy=policy), **quota)
+        return cls(RateLimiter(scope, log_label=scope, window_failure_policy=policy), **quota)
 
     @property
     def max_requests(self) -> int:
@@ -170,12 +170,7 @@ class WindowQuota:
     async def acquire(self, key: str | None = None) -> bool:
         """Atomically admit or refuse one request."""
         subject = key or self._key
-        allowed = await self.limiter.acquire_window(subject, self.max_requests, self.window_seconds)
-        if not allowed:
-            logger.warning(
-                "Rate limit exceeded: %s %s/%ss (key=%s)", self.max_requests, self.label, self.window_seconds, subject
-            )
-        return allowed
+        return await self.limiter.acquire_window(subject, self.max_requests, self.window_seconds)
 
     async def check_or_429(self, key: str | None = None) -> None:
         """``acquire``, raising ``HTTPException(429)`` when refused."""

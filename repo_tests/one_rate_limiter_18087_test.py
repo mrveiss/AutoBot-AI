@@ -41,6 +41,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -61,6 +62,12 @@ DISTINCT_CONCEPTS: dict[str, str] = {
         "fractional, burst is a capacity separate from the sustained rate. A sliding window admits `max` "
         "at once then nothing until the oldest hit ages out; a bucket admits one per 1/rate. Per-provider "
         "RPM/burst come from AUTOBOT_LLM_RL_*. Cannot be expressed as RateLimiter.acquire_window."
+    ),
+    "autobot_shared/rate_limit.py": (
+        "IPRateLimiter, the per-IP fork #18087 folds into the canonical RateLimiter. NOT a distinct concept: "
+        "listed only because its last consumer (autobot-backend/api/rum_ingest_bounds.py, added after the "
+        "fold was written) still imports it, and deleting the module is an owner decision recorded on the "
+        "pull request. Remove this entry together with the module once rum_ingest_bounds is migrated."
     ),
     "autobot-backend/integrations/rate_limiter.py": (
         "Outbound quota for GitHub/Slack calls whose pause state is corrected by the provider's own "
@@ -113,12 +120,11 @@ def _scanned_modules(root: Path) -> list[str]:
     return sorted(p for p in listed if p.endswith(".py") and not _is_test_path(p))
 
 
-#: 2,992 non-test modules under the three trees on 2026-10-10. A sweep that lost its reach
-#: (wrong root, inverted filter) would report "nothing found" with none of the evidence.
+#: Relative floor, computed from the base: a sweep that lost its reach (wrong root, inverted
+#: filter) would report "nothing found" with none of the evidence.
 REACH = declare(
     "one-rate-limiter-scan",
     discover=_scanned_modules,
-    floor=2_890,
     growth=200,
     what="non-test Python modules",
     roots=SCANNED_TREES,
@@ -137,7 +143,7 @@ def _zset_words(tree: ast.AST) -> set[str]:
 
 def signals(source: str) -> set[str]:
     """Which rate-limiter shapes *source* contains (empty set: none)."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):
@@ -262,7 +268,7 @@ def test_every_distinct_concept_records_a_reason() -> None:
 def test_the_mcp_modules_take_their_quota_from_the_canonical_limiter(rel: str) -> None:
     """#18087 AC1: no local counter dict or lock is left behind, and the quota is the canonical one."""
     source = (REPO_ROOT / rel).read_text(encoding="utf-8")
-    assert "WindowQuota.for_scope(" in source
+    assert "RateLimiter(" in source
     assert "_rate_limit_lock" not in source
     assert signals(source) == set()
 

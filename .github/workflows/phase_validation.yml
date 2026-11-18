@@ -30,9 +30,11 @@ on:
       - '.github/filters/backend-python-paths.yml'
       - '**/requirements*.txt'
       - 'requirements-ci/**'
+      - 'constraints/shared.txt'  # #21471: CI-plane versions live here
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - '.github/workflows/phase_validation.yml'
+      - '.github/actions/setup-python-suite/ci-config.yaml'
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -91,32 +93,7 @@ jobs:
         touch data/.gitkeep logs/.gitkeep static/.gitkeep
 
         # Create minimal config for validation
-        cat > config/config.yaml << 'EOF'
-        llm:
-          orchestrator_llm: "mock"
-          task_llm: "mock"
-          ollama:
-            model: "mock-model"
-            models: {}
-          unified:
-            embedding:
-              providers:
-                ollama:
-                  selected_model: "mock-embed"
-        deployment:
-          mode: "local"
-        data:
-          reliability_stats_file: "data/reliability_stats.json"
-        diagnostics:
-          enabled: false
-          use_llm_for_analysis: false
-          use_web_search_for_analysis: false
-          auto_apply_fixes: false
-        redis:
-          host: "localhost"
-          port: 6379
-          db: 0
-        EOF
+        cp .github/actions/setup-python-suite/ci-config.yaml config/config.yaml
 
     - name: Run Phase Validation System
       env:
@@ -255,7 +232,7 @@ jobs:
         fi
 
     - name: Upload Validation Reports
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       if: always()
       with:
         name: phase-validation-reports

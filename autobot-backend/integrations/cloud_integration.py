@@ -27,8 +27,24 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
+
+
+async def _bearer_json_request(log, label: str, method: str, url: str, token: str | None) -> Dict[str, Any]:
+    """Bearer-authenticated JSON request to a fixed vendor API; public-only egress (#17576)."""
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    try:
+        timeout = aiohttp.ClientTimeout(total=30.0)
+        async with get_http_client().tracked_request(
+            method, url, headers=headers, timeout=timeout, guard_egress=VENDOR_API_EGRESS
+        ) as resp:
+            body = await resp.json()
+            return {"status_code": resp.status, "body": body, "headers": dict(resp.headers)}
+    except aiohttp.ClientError as exc:
+        log.warning("%s request to %s failed: %s", label, url, exc)
+        return {"status_code": 0, "body": {}, "error": str(exc)}
 
 
 class AWSIntegration(BaseIntegration):
@@ -236,7 +252,9 @@ class AWSIntegration(BaseIntegration):
         """Make HTTP request to AWS API."""
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, timeout=timeout, guard_egress=VENDOR_API_EGRESS
+            ) as resp:
                 text = await resp.text()
                 body = self._parse_xml_response(text)
                 return {
@@ -421,23 +439,7 @@ class AzureIntegration(BaseIntegration):
 
     async def _make_azure_request(self, method: str, url: str) -> Dict[str, Any]:
         """Make HTTP request to Azure API."""
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-
-        try:
-            timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
-                body = await resp.json()
-                return {
-                    "status_code": resp.status,
-                    "body": body,
-                    "headers": dict(resp.headers),
-                }
-        except aiohttp.ClientError as exc:
-            self.logger.warning("Azure request to %s failed: %s", url, exc)
-            return {"status_code": 0, "body": {}, "error": str(exc)}
+        return await _bearer_json_request(self.logger, "Azure", method, url, self.access_token)
 
     def _extract_vm_data(self, vm: Dict[str, Any]) -> Dict[str, Any]:
         """Extract relevant VM data."""
@@ -590,23 +592,7 @@ class GCPIntegration(BaseIntegration):
 
     async def _make_gcp_request(self, method: str, url: str) -> Dict[str, Any]:
         """Make HTTP request to GCP API."""
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-
-        try:
-            timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
-                body = await resp.json()
-                return {
-                    "status_code": resp.status,
-                    "body": body,
-                    "headers": dict(resp.headers),
-                }
-        except aiohttp.ClientError as exc:
-            self.logger.warning("GCP request to %s failed: %s", url, exc)
-            return {"status_code": 0, "body": {}, "error": str(exc)}
+        return await _bearer_json_request(self.logger, "GCP", method, url, self.access_token)
 
     def _extract_instance_data(self, instance: Dict[str, Any]) -> Dict[str, Any]:
         """Extract relevant instance data."""

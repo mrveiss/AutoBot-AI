@@ -5,10 +5,22 @@ Integration tests for complete AutoBot system workflows
 Tests how different system components work together end-to-end
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
 # Import system components
 from app_factory import create_app
+from tests.fixtures.audit_trail import InMemoryAuditTrail
+
+
+@pytest.fixture(autouse=True)
+def _in_memory_audit_trail():
+    """The security audit endpoints read the canonical trail; without Redis they answer 500
+    rather than an empty log (#13258), so these flows run against an in-memory one (#17225 D6)."""
+    patchers = InMemoryAuditTrail().patched()
+    patchers.start()
+    yield
+    patchers.stop()
 
 
 class TestAutoBootSystemIntegration:

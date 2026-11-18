@@ -11,9 +11,6 @@ Endpoints:
   GET    /api/push/vapid-public-key — return the VAPID public key for the SW
 """
 
-import asyncio
-import ipaddress
-import socket
 import uuid
 from typing import Dict
 from urllib.parse import urlparse
@@ -27,6 +24,7 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.url_safety import is_public_url_async
 from models.push_subscription import PushSubscription
 from services.push_notification_service import get_vapid_public_key
 
@@ -66,29 +64,18 @@ class UnsubscribeRequest(BaseModel):
 
 
 async def _check_ssrf(endpoint: str) -> None:
-    """Reject endpoints that resolve to private/loopback IPs (SSRF guard, GH#9093).
+    """Reject endpoints that are not public (SSRF guard, GH#9093).
 
-    DNS resolution runs in a thread pool so it never blocks the async event loop.
+    Delegates to the shared ``url_safety`` authority (#17855) so the rule set is
+    the one every other egress surface uses: loopback, link-local, multicast,
+    reserved, unspecified, RFC-1918, CGNAT/Tailscale ``100.64/10``, ``::ffff:``
+    mapped addresses and private TLDs. DNS runs off the event loop.
     """
-    hostname = urlparse(endpoint).hostname or ""
-    try:
-        addr_infos = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
-    except socket.gaierror as exc:
+    if not await is_public_url_async(endpoint):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Push endpoint hostname could not be resolved: {exc}",
+            detail="Push endpoint is unresolvable or resolves to a private/internal address — SSRF rejected",
         )
-    for addr_info in addr_infos:
-        ip_str = addr_info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            continue
-        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Push endpoint resolves to a private/internal address — SSRF rejected",
-            )
 
 
 @router.get("/vapid-public-key", response_model=Dict[str, str])

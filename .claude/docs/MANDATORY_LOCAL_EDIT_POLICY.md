@@ -52,7 +52,8 @@ rsync -avz --delete \
 
 ### 3. Ansible
 ```bash
-ansible-playbook -i inventory/production playbooks/deploy-frontend.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync),
+# which runs the role dispatcher (playbooks/deploy_role.yml) -- never an ad-hoc playbook run.
 ```
 
 ## ⚠️ Violations vs Correct
@@ -72,7 +73,7 @@ vim config.yaml
 rsync -avz config.yaml autobot@<frontend-host>:/opt/autobot/
 
 # Or use Ansible for config changes
-ansible-playbook playbooks/update-redis-config.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync); never an ad-hoc playbook run
 ```
 
 ## 📋 Pre-Remote Checklist

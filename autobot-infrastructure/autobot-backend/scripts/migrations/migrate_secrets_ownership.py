@@ -23,9 +23,12 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add autobot modules to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-backend"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp

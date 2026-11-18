@@ -467,3 +467,24 @@ Cross-linked as comments on #14863 (class is 5 stores, not 3), #11266, #11207, #
 and #10603. `#17285` carries a native `blocked_by` edge on `#17281`.
 
 Nothing from this review is unfiled.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17275 — Umbrella: delegation's fan-in wait does not survive a restart — durability before enablement
+- #17281 — orchestration: the fan-in wait is memory-resident at all four fan-out sites — a restart strands the batch
+- #17282 — orchestration: SubagentDispatcher is reachable only behind a default-off flag — decide enable, document, or retire
+- #17283 — reliability: ProcessAdapterService has no startup recovery — a crashed run leaves its row at RUNNING forever
+- #17284 — reliability: LongRunningOperationManager.resume_operation always fails after a restart — the checkpoint survives, the registry does not
+- #17285 — delegation: governed delegation was never enabled — #11266 closed on a hardening PR with every checklist box unticked
+- #17286 — delegation: the superseded HierarchicalAgent/DelegateTool pair is still present with no production caller
+- #17287 — observability: the dropped-WebSocket-message counter is declared and never incremented — six drop sites are log-only
+- #17288 — agents: a capability denial names no legal alternative and no deciding hop — RepairableException.suggestion exists and is unused here
+- #17289 — approvals: DB-persisted approval gates have no expiry — an unanswered approval blocks its work forever
+- #17290 — worker: worker_node subscribes to 'orchestrator_tasks' and nothing in the repo publishes to it
+- #17291 — gateway: the message queue is a sole carrier — a full queue drops the message with only a log line
+- #17292 — events: code_exec/broker swallows the durable-write exception RedisEventStreamManager raises, making the durable bus lossy at that call site
+- #17293 — workflow: execution state carries a 24h Redis TTL — #3231 fixed the 30d checkpoint key, not this one
+- #17294 — events: ten-plus signalling mechanisms against a doctrine that says one bus — no issue states the real count
+- #17295 — llc: startup recovery writes run status unconditionally — safe only because the scan is single-threaded

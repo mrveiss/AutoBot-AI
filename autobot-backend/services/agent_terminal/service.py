@@ -15,14 +15,17 @@ from autobot_logging.terminal_logger import TerminalLogger
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
 from monitoring.prometheus_metrics import get_metrics_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
 from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
+from .ai_line_gate import claim_pending, decide_command, permission_refusal, queue_reservation, settle_pending
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
+from .decision_session import claim_for_decision, mark_queued_approved
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
+from .interpretation_service import InterpretationOwnershipMixin
 from .models import AgentSessionState, AgentTerminalSession
 from .session_manager import SessionManager
 from .utils import (
@@ -36,7 +39,7 @@ from .utils import (
 logger = get_logger(__name__)
 
 
-class AgentTerminalService:
+class AgentTerminalService(InterpretationOwnershipMixin):
     """
     Service layer for agent terminal access with security controls.
 
@@ -59,7 +62,7 @@ class AgentTerminalService:
             command_queue: Command execution queue (default: singleton instance)
         """
         self.redis_client = redis_client
-        self.security_policy = SecurityPolicy()
+        self.security_policy = CommandSecurityPolicy()
 
         self.chat_history_manager = ChatHistoryManager()
 
@@ -201,8 +204,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        await self.command_queue.add_command(cmd_execution)
-        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
+        refusal = await claim_pending(session, self.redis_client, cmd_execution.command_id, command, risk)
+        if refusal is not None:
+            return refusal
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
@@ -229,8 +233,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        if self.redis_client:
-            await self.session_manager._persist_session(session)
+        refusal = await queue_reservation(session, self.session_manager, cmd_execution, self.command_queue, risk)
+        if refusal is not None:
+            return refusal
 
         user_id = session.get_user_id()
         if session.has_conversation():
@@ -437,7 +442,7 @@ class AgentTerminalService:
             result=result,
         )
 
-        session.clear_pending_and_resume()
+        await settle_pending(session, self.session_manager)
 
         if auto_approve_future and user_id:
             await self.approval_handler.store_auto_approve_rule(
@@ -506,12 +511,7 @@ class AgentTerminalService:
         extract logging/post-execution helpers. Issue #1088: extracted
         _run_approved_command_body to reduce function length.
         """
-        await self.approval_handler.update_command_queue_status(
-            command_id=command_id,
-            approved=True,
-            user_id=user_id,
-            comment=comment,
-        )
+        await mark_queued_approved(self.approval_handler, self.session_manager, session, command_id, user_id, comment)
 
         try:
             return await self._run_approved_command_body(
@@ -529,7 +529,7 @@ class AgentTerminalService:
         except (TypeError, AttributeError):
             raise
         except Exception:
-            logger.error("Approved command execution error", exc_info=True)
+            await self.session_manager.release_after_failed_run(session)
             return execution_failed_response(command)
 
     async def _handle_denied_command(
@@ -565,7 +565,7 @@ class AgentTerminalService:
             comment=comment,
         )
 
-        session.clear_pending_and_resume()
+        await settle_pending(session, self.session_manager)
 
         await self._update_and_broadcast_approval_status(session, command, False, user_id, comment)
 
@@ -579,20 +579,17 @@ class AgentTerminalService:
     async def _interpret_approved_command(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
         """Interpret approved command results with workflow manager (Issue #281: extracted).
 
-        #13480: skipped when a chat turn is still polling this approval — it
-        streams its own interpretation of the same result, and both paths
-        persist, so running both meant two LLM calls and two interpretations of
-        one command in the conversation.
+        #13480, #21202: skipped when a chat turn polling this approval took the
+        interpretation — it streams its own, and both paths persist, so running
+        both meant two LLM calls and two interpretations of one command.
 
-        The skip is deliberately conditional on a marker the poller clears in a
-        `finally`. If the turn has gone, the marker is gone and this runs — which
-        is what makes a late approval produce anything at all (#13479).
+        Ownership is one compare-and-set key in Redis (``interpretation_turn``),
+        so exactly one side interprets whichever worker ran the command. If the
+        turn has gone the key is free and this runs, which is what makes a late
+        approval produce anything at all (#13479).
         """
-        if session.has_live_turn_interpreting():
-            logger.info(
-                "[#13480] Skipping approve-path interpretation for %s — a live chat turn owns it",
-                command[:50],
-            )
+        if not await self._owns_interpretation(session):
+            logger.info("[#21202] Skipping approve-path interpretation for %s: a live chat turn took it", command[:50])
             return
 
         if session.has_conversation() and self.chat_workflow_manager:
@@ -632,30 +629,9 @@ class AgentTerminalService:
     # Command Execution (delegated to CommandExecutor)
     # ============================================================================
 
-    def _check_agent_permission(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        risk,
-    ) -> Metadata | None:
-        """
-        Check if agent has permission to execute command at given risk level.
-
-        Issue #665: Extracted from execute_command for single responsibility.
-
-        Args:
-            session: Terminal session containing agent role
-            command: Command being executed
-            risk: Assessed risk level of the command
-
-        Returns:
-            Error response if permission denied, None if allowed
-        """
-        allowed, permission_reason = self.approval_handler.check_agent_permission(session.agent_role, risk)
-        if not allowed:
-            logger.warning(f"Agent {session.agent_id} denied command execution: {permission_reason}")
-            return session.get_permission_denied_response(permission_reason, command, risk.value)
-        return None
+    def _check_agent_permission(self, session: AgentTerminalSession, command: str, risk) -> Metadata | None:
+        """Error response if the role may not run *risk*, else ``None`` (Issue #665)."""
+        return permission_refusal(self.approval_handler, session, command, risk)
 
     async def _check_auto_approval_or_queue(
         self,
@@ -666,33 +642,19 @@ class AgentTerminalService:
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
+        force_approval: bool = False,
     ) -> tuple[bool, Metadata | None]:
+        """Resolve the command's AI line, then check auto-approve rules or queue it (#665, #18430).
+
+        Line 3 is refused and line 1 runs; only line 2 reaches the rules and this terminal's queue.
+        Returns ``(is_auto_approved, queue_or_refusal_response)``.
         """
-        Check auto-approve rules or queue command for manual approval.
-
-        Issue #665: Extracted from execute_command for single responsibility.
-
-        Args:
-            session: Terminal session
-            command: Command to execute
-            description: Optional command description
-            risk: Assessed risk level
-            reasons: Risk assessment reasons
-            is_interactive: Whether command requires stdin
-            interactive_reasons: Reasons for interactivity
-
-        Returns:
-            Tuple of (is_auto_approved, queue_response_if_not_approved)
-        """
-        user_id = session.get_user_id()
-        is_auto_approved = await self.approval_handler.check_auto_approve_rules(
-            user_id=user_id,
-            command=command,
-            risk_level=risk.value,
+        is_auto_approved, refusal = await decide_command(
+            self.approval_handler, session, command, risk, force_approval=force_approval
         )
-
+        if refusal is not None:
+            return False, session.get_permission_denied_response(refusal, command, risk.value)
         if is_auto_approved:
-            logger.info(f"Command auto-approved by rule: {command} " f"(user: {user_id}, risk: {risk.value})")
             return True, None
 
         queue_response = await self._queue_command_for_approval(
@@ -749,6 +711,7 @@ class AgentTerminalService:
             reasons,
             is_interactive,
             interactive_reasons,
+            force_approval=force_approval,
         )
         if not is_auto_approved:
             return queue_response
@@ -807,21 +770,6 @@ class AgentTerminalService:
     # Approval Workflow (delegated to ApprovalHandler)
     # ============================================================================
 
-    async def set_live_turn_interpreting(self, session_id: str, live: bool) -> None:
-        """Register/withdraw a chat turn as the interpreter for a pending approval (#13480).
-
-        Exposed as a service method so the chat turn never reaches into
-        `pending_approval` directly, and so the change is persisted — the approve
-        path may well read the session back from Redis rather than from memory.
-        """
-        session = await self.get_session(session_id)
-        if not session:
-            return
-
-        session.set_live_turn_interpreting(live)
-        if self.redis_client:
-            await self.session_manager._persist_session(session)
-
     async def approve_command(
         self,
         session_id: str,
@@ -860,12 +808,9 @@ class AgentTerminalService:
 
         Issue #281: Refactored from 182 lines to use extracted helper methods.
         """
-        session = await self.get_session(session_id)
-        if not session:
-            return {"status": "error", "error": "Session not found"}
-
-        if not session.has_pending_approval():
-            return {"status": "error", "error": "No pending approval"}
+        session, refusal = await claim_for_decision(self.session_manager, session_id)
+        if refusal:
+            return refusal
 
         command = session.get_pending_command()
         risk_level = session.get_pending_risk_level()
@@ -915,7 +860,8 @@ class AgentTerminalService:
             return {"status": "error", "error": "Session not found"}
 
         previous_state = session.state
-        session.state = AgentSessionState.USER_CONTROL
+        if refusal := await self.session_manager.persist_control(session, AgentSessionState.USER_CONTROL):
+            return refusal
 
         logger.info(
             f"User {user_id} interrupted agent session {session_id} " f"(previous state: {previous_state.value})"
@@ -941,7 +887,8 @@ class AgentTerminalService:
                 "error": f"Cannot resume from state: {session.state.value}",
             }
 
-        session.state = AgentSessionState.AGENT_CONTROL
+        if refusal := await self.session_manager.persist_control(session, AgentSessionState.AGENT_CONTROL):
+            return refusal
         logger.info("Agent resumed control of session %s", session_id)
 
         return {

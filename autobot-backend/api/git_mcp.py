@@ -47,11 +47,12 @@ from api.schemas_code import (
     UnsubscribeResourceRequest,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
 from autobot_shared.git_refs import is_safe_ref
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.time_utils import now_utc
@@ -143,17 +144,11 @@ BLOCKED_GIT_COMMANDS = [
 ]
 
 # Rate limiting
-MAX_GIT_OPS_PER_MINUTE = 60
-# One canonical window quota shared by every worker (#18087). LOCAL keeps
-# enforcing per worker while Redis is down: these admin MCP operations were
-# always enforced, so the control must not turn off during an outage.
-mcp_quota = WindowQuota.for_scope(
-    "git_mcp",
-    policy=WindowFailurePolicy.LOCAL,
-    max_requests=MAX_GIT_OPS_PER_MINUTE,
-    window_seconds=60,
-    label="git operations",
-)
+MAX_GIT_OPS_PER_MINUTE = env_int_clamped("AUTOBOT_MCP_GIT_RATE_LIMIT", 60, min_v=1, max_v=1_000_000)
+RATE_LIMIT_WINDOW_SECONDS = 60
+# One global Redis-backed count shared by every worker (#18087); fails open when Redis is down.
+_rate_limiter = RateLimiter("mcp:git", log_label="mcp:git")
+_RATE_LIMIT_KEY = "global"
 
 # Output limits
 MAX_OUTPUT_SIZE = 1 * 1024 * 1024  # 1 MB
@@ -560,7 +555,7 @@ async def git_status_mcp(request: GitStatusRequest) -> Metadata:
     Shows staged, unstaged, and untracked files
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -597,7 +592,7 @@ async def git_log_mcp(request: GitLogRequest) -> Metadata:
     Shows commit messages, authors, and dates
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -642,7 +637,7 @@ async def git_diff_mcp(request: GitDiffRequest) -> Metadata:
     Compare working directory, staged changes, or commits
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -691,7 +686,7 @@ async def git_branch_mcp(request: GitBranchRequest) -> Metadata:
     Shows local and optionally remote branches
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -742,7 +737,7 @@ async def git_blame_mcp(request: GitBlameRequest) -> Metadata:
     Line-by-line authorship information
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -784,7 +779,7 @@ async def git_show_mcp(request: GitShowRequest) -> Metadata:
     Displays commit info and changes for specified ref
     """
     # Security checks
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     if not is_repository_allowed(request.repo_path):
@@ -820,7 +815,7 @@ async def get_git_repo_info() -> Metadata:
     Returns list of allowed repositories and their status
     """
     # Security check
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
 
     logger.info("Getting git repository info")
@@ -880,12 +875,21 @@ async def get_git_mcp_status() -> Metadata:
     - Configuration info
     """
 
-    rate_status = await mcp_quota.status()
+    remaining = await _rate_limiter.get_remaining_in_window(
+        _RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS
+    )
+    current_rate = MAX_GIT_OPS_PER_MINUTE - remaining
+    # A sliding window has no single reset instant; the window length bounds it.
+    time_until_reset = RATE_LIMIT_WINDOW_SECONDS if current_rate else 0
 
     return {
         "status": "operational",
         "service": "git_mcp",
-        "rate_limit": rate_status,
+        "rate_limit": {
+            "current": current_rate,
+            "max": MAX_GIT_OPS_PER_MINUTE,
+            "reset_in_seconds": round(time_until_reset, 1),
+        },
         "configuration": {
             "allowed_repositories": len(ALLOWED_REPOSITORIES),
             "safe_commands": len(SAFE_GIT_COMMANDS),
@@ -920,7 +924,7 @@ async def list_git_resources() -> Metadata:
     - git://repo/branch/<name> - branch tip commit
     - git://repo/diff/<base>..<head> - diff between commits
     """
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     resources = []
@@ -985,7 +989,7 @@ async def read_git_resource(request: Metadata) -> Metadata:
     - git://repo/branch/<name> - show branch tip commit
     - git://repo/diff/<base>..<head> - show diff between commits
     """
-    if not await mcp_quota.acquire():
+    if not await _rate_limiter.acquire_window(_RATE_LIMIT_KEY, MAX_GIT_OPS_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
     uri = request.get("uri", "")

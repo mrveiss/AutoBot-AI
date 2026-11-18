@@ -50,4 +50,4 @@ service_auth_redis_host: >-
 service_auth_redis_port: 6379
 
 # Ansible working directory for rotation playbook invocation
-autobot_ansible_dir: /opt/autobot/autobot-slm-backend/ansible
+autobot_ansible_dir: "{{ autobot.base_dir }}/autobot-slm-backend/ansible"

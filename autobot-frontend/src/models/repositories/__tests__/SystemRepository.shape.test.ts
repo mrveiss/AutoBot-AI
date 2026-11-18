@@ -17,7 +17,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SystemRepository } from '../SystemRepository'
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendUrl: () => '',
 }))
 
 describe('SystemRepository shape handling (#5207 audit)', () => {
