@@ -18,12 +18,14 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _LIFESPAN = repo_root() / "autobot-backend/initialization/lifespan.py"
 _EARLY = ("_recover_agent_sessions", "_init_heartbeat_scheduler", "_init_llc_routine_scheduler")
 
 
 def _phase2_call_order() -> list[str]:
-    tree = ast.parse(_LIFESPAN.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_LIFESPAN.read_text(encoding="utf-8"))
     func = next(
         n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "initialize_background_services"
     )

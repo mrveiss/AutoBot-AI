@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, httpErrorText, isHttpError, saveTextFile } from '@autobot/ui'
 /**
  * VisionAnalysisModal — Modal dialog for image analysis from the chat input.
  *
@@ -16,11 +16,8 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import {
-  visionMultimodalApiClient,
-  type ProcessingIntent,
-  type MultiModalResponse,
-} from '@/utils/VisionMultimodalApiClient'
+import { processImage } from '@/composables/useVisionApi'
+import type { ProcessingIntent, MultiModalResponse } from '@/types/visionMultimodal'
 
 const { t } = useI18n()
 const logger = createLogger('VisionAnalysisModal')
@@ -105,19 +102,12 @@ async function analyzeImage(): Promise<void> {
     const q = selectedIntent.value === 'visual_qa'
       ? question.value
       : undefined
-    const response = await visionMultimodalApiClient.processImage(
-      selectedFile.value,
-      selectedIntent.value,
-      q,
-    )
-    if (response.success && response.data) {
-      analysisResult.value = response.data
-      logger.debug('Analysis complete:', response.data)
-    } else {
-      error.value = response.error || t('chat.vision.analysisFailed')
-    }
+    const response = await processImage(selectedFile.value, selectedIntent.value, q)
+    analysisResult.value = response
+    logger.debug('Analysis complete:', response)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.unknownError')
+    if (isHttpError(err)) error.value = httpErrorText(err, t('chat.vision.analysisFailed'))
+    else error.value = err instanceof Error ? err.message : t('common.unknownError')
     logger.error('Analysis error:', err)
   } finally {
     processing.value = false
@@ -139,16 +129,7 @@ function sendToChat(): void {
 
 function exportResults(): void {
   if (!analysisResult.value) return
-  const blob = new Blob(
-    [JSON.stringify(analysisResult.value, null, 2)],
-    { type: 'application/json' },
-  )
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `analysis_${Date.now()}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveTextFile(JSON.stringify(analysisResult.value, null, 2), `analysis_${Date.now()}.json`, 'application/json')
 }
 
 onUnmounted(() => {

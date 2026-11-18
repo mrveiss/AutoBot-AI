@@ -71,6 +71,7 @@ class PortabilityExportMixin:
             text("""
                 SELECT id, name, slug, description, issue_prefix,
                        budget_monthly_cents, brand_color, require_approval_for_hires,
+                       require_approval_for_budget_raises,
                        parent_org_id, llc_status, created_at
                 FROM organizations
                 WHERE id = :cid

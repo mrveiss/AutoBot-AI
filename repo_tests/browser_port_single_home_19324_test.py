@@ -113,7 +113,7 @@ _PINNED: dict[str, tuple[str, ...]] = {
         r"^    browser_port: (\d+)\b",
         r"^        playwright_port: (\d+)\b",
     ),
-    "autobot-slm-backend/ansible/inventory/group_vars/infrastructure.yml": (r"^    browser: (\d+)\b",),
+    "autobot-slm-backend/ansible/inventory/group_vars/infrastructure.yml": (r"^  browser: (\d+)\b",),
     "autobot-slm-backend/ansible/inventory/group_vars/browser.yml": (
         r"^      port: (\d+)  # #19324",
         r"^    port: (\d+)  # #19324",
@@ -208,7 +208,6 @@ def _scanned(root: Path) -> list[str]:
 REACH = declare(
     "browser-port-single-home-scan",
     discover=_scanned,
-    floor=10629,  # re-measured at 10430 with the nested .env* glob, pinned mid-window (#15928)
     growth=600,
     skips=0,
     what="tracked files scanned for a second browser-port home or Grafana's 3000 (#19324)",

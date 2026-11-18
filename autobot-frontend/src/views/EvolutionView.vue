@@ -362,7 +362,7 @@ const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
 const evolution = useEvolution(sourceId)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const showAnalysisModal = ref(false)
 
 // Filter state (Issue #247)
@@ -444,7 +444,7 @@ function formatMetricName(metric: string): string {
     .join(' ')
 }
 
-const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: { year: 'numeric', month: 'short', day: 'numeric' }, emptyText: 'N/A' })
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: { year: 'numeric', month: 'short', day: 'numeric' }, emptyText: 'N/A' })
 
 // Load all data on mount
 onMounted(async () => {

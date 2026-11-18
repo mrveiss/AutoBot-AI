@@ -25,11 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.approval import Approval
 
-from ..kb.decision_log import DecisionLogWriter
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .approval_hooks import (
     ApprovalHookError,
     record_approval_event,
+    review_decider,
     run_post_commit_hook,
     run_post_decision_hook,
     validate_payload,
@@ -57,12 +58,18 @@ class ApprovalRequiredError(Exception):
         super().__init__(f"Approval of type '{gate_type.value}' required before this operation")
 
 
-class ApprovalNotFoundError(Exception):
+class ApprovalNotFoundError(PublicMessageMixin, Exception):
     """Raised when an approval record cannot be located."""
 
 
-class ApprovalStateError(Exception):
+class ApprovalStateError(PublicMessageMixin, Exception):
     """Raised when an approval is in an unexpected state for the requested action."""
+
+
+class ApprovalCompanyMismatch(ApprovalStateError):
+    """The approval belongs to another company. Its message names both company ids, so only a fixed text is public."""
+
+    public_detail = "Approval does not belong to this company"
 
 
 class ApprovalService(LLCServiceBase):
@@ -159,7 +166,8 @@ class ApprovalService(LLCServiceBase):
             ApprovalNotFoundError: approval_id does not exist.
             ApprovalStateError: approval is not in PENDING state, or decision
                 value is not APPROVED/REJECTED.
-            ApprovalHookError: the approved action cannot be applied (GH#8214); nothing is
+            ApprovalHookError: the approved action cannot be applied, or the decider asked for it while another
+                owner/admin exists (GH#8214); nothing is
                 recorded, and the caller must roll back.
         """
         if decision not in (ApprovalStatus.APPROVED, ApprovalStatus.REJECTED):
@@ -186,6 +194,7 @@ class ApprovalService(LLCServiceBase):
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
         # Same transaction as the status change: a hook that raises leaves the approval pending.
+        self_approval = await review_decider(session, approval, decision, decided_by)  # four eyes (#8214)
         applied = await run_post_decision_hook(session, approval, decision, decided_by)
         await record_approval_event(
             session,
@@ -193,7 +202,7 @@ class ApprovalService(LLCServiceBase):
             _DECISION_EVENT[decision],
             actor_user_id=decided_by,
             before={"status": ApprovalStatus.PENDING.value},
-            after={"status": decision.value, "applied": applied},
+            after={"status": decision.value, "applied": applied, "self_approval": self_approval},
         )
         await wake_for_decided_approval(session, approval, decision.value)  # #19582: wake the requester
         logger.info(
@@ -237,6 +246,12 @@ class ApprovalService(LLCServiceBase):
         Call AFTER the DB transaction commits, alongside ``publish_decided``.
         """
         try:
+            # Deferred (#21596): llc.kb pulls the vector stack, and this module is
+            # imported at llc.scheduler package import (Celery registration).
+            from ..kb.decision_log import (  # noqa: PLC0415 -- keeps llc.kb out of scheduler import
+                DecisionLogWriter,
+            )
+
             writer = DecisionLogWriter()
             await writer.write(approval)
         except Exception as exc:
@@ -344,7 +359,7 @@ def requires_approval(gate_type: ApprovalType) -> Callable:
                 raise ApprovalStateError(f"Approval {approval_id} has status {approval.status!r}, must be APPROVED")
             target_company_id: Optional[uuid.UUID] = kwargs.get("company_id")
             if target_company_id is not None and approval.company_id != target_company_id:
-                raise ApprovalStateError(
+                raise ApprovalCompanyMismatch(
                     f"Approval {approval_id} belongs to company {approval.company_id!r}, " f"not {target_company_id!r}"
                 )
 

@@ -24,6 +24,7 @@ from llc.services.company_os.plan_types import (
     Direction,
     Edge,
     EntryPoint,
+    HolderKind,
     Label,
     Lane,
     PlanApprovalPolicy,
@@ -162,3 +163,47 @@ class ApprovalPoliciesBody(_Body):
     """``on_timeout`` is hold, remind or escalate: a ``send`` is a 422 (FR-6.2)."""
 
     policies: List[PlanApprovalPolicy] = Field(default_factory=list, max_length=200)
+
+
+class LanePatch(_Body):
+    """Only what is sent changes; the key is the lane's identity and never changes."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    holder_kind: Optional[HolderKind] = None
+    role_id: Optional[uuid.UUID] = None
+
+
+class StepPatch(_Body):
+    label: Optional[str] = Field(None, min_length=1, max_length=255)
+    lane_key: Optional[str] = Field(None, min_length=1, max_length=64)
+    process_key: Optional[str] = Field(None, max_length=255)
+    note: Optional[str] = Field(None, max_length=2000)
+
+
+class EdgePatch(_Body):
+    condition: Optional[str] = Field(None, max_length=2000)
+
+
+class EdgeCasePatch(_Body):
+    description: Optional[str] = Field(None, min_length=1, max_length=2000)
+    classification: Optional[Label] = None
+    handling: Optional[str] = Field(None, max_length=2000)
+    sub_step_key: Optional[str] = None
+
+
+class CandidateItem(BaseModel):
+    rank: int
+    step_key: str
+    label: str
+    lane_key: str
+    frequency_per_week: float
+    duration_hours: float
+    score: float
+
+
+class CandidatesResponse(BaseModel):
+    """Measured steps by ``frequency x duration`` (hours per week); ``unmeasured`` steps are not ranked (FR-3.1)."""
+
+    return_kind: ReturnKind
+    candidates: List[CandidateItem]
+    unmeasured: List[str]

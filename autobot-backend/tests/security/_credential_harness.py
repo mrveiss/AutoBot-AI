@@ -105,7 +105,8 @@ REFUSED_AT_AUTHENTICATION = "authentication"
 
 ASYNC_ROUTE_EXPECTED = {
     "pre_17042_login_jwt": (403, REFUSED_BY_HUMAN_CHECK),
-    "internal_service_key": (403, REFUSED_BY_HUMAN_CHECK),
+    # #16333 (owner ruling b): the key is not a user, so it is refused before the human check.
+    "internal_service_key": (401, REFUSED_AT_AUTHENTICATION),
     "run_jwt": (403, "run-JWT path allow-list"),
     "run_jwt_on_platform_key": (403, "run-JWT path allow-list"),
     "device_jwt": (403, "device-JWT path allow-list"),
@@ -131,7 +132,8 @@ ASYNC_ROUTE_EXPECTED = {
 #: (service principals are not tenant admins), so that kind is refused before
 #: the human check there and still reaches it on the async route. Asserting one
 #: shared number would be wrong for one of the two tables.
-MIN_KINDS_REACHING_HUMAN_CHECK = 4
+#: #16333 moved the internal service key to an earlier refusal (it is no longer a user), so 3 remain.
+MIN_KINDS_REACHING_HUMAN_CHECK = 3
 MIN_KINDS_REACHING_HUMAN_CHECK_LLC = 3
 
 

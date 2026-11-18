@@ -34,17 +34,29 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
+from api._connector_auth_validation import validated_connector_auth
+from api._connector_keys import (
+    _HISTORY_KEY_SUFFIX,
+    _REDIS_KEY_PREFIX,
+    _connector_key,
+    _delete_connector_keys,
+    _history_key,
+)
+from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
+from api._connector_sync_result import record_last_sync
 from auth_middleware import check_admin_permission, get_current_user
-from autobot_shared.auth import validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.credential_store import get_credential_store
+from knowledge.connectors.job_state import JOB_KEY_SUFFIX as _JOB_KEY_SUFFIX
+from knowledge.connectors.job_state import read_job_state
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
+from knowledge.connectors.sync_lease import ConnectorSyncUnavailable, one_sync_per_connector
 from knowledge.schemas.connectors import (
     ConnectorCreateResponse,
     ConnectorDetailResponse,
@@ -92,24 +104,11 @@ _SUPPORTED_TYPES = [
 _OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 
 
-# ---------------------------------------------------------------------------
-# Redis helpers
-# ---------------------------------------------------------------------------
+# --- Redis helpers ---
 
-_REDIS_KEY_PREFIX = "connector:"
-_HISTORY_KEY_SUFFIX = ":history"
-_JOB_KEY_SUFFIX = ":job:current"
 _MAX_HISTORY = 50
 # Suffixes / infixes that mark non-config Redis keys under connector: namespace.
 _NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, _JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
-
-
-def _connector_key(connector_id: str) -> str:
-    return "%s%s" % (_REDIS_KEY_PREFIX, connector_id)
-
-
-def _history_key(connector_id: str) -> str:
-    return "%s%s%s" % (_REDIS_KEY_PREFIX, connector_id, _HISTORY_KEY_SUFFIX)
 
 
 # Config keys that hold an operator-configured *instance host* (#13625). These
@@ -260,19 +259,7 @@ async def _append_history(connector_id: str, result_data: Dict[str, Any]) -> Non
     await asyncio.to_thread(redis.ltrim, key, 0, _MAX_HISTORY - 1)
 
 
-async def _delete_connector_keys(connector_id: str) -> None:
-    """Remove connector config and history from Redis (Issue #1254)."""
-    redis = get_redis_client(database="knowledge")
-    await asyncio.to_thread(
-        redis.delete,
-        _connector_key(connector_id),
-        _history_key(connector_id),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Connector instance management
-# ---------------------------------------------------------------------------
+# --- Connector instance management ---
 
 
 async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> ConnectorConfig:
@@ -334,8 +321,22 @@ async def _load_or_create_instance(cfg: ConnectorConfig):
     return instance
 
 
+async def _record_failed_sync(connector_id: str, started_at: datetime, stage: str) -> None:
+    """A failed run leaves a history entry, so the panel can say so (#19714). The details stay in the log."""
+    entry = {
+        "connector_id": connector_id,
+        "started_at": started_at.isoformat(),
+        "completed_at": now_utc().isoformat(),
+        "status": "failed",
+        "errors": [f"The sync failed while {stage}. See the backend log."],
+    }
+    await _append_history(connector_id, entry)
+
+
+@one_sync_per_connector  # #20556
 async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     """Background task: run sync and persist result + last_sync_at."""
+    started_at = now_utc()
     cfg = await _load_connector(connector_id)
     if cfg is None:
         logger.error("Background sync: connector %s not found", connector_id)
@@ -346,20 +347,25 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     auth_cls = klass.auth_schema() if klass else None
     try:
         cfg = await _cfg_with_credentials(cfg, auth_cls)
-    except HTTPException as exc:
-        logger.error("Background sync: credential load failed for %s: %s", connector_id, exc.detail)
+    except Exception as exc:
+        logger.error("Background sync: credential load failed for %s: %s", connector_id, exc, exc_info=True)
+        await _record_failed_sync(connector_id, started_at, "loading its credentials")
         return
 
-    instance = await _load_or_create_instance(cfg)
+    try:
+        instance = await _load_or_create_instance(cfg)
+    except Exception as exc:
+        logger.error("Background sync: could not start %s: %s", connector_id, exc, exc_info=True)
+        await _record_failed_sync(connector_id, started_at, "starting the connector")
+        return
     try:
         sync_result = await instance.sync(incremental=incremental)
     except Exception as exc:
         logger.error("Background sync failed for %s: %s", connector_id, exc, exc_info=True)
+        await _record_failed_sync(connector_id, started_at, "fetching content")
         sync_result = None
 
-    if sync_result is not None:
-        cfg.last_sync_at = sync_result.completed_at or now_utc()
-        await _save_connector(cfg)
+    if sync_result is not None and await record_last_sync(instance, _connector_key(connector_id), sync_result):
 
         completed_at = sync_result.completed_at
         duration_seconds = None
@@ -382,9 +388,7 @@ async def _run_sync_background(connector_id: str, incremental: bool) -> None:
         await _append_history(connector_id, history_entry)
 
 
-# ---------------------------------------------------------------------------
-# API endpoints
-# ---------------------------------------------------------------------------
+# --- API endpoints ---
 
 
 @router.get("/knowledge_base/connector_types", response_model=ConnectorTypesResponse)
@@ -436,13 +440,27 @@ async def list_connectors():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+async def _finish_create(
+    cfg: ConnectorConfig, request: CreateConnectorRequest, background_tasks: BackgroundTasks
+) -> dict:
+    """Schedule a saved connector and run its first full sync, so a new source does not stay empty (#19714)."""
+    await _maybe_schedule(cfg)
+    sync_started = request.sync_now and cfg.enabled
+    if sync_started:
+        background_tasks.add_task(_run_sync_background, cfg.connector_id, False)
+    logger.info("Created connector %s (%s)", cfg.connector_id, request.connector_type)
+    return {"connector_id": cfg.connector_id, "config": _cfg_to_dict(cfg), "sync_started": sync_started}
+
+
 @router.post("/knowledge_base/connectors", status_code=201, response_model=ConnectorCreateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_connector",
     error_code_prefix="KNOWLEDGE_CONNECTORS",
 )
-async def create_connector(request: CreateConnectorRequest, user: dict = Depends(get_current_user)):
+async def create_connector(
+    request: CreateConnectorRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)
+):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
         raise HTTPException(
@@ -450,36 +468,12 @@ async def create_connector(request: CreateConnectorRequest, user: dict = Depends
             detail="connector_type must be one of: %s" % _SUPPORTED_TYPES,
         )
     connector_id = str(uuid.uuid4())
-    klass = ConnectorRegistry.get_registered_class(request.connector_type)
-    if klass is None:
-        raise HTTPException(
-            status_code=422,
-            detail="connector_type '%s' is not registered" % request.connector_type,
-        )
-    # Issue #8145: validate config against the connector's declared auth schema.
-    # Skip when a secret_id is supplied: the OAuth flow already obtained and
-    # stored the credential, so it is intentionally absent from the config.
-    auth_cls = klass.auth_schema()
-    auth_type: str | None = None
-    if auth_cls is not None:
-        auth_type = auth_cls.__name__
-        if not request.secret_id:
-            errors = validate_config_against_schema(auth_cls, request.config)
-            if errors:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Auth config invalid for %s: %s" % (auth_type, "; ".join(errors)),
-                )
+    klass, auth_cls, auth_type = validated_connector_auth(request)
 
     # ADR-007: extract sensitive credential fields and store encrypted.
-    # #13702: fall back to the authenticated caller, never to a shared literal.
-    # ``or "system"`` gave every connector created without an explicit owner the
-    # same owner_id, so `_require_owner` (#13628) compared "system" against
-    # "system" and two distinct admins passed each other's ownership check.
-    #
-    # Identity resolved user_id -> sub -> username, matching api/voice.py:73 —
-    # ``get_current_user`` does not guarantee ``user_id``: the internal-API-key
-    # path returns only ``username``, and SLM-minted JWTs carry ``sub``.
+    # #13702: the authenticated caller, never a shared literal, which let two admins pass each other's
+    # ownership check (#13628). Resolved user_id -> sub -> username, matching api/voice.py:73:
+    # the internal-API-key path returns only ``username``, and SLM-minted JWTs carry ``sub``.
     caller_id = str(user.get("user_id") or user.get("sub") or user.get("username") or "")
     owner_id = getattr(request, "owner_id", None) or caller_id
     if not owner_id:
@@ -532,9 +526,7 @@ async def create_connector(request: CreateConnectorRequest, user: dict = Depends
             detail="Connection test failed — verify connector config and target availability",
         )
     await _save_connector(cfg)
-    await _maybe_schedule(cfg)
-    logger.info("Created connector %s (%s)", connector_id, request.connector_type)
-    return {"connector_id": connector_id, "config": _cfg_to_dict(cfg)}
+    return await _finish_create(cfg, request, background_tasks)
 
 
 @router.get("/knowledge_base/connectors/scheduler/leader", response_model=ConnectorLeaderResponse)
@@ -733,7 +725,8 @@ async def trigger_sync(
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
-    background_tasks.add_task(_run_sync_background, connector_id, incremental)
+    lease = await claim_or_refuse(connector_id)
+    background_tasks.add_task(run_claimed_sync, _run_sync_background.__wrapped__, connector_id, lease, incremental)
     logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
         "connector_id": connector_id,
@@ -779,10 +772,8 @@ async def get_sync_history(connector_id: str, limit: int = 20):
     error_code_prefix="KNOWLEDGE_CONNECTORS",
 )
 async def get_connector_job(connector_id: str):
-    """Return in-flight job state for a connector sync (Issue #8149).
-
-    Returns 404 when no sync is currently in flight (or the 24h TTL expired).
-    """
+    """Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+    else the last finished one. 404 when there is neither (#20755, see ``job_state``)."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
@@ -793,16 +784,15 @@ async def get_connector_job(connector_id: str):
     if redis is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
-    job_key = "connector:%s:job:current" % connector_id
-    raw = await redis.get(job_key)
-    if raw is None:
-        raise HTTPException(status_code=404, detail="No active job for connector %s" % connector_id)
-
     try:
-        state = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
-    except Exception as exc:
+        state = await read_job_state(redis, connector_id)
+    except ConnectorSyncUnavailable:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+    except ValueError as exc:
         logger.warning("Malformed job state for connector %s: %s", connector_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
+    if state is None:
+        raise HTTPException(status_code=404, detail="No active job for connector %s" % connector_id)
 
     return {
         "connector_id": connector_id,
@@ -817,9 +807,7 @@ async def get_connector_job(connector_id: str):
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers (kept short per function-length policy)
-# ---------------------------------------------------------------------------
+# --- Internal helpers (kept short per function-length policy) ---
 
 
 async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:

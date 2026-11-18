@@ -60,7 +60,7 @@ firewall_service_ports:
   node_exporter: 9100
 
   # SLM services
-  slm_backend: 8000
+  slm_backend: "{{ slm_backend_port }}"
   slm_frontend: 443
 
 # Default UFW logging level

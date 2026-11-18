@@ -531,7 +531,7 @@ register_env_var(
         type=str,
         default="./docker/nginx/nginx-slm.conf",
         description=(
-            "nginx config the SLM-only web GUI (compose profile slm) mounts. The default serves "
+            "nginx config the SLM-only web GUI (compose service autobot-slm-gui) mounts. The default serves "
             "HTTP; ./docker/nginx/nginx-slm-ssl.conf serves HTTPS with ./docker/certs (#18593)."
         ),
         component="slm",
@@ -542,10 +542,10 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_DOCKER_SLM_HTTPS_PORT",
         type=int,
-        default=443,
+        default=8443,
         description=(
-            "Host port the SLM-only web GUI publishes for HTTPS (container port 443). Change it when "
-            "host port 443 is already taken; the GUI's HTTP port stays 80 (#18593)."
+            "Host port the compose SLM GUI publishes for HTTPS (container port 443); the frontend "
+            "holds 443 (#18593, #20620)."
         ),
         component="slm",
     )
@@ -585,6 +585,7 @@ register_env_var(
 # Node-health vars live in a sibling for room (#19292); importing it here
 # registers them whenever this module loads.
 from autobot_shared import env_registry_slm_health  # noqa: E402,F401
+from autobot_shared import env_registry_slm_rollback  # noqa: E402,F401  # #20214
 
 register_env_var(
     EnvVarSpec(

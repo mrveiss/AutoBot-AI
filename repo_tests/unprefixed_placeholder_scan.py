@@ -30,6 +30,7 @@ from typing import Callable, Dict, FrozenSet, List, Optional, Set, Tuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 
@@ -161,7 +162,7 @@ def _field_root(field: str, qualified: bool = True) -> Optional[str]:
     subscript or call, ``False`` for the bare identifiers those exclude.
     """
     try:
-        parsed = ast.parse(field, mode="eval")
+        parsed = parse_cache.parse(field, mode="eval")
     except (SyntaxError, ValueError, MemoryError, RecursionError):
         return None
     nodes = list(ast.walk(parsed))
@@ -323,7 +324,7 @@ def _conditional_field_names(field: str) -> Optional[FrozenSet[str]]:
     therefore not a stranded interpolation either.
     """
     try:
-        parsed = ast.parse(field, mode="eval")
+        parsed = parse_cache.parse(field, mode="eval")
     except (SyntaxError, ValueError, MemoryError, RecursionError):
         return None
     nodes = list(ast.walk(parsed))
@@ -460,7 +461,7 @@ def _examine(source: str, finder: Callable[[ModuleView], Findings]) -> Findings:
     files separately, so a syntax error can never masquerade as a clean file.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except (SyntaxError, ValueError):
         return []
     return finder(_module_view(tree))
@@ -518,7 +519,7 @@ def sweep() -> Tuple[Dict[str, Dict[str, int]], int, int]:
     for relative in placeholder_sweep_python_files():
         try:
             source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
             continue
         parsed += 1

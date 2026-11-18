@@ -9,7 +9,7 @@ Scope is the whole `scripts/` tree, which includes the two roots #15580 names (`
 
 `shared/scripts` is a flat sys.path root: its tests load siblings by bare name, so two files
 called `optimize_agents.py` bound one `sys.modules` slot and the loser's tests ran against the
-other tool. They were the same concept (optimise `.claude/agents/*.md`), so #14873 merged the
+other tool. They were the same concept (optimise Claude Code agent `*.md` files), so #14873 merged the
 older class-based copy into the newer atomic/dry-run one. This guard keeps the import name
 unique, and pins the survivor's path so a second `optimize_agents` cannot return.
 """
@@ -47,8 +47,6 @@ def _script_files(root) -> list[str]:
 REACH = declare(
     "script-module-name-scan",
     discover=_script_files,
-    # Mid-window, from REACH.window().
-    floor=285,
     what="tracked scripts (py, sh, bash, js)",
     roots=(_ROOT,),
     growth=100,

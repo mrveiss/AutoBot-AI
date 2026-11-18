@@ -337,6 +337,9 @@ class Settings(RedactedReprMixin, BaseSettings):
     # window total (review finding on #14362's original PR).
     metrics_cache_ttl_seconds: float = float(os.getenv("SLM_METRICS_CACHE_TTL_SECONDS", "5"))
 
+    # Idle seconds before a stream endpoint pings a quiet WebSocket client (#20939).
+    ws_keepalive_seconds: float = float(os.getenv("SLM_WS_KEEPALIVE_SECONDS", str(DEFAULT_HEARTBEAT_INTERVAL)))
+
     # #14362 (review): `_fetch_top_slow_traces` (autobot-slm-backend/api/
     # performance.py) is a genuine bounded top-N — the slowest traces shown
     # on the authenticated /performance/overview panel — where a cap is the

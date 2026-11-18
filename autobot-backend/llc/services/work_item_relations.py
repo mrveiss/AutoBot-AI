@@ -19,10 +19,12 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import ActivityEventType, WorkItemRelationType, WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
 from .actor import resolve_actor
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ _MIRROR = {
 }
 
 
-class RelationConflict(Exception):
+class RelationConflict(PublicMessageMixin, Exception):
     """Raised when a relation already exists or would create a self-loop."""
 
 
@@ -81,24 +83,23 @@ class WorkItemRelationService(LLCServiceBase):
 
         await session.flush()
 
-        if self.activity_log:
-            actor = resolve_actor(created_by_agent_id, created_by_user_id)
-            await self.activity_log.record(
-                session,
-                event_type=ActivityEventType.WORK_ITEM_RELATION_ADDED,
-                company_id=company_id,
-                entity_type="work_item",
-                entity_id=source_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(
-                    {
-                        "relation_id": str(relation.id),
-                        "relation_type": relation_type.value,
-                        "target_id": target_id,
-                    }
-                ),
-            )
+        actor = resolve_actor(created_by_agent_id, created_by_user_id)
+        await self.activity_log.record(
+            session,
+            event_type=ActivityEventType.WORK_ITEM_RELATION_ADDED,
+            company_id=company_id,
+            entity_type="work_item",
+            entity_id=source_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(
+                {
+                    "relation_id": str(relation.id),
+                    "relation_type": relation_type.value,
+                    "target_id": target_id,
+                }
+            ),
+        )
 
         return relation
 
@@ -120,7 +121,7 @@ class WorkItemRelationService(LLCServiceBase):
         )
         relation = result.scalar_one_or_none()
         if relation is None:
-            raise ValueError(f"Relation {relation_id} not found")
+            raise CompanyOsNotFound(f"Relation {relation_id} not found")
 
         source_id = str(relation.source_id)
         target_id = str(relation.target_id)
@@ -143,20 +144,17 @@ class WorkItemRelationService(LLCServiceBase):
 
         await session.flush()
 
-        if self.activity_log:
-            actor = resolve_actor(actor_agent_id, actor_user_id)
-            await self.activity_log.record(
-                session,
-                event_type=ActivityEventType.WORK_ITEM_RELATION_REMOVED,
-                company_id=company_id,
-                entity_type="work_item",
-                entity_id=source_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(
-                    {"relation_id": relation_id, "relation_type": rtype.value, "target_id": target_id}
-                ),
-            )
+        actor = resolve_actor(actor_agent_id, actor_user_id)
+        await self.activity_log.record(
+            session,
+            event_type=ActivityEventType.WORK_ITEM_RELATION_REMOVED,
+            company_id=company_id,
+            entity_type="work_item",
+            entity_id=source_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata({"relation_id": relation_id, "relation_type": rtype.value, "target_id": target_id}),
+        )
 
     async def list_for_item(
         self,
