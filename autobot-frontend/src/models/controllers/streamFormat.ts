@@ -5,6 +5,7 @@
 
 /** Pure formatting helpers for the chat response stream, split out of ChatController (#21357 size ceiling). */
 
+import i18n from '@/i18n'
 import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 
 /**
@@ -46,9 +47,9 @@ export function extractStreamingPreview(content: string, messageType?: string): 
 
   // Add type-specific prefix for context
   if (messageType === 'thought') {
-    return `Thinking: ${result}`
+    return i18n.global.t('chat.streamPreview.thought', { text: result })
   } else if (messageType === 'planning') {
-    return `Planning: ${result}`
+    return i18n.global.t('chat.streamPreview.planning', { text: result })
   }
 
   return result

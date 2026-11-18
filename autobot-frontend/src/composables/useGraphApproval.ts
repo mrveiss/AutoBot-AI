@@ -66,29 +66,29 @@ function useResumePost() {
     hooks: { onAccepted?: () => void; onStreamError?: () => void } = {}
   ): Promise<void> {
     const chatId = cardChatId(message, store.currentSessionId)
-    store.setTyping(true)
+    if (store.currentSessionId === chatId) store.setTyping(true) // #21357: only the chat resumed shows typing
     let accepted = false
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      // #21357: counted as streaming from the POST on, so switching away and back mid-request keeps the indicator
+      await controller.withActiveStream(chatId, async () => {
+        const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!response.ok) throw new ResumeRejectedError(response.status)
+        accepted = true
+        hooks.onAccepted?.()
+        if ((await controller.handleStreamingResponse(response, chatId, true)) === true) {
+          hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
+          throw new ResumeStreamError('resume stream reported an error')
+        }
       })
-      if (!response.ok) throw new ResumeRejectedError(response.status)
-      accepted = true
-      hooks.onAccepted?.()
-      if ((await controller.handleStreamingResponse(response, chatId)) === true) {
-        hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
-        throw new ResumeStreamError('resume stream reported an error')
-      }
     } catch (error) {
       logger.error('Resuming the chat failed:', error)
       // A stream that reported an error already restored the card; a read that threw has not (#21022).
       if (accepted && !(error instanceof ResumeStreamError)) hooks.onStreamError?.()
       throw error
-    } finally {
-      // #21357: only the chat that was resumed owns the indicator; a chat opened since keeps its own
-      if (store.currentSessionId === chatId) store.setTyping(false)
     }
   }
 }

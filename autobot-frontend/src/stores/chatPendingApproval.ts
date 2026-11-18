@@ -26,6 +26,7 @@ export function usePendingApproval(currentSessionId: Ref<string | null>, session
   function setPendingApproval(pending: boolean, sessionId?: string): void {
     const id = sessionId ?? currentSessionId.value
     if (!id) return
+    if (pending && !sessions.value.some(x => x.id === id)) return // a late event for a deleted chat adds nothing
     const next = new Set(pendingSessionIds.value)
     if (pending) next.add(id)
     else next.delete(id)

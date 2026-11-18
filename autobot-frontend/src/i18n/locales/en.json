@@ -799,6 +799,10 @@
     },
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
+    "streamPreview": {
+      "thought": "Thinking: {text}",
+      "planning": "Planning: {text}"
+    },
     "errors": {
       "budgetExhausted": "Your {period} spending limit for this {scope} (${limit}) has been reached. Chat is unavailable until it resets or an administrator raises the limit.",
       "budgetScope": {

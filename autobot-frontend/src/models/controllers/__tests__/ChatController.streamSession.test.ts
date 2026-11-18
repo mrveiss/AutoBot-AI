@@ -129,6 +129,7 @@ describe('ChatController stream is bound to its originating chat (#21357)', () =
     expect(store.isTyping).toBe(true)
     s.close()
     await done
+    expect(store.isTyping).toBe(false) // the restored indicator does not outlive its stream
   })
 
   it('interleaved streams each keep their buffered update through one flush', async () => {
@@ -184,5 +185,38 @@ describe('ChatController stream is bound to its originating chat (#21357)', () =
     settle({ type: 'json', data: {} })
     await sent
     expect(store.isTyping).toBe(false)
+  })
+
+  it('does not restore typing for a chat whose stream is paused for approval', async () => {
+    const s = controlledStream()
+    const done = chat.handleStreamingResponse(s.response)
+    s.push({ type: 'command_approval_request', content: 'ok?', metadata: { message_id: 'm1' } })
+    await tick()
+    store.switchToSession(b)
+    await chat.switchToSession(a)
+
+    expect(store.isPendingApproval(a)).toBe(true)
+    expect(store.isTyping).toBe(false)
+    s.close()
+    await done
+  })
+
+  it('lets the open chat schedule a preview while another chat has a timer pending', async () => {
+    const sa = controlledStream()
+    const doneA = chat.handleStreamingResponse(sa.response)
+    store.setTyping(true)
+    sa.push({ type: 'response', content: 'Working through the plan for A.', metadata: { message_id: 'ma' } })
+    await new Promise((r) => setTimeout(r, 20)) // A's preview timer is now pending
+    store.switchToSession(b)
+    store.setTyping(true)
+    const sb = controlledStream()
+    const doneB = chat.handleStreamingResponse(sb.response)
+    sb.push({ type: 'response', content: 'Working through the plan for B.', metadata: { message_id: 'mb' } })
+    await new Promise((r) => setTimeout(r, 260))
+
+    expect(store.streamingPreview).toContain('plan for B')
+    sa.close()
+    sb.close()
+    await Promise.all([doneA, doneB])
   })
 })

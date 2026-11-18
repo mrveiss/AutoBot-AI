@@ -13,7 +13,8 @@ import { stripBracketTags } from '@/utils/llmProtocolTags'
 import { showAttachmentNotice } from '@/utils/attachmentNotice'
 import { keepUnansweredQuestions } from './stallQuestions'
 import { ActiveStreams } from './activeStreams'
-import { extractStreamingPreview, mapMessageType } from './streamFormat'
+import { StreamThrottle } from './streamThrottle'
+import { mapMessageType } from './streamFormat'
 
 const logger = createLogger('ChatController')
 
@@ -63,20 +64,12 @@ export class ChatController {
   private retryAttempts = 3
   private retryDelay = 1000
 
-  // Issue #1312: Streaming update throttle state
-  // #21357: one buffered update per `sessionId:messageId`, so interleaved streams each keep the throttle
-  private _pendingStreamUpdates = new Map<string, {
-    sessionId?: string
-    messageId: string
-    content: string
-    type: ChatMessageDisplayType | string | undefined
-    metadata: Record<string, unknown>
-  }>()
-  private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
   private _activeStreams = new ActiveStreams() // #21357
-  private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
-  private static readonly STREAM_FLUSH_INTERVAL_MS = 80
-  private static readonly PREVIEW_THROTTLE_MS = 200
+  private _throttle = new StreamThrottle({ // Issue #1312
+    updateMessage: (id, updates, sid) => this.chatStore.updateMessage(id, updates, sid),
+    setPreview: preview => this.chatStore.setStreamingPreview(preview),
+    isOpenChat: sid => this.isOpenChat(sid)
+  })
 
   constructor() {
     // Stores will be initialized lazily when needed
@@ -132,11 +125,8 @@ export class ChatController {
       // #6746: ensure session exists BEFORE addMessage. addMessage no longer
       // creates a session as a side effect (that was a major churn source —
       // see #6745). Order: session-first, then attach message.
-      if (!this.chatStore.currentSessionId) {
-        await this.createNewSession()
-      }
-
-      originSessionId = this.chatStore.currentSessionId ?? undefined
+      // #21357: keep the id creation returned; a concurrent send may have selected another chat by now
+      originSessionId = this.chatStore.currentSessionId ?? (await this.createNewSession())
       this._activeStreams.begin(originSessionId) // before the POST: a switch away and back mid-request keeps the indicator
       registered = true
       const userMessageId = this.chatStore.addMessage({
@@ -221,7 +211,25 @@ export class ChatController {
     } finally {
       // #21357: typing belongs to the chat that sent; another open chat keeps its own indicator
       if (registered) this._activeStreams.end(originSessionId)
-      if (this.isOpenChat(originSessionId)) this.chatStore.setTyping(false)
+      this.syncTyping(originSessionId)
+    }
+  }
+
+  /** #21357: the open chat shows typing while it has a generating operation that is not paused for approval. */
+  private syncTyping(sessionId: string | undefined): void {
+    if (!this.isOpenChat(sessionId)) return
+    const generating = sessionId !== undefined && this._activeStreams.has(sessionId) && !this.chatStore.isPendingApproval(sessionId)
+    this.chatStore.setTyping(generating)
+  }
+
+  /** Count `sessionId` as streaming while `run` (a resume POST plus its reply) is in flight; then recompute typing. */
+  async withActiveStream<T>(sessionId: string, run: () => Promise<T>): Promise<T> {
+    this._activeStreams.begin(sessionId)
+    try {
+      return await run()
+    } finally {
+      this._activeStreams.end(sessionId)
+      this.syncTyping(sessionId)
     }
   }
 
@@ -303,52 +311,8 @@ export class ChatController {
     return i18n.global.t('chat.errors.sendFailed', { error: message })
   }
 
-  /**
-   * Issue #1312: Flush pending streaming update to the store.
-   * Batches rapid chunk updates into a single store mutation per flush interval.
-   */
   private flushStreamUpdate(): void {
-    const pending = [...this._pendingStreamUpdates.values()]
-    this._pendingStreamUpdates.clear()
-    for (const { sessionId, messageId, content, type, metadata } of pending) {
-      this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] }, sessionId)
-    }
-  }
-
-  /**
-   * Issue #1312: Schedule a throttled streaming update.
-   * Instead of mutating the store on every chunk, we buffer the latest state
-   * and flush at ~12fps (80ms) which is perceptually smooth for text.
-   */
-  private scheduleStreamUpdate(
-    sessionId: string | undefined,
-    messageId: string,
-    content: string,
-    type: ChatMessageDisplayType | string | undefined,
-    metadata: Record<string, unknown>
-  ): void {
-    this._pendingStreamUpdates.set(`${sessionId ?? ''}:${messageId}`, { sessionId, messageId, content, type, metadata })
-    if (!this._streamFlushTimer) {
-      this._streamFlushTimer = setTimeout(() => {
-        this._streamFlushTimer = null
-        this.flushStreamUpdate()
-      }, ChatController.STREAM_FLUSH_INTERVAL_MS)
-    }
-  }
-
-  /**
-   * Issue #1312: Throttled preview extraction.
-   * Runs at most every 200ms instead of per-chunk.
-   */
-  private schedulePreviewUpdate(content: string, messageType?: string, sessionId?: string): void {
-    if (this._previewThrottleTimer) return // Already scheduled
-    this._previewThrottleTimer = setTimeout(() => {
-      this._previewThrottleTimer = null
-      const preview = extractStreamingPreview(content, messageType)
-      if (preview && this.isOpenChat(sessionId)) { // #21357: the preview is the open chat's
-        this.chatStore.setStreamingPreview(preview)
-      }
-    }, ChatController.PREVIEW_THROTTLE_MS)
+    this._throttle.flush()
   }
 
   /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
@@ -409,7 +373,10 @@ export class ChatController {
       }
       throw error
     } finally {
-      if (!registered) this._activeStreams.end(sessionId)
+      if (!registered) {
+        this._activeStreams.end(sessionId)
+        this.syncTyping(sessionId) // the restored indicator must not outlive its stream
+      }
       reader.releaseLock()
     }
     return streamState.reportedError
@@ -520,11 +487,11 @@ export class ChatController {
       // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
       // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
       // This reduces 200+ re-renders to ~20 per streaming response
-      this.scheduleStreamUpdate(sid, frontendMessageId, data.content, messageType, data.metadata || {})
+      this._throttle.schedule({ sessionId: sid, messageId: frontendMessageId, content: data.content, type: messageType, metadata: data.metadata || {} })
 
       // Issue #1312: Throttle preview extraction to max every 200ms
       if (data.content && this.chatStore.isTyping && this.isOpenChat(sid)) {
-        this.schedulePreviewUpdate(data.content, messageType, sid)
+        this._throttle.schedulePreview(data.content, messageType, sid)
       }
 
     } catch (e) {
@@ -540,16 +507,8 @@ export class ChatController {
     sessionId?: string
   ): void {
     // Issue #1312: Flush any remaining buffered update before finalization
-    if (this._streamFlushTimer) {
-      clearTimeout(this._streamFlushTimer)
-      this._streamFlushTimer = null
-    }
-    this.flushStreamUpdate()
     // #21357: the preview timer is shared; another running stream still needs it
-    if (this._previewThrottleTimer && this._activeStreams.total <= 1) {
-      clearTimeout(this._previewThrottleTimer)
-      this._previewThrottleTimer = null
-    }
+    this._throttle.finish(this._activeStreams.total > 1)
 
     // Issue #1302: Finalize all messages and clean up truly empty ones
     // Check displayable content (after stripping internal tags) not raw content
@@ -887,7 +846,7 @@ export class ChatController {
     logger.debug(`Switching to session: ${sessionId}`)
     this.chatStore.switchToSession(sessionId)
     // #21357: the store resets typing on a switch; a chat whose stream is still running gets its indicator back
-    if (this._activeStreams.has(sessionId)) this.chatStore.setTyping(true)
+    if (this._activeStreams.has(sessionId) && !this.chatStore.isPendingApproval(sessionId)) this.chatStore.setTyping(true)
     logger.debug('Calling loadChatMessages...')
     // Load messages from backend when switching sessions
     await this.loadChatMessages(sessionId)

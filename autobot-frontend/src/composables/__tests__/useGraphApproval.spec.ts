@@ -30,7 +30,9 @@ const fakeStore = {
 }
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: (...args: unknown[]) => fetchWithAuth(...args) }))
-vi.mock('@/models/controllers', () => ({ useChatController: () => ({ handleStreamingResponse }) }))
+vi.mock('@/models/controllers', () => ({
+  useChatController: () => ({ handleStreamingResponse, withActiveStream: (_id: string, run: () => Promise<unknown>) => run() }),
+}))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => fakeStore }))
 
@@ -76,7 +78,7 @@ describe('graph-interrupt approval cards', () => {
     expect(url).toMatch(/\/chats\/chat-1\/resume$/)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ approved: true, reason: '' })
-    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1')
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1', true)
     expect(terminal).not.toHaveBeenCalled()
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('approved')
   })
@@ -195,7 +197,7 @@ describe('a card answered after the person opened another chat (#21357)', () => 
     fakeStore.currentMessages = [{ id: 'q-card', metadata: { session_id: 'chat-1', question_id: 'q1' } }]
     await useStallAnswer()(fakeStore.currentMessages[0] as never, 'go')
     expect(fakeStore.updateMessageMetadata).toHaveBeenCalledWith('q-card', { answered: true, answer_text: 'go' }, 'chat-1')
-    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1')
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1', true)
   })
 
   it('sets and restores the pending-approval flag on the card chat, not the open one', async () => {
