@@ -42,14 +42,14 @@ def test_without_an_override_the_configured_default_is_used(store):
 
 
 def test_an_override_wins_without_a_restart(store):
-    em.set_embedding_model_override("mxbai-embed-large:latest")
+    em.set_embedding_model_override("mxbai-embed-large:latest", "kb_mxbai")
     assert em.active_embedding_model() == "mxbai-embed-large:latest"
-    assert store.writes == [(em.EMBEDDING_OVERRIDE_KEY, "mxbai-embed-large:latest")]
+    assert [k for k, _ in store.writes] == [em.EMBEDDING_OVERRIDE_KEY]
 
 
 def test_a_chat_model_cannot_be_set_as_the_override(store):
     with pytest.raises(ValueError, match="not an embedding model"):
-        em.set_embedding_model_override("phi3:mini")
+        em.set_embedding_model_override("phi3:mini", "kb_phi3")
     assert store.writes == []
 
 
@@ -69,7 +69,7 @@ def test_an_unreadable_store_falls_back_to_the_default_loudly(monkeypatch, store
 def test_a_failed_write_raises_rather_than_switching_silently(monkeypatch, store):
     monkeypatch.setattr(em, "_redis", lambda: None)
     with pytest.raises(RuntimeError, match="could not be written"):
-        em.set_embedding_model_override("nomic-embed-text:latest")
+        em.set_embedding_model_override("nomic-embed-text:latest", "kb_nomic")
 
 
 def test_the_override_is_cached_for_the_window(monkeypatch, store):
@@ -86,6 +86,59 @@ def test_a_switch_in_this_process_is_seen_at_once_despite_the_cache(monkeypatch,
     store.value = b"mxbai-embed-large:latest"
     assert em.active_embedding_model() == "mxbai-embed-large:latest", "the old value is now cached"
 
-    em.set_embedding_model_override("bge-m3:latest")
+    em.set_embedding_model_override("bge-m3:latest", "kb_bge")
 
     assert em.active_embedding_model() == "bge-m3:latest"
+
+
+# --- #19379: the override is one record, model AND collection ---------------------------------
+
+
+def test_a_switch_writes_model_and_collection_as_one_record(store):
+    record = em.set_embedding_model_override("mxbai-embed-large:latest", "kb_mxbai")
+    assert em.active_embedding_space() == record == em.EmbeddingSpace("mxbai-embed-large:latest", "kb_mxbai", 1)
+    assert len(store.writes) == 1, "one write, so no reader sees the model without its collection"
+
+
+def test_each_switch_raises_the_generation(store):
+    em.set_embedding_model_override("mxbai-embed-large:latest", "kb_mxbai")
+    assert em.set_embedding_model_override("bge-m3:latest", "kb_bge").generation == 2
+
+
+def test_a_switch_without_a_collection_is_refused(store):
+    with pytest.raises(ValueError, match="names the collection"):
+        em.set_embedding_model_override("bge-m3:latest", "")
+    assert store.writes == []
+
+
+def test_a_legacy_bare_model_value_still_reads_with_no_collection(store):
+    """A value written by #19377 (a bare model id) keeps the KB on its configured collection."""
+    store.value = b"mxbai-embed-large:latest"
+    assert em.active_embedding_space() == em.EmbeddingSpace("mxbai-embed-large:latest", None, 0)
+    assert em.active_embedding_model() == "mxbai-embed-large:latest"
+
+
+def test_a_record_naming_a_chat_model_is_ignored(store, caplog):
+    store.value = b'{"model": "phi3:mini", "collection": "kb_phi3", "generation": 3}'
+    assert em.active_embedding_space() is None
+    assert em.active_embedding_model() == "nomic-embed-text:latest"
+
+
+def test_the_strict_read_raises_on_a_store_error_where_the_lenient_read_falls_back_to_none(store):
+    store.fail = True
+    assert em.active_embedding_space() is None  # the lenient reader hides the error
+    with pytest.raises(RuntimeError, match="could not be read"):
+        em.read_embedding_space_strict()
+
+
+def test_the_strict_read_raises_when_the_store_is_unavailable(monkeypatch):
+    monkeypatch.setattr(em, "_redis", lambda: None)
+    with pytest.raises(RuntimeError):
+        em.read_embedding_space_strict()
+
+
+def test_the_strict_read_ignores_the_cache_and_returns_the_current_record(store, monkeypatch):
+    monkeypatch.setattr(em, "EMBEDDING_OVERRIDE_CACHE_S", 3600.0)
+    assert em.read_embedding_space_strict() is None
+    store.value = b'{"model": "mxbai-embed-large:latest", "collection": "kb_mxbai", "generation": 2}'
+    assert em.read_embedding_space_strict() == em.EmbeddingSpace("mxbai-embed-large:latest", "kb_mxbai", 2)

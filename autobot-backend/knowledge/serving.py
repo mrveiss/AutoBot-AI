@@ -185,6 +185,22 @@ def is_servable(fact_like: Any, as_of: datetime | str | None = None) -> bool:
     return serving_verdict(fact_like, as_of) is ServingVerdict.VALID
 
 
+def _research_quarantined(fact_like: Any) -> bool:
+    """Whether *fact_like* is research-quarantined; ``knowledge.quarantine`` owns that rule (#19164)."""
+    from knowledge.quarantine import is_quarantined  # noqa: PLC0415 -- it imports this module
+
+    return is_quarantined(fact_like)
+
+
+def is_servable_unquarantined(fact_like: Any) -> bool:
+    """The default keep of :func:`servable_response`: servable now and not research-quarantined (#19164).
+
+    The second line of defence: a reader that skipped ``KB.search`` and calls the bare
+    ``servable_response(results)`` still never serves a quarantined fact.
+    """
+    return is_servable(fact_like) and not _research_quarantined(fact_like)
+
+
 def servable(items: Iterable[Any] | None, keep: Callable[[Any], bool] = is_servable) -> List[Any]:
     """*items* without any fact *keep* refuses (default: not servable now), order preserved."""
     pool = list(items or ())
@@ -217,14 +233,14 @@ def _reduced(response: dict, key: str, dropped: int) -> None:
         response[key] = max(0, response[key] - dropped)
 
 
-def servable_response(response: Any, keep: Callable[[Any], bool] = is_servable) -> Any:
+def servable_response(response: Any, keep: Callable[[Any], bool] = is_servable_unquarantined) -> Any:
     """A KB search response without the facts that may not be served now.
 
     The single place the predicate meets a search result, whatever the mode returned: a list of
     hits (basic) or a response dict whose ``results`` and ``clusters`` carry hits (enhanced and
     advanced). Anything else -- an error dict without ``results`` -- is returned untouched.
-    *keep* is the per-hit predicate; the default is :func:`is_servable`, and ``KB.search`` composes the
-    research-quarantine check into it (#19163).
+    *keep* is the per-hit predicate; the default, :func:`is_servable_unquarantined`, also refuses a
+    research-quarantined fact (#19164). ``KB.search`` passes its own, which honours the audited opt-outs (#19163).
     """
     if isinstance(response, list):
         return servable(response, keep)

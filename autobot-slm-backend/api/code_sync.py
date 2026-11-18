@@ -16,11 +16,12 @@ import os
 import shutil
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -74,6 +75,7 @@ from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
 from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.enrollment_skip import EnrollmentSkip
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -97,13 +99,15 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
-from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
+from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
+from services.collection_errors import mark_stage_failed, operational_failure_reason
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
     HOST_STATE_EXCLUDES,
+    RSYNC_ARCHIVE_ARGS,
 )
 from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
@@ -114,11 +118,15 @@ from services.drift_checker import (
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
+from services.node_events import get_slm_self_node, split_enrollment_failed
 from services.playbook_executor import get_playbook_executor
+from services.schedule_executor import get_schedule_target_nodes
+from services.single_flight_cache import SingleFlightCache
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
+from services.sync_restart import no_restart_args
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -637,6 +645,7 @@ async def _get_tracker_for_db(db: AsyncSession):
 # Never hard-code a cache TTL — read it from the environment so a frequently
 # polled status endpoint doesn't re-checksum every deployed component per call.
 _STALE_COMPONENTS_TTL_SECONDS = env_int("SLM_STALE_COMPONENTS_TTL_SECONDS", 60)
+_STALE_SCAN_TIMEOUT_SECONDS = env_int("SLM_STALE_COMPONENTS_SCAN_TIMEOUT_SECONDS", 300)
 
 # #14683: how long update-all waits for a fired self-update play to report
 # completion -- generous, the play covers every deployed role on the box. The
@@ -649,7 +658,11 @@ _SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SE
 # node stamps progress, so this bounds the gap between two signs of life, not
 # the job's total duration.
 _UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
-_stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
+# #20250: one scan at a time; concurrent /status polls hashing with the GIL starved the event loop.
+_stale_components_cache = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS, _STALE_SCAN_TIMEOUT_SECONDS)
+_stale_scan_executor = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="stale-scan"
+)  # a stuck scan starves only itself
 
 
 async def _compute_stale_components(force: bool = False) -> list[str]:
@@ -660,24 +673,18 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     matches latest, so /status must not read "up to date" while this is set.
     Only components actually deployed here (deployed dir present) are checked,
     and the result is cached for _STALE_COMPONENTS_TTL_SECONDS to bound cost on
-    the polled status path. Defensive: a failing component is logged and skipped,
-    never breaking the status response.
+    the polled status path. A failing component is logged and skipped, never breaking /status.
 
-    #12450: scans VISIBILITY_COMPONENTS (ALLOWED_COMPONENTS plus the
-    read-only extras — ai-stack, npu-worker, browser-worker, slm-agent,
-    plugins) so an operator gets a drift signal for every deployed component,
-    not just the 5 with a resolve path. Reporting here does NOT imply those
-    extras can be resolved — /drift/resolve[-async] still gate on the
-    narrower ALLOWED_COMPONENTS.
+    #12450: scans VISIBILITY_COMPONENTS, wider than the ALLOWED_COMPONENTS /drift/resolve can act on.
 
-    force=True bypasses the cache and re-scans immediately (#11512): callers
-    that just resynced a component need the FRESH drift state, not a stale
-    cached snapshot that could still list the component they just fixed.
+    force=True re-scans (#11512): a caller that just resynced needs the FRESH state. Raises
+    RefreshUnavailable when no answer came in time (#20250): unknown, never "none stale".
     """
-    now = time.monotonic()
-    if not force and now - _stale_components_cache["ts"] < _STALE_COMPONENTS_TTL_SECONDS:
-        return _stale_components_cache["value"]
+    return await _stale_components_cache.get(_scan_stale_components, force=force)
 
+
+async def _scan_stale_components() -> list[str]:
+    """Hash each deployed component against code_source. Helper for _compute_stale_components."""
     stale: list[str] = []
     loop = asyncio.get_running_loop()
     for component in sorted(VISIBILITY_COMPONENTS):
@@ -687,7 +694,7 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
                 continue  # not deployed on this box — nothing to compare
             source_dir = get_default_source_dir(component)
             report = await loop.run_in_executor(
-                None,
+                _stale_scan_executor,
                 functools.partial(build_drift_report, source_dir, deployed_dir, component),
             )
             if report["drifted_files"]:
@@ -695,8 +702,6 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
         except Exception:  # noqa: BLE001 - a bad component must not break /status
             logger.exception("stale-components scan failed for %s", component)
 
-    _stale_components_cache["ts"] = now
-    _stale_components_cache["value"] = stale
     return stale
 
 
@@ -706,11 +711,10 @@ def _invalidate_stale_components_cache() -> None:
     POST /code-sync/pull advances code_source/local_version but never told
     this TTL cache, so /status could keep serving a pre-pull drift snapshot
     ("up to date") for up to _STALE_COMPONENTS_TTL_SECONDS right after an
-    operator pull actually drifted a component. Resetting ts (not eagerly
-    recomputing) keeps pull() fast; the next /status call pays the
-    recompute cost exactly once — no thundering herd on repeated polls.
+    operator pull actually drifted a component. Invalidating, not eagerly
+    recomputing, keeps pull() fast.
     """
-    _stale_components_cache["ts"] = -_STALE_COMPONENTS_TTL_SECONDS - 1.0
+    _stale_components_cache.invalidate()
 
 
 async def _compute_process_divergence() -> Dict[str, str]:
@@ -758,6 +762,10 @@ async def get_sync_status(
 
     Returns the latest version, local version, and count of outdated nodes.
     """
+    # #11820: never read "up to date" while a co-located managed component is stale. #20250: first,
+    # so a slow scan holds no open transaction; and a scan with no answer says so, never "none stale".
+    stale_components, stale_scan_unknown = await _stale_components_cache.get_or_unknown(_scan_stale_components, [])
+    deploy_activity = await read_deploy_activity()  # #19770: before any query; slow systemctl, no pooled connection
     tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
@@ -803,19 +811,13 @@ async def get_sync_status(
     # Check if local repo has updates
     has_update = local_version is not None and latest_version is not None and local_version != latest_version
 
-    # #11820: surface deployed-vs-source drift for co-located managed components
-    # so the endpoint never reads "up to date" while a managed component is stale.
-    stale_components = await _compute_stale_components()
-
     # #15323: surface whether each running service actually LOADED the code
     # now on disk — distinct from stale_components (source vs deployed files),
     # this is deployed files vs the process's in-memory state.
     process_divergence = await _compute_process_divergence()
 
-    # #12776: the self-update path restarts this backend mid-run, so nothing
-    # in-process can assert the playbook finished. Read the verdict off the log
-    # instead, so a run that died before Play 2 stops being reported as success.
-    verdict = _read_last_self_update_verdict()
+    # #12776: the self-update restarts this backend, so the log has the verdict; #19770: liveness reads it.
+    verdict = _read_last_self_update_verdict(run_alive=deploy_activity.in_progress)
 
     return CodeSyncStatusResponse(
         latest_version=latest_version,
@@ -825,6 +827,7 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
         stale_components=stale_components,
+        stale_scan_unknown=stale_scan_unknown,
         process_divergence=process_divergence,
         self_update_incomplete=verdict.degraded,
         self_update_detail=verdict.reason,
@@ -839,7 +842,7 @@ _SELF_UPDATE_QUEUED_MESSAGE = (
 )
 
 
-def _read_last_self_update_verdict(not_before: Optional[str] = None):
+def _read_last_self_update_verdict(not_before: Optional[str] = None, run_alive: Optional[bool] = None):
     """Verdict for the last self-update run; never fails the status endpoint (#12776).
 
     #12959: the log only says whether the *playbook* finished. A run can reach
@@ -856,7 +859,7 @@ def _read_last_self_update_verdict(not_before: Optional[str] = None):
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, not_before, run_alive)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
         verdict = SelfUpdateVerdict(reason=None)
@@ -1394,7 +1397,7 @@ async def _rsync_component(
     ssh_opts = f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new"
     cmd = [
         "rsync",
-        "-avz",
+        *RSYNC_ARCHIVE_ARGS,
         "--delete",
         "-e",
         ssh_opts,
@@ -1433,12 +1436,11 @@ def _rsync_local_cmd(
 ) -> List[str]:
     """Build the local delete-style rsync argv for *component* (#13851).
 
-    Extracted so the dry-run deletion preview and the real sync are guaranteed
-    to run the *same* command — a preview built from a slightly different
-    exclude list would clear a resolve that then deletes something the operator
-    was never shown.
+    Extracted so the dry-run deletion preview and the real sync are guaranteed to run the
+    *same* command — a preview built from a slightly different exclude list would clear a
+    resolve that then deletes something the operator was never shown.
     """
-    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
+    cmd = ["rsync", *RSYNC_ARCHIVE_ARGS, "--delete", "--no-group", "--no-owner"]
     cmd.extend(_rsync_exclude_args(excludes, component))
     cmd.append(f"{source_dir or f'{source_path}/{component}'}/")
     cmd.append(f"{dest_dir or f'{FLEET_INSTALL_ROOT}/{component}'}/")
@@ -1748,7 +1750,6 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     The command matches the NOPASSWD sudoers grant from
     configure-python-provision-permissions.yml. Returns True on rc==0.
     """
-    # ARG LIST only — never a shell string. Matches the NOPASSWD sudoers grant.
     # Use an inline localhost inventory ("localhost,") rather than the fleet
     # inventory + "--limit localhost": the fleet inventory has no localhost host,
     # so "--limit localhost" left ansible with no hosts to target (#11352). The
@@ -1766,12 +1767,13 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600.0)
         out = stdout.decode(errors="replace") if stdout else ""
-        if proc.returncode == 0:
+        failure = ansible_run_failure(out, "localhost", proc.returncode)  # #19475: exit 0 is not proof
+        if not failure:
             logger.info("drift resolve: provisioned interpreter %s", target)
             steps.append(f"python-provision: {target} install ok")
             return True
-        logger.error("drift resolve: interpreter provision failed (%d): %s", proc.returncode, out[-400:])
-        steps.append(f"python-provision: FAILED (rc={proc.returncode}): {out[-200:]}")
+        logger.error("drift resolve: interpreter provision failed (%s): %s", proc.returncode, failure[-400:])
+        steps.append(f"python-provision: FAILED (rc={proc.returncode}): {failure[-200:]}")
         return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: interpreter provision timed out for %s", target)
@@ -2005,11 +2007,8 @@ def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
     # Merge env_vars (higher precedence) over os.environ; filter empty strings so
     # assemble_postgres_url falls back to its per-key defaults correctly (#11466).
     merged = {k: v for k in _PG_COMPONENT_KEYS if (v := env_vars.get(k) or os.environ.get(k, ""))}
-    return assemble_postgres_url(
-        merged,
-        default_user="autobot_app",
-        default_db="autobot_users",
-    )
+    # User/DB fall back to the shared identity defaults (postgres_identity, #19320).
+    return assemble_postgres_url(merged)
 
 
 def _build_pg_dump_command(parsed, dump_path: Path, env_vars: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
@@ -2025,14 +2024,14 @@ def _build_pg_dump_command(parsed, dump_path: Path, env_vars: Dict[str, str]) ->
     if parsed.port:
         cmd += ["-p", str(parsed.port)]
     if parsed.username:
-        cmd += ["-U", parsed.username]
-    db_name = (parsed.path or "").lstrip("/") or parsed.username or ""
+        cmd += ["-U", unquote(parsed.username)]
+    db_name = (parsed.path or "").lstrip("/") or unquote(parsed.username or "")
     if db_name:
         cmd.append(db_name)
 
     env = dict(os.environ)
     if parsed.password:
-        env["PGPASSWORD"] = parsed.password
+        env["PGPASSWORD"] = unquote(parsed.password)
     env.update(env_vars)
     return cmd, env
 
@@ -2364,7 +2363,7 @@ async def _snapshot_component(component: str) -> Optional[str]:
     try:
         proc = await asyncio.create_subprocess_exec(
             "rsync",
-            "-a",
+            *RSYNC_ARCHIVE_ARGS,
             "--delete",
             f"{deployed_dir}/",
             f"{backup_dir}/",
@@ -3070,15 +3069,11 @@ async def _execute_node_playbook(
     # hostname is user-editable and can drift from inventory host names (#921)
     # Issue #1091: Include localhost so Play 0 (archive build) runs
     limit = ["localhost", node.node_id]
-    tags = []
-    if not request.restart:
-        tags.append("!restart")  # Skip restart tasks
-
     playbook_result = await executor.execute_playbook(
         playbook_name="update-all-nodes.yml",
         limit=limit,
-        tags=tags if tags else None,
         progress_callback=progress_callback,
+        **no_restart_args(request.restart),  # #20743
     )
 
     if playbook_result["success"]:
@@ -3228,7 +3223,7 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     executor = get_playbook_executor()
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
-        result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        result = await executor.execute_playbook("update-all-nodes.yml", limit=limit, detach=True, must_run=[node_id])
         if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
             return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])
@@ -3466,15 +3461,8 @@ async def _sync_single_node(
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
         # Issue #1091: Include localhost so Play 0 (archive build) runs
         limit = ["localhost", node_state.node_id]
-        tags = []
-        if not restart:
-            tags.append("!restart")  # Skip restart tasks
-
-        # Execute update playbook
         result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            tags=tags if tags else None,
+            playbook_name="update-all-nodes.yml", limit=limit, **no_restart_args(restart)  # #20743
         )
 
         if result["success"]:
@@ -4090,35 +4078,13 @@ async def delete_schedule(
     return {"success": True, "message": f"Schedule '{schedule_name}' deleted"}
 
 
-async def _get_schedule_target_nodes(db: AsyncSession, schedule: UpdateSchedule) -> List[Node]:
-    """
-    Get target nodes based on schedule configuration.
-
-    Helper for run_schedule (Issue #665).
-    """
-    if schedule.target_type == "all":
-        nodes_result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
-    elif schedule.target_type == "specific" and schedule.target_nodes:
-        nodes_result = await db.execute(select(Node).where(Node.node_id.in_(schedule.target_nodes)))
-    else:
-        nodes_result = await db.execute(select(Node).where(Node.code_status == CodeStatus.OUTDATED.value))
-
-    return nodes_result.scalars().all()
-
-
 def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJobState:
-    """
-    Create a fleet sync job with target nodes.
-
-    Helper for run_schedule (Issue #665).
-    """
-    job_id = str(uuid.uuid4())[:16]
-
+    """A schedule's fleet sync job; a ``manual`` restart strategy never restarts (#665, #19352)."""
     job = FleetSyncJobState(
-        job_id=job_id,
+        job_id=str(uuid.uuid4())[:16],
         strategy="rolling",
         batch_size=1,
-        restart=schedule.restart_after_sync,
+        restart=bool(schedule.restart_after_sync) and schedule.restart_strategy != "manual",
     )
 
     for node in nodes:
@@ -4130,6 +4096,15 @@ def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> Fleet
             ssh_port=node.ssh_port or 22,
         )
 
+    return job
+
+
+async def queue_schedule_job(db: AsyncSession, schedule: UpdateSchedule, nodes: List[Node]) -> FleetSyncJobState:
+    """Guard, build and persist a schedule's job: run-now and the schedule executor share it (#1979, #19352)."""
+    async with fleet_sync_lock:
+        await assert_no_running_sync(db)
+        job = _create_fleet_sync_job(nodes, schedule)
+        await _persist_fleet_sync_job(job)
     return job
 
 
@@ -4154,7 +4129,7 @@ async def run_schedule(
         )
 
     # Get target nodes based on schedule configuration
-    nodes = await _get_schedule_target_nodes(db, schedule)
+    nodes = await get_schedule_target_nodes(db, schedule)
 
     if not nodes:
         return ScheduleRunResponse(
@@ -4164,14 +4139,8 @@ async def run_schedule(
             job_id=None,
         )
 
-    # Guard: prevent overlapping fleet sync jobs (#1979)
-    async with fleet_sync_lock:
-        await assert_no_running_sync(db)
-
-        job = _create_fleet_sync_job(nodes, schedule)
-        await _persist_fleet_sync_job(job)
-        task = asyncio.create_task(_run_fleet_sync_job(job))
-        _running_tasks[job.job_id] = task
+    job = await queue_schedule_job(db, schedule, nodes)
+    _running_tasks[job.job_id] = asyncio.create_task(_run_fleet_sync_job(job))
 
     # Update schedule last_run
     schedule.last_run = datetime.now(timezone.utc)
@@ -4403,6 +4372,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # never completed enrollment (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -4550,6 +4520,8 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     plan_version_is_supported,
     restart_cut_the_wait,
     restored_stage,
+    resume_ref,
+    resumed_scope,
 )
 from api._resume_wait import resolve_completion_time, wait_for_detached_self_update  # noqa: E402
 
@@ -4925,12 +4897,7 @@ def _fail_fleet_stage(
     reason: str,
 ) -> None:
     """Mark *stage* and its job failed with one reason string (any update-all stage)."""
-    stage.status = _StageStatus.FAILED
-    stage.message = reason[:300]
-    stage.completed_at = utc_timestamp()
-    job.status = "failed"
-    job.failure_reason = reason[:300]
-    job.completed_at = utc_timestamp()
+    mark_stage_failed(job, stage, reason, _StageStatus.FAILED, utc_timestamp())
 
 
 _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending", "enrolling", "decommissioned"})
@@ -4939,10 +4906,9 @@ _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending"
 def _is_node_operational(node: Node) -> bool:
     """Return True only when a node is in a state where a deploy is safe (#11511).
 
-    Nodes that are degraded, have never sent a heartbeat, or whose status is
-    anything other than online/maintenance are not targeted — attempting an
-    Ansible deploy against them will always fail and should not affect the
-    overall job result.
+    Deploy-safety, not enrollment (see status_enums.NOT_FULLY_ENROLLED_STATUSES): nodes that are
+    degraded, never heartbeated or not online/maintenance are not targeted; an Ansible deploy
+    against them always fails and should not affect the overall job result.
     """
     if node.last_heartbeat is None:
         return False
@@ -5164,10 +5130,6 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
     currency count — it does not cause a double-update.
     """
     try:
-        slm_own_ip = urlparse(settings.external_url).hostname or ""
-        seen_ids: set = set()
-        outdated_node_ids: List[str] = []
-
         async with db_service_ref.session() as db:
             # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
@@ -5176,28 +5138,26 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                 .order_by(Node.hostname)
             )
             version_outdated = nodes_result.scalars().all()
-
-            for n in version_outdated:
-                seen_ids.add(n.node_id)
-                outdated_node_ids.append(n.node_id)
+            outdated_node_ids = [n.node_id for n in version_outdated]
+            seen_ids = set(outdated_node_ids)
 
             # A: self-node inclusion — ensure the co-located SLM host is counted
             # even when heartbeat hasn't yet updated its code_status to OUTDATED.
-            if slm_own_ip:
-                slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
-                slm_node = slm_result.scalar_one_or_none()
-                if slm_node and slm_node.node_id not in seen_ids:
-                    # Self-node is not captured by version comparison (e.g. no
-                    # code_version recorded yet); include it so the pipeline
-                    # does not report "everything current" prematurely.
-                    logger.info(
-                        "update-all: self-node %s not in version-outdated list "
-                        "(code_version=%s vs remote=%s) — adding explicitly (#9996-A)",
-                        slm_node.node_id,
-                        _short_sha(slm_node.code_version),
-                        _short_sha(remote_commit),
-                    )
-                    outdated_node_ids.append(slm_node.node_id)
+            slm_node = await get_slm_self_node(db, settings.external_url)
+            if slm_node and slm_node.node_id not in seen_ids:
+                # Not captured by version comparison (e.g. no code_version yet); include it so the
+                # pipeline does not report "everything current" prematurely.
+                logger.info(
+                    "update-all: self-node %s not outdated (code_version=%s, remote=%s), adding (#9996-A)",
+                    slm_node.node_id,
+                    _short_sha(slm_node.code_version),
+                    _short_sha(remote_commit),
+                )
+                outdated_node_ids.append(slm_node.node_id)
+
+            outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(
+                db, outdated_node_ids, {slm_node.node_id} if slm_node else set()
+            )
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)
@@ -5208,8 +5168,8 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
         )
         return outdated_node_ids
-    except Exception as exc:
-        logger.warning("update-all: could not collect outdated nodes: %s", exc)
+    except Exception as exc:  # operational_failure_reason decides: it re-raises a programming error (#21334)
+        _fail_fleet_stage(job, _get_stage(job, "fleet_nodes"), operational_failure_reason("outdated nodes", exc))
         return []
 
 
@@ -5271,7 +5231,7 @@ def _completion_is_newer_than(completed_at: Optional[str], since: Optional[str])
     return done > fired
 
 
-def _rotated_completion_time() -> Optional[str]:
+def _rotated_completion_time(run_alive: Optional[bool] = None) -> Optional[str]:
     """When the last verdict came from the ROTATED log, when that log was rotated.
 
     Returns None when the verdict came from the live log (the normal case) or
@@ -5292,7 +5252,7 @@ def _rotated_completion_time() -> Optional[str]:
         from services.playbook_executor import SELF_UPDATE_LOG_PATH
         from services.self_update_log_reader import read_self_update_verdict
 
-        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH, run_alive=run_alive)
         if getattr(verdict, "from_rotated_log", False) is not True:
             return None
         # Only a run that reached its recap is a completion. `complete` is a real
@@ -5368,7 +5328,7 @@ async def _reconcile_self_update_stage(
     # probe_role_delivery and `/status` already gates on. Resolving this stage
     # on the weaker check would let a degraded self-update be reported as
     # resolved and then deploy to the fleet on the strength of it.
-    verdict = _read_last_self_update_verdict(stage.started_at)
+    verdict = _read_last_self_update_verdict(stage.started_at, run_alive=(await read_deploy_activity()).in_progress)
     if verdict.degraded:
         # Carry the reason into the stage: the count alone gave an operator
         # nothing to act on.
@@ -5428,6 +5388,8 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
 
     outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
     _mark_progress(job)
+    if job.status == "failed":  # #21334: could not determine, not "nothing outdated"
+        return
 
     slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
     _mark_progress(job)
@@ -5509,7 +5471,7 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     if deployed_commit == target_commit:
         return True
     err_msg = (
-        f"SLM deployed commit {_short_sha(deployed_commit)} " f"!= target {_short_sha(target_commit)} — stage 3 failed"
+        f"SLM deployed commit {_short_sha(deployed_commit)} != target {_short_sha(target_commit)} — stage 3 failed"
     )
     logger.error("update-all resume: %s", err_msg)
     stage_slm = _get_stage(job, "slm_self_update")
@@ -5523,17 +5485,14 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     return False
 
 
-async def _execute_resume(
-    job: UpdateAllJob,
-    target_commit: Optional[str],
-    remaining: List[str],
-) -> None:
+async def _execute_resume(job: UpdateAllJob, target_commit: Optional[str], remaining: List[str], plan: dict) -> None:
     """C2-c: Inner resume execution — always clears plan on any exception.
 
-    C1: verifies deployed commit; C2-c: try/except wraps everything.
-    """
+    C1: verifies deployed commit. #20214: a rollback's ref is read once from the plan; one without a valid ref
+    fails the job here rather than deploying main."""
     global _resume_task
     try:
+        deploy_ref = resume_ref(plan)
         if not await wait_for_detached_self_update(
             job, _mark_progress, _SELF_UPDATE_WATCH_TIMEOUT_SECONDS, _SELF_UPDATE_WATCH_POLL_SECONDS
         ):
@@ -5557,7 +5516,8 @@ async def _execute_resume(
             await _clear_resume_plan()
             return
 
-        await _run_fleet_stage(job, remaining)
+        with resumed_scope(deploy_ref):
+            await _run_fleet_stage(job, remaining)
     except Exception as exc:
         logger.error("update-all resume: unhandled error: %s", exc, exc_info=True)
         job.status = "failed"
@@ -5616,7 +5576,7 @@ async def resume_update_all_orchestration() -> None:
         ],
     )
     _set_update_all_job(job)
-    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining))
+    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining, plan))
 
 
 async def _check_persisted_plan_exists() -> bool:
@@ -5670,8 +5630,8 @@ def _retire_stale_job(existing: UpdateAllJob) -> None:
     existing.completed_at = utc_timestamp()
 
 
-async def _start_update_all_locked() -> UpdateAllJob:
-    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
+async def _start_update_all_locked(orchestrate=None) -> UpdateAllJob:
+    """Decide, retire, and start (serialised by the start lock); `orchestrate` replaces the forward run (#20214)."""
     global _update_all_task
 
     existing = _get_update_all_job()
@@ -5725,7 +5685,7 @@ async def _start_update_all_locked() -> UpdateAllJob:
     async def _run() -> None:
         global _update_all_task
         try:
-            await _run_update_all_orchestration(job, _db_svc)
+            await (orchestrate or _run_update_all_orchestration)(job, _db_svc)
         except Exception as exc:
             logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
             job.status = "failed"

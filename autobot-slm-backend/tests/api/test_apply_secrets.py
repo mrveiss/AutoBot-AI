@@ -60,6 +60,7 @@ _STUB_MODULE_NAMES = [
     "services.hf_token_validator",
     "services.system_secrets_vault",
     "services.playbook_executor",
+    "services.api_key_pepper",  # api/secrets.py imports HMAC_PEPPER_KEY + invalidate_pepper_cache (#16299)
     "autobot_shared",
     "autobot_shared.auth",
     "autobot_shared.auth.permissions",

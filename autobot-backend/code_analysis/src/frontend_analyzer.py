@@ -39,6 +39,37 @@ except ImportError:
 
 logger = get_logger(__name__)
 
+# Issue #19566: ONE word-bounded alternation per framework, compiled at import. Hooks are whole
+# identifiers, so ``findall``'s set holds exactly the hooks a per-hook ``\bhook\b`` would find.
+_LIFECYCLE_HOOKS: Dict[str, tuple] = {
+    "vue": (
+        "created",
+        "mounted",
+        "updated",
+        "destroyed",
+        "beforeCreate",
+        "beforeMount",
+        "beforeUpdate",
+        "beforeDestroy",
+        "onMounted",
+        "onUpdated",
+        "onUnmounted",
+    ),
+    "react": (
+        "componentDidMount",
+        "componentDidUpdate",
+        "componentWillUnmount",
+        "useEffect",
+        "useState",
+        "useCallback",
+        "useMemo",
+    ),
+}
+_LIFECYCLE_HOOK_RES: Dict[str, re.Pattern] = {
+    framework: re.compile(r"\b(?:" + "|".join(map(re.escape, hooks)) + r")\b")
+    for framework, hooks in _LIFECYCLE_HOOKS.items()
+}
+
 
 @dataclass
 class FrontendComponent:
@@ -423,43 +454,12 @@ class FrontendAnalyzer:
         return list(set(methods))
 
     def _extract_lifecycle_hooks(self, content: str, framework: str) -> List[str]:
-        """Extract lifecycle hooks based on framework"""
-
-        hooks = []
-
-        if framework == "vue":
-            vue_hooks = [
-                "created",
-                "mounted",
-                "updated",
-                "destroyed",
-                "beforeCreate",
-                "beforeMount",
-                "beforeUpdate",
-                "beforeDestroy",
-                "onMounted",
-                "onUpdated",
-                "onUnmounted",
-            ]
-            for hook in vue_hooks:
-                if re.search(rf"\b{hook}\b", content):
-                    hooks.append(hook)
-
-        elif framework == "react":
-            react_hooks = [
-                "componentDidMount",
-                "componentDidUpdate",
-                "componentWillUnmount",
-                "useEffect",
-                "useState",
-                "useCallback",
-                "useMemo",
-            ]
-            for hook in react_hooks:
-                if re.search(rf"\b{hook}\b", content):
-                    hooks.append(hook)
-
-        return hooks
+        """Extract lifecycle hooks based on framework, in declaration order (#19566: one pass)."""
+        hook_re = _LIFECYCLE_HOOK_RES.get(framework)
+        if hook_re is None:
+            return []
+        found = set(hook_re.findall(content))
+        return [hook for hook in _LIFECYCLE_HOOKS[framework] if hook in found]
 
     def _extract_dependencies(self, content: str) -> List[str]:
         """Extract import dependencies"""

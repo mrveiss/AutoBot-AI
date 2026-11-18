@@ -394,10 +394,8 @@ class TestSessionTakeover:
         assert [step["step_id"] for step in status["steps"]] == [
             f"demo_{index}" for index in range(1, 6)
         ], "Status must list every step, in order"
+        # #19807: WorkflowStep pins requires_confirmation for every non-vision step, so the
+        # creator's False on the echo/git steps is overridden; the status must carry the pinned value.
         assert [step["requires_confirmation"] for step in status["steps"]] == [
-            False,
-            True,
-            True,
-            False,
-            False,
-        ], "Status must carry each step's confirmation requirement"
+            True
+        ] * 5, "Status must carry each step's confirmation requirement"

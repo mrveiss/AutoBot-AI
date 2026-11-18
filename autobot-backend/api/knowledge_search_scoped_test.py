@@ -12,7 +12,7 @@ Tests:
 - extract_user_context_from_request handles dict and ORM users
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -270,7 +270,9 @@ async def test_search_passes_filters_to_query_chromadb():
     # #19163: the caller's filter reaches the store AND-ed with the quarantine/serving clause
     from knowledge.quarantine import store_side_where
 
-    mock_query.assert_called_once_with(query_embedding, 5, where=store_side_where(where_filter, False, False))
+    mock_query.assert_called_once_with(
+        query_embedding, 5, where=store_side_where(where_filter, False, False), store=ANY
+    )
 
 
 @pytest.mark.asyncio
@@ -303,4 +305,4 @@ async def test_search_no_filters_omits_where():
     # #19163: with no caller filter the store still gets the quarantine/serving clause, nothing else
     from knowledge.quarantine import store_side_where
 
-    mock_query.assert_called_once_with(query_embedding, 5, where=store_side_where(None, False, False))
+    mock_query.assert_called_once_with(query_embedding, 5, where=store_side_where(None, False, False), store=ANY)

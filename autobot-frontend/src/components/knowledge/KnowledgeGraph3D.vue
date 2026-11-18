@@ -327,8 +327,9 @@ watch(
   color: var(--text-tertiary);
 }
 
-.graph3d-empty i {
-  font-size: var(--text-5xl);
+.graph3d-empty .icon {
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   opacity: 0.3;
 }
 

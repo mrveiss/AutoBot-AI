@@ -55,7 +55,10 @@ def test_the_preview_is_the_render_of_the_current_mark() -> None:
     blobs = {path: (repo_root() / path).read_bytes() for path in _RENDERED_FROM}
     assert not drifted(blobs, _RENDERED_FROM), (
         f"#18266: {_MARK} or {_PREVIEW} changed without the other; re-run "
-        "scripts/brand/render_social_preview.mjs and update both hashes in _RENDERED_FROM."
+        "scripts/brand/render_social_preview.mjs and update both hashes in _RENDERED_FROM. "
+        "The PNG hash also depends on the Chromium build and installed fonts that render it, "
+        "so a re-render elsewhere changes it even when the mark did not; commit that re-render "
+        "with both hashes rather than reverting it."
     )
 
 

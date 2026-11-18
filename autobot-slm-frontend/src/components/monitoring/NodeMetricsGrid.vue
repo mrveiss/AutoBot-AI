@@ -10,7 +10,7 @@
 
 import { ref, computed } from 'vue'
 import type { NodeMetricsDetailed } from '@/composables/useFleetMetrics'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 interface Props {
   nodes: NodeMetricsDetailed[]
@@ -171,7 +171,7 @@ function getSortIcon(key: SortKey): string {
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               <span v-if="node.last_heartbeat">
-                {{ formatDateTime(node.last_heartbeat) }}
+                {{ formatFleetDateTime(node.last_heartbeat) }}
               </span>
               <span v-else class="text-gray-400">{{ $t('monitoring.nodeMetricsGrid.noData') }}</span>
             </td>

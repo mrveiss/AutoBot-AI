@@ -13,6 +13,8 @@
  * cleanup, no timeout).
  */
 
+import { formatFleetDateTime } from '@/composables/useTimezone'
+import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import {
   useAutobotApi,
@@ -22,9 +24,10 @@ import {
   type AgentDirectReport,
   type AgentOrgNode,
 } from '@/composables/useAutobotApi'
-import { BaseFormField } from '@autobot/ui'
+import { BaseFormField, BaseButton } from '@autobot/ui'
 import OrgTreeNode from './OrgTreeNode.vue'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 const tree = ref<AgentOrgNode[]>([])
 const loading = ref(true)
@@ -43,7 +46,7 @@ async function fetchTree() {
   try {
     tree.value = await api.getAgentOrgTree()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Failed to load org tree')
+    error.value = autobotApiErrorMessage(err, t('agents.orgChartTab.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -75,7 +78,7 @@ async function submitDelegation() {
     showDelegateForm.value = false
     await selectNode(selectedNode.value)
   } catch (err) {
-    delegateError.value = autobotApiErrorMessage(err, 'Delegation failed')
+    delegateError.value = autobotApiErrorMessage(err, t('agents.orgChartTab.delegationFailed'))
   }
 }
 
@@ -176,13 +179,12 @@ onMounted(fetchTree)
         </div>
 
         <div v-if="directReports.length" class="delegate-section">
-          <button
+          <BaseButton
             v-if="!showDelegateForm"
-            class="btn-primary"
             @click="showDelegateForm = true"
           >
             {{ $t('agents.orgChartTab.delegateTask') }}
-          </button>
+          </BaseButton>
           <div v-else class="delegate-form">
             <h4>{{ $t('agents.orgChartTab.newDelegation') }}</h4>
             <div v-if="delegateError" class="error-inline">{{ delegateError }}</div>
@@ -209,8 +211,8 @@ onMounted(fetchTree)
               />
             </BaseFormField>
             <div class="form-actions">
-              <button class="btn-primary" @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</button>
-              <button class="btn-cancel" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</button>
+              <BaseButton @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</BaseButton>
+              <BaseButton variant="secondary" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</BaseButton>
             </div>
           </div>
         </div>
@@ -223,9 +225,7 @@ onMounted(fetchTree)
               <span class="delegation-assignee">&rarr; {{ d.assignee_id }}</span>
             </div>
             <p class="delegation-desc">{{ d.task_description }}</p>
-            <span v-if="d.created_at" class="delegation-time">{{
-              new Date(d.created_at).toLocaleString()
-            }}</span>
+            <span v-if="d.created_at" class="delegation-time">{{ formatFleetDateTime(d.created_at) }}</span>
           </div>
         </div>
       </div>
@@ -269,9 +269,6 @@ h4 { font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--spacing-3) 0
 .delegate-form { background: var(--slm-gray-50); border-radius: var(--radius-lg); padding: var(--spacing-4); }
 .delegate-control { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); font-family: inherit; }
 .form-actions { display: flex; gap: var(--spacing-2); }
-.btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
-.btn-primary:hover { background: var(--slm-indigo-600); }
-.btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
 .delegation-item { padding: 10px 0; border-bottom: 1px solid var(--slm-gray-100); }
 .delegation-header { display: flex; align-items: center; gap: var(--spacing-2); }
 .status-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }

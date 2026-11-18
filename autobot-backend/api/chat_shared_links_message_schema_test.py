@@ -39,8 +39,11 @@ class _RecordingHistory(MessagesMixin):
     async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         return list(self.sessions.get(session_id, []))
 
-    async def save_session(self, session_id: str, messages: List[Dict[str, Any]], **_: Any) -> bool:
-        self.sessions[session_id] = list(messages)
+    async def save_session(
+        self, session_id: str, messages: List[Dict[str, Any]], append: bool = False, **_: Any
+    ) -> bool:
+        stored = self.sessions.get(session_id, []) if append else []  # the real writer appends under its lease
+        self.sessions[session_id] = stored + list(messages)
         return True
 
 

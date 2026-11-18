@@ -298,6 +298,21 @@ class SecretsCoordinator:
             raise SecretAccessError(f"not authorized to view dependencies for secret {secret_id}")
         return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
 
+    async def describe_dependencies_for_delete(
+        self, session: AsyncSession, *, user_id: uuid.UUID, permissions: set[str], secret_id: uuid.UUID
+    ) -> list[SecretDependency]:
+        """What depends on *secret_id*, listed for a caller who may DELETE it (#20640).
+
+        Gated by ``write`` -- the same authority :meth:`delete` needs -- not the ``share`` authority of
+        :meth:`describe_dependencies`, so a write-only member can still delete a secret that has no
+        dependents and is told who depends on one that has.
+        """
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "write", owner):
+            raise SecretAccessError(f"not authorized to delete secrets in {owner.to_str()}")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
     async def register_dependency(
         self,
         session: AsyncSession,
@@ -500,12 +515,24 @@ class SecretsCoordinator:
             session, secret_id=secret_id, new_root_key=new_root_key, actor_vaults={vault}
         )
 
-    async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
-        """Delete a system-vault secret on behalf of a service identity."""
-        self._assert_system_vault(vault)
+    async def _require_system_owner(self, session: AsyncSession, secret_id: uuid.UUID, action: str) -> None:
+        """A service identity acts only on secrets the system vault owns (the one check for every service_* use)."""
         owner_vault = await self._owner_vault(session, secret_id)
         if owner_vault.kind is not VaultKind.SYSTEM:
             raise SecretAccessError(
-                f"service may only delete system-vault secrets; found owner {owner_vault.to_str()!r}"
+                f"service may only {action} system-vault secrets; found owner {owner_vault.to_str()!r}"
             )
+
+    async def service_describe_dependencies(
+        self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef
+    ) -> list[SecretDependency]:
+        """What depends on a system-vault secret, for a service identity's delete (#20640)."""
+        self._assert_system_vault(vault)
+        await self._require_system_owner(session, secret_id, "read dependents of")
+        return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
+    async def service_delete(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> None:
+        """Delete a system-vault secret on behalf of a service identity."""
+        self._assert_system_vault(vault)
+        await self._require_system_owner(session, secret_id, "delete")
         await self._service.delete(session, secret_id=secret_id)

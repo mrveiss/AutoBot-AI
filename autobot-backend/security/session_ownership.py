@@ -29,7 +29,15 @@ from security.enforcement_mode import (
     resolve_enforcement_mode,
     resolve_enforcement_mode_for_request,
 )
-from security.session_posture import SessionPosture, authenticated_user, read_owner, require_posture, validate_strict
+from security.session_owner_claim import take_or_refresh
+from security.session_posture import (
+    SessionPosture,
+    authenticated_user,
+    read_owner,
+    require_posture,
+    unowned_access,
+    validate_strict,
+)
 
 logger = get_logger(__name__)
 
@@ -73,14 +81,7 @@ class SessionOwnershipValidator:
     """
 
     def __init__(self, redis_client, feature_flags=None, metrics_service=None):
-        """
-        Initialize session ownership validator.
-
-        Args:
-            redis_client: Async Redis client for ownership data
-            feature_flags: Optional feature flags service for enforcement mode
-            metrics_service: Optional metrics service for violation tracking
-        """
+        """Take the async Redis client, and the optional flag (enforcement mode) and metrics services."""
         self.redis = redis_client
         self.ownership_ttl = 86400  # 24 hours (match conversation TTL)
         self.feature_flags = feature_flags
@@ -113,6 +114,7 @@ class SessionOwnershipValidator:
         org_id: str | None = None,
         team_id: str | None = None,
         force: bool = False,
+        previous_owner: str | None = None,
     ) -> bool:
         """
         Associate a chat session with its owner and org/team context.
@@ -124,30 +126,25 @@ class SessionOwnershipValidator:
             team_id: Team ID for team-scoped sessions (#684)
             force: Reassign an already-owned session (#14012). A deliberate
                 transfer must say so; the default refuses.
+            previous_owner: Who held it, when the ownership key may have expired.
 
         Returns:
             True if successful, False if the session already has a different
             owner and *force* was not set.
         """
         try:
-            # #14012: this used to be an unconditional set, so any writer could
-            # silently take a session over — and then pass every ownership check
-            # on it. An authorization record that any caller can overwrite is not
-            # an authorization record. Refreshing one's own ownership (the TTL
-            # refresh path) is still allowed.
+            # #14012: an unconditional set let any writer take a session over and pass every
+            # ownership check on it. Refreshing one's own ownership (TTL refresh) is still allowed.
             existing = await self.get_session_owner(session_id)
             if existing and existing != username and not force:
-                logger.warning(
-                    "Refusing to reassign session %s... from %s to %s without force",
-                    session_id[:8],
-                    existing,
-                    username,
-                )
+                refusal = "Refusing to reassign session %s... from %s to %s without force"
+                logger.warning(refusal, session_id[:8], existing, username)
                 return False
 
-            # Store ownership mapping
-            ownership_key = self._get_ownership_key(session_id)
-            await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
+            if not await take_or_refresh(self, session_id, existing, username, force):
+                return False
+            for previous in {existing, previous_owner} - {None, username}:  # #20029: their list stops showing it
+                await self.redis.srem(self._get_user_sessions_key(previous), session_id)
 
             # Add to user's session set
             user_sessions_key = self._get_user_sessions_key(username)
@@ -509,13 +506,10 @@ class SessionOwnershipValidator:
     ) -> "tuple[str | None, Dict | None]":
         """Resolve ownership when Redis has no record (#14018).
 
-        An absent Redis record does NOT mean the session is unowned: the key
-        carries a TTL, so it also goes absent for any session whose owner has not
-        touched it recently. Claiming it here handed that session to whoever
-        accessed it next, authorized — ownership expiring into a takeover.
-
-        The session file's ``metadata.owner`` does not expire, so it is asked
-        first. Redis is a cache in front of it, not the record of truth.
+        An absent Redis record does NOT mean the session is unowned: the key carries a TTL.
+        Claiming it here handed that session to whoever accessed it next, authorized —
+        ownership expiring into a takeover. The session file's ``metadata.owner`` does not
+        expire, so it is asked first. Redis is a cache in front of it, not the record of truth.
 
         Returns ``(owner, early_result)``. A non-None *early_result* is the
         caller's return value; otherwise *owner* continues the normal comparison.
@@ -527,8 +521,12 @@ class SessionOwnershipValidator:
                 await self.set_session_owner(session_id, durable_owner, org_id=user_data.get("org_id"), team_id=None)
             return durable_owner, None
 
+        if (decided := await unowned_access(session_id, user_data, request)) is not None:
+            return username, decided
         logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
-        await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
+        if not await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None):
+            # Another writer took it first (#20030): the normal comparison refuses; unknown is no owner, not "free"
+            return await self.get_session_owner(session_id) or "", None
         return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
 
     async def _resolve_ownership(
@@ -617,18 +615,12 @@ class SessionOwnershipValidator:
             username: Owner username
 
         Returns:
-            List of session IDs
+            List of session IDs. A Redis error propagates (#21664): "could not
+            read" must never look like "owns nothing" to a caller.
         """
-        try:
-            user_sessions_key = self._get_user_sessions_key(username)
-            sessions = await self.redis.smembers(user_sessions_key)
-            if not sessions:
-                return []
-            # Handle both bytes and str responses from Redis
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
-        except Exception as e:
-            logger.error("Failed to get user sessions: %s", e)
-            return []
+        sessions = await self.redis.smembers(self._get_user_sessions_key(username))
+        # Handle both bytes and str responses from Redis
+        return [s.decode() if isinstance(s, bytes) else s for s in sessions or ()]
 
     async def get_org_sessions(self, org_id: str) -> list[str]:
         """Get all sessions for an organization (#684)."""

@@ -33,6 +33,7 @@ from typing import Dict, List, Optional
 
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
+from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE
 
 logger = get_logger(__name__)
 
@@ -90,6 +91,7 @@ async def _deploy_constraints_dir(source_root: str, steps: List[str]) -> None:
         proc = await asyncio.create_subprocess_exec(
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             src,
             dst,

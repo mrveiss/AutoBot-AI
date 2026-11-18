@@ -94,6 +94,8 @@ is unreachable, so those two never look the same either. Writing an entry is
 best-effort and returns `False` when it fails: the claim is already held by
 then, so a failed audit write must not fail the work it describes.
 
+**The trainmaster role** is a `task` claim in the ledger: the trainmaster holds `task trainmaster` as a timed claim and renews it at each train build and landing, because `ledger beat` does not extend the expiry. `ledger who task trainmaster` answers whether one is active; PR-granularity rules that depend on it ([CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#pr-granularity)) read that answer.
+
 ## Design tests
 
 Any "no" needs a written justification in the issue.

@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
-from services.deploy_artifacts import rsync_artifact_excludes, rsync_host_state_args
+from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes, rsync_host_state_args
 from services.deployed_dir_resolver import get_release_component_dir
 from services.drift_checker import deploy_only_entries, owned_subtrees
 
@@ -190,6 +190,7 @@ async def _restore_component_snapshot(component: str, snapshot: str, steps: List
         proc = await asyncio.create_subprocess_exec(
             "rsync",
             "-a",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             f"{snapshot}/",
             f"{deployed_dir}/",

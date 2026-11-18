@@ -41,7 +41,13 @@ from fastapi import HTTPException
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from knowledge.serving import SERVING_TRUST_WHERE, _fact_field, is_servable, servable_response
+from knowledge.serving import (
+    SERVING_TRUST_WHERE,
+    _fact_field,
+    is_servable,
+    is_servable_unquarantined,
+    servable_response,
+)
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -163,7 +169,7 @@ def keep_predicate(include_unservable: bool, include_quarantined: bool):
         return not_quarantined
     if include_quarantined:
         return is_servable
-    return lambda hit: is_servable(hit) and not_quarantined(hit)
+    return is_servable_unquarantined
 
 
 def response_hits(response: Any) -> list:

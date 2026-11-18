@@ -5,19 +5,19 @@ tags:
   - sprint
   - planning
 aliases:
-  - LLC Gantt
+  - Company OS Gantt
   - Project Timeline
   - Gantt Chart
 status: current
 ---
 
-# LLC Project Timeline (Gantt)
+# Company OS Project Timeline (Gantt)
 
 A timeline / Gantt view for sprint planning and project roadmaps (GH#9020).
 Work items render as horizontal bars over a time axis, with dependency arrows,
 critical-path highlighting, drag-to-reschedule, zoom, and PNG export.
 
-Reachable from the LLC company sidebar (**Timeline**) at
+Reachable from the Company OS company sidebar (**Timeline**) at
 `/llc/companies/{companyId}/timeline`. The view lists the company's projects and
 draws the selected project's timeline.
 
@@ -86,4 +86,4 @@ reused by the project browser).
 ## See Also
 
 - Issue #9020 — Gantt chart + timeline view
-- [LLC Module PRD](../planning/PRD_AutoBot_LLC_Module.md)
+- [Company OS Module PRD](../planning/PRD_AutoBot_LLC_Module.md)

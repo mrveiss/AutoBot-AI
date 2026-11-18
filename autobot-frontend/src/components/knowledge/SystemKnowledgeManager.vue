@@ -131,7 +131,7 @@
     <!-- Progress Display -->
     <div v-if="progressMessage" class="progress-display">
       <div class="progress-content">
-        <div class="spinner"></div>
+        <BaseSpinner size="md" />
         <p>{{ progressMessage }}</p>
       </div>
       <div v-if="progressPercent > 0" class="progress-bar">
@@ -185,7 +185,7 @@
 </template>
 
 <script>
-import { BaseButton, BaseCard } from '@autobot/ui';
+import { BaseButton, BaseCard, BaseSpinner } from '@autobot/ui';
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -195,7 +195,7 @@ import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
-import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
+import { formatCategoryName as formatKey, formatLocalTime } from '@/utils/formatHelpers';
 import { useHostSelection } from '@/composables/useHostSelection';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -204,10 +204,7 @@ const logger = createLogger('SystemKnowledgeManager');
 
 export default {
   name: 'SystemKnowledgeManager',
-  components: {
-    BaseButton,
-    BaseCard
-  },
+  components: { BaseButton, BaseCard, BaseSpinner },
 
   setup() {
     const { t } = useI18n();
@@ -273,7 +270,7 @@ export default {
     const { isLoading: isVectorizing } = useLoadingState()
 
     const addLogEntry = (message, status) => {
-      const time = new Date().toLocaleTimeString();
+      const time = formatLocalTime(new Date());
       activityLog.value.unshift({ time, message, status });
       if (activityLog.value.length > 10) {
         activityLog.value.pop();
@@ -893,19 +890,6 @@ export default {
 
 .progress-content p {
   color: var(--text-primary);
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--bg-tertiary);
-  border-top-color: var(--color-info);
-  border-radius: var(--radius-full);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .progress-bar {

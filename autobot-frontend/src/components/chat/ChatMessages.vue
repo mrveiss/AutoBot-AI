@@ -144,13 +144,12 @@
           :plan="message.metadata.plan as any"
           :steps="message.metadata?.steps as any"
         />
-
+        <StallQuestionCard v-else-if="message.type === 'human_question'" :message="message" /> <!-- #21022 -->
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
           :step="message.metadata.step as any"
         />
-
         <!-- GH#9015: AI-generated image message -->
         <ImageCell
           v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
@@ -442,6 +441,7 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
+                v-if="!isGraphApproval(message.metadata)"
                 variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
@@ -580,6 +580,7 @@ import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseModal, BaseButton } from '@autobot/ui'
+import StallQuestionCard from '@/components/chat/StallQuestionCard.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
@@ -590,6 +591,7 @@ import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
+import { isGraphApproval, useApprovalRouting } from '@/composables/useGraphApproval'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
@@ -638,31 +640,8 @@ const {
   getRiskClass,
 } = useCommandApproval()
 
-/**
- * Thin wrapper: calls the composable's approveCommand with the store's
- * message-update callback wired in.
- */
-const approveCommand = (
-  terminal_session_id: string,
-  approved: boolean,
-  comment?: string,
-  command_id?: string,
-  commandInfo?: { command: string; risk_level: string }
-) => {
-  const onMessageUpdate = (sessionId: string, status: string, updateComment?: string) => {
-    const targetMessage = store.currentMessages.find(
-      msg => msg.metadata?.terminal_session_id === sessionId &&
-             msg.metadata?.requires_approval === true
-    )
-    if (targetMessage && targetMessage.metadata) {
-      targetMessage.metadata.approval_status = status
-      targetMessage.metadata.approval_comment = updateComment
-    } else {
-      logger.warn('Could not find message to update approval status')
-    }
-  }
-  return _approveCommand(terminal_session_id, approved, comment, command_id, onMessageUpdate, commandInfo)
-}
+/** A graph-interrupt card posts to /chats/{id}/resume; any other card keeps the terminal route (#20195). */
+const approveCommand = useApprovalRouting(_approveCommand)
 
 // Refs
 const messagesContainer = ref<HTMLElement>()
@@ -1564,13 +1543,13 @@ onUnmounted(() => {
 /* Issue #690: Overseer Agent Message Styles */
 .message-wrapper.type-overseer_plan::after {
   content: 'Plan';
-  @apply bg-autobot-primary text-white;
+  @apply bg-autobot-primary text-autobot-text-on-primary;
 }
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  background: var(--color-info);
-  color: var(--text-inverse);
+  background: var(--color-info-solid);
+  color: var(--text-on-info);
 }
 
 .message-wrapper.type-overseer_plan,
@@ -2042,7 +2021,7 @@ onUnmounted(() => {
 }
 
 .citations-count {
-  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-white rounded-full;
+  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-autobot-text-on-primary rounded-full;
 }
 
 .citations-list {

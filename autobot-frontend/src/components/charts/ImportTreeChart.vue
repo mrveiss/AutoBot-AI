@@ -16,7 +16,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('charts.importTree.loading') }}</span>
     </div>
 
@@ -68,7 +68,7 @@
       <div v-show="viewMode === 'network'" class="network-view">
         <!-- Loading Cytoscape library -->
         <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
+          <BaseSpinner size="md" />
           <span>{{ $t('charts.importTree.loadingVisualization') }}</span>
         </div>
 
@@ -228,6 +228,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, shallowRef, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -852,21 +853,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 10;
+  z-index: var(--z-10);
   gap: var(--spacing-2);
-}
-
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid var(--border-color);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .chart-error {
@@ -1071,7 +1059,7 @@ onUnmounted(() => {
   border-left: 1px solid var(--border-color);
   border-radius: 0;
   overflow-y: auto;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1084,7 +1072,7 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   position: sticky;
   top: 0;
-  z-index: 101;
+  z-index: var(--z-raised);
 }
 
 .detail-icon {

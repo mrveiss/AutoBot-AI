@@ -28,6 +28,7 @@ from typing import Callable, Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
@@ -39,13 +40,14 @@ from api.schemas_knowledge import (
     GraphRAGSearchResponse,
 )
 from api.system_health import register_app_state_probe
-from api.user_management.dependencies import get_tenant_context
+from api.user_management.dependencies import get_db_session, get_tenant_context
 from auth_middleware import get_current_user
 from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.user_management.base_service import TenantContext
+from knowledge.root_read import is_superadmin_user
 from knowledge.search_filters import kb_principal_from_tenant
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
@@ -174,6 +176,8 @@ async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
     tenant: TenantContext = Depends(get_tenant_context),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
     Perform graph-aware RAG search combining semantic search with graph traversal.
@@ -183,7 +187,8 @@ async def graph_rag_search(
     """
     request_id = generate_request_id()
     owner = _owner_scope(tenant)  # outside the try: a 403 must not become a 500 (#18825)
-    principal = kb_principal_from_tenant(tenant)  # #16664: the KB leg returns what the caller may read
+    # #16664, #19007: what the caller may read; #19860: the superadmin from the verified role claim only
+    principal = await kb_principal_from_tenant(tenant, session, is_superadmin=is_superadmin_user(current_user))
 
     try:
         logger.info(
@@ -351,17 +356,18 @@ async def graph_rag_metrics(
     Returns:
         JSONResponse with service metrics
 
-    Example Response:
+    Example Response (numbers illustrative; live values are RAGConfig.graph_weight,
+    timeout_seconds and graph_timeout_seconds):
         ```json
         {
             "service": "GraphRAGService",
-            "graph_weight": "<RAGConfig.graph_weight>",
+            "graph_weight": 0.5,
             "entity_extraction_enabled": true,
             "rag_service": {
                 "enable_advanced_rag": true,
-                "timeout_seconds": "<RAGConfig.timeout_seconds>"
+                "timeout_seconds": 20.0
             },
-            "graph_timeout_seconds": "<RAGConfig.graph_timeout_seconds>",
+            "graph_timeout_seconds": 15.0,
             "graph_initialized": true
         }
         ```

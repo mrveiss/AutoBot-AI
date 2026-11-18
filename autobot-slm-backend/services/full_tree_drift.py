@@ -46,11 +46,7 @@ from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import (
     ARTIFACT_DIR_SUFFIXES,
     ARTIFACT_DIRS,
-    SLM_FRONTEND_BUILD_PREFIX,
-    SLM_FRONTEND_CURRENT_LINK,
-    SLM_FRONTEND_LEGACY_DIR,
-    SLM_FRONTEND_LEGACY_PREVIOUS_DIR,
-    SLM_FRONTEND_PREVIOUS_LINK,
+    is_host_generated,
 )
 from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
@@ -60,17 +56,11 @@ from services.host_state_filter import kept_reason
 
 logger = get_logger(__name__)
 
-# Top-level names the SLM frontend publish step owns, sourced from
-# services/deploy_artifacts.py (#16717) rather than restated here -- the same
-# vocabulary services/drift_checker.py's rsync-exclude and legacy-drift-walk
-# protection derives from, so this walk and that one can never disagree
-# about what a release artifact is called. Expected release artifacts at ANY
-# retention depth -- the publish step's own SLM_FRONTEND_RELEASE_KEEP pruning
-# is what bounds them, not this check.
-_BUILD_BUNDLE_PREFIX = SLM_FRONTEND_BUILD_PREFIX
-_BUILD_BUNDLE_NAMES = frozenset(
-    {SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK, SLM_FRONTEND_LEGACY_DIR, SLM_FRONTEND_LEGACY_PREVIOUS_DIR}
-)
+# What a deploy or the running host produces per component -- the release bundles of both frontends
+# (dist-*, current, previous, ...), the backend's rendered .validation_vars and filtered requirements --
+# is ONE declaration, deploy_artifacts.HOST_GENERATED_PATHS (#19443), asked through is_host_generated
+# (#19453). This walk used to keep its own SLM-frontend-only set, so the user frontend's bundles and the
+# backend's rendered files fell through to host_state:unclassified.
 
 # Drift verdicts. Only the first two are drift; the rest are named exclusions.
 VERDICT_MODIFIED = "modified"
@@ -112,18 +102,14 @@ def _sha256(path: Path, block_size: int = 65536) -> str:
     return digest.hexdigest()
 
 
-def _is_build_bundle_top(name: str) -> bool:
-    return name in _BUILD_BUNDLE_NAMES or name.startswith(_BUILD_BUNDLE_PREFIX)
-
-
-def _prune_reason(rel_dir: str, name: str, owned: frozenset[str]) -> str | None:
+def _prune_reason(rel_dir: str, name: str, owned: frozenset[str], component: str) -> str | None:
     """Exclusion bucket name for a directory the walk must not descend into, or None."""
     if name in ARTIFACT_DIRS or name.endswith(ARTIFACT_DIR_SUFFIXES):
         return f"artifact:{name}"
     rel = name if rel_dir in ("", ".") else f"{rel_dir}/{name}"
     if any(rel == sub or rel.startswith(f"{sub}/") for sub in owned):
         return "owned_by_other_component"
-    if rel_dir in ("", ".") and _is_build_bundle_top(name):
+    if rel_dir in ("", ".") and is_host_generated(component, name):
         return VERDICT_BUILD_BUNDLE
     return None
 
@@ -138,12 +124,14 @@ def _can_list(root: Path) -> bool:
         return False
 
 
-def _prune_dirnames(dirpath: Path, root: Path, dirnames: list[str], owned: frozenset[str], exclusions: dict) -> None:
+def _prune_dirnames(
+    dirpath: Path, root: Path, dirnames: list[str], owned: frozenset[str], exclusions: dict, component: str
+) -> None:
     """Filter *dirnames* in place, tallying every pruned reason."""
     rel_dir = dirpath.relative_to(root).as_posix()
     kept = []
     for name in dirnames:
-        reason = _prune_reason(rel_dir, name, owned)
+        reason = _prune_reason(rel_dir, name, owned, component)
         if reason is None:
             kept.append(name)
         else:
@@ -161,7 +149,9 @@ def _checksum_files(dirpath: Path, root: Path, filenames: list[str], checksums: 
             logger.warning("full_tree_drift: cannot read %s: %s", filepath, exc)
 
 
-def _walk_checksums(root: Path, owned: frozenset[str], exclusions: dict[str, int]) -> dict[str, str] | None:
+def _walk_checksums(
+    root: Path, owned: frozenset[str], exclusions: dict[str, int], component: str
+) -> dict[str, str] | None:
     """Every file under *root*, sha256'd, minus artifact/owned/bundle dirs.
 
     Returns ``None`` when *root* itself cannot be listed -- an unreadable
@@ -173,7 +163,7 @@ def _walk_checksums(root: Path, owned: frozenset[str], exclusions: dict[str, int
     checksums: dict[str, str] = {}
     onerror = lambda exc: logger.warning("full_tree_drift: %s", exc)  # noqa: E731
     for dirpath, dirnames, filenames in os.walk(root, onerror=onerror):
-        _prune_dirnames(Path(dirpath), root, dirnames, owned, exclusions)
+        _prune_dirnames(Path(dirpath), root, dirnames, owned, exclusions, component)
         _checksum_files(Path(dirpath), root, filenames, checksums)
     return checksums
 
@@ -187,7 +177,7 @@ def _classify_host_state(rel_path: str, component: str) -> str:
     if rel_path in deploy_only_entries(component):
         return f"deploy_only:{rel_path}"
     top = rel_path.split("/", 1)[0]
-    if _is_build_bundle_top(top):
+    if is_host_generated(component, top):
         return VERDICT_BUILD_BUNDLE
     if rel_path == ".deployed_commit":
         return "host_state:deployed_commit_marker"
@@ -237,15 +227,15 @@ def _resolve_component_trees(component: str) -> tuple[str, str] | ComponentDrift
 
 
 def _collect_both_checksums(
-    source_dir: str, deployed_dir: str, owned: frozenset[str], exclusions: dict[str, int]
+    source_dir: str, deployed_dir: str, owned: frozenset[str], exclusions: dict[str, int], component: str
 ) -> tuple[dict[str, str], dict[str, str]] | str:
     """(deployed, source) checksums, or an error string naming which side failed."""
-    dep_checksums = _walk_checksums(Path(deployed_dir), owned, exclusions)
+    dep_checksums = _walk_checksums(Path(deployed_dir), owned, exclusions, component)
     if dep_checksums is None:
         return f"deployed tree unreadable: {deployed_dir}"
     if not dep_checksums:
         return f"deployed tree is empty: {deployed_dir}"
-    src_checksums = _walk_checksums(Path(source_dir), frozenset(), {})
+    src_checksums = _walk_checksums(Path(source_dir), frozenset(), {}, component)
     if src_checksums is None:
         return f"source tree unreadable: {source_dir}"
     return dep_checksums, src_checksums
@@ -318,7 +308,7 @@ async def compute_full_tree_drift(component: str, repo_root: str = DEFAULT_REPO_
     source_dir, deployed_dir = trees
 
     result = ComponentDrift(component=component)
-    both = _collect_both_checksums(source_dir, deployed_dir, owned_subtrees(component), result.exclusions)
+    both = _collect_both_checksums(source_dir, deployed_dir, owned_subtrees(component), result.exclusions, component)
     if isinstance(both, str):
         result.error = both
         return result

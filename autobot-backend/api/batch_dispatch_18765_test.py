@@ -162,11 +162,10 @@ async def test_a_refused_endpoint_never_dispatches(calls, endpoint) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_sub_request_401_propagates_into_its_slot(calls) -> None:
-    """The internal key admits /load itself but is never forwarded, so the sub-request is anonymous."""
+async def test_the_internal_key_alone_does_not_open_a_batch(calls) -> None:
+    """#16333 (owner ruling b): the key is not a user, so /load refuses it and no sub-request runs."""
     resp = await _load(calls, [_get("/api/chats")], {"X-Internal-API-Key": INTERNAL_KEY})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["results"][0]["status"] == 401  # the gated route sees an anonymous caller
+    assert resp.status_code == 401, resp.text
     assert calls == []
 
 

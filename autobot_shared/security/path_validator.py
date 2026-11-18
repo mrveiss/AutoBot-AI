@@ -222,15 +222,17 @@ def validate_relative_path(
     if PureWindowsPath(str(user_segment)).drive:
         raise ValueError("Path traversal detected: segment carries a drive qualifier")
 
-    base = Path(os.path.realpath(str(base_dir)))
-    resolved = Path(os.path.realpath(str(base / user_segment)))
-
-    # Retained, not replaced: the checks above cannot see a SYMLINK inside the
-    # base that points out of it, which resolves only after `realpath`.
-    try:
-        resolved.relative_to(base)
-    except ValueError:
+    # The containment test is a string-prefix check on the realpath of the joined path, the
+    # shape static analysers model as a path sanitiser (#20611). It also catches a SYMLINK
+    # inside the base that points out of it, which resolves only after `realpath`.
+    base_str = os.path.realpath(str(base_dir))
+    resolved_str = os.path.realpath(os.path.join(base_str, str(user_segment)))
+    if resolved_str == base_str:
+        resolved = Path(base_str)
+    elif not resolved_str.startswith(base_str.rstrip(os.sep) + os.sep):
         raise ValueError("Path traversal detected: segment escapes base directory")
+    else:
+        resolved = Path(resolved_str)
 
     if must_exist and not resolved.exists():
         raise ValueError(f"Path does not exist: {resolved}")

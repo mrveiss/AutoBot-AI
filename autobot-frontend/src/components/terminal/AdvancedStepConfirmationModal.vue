@@ -567,7 +567,7 @@ function resetEdit(): void {
 }
 
 .edit-action-save {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

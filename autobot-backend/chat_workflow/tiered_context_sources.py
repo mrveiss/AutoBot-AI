@@ -178,13 +178,13 @@ async def _query_goal_ancestry(work_item_id: str, company_id: str | None) -> lis
         logger.debug("Ignoring malformed work_item_id for goal ancestry: %r", work_item_id)
         return None
 
+    from llc.services.accessors import get_work_item_service
     from llc.services.goal import GoalService
-    from llc.services.work_item_service import WorkItemService
     from user_management.database import get_async_session_factory
 
     factory = get_async_session_factory()
     async with factory() as session:
-        work_item = await WorkItemService().get(session, work_item_id, company_id=company_id)
+        work_item = await get_work_item_service().get(session, work_item_id, company_id=company_id)
         goal_id = getattr(work_item, "goal_id", None) if work_item else None
         if not goal_id:
             return None
@@ -225,6 +225,14 @@ async def build_tiered_context(session: Any, message: str, model_name: str) -> s
     )
 
 
+def _turn_user_principal(session: Any):
+    """The turn's user principal, or None when the turn has no user: no ``SYSTEM_SCOPE`` fallback (#16665)."""
+    from knowledge.search_filters import SYSTEM_SCOPE
+
+    principal = session.kb_principal()
+    return None if principal is SYSTEM_SCOPE else principal
+
+
 async def prepend_memory_context(system_prompt: str, session: Any, message: str, model_name: str) -> str:
     """Prepend the memory context to the system prompt; any failure leaves it unchanged.
 
@@ -241,7 +249,9 @@ async def prepend_memory_context(system_prompt: str, session: Any, message: str,
             # Issue #3787: legacy always-loaded compact memory summary.
             from memory.essential_story import EssentialStoryGenerator
 
-            prefix = await EssentialStoryGenerator().generate(model_name=model_name)
+            prefix = await EssentialStoryGenerator().generate(
+                model_name=model_name, principal=_turn_user_principal(session)
+            )
         return prefix + "\n\n" + system_prompt if prefix else system_prompt
     except Exception as ctx_exc:
         logger.warning("Context injection failed: %s", ctx_exc)
