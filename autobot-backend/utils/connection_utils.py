@@ -15,6 +15,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
@@ -25,7 +26,7 @@ from autobot_shared.ssot_config import get_ollama_url
 # `.get_nested()` lookups below require `config_manager`. Using `config` here
 # previously raised AttributeError (#12069, same root cause as #11971).
 from config import config_manager
-from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
+from constants.api_constants import PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from type_defs.common import Metadata
 
@@ -153,7 +154,7 @@ class ConnectionTester:
         if not endpoint:
             endpoint = config_manager.get_nested(
                 "backend.ollama_endpoint",
-                f"{get_ollama_url()}/api/generate",
+                ollama_generate_url(get_ollama_url()),
             )
         if not model:
             model = config_manager.get_nested(
@@ -162,7 +163,7 @@ class ConnectionTester:
             )
         # Final fallbacks
         if not endpoint:
-            endpoint = f"{get_ollama_url()}/api/generate"
+            endpoint = ollama_generate_url(get_ollama_url())
         if not model:
             model = _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL
         return endpoint, model
@@ -217,7 +218,7 @@ class ConnectionTester:
             endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
             endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
 
-            check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
+            check_url = ollama_api_url(endpoint, PATH_OLLAMA_TAGS)
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
             # Issue #12979: shared pool. The reachability probe releases its

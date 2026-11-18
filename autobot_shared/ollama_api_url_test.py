@@ -1,0 +1,44 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Pins the one base-URL -> Ollama API URL rule (#21750).
+
+A configured endpoint may be a bare base or already end in ``/api/generate``;
+both must yield exactly one path segment.
+"""
+
+import pytest
+
+from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
+from autobot_shared.ssot_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
+
+_EXPECTED = "http://ollama.example:11434/api/generate"
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "http://ollama.example:11434",
+        "http://ollama.example:11434/",
+        "http://ollama.example:11434/api/generate",
+        "http://ollama.example:11434/api/generate/",
+        "http://ollama.example:11434/api/chat",
+    ],
+)
+def test_generate_url_has_the_path_exactly_once(base):
+    assert ollama_generate_url(base) == _EXPECTED
+
+
+def test_generate_url_is_idempotent():
+    assert ollama_generate_url(ollama_generate_url("http://ollama.example:11434")) == _EXPECTED
+
+
+def test_other_paths_replace_a_carried_path():
+    assert ollama_api_url(_EXPECTED, PATH_OLLAMA_TAGS) == "http://ollama.example:11434/api/tags"
+    assert ollama_api_url("http://ollama.example:11434", PATH_OLLAMA_CHAT) == "http://ollama.example:11434/api/chat"
+
+
+def test_path_prefixed_base_keeps_its_prefix():
+    assert ollama_generate_url("http://gw.example/ollama/api/generate") == "http://gw.example/ollama/api/generate"
+    assert ollama_generate_url("http://gw.example/ollama") == "http://gw.example/ollama/api/generate"

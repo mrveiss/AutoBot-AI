@@ -19,6 +19,7 @@ from agents.classification_agent import TaskClassificationResult
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -293,7 +294,7 @@ Respond with valid JSON:
         timeout = aiohttp.ClientTimeout(total=10)
 
         async with await http_client.post(
-            f"{self.ollama_host}/api/generate",
+            ollama_generate_url(self.ollama_host),
             json={
                 "model": model,
                 "prompt": prompt,
