@@ -12,11 +12,11 @@ as the terminal, and a caller-chosen ``resume_ref`` would pick what the server r
 
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import datetime
 from typing import Any, Dict
 
+from autobot_shared.content_digest import content_digest
 from autobot_shared.risk_tier import parse_risk_tier
 from autobot_shared.time_utils import now_utc
 from models.approval import ApprovalSource
@@ -26,7 +26,7 @@ from services.approval_execution import is_registered_resume_source
 def payload_hash_of(payload: Any) -> str:
     """sha256 hex of *payload* in canonical JSON, so equal payloads hash equally."""
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=True)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return content_digest(canonical)
 
 
 def _checked_expiry(expires_at: datetime | None) -> datetime | None:

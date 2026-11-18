@@ -40,7 +40,7 @@
 
     <KnowledgeResearchPanel v-if="researchTab === 'research'" />
     <WebResearchPanel v-else-if="researchTab === 'webTools'" />
-    <WebResearchSettings v-else-if="researchTab === 'settings'" />
+    <WebResearchStatus v-else-if="researchTab === 'settings'" />
   </div>
 </template>
 
@@ -50,7 +50,7 @@ import { useRoute } from 'vue-router'
 import Icon from '@/components/ui/Icon.vue'
 import KnowledgeResearchPanel from './KnowledgeResearchPanel.vue'
 import WebResearchPanel from './WebResearchPanel.vue'
-import WebResearchSettings from './WebResearchSettings.vue'
+import WebResearchStatus from './WebResearchStatus.vue'
 
 const route = useRoute()
 

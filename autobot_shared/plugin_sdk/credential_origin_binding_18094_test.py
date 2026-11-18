@@ -27,10 +27,15 @@ def _resolver(name: str) -> str:
 
 @pytest.fixture(autouse=True)
 def _restore_sys_modules():
-    before = set(sys.modules)
+    before = dict(sys.modules)
     yield
-    for key in set(sys.modules) - before:
+    for key in set(sys.modules) - set(before):
         del sys.modules[key]
+    # canonicalise_plugin_sdk() REPLACES existing `plugin_sdk.*` entries with aliases of the
+    # canonical modules; a key-set diff misses those, so put every replaced value back too.
+    for key, module in before.items():
+        if sys.modules.get(key) is not module:
+            sys.modules[key] = module
 
 
 @pytest.fixture

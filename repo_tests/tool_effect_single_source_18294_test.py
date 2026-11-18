@@ -28,6 +28,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CATALOGUE = "autobot_shared/tool_catalogue.py"
@@ -46,9 +47,10 @@ _NOT_AN_EFFECT_TABLE: dict[str, tuple[int, str]] = {
         "TERMINAL_KEYWORDS are words matched against the USER's message to classify intent; they are not tool names",
     ),
     "autobot-backend/chat_workflow/tool_handler.py": (
-        2,
+        3,
         "WEB_RESEARCH_TOOL_NAMES and the _handlers map route a tool to its web_fetch handler (dispatch), "
-        "which says where a call goes, not what it does",
+        "which says where a call goes, not what it does; _BUILTIN_TOOL_SCHEMAS maps a tool to its argument "
+        "schema (what it accepts, not what it does)",
     ),
 }
 
@@ -76,7 +78,7 @@ def _literal_strings(node: ast.AST) -> list[str] | None:
 def effect_tables(source: str, names: frozenset[str]) -> list[int]:
     """Line numbers of assigned literals that read as a tool-name classification table."""
     lines: list[int] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
             continue
         strings = _literal_strings(node.value)
@@ -122,7 +124,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "tool-effect-table-scan",
     discover=_population,
-    floor=2929,
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

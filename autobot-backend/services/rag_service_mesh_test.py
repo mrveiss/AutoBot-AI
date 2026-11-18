@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from knowledge.search_filters import SYSTEM_SCOPE
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -106,7 +108,7 @@ class TestMeshFlagDisabled:
             patch("services.rag_service.RAGService._emit_ranked_feedback", new_callable=AsyncMock),
             patch("services.rag_service.RAGService._run_mesh_retriever", new_callable=AsyncMock) as mock_mesh,
         ):
-            await svc.advanced_search("test query")
+            await svc.advanced_search("test query", principal=SYSTEM_SCOPE)
             mock_mesh.assert_not_called()
             svc.optimizer.advanced_search.assert_called_once()
 
@@ -138,8 +140,8 @@ class TestMeshFlagEnabled:
                 return_value=(expected, metrics),
             ) as mock_mesh,
         ):
-            results, _ = await svc.advanced_search("test query")
-            mock_mesh.assert_called_once_with("test query", 5)
+            results, _ = await svc.advanced_search("test query", principal=SYSTEM_SCOPE)
+            mock_mesh.assert_called_once_with("test query", 5, SYSTEM_SCOPE)
             assert results is expected
 
 
@@ -162,7 +164,7 @@ class TestMeshFlagEnabledRetrieverNone:
             patch("services.rag_service.RAGService._emit_ranked_feedback", new_callable=AsyncMock),
             patch("services.rag_service.RAGService._run_mesh_retriever", new_callable=AsyncMock) as mock_mesh,
         ):
-            await svc.advanced_search("test query")
+            await svc.advanced_search("test query", principal=SYSTEM_SCOPE)
             mock_mesh.assert_not_called()
             svc.optimizer.advanced_search.assert_called_once()
 

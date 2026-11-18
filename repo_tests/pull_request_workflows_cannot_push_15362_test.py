@@ -50,13 +50,19 @@ ALLOWED: dict[tuple[str, str | None], str] = {
         "opens a PR from it -- never to the branch under review, so no in-flight check is "
         "invalidated"
     ),
+    ("duplication-guard.yml", "lower-pins"): (
+        "runs only on a push to main (`github.event_name == 'push'`), never on the pull_request "
+        "trigger, and pushes its own `automation/duplication-pins` branch to open a PR (#16324) -- "
+        "never the branch under review and never main"
+    ),
 }
 
 #: Reach floor. A discovery-based guard that finds no workflows reports a clean run having
 #: asserted nothing -- the failure #15826 catalogues across this repo's tree scanners. Measured at
 #: 45 when this landed; the floor is set well below that so ordinary additions and removals do not
-#: trip it, while a glob that stops matching does.
-MIN_PR_WORKFLOWS = 30
+#: trip it, while a glob that stops matching does. #18208 folded 16 pull_request workflows into ci.yml
+#: (45 -> 29 measured), so the floor moved 30 -> 20: the population shrank on purpose, the glob did not stop matching.
+MIN_PR_WORKFLOWS = 20
 
 
 def _document(path):

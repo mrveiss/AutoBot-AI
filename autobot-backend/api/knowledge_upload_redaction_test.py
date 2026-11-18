@@ -34,7 +34,7 @@ async def test_uploaded_text_file_is_redacted_before_it_reaches_the_kb():
     req = MagicMock()
     req.form = AsyncMock(return_value={"file": upload, "title": "Setup"})
     kb = MagicMock()
-    kb.add_document = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
 
     with (
         patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
@@ -58,7 +58,7 @@ async def test_uploaded_text_file_with_no_secret_is_unchanged():
     req = MagicMock()
     req.form = AsyncMock(return_value={"file": upload, "title": "Notes"})
     kb = MagicMock()
-    kb.add_document = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
 
     with (
         patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),

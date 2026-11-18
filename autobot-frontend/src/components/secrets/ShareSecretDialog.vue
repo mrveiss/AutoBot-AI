@@ -10,7 +10,7 @@
 import { ref, computed, toRef, watch } from 'vue'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useBatchSelection } from '@/composables/useBatchSelection'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { BaseAvatar, useBodyScrollLock, useFocusRestore, useFocusTrap, useInitialFocus } from '@autobot/ui'
 
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
 
@@ -73,10 +73,6 @@ const closeDialog = () => {
   }, 300)
 }
 
-// Get initials
-const getInitials = (username: string): string => {
-  return username.substring(0, 2).toUpperCase()
-}
 </script>
 
 <template>
@@ -136,9 +132,7 @@ const getInitials = (username: string): string => {
                   ]"
                   @click="selection.toggle(participant)"
                 >
-                  <div class="w-8 h-8 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary">
-                    {{ getInitials(participant.username) }}
-                  </div>
+                  <BaseAvatar :name="participant.username" size="md" decorative />
                   <div class="flex-1 text-left">
                     <div class="text-sm font-medium text-autobot-text-primary">
                       {{ participant.username }}

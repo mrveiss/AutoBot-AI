@@ -4,6 +4,8 @@
 // Author: mrveiss
 const { chromium } = require('playwright');
 const express = require('express');
+// Default frontend for the /test-frontend* routes; one place, env-overridable.
+const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://localhost:5173';
 const { SessionStore } = require('./session-store');
 const { collectIndexedElements, resolveElementByIndex } = require('./element-index');
 const app = express();
@@ -478,7 +480,7 @@ app.post('/search', async (req, res) => {
 app.post('/send-test-message', async (req, res) => {
   logger.info('Received message test request:', req.body);
   try {
-    const { frontend_url = 'http://localhost:5173', message = 'what network scanning tools do we have available?' } = req.body;
+    const { frontend_url = FRONTEND_URL, message = 'what network scanning tools do we have available?' } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
@@ -658,7 +660,7 @@ app.post('/send-test-message', async (req, res) => {
 app.post('/test-frontend', async (req, res) => {
   logger.info('Received frontend test request:', req.body);
   try {
-    const { frontend_url = 'http://localhost:5173' } = req.body;
+    const { frontend_url = FRONTEND_URL } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
@@ -1140,6 +1142,71 @@ app.post('/automation', async (req, res) => {
   } catch (error) {
     logger.error('Automation error:', action, error);
     res.status(500).json({ success: false, error: error.message, action });
+  }
+});
+
+// --- Frontend connectivity probe (merged from the retired infrastructure copy, #18549) ---
+
+const NAVIGATION_CONFIG = {
+  defaultTimeout: 60000,
+  retryAttempts: 3,
+  retryDelayBase: 2000,
+  waitStrategy: 'domcontentloaded',
+};
+
+// Navigate with exponential-backoff retry; rethrows the last error.
+async function navigateWithRetry(page, url, options = {}) {
+  const maxRetries = options.maxRetries || NAVIGATION_CONFIG.retryAttempts;
+  const baseDelay = options.retryDelayBase || NAVIGATION_CONFIG.retryDelayBase;
+  const timeout = options.timeout || NAVIGATION_CONFIG.defaultTimeout;
+  const waitUntil = options.waitUntil || NAVIGATION_CONFIG.waitStrategy;
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info('Navigation attempt %d/%d: %s', attempt, maxRetries, url);
+      return await page.goto(url, { waitUntil, timeout });
+    } catch (error) {
+      lastError = error;
+      logger.warn('Navigation attempt %d failed: %s', attempt, error.message);
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, baseDelay * Math.pow(2, attempt - 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
+app.get('/test-frontend-connectivity', async (req, res) => {
+  const frontendUrl = req.query.url || FRONTEND_URL;
+  let page = null;
+  try {
+    const b = await initBrowser();
+    page = await b.newPage();
+    const startTime = Date.now();
+    await navigateWithRetry(page, frontendUrl, {
+      timeout: NAVIGATION_CONFIG.defaultTimeout,
+      waitUntil: 'domcontentloaded',
+    });
+    res.json({
+      success: true,
+      frontend_url: frontendUrl,
+      title: await page.title(),
+      load_time_ms: Date.now() - startTime,
+      navigation_config: NAVIGATION_CONFIG,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Frontend connectivity test failed:', frontendUrl, error.message);
+    res.status(503).json({
+      success: false,
+      frontend_url: frontendUrl,
+      error: error.message,
+      navigation_config: NAVIGATION_CONFIG,
+      recommendation: `Check if frontend is running at ${FRONTEND_URL}`,
+      timestamp: new Date().toISOString(),
+    });
+  } finally {
+    if (page) await page.close().catch((e) => logger.warn('connectivity: page close failed: %s', e.message));
   }
 });
 

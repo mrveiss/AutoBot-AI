@@ -261,12 +261,12 @@ def refused_response(request, conflict: ClaimConflict, *, agent_type: str):
     lossy summary of it. The metadata is the shared refusal shape (#16208).
 
     Imported lazily to keep this module importable from `base_agent`, which is
-    where `AgentResponse` lives.
+    where `StandardizedAgentResponse` lives.
     """
-    from agents.base_agent_types import AgentResponse
+    from agents.base_agent_types import StandardizedAgentResponse
 
     logger.info("Agent %s refused: %s", agent_type, conflict)
-    return AgentResponse(
+    return StandardizedAgentResponse(
         request_id=request.request_id,
         agent_type=agent_type,
         status="refused",

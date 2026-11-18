@@ -37,7 +37,7 @@ def _reach(found: int, *, fraction: float, reference: int, skips: int = 0) -> Re
     return Reach(
         name=f"synthetic-{found}-of-{reference}",
         discover=lambda _root: list(range(found)),
-        floor=0,
+        pinned_floor=0,
         what="synthetic items",
         skips=skips,
         min_fraction=fraction,
@@ -106,9 +106,10 @@ def test_a_reference_of_zero_raises_rather_than_passing() -> None:
     assert "reference enumeration found 0 files" in str(excinfo.value)
 
 
-def test_declare_refuses_a_declaration_bounded_by_nothing() -> None:
-    with pytest.raises(ValueError, match="positive floor or a min_fraction"):
-        declare(name="unbounded-synthetic", discover=lambda _r: [], what="nothing", floor=0)
+def test_declare_refuses_a_negative_floor() -> None:
+    """No floor is never "bounded by nothing": it is computed from the base (#19676). A negative one is refused."""
+    with pytest.raises(ValueError, match="compute the floor from the base"):
+        declare(name="negative-synthetic", discover=lambda _r: [], what="nothing", floor=-1)
 
 
 @pytest.mark.parametrize("bad", [0, -0.1, 1.5, 2])
@@ -211,7 +212,7 @@ def test_completed_without_a_root_is_refused_on_a_relative_declaration() -> None
 
 def test_an_absolute_declaration_still_completes_without_a_root() -> None:
     """The 25 call sites on absolute declarations are untouched by the new parameter."""
-    absolute = Reach(name="synthetic-absolute", discover=lambda _r: list(range(10)), floor=5, what="items")
+    absolute = Reach(name="synthetic-absolute", discover=lambda _r: list(range(10)), pinned_floor=5, what="items")
     absolute.completed(7)
     with pytest.raises(ReachFloorError):
         absolute.completed(3)

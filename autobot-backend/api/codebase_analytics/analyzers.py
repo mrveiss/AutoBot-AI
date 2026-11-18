@@ -24,6 +24,8 @@ from llm_shared.types import LLMType
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
 
+from .problem_dedup import dedupe_same_location_problems
+
 logger = get_logger(__name__)
 
 # Code intelligence analyzers (Issue #268)
@@ -1596,10 +1598,8 @@ async def _run_analysis_phases(file_path: str, content: str, tree: ast.AST, use_
     except Exception as e:
         logger.debug("Race condition detection skipped for %s: %s", file_path, e)
 
-    # Phase 5: Code intelligence analyzers
-    # Issue #711: Run in thread pool to prevent event loop blocking.
-    code_intel_problems = await asyncio.to_thread(_run_code_intelligence_analyzers, file_path)
-    problems.extend(code_intel_problems)
+    # Phase 5: Code intelligence analyzers (#711: thread pool, keeps the loop free)
+    problems.extend(await asyncio.to_thread(_run_code_intelligence_analyzers, file_path))
 
     # Phase 6: Count line types (Issue #368)
     line_counts = _count_python_line_types(content, tree)
@@ -1609,7 +1609,7 @@ async def _run_analysis_phases(file_path: str, content: str, tree: ast.AST, use_
         "classes": classes,
         "imports": imports,
         "hardcodes": hardcodes,
-        "problems": problems,
+        "problems": dedupe_same_location_problems(problems),  # #20493
         "technical_debt": technical_debt,
         **line_counts,
     }

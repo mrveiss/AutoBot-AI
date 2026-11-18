@@ -35,18 +35,38 @@ ROWS = [
 
 
 class _FakeCollection:
-    """Just enough of a Chroma collection for ``get_all_paginated`` and the orphan delete."""
+    """Just enough of a Chroma collection for ``get_all_paginated``, the stale-chunk read and its delete."""
 
     def __init__(self, metadatas: list[dict]) -> None:
         self.metadatas = list(metadatas)
+        self.ids = [f"id{i}" for i in range(len(self.metadatas))]
 
     def get(self, where=None, limit=None, offset=0, include=None) -> dict:
-        rows = [m for m in self.metadatas if not where or all(m.get(k) == v for k, v in where.items())]
-        page = rows[offset : offset + limit]
-        return {"ids": [f"id{offset + i}" for i in range(len(page))], "metadatas": page}
+        rows = [
+            (i, m)
+            for i, m in zip(self.ids, self.metadatas)
+            if not where or all(m.get(k) == v for k, v in where.items())
+        ]
+        page = rows[offset : None if limit is None else offset + limit]
+        return {"ids": [i for i, _ in page], "metadatas": [m for _, m in page]}
 
-    def delete(self, where=None) -> None:
-        self.metadatas = [m for m in self.metadatas if not all(m.get(k) == v for k, v in where.items())]
+    def delete(self, where=None, ids=None) -> None:
+        keep = [
+            (i, m)
+            for i, m in zip(self.ids, self.metadatas)
+            if (ids is not None and i not in ids)
+            or (where is not None and not all(m.get(k) == v for k, v in where.items()))
+        ]
+        self.ids = [i for i, _ in keep]
+        self.metadatas = [m for _, m in keep]
+
+    def upsert(self, ids, embeddings=None, documents=None, metadatas=None) -> None:
+        for i, m in zip(ids, metadatas):
+            if i in self.ids:
+                self.metadatas[self.ids.index(i)] = m
+            else:
+                self.ids.append(i)
+                self.metadatas.append(m)
 
 
 def _service(rows: list[dict], initialized: bool = True) -> MagicMock:
@@ -123,7 +143,6 @@ async def test_an_unreachable_index_is_a_503_not_an_empty_browser() -> None:
 async def test_reindexing_a_file_drops_its_prior_chunks_even_when_a_section_was_renamed() -> None:
     svc: DocIndexerService = _make_service()
     svc._collection = _FakeCollection([{**_meta("docs/x.md", "X", "t"), "section": "Old name"}])
-    svc._collection.upsert = MagicMock()
     other = {**_meta("docs/other.md", "O", "t"), "section": "Keep"}
     svc._collection.metadatas.append(other)
     body = "# X\n\n## New name\n\n" + "words " * 80

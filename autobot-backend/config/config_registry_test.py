@@ -9,7 +9,21 @@ import os
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
+
+@pytest.fixture(autouse=True)
+def _drop_the_config_a_cleared_env_cached():
+    """Tests here run ConfigRegistry inside ``patch.dict(os.environ, clear=True)``, whose first import of
+    ``registry_defaults`` caches an SSOT config built from that empty environment; it would leave every
+    later test with no AUTOBOT_FRONTEND_SERVED_BY and a production ``config.frontend_url`` (#19326). Looked up
+    on the module, not imported by name: ssot_config_test reloads the module, replacing ``get_config``."""
+    yield
+    import autobot_shared.ssot_config as ssot
+
+    ssot.get_config.cache_clear()
 
 
 class TestConfigRegistryBasic:

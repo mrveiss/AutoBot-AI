@@ -5,8 +5,11 @@
 """A permission denial whose audit record is lost must be counted (#14843).
 
 #14750 instrumented the DB-backed denial audit in both backends' RBAC
-middleware. ``auth_rbac._deny_permission_access``, ``_deny_any_permission_access``
-and ``_deny_role_access`` audit through ``SecurityLayer.audit_log`` instead. That
+middleware. #18263 retired ``auth_rbac._deny_permission_access`` and
+``_deny_any_permission_access``: a permission denial now goes through the shared
+gate and the shared RBAC audit writer, whose loss counter is #14750's.
+``require_role``'s ``_deny_role_access`` is the path left here, and it audits
+through ``SecurityLayer.audit_log``. That
 used to append to a file and swallow the failure; since #17225 D6 it records
 through the canonical audit service, and the loss it can still suffer is a
 record that could not be scheduled at all (a thread with no event loop, before
@@ -54,37 +57,6 @@ def _no_loop_anywhere():
     return patch.object(audit, "_LOOP", None)
 
 
-@pytest.mark.parametrize(
-    "deny,args",
-    [
-        ("_deny_permission_access", ("analytics:view",)),
-        ("_deny_any_permission_access", (["analytics:view", "analytics:export"],)),
-    ],
-)
-def test_a_lost_denial_audit_record_increments_the_counter(deny, args):
-    """Both permission-denial entry points, since only instrumenting one is the bug."""
-    from fastapi import HTTPException
-
-    import auth_rbac
-
-    before = _counter_value("permission_denied", _EXPECTED_ERROR)
-
-    with _no_loop_anywhere(), patch.object(auth_rbac, "_get_security_layer", return_value=_layer()):
-        with pytest.raises(HTTPException) as raised:
-            getattr(auth_rbac, deny)({"username": "someone", "role": "viewer"}, *args, _request())
-
-    # The denial itself must still be a clean 403 -- counting the loss must not
-    # turn an audit problem into a request failure.
-    assert raised.value.status_code == 403
-
-    after = _counter_value("permission_denied", _EXPECTED_ERROR)
-    assert after == before + 1, (
-        "the denial audit record was lost and nothing counted it -- it is "
-        f"indistinguishable from one that was written ({_COUNTER} did "
-        f"not move: {before} -> {after}) (#14843)"
-    )
-
-
 def test_a_scheduled_denial_audit_records_the_event_and_counts_nothing():
     """Negative control: the counter must measure loss, not denials."""
     from fastapi import HTTPException
@@ -99,23 +71,22 @@ def test_a_scheduled_denial_audit_records_the_event_and_counts_nothing():
         coro.close()
         return object()  # a scheduled future
 
-    before = _counter_value("permission_denied", _EXPECTED_ERROR)
+    before = _counter_value("role_denied", _EXPECTED_ERROR)
     with (
         patch.object(audit, "fire_and_forget_threadsafe", side_effect=capture),
         patch.object(auth_rbac, "_get_security_layer", return_value=_layer()),
     ):
         with pytest.raises(HTTPException):
-            auth_rbac._deny_permission_access({"username": "someone", "role": "viewer"}, "analytics:view", _request())
+            auth_rbac._deny_role_access({"username": "someone", "role": "viewer"}, ["admin"], "viewer", _request())
 
-    assert [e.action for e in handed_over] == ["permission_denied"], "the record was not handed to the service"
-    assert "analytics:view" in str(handed_over[0].metadata)
-    after = _counter_value("permission_denied", _EXPECTED_ERROR)
+    assert [e.action for e in handed_over] == ["role_denied"], "the record was not handed to the service"
+    assert "admin" in str(handed_over[0].metadata)
+    after = _counter_value("role_denied", _EXPECTED_ERROR)
     assert after == before, "a record that WAS scheduled must not be counted as lost"
 
 
 def test_a_role_denial_loss_is_counted_under_its_own_action():
-    """The third entry point audits ``role_denied``; a counter keyed only to
-    ``permission_denied`` would leave that loss invisible."""
+    """A lost ``role_denied`` record is counted under its own action, not ``permission_denied``."""
     from fastapi import HTTPException
 
     import auth_rbac

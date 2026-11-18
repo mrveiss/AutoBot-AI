@@ -45,11 +45,11 @@ _INCLUDE_EXTENSIONS: frozenset[str] = _BACKEND_EXTENSIONS | _FRONTEND_EXTENSIONS
 #: Files present in a component's SOURCE that its deploying role deliberately
 #: never copies, per component (#14283).
 #:
-#: Only the slm_agent role needs this: it copies its source file-by-file
-#: (roles/slm_agent/tasks/main.yml) and omits the co-located tests, so the walk
-#: found `health_collector_state_change_test.py` and `version_test.py` in
-#: code_source, absent on the node, and reported `autobot-slm-agent` stale
-#: forever — a condition no amount of syncing can clear.
+#: Only the slm_agent role needs this: it copies only the production modules
+#: of slm/agent/ (roles/slm_agent/tasks/main.yml) and omits the co-located
+#: tests, so the walk found `health_collector_state_change_test.py` and
+#: `version_test.py` in code_source, absent on the node, and reported
+#: `autobot-slm-agent` stale forever — a condition no amount of syncing can clear.
 #:
 #: Deliberately NOT global. The backend components rsync their whole tree, so
 #: their co-located tests ARE deployed and ARE comparable — 1382 files under
@@ -195,13 +195,13 @@ _NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
         "autobot-ai-stack",
     ),
     # slm-agent has no top-level code_source/autobot-slm-agent dir either;
-    # its source of truth is the individual per-file `copy:` tasks in the
-    # slm_agent role, all of which live under files/slm/agent/ and land at
-    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml
-    # ~132-213). config.yaml/role.json/version.json are Jinja2 templates
+    # the slm_agent role copies the production modules of
+    # autobot-slm-backend/slm/agent/ (its one source tree, #18548) to
+    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml).
+    # config.yaml/role.json/version.json are Jinja2 templates
     # (not raw source files) and are intentionally excluded from this scan.
     "autobot-slm-agent": (
-        "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent",
+        "autobot-slm-backend/slm/agent",
         "autobot-slm-agent/slm/agent",
     ),
     # plugins/ ships at the repo root, a SIBLING of autobot-backend/, and is
@@ -267,7 +267,6 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
     "autobot-backend": frozenset({"config/npu_workers.yaml", "autobot_shared"}),
     "autobot-slm-backend": frozenset({"autobot_shared"}),
-    "autobot-slm-frontend": deploy_artifacts.SLM_FRONTEND_RELEASE_EXCLUDES,  # #16717
 }
 
 # Individual files inside an otherwise-1:1 component tree that are deployed as a
@@ -344,7 +343,8 @@ def deploy_only_entries(component: str) -> frozenset[str]:
     the component tree), while the walk must still compare it — see
     ``_rendered_file_drift``.
     """
-    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
+    generated = deploy_artifacts.host_generated_paths(component)  # #19443
+    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | generated | frozenset(_RENDERED_FILES.get(component, {}))
 
 
 def _is_expected_drift(
@@ -378,12 +378,11 @@ def _is_expected_drift(
         return True
     if component is None:
         return False
-    # _DEPLOY_ONLY_ENTRIES, not deploy_only_entries(): the latter also carries
-    # the rendered artifacts, which rsync must not delete but the walk MUST
-    # still compare (#13851).
+    # _DEPLOY_ONLY_ENTRIES, not deploy_only_entries(): the latter carries rendered
+    # artifacts the walk MUST still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
         return True
-    if deploy_artifacts.is_release_artifact(component, rel_path.split("/", 1)[0]):  # #16717
+    if deploy_artifacts.is_host_generated(component, rel_path):  # #16717, #19443
         return True
     if owned is None:
         raise ValueError("owned_subtrees must be supplied when component is given (#13851)")

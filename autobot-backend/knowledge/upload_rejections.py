@@ -38,6 +38,8 @@ class UploadRejectionCode(str, Enum):
     NO_TEXT_CONTENT = "upload.no_text_content"  # {}
     PARSE_FAILED = "upload.parse_failed"  # {format: str}
     PARSER_UNAVAILABLE = "upload.parser_unavailable"  # {library: str}
+    INGEST_FAILED = "upload.ingest_failed"  # {}  (nothing was stored)
+    INGEST_TIMEOUT = "upload.ingest_timeout"  # {}  (the ingest budget ran out before any chunk was stored)
 
 
 class UploadRejection(HTTPException):

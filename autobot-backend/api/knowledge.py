@@ -45,8 +45,11 @@ from fastapi import (
     Query,
     Request,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.knowledge_chunked_upload import router as chunked_upload_router
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
+from api.knowledge_upload_limit import router as upload_limit_router
 from api.schemas_knowledge import (
     AddFactsRequest,
     AddUrlRequest,
@@ -60,6 +63,7 @@ from api.schemas_knowledge import (
     WatchFolderStatsResponse,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
+from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -67,7 +71,7 @@ from autobot_shared.secret_redaction import redact_content
 from autobot_shared.ssot_constants import SecurityConstants
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
-from knowledge.ingestion_visibility import stamp_if_document
+from knowledge.kb_ingest_result import ingest_in_kb, partial_note
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from knowledge.schemas.documents import (
     DocsBrowseResponse,
@@ -109,6 +113,7 @@ from knowledge.schemas.stats import (
     KnowledgeMainCategoriesResponse,
     KnowledgeStatsBasic,
 )
+from knowledge.upload_limit import MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, reject_oversize_file, reject_oversize_request
 from knowledge.upload_pages import clean_upload_text
 from knowledge.upload_rejections import (
     UploadRejection,
@@ -121,7 +126,9 @@ from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (SearchRequest) defined in schemas_knowledge.py (#10666 B1)
 from knowledge_factory import get_or_create_knowledge_base
+from security.upload_filename_policy import is_safe_file, require_safe_upload
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.kb_wipe_request import request_kb_wipe
 from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
 
@@ -130,9 +137,6 @@ from utils.path_validation import contains_path_traversal
 # =============================================================================
 
 
-# File upload constants (Issue #549 Code Review)
-MAX_FILE_SIZE_MB = 10
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".json", ".csv", ".html"} | OFFICE_EXTENSIONS  # #16775
 
 # Import RAG Agent for enhanced search capabilities
@@ -686,13 +690,8 @@ async def add_text_to_knowledge(
 
 
 async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
-    """Store *content* under *metadata* and return the fact id (#549). An admin file upload, the only
-    caller writing ``type: file``, is a document: SYSTEM unless something already claims it (#16693)."""
-    if metadata.get("type") == "file":
-        stamp_if_document(metadata)
-    # The one ingest path (#18407): long input is chunked, with per-chunk page_spans.
-    result = await kb.add_document(content, metadata)
-    return result.get("fact_id")
+    """Store *content* under *metadata* and return the fact id (#549); see :func:`ingest_in_kb`."""
+    return (await ingest_in_kb(kb, content, metadata))["fact_id"]
 
 
 def _fallback_html_strip(html_content: str) -> tuple:
@@ -824,6 +823,22 @@ def _sanitize_html_content(html_content: str) -> tuple:
     return plain_text, extractor.title
 
 
+def require_safe_kb_name(filename: str) -> None:
+    """The one KB upload-name gate: the canonical policy, with the KB's own stable rejection codes (#19088)."""
+    import os
+
+    if is_safe_file(filename, ALLOWED_EXTENSIONS):
+        return
+    if os.path.splitext(filename.lower())[1] not in ALLOWED_EXTENSIONS:
+        allowed = sorted(ALLOWED_EXTENSIONS)
+        raise UploadRejection(
+            UploadRejectionCode.UNSUPPORTED_TYPE,
+            f"File type not allowed. Allowed: {', '.join(allowed)}",
+            allowed=allowed,
+        )
+    raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+
+
 def _validate_file_upload(filename: str, file_size: int) -> None:
     """
     Validate file upload for security (Issue #549 Code Review: Security fix).
@@ -835,7 +850,6 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
     Raises:
         HTTPException: If validation fails
     """
-    import os
 
     # Check file size
     if file_size > MAX_FILE_SIZE_BYTES:
@@ -845,19 +859,7 @@ def _validate_file_upload(filename: str, file_size: int) -> None:
             max_mb=MAX_FILE_SIZE_MB,
         )
 
-    # Check extension
-    ext = os.path.splitext(filename.lower())[1]
-    if ext not in ALLOWED_EXTENSIONS:
-        allowed = sorted(ALLOWED_EXTENSIONS)
-        raise UploadRejection(
-            UploadRejectionCode.UNSUPPORTED_TYPE,
-            f"File type not allowed. Allowed: {', '.join(allowed)}",
-            allowed=allowed,
-        )
-
-    # Check for path traversal
-    if contains_path_traversal(filename):
-        raise UploadRejection(UploadRejectionCode.INVALID_FILENAME, "Invalid filename")
+    require_safe_kb_name(filename)
 
 
 @router.post("/facts", response_model=AddFactResponse)
@@ -1188,7 +1190,6 @@ async def upload_file_to_knowledge(
     Supports: .txt, .md, .pdf, .docx, .json, .csv, .html files
     Issue #744: Requires admin authentication.
     """
-    import os
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:
@@ -1199,27 +1200,33 @@ async def upload_file_to_knowledge(
         autobot_kb_degradation_total.labels(endpoint="upload", reason="kb_uninit").inc()
         raise InternalError("Knowledge base not initialized")
 
+    reject_oversize_request(req.headers)
     form = await req.form()
     file = form.get("file")
     if not file or not hasattr(file, "read"):
         raise UploadRejection(UploadRejectionCode.FILE_REQUIRED, "File is required")
 
-    # Get filename and sanitize (Issue #549 Code Review: Security)
-    filename = os.path.basename(getattr(file, "filename", "unknown"))
+    filename = getattr(file, "filename", None) or ""
+    require_safe_kb_name(filename)  # #19088: name and type gate BEFORE the body is read
+    reject_oversize_file(getattr(file, "size", None))
     file_content = await file.read()
-
-    # Validate file upload BEFORE processing (Issue #549 Code Review: Security)
-    _validate_file_upload(filename, len(file_content))
+    _validate_file_upload(filename, len(file_content))  # #549: BEFORE processing
 
     title = form.get("title", "") or filename
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
+    return await ingest_uploaded_document(kb_to_use, req, filename, file_content, title, category, tags)
+
+
+async def ingest_uploaded_document(
+    kb_to_use, req: Request, filename: str, file_content: bytes, title: str, category: str, tags: list
+) -> UploadFileResponse:
+    """Extract, clean and store a document whose bytes have passed the size gate of the way they arrived."""
     content, extracted_doc = await extract_within_deadline(_extract_file_content, filename, file_content)
     if not _has_usable_content(content, extracted_doc):
-        # #13884: distinguish "we could not read it" from "it is empty". A scanned
-        # PDF parses fine and yields nothing, and a generic message left the user
-        # with no way to tell that OCR — not a different file — is what is needed.
+        # #13884: "could not read it" isn't "it is empty". A scanned PDF parses fine and yields nothing,
+        # and a generic message left the user no way to tell that OCR, not another file, is what's needed.
         raise _no_text_rejection(extracted_doc)
 
     # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
@@ -1243,7 +1250,8 @@ async def upload_file_to_knowledge(
     }
     fact_metadata.update(page_metadata)
 
-    fact_id = await _store_fact_in_kb(kb_to_use, content, fact_metadata)
+    ingested = await ingest_in_kb(kb_to_use, content, fact_metadata)
+    fact_id = ingested["fact_id"]
 
     _user = get_auth_middleware().get_user_from_request(req)
     audit_record(
@@ -1263,7 +1271,7 @@ async def upload_file_to_knowledge(
         title=title,
         content=content[:100] + "..." if len(content) > 100 else content,
         word_count=word_count,
-        message=f"File uploaded ({word_count} words)",
+        **{"message": f"File uploaded ({word_count} words)", **partial_note(ingested)},
     )
 
 
@@ -1412,7 +1420,6 @@ async def upload_audio_file(
         whisper_model: Whisper model size (default "base").
         language:      ISO-639-1 language hint (optional).
     """
-    import json as _json
     import os as _os
     import tempfile as _tmp
 
@@ -1430,16 +1437,8 @@ async def upload_audio_file(
     if not file or not hasattr(file, "read"):
         raise HTTPException(status_code=400, detail="Audio file is required")
 
-    filename = _os.path.basename(getattr(file, "filename", "audio.mp3"))
-    if contains_path_traversal(filename):
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
+    filename = require_safe_upload(getattr(file, "filename", None), _AUDIO_ALLOWED_EXTS)  # #19088: before the read
     ext = _os.path.splitext(filename.lower())[1]
-    if ext not in _AUDIO_ALLOWED_EXTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported audio format. Allowed: {', '.join(sorted(_AUDIO_ALLOWED_EXTS))}",
-        )
 
     file_bytes = await file.read()
     if len(file_bytes) > _AUDIO_MAX_BYTES:
@@ -1449,14 +1448,7 @@ async def upload_audio_file(
     category = form.get("category", "audio")
     whisper_model = form.get("whisper_model", "base")
     language = form.get("language") or None
-    try:
-        raw_tags = form.get("tags", "[]")
-        tags = _json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
-        if not isinstance(tags, list):
-            tags = []
-        tags = [str(t)[:50] for t in tags[:20]]
-    except (_json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_upload_tags(form.get("tags", "[]"))
 
     # Write to a temp file so AudioConnector can read it by path
     with _tmp.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -1958,21 +1950,6 @@ async def search_man_pages(
     }
 
 
-async def _clear_kb_via_redis(kb) -> int:
-    """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
-    if not (hasattr(kb, "redis") and kb.redis):
-        logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
-
-    keys = await kb.redis.keys("fact:*")
-    if keys:
-        await kb.redis.delete(*keys)
-    index_keys = await kb.redis.keys("index:*")
-    if index_keys:
-        await kb.redis.delete(*index_keys)
-    return len(keys) if keys else 0
-
-
 @router.post("/clear_all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1983,59 +1960,15 @@ async def clear_all_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
     req: Request = None,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ):
-    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+    """Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
 
-    Issue #744: Requires admin authentication.
+    Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+    the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized.
-        logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="clear_all", reason="kb_uninit").inc()
-        return {
-            "status": "error",
-            "items_removed": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
-
-    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
-    try:
-        stats_before = await kb.get_stats()
-        items_before = stats_before.get("total_facts", 0)
-    except Exception:
-        items_before = 0
-
-    if hasattr(kb, "clear_all"):
-        result = await kb.clear_all()
-        items_removed = result.get("items_removed", items_before)
-    else:
-        try:
-            items_removed = await _clear_kb_via_redis(kb)
-        except Exception as e:
-            logger.error("Error during knowledge base clearing: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to clear")
-
-    logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
-    _user = get_auth_middleware().get_user_from_request(req)
-    audit_record(
-        user_id=str((_user or {}).get("user_id", "unknown")),
-        action=AuditAction.KNOWLEDGE_REMOVE,
-        resource_type="knowledge_doc",
-        resource_id="all",
-        ip_address=req.client.host if req and req.client else "unknown",
-        session_id=None,
-        outcome="success",
-        metadata={"items_removed": items_removed},
-    )
-    return {
-        "status": "success",
-        "items_removed": items_removed,
-        "items_before": items_before,
-        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
-    }
+    return await request_kb_wipe(current_user, session)
 
 
 # Legacy endpoints for backward compatibility
@@ -3064,6 +2997,8 @@ async def set_org_model_config(
 from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
+router.include_router(upload_limit_router)
+router.include_router(chunked_upload_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
 # These routers were previously registered separately in feature_routers.py

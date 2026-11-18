@@ -19,13 +19,15 @@ from unittest.mock import MagicMock
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 REPO_ROOT = repo_root()
 SCRIPT_PATH = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "zero_downtime_deploy.py"
 
 
 def test_no_undefined_self_references() -> None:
     """AST walk: every self.<name> load in ZeroDowntimeDeployer must be defined."""
-    tree = ast.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
 
     cls = next(
         node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "ZeroDowntimeDeployer"

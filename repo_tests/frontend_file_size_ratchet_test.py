@@ -7,9 +7,8 @@
 `.ts` and `.vue` had no length measurement of any kind before this gate. These
 tests hold the four things that make it real rather than decorative:
 
-1. the two copies of the ceilings agree, so a shrink cannot be un-shrunk
-   (equality itself is owned by ``ceiling_record_parity_17872_test.py``, which
-   asserts it both ways for all three gates; the direction check is here);
+1. the ceilings are one table, checked against the base commit's, so a shrink
+   cannot be un-shrunk and nothing can be added (#19544);
 2. the ratchet's three-way verdict is enforced, including the branch that looks
    wrong -- a file UNDER its ceiling is a failure until the ceiling is lowered;
 3. the walk actually reaches the tree, so a clean run means "looked and found
@@ -30,8 +29,9 @@ import importlib.util
 import pytest
 import yaml
 from repo_tests._paths import repo_root
-from repo_tests.frontend_file_size_ratchet_baseline import RATCHET_BASELINE
+from repo_tests._ratchet_base import base_table, growth_over_base, raised_entries
 
+from tools.lint._file_size_guard import load_known_large
 from tools.lint._scan_helpers import tracked_paths
 
 #: Asks git first, so a worktree resolves to its own tree (#15925). Deriving it
@@ -52,7 +52,7 @@ PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 #: nothing outside .ts/.vue" and "the gate never looked outside .ts/.vue" are
 #: the same observation (MEASUREMENT_DISCIPLINE.md).
 _UNCOVERED_OVERSIZED: dict[str, int] = {
-    "autobot-frontend/src/config/AppConfig.js": 616,
+    "autobot-frontend/src/config/AppConfig.js": 612,
 }
 
 #: Suffixes the uncovered-population sweep enumerates. Everything a frontend
@@ -84,34 +84,31 @@ def hook():
     return module
 
 
-def test_no_ceiling_exceeds_its_recorded_baseline(hook):
-    """The ratchet turns one way. This is the direction check, stated separately."""
-    raised = {
-        rel: (ceiling, RATCHET_BASELINE[rel])
-        for rel, ceiling in hook.KNOWN_LARGE.items()
-        if rel in RATCHET_BASELINE and ceiling > RATCHET_BASELINE[rel]
-    }
-    assert not raised, f"ceilings raised above their baseline (never allowed): {raised}"
+def _base_known_large() -> dict[str, int]:
+    """``KNOWN_LARGE`` as the base commit had it; BaseUnavailable propagates (fail closed)."""
+    return base_table(REPO_ROOT, ("scripts/frontend_file_size_known_large.py",), "KNOWN_LARGE")
 
 
-def test_every_grandfathered_file_is_at_its_ceiling(hook):
-    """Each entry names a real file whose measured size equals its ceiling.
+def test_no_entry_may_be_added(hook):
+    """An entry the base commit did not have admits a new oversized file."""
+    added = set(hook.KNOWN_LARGE) - set(_base_known_large())
+    assert added == set(), (
+        f"new grandfathered files {sorted(added)} -- the exemption list only shrinks. "
+        "Split the file instead of exempting it."
+    )
 
-    This is the tree-anchored direction: it is what stops both records drifting
-    together away from the files they describe.
-    """
-    wrong: dict[str, str] = {}
-    for rel, ceiling in hook.KNOWN_LARGE.items():
-        path = REPO_ROOT / rel
-        if not path.is_file():
-            wrong[rel] = "no such file — remove the entry from both copies"
-            continue
-        measured = hook.count_lines(path)
-        if measured is None:
-            wrong[rel] = "could not be read, so it was never measured"
-        elif measured != ceiling:
-            wrong[rel] = f"measured {measured}, ceiling {ceiling}"
-    assert not wrong, f"grandfathered entries out of step with the files: {wrong}"
+
+def test_no_ceiling_may_exceed_its_baseline(hook):
+    """No ceiling is above what the base commit's ``KNOWN_LARGE`` recorded for it."""
+    base = _base_known_large()
+    raised = {rel: v for rel, v in raised_entries(dict(hook.KNOWN_LARGE), base).items() if rel in base}
+    assert not raised, f"ceilings raised against the base commit (base, now): {raised}"
+
+
+def test_no_grandfathered_file_grows_past_the_base(hook):
+    """lines(F@HEAD) <= min(ceiling, lines(F@base)) for every entry; a file new at the base is blocked (#19673)."""
+    found = growth_over_base(REPO_ROOT, dict(hook.KNOWN_LARGE))
+    assert found == {}, f"grandfathered files grew, or are new, against the merge base: {found}"
 
 
 def test_no_unlisted_frontend_file_is_oversized(hook):
@@ -261,27 +258,32 @@ def test_the_generated_clients_are_excluded_by_a_recorded_prefix(hook):
     ], "a generated file carries a ceiling — remove it, the exclusion is the mechanism"
 
 
-#: The largest ceiling, read from the baseline rather than written as a literal.
+#: The largest ceiling, read from the table rather than written as a literal.
 #: A literal is how a parametrisation comes to assert that 900 is above a ceiling
 #: of 1265 -- the inputs have to move when the ceiling is lowered, and only a
 #: derived value does that.
-_SUBJECT = max(RATCHET_BASELINE, key=lambda rel: RATCHET_BASELINE[rel])
-_CEILING = RATCHET_BASELINE[_SUBJECT]
+_KNOWN_LARGE = load_known_large(str(HOOK_PATH), "frontend_file_size_known_large.py")
+_SUBJECT = max(_KNOWN_LARGE, key=lambda rel: _KNOWN_LARGE[rel])
+_CEILING = _KNOWN_LARGE[_SUBJECT]
 
 
 @pytest.mark.parametrize(
     ("measured", "expect"),
     [
         (_CEILING + 1, "may not grow"),
-        (_CEILING - 1, "Lower the ceiling"),
         (500, "within the"),
     ],
 )
 def test_the_three_way_verdict(hook, measured, expect):
-    """Over, under and compliant are all failures, each with its own instruction."""
+    """Over and compliant are failures, each with its own instruction; under passes (#19673)."""
     message = hook.verdict(_SUBJECT, measured)
     assert message is not None, f"{measured} lines against a ceiling of {_CEILING} must not pass silently"
     assert expect in message, f"expected {expect!r} in: {message}"
+
+
+def test_a_file_under_its_ceiling_passes(hook):
+    """A shrink needs no table edit (#19673); the merge-base gate bounds it instead."""
+    assert hook.verdict(_SUBJECT, max(_CEILING - 1, hook.MAX_LINES + 1)) is None  # above the limit: a real shrink
 
 
 def test_a_file_at_its_exact_ceiling_passes(hook):
@@ -320,71 +322,3 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
     """End to end on the path that blocks a push, not just on the message builder."""
     monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
     assert hook.check_paths(["autobot-frontend/src/never_written.vue"]) == 1
-
-
-#: The sum of every recorded ceiling, which only ever moves DOWN.
-#:
-#: WHY A THIRD NUMBER (#17970). The two records are compared against each other
-#: by `test_no_ceiling_exceeds_its_recorded_baseline`, so that check fires when
-#: ONE anchor is raised and is blind when BOTH are. Moving both is the
-#: documented way to grow a grandfathered file here --
-#: `autobot-backend/api/schemas_system.py` went 4306 -> 4346 across five merged
-#: commits exactly that way -- so "no ceiling may be raised" was a claim the
-#: Python ratchet made and did not enforce.
-#:
-#: A mirrored pair detects a transcription error between the copies. It cannot
-#: detect movement OF the pair, because both sides of the comparison move
-#: together. Direction needs a figure that does not move with the edit, which
-#: is what this is.
-#:
-#: The repo reached this conclusion once already and applied it to the other
-#: half: `MAX_KNOWN_LARGE_ENTRIES` exists because a two-sided *addition* passes
-#: the record-to-record check. This is the same argument one step over, for
-#: ceiling VALUES rather than entry COUNT.
-#:
-#: Re-pin DOWN when files shrink. Raising it is the thing being prevented, so a
-#: raise needs a recorded reason in the pull request, not a quiet edit.
-#:
-#: WHAT THIS NUMBER CANNOT SEE (#17989). It is a SUM, so it only reports the
-#: NET. A ceiling raised here and an unrelated file shrinking there cancel, and
-#: a total that moved DOWN reads as a clean shrink while individual ceilings
-#: rose. That happened on this very re-pin: 184571 -> 184531 is -40 net, and
-#: underneath it seven ceilings ROSE (+45) while two FELL (-85). Both tests
-#: below pass on the net and see none of the seven. The argument that produced
-#: this constant -- a comparison cannot police what moves with it -- applies to
-#: the sum one step further out, so the per-entry direction check still has no
-#: fixed reference. Do not read a falling total as "no ceiling was raised".
-MAX_CEILING_TOTAL = 181931  # train-8: #18441 measured; #18240 App.vue 1144 left the list (-1144 off main's 183687); merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
-
-
-def test_the_ceiling_total_only_shrinks(hook):
-    """A two-sided raise is invisible to the record-to-record check; this sees it.
-
-    `test_no_ceiling_exceeds_its_recorded_baseline` compares KNOWN_LARGE against
-    RATCHET_BASELINE. Raise an entry in both and they agree again, so it passes
-    while a grandfathered file just grew. The total is pinned against a constant
-    that does not move with either record, so the raise shows up here.
-    """
-    total = sum(hook.KNOWN_LARGE.values())
-
-    assert total <= MAX_CEILING_TOTAL, (
-        f"recorded ceilings now total {total}, over the pinned {MAX_CEILING_TOTAL} "
-        f"(+{total - MAX_CEILING_TOTAL}). A grandfathered file grew. Raising both "
-        "records agrees with itself and passes every other check here (#17970) -- "
-        "this is the one that sees it. Split the file, or state in the PR why the "
-        "ceiling must rise and move this number with it."
-    )
-
-
-def test_the_ceiling_total_is_not_stale(hook):
-    """The contrast. Without it, the pin above could drift far above the real sum
-    and silently license growth up to the gap -- a floor that permits anything is
-    not a floor. Mirrors how `MAX_KNOWN_LARGE_ENTRIES` is kept honest.
-    """
-    total = sum(hook.KNOWN_LARGE.values())
-
-    assert total == MAX_CEILING_TOTAL, (
-        f"ceilings total {total} but the pin says {MAX_CEILING_TOTAL}. Files shrank "
-        "and the pin was not lowered, which re-licenses the lines just cut. Set "
-        f"MAX_CEILING_TOTAL = {total}."
-    )

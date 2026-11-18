@@ -6,22 +6,15 @@
 
 #11511 — three bugs in POST /code-sync/update-all fleet_nodes stage:
 
-  Bug 1: Non-operational nodes (degraded / never-heartbeated) caused the whole
-         job to be marked failed when their Ansible deploy predictably failed.
-         Fix: _is_node_operational() gate — skip such nodes with a 'skipped'
-         per-node result; the job reaches 'partial' (or 'completed') instead of
-         'failed'.
+  Bug 1: Non-operational nodes caused the whole job to fail. Fix: _is_node_operational()
+         skips them; the job reaches 'partial' (or 'completed').
 
-  Bug 2: Per-node partial-success model was absent — a single node failure
-         erased the overall success of slm_self_update and healthy nodes.
-         Fix: skipped_fleet_nodes counter on UpdateAllJob; job status becomes
-         'partial' when skips occurred but no operational node failed.
+  Bug 2: A single node failure erased the overall success. Fix: skipped_fleet_nodes on
+         UpdateAllJob; the job becomes 'partial' when no operational node failed.
 
 #14683 — the fired self-update stage had no completion path in this process.
-         It relied on the restart killing us so the startup resume hook would
-         continue the fleet stage; when the play finished WITHOUT replacing the
-         service, the stage stayed RUNNING and fleet_nodes stayed PENDING
-         forever, so no node was ever updated and the job could not finish.
+         When the play finished WITHOUT replacing the service, the stage stayed RUNNING
+         and fleet_nodes PENDING forever.
          Fix: _reconcile_self_update_stage() resolves the stage against the
          play's real completion.
 
@@ -670,6 +663,13 @@ def test_wait_returns_the_completion_once_the_play_ends() -> None:
         patch("api.code_sync._SELF_UPDATE_WATCH_POLL_SECONDS", 1),
     ):
         assert _run(_await_self_update_completion(_fired_job(), "2026-08-21T12:08:47.427212+00:00")) == _AFTER_FIRING
+
+
+@pytest.fixture(autouse=True)
+def _deploy_activity():
+    idle = SimpleNamespace(in_progress=False, last_completed_play_at=None)
+    with patch("api.code_sync.read_deploy_activity", AsyncMock(return_value=idle)) as read:
+        yield read
 
 
 def test_no_restart_still_reaches_the_fleet_stage() -> None:

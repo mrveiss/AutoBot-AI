@@ -5,7 +5,7 @@
 """
 Equivalence tests for the code_analysis.src legacy analyzer shims (#12362).
 
-Verifies that ``code_analysis.src.performance_analyzer.PerformanceAnalyzer``
+Verifies that ``code_analysis.src.performance_analyzer.LegacyPerformanceAnalyzer``
 and ``code_analysis.src.security_analyzer.LegacySecurityAnalyzer`` — now thin
 adapters delegating to the canonical ``code_intelligence.performance_analysis``
 / ``code_intelligence.security`` packages — still return the legacy response
@@ -28,8 +28,8 @@ import textwrap
 import pytest
 
 from code_analysis.src.performance_analyzer import (
-    PerformanceAnalyzer,
-    PerformanceIssue,
+    LegacyPerformanceAnalyzer,
+    LegacyPerformanceIssue,
     PerformanceRecommendation,
 )
 from code_analysis.src.security_analyzer import (
@@ -44,7 +44,7 @@ async def _write_source(path, text):
 
 
 class TestPerformanceShimFieldMapping:
-    """Verify the legacy PerformanceIssue shape is populated correctly."""
+    """Verify the legacy LegacyPerformanceIssue shape is populated correctly."""
 
     @pytest.mark.asyncio
     async def test_analyze_performance_response_shape(self, tmp_path):
@@ -59,7 +59,7 @@ class TestPerformanceShimFieldMapping:
                 """),
         )
 
-        analyzer = PerformanceAnalyzer()
+        analyzer = LegacyPerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
 
         for key in (
@@ -91,7 +91,7 @@ class TestPerformanceShimFieldMapping:
                 """),
         )
 
-        analyzer = PerformanceAnalyzer()
+        analyzer = LegacyPerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
 
         details = results["performance_details"]
@@ -105,14 +105,14 @@ class TestPerformanceShimFieldMapping:
 
     @pytest.mark.asyncio
     async def test_dataclass_field_names_unchanged(self, tmp_path):
-        """PerformanceIssue must keep line_number/issue_type (not line_start/PerformanceIssueType)."""
+        """LegacyPerformanceIssue must keep line_number/issue_type (not line_start/PerformanceIssueType)."""
         await _write_source(tmp_path / "leak.py", 'f = open("x.txt", "r")\ndata = f.read()\n')
 
-        analyzer = PerformanceAnalyzer()
+        analyzer = LegacyPerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
 
-        # Reconstruct one PerformanceIssue directly to assert the dataclass contract.
-        issue = PerformanceIssue(
+        # Reconstruct one LegacyPerformanceIssue directly to assert the dataclass contract.
+        issue = LegacyPerformanceIssue(
             file_path="x.py",
             line_number=1,
             function_name=None,
@@ -143,7 +143,7 @@ class TestPerformanceShimRecommendations:
                 """),
         )
 
-        analyzer = PerformanceAnalyzer()
+        analyzer = LegacyPerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
 
         assert results["recommendations_count"] >= 1

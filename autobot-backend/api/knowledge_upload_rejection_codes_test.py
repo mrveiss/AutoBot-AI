@@ -17,11 +17,13 @@ _API = Path(__file__).parent
 _UPLOAD_PATH = {
     "knowledge.py": {
         "_validate_file_upload",
+        "require_safe_kb_name",
         "_extract_pdf_document",
         "_extract_docx_document",
         "_extract_file_content",
         "upload_file_to_knowledge",
     },
+    "../knowledge/kb_ingest_result.py": {"ingest_in_kb"},
     "../knowledge/upload_rejections.py": {"no_text_rejection", "extract_within_deadline"},
     "knowledge_office_upload.py": {"extract_office_upload", "verified_upload_extension"},
 }
