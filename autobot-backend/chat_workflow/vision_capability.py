@@ -88,7 +88,7 @@ async def _fetch_vision_capability(base_url: str, model_name: str) -> bool | Non
 
 
 def _remember(key: tuple[str, str], value: bool | None) -> None:
-    if len(_cache) >= VISION_CAPABILITY_CACHE_MAX:
+    if key not in _cache and len(_cache) >= VISION_CAPABILITY_CACHE_MAX:
         _cache.pop(next(iter(_cache)))
     ttl = VISION_CAPABILITY_TTL_S if value is not None else VISION_CAPABILITY_FAILURE_TTL_S
     _cache[key] = (time.monotonic() + ttl, value)
