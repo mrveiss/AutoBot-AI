@@ -37,7 +37,7 @@
 
     <div v-else-if="error" class="error-state">
       <Icon name="exclamation-triangle" />
-      <span>{{ error }}</span>
+      <span>{{ t('visualizations.resourceHeatmap.loadFailed') }} {{ error }}</span>
       <button @click="fetchData" class="retry-btn">{{ t('visualizations.resourceHeatmap.retry') }}</button>
     </div>
 

@@ -461,7 +461,7 @@ in #16539.
 **Reason:** these names are NOT second implementations. The behaviour has exactly one
 definition in `autobot_shared`; each service keeps a thin binding that must be a concrete,
 separately mapped class: the two services attach different SQLAlchemy relationships and
-columns (backend: activity tracking and LLC columns; SLM: none) and register in different
+columns (backend: activity tracking and Company OS columns; SLM: none) and register in different
 mapper registries, so one shared mapped class would break `configure_mappers()` on one side.
 `UserService` bindings only set `user_model` and, in the backend, two hooks. Each service's
 `OrganizationService` only binds its own concrete `Organization` and `User` mappings (two
@@ -516,24 +516,6 @@ it and this entry be removed.
 
 ---
 
-## Direct Redis Health Probes
-
-**Files:** `autobot-backend/utils/distributed_service_discovery.py`, `autobot-backend/utils/service_discovery.py`
-**Canonical it does not use:** `autobot_shared/redis_client.py`
-**Issue:** #18553
-
-**Reason:** each builds a fresh `redis.Redis(...)` to ask "is THIS endpoint answering" for a host and
-port supplied by the caller, with its own short timeouts, and closes it
-afterwards. The canonical client addresses named databases on the configured Redis through pooled,
-circuit-broken connections, so it cannot probe an arbitrary endpoint and would report the pool's
-state instead of the endpoint's. The sites are frozen in `repo_tests/redis_direct_constructor_baseline_18553.py`.
-
-**Revisit when:** the canonical layer grows an endpoint-probe entry point; delete these constructors then.
-
-**Grep check:** `grep -n "redis.Redis(" autobot-backend/utils/distributed_service_discovery.py autobot-backend/utils/service_discovery.py` — if empty, this exception is obsolete.
-
----
-
 ## Memory graph vs knowledge-base visibility — two models on purpose
 
 **Files:** `autobot-backend/autobot_memory_graph/owner_scope.py`, `autobot-backend/knowledge/search_filters.py`
@@ -578,3 +560,106 @@ derived as `{{ autobot.base_dir | dirname }}/<svc>`.
 **Revisit when:** the platform decides to relocate service state under the install root.
 
 **Grep check:** `grep -n "_config_dir\|_data_dir" autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml` -- if no `/etc` or `/var` literal remains, this exception is obsolete.
+
+## Compose Postgres Variables — Same Concept, Compose's Own Values
+
+**Files:** `docker-compose.yml`, `autobot_shared/postgres_identity.py`
+**Canonical it does not use:** the fleet values of `AUTOBOT_POSTGRES_USER` and `SLM_DB_NAME`
+**Issue:** #19408
+
+**Reason:** Each name means one concept everywhere: `AUTOBOT_POSTGRES_USER` is the login role
+on the user-management database, and `SLM_DB_NAME` is the SLM control-plane database. Only
+the values differ. The postgres image creates one role, so compose uses the owner role
+(`COMPOSE_OWNER_ROLE`) where a fleet host has `autobot_app`, and keeps its existing database
+(`COMPOSE_SLM_DB_NAME`) where a fleet host has `slm`. Renaming either would move existing
+compose volumes. The compose SLM defaults to that owner role too; a non-default
+`SLM_POSTGRES_USER` must already exist, because compose creates only the owner role.
+
+**Enforced by:** `COMPOSE_KEY_VALUES` in `repo_tests/postgres_identity_one_source_19320_test.py`
+allows these values in compose files only.
+
+---
+
+## Infra Files That Look Alike and Stay Separate
+
+**Issue:** #18558
+
+The audit behind #18558 listed these next to two real copies, which now have one home each: the
+CI config fixture (`.github/actions/setup-python-suite/ci-config.yaml`) and the credential
+registration (`_shared/tasks/register_node_credentials.yml`).
+
+| Files | Measured on `a975fe87ad` | Why they stay separate |
+|---|---|---|
+| Workflow `concurrency:` blocks | 62 workflows, 55 of them 3 lines | GitHub Actions has no way to include a workflow-level `concurrency:` key. |
+| Jobs with their own `setup-python` | 13 workflows call it directly, 4 use `setup-python-suite`; 6 of the 13 install `requirements-ci.txt` | That action builds the test venv, its cache and the system packages, and does not put the venv on `PATH`. These jobs install on the runner's Python, some add packages or tolerate a failed install, so moving them would change what they run on. |
+| `docker/backend/Dockerfile`, `docker/slm/Dockerfile` | 183 and 103 lines | They share a `FROM`, but their package lists, requirement filters and health checks differ. A base image would need its own build and publish step. |
+
+**Keep in sync:** nothing. If two of these come to differ only by a name, extract them and drop the row.
+
+---
+
+## NPU Worker Pairing — Backend Resource, Not the SLM Node Registry
+
+**File:** `autobot-backend/api/npu_workers.py` (`/api/npu/workers*`)
+**Diverges from:** one fleet inventory in SLM `/api/nodes`
+**Issue:** #18735
+
+**Reason:** The SLM is the control plane for all services, so it sees and controls NPU workers, but
+through the backend's existing routes. Pairing and credentials stay in the backend, because moving
+them would change the worker credential flow and need redirects for installed workers. Maintainer
+decision on the split; the control work is #20625.
+
+**Sync cadence:** None; the SLM calls these routes and keeps no copy of the worker records. Reopen
+this decision if the SLM needs to hold NPU worker credentials itself.
+
+---
+
+## SLM First Admin Password Hash Crosses to the Main Backend
+
+**File:** `autobot-slm-backend/api/first_admin_internal.py` (`GET /api/internal/first-admin`)
+**Consumer:** `autobot-backend/user_management/services/person_link_service.py`
+**Diverges from:** the rule that no `response_model` carries a stored credential (#17865)
+**Issue:** #10200, PR #20607
+
+**What crosses:** the first SLM admin's password hash (`password_hash`), SLM to main backend, so that
+person keeps their password when the main app is installed and links them.
+
+**Reason:** maintainer ruling, https://github.com/mrveiss/AutoBot-AI/pull/20607#issuecomment-6689286310,
+matching the shared-users decision on #10200. The guard records it as a deliberate waiver in
+`repo_tests/no_secret_in_response_model_baseline_17865.py` (`_WAIVED`, keyed to this one route).
+
+**Constraint:** the route is reachable only with the internal service key. It is mounted on the
+unauthenticated health router, so the handler's own `verify_internal_api_key` check is the only gate
+and no user token, whatever its role, can substitute (`autobot-slm-backend/tests/api/test_first_admin_internal.py`
+asserts no key, a user token without the key, and a wrong key are refused, and the valid key succeeds).
+The hash is read once at first start and is never logged.
+
+**Second barrier:** every public nginx edge that proxies `/api` denies `/api/internal/` with a `location ^~` 404,
+so a browser session cannot reach the route even with the key injected (#20046; every file is discovered and
+checked by `repo_tests/internal_paths_denied_at_edge_20046_test.py`, which also pins this route under the denied
+prefix). The SLM vhost templates are already among the files it reads and all carry the deny.
+
+**Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
+logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.
+
+---
+
+## SLM API-Key Route Scoping — No Route Is Called With a User API Key
+
+**File:** `autobot-slm-backend/services/auth.py` (`get_api_key_user`, `require_key_permission`)
+**Diverges from:** the expectation that every dependency in the auth module has a production route behind it
+**Issue:** #20534, #16294
+
+**Reason:** maintainer decision (2026-11-17): no SLM route is called with a user API key, so none is
+scoped to one. Keys are created, stored, listed and revoked; they are not yet a way to call the SLM.
+`require_key_permission` is the mechanism, proved on a test route
+(`autobot-slm-backend/tests/api/test_api_key_route_scope_16040.py`). Which routes accept a key is
+the open product decision on #16294.
+
+**Baseline:** the two `declared:` entries (`get_api_key_user`, `require_key_permission`) in
+`repo_tests/unconnected_code_baseline.txt` stay as the record of this decision; the baseline is
+shrink-only and a declared entry is true only while its referencing files are exactly the live ones
+(`repo_tests/unconnected_code_gate_20512_test.py`, `test_declared_entries_describe_the_live_references`).
+
+**Review trigger:** when #16294 names a route that accepts a user API key, that route uses
+`require_key_permission` with a test, and both `declared:` baseline lines are deleted in the same PR.

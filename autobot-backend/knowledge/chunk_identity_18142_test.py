@@ -6,12 +6,15 @@
 
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from knowledge.chunk_identity import (
+    DOC_SEARCH_SOURCE,
     DOC_SOURCE,
     SEED_SOURCE,
+    STORE_ID_KEY,
     doc_chunk_id,
     legacy_chunk_id,
     resolve_chunk_id,
@@ -163,3 +166,55 @@ def test_seed_chunk_joins_stored_or_legacy(seeded: bool) -> None:
 )
 def test_stored_ids_keep_their_pre_18142_values(chunk_id, expected: str) -> None:
     assert chunk_id() == expected
+
+
+def test_the_carried_store_id_beats_the_top_level_id_and_the_rebuilt_id() -> None:
+    meta = _doc_meta(**{STORE_ID_KEY: "store-row"})
+    assert resolve_chunk_id({"metadata": meta, "chunk_id": "top"}) == "store-row"
+    assert resolve_chunk_id({"metadata": {**meta, "chunk_id": "stamped"}}) == "stamped"
+
+
+def test_the_search_relabelled_source_still_rebuilds_the_doc_id() -> None:
+    meta = _doc_meta(source=DOC_SEARCH_SOURCE)
+    assert resolve_chunk_id({"metadata": meta, "source_path": REL}) == "72446a68c458"
+
+
+# --- through DocIndexerService.search, on rows exactly as an old indexer left them (#19149) --------
+
+
+async def _search(rows: list[tuple[str, dict]]) -> list[Any]:
+    svc = _make_service(collection_count=len(rows))
+    svc._collection.query = MagicMock(
+        return_value={
+            "ids": [[i for i, _ in rows]],
+            "documents": [["body"] * len(rows)],
+            "metadatas": [[dict(m) for _, m in rows]],
+            "distances": [[0.1] * len(rows)],
+        }
+    )
+    stub = MagicMock(RankedResult=lambda **kw: SimpleNamespace(**kw))
+    with patch.dict("sys.modules", {"advanced_rag_optimizer": stub}):
+        return await svc.search("q", n_results=len(rows))
+
+
+@pytest.mark.asyncio
+async def test_unstamped_doc_chunks_of_one_file_keep_distinct_ids_through_search() -> None:
+    rows = [(doc_chunk_id(REL, SECTION, i), _doc_meta(chunk_index=i)) for i in range(3)]
+    hits = await _search(rows)
+    assert all(h.metadata["source"] == DOC_SEARCH_SOURCE for h in hits)
+    assert [resolve_chunk_id(h) for h in hits] == [i for i, _ in rows]
+    assert resolve_chunk_id(hits[2]) == "72446a68c458"  # literal pin: docs/x.md / Setup / 2
+
+
+@pytest.mark.asyncio
+async def test_unstamped_split_siblings_resolve_to_their_stored_ids_through_search() -> None:
+    parent = doc_chunk_id(REL, SECTION, 2)
+    legacy = _doc_meta(chunk_id_parent=parent, split_depth=0)  # equal metadata: only the row id differs
+    hits = await _search([(f"{parent}_L0", legacy), (f"{parent}_R0", legacy)])
+    assert [resolve_chunk_id(h) for h in hits] == ["72446a68c458_L0", "72446a68c458_R0"]  # literal pins
+
+
+@pytest.mark.asyncio
+async def test_a_stamped_row_keeps_its_stamp_through_search() -> None:
+    hits = await _search([("row", _doc_meta(chunk_id="stamped"))])
+    assert resolve_chunk_id(hits[0]) == "stamped"

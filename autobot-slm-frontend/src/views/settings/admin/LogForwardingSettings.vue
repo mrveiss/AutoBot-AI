@@ -11,14 +11,13 @@
  */
 
 import { ref, reactive, onMounted } from 'vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, BaseSwitch, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import type { LogForwardingDestination } from '@/composables/autobotAdminModels'
 import {
   defaultForm, formFromDestination, destinationTypes, getUrlPlaceholder, buildCreateBody, buildUpdateBody,
 } from './logForwardingForm'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LogForwardingSettings')
 const { t } = useI18n()
@@ -118,10 +117,9 @@ async function toggleService(): Promise<void> {
   }
 }
 
-async function toggleAutoStart(event: Event): Promise<void> {
-  // The native checkbox has already flipped; it shows the confirmed value until the server answers.
-  const box = event.target as HTMLInputElement
-  box.checked = autoStart.value
+// BaseSwitch shows `autoStart`, the server-confirmed value, so a pending or failed save never
+// leaves it flipped; a change while one is pending is ignored (#18797).
+async function toggleAutoStart(): Promise<void> {
   if (!autoStartLoaded.value || autoStartSaving.value) return
   autoStartSaving.value = true
   try {
@@ -133,7 +131,6 @@ async function toggleAutoStart(event: Event): Promise<void> {
     error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.autoStartFailed')
   } finally {
     autoStartSaving.value = false
-    box.checked = autoStart.value
   }
 }
 
@@ -253,12 +250,7 @@ onMounted(refreshAll)
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.logForwardingSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Service Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
@@ -352,17 +344,13 @@ onMounted(refreshAll)
 
       <!-- Auto-start toggle -->
       <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="autoStart"
-            :disabled="!autoStartLoaded || autoStartSaving"
-            data-test="auto-start"
-            @change="toggleAutoStart"
-            class="sr-only peer"
-          />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-        </label>
+        <BaseSwitch
+          :model-value="autoStart"
+          :label="$t('settings.admin.logForwardingSettings.autoStartOnBackend')"
+          :disabled="!autoStartLoaded || autoStartSaving"
+          data-test="auto-start"
+          @change="toggleAutoStart"
+        />
         <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.autoStartOnBackend') }}</span>
       </div>
     </div>
@@ -609,10 +597,7 @@ onMounted(refreshAll)
 
       <!-- Enabled Toggle -->
       <div class="flex items-center gap-3 pt-2">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" v-model="formData.enabled" class="sr-only peer" />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-        </label>
+        <BaseSwitch v-model="formData.enabled" :label="$t('settings.admin.logForwardingSettings.enabled')" />
         <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.enabled') }}</span>
       </div>
       </div>

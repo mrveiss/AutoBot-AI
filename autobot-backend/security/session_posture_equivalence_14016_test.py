@@ -160,6 +160,8 @@ def _drive(monkeypatch, c):
     monkeypatch.setattr("security.session_ownership.get_auth_middleware", lambda: middleware)
     install_canonical_resolver(monkeypatch, "security.session_posture.resolve_human_user", middleware)
     monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda r: manager)
+    # #20025: these rows are a write on an id with no session; an existing ownerless one is covered there.
+    monkeypatch.setattr("chat_history.session_file.session_file_exists", AsyncMock(return_value=False))
     monkeypatch.setattr(
         "security.session_ownership.resolve_enforcement_mode_for_request",
         AsyncMock(return_value=ResolvedEnforcementMode(c["mode"])),

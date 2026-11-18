@@ -80,6 +80,14 @@ def _module_path(name: str, call):
     return build
 
 
+def _operator_gate(monkeypatch, role: str = "operator"):
+    import security.human_admin as human_admin  # noqa: PLC0415
+
+    real = _sees(monkeypatch, human_admin, {**_JWT_ADMIN, "role": role})
+    monkeypatch.setattr(human_admin, "auth_middleware", real)  # the gate reads the module at call time
+    return lambda request: human_admin.require_human_operator(request)
+
+
 def _envelope_principal(monkeypatch):
     from user_management.middleware.rbac_middleware import rbac_middleware  # noqa: PLC0415
 
@@ -96,9 +104,7 @@ _PATHS = {
     "session_posture.authenticated_user": _module_path(
         "security.session_posture", lambda m, r: m.authenticated_user("session-1", r)
     ),
-    "redis_service.check_operator_permission": _module_path(
-        "api.redis_service", lambda m, r: m.check_operator_permission(r)
-    ),
+    "human_admin.require_human_operator (redis_service /start, /restart)": lambda mp: _operator_gate(mp),
     "chat_shared_links._enforce_require_login": _module_path(
         "api.chat_shared_links", lambda m, r: m._enforce_require_login(SimpleNamespace(require_login=True), r)
     ),
@@ -126,6 +132,26 @@ def test_a_fresh_jwt_passes(monkeypatch, path):
     _resolve(call(_request()))  # no refusal
 
 
+@pytest.mark.parametrize("role", ["superadmin", "admin", "operator"])
+def test_the_admin_family_and_operator_pass_the_redis_gate(monkeypatch, role):
+    """#19125: superadmin is the highest admin -- main's literal {"admin","operator"} refused it."""
+    call = _operator_gate(monkeypatch, role)
+    _epoch_says(monkeypatch, revoked=False)
+
+    principal = _resolve(call(_request()))
+    assert principal["username"] == "alice"  # the audit trail attributes the action to this identity
+
+
+@pytest.mark.parametrize("role", ["analyst", "user"])
+def test_a_role_outside_the_admin_family_is_refused_by_the_redis_gate(monkeypatch, role):
+    call = _operator_gate(monkeypatch, role)
+    _epoch_says(monkeypatch, revoked=False)
+
+    with pytest.raises(HTTPException) as refused:
+        _resolve(call(_request()))
+    assert refused.value.status_code == 403
+
+
 def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):
     """Revocation-store failure follows get_current_user's policy: fail closed with a 503 the client
     retries, not a 401 that ends the session (#16411, #18892)."""
@@ -145,14 +171,28 @@ def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):
     assert int(exc.value.headers["Retry-After"]) >= 1
 
 
-def test_the_internal_key_still_passes_the_admin_gate_without_an_epoch_lookup(monkeypatch):
+def test_an_opted_in_route_admits_the_key_without_an_epoch_lookup(monkeypatch):
+    """#16333: the key is admitted only where a route names its caller, and that path reads no session."""
+    from unittest.mock import patch  # noqa: PLC0415
+
+    import auth_service_opt_in  # noqa: PLC0415
+    from auth_service_opt_in import service_opt_in  # noqa: PLC0415
+
     call = _admin_gate(monkeypatch)
+    monkeypatch.setattr(auth_service_opt_in, "verify_internal_api_key", lambda provided: provided == INTERNAL_KEY)
     epoch = AsyncMock(return_value=True)
     import auth_revocation  # noqa: PLC0415
 
     monkeypatch.setattr(auth_revocation, "is_token_revoked_by_password_change", epoch)
 
-    assert _resolve(call(_request({"X-Internal-API-Key": INTERNAL_KEY}))) is True
+    @service_opt_in("test-caller")
+    async def endpoint():
+        return None
+
+    request = _request({"X-Internal-API-Key": INTERNAL_KEY})
+    request.scope["endpoint"] = endpoint
+    with patch("services.audit.audit.record_committed", AsyncMock(return_value=True)):
+        assert _resolve(call(request)) is True
     epoch.assert_not_called()
 
 

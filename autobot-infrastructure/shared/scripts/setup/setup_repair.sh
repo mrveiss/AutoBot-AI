@@ -371,7 +371,7 @@ run_diagnostics() {
     log_info "Checking container health..."
     check_container_health "autobot-redis" "" "6379"
     check_container_health "autobot-npu-worker" "http://localhost:8081/health" "8081"
-    check_container_health "autobot-playwright" "http://localhost:3000/health" "3000"
+    check_container_health "autobot-playwright" "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" "${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 
     # Check environments
     check_python_env
@@ -434,9 +434,22 @@ run_repairs() {
     fi
 
     # Fix Python environment
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$SCRIPT_DIR/../../../../scripts/lib/python_floor.sh" || {
+        echo "ERROR: cannot source scripts/lib/python_floor.sh" >&2
+        exit 1
+    }
+    if [ "${ISSUES_FOUND[venv_missing]}" != true ] && [ -d venv ] \
+        && ! python_floor_venv_matches "$SCRIPT_DIR/../../../.." venv; then
+        log_info "Existing venv is not on the floor interpreter; rebuilding it (#20932)"
+        rm -rf venv
+        ISSUES_FOUND[venv_missing]=true
+    fi
     if [ "${ISSUES_FOUND[venv_missing]}" = true ]; then
         log_info "Creating Python virtual environment..."
-        python3 -m venv venv
+        # #20932: the floor interpreter from .python-version, never a bare python3
+        PYTHON_BIN="$(python_floor_ensure "$SCRIPT_DIR/../../../..")" || exit 1
+        "$PYTHON_BIN" -m venv venv
     fi
 
     if [ "${ISSUES_FOUND[deps_need_update]}" = true ] || [ "${ISSUES_FOUND[venv_missing]}" = true ]; then
@@ -523,7 +536,7 @@ force_recreate_containers() {
     # Verify health
     check_container_health "autobot-redis" "" "6379"
     check_container_health "autobot-npu-worker" "http://localhost:8081/health" "8081"
-    check_container_health "autobot-playwright" "http://localhost:3000/health" "3000"
+    check_container_health "autobot-playwright" "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" "${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 
     log_success "Container recreation completed!"
 }

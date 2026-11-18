@@ -56,6 +56,15 @@ describe('useTheme', () => {
       expect(document.documentElement.style.colorScheme).toBe('light')
     })
 
+    it('should apply the contrast-dark theme with the dark colour scheme (#18253)', () => {
+      const { setTheme, effectiveTheme, isLight } = useTheme()
+      setTheme('contrast-dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('contrast-dark')
+      expect(document.documentElement.style.colorScheme).toBe('dark')
+      expect(effectiveTheme.value).toBe('contrast-dark')
+      expect(isLight.value).toBe(false)
+    })
+
     it.each(['contrast', 'mono'] as const)('should apply the %s theme to document', (name) => {
       const { setTheme, effectiveTheme, isDark, isLight } = useTheme()
       setTheme(name)
@@ -163,7 +172,7 @@ describe('useTheme', () => {
   describe('available options', () => {
     it('should provide available theme options', () => {
       const { availableThemes } = useTheme()
-      expect(availableThemes).toEqual(['light', 'dark', 'contrast', 'mono', 'system'])
+      expect(availableThemes).toEqual(['light', 'dark', 'contrast', 'contrast-dark', 'mono', 'system'])
     })
 
     it('should provide available accent options', () => {
@@ -187,6 +196,7 @@ describe('useTheme', () => {
       expect(themeLabels.light).toBe('Light')
       expect(themeLabels.system).toBe('System')
       expect(themeLabels.contrast).toBe('High contrast')
+      expect(themeLabels['contrast-dark']).toBe('High contrast dark')
       expect(themeLabels.mono).toBe('Monochrome')
     })
 
@@ -197,10 +207,88 @@ describe('useTheme', () => {
       expect(accentLabels.purple).toBe('Purple')
     })
 
-    it('should provide accent descriptions', () => {
-      const { accentDescriptions } = useTheme()
-      expect(accentDescriptions.blue).toContain('Electric Blue')
-      expect(accentDescriptions.green).toContain('Emerald')
+    it('gives every accent a description key that en.json defines (#18255)', async () => {
+      const { accentDescriptionKeys, availableAccents } = useTheme()
+      type Tree = { [key: string]: Tree | string }
+      const en = (await import('@/i18n/locales/en.json')).default as unknown as Tree
+      const resolve = (key: string) =>
+        key.split('.').reduce<Tree | string | undefined>((node, part) => (typeof node === 'object' ? node[part] : undefined), en)
+      for (const accent of availableAccents) {
+        expect(typeof resolve(accentDescriptionKeys[accent])).toBe('string')
+      }
+    })
+  })
+
+  describe('preset state (#18252)', () => {
+    it('selects no preset on a fresh install, which renders light', () => {
+      const { initTheme, preset, theme } = useTheme()
+      initTheme()
+      expect(theme.value).toBe('light')
+      expect(preset.value).toBeNull()
+    })
+
+    it.each([
+      ['system', 'theme', 'auto'],
+      ['dark', 'theme', null],
+      ['system', 'blue', null],
+    ] as const)('reads a stored "auto" with theme %s and accent %s as %s', (storedTheme, accent, expected) => {
+      localStorage.setItem('autobot-theme-preset', 'auto')
+      localStorage.setItem('autobot-theme', storedTheme)
+      localStorage.setItem('autobot-accent-color', accent)
+      const { initTheme, preset } = useTheme()
+      initTheme()
+      expect(preset.value).toBe(expected)
+    })
+
+    it('keeps a stored named preset', () => {
+      localStorage.setItem('autobot-theme-preset', 'midnight')
+      const { initTheme, preset } = useTheme()
+      initTheme()
+      expect(preset.value).toBe('midnight')
+    })
+
+    it.each([
+      ['high-contrast-dark', 'contrast-dark'],
+      ['high-contrast-light', 'contrast'],
+    ] as const)('the %s preset applies data-theme %s and no legacy attribute (#18253)', (name, applied) => {
+      const { setPreset } = useTheme()
+      setPreset(name)
+      expect(document.documentElement.getAttribute('data-theme')).toBe(applied)
+      expect(document.documentElement.hasAttribute('data-high-contrast')).toBe(false)
+    })
+
+    it('a manual theme change after a high-contrast preset leaves no preset', () => {
+      const { setPreset, setTheme, preset } = useTheme()
+      setPreset('high-contrast-dark')
+      setTheme('light')
+      expect(preset.value).toBeNull()
+      expect(localStorage.getItem('autobot-theme-preset')).toBe('auto')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    })
+
+    it('a manual accent change after a high-contrast preset leaves no preset', () => {
+      const { setPreset, setAccentColor, preset } = useTheme()
+      setPreset('high-contrast-light')
+      setAccentColor('green')
+      expect(preset.value).toBeNull()
+      expect(localStorage.getItem('autobot-theme-preset')).toBe('auto')
+    })
+
+    it('initializeTheme applies a stored named preset before mount', async () => {
+      localStorage.setItem('autobot-theme-preset', 'high-contrast-dark')
+      const module = await import('./useTheme')
+      module.initializeTheme()
+      const { preset, theme } = module.useTheme()
+      expect(preset.value).toBe('high-contrast-dark')
+      expect(theme.value).toBe('contrast-dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('contrast-dark')
+      expect(document.documentElement.hasAttribute('data-high-contrast')).toBe(false)
+    })
+
+    it('choosing system theme with the theme accent is the Auto preset', () => {
+      const { setTheme, preset } = useTheme()
+      setTheme('system')
+      expect(preset.value).toBe('auto')
     })
   })
 

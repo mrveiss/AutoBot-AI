@@ -41,6 +41,7 @@ def _service(cls=_Bound):
     user = MagicMock(username="alice", password_hash=None)
     svc.get_user = AsyncMock(return_value=user)
     svc._audit_log = AsyncMock()
+    svc._guard_last_admin = AsyncMock()  # the last-admin guard has its own tests (#21018)
     return svc
 
 
@@ -67,7 +68,7 @@ async def test_change_password_audits_the_union_of_both_forks_keys(cls, expected
     svc = _service(cls)
     with patch.object(user_service_lifecycle, "set_password_epoch", AsyncMock(return_value=1234)) as epoch:
         assert await svc.change_password(uuid.uuid4(), None, "new-secret", require_current=False)
-    epoch.assert_awaited_once_with("alice")
+    epoch.assert_awaited_once_with("alice", in_redis=False)
     action, _rtype, _rid, details = svc._audit_log.await_args.args
     assert action == IdentityAuditAction.PASSWORD_CHANGED
     assert details == {

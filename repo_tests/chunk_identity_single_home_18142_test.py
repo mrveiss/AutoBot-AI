@@ -18,12 +18,15 @@ REPO-RELATIVE parts (#18972), so a checkout under `.worktrees` is not read as cl
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.chunk_identity_baseline_18142 import BASELINE
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -32,8 +35,7 @@ _SKIP_PARTS = frozenset({"__pycache__", "node_modules", ".worktrees", "venv", ".
 
 
 def _is_test(rel: str) -> bool:
-    name = Path(rel).name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return is_test_filename(rel, include_js=False)
 
 
 def _candidates(root: Path) -> list[str]:
@@ -52,7 +54,6 @@ def _kept(rel: str) -> bool:
 REACH = declare(
     "chunk-identity-single-home-18142",
     discover=_candidates,
-    floor=2846,  # mid-window: population 2946 (backend + shared non-test .py), window [2746, 2946]
     growth=200,
     what="tracked non-test .py files",
     roots=("autobot-backend/", "autobot_shared/"),
@@ -102,7 +103,7 @@ def _derivations(tree: ast.AST) -> int:
 def inline_sites(source: str) -> int:
     """How many inline chunk-identity reads or derivations *source* holds."""
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except (SyntaxError, ValueError):
         return 0
     return sum(_is_chunk_id_read(n) for n in ast.walk(tree)) + _derivations(tree)
@@ -114,13 +115,29 @@ def measure(files: dict[str, str]) -> dict[str, int]:
     return {rel: n for rel, n in counts.items() if n}
 
 
+def _parses(source: str) -> bool:
+    try:
+        parse_cache.parse(source)
+    except (SyntaxError, ValueError):
+        return False
+    return True
+
+
+@functools.lru_cache(maxsize=1)
 def _read_all() -> dict[str, str]:
+    """Files read AND parsed; the reach floor binds to these, not to the candidates listed (#19149).
+
+    Memoised (#20814): 2 tests read the same sweep.
+    """
     files = {}
     for rel in REACH.examined(_ROOT):
         try:
-            files[rel] = (_ROOT / rel).read_text(encoding="utf-8")
+            text = (_ROOT / rel).read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
+        if _parses(text):
+            files[rel] = text
+    REACH.completed(len(files), _ROOT)
     return files
 
 
@@ -169,8 +186,10 @@ def test_calling_the_helper_is_clean_and_the_home_module_is_exempt() -> None:
     assert measure({_HOME: _READ, "autobot-backend/x.py": _READ}) == {"autobot-backend/x.py": 2}
 
 
-def test_an_unparsable_file_is_not_a_crash() -> None:
+def test_an_unparsable_file_is_not_a_crash_and_is_not_a_parse() -> None:
     assert inline_sites("def (:\n") == 0
+    assert not _parses("def (:\n")
+    assert _parses(_HELPER)
 
 
 def test_skip_dirs_use_repo_relative_parts() -> None:

@@ -54,9 +54,19 @@ def test_redis_username_wins_over_the_autobot_name(monkeypatch):
     assert RedisDbConfig(name="main", db=0).username == "first"
 
 
-def test_a_yaml_database_entry_carries_its_username():
-    config = RedisConfigLoader._parse_database_config("main", {"db": 0, "username": "default"})
+def test_a_yaml_database_entry_carries_the_shared_endpoint_username():
+    """#19232: a YAML entry connects with the ONE resolved endpoint's credentials."""
+    endpoint = {"host": "127.0.0.1", "port": 6379, "password": _PW, "username": "default"}
+    config = RedisConfigLoader._parse_database_config("main", {"db": 0}, endpoint)
     assert config.username == "default"
+
+
+def test_a_yaml_database_entry_cannot_name_its_own_username(caplog):
+    """A per-entry username would be a second auth path (#19232): ignored, and said so."""
+    endpoint = {"host": "127.0.0.1", "port": 6379, "password": None, "username": None}
+    config = RedisConfigLoader._parse_database_config("main", {"db": 0, "username": "other"}, endpoint)
+    assert config.username is None
+    assert "ignoring ['username']" in caplog.text
 
 
 def test_the_async_pool_gets_the_username():
@@ -66,12 +76,12 @@ def test_the_async_pool_gets_the_username():
 
 def test_the_sync_pool_gets_the_username():
     config = RedisDbConfig(name="main", db=0, host="127.0.0.1", password=_PW, username="default")
-    pool = _manager()._create_sync_pool_with_keepalive("main", config)
+    pool = _manager().build_sync_pool("main", config)
     assert pool.connection_kwargs["username"] == "default"
 
 
 def test_no_username_keeps_the_password_only_pool():
     config = RedisDbConfig(name="main", db=0, host="127.0.0.1", password=_PW)
-    pool = _manager()._create_sync_pool_with_keepalive("main", config)
+    pool = _manager().build_sync_pool("main", config)
     assert "username" not in pool.connection_kwargs
     assert pool.connection_kwargs["password"] == _PW

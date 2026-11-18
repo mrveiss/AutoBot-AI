@@ -30,6 +30,7 @@ from knowledge.backends.base import (
     WhereDocument,
 )
 from knowledge.backends.hnsw_params import configuration_from_metadata
+from knowledge.backends.where_filter import matches_where
 
 
 def _cosine_distance(a: Sequence[float], b: Sequence[float]) -> float:
@@ -42,26 +43,6 @@ def _cosine_distance(a: Sequence[float], b: Sequence[float]) -> float:
     if da == 0 or db == 0:
         return 1.0
     return 1.0 - (num / (da * db))
-
-
-def _match_field(actual: Any, expected: Any) -> bool:
-    """Match one metadata field against a plain value or a single-key operator dict.
-
-    Issue #12623: extended from bare equality to also support ``$ne`` (the
-    operator the chat-RAG quarantine filter — #12622 — and this repo's
-    knowledge base use to exclude the ``research`` collection). Missing
-    metadata (``actual is None``) matches ``$ne`` — same "absent field passes"
-    semantics verified empirically against real ChromaDB in #13010.
-    """
-    if isinstance(expected, dict):
-        if "$ne" in expected:
-            return actual != expected["$ne"]
-        if "$eq" in expected:
-            return actual == expected["$eq"]
-        if "$nin" in expected:  # #18820: the serving clause once several trust states are withheld
-            return actual not in expected["$nin"]
-        return False  # unsupported operator -> fail-safe: no match
-    return actual == expected
 
 
 def _check_where(where: Where | None) -> None:
@@ -81,22 +62,8 @@ def _check_where(where: Where | None) -> None:
 
 
 def _match_where(meta: Metadata | None, where: Where | None) -> bool:
-    """Minimal ``where`` filter: equality plus ``$ne``/``$eq``/``$nin`` on top-level keys, and ``$and``.
-
-    ``$and`` (#18820) is here because the shared grounding filter is an ``$and`` of the
-    quarantine and serving clauses. The rest of ChromaDB's where syntax (``$or``, ``$in`` ...)
-    is out of scope for the in-memory fake — tests that need it should use ChromaDB
-    directly or extend this helper.
-    """
-    if not where:
-        return True
-    if "$and" in where:
-        return all(_match_where(meta, clause) for clause in where["$and"])
-    for key, expected in where.items():
-        actual = meta.get(key) if meta is not None else None
-        if not _match_field(actual, expected):
-            return False
-    return True
+    """Evaluate ``where`` with the shared ChromaDB-semantics evaluator (#18874)."""
+    return matches_where(meta, where)
 
 
 class InMemoryCollection(BaseCollection):

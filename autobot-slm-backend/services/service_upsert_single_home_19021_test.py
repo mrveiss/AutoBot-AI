@@ -20,11 +20,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 _CORE = "services/service_upsert.py"
-# Known third copy, tracked in #19059; delete this entry when it moves onto the core -- the
-# stale-entry check below fails until it is deleted.
-_KNOWN_FORKS = {"services/service_orchestrator.py:_update_service_record"}
+_KNOWN_FORKS: set[str] = set()  # the third copy moved onto the core (#19059)
 _FORK_FIXTURE = """
 async def _upsert_service(db, node_id, name):
     r = await db.execute(select(Service).where(Service.node_id == node_id, Service.service_name == name))
@@ -99,9 +99,9 @@ def _sources() -> dict[str, ast.AST]:
     out = {}
     for path in _SLM_ROOT.rglob("*.py"):
         rel = path.relative_to(_SLM_ROOT).as_posix()
-        if rel.endswith("_test.py") or rel.startswith(("tests/", "migrations/", "venv/", ".venv/")) or "/test_" in rel:
+        if rel.startswith(("tests/", "migrations/", "venv/", ".venv/")) or "/test_" in rel:
             continue
-        if path.name.startswith("test_") or path.name == "conftest.py":
+        if is_test_filename(path.name, include_js=False):
             continue
         out[rel] = ast.parse(path.read_text(encoding="utf-8"))
     return out
@@ -142,7 +142,7 @@ def test_both_callers_delegate_and_keep_no_query_or_guard_of_their_own():
     sources = _sources()
     callers = {
         "api/services.py": _find(sources["api/services.py"], "_upsert_service"),
-        "services/reconciler.py": _find(sources["services/reconciler.py"], "_upsert_service"),
+        "services/reconciler.py": _find(sources["services/reconciler.py"], "_apply_service"),
     }
     for rel, fn in callers.items():
         calls = _calls(fn)

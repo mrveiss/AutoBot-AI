@@ -101,7 +101,6 @@ def _site_total(root: Path) -> int:
 REACH = declare(
     "egress-default-outbound-call-sweep",
     discover=_files_with_outbound_calls,
-    floor=150,
     growth=60,
     what="python files making outbound HTTP calls",
     roots=("autobot-", "autobot_shared/", "debug/", "plugins/", "scripts/", "pipeline-scripts/"),
@@ -115,11 +114,10 @@ def _outbound_call_sites(root: Path) -> list[str]:
 
 #: Outbound call SITES (not files) the sweep must find -- the files floor alone cannot see a detector
 #: that lost a client kind but still finds one call per file. Migrated from a hand-rolled
-#: ``SITE_FLOOR = 400`` (#16147); pinned mid-window from the measured population.
+#: ``SITE_FLOOR = 400`` (#16147).
 SITES = declare(
     "egress-default-outbound-call-sites",
     discover=_outbound_call_sites,
-    floor=443,  # measured: 473 sites, window [413, 473]
     growth=60,
     what="outbound HTTP call sites (detected + declared) in the egress sweep",
     roots=("autobot-", "autobot_shared/", "debug/", "plugins/", "scripts/", "pipeline-scripts/"),
@@ -367,10 +365,15 @@ def test_an_asgi_client_with_network_mounts_is_still_an_outbound_call() -> None:
 
 
 def test_known_live_misses_are_now_found() -> None:
-    """The review's three live misses: an aliased session under ``with`` and an httpx client."""
+    """The review's live misses: an aliased session under ``with`` and an httpx client.
+
+    provider_auth had two ``ClientSession`` sites (device_initiate, device_poll); #19241/#19259 folded both into
+    the single ``_post_form`` helper, which calls ``assert_public_egress`` first (api/provider_auth.py), so one
+    session site remains and the recorded count is 1 (measured: the other site was removed, not hidden).
+    """
     found = scan_paths(repo_root(), ["autobot-backend/api/provider_auth.py", "autobot-backend/content_reach/_http.py"])
     # By kind, not line number: a line pin breaks on every unrelated edit to the file (#17576).
-    assert [s.kind for s in found["autobot-backend/api/provider_auth.py"]] == ["session", "session"]
+    assert [s.kind for s in found["autobot-backend/api/provider_auth.py"]] == ["session"]
     assert 68 in {s.lineno for s in found["autobot-backend/content_reach/_http.py"]}
 
 
@@ -383,8 +386,12 @@ def test_declared_registry_is_part_of_the_census() -> None:
 
 def test_the_sweep_reaches_a_known_outbound_caller() -> None:
     """A known positive, so an empty sweep cannot read as a clean tree."""
-    found = scan_paths(repo_root(), ["autobot-backend/knowledge/connectors/atlassian_base.py"])
-    assert found, "atlassian_base.py makes tracked_request calls; the detector found nothing"
+    rel = "autobot-backend/knowledge/connectors/atlassian_base.py"
+    found = scan_paths(repo_root(), [rel])
+    # The exact key: an `(UNPARSED)` entry is a non-empty dict too, and must not satisfy this.
+    assert rel in found and any(
+        s.kind == "manager" for s in found[rel]
+    ), "atlassian_base.py makes tracked_request calls; the detector found no site under its own key"
 
 
 def test_the_sweep_population_floors() -> None:

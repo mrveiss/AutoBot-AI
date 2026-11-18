@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 
 from autobot_shared.logging_manager import get_logger
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -218,7 +218,7 @@ async def test_api_integration():
         # Test health endpoint
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(get_test_backend_url() + "/api/alerts/health") as response:
+                async with session.get(live_backend_url() + "/api/alerts/health") as response:
                     if response.status == 200:
                         data = await response.json()
                         logger.info(f"✅ Health check passed: {data['status']}")

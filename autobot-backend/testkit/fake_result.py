@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterator, List
+from typing import Any, Iterator, List, Optional
 
 from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 
@@ -30,8 +30,12 @@ class FakeScalars:
 class FakeResult:
     """A fixed list of rows with the read methods production code calls on a ``Result``."""
 
-    def __init__(self, rows: Any = ()) -> None:
+    def __init__(self, rows: Any = (), rowcount: Optional[int] = None) -> None:
         self._rows: List[Any] = list(rows)
+        #: What a write's ``CursorResult.rowcount`` would say. ``None`` means the canned
+        #: answer does not model a write; queue ``FakeResult(rowcount=0)`` to test the
+        #: "matched nothing" branch (e.g. a lost RUNNING claim, #19582).
+        self.rowcount = rowcount
 
     def scalar_one_or_none(self) -> Any:
         if len(self._rows) > 1:

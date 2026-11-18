@@ -13,6 +13,7 @@ aliases pointing here.
 from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.spend_recording import report_spend
 from autobot_shared.ssot_config import config as ssot_config
 
 from ..models import LLMRequest, LLMResponse
@@ -21,6 +22,9 @@ from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics, disabled_route
 
 logger = get_logger(__name__)
+
+# Where the Claude escalation's spend is attributed (#19650).
+ESCALATION_SPEND_SITE = "complexity_router_escalation"
 
 
 class ComplexityRouter:
@@ -177,6 +181,7 @@ class ComplexityRouter:
                 logger.warning("ComplexityRouter: Anthropic provider not available; falling through")
                 return None
             response = await claude.chat_completion(escalation_request)
+            await report_spend(response, site=ESCALATION_SPEND_SITE, metadata=escalation_request.metadata)
             if response.error:
                 logger.warning(
                     "ComplexityRouter: Claude escalation returned error=%s; falling through",

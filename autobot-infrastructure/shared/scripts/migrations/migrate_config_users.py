@@ -155,7 +155,6 @@ class ConfigUserMigrator:
             slug=self.org_slug,
             description="Migrated from config-based authentication",
             settings={},
-            subscription_tier="free",
             max_users=-1,  # Unlimited
             is_active=True,
         )

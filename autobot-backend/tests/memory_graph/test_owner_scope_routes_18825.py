@@ -82,7 +82,10 @@ class TestGraphRagRoutes:
         service.graph_aware_search = AsyncMock(return_value=([], metrics))
 
         await graph_rag_search(
-            search_request=GraphRAGSearchRequest(query="redis config"), service=service, tenant=ALICE_TENANT
+            search_request=GraphRAGSearchRequest(query="redis config"),
+            service=service,
+            tenant=ALICE_TENANT,
+            current_user={"role": "user"},
         )
 
         assert service.graph_aware_search.await_args.kwargs["owner"] == ALICE

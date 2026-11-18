@@ -41,7 +41,7 @@ import asyncio
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
 
 from api.schemas_task_workspace import (
     CheckpointRestoreRequest,
@@ -54,6 +54,7 @@ from api.schemas_task_workspace import (
 from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
 from auth_middleware import check_admin_permission
+from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.websocket_subprotocol import accept_websocket
 from services.docker_task_workspace import (
@@ -240,7 +241,7 @@ async def workspace_shell(
     # Authentication (bearer header / cookie-session / internal-service key) + admin
     # is decided solely here, so cookie-authenticated admins and internal-key clients
     # are no longer locked out by an Authorization-header precondition (#11016).
-    if not _authenticate_ws_admin(websocket):
+    if not await _authenticate_ws_admin(websocket):
         await _ws_error(websocket, "Authentication required (admin)")
         await websocket.close(code=1008)
         return
@@ -276,8 +277,10 @@ async def workspace_shell(
                 pass
             elif msg.get("type") == "ping":
                 await _ws_send(websocket, "pong", "")
-    except (WebSocketDisconnect, RuntimeError):
-        pass
+    except Exception as closed:
+        if not is_client_disconnect(closed, websocket=websocket):
+            raise
+        log_client_disconnect(logger, closed, "task_workspace_exec_stream")
     finally:
         read_task.cancel()
         try:
@@ -352,11 +355,11 @@ async def _ws_error(websocket: WebSocket, content: str) -> None:
     await _ws_send(websocket, "error", content)
 
 
-def _authenticate_ws_admin(websocket: WebSocket) -> bool:
+async def _authenticate_ws_admin(websocket: WebSocket) -> bool:
     """Fail-closed auth+authz for the shell WS — delegates to the shared,
     audited implementation in :mod:`api.ws_security` (#12178).
     """
-    return authenticate_ws_admin(websocket)
+    return await authenticate_ws_admin(websocket)
 
 
 def _info_to_response(info: WorkspaceInfo) -> WorkspaceInfoResponse:

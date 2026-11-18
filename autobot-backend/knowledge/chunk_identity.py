@@ -16,11 +16,14 @@ legacy chunk and a re-indexed copy of it resolve to the same id.
 
 Precedence, fixed (first non-empty wins):
 
-1. ``metadata["chunk_id"]``   -- stored at write time; the only id that is a fact, not a guess
-2. top-level ``chunk_id``     -- a result already normalised by a retriever or reranker
-3. the rebuilt legacy id      -- doc / seed chunks written before the stamp (no data rewrite)
-4. ``source_path``            -- last resort; identifies the file, not the chunk
-5. ``""``
+1. ``metadata["chunk_id"]``        -- stored at write time; the only id that is a fact, not a guess
+2. ``metadata["chunk_store_id"]``  -- the store row id a retriever carried through for a row with no
+                                      stamp; the only way to tell oversize split siblings
+                                      (``base_L0`` / ``base_R0``) apart, as their metadata is equal
+3. top-level ``chunk_id``          -- a result already normalised by a retriever or reranker
+4. the rebuilt legacy id           -- doc / seed chunks written before the stamp (no data rewrite)
+5. ``source_path``                 -- last resort; identifies the file, not the chunk
+6. ``""``
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ import hashlib
 from typing import Any, Mapping
 
 DOC_SOURCE = "autobot_documentation"
+DOC_SEARCH_SOURCE = "autobot_docs"  # what DocIndexerService.search relabels a doc hit's source to
+STORE_ID_KEY = "chunk_store_id"
 SEED_SOURCE = "cognition_store"
 DOC_ID_LENGTH = 12  # oversize splits append "_L<depth>" / "_R<depth>" to the base id
 SEED_ID_LENGTH = 16
@@ -53,11 +58,16 @@ def stamp_chunk_id(metadata: Mapping[str, Any], chunk_id: str) -> dict[str, Any]
     return {**metadata, "chunk_id": chunk_id}
 
 
+def carry_store_id(metadata: Mapping[str, Any], row_id: str) -> dict[str, Any]:
+    """Copy of a retrieved row's *metadata* carrying its store row id; a read-side copy, never a write."""
+    return {**metadata, STORE_ID_KEY: row_id} if row_id else dict(metadata)
+
+
 def legacy_chunk_id(metadata: Mapping[str, Any]) -> str:
     """Rebuild the id of a chunk written before ``chunk_id`` was stored; ``""`` when not derivable."""
     source = metadata.get("source")
     try:
-        if source == DOC_SOURCE:
+        if source in (DOC_SOURCE, DOC_SEARCH_SOURCE):
             return doc_chunk_id(metadata["file_path"], metadata["section"], int(metadata["chunk_index"]))
         if source == SEED_SOURCE:
             return seed_chunk_id(metadata["seed_collection"], metadata["relative_path"], int(metadata["chunk_index"]))
@@ -77,6 +87,7 @@ def resolve_chunk_id(result: Any) -> str:
     metadata = _read(result, "metadata", {})
     return str(
         metadata.get("chunk_id")
+        or metadata.get(STORE_ID_KEY)
         or _read(result, "chunk_id", "")
         or legacy_chunk_id(metadata)
         or _read(result, "source_path", "")

@@ -87,14 +87,13 @@ async def fix_dimensions():
     logger.info("\nRedis cleanup complete!")
     logger.info("\nNow testing with correct embedding model...")
 
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
     # Create a fresh knowledge base
-    kb = KnowledgeBase()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
     logger.info(f"Knowledge base will use Redis DB: {kb.redis_db}")
-
-    # Initialize it
-    await kb.ainit()
     logger.info("Knowledge base initialized")
 
     # Test adding a simple document

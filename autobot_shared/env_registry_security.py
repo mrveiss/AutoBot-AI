@@ -415,3 +415,170 @@ register_env_var(
         range=(0, 3600),
     )
 )
+
+# --- LLM provider sign-in (#19241) -------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_OAUTH_UNUSABLE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "How long a signed-in LLM provider token whose refresh failed is skipped before "
+            "another refresh is tried (llm_shared/provider_token_refresh.py). While skipped, "
+            "calls fall through to the next credential (the system token, then the API key). "
+            "Floored at 60 so the backoff cannot become a re-POST on every call."
+        ),
+        component="auth",
+        range=(60, None),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS",
+        type=str,
+        default="",
+        description=(
+            "Comma-separated exact origins (scheme://host[:port]) an LLM tracing destination may use "
+            "(#19933), e.g. a self-hosted collector on a private address. Empty: none. A listed origin is "
+            "allowed even when private or loopback; link-local, cloud-metadata and unspecified hosts are "
+            "refused, and an entry with userinfo, a backslash or other non-strict shape never matches. "
+            "SSOT service origins are not trusted for tracing."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL",
+        type=bool,
+        default=False,
+        description=(
+            "Allow an LLM tracing destination on a public address that is not listed in "
+            "AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS (#19933). Off: a tracing key alone never moves prompt "
+            "metadata off the install, and the destination is refused at startup. On: a public destination "
+            "is allowed; private, loopback and link-local ones are still refused."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_INCLUDE_CONTENT",
+        type=bool,
+        default=False,
+        description=(
+            "Send prompt and response text to an enabled LLM tracing destination (#19933). "
+            "Off: only metadata (ids, model, token usage, latency) is sent. "
+            "On: the text is sent after the outbound credential redaction."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S",
+        type=int,
+        default=300,
+        description="Seconds between passes that push every linked person's copy to the SLM (#10200). Minimum 30.",
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds before a person copy the SLM refused as last platform admin is pushed again (#21018). "
+            "Range 60 to 604800."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LAST_ADMIN_RETRY_AFTER_S",
+        type=int,
+        default=1,
+        description=(
+            "Retry-After seconds sent with the 503 for a transient last-platform-admin lock failure (#21018). "
+            "Range 1 to 30."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_TTL_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the per-person lock on a copy push is held before it expires; "
+            "the SLM POST timeout is derived from it (#10200)."
+        ),
+        component="backend",
+        range=(10, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_WAIT_S",
+        type=int,
+        default=15,
+        description=(
+            "Seconds a push waits for another worker's lock on the same person " "before it records a failure (#10200)."
+        ),
+        component="backend",
+        range=(1, 120),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_POLL_MS",
+        type=int,
+        default=200,
+        description="Milliseconds between attempts to take that per-person lock (#10200).",
+        component="backend",
+        range=(20, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
+        type=int,
+        default=10,
+        description=(
+            "Members whose token-revocation marker is written at once when an organisation is "
+            "deactivated or deleted (#20443); bounds the store's concurrent writes however large the "
+            "organisation is; read by autobot_shared/user_management/password_epoch.py."
+        ),
+        component="security",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between role_denied audit records for one user on one route (#16333); repeats in "
+            "the window are counted into the next record, so a non-admin cannot flood the audit log; "
+            "read by autobot-backend/auth_rbac.py."
+        ),
+        component="security",
+        range=(1, 86400),
+    )
+)

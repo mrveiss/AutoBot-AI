@@ -15,6 +15,8 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 
 _PINNED: dict[tuple[str, str], dict[str, str]] = {
@@ -74,7 +76,7 @@ def _members(rel: str, cls: str) -> dict[str, str]:
 
 
 def _members_from_source(source: str, cls: str, rel: str = "<source>") -> dict[str, str]:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == cls:
             return {

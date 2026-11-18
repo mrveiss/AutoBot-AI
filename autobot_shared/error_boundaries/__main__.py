@@ -8,7 +8,7 @@ import argparse
 import json
 
 from autobot_shared.error_boundaries import error_boundary, get_error_statistics
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -52,4 +52,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

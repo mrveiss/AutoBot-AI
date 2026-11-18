@@ -28,6 +28,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from code_embedding_generator import get_code_embedding_generator
 from constants.ttl_constants import TTL_1_HOUR, TTL_24_HOURS
 from npu_semantic_search import get_npu_search_engine
+from utils.file_categorization import SKIP_DIRS
 from worker_node import WorkerNode
 
 from .base_agent import AgentRequest
@@ -44,8 +45,7 @@ logger = get_logger(__name__)
 # Issue #380: Module-level tuple for code element types
 _CODE_ELEMENT_TYPES = ("functions", "classes", "imports", "variables")
 
-# Issue #380: Module-level frozenset for ignored directories in code search
-_IGNORED_DIRS = frozenset({"node_modules", "__pycache__", ".git", "dist", "build", "target"})
+_IGNORED_DIRS = frozenset(SKIP_DIRS)  # Issue #380: canonical ignored dirs for code search
 
 
 @dataclass

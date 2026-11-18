@@ -30,6 +30,7 @@ from typing import Any
 import websockets
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import first_time
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from config import config_manager
@@ -448,8 +449,8 @@ class VNCServerManager:
                 websockify_cmd,
                 "--web",
                 config.path.novnc_path,
-                "--cert=/etc/autobot/certs/server-cert.pem",
-                "--key=/etc/autobot/certs/server-key.pem",
+                f"--cert={config.tls.remote_cert_dir}/server-cert.pem",
+                f"--key={config.tls.remote_cert_dir}/server-key.pem",
                 "--ssl-only",
                 f"localhost:{novnc_port}",
                 f"localhost:{vnc_port}",
@@ -736,7 +737,6 @@ class DesktopStreamingManager:
         # H2: per-process latch — once any Redis op fails, stay in fallback mode.
         # None = not yet probed; True = working; False = latched to fallback.
         self._redis_available: bool | None = None
-        self._redis_warning_logged = False
         self._subscriber_task: asyncio.Task | None = None
 
         logger.info("Desktop Streaming Manager initialized (worker=%s)", _WORKER_ID)
@@ -790,12 +790,12 @@ class DesktopStreamingManager:
             return None
         r = await self._get_redis()
         if r is None:
-            if not self._redis_warning_logged:
+            # Once per process (#21071): the manager is a lazy singleton, so the shared registry is its scope.
+            if first_time(logger.name, "redis_unavailable"):
                 logger.warning(
                     "DesktopStreamingManager: Redis unavailable — sessions not shared "
                     "across workers; cross-worker broadcast disabled"
                 )
-                self._redis_warning_logged = True
             self._redis_available = False
             return None
         if self._redis_available is None:

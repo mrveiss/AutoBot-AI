@@ -19,7 +19,7 @@ import { ref, computed, readonly, reactive } from 'vue'
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type {
   ServiceDefinition,
   ServiceActionRequest,
@@ -158,7 +158,7 @@ export function useOrchestrationManagement() {
   // Service Definitions API (from useOrchestration)
   // ===========================================================================
 
-  async function fetchServiceDefinitions(): Promise<ServiceDefinition[]> {
+  async function fetchServiceDefinitions(): Promise<ServiceDefinition[] | null> {
     loading.value = true
     error.value = null
 
@@ -170,7 +170,7 @@ export function useOrchestrationManagement() {
     } catch (e) {
       error.value = extractErrorMessage(e, 'Failed to fetch service definitions')
       logger.error('Failed to fetch service definitions:', e)
-      return []
+      return null
     } finally {
       loading.value = false
     }

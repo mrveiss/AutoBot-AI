@@ -28,10 +28,13 @@ function resetApi() {
   api.getLogForwardingDestinations.mockResolvedValue([])
   api.getNPUWorkers.mockResolvedValue([])
 }
-vi.mock('@/composables/useAutobotApi', () => ({ useAutobotApi: () => api }))
+vi.mock('@/composables/useAutobotApi', () => ({
+  useAutobotApi: () => api,
+  createAutobotBackendClient: () => ({ get: vi.fn().mockResolvedValue({ workers: [] }) }),
+}))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })
-const t = (en as { settings: { admin: Record<string, Record<string, string>> } }).settings.admin
+const t = en.settings.admin
 
 function toggleButton(wrapper: ReturnType<typeof mount>) {
   const label = [t.logForwardingSettings.start, t.logForwardingSettings.stop]
