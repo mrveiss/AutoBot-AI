@@ -19,11 +19,14 @@ Endpoints:
 """
 
 import asyncio
-import json
 from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from api.knowledge_graph_facts import FactsPage
+from api.knowledge_graph_facts import decode_fact_metadata as _decode_fact_metadata
+from api.knowledge_graph_facts import visible_facts_page
+from api.knowledge_graph_sections import graph_sections
 from api.schemas_knowledge import (
     ContextRequest,
     GraphRequest,
@@ -33,13 +36,15 @@ from api.schemas_knowledge import (
     KnowledgeMultiSourceStatsResponse,
     SearchRequest,
 )
+from api.schemas_knowledge_graph import CURSOR_PATTERN
 from auth_middleware import get_current_user
-from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.graph_limits import GRAPH_MAX_OFFSET
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.relations import relations_by_direction
+from knowledge.root_read import admin_read_audit
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -105,20 +110,6 @@ async def _expand_fact_relations(
             rel.get("source_fact"), ownership_manager, user_id, user_org_id, user_group_ids, is_admin
         ):
             _process_incoming_relation(rel, fact_id, related_ids, results)
-
-
-def _decode_fact_metadata(raw_fact: Dict[str, Any]) -> Dict[str, Any]:
-    """knowledge/facts.py hset()s "metadata" as a JSON *string* (#16665 review:
-    wrapping it un-decoded read every fact as owner_id=None, denying everyone
-    including the owner)."""
-    raw = raw_fact.get("metadata")
-    if not isinstance(raw, str):
-        return raw if isinstance(raw, dict) else {}
-    try:
-        decoded = json.loads(raw)
-    except (TypeError, ValueError):
-        return {}
-    return decoded if isinstance(decoded, dict) else {}
 
 
 async def _related_fact_is_accessible(
@@ -361,33 +352,33 @@ async def search(req: Request, body: SearchRequest, current_user: Dict = Depends
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    is_admin = is_admin_role(current_user.get("role"))
+    async with admin_read_audit(current_user, user_id, "kb.multi_source_search") as is_admin:  # #19860
 
-    result = {
-        "success": True,
-        "query": body.query,
-        "facts": [],
-        "related_facts": [],
-        "documentation": [],
-        "sources_searched": [],
-    }
+        result = {
+            "success": True,
+            "query": body.query,
+            "facts": [],
+            "related_facts": [],
+            "documentation": [],
+            "sources_searched": [],
+        }
 
-    # Search facts (Issue #620: uses helper)
-    if "facts" in body.include_sources and kb is not None:
-        await _search_facts(kb, body.query, body.limit, result, user_id, user_org_id, user_group_ids, is_admin)
+        # Search facts (Issue #620: uses helper)
+        if "facts" in body.include_sources and kb is not None:
+            await _search_facts(kb, body.query, body.limit, result, user_id, user_org_id, user_group_ids, is_admin)
 
-    # Expand with relations (Issue #620: uses helper)
-    if "relations" in body.include_sources and body.expand_relations and kb is not None:
-        await _search_relations(kb, result, user_id, user_org_id, user_group_ids, is_admin)
+        # Expand with relations (Issue #620: uses helper)
+        if "relations" in body.include_sources and body.expand_relations and kb is not None:
+            await _search_relations(kb, result, user_id, user_org_id, user_group_ids, is_admin)
 
-    # Search documentation (Issue #620: uses helper)
-    if "documentation" in body.include_sources and body.doc_results > 0:
-        _search_documentation(body.query, body.doc_results, body.min_score, result)
+        # Search documentation (Issue #620: uses helper)
+        if "documentation" in body.include_sources and body.doc_results > 0:
+            _search_documentation(body.query, body.doc_results, body.min_score, result)
 
-    # Calculate totals
-    result["total_results"] = len(result["facts"]) + len(result["related_facts"]) + len(result["documentation"])
+        # Calculate totals
+        result["total_results"] = len(result["facts"]) + len(result["related_facts"]) + len(result["documentation"])
 
-    return result
+        return result
 
 
 @router.get("/stats", response_model=KnowledgeMultiSourceStatsResponse)
@@ -476,11 +467,11 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
     - Metadata about retrieved content
 
     #16665: every fact entering the context is filtered to what the calling
-    user may see -- this feeds an LLM prompt, not just a display list.
+    user may see -- this feeds an LLM prompt, not just a display list. Owner ruling
+    2026-10-26: an admin is an ordinary caller here, with no visibility bypass.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    is_admin = is_admin_role(current_user.get("role"))
 
     context_parts: List[str] = []
     citations: List[Dict] = []
@@ -497,7 +488,6 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
                 user_org_id=user_org_id,
                 user_group_ids=user_group_ids,
                 ownership_manager=getattr(kb, "ownership_manager", None),
-                is_admin=is_admin,
             )
             total_length = _process_fact_results(
                 fact_results,
@@ -521,7 +511,7 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
                 user_id,
                 user_org_id,
                 user_group_ids,
-                is_admin,
+                is_admin=False,
             )
         except Exception as e:
             logger.warning("Relation context failed: %s", e)
@@ -630,46 +620,6 @@ def _process_category_tree(
         children = category.get("children", [])
         if children:
             _process_category_tree(children, nodes, edges, node["id"])
-
-
-async def _get_facts_for_graph(
-    kb: Any,
-    category_filter: str | None,
-    max_facts: int,
-    user_id: str,
-    user_org_id: str | None,
-    user_group_ids: List[str],
-    is_admin: bool,
-) -> List[Dict[str, Any]]:
-    """Get facts for the graph with optional category filtering.
-
-    Issue #707: Extracted helper for multi-source graph building.
-
-    #16665: the returned facts (and, transitively, every fact_id the graph's
-    relation edges reach -- _get_fact_relations_for_graph only ever sees IDs
-    this function already returned) are filtered to what *user_id* may see.
-    """
-    if category_filter:
-        # get_facts_in_category's facts carry metadata JSON-encoded, unlike
-        # kb.search()'s already-decoded results -- _decode_fact_metadata fixes
-        # the shape before filtering (#16665 review).
-        result = await kb.get_facts_in_category(category_id=category_filter, include_descendants=True, limit=max_facts)
-        raw_facts = result.get("facts", []) if result.get("success") else []
-        facts = [{**fact, "metadata": _decode_fact_metadata(fact)} for fact in raw_facts]
-    else:
-        # Search for recent facts
-        # Issue #13009: exclude quarantined research facts (#12622).
-        result = await kb.search("*", top_k=max_facts, filters=RESEARCH_QUARANTINE_FILTER)
-        facts = result.get("results", [])
-
-    return await filter_search_results_by_permission(
-        facts,
-        user_id=user_id,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        ownership_manager=getattr(kb, "ownership_manager", None),
-        is_admin=is_admin,
-    )
 
 
 async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relations: int = 100) -> List[Dict[str, Any]]:
@@ -875,55 +825,52 @@ async def get_multi_source_graph(req: Request, body: GraphRequest, current_user:
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    is_admin = is_admin_role(current_user.get("role"))
+    async with admin_read_audit(current_user, user_id, "kb.multi_source_graph") as is_admin:  # #19860
+        nodes: List[Dict[str, Any]] = []
+        edges: List[Dict[str, Any]] = []
 
-    nodes: List[Dict[str, Any]] = []
-    edges: List[Dict[str, Any]] = []
+        # Process category tree and get category map
+        category_map = await _process_category_tree_for_graph(kb, body, nodes, edges)
 
-    # Process category tree and get category map
-    category_map = await _process_category_tree_for_graph(kb, body, nodes, edges)
+        # Get facts for the graph
+        page = FactsPage(cursor=body.cursor, failed=True)  # no KB / unreadable listing: failed, not empty or success
+        if kb is not None:
+            try:
+                scope = (kb, body.category_filter, body.max_facts, body.offset, user_id, user_org_id, user_group_ids)
+                page = await visible_facts_page(*scope, is_admin, cursor=body.cursor)
+            except Exception as e:
+                logger.warning("Failed to get facts: %s", e)
+        facts = page.facts
 
-    # Get facts for the graph
-    facts: List[Dict[str, Any]] = []
-    if kb is not None:
-        try:
-            facts = await _get_facts_for_graph(
-                kb, body.category_filter, body.max_facts, user_id, user_org_id, user_group_ids, is_admin
-            )
-        except Exception as e:
-            logger.warning("Failed to get facts: %s", e)
+        # If no category nodes from tree, create them dynamically from facts
+        if body.include_categories and not category_map and facts:
+            category_map = _create_dynamic_category_nodes(facts, nodes, edges)
 
-    # If no category nodes from tree, create them dynamically from facts
-    if body.include_categories and not category_map and facts:
-        category_map = _create_dynamic_category_nodes(facts, nodes, edges)
+        # Process facts into nodes and create category-fact edges
+        fact_ids = _process_facts_into_nodes(facts, nodes, edges, category_map)
 
-    # Process facts into nodes and create category-fact edges
-    fact_ids = _process_facts_into_nodes(facts, nodes, edges, category_map)
+        # Update category fact counts
+        _update_category_fact_counts(nodes, facts)
 
-    # Update category fact counts
-    _update_category_fact_counts(nodes, facts)
+        # Get fact relations if requested
+        if body.include_relations and kb is not None and fact_ids:
+            try:
+                fact_relations = await _get_fact_relations_for_graph(kb, fact_ids)
+                edges.extend(fact_relations)
+            except Exception as e:
+                logger.warning("Failed to get fact relations: %s", e)
 
-    # Get fact relations if requested
-    if body.include_relations and kb is not None and fact_ids:
-        try:
-            fact_relations = await _get_fact_relations_for_graph(kb, fact_ids)
-            edges.extend(fact_relations)
-        except Exception as e:
-            logger.warning("Failed to get fact relations: %s", e)
-
-    return {
-        "success": True,
-        "data": {
-            "entities": nodes,
-            "relations": edges,
-        },
-        "stats": {
-            "total_entities": len(nodes),
-            "total_relations": len(edges),
-            "categories": len([n for n in nodes if n["type"] == "category"]),
-            "facts": len([n for n in nodes if n["type"] == "fact"]),
-        },
-    }
+        return {
+            "success": True,
+            "data": {"entities": nodes, "relations": edges},
+            "stats": {
+                "sections": await graph_sections(kb, body, nodes, edges, is_admin, page, current_user),
+                "total_entities": len(nodes),
+                "total_relations": len(edges),
+                "categories": len([n for n in nodes if n["type"] == "category"]),
+                "facts": len([n for n in nodes if n["type"] == "fact"]),
+            },
+        }
 
 
 @router.get("/graph", response_model=KnowledgeMultiSourceGraphResponse)
@@ -936,6 +883,9 @@ async def get_multi_source_graph_simple(
     req: Request,
     max_facts: int = Query(50, ge=1, le=200, description="Maximum facts to include"),
     include_categories: bool = Query(True, description="Include category nodes"),
+    offset: int = Query(0, ge=0, le=GRAPH_MAX_OFFSET, description="Facts and bucket records to skip"),
+    cursor: str | None = Query(None, pattern=CURSOR_PATTERN, description="Resume the facts scan (see GraphRequest)"),
+    include_buckets: bool = Query(True),
     current_user: Dict = Depends(get_current_user),
 ):
     """
@@ -944,8 +894,6 @@ async def get_multi_source_graph_simple(
     Returns a multi-source knowledge graph with default settings.
     For more control, use POST /multi-source/graph with GraphRequest body.
     """
-    body = GraphRequest(
-        max_facts=max_facts,
-        include_categories=include_categories,
-    )
+    body = GraphRequest(max_facts=max_facts, include_categories=include_categories, offset=offset, cursor=cursor)
+    body.include_buckets = include_buckets
     return await get_multi_source_graph(req, body, current_user)

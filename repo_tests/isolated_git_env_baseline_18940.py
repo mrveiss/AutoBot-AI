@@ -2,65 +2,44 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Frozen list of test files that still build git repos without `autobot_shared.isolated_git` (#18940).
+"""Test files that build git repos without `autobot_shared.isolated_git`, each a PERMANENT exception (#18940).
 
-The list may only SHRINK. A new offender fails `isolated_git_env_guard_18940_test.py`; an entry
-that was migrated (or left the tree) fails it too until the line is deleted. `FROZEN_TOTAL` caps
-the length, so adding a line also means raising a number a reviewer sees.
-
-Why each file is still here is the value; none is exempt from the goal.
+Owner ruling 2026-10-22: every file outside this list is migrated; the files below stay on their own
+environment for good, each for the reason recorded beside it. The list may only SHRINK: a new offender
+fails `isolated_git_env_guard_18940_test.py`, and an entry that was migrated (or left the tree) fails
+it too until the line is deleted. `FROZEN_TOTAL` caps the length, so adding a line also means raising
+a number a reviewer sees, and every row must be a PERMANENT row (the guard checks the prefix).
 """
 
 from __future__ import annotations
 
-_CONTRACT = (
-    "CONTRACT: the test asserts on the scrub/config behaviour itself, so it builds its own environment on purpose"
-)
-_AUTHOR = "AUTHOR: asserts on the author a fixture configures; needs identity=False and a read of the assertions"
-_BRANCH = (
-    "BRANCH: depends on the default branch name (master today) or branch-guard behaviour; audit before it takes main"
-)
-_PENDING = "PENDING: hand-rolled scrub only; migrate to isolated_git_env()/make_repo() (#18940 follow-up)"
+PERMANENT_PREFIX = "PERMANENT (owner decision #18940, 2026-10-22): "
 
 ALLOWLIST: dict[str, str] = {
-    "autobot-backend/api/git_mcp_env_scrub_15991_test.py": _CONTRACT,
-    "autobot-backend/api/sandbox_files_delete_guard_15777_test.py": _PENDING,
-    "autobot-backend/code_intelligence/co_change_test.py": _AUTHOR,
-    "autobot-backend/code_intelligence/git_history_crawler_test.py": _AUTHOR,
-    "autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard_test.py": _BRANCH,
-    "autobot-infrastructure/shared/scripts/hooks/pre-commit-no-tag-pinned-action_test.py": _BRANCH,
-    "autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch_test.py": _BRANCH,
-    "autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard_test.py": _BRANCH,
-    "autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard_test.py": _BRANCH,
-    "autobot-slm-backend/scripts/sync_deletion_planner_test.py": _BRANCH,
-    "autobot-slm-backend/tests/services/full_tree_drift_test.py": _BRANCH,
-    "autobot-slm-backend/tests/services/git_subprocess_test.py": _BRANCH,
-    "autobot-slm-backend/tests/services/sync_deletions_shallow_bootstrap_test.py": _BRANCH,
-    "autobot-slm-backend/tests/services/sync_deletions_test.py": _BRANCH,
-    "autobot_shared/git_probe_test.py": _CONTRACT,
-    "autobot_shared/paths_test.py": _CONTRACT,
-    "pipeline-scripts/check_baseline_no_growth_test.py": _BRANCH,
-    "repo_tests/commit_msg_hook_17029_test.py": _PENDING,
-    "repo_tests/doc_index_worktree_contamination_16934_test.py": _PENDING,
-    "repo_tests/git_hooks_formatter_dispatch_16923_test.py": _PENDING,
-    "repo_tests/git_hooks_installer_test.py": _PENDING,
-    "repo_tests/git_hooks_post_checkout_precommit_sync_16923_test.py": _PENDING,
-    "repo_tests/git_repo_root_scrub_test.py": _CONTRACT,
-    "repo_tests/hook_self_sync_atomic_test.py": _PENDING,
-    "repo_tests/hooks_path_override_15961_test.py": _CONTRACT,
-    "repo_tests/node_modules_link_traversable_17573_test.py": _PENDING,
-    "repo_tests/one_git_enumeration_15926_test.py": _CONTRACT,
-    "repo_tests/one_static_data_copy_18556_test.py": _CONTRACT,
-    "repo_tests/pre_push_open_pr_cap_17006_test.py": _PENDING,
-    "repo_tests/prepush_budget_18578_test.py": _PENDING,
-    "repo_tests/prepush_hook_sync_17578_test.py": _PENDING,
-    "repo_tests/release_range_test.py": _PENDING,
-    "repo_tests/scan_helpers_vacuity_migrated_test.py": _PENDING,
-    "repo_tests/scan_helpers_vacuity_test.py": _PENDING,
-    "repo_tests/stylelint_changed_files_skip_deletions_17571_test.py": _PENDING,
-    "scripts/lint_conventions_test.py": _PENDING,
-    "scripts/verify_done_test.py": _PENDING,
+    "autobot-backend/api/git_mcp_env_scrub_15991_test.py": PERMANENT_PREFIX
+    + "its subject is an ambient GIT_DIR outranking `-C`; the decoy/validated repos are built with the bare "
+    "`scrubbed_git_env()` so the only environment variable in play is the one under test",
+    "autobot_shared/git_probe_test.py": PERMANENT_PREFIX
+    + "tests `git_probe`, whose contract is that no call shape inherits the ambient env; the fixture "
+    "builds with the bare `scrubbed_git_env()` so the probe's own scrub is the only thing exercised",
+    "autobot_shared/paths_test.py": PERMANENT_PREFIX
+    + "tests `project_root()` resolution against a real main-tree/worktree layout, and `autobot_shared.paths` "
+    "is the module `isolated_git` imports its scrub from, so the fixture keeps its own env "
+    "(`scrubbed_git_env()` plus null global/system config) and does not depend on a helper built on it",
+    "repo_tests/git_repo_root_scrub_test.py": PERMANENT_PREFIX
+    + "asserts on the scrub itself (GIT_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES), so it "
+    "must control exactly which variables reach git rather than take them from a helper",
+    "repo_tests/hooks_path_override_15961_test.py": PERMANENT_PREFIX
+    + "pins git's DEFAULT hook lookup (`core.hooksPath` unset, shared `$GIT_COMMON_DIR/hooks`) against a "
+    "worktree; `isolated_git` documents that it does not force `core.hooksPath`, and the fixture asserts "
+    "the key is unset itself, so it keeps a plain scrubbed env",
+    "repo_tests/one_git_enumeration_15926_test.py": PERMANENT_PREFIX
+    + "tests `tracked_paths`/`exclude=` enumeration against fixtures that demonstrate a GIT_DIR hazard, "
+    "so the repo is built with the bare `scrubbed_git_env()` to keep the enumerator the only variable",
+    "repo_tests/one_static_data_copy_18556_test.py": PERMANENT_PREFIX
+    + "asserts that a global `core.excludesFile` cannot untrack a file in its throwaway tree, i.e. it tests "
+    "the hermetic-config behaviour itself with its own null global/system config",
 }
 
 #: Caps the length of ALLOWLIST; lower it when an entry goes, never raise it.
-FROZEN_TOTAL = 37
+FROZEN_TOTAL = 7

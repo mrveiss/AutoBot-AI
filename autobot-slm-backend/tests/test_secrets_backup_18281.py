@@ -42,13 +42,20 @@ def _load(name: str, rel: str):
 
 
 @pytest.fixture()
-def mods(tmp_path, monkeypatch):
+def real_status_enum(monkeypatch):
     # The harness hands out a MagicMock for models.database, whose BackupStatus.X.value is a
     # truthy mock; the row-state assertions below are only meaningful against the real enum.
+    # Any test that loads a module doing `from models.database import BackupStatus` takes this
+    # fixture, so it never depends on what an earlier test left in sys.modules for that name.
     enums = _load("_real_status_enums_18281", "status_enums.py")
     db_module = sys.modules.get("models.database")
     if db_module is not None:
         monkeypatch.setattr(db_module, "BackupStatus", enums.BackupStatus, raising=False)
+    return enums
+
+
+@pytest.fixture()
+def mods(tmp_path, monkeypatch, real_status_enum):
     try:
         backup = _load("_real_backup_18281", "services/backup.py")
         secrets_backup = _load("_real_secrets_backup_18281", "services/secrets_store_snapshot.py")
@@ -270,7 +277,7 @@ async def test_a_staging_failure_fails_the_row_without_touching_the_store(mods, 
     assert not any("python3" in c for c in service.remote.remote_commands())
 
 
-def test_a_typod_timeout_env_does_not_stop_the_module_loading(monkeypatch):
+def test_a_typod_timeout_env_does_not_stop_the_module_loading(monkeypatch, real_status_enum):
     monkeypatch.setenv("SLM_SECRETS_BACKUP_TIMEOUT_S", "three hundred")
     monkeypatch.setenv("SLM_SECRETS_BACKUP_REMOVE_TIMEOUT_S", "-4")
     module = _load("_real_secrets_snapshot_typo_18281", "services/secrets_store_snapshot.py")

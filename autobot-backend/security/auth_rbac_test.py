@@ -116,10 +116,10 @@ class TestRolePermissionMappings:
         assert user_perms > readonly_perms
 
     def test_shell_execute_only_admin(self):
-        """Shell execute permission should only be granted to admin."""
+        """Shell execute permission should only be granted to admin (and superadmin, derived from admin, #19125)."""
         for role, perms in ROLE_PERMISSIONS.items():
             perm_values = [p.value if hasattr(p, "value") else p for p in perms]
-            if role != Role.ADMIN:
+            if role not in (Role.ADMIN, Role.SUPERADMIN):
                 assert (
                     Permission.SHELL_EXECUTE.value not in perm_values
                 ), f"Role {role} should not have shell execute permission"

@@ -30,22 +30,12 @@ EXCEPTION = "EXCEPTION"
 MIGRATE = "MIGRATE"
 VERDICTS = (EXCEPTION, MIGRATE)
 
-_PROBE = (
-    "health probe of an arbitrary caller-supplied endpoint: fresh short-lived connection per check, no pool by design"
-)
-_SCRIPT_A = "#18553 scripts batch A: standard named db, decode_responses=True; moves to get_redis_client"
-_SCRIPT_B = (
-    "#18553 scripts batch B, owner decision pending: needs decode_responses=False or a raw db-number loop, "
-    "which the canonical client does not offer"
-)
 _SHELL = "shell-embedded python in a pre-install/deploy script; cannot import app code (#1086)"
 _ANSIBLE_ROOT = "autobot-slm-backend/ansible"
 _SCRIPTS = "autobot-infrastructure/shared/scripts"
 
 BASELINE: dict[str, tuple[int, str, str]] = {
     # --- product code -------------------------------------------------------------------------
-    "autobot-backend/utils/distributed_service_discovery.py": (1, EXCEPTION, _PROBE),
-    "autobot-backend/utils/service_discovery.py": (1, EXCEPTION, _PROBE),
     # --- worker, infrastructure, shell --------------------------------------------------------
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/redis_client.py": (
         2,
@@ -59,32 +49,7 @@ BASELINE: dict[str, tuple[int, str, str]] = {
     ),
     f"{_ANSIBLE_ROOT}/deploy-hybrid.sh": (1, EXCEPTION, _SHELL),
     f"{_ANSIBLE_ROOT}/deploy-native.sh": (1, EXCEPTION, _SHELL),
-    "autobot-backend/code_analysis/install.sh": (1, EXCEPTION, _SHELL),
-    "scripts/daily_health_check.py": (
-        1,
-        MIGRATE,
-        "#18553 scripts batch A: literal localhost/db 0 ping; the file already imports autobot_shared",
-    ),
     # --- autobot-infrastructure/shared/scripts ------------------------------------------------
-    f"{_SCRIPTS}/analysis/debug_redis_fields.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/redis_final_analysis.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/redis_vector_analysis.py": (2, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/test_data_layer_debug.py": (5, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/test_redis_comparison.py": (2, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/test_redis_connection.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/test_redis_direct.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/metrics_collector.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/utilities/migrate_codebase_to_chromadb.py": (1, MIGRATE, _SCRIPT_A),
-    f"{_SCRIPTS}/analysis/analyze_redis_db0.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/analysis/check_all_redis_dbs.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/analysis/check_redis_db.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/migrate_redis_databases.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/utilities/init_memory_graph_redis.py": (1, MIGRATE, _SCRIPT_B),
-    f"{_SCRIPTS}/migrations/migrate_category_indexes.py": (
-        1,
-        EXCEPTION,
-        "standalone one-off migration script, decode_responses=False with explicit credentials (#1086)",
-    ),
     f"{_SCRIPTS}/security/mtls-migrate.py": (
         4,
         EXCEPTION,
@@ -98,4 +63,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 36
+FROZEN_TOTAL = 11

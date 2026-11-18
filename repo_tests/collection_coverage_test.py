@@ -54,6 +54,7 @@ from autobot_shared.paths import (
     git_repo_root,
     scrubbed_git_env,
 )
+from tools.lint import _parse_cache as parse_cache
 
 
 def project_root() -> Path:
@@ -126,7 +127,7 @@ NARROWLY_COLLECTED = {
         "backend-run: named by pytest.ini's testpaths (line 147) and by "
         "marker-tests.yml's 'marked tests -- infrastructure, libs and frontend' "
         "step (line 341). #15161 repointed this tree's conftest shim, so its "
-        "`from config import unified_config_manager` resolves through "
+        "`from config import config_manager` resolves through "
         "autobot-backend/config/__init__.py's lazy `__getattr__` (line 242) and "
         "the tree collects on its own terms"
     ),
@@ -289,7 +290,7 @@ def _declared_markers(path: Path) -> set[str]:
     per-test decorator -- and, being an AST walk, cannot be satisfied by the
     string appearing in a comment or a docstring.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     return {
         node.attr
         for node in ast.walk(tree)

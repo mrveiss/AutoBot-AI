@@ -13,6 +13,7 @@
 -->
 <script setup lang="ts">
 import { computed, useId, watch } from 'vue'
+import { createDateFormatter } from '../utils/format'
 import { summaryText, weekdayName } from '../schedule/summary'
 import { listZones } from '../schedule/zone'
 import { joinTime } from '../schedule/time'
@@ -83,8 +84,10 @@ const gated = computed(() => pv.available.value !== true)
 watch(() => pv.available.value === true, (v) => emit('update:previewAvailable', v), { immediate: true })
 
 const dayName = (d: Weekday, style: 'long' | 'short') => weekdayName(d, props.locale, style)
-const fmtRun = (d: Date) =>
-  new Intl.DateTimeFormat(props.locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone.value }).format(d)
+const fmtRun = createDateFormatter({
+  locale: () => props.locale,
+  intl: () => ({ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone.value }),
+})
 </script>
 
 <template>

@@ -45,7 +45,7 @@ service_definitions:
   browser:
     service_name: "autobot-playwright"
     health_endpoint: "/health"
-    health_port: 3000
+    health_port: 9001
     has_python_venv: false  # Playwright uses Node.js
 
 # Update order - defines the sequence for rolling updates

@@ -53,6 +53,13 @@ class TestOneGraphWeight:
         out = retriever._as_dict({"score": 0.5, "metadata": {}}, ppr_boost=0.8)
         assert out["score"] == pytest.approx(blend_graph_score(0.5, 0.8, 0.3))
 
+    def test_a_rest_search_without_max_depth_defers_to_the_configured_depth(self) -> None:
+        from api.schemas_knowledge import GraphRAGSearchRequest
+
+        # A schema default would always reach the service, so RAGConfig.graph_traversal_depth never applied.
+        assert GraphRAGSearchRequest(query="q").max_depth is None
+        assert GraphRAGSearchRequest(query="q", max_depth=3).max_depth == 3
+
     def test_config_round_trip_and_validation(self) -> None:
         cfg = RAGConfig(graph_weight=0.2, graph_traversal_depth=3)
         restored = RAGConfig.from_dict(cfg.to_dict())

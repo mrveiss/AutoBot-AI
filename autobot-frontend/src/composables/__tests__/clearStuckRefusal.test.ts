@@ -5,6 +5,7 @@
  * never retried, never shown as "another analysis is still running", never a successful no-op.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 
 const { post, fetchWithAuth } = vi.hoisted(() => ({ post: vi.fn(), fetchWithAuth: vi.fn() }))
 
@@ -26,7 +27,7 @@ describe('a refused clear-stuck (#18718)', () => {
 
   it('background task: a 409 whose clear is refused reports the refusal and does not retry', async () => {
     fetchWithAuth.mockResolvedValue(conflict())
-    post.mockRejectedValue(new Error('HTTP 403: Forbidden'))
+    post.mockRejectedValue(new HttpError(403, 'Forbidden'))
     const task = useBackgroundTask('/api/x')
     expect(await task.start()).toBe(false)
     expect(task.error.value).toBe(CLEAR_STUCK_FORBIDDEN_MESSAGE)
@@ -44,15 +45,15 @@ describe('a refused clear-stuck (#18718)', () => {
 
   it('pattern analysis: a 409 whose clear is refused reports the refusal and does not retry', async () => {
     fetchWithAuth.mockResolvedValueOnce(conflict()).mockResolvedValueOnce(new Response('', { status: 403 }))
-    const analysis = usePatternAnalysis()
-    expect(await analysis.analyzePatterns('/src')).toBe(false)
+    const analysis = usePatternAnalysis((url: string) => `${url}?source_id=src-a`)
+    expect(await analysis.analyzePatterns(undefined)).toBe(false)
     expect(analysis.error.value).toBe(CLEAR_STUCK_FORBIDDEN_MESSAGE)
     expect(fetchWithAuth).toHaveBeenCalledTimes(2)
   })
 
   it('manual clear: a refusal is its own result, distinct from clearing nothing', async () => {
-    const analysis = usePatternAnalysis()
-    post.mockRejectedValueOnce(new Error('HTTP 403: Forbidden'))
+    const analysis = usePatternAnalysis((url: string) => `${url}?source_id=src-a`)
+    post.mockRejectedValueOnce(new HttpError(403, 'Forbidden'))
     expect((await analysis.clearStuckTasks(true)).forbidden).toBe(true)
     post.mockResolvedValueOnce({ cleared_count: 0, message: 'none' })
     expect(await analysis.clearStuckTasks(true)).toEqual({ cleared: 0, message: 'none', forbidden: false })

@@ -25,6 +25,7 @@
 #     would make a real verdict indistinguishable from a crashed run.
 #
 # Usage: detect-hardcoded-values.sh [--json|--report|--audit-baseline|--prune-baseline|--help]
+#                                   [--paths-from=FILE]
 
 set -euo pipefail
 
@@ -41,6 +42,7 @@ OUTPUT_FORMAT="text"
 REPORT_MODE=false
 AUDIT_BASELINE=false
 PRUNE_BASELINE=false
+PATHS_FROM=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -48,6 +50,7 @@ for arg in "$@"; do
         --report)          REPORT_MODE=true ;;
         --audit-baseline)  AUDIT_BASELINE=true ;;
         --prune-baseline)  PRUNE_BASELINE=true ;;
+        --paths-from=*)    PATHS_FROM="${arg#--paths-from=}" ;;
         --help)
             echo "Usage: $0 [--json|--report|--audit-baseline|--prune-baseline|--help]"
             echo "  --json            Output results as JSON"
@@ -55,6 +58,8 @@ for arg in "$@"; do
             echo "  --audit-baseline  Fail on baseline entries that claim more findings than the scan finds"
             echo "                    (matched 0: delete the entry; matched fewer: lower its count)"
             echo "  --prune-baseline  Rewrite the baseline to what is actually found (REMOVES only)"
+            echo "  --paths-from=FILE With --audit-baseline: scan only the repo paths listed in FILE and"
+            echo "                    audit only their entries (the pre-push audit, #18808)"
             exit 0
             ;;
     esac
@@ -92,6 +97,23 @@ for dir in "${SCAN_DIRS[@]}"; do
 done
 
 hv_load_baseline "$BASELINE" || exit 1
+
+# #18808: a scoped audit, for pre-push. Only --audit-baseline may scope -- a scoped --json would
+# under-report the verdict and a scoped prune would delete every entry outside the scope.
+declare -A HV_ONLY_FILES=()
+if [ -n "$PATHS_FROM" ]; then
+    if [ "$AUDIT_BASELINE" != true ] || [ ! -r "$PATHS_FROM" ]; then
+        echo "FATAL: --paths-from needs --audit-baseline and a readable file" >&2
+        exit 1
+    fi
+    while IFS= read -r path; do
+        [ -n "$path" ] && HV_ONLY_FILES["$path"]=1
+    done < "$PATHS_FROM"
+    SCAN_DIRS=()
+    for path in "${!HV_ONLY_FILES[@]}"; do
+        hv_path_in_scan_dirs "$path" && SCAN_DIRS+=("$path")
+    done
+fi
 
 RAW=$(mktemp); NEWFILE=$(mktemp)
 trap 'rm -f "$RAW" "$NEWFILE"' EXIT
@@ -143,11 +165,27 @@ STATUS="pass"
 [ "$TOTAL_VIOLATIONS" -gt 0 ] && STATUS="fail"
 
 if [ "$AUDIT_BASELINE" = true ]; then
+    # #19312 review: a scoped (pre-push) audit also gives the verdict for its paths. An entry
+    # over-claiming is one way a changed file drifts from the baseline; a NEW value in it is
+    # the other, and the pre-push check that saw only the first passed the second.
+    if [ "${#HV_ONLY_FILES[@]}" -gt 0 ] && [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
+        echo "${TOTAL_VIOLATIONS} hardcoded value(s) in the changed files are not in ${BASELINE#"$REPO_ROOT"/}:"
+        grep '^VIOLATION|' "$NEWFILE" | sed 's/^/  /'
+        echo
+        echo "Move each value to the SSOT config (see the detector's --report for the fix per class)."
+        exit 1
+    fi
     # `claimed|found|key` per entry that found fewer than it claims (#16334).
     # found 0 -> delete the entry; 0 < found < claimed -> lower it to found.
     # Calling both "no longer match anything" made #16298 delete an entry that
     # still covered a live finding, so the two are listed and worded apart.
     SHORT=$(hv_stale_baseline_entries | LC_ALL=C sort -t'|' -k3)
+    if [ "${#HV_ONLY_FILES[@]}" -gt 0 ]; then
+        # A scoped audit (--paths-from): an entry for a file it did not scan is not stale.
+        SHORT=$(while IFS='|' read -r claimed found class file rest; do
+            [ -n "${HV_ONLY_FILES[$file]:-}" ] && printf '%s|%s|%s|%s|%s\n' "$claimed" "$found" "$class" "$file" "$rest"
+        done <<< "$SHORT"; true)
+    fi
     if [ -n "$SHORT" ]; then
         UNMATCHED=(); OVERCOUNTED=()
         while IFS='|' read -r claimed found key; do

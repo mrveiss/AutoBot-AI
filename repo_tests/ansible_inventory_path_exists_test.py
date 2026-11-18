@@ -136,7 +136,6 @@ def _shell_files(root: Path = _REPO_ROOT) -> list[Path]:
 REACH = declare(
     "ansible-inventory-shell-sweep",
     discover=_shell_files,
-    floor=211,
     growth=30,
     skips=0,
     what="tracked shell scripts",

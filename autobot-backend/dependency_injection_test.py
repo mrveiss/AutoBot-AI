@@ -81,7 +81,8 @@ class TestDependencyInjection:
         # Verify that default dependencies are created
         assert orchestrator.config_manager is not None
         assert orchestrator.llm_service is not None
-        assert orchestrator.knowledge_base is not None
+        # #18122: no private KnowledgeBase at construction; the canonical one is resolved at first use
+        assert orchestrator.knowledge_base is None
         assert orchestrator.diagnostics is not None
 
         # Verify they are the expected types
@@ -186,7 +187,7 @@ class TestDependencyInjection:
         assert hasattr(orchestrator, "diagnostics")
 
     def test_no_global_config_import_in_classes(self):
-        """Test that classes use injected config instead of importing global_config_manager"""
+        """Test that classes use injected config instead of importing config_manager"""
         # Create mock config
         mock_config = Mock(spec=ConfigManager)
         mock_config.get_llm_config.return_value = {

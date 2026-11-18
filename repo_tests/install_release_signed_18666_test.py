@@ -58,21 +58,43 @@ def _run(script: str, cwd: Path, env: dict | None = None) -> subprocess.Complete
 # --- the key gate -------------------------------------------------------------------------------
 
 
-def test_a_placeholder_key_skips_signing_with_a_warning(tmp_path: Path) -> None:
-    (tmp_path / "cosign.pub").write_text((_ROOT / "cosign.pub").read_text(encoding="utf-8"), encoding="utf-8")
-    out = _run(_step("Check the signing key is real")["run"], tmp_path)
-    assert out.returncode == 0, out.stderr
-    assert (tmp_path / "out.txt").read_text(encoding="utf-8").strip() == "real=false"
-    assert "::warning::" in out.stdout and "UNSIGNED" in out.stdout and "#19126" in out.stdout
+_REAL_PUB = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n"
 
 
-def test_a_real_key_takes_the_signing_path(tmp_path: Path) -> None:
-    (tmp_path / "cosign.pub").write_text(
-        "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n", encoding="utf-8"
-    )
-    out = _run(_step("Check the signing key is real")["run"], tmp_path)
-    assert out.returncode == 0 and "::warning::" not in out.stdout
-    assert (tmp_path / "out.txt").read_text(encoding="utf-8").strip() == "real=true"
+def _gate(tmp_path: Path, pub: str | None, secret: str) -> tuple[subprocess.CompletedProcess, str]:
+    """Run the key gate's own script; *pub* None leaves cosign.pub missing."""
+    if pub is not None:
+        (tmp_path / "cosign.pub").write_text(pub, encoding="utf-8")
+    out = _run(_step("Check the signing key is real")["run"], tmp_path, {"COSIGN_PRIVATE_KEY": secret})
+    written = tmp_path / "out.txt"
+    return out, written.read_text(encoding="utf-8").strip() if written.exists() else ""
+
+
+@pytest.mark.parametrize(
+    ("case", "pub", "secret", "ok", "real", "says"),
+    [
+        ("missing", None, "", False, "", "missing or empty"),
+        ("empty", "", "k", False, "", "missing or empty"),
+        ("placeholder", "PLACEHOLDER", "", True, "real=false", "UNSIGNED"),
+        ("placeholder with a secret", "PLACEHOLDER", "k", True, "real=false", "commit the matching public key"),
+        ("real without a secret", _REAL_PUB, "", False, "", "COSIGN_PRIVATE_KEY secret is empty"),
+        ("real with a secret", _REAL_PUB, "k", True, "real=true", ""),
+    ],
+)
+def test_the_key_gate_classifies_every_configuration(tmp_path, case, pub, secret, ok, real, says) -> None:
+    """CodeRabbit on #19154: classify explicitly, and refuse an unusable configuration before the tag."""
+    if pub == "PLACEHOLDER":
+        pub = (_ROOT / "cosign.pub").read_text(encoding="utf-8")
+    out, written = _gate(tmp_path, pub, secret)
+    assert (out.returncode == 0) is ok, (case, out.stdout, out.stderr)
+    assert written == real, case
+    assert says in out.stdout, (case, out.stdout)
+
+
+def test_the_key_gate_runs_before_the_tag_is_created() -> None:
+    """A signing failure after the tag push strands a tagged release with no assets."""
+    names = [s.get("name") for s in _steps(_RELEASE, "release")]
+    assert names.index("Check the signing key is real (#18666)") < names.index("Commit changelog files and tag")
 
 
 def test_signing_steps_are_gated_on_the_real_key() -> None:
@@ -160,12 +182,16 @@ def test_signing_signs_self_verifies_removes_the_key_and_publishes_the_fingerpri
     assert "Installer signing key (`cosign.pub`) SHA256:" in (tmp_path / "RELEASE_NOTES.md").read_text()
 
 
+def private_key_in_scripts(steps: list[dict]) -> list[str]:
+    """Steps whose `run:` text names the private-key secret (it must arrive through env:)."""
+    return [str(s.get("name")) for s in steps if "secrets.COSIGN_PRIVATE_KEY" in str(s.get("run", ""))]
+
+
 def test_no_workflow_interpolates_the_private_key_into_a_script() -> None:
     """27's review: the key goes in via env:, never `${{ secrets.COSIGN_PRIVATE_KEY }}` inside run:."""
     for path in (_RELEASE, _IMAGE_SIGN):
         for job in yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"].values():
-            for step in job.get("steps", []):
-                assert "secrets.COSIGN_PRIVATE_KEY" not in str(step.get("run", "")), (path.name, step.get("name"))
+            assert not private_key_in_scripts(job.get("steps", [])), path.name
 
 
 def test_the_signature_asset_is_listed_only_when_the_key_is_real() -> None:
@@ -263,6 +289,8 @@ def test_install_md_documents_verifying_the_release_before_running() -> None:
         "/releases/download/${TAG}",
         "sha256sum -c install.sh.sha256",
         "cosign verify-blob --key cosign.pub --signature install.sh.sig install.sh",
+        "a channel a release cannot rewrite",
+        "comparison aid only",
     ):
         assert needed in doc, f"INSTALL.md no longer shows: {needed}"
     assert re.search(
@@ -279,11 +307,39 @@ def test_install_md_documents_verifying_the_release_before_running() -> None:
     assert "air-gapped installs are out of scope" in doc, "the offline path is neither documented nor ruled out"
 
 
+def expressions_in_scripts(steps: list[dict]) -> dict[str, list[str]]:
+    """{step name: the `${{ }}` expressions written into its `run:` text}."""
+    return {
+        str(s.get("name")): re.findall(r"\$\{\{[^}]*\}\}", s.get("run", "")) for s in steps if "${{" in s.get("run", "")
+    }
+
+
 def test_no_release_step_interpolates_an_expression_into_its_script() -> None:
     """27's review: step outputs reach `run:` through env:, never as `${{ }}` in the script text."""
-    left = {
-        s.get("name"): re.findall(r"\$\{\{[^}]*\}\}", s.get("run", ""))
-        for s in _steps(_RELEASE, "release")
-        if "${{" in s.get("run", "")
-    }
+    left = expressions_in_scripts(_steps(_RELEASE, "release"))
     assert not left, left
+
+
+def test_contrast_both_detectors_flag_the_script_form_and_pass_the_env_form() -> None:
+    """CodeRabbit on #19154: each detector is shown firing on `${{ }}` in run: and not on env:."""
+    inline = [
+        {
+            "name": "inline",
+            "run": 'printf %s "${{ secrets.COSIGN_PRIVATE_KEY }}" > k\necho "${{ steps.check.outputs.version }}"',
+        }
+    ]
+    via_env = [
+        {
+            "name": "via env",
+            "env": {
+                "COSIGN_PRIVATE_KEY": "${{ secrets.COSIGN_PRIVATE_KEY }}",
+                "VERSION": "${{ steps.check.outputs.version }}",
+            },
+            "run": 'printf %s "${COSIGN_PRIVATE_KEY}" > k\necho "${VERSION}"',
+        }
+    ]
+    assert private_key_in_scripts(inline) == ["inline"] and private_key_in_scripts(via_env) == []
+    assert expressions_in_scripts(inline) == {
+        "inline": ["${{ secrets.COSIGN_PRIVATE_KEY }}", "${{ steps.check.outputs.version }}"]
+    }
+    assert expressions_in_scripts(via_env) == {}

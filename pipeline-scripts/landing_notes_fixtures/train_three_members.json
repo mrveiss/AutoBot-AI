@@ -1,0 +1,44 @@
+{
+  "event_pr": {
+    "number": 900,
+    "merged": true,
+    "merged_at": "2026-10-25T01:15:57Z",
+    "merge_commit_sha": "9999999999999999999999999999999999999999",
+    "head": {"ref": "train-2026-10-25-99", "sha": "8888888888888888888888888888888888888888"},
+    "body": "## What Changed\n\n| Member | Head | Change |\n|---|---|---|\n| #901 | aaaaaaaaaa | one |\n| #902 | bbbbbbbbbb | two |\n| #903 | cccccccccc | three |\n\nRefs #101 #108 #901 #950\n"
+  },
+  "commits": [
+    {"sha": "1111111111111111111111111111111111111111", "parents": [{"sha": "0000000000000000000000000000000000000000"}, {"sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+    {"sha": "2222222222222222222222222222222222222222", "parents": [{"sha": "1111111111111111111111111111111111111111"}, {"sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]},
+    {"sha": "3333333333333333333333333333333333333333", "parents": [{"sha": "2222222222222222222222222222222222222222"}, {"sha": "cccccccccccccccccccccccccccccccccccccccc"}]},
+    {"sha": "4444444444444444444444444444444444444444", "parents": [{"sha": "3333333333333333333333333333333333333333"}]}
+  ],
+  "commit_pulls": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": [{"number": 900, "head": {"ref": "train-2026-10-25-99", "sha": "8888888888888888888888888888888888888888"}}],
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": [{"number": 902, "head": {"ref": "issue-102", "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "body": "Fixes: #102\nresolved mrveiss/AutoBot-AI#104\nRefs other/repo#999"}],
+    "cccccccccccccccccccccccccccccccccccccccc": []
+  },
+  "search": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": [900, 950, 901],
+    "cccccccccccccccccccccccccccccccccccccccc": [903]
+  },
+  "pulls": {
+    "901": {"number": 901, "merged_at": "2026-10-25T10:00:00Z", "head": {"ref": "issue-101", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, "body": "Closes #101\n\nRefs #102 #103"},
+    "902": {"number": 902, "merged_at": "2026-10-25T10:00:00Z", "head": {"ref": "issue-102", "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "body": "Fixes: #102\nresolved mrveiss/AutoBot-AI#104\nRefs other/repo#999"},
+    "903": {"number": 903, "merged_at": "2026-10-25T10:00:00Z", "head": {"ref": "issue-105", "sha": "cccccccccccccccccccccccccccccccccccccccc"}, "body": "Refs #101, #105\n<!-- Closes #106 -->\n```\nCloses #107\n```\nThe `Closes #107` example is code."},
+    "950": {"number": 950, "head": {"ref": "release", "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}, "body": ""}
+  },
+  "issues": {
+    "101": {"number": 101, "state": "closed"},
+    "102": {"number": 102, "state": "closed"},
+    "103": {"number": 103, "state": "open"},
+    "104": {"number": 104, "state": "open"},
+    "105": {"number": 105, "state": "closed"},
+    "108": {"number": 108, "state": "open"},
+    "950": {"number": 950, "state": "open", "pull_request": {"url": "x"}}
+  },
+  "comments": {
+    "101": [{"id": 1, "user": {"login": "someone", "type": "User"}, "body": "a person quoting <!-- landing-note:9999999999999999999999999999999999999999 -->"}]
+  },
+  "labels": []
+}

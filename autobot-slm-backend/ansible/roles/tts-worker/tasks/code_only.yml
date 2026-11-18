@@ -20,6 +20,17 @@
 # Handlers (`restart tts-worker`, `reload systemd`) live in the role, so this
 # file is only usable via include_role/import_role — which is intended.
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['tts', 'deploy']
+  vars:
+    app_log_dir: "{{ tts_app_log_dir }}"
+    app_log_dir_owner: "{{ tts_user }}"
+    app_log_dir_group: "{{ tts_group }}"
+  tags: ['tts', 'deploy']
+
 - name: "TTS Worker | Deploy tts-worker.py"
   ansible.builtin.template:
     src: tts-worker.py.j2
@@ -37,6 +48,7 @@
     mode: "0600"
     owner: "{{ tts_user }}"
     group: "{{ tts_group }}"
+  diff: false  # the file carries secrets (#20941)
   notify: restart tts-worker
   tags: ['tts', 'deploy']
 

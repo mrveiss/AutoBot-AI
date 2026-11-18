@@ -59,10 +59,10 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.owner_scope import require_scope
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger
-from constants.rag_graph_constants import RAG_GRAPH_TRAVERSAL_DEPTH
 from knowledge.search_components.graph_blend import blend_graph_score
-from knowledge.search_components.reranking import provenance_adjustment
+from knowledge.search_components.reranking import provenance_adjustment, ranking_score
 from knowledge.search_filters import KbPrincipal
+from knowledge.stale_filter import fresh_graph_items
 from services.graph_rag_metrics import GraphRAGMetrics
 from services.graph_rag_path import GraphPathMixin
 from services.rag_config import get_rag_config
@@ -165,7 +165,7 @@ class GraphRAGService(GraphPathMixin):
         self,
         query: str,
         start_entity: str | None = None,
-        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
+        max_depth: int | None = None,
         max_results: int = 5,
         enable_reranking: bool = True,
         timeout: float | None = None,
@@ -179,7 +179,7 @@ class GraphRAGService(GraphPathMixin):
         Args:
             query: Search query string
             start_entity: Optional starting entity name for graph traversal
-            max_depth: Maximum graph traversal depth (1-3)
+            max_depth: Maximum graph traversal depth; None reads RAGConfig.graph_traversal_depth
             max_results: Maximum number of results to return
             enable_reranking: Whether to apply cross-encoder reranking
             timeout: Optional timeout in seconds
@@ -196,7 +196,8 @@ class GraphRAGService(GraphPathMixin):
 
         try:
             self._seen_content.clear()
-            timeout = timeout or get_rag_config().graph_timeout_seconds
+            cfg = get_rag_config()
+            timeout, max_depth = timeout or cfg.graph_timeout_seconds, max_depth or cfg.graph_traversal_depth
             rag_results = await self._perform_initial_rag_search(
                 query, max_results, enable_reranking, timeout, metrics, principal
             )
@@ -329,9 +330,8 @@ class GraphRAGService(GraphPathMixin):
             max_depth: Maximum traversal depth for scoring.
 
         Returns:
-            List of RankedResult objects from expanded entities.
-
-        Issue #620.
+            RankedResult objects for the expanded entities whose entity and relation are still valid
+            (Issue #620; the KAG staleness rule, ``knowledge.stale_filter.fresh_graph_items``, #19280).
         """
         expanded_results = []
 
@@ -342,7 +342,7 @@ class GraphRAGService(GraphPathMixin):
 
             logger.debug("Found %s related entities for '%s'", len(related), entity_name)
 
-            for item in related:
+            for item in fresh_graph_items(related):
                 result = self._create_search_result_from_entity(
                     item["entity"],
                     item["relation"],
@@ -369,7 +369,7 @@ class GraphRAGService(GraphPathMixin):
         for result in results:
             content_hash = hash(result.content[:500])
             if content_hash in content_hashes:
-                if result.hybrid_score > content_hashes[content_hash].hybrid_score:
+                if ranking_score(result) > ranking_score(content_hashes[content_hash]):
                     content_hashes[content_hash] = result
             else:
                 content_hashes[content_hash] = result
@@ -386,7 +386,7 @@ class GraphRAGService(GraphPathMixin):
         Returns:
             Ranked and truncated results. Issue #620.
         """
-        results.sort(key=lambda x: x.hybrid_score, reverse=True)
+        results.sort(key=ranking_score, reverse=True)  # the reranked order, as every branch (#18141)
         for idx, result in enumerate(results[:max_results]):
             result.relevance_rank = idx + 1
         return results[:max_results]

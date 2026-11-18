@@ -15,6 +15,7 @@ const api = {
   getLogForwardingStatus: vi.fn(),
   getLogForwardingAutoStart: vi.fn(),
   getLogForwardingDestinations: vi.fn(),
+  getLogForwardingDestination: vi.fn(),
   createLogForwardingDestination: vi.fn(),
   updateLogForwardingDestination: vi.fn(),
   deleteLogForwardingDestination: vi.fn(),
@@ -27,7 +28,7 @@ const api = {
 vi.mock('@/composables/useAutobotApi', () => ({ useAutobotApi: () => api }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })
-const t = (en as { settings: { admin: Record<string, Record<string, string>> } }).settings.admin.logForwardingSettings
+const t = en.settings.admin.logForwardingSettings
 
 function served(name: string, over: Record<string, unknown> = {}) {
   return {
@@ -56,6 +57,8 @@ beforeEach(() => {
   api.getLogForwardingStatus.mockResolvedValue({ running: true, total_destinations: 2 })
   api.getLogForwardingAutoStart.mockResolvedValue({ auto_start: true, message: 'on' })
   api.getLogForwardingDestinations.mockResolvedValue([served('alpha'), served('beta', { type: 'file', url: null, file_path: '/var/log/b.log' })])
+  // Edit reads the destination fresh by name (#18734).
+  api.getLogForwardingDestination.mockImplementation(async (name: string) => served(name))
 })
 
 describe('Log Forwarding served shapes', () => {
@@ -70,6 +73,7 @@ describe('Log Forwarding served shapes', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     const key = wrapper.get('[data-test="field-api-key"]')
     expect((key.element as HTMLInputElement).value).toBe('')
     expect(wrapper.text()).toContain(t.leaveBlankToKeep)
@@ -89,6 +93,7 @@ describe('Log Forwarding served shapes', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     await wrapper.get('[data-test="field-api-key"]').setValue('new-secret')
     await wrapper.findAll('button').find((b) => b.text() === t.update)!.trigger('click')
     await flushPromises()
@@ -98,12 +103,12 @@ describe('Log Forwarding served shapes', () => {
   it('auto-start toggle sends the inverse of the value read from GET /auto-start', async () => {
     api.setLogForwardingAutoStart.mockResolvedValue({ auto_start: false, message: 'off' })
     const wrapper = await mountPage()
-    const box = wrapper.get('input[type="checkbox"]')
-    expect((box.element as HTMLInputElement).checked).toBe(true)
-    await box.trigger('change')
+    const toggle = wrapper.get('[data-test="auto-start"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    await toggle.trigger('click')
     await flushPromises()
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledWith(false)
-    expect((wrapper.get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.get('[data-test="auto-start"]').attributes('aria-checked')).toBe('false')
   })
 
   it('test and delete address the destination by name', async () => {
@@ -134,6 +139,7 @@ describe('Log Forwarding edit mode details', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     return wrapper
   }
   async function save(wrapper: ReturnType<typeof mount>) {
@@ -168,19 +174,22 @@ describe('Log Forwarding edit mode details', () => {
     expect('api_key' in (await save(wrapper))).toBe(false)
     api.updateLogForwardingDestination.mockClear()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     await wrapper.get('[data-test="field-api-key"]').setValue('typed')
     expect((await save(wrapper)).api_key).toBe('typed')
   })
 })
 
 describe('Log Forwarding auto-start toggle (#18797 review)', () => {
-  const box = (w: Awaited<ReturnType<typeof mountPage>>) => w.find<HTMLInputElement>('input[data-test="auto-start"]')
+  // The kit BaseSwitch: a role=switch button, its state in aria-checked (#14780).
+  const box = (w: Awaited<ReturnType<typeof mountPage>>) => w.find<HTMLButtonElement>('[data-test="auto-start"]')
+  const on = (w: Awaited<ReturnType<typeof mountPage>>) => box(w).attributes('aria-checked') === 'true'
 
   it('stays disabled when the auto-start read failed, instead of showing "off"', async () => {
     api.getLogForwardingAutoStart.mockRejectedValue(new Error('503'))
     const w = await mountPage()
     expect(box(w).element.disabled).toBe(true)
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     expect(api.setLogForwardingAutoStart).not.toHaveBeenCalled()
   })
 
@@ -188,23 +197,23 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     api.setLogForwardingAutoStart.mockResolvedValue({ auto_start: false })
     const w = await mountPage()
     expect(box(w).element.disabled).toBe(false)
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     await flushPromises()
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledWith(false)
-    expect(box(w).element.checked).toBe(false)
+    expect(on(w)).toBe(false)
   })
 
   it('ignores a second change while the first is pending, and shows the confirmed value', async () => {
     let finish: (v: { auto_start: boolean }) => void = () => {}
     api.setLogForwardingAutoStart.mockReturnValue(new Promise((r) => { finish = r }))
     const w = await mountPage()
-    await box(w).trigger('change')
-    await box(w).trigger('change')
+    await box(w).trigger('click')
+    await box(w).trigger('click')
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledTimes(1)
-    expect(box(w).element.checked).toBe(true) // unconfirmed: still the stored value
+    expect(on(w)).toBe(true) // unconfirmed: still the stored value
     finish({ auto_start: false })
     await flushPromises()
-    expect(box(w).element.checked).toBe(false)
+    expect(on(w)).toBe(false)
   })
 
   it('Refresh retries a failed auto-start read and enables the toggle (#18797)', async () => {
@@ -217,13 +226,12 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     expect(box(w).element.disabled).toBe(false)
   })
 
-  it('a failed save leaves the checkbox at the stored value', async () => {
+  it('a failed save leaves the switch at the stored value', async () => {
     api.setLogForwardingAutoStart.mockRejectedValue(new Error('500'))
     const w = await mountPage()
-    box(w).element.checked = false
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     await flushPromises()
-    expect(box(w).element.checked).toBe(true)
+    expect(on(w)).toBe(true)
   })
 })
 
@@ -255,5 +263,26 @@ describe('Log Forwarding test results are shown truthfully (#18797 review)', () 
     await flushPromises()
     expect(errorAlert(w).exists()).toBe(false)
     expect(w.text()).toContain('2/2 destinations healthy')
+  })
+})
+
+describe('Log Forwarding edit reads the destination by name (#18734 AC1)', () => {
+  it('opens the edit form from GET /destinations/{name}, not the list row', async () => {
+    // the list row is stale: the fresh read says the url changed since the list was fetched
+    api.getLogForwardingDestination.mockResolvedValue(served('alpha', { url: 'https://fresh.example/logs' }))
+    const w = await mountPage()
+    await buttonByTitle(w, t.edit).trigger('click')
+    await flushPromises()
+    expect(api.getLogForwardingDestination).toHaveBeenCalledWith('alpha')
+    expect(w.get<HTMLInputElement>('[data-test="field-url"]').element.value).toBe('https://fresh.example/logs')
+  })
+
+  it('a failed read shows the error and does not open the dialog', async () => {
+    api.getLogForwardingDestination.mockRejectedValue(new Error('gone'))
+    const w = await mountPage()
+    await buttonByTitle(w, t.edit).trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('gone')
+    expect(w.find('[data-test="field-url"]').exists()).toBe(false)
   })
 })

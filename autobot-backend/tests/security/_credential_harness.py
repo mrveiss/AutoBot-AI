@@ -19,6 +19,7 @@ the human-decider check (#17042) stands between it and a recorded decision.
 
 import sys
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -104,7 +105,8 @@ REFUSED_AT_AUTHENTICATION = "authentication"
 
 ASYNC_ROUTE_EXPECTED = {
     "pre_17042_login_jwt": (403, REFUSED_BY_HUMAN_CHECK),
-    "internal_service_key": (403, REFUSED_BY_HUMAN_CHECK),
+    # #16333 (owner ruling b): the key is not a user, so it is refused before the human check.
+    "internal_service_key": (401, REFUSED_AT_AUTHENTICATION),
     "run_jwt": (403, "run-JWT path allow-list"),
     "run_jwt_on_platform_key": (403, "run-JWT path allow-list"),
     "device_jwt": (403, "device-JWT path allow-list"),
@@ -130,7 +132,8 @@ ASYNC_ROUTE_EXPECTED = {
 #: (service principals are not tenant admins), so that kind is refused before
 #: the human check there and still reaches it on the async route. Asserting one
 #: shared number would be wrong for one of the two tables.
-MIN_KINDS_REACHING_HUMAN_CHECK = 4
+#: #16333 moved the internal service key to an earlier refusal (it is no longer a user), so 3 remain.
+MIN_KINDS_REACHING_HUMAN_CHECK = 3
 MIN_KINDS_REACHING_HUMAN_CHECK_LLC = 3
 
 
@@ -151,7 +154,8 @@ def real_middleware(real_auth_middleware, *, enable_auth: bool):
     middleware.jwt_public_key = None
     middleware.failed_attempts = {}
     middleware.enable_auth = enable_auth
-    sessions = {SESSION_ID: {"user_data": dict(HUMAN)}}
+    # ``created_at`` is what the session store always writes; the password-epoch gate reads it (#20443).
+    sessions = {SESSION_ID: {"user_data": dict(HUMAN), "created_at": datetime.now(tz=timezone.utc).isoformat()}}
     middleware.get_session = sessions.get
     return middleware
 
@@ -186,7 +190,8 @@ def install_real_resolution(real_auth_middleware, monkeypatch) -> SimpleNamespac
         "api.user_management.dependencies._canonical_resolve_human_user", real_auth_middleware.resolve_human_user
     )
     monkeypatch.setattr(real_auth_middleware, "verify_internal_api_key", lambda provided: provided == INTERNAL_KEY)
-    monkeypatch.setattr(real_auth_middleware, "reject_if_revoked_by_password_change", AsyncMock())
+    # resolve_human_user_via (auth_revocation) owns the gate since #19061.
+    monkeypatch.setattr("auth_revocation.reject_if_revoked_by_password_change", AsyncMock())
     run_jwt = SimpleNamespace(validate_run_jwt=token_validator(lambda: state.run_secret, RUN_AUD))
     device_jwt = SimpleNamespace(validate_device_jwt=token_validator(lambda: state.device_secret, DEVICE_AUD))
     monkeypatch.setitem(sys.modules, "services.run_jwt", run_jwt)

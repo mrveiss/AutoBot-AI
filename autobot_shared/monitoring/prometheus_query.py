@@ -5,9 +5,10 @@
 """
 Canonical async PromQL client for AutoBot backend services.
 
-Provides two helpers:
-- ``query_instant`` — instant PromQL (Prometheus /api/v1/query)
-- ``query_range``   — range PromQL  (Prometheus /api/v1/query_range)
+Provides these helpers:
+- ``query_instant``      — instant PromQL (Prometheus /api/v1/query)
+- ``query_range``        — range PromQL  (Prometheus /api/v1/query_range), flattened points
+- ``query_range_series`` — the same range query, per-series (the Prometheus MCP server's, #18964)
 
 Both helpers degrade gracefully: any network / parse error returns an empty
 result rather than raising so callers can return empty data to the frontend.
@@ -73,10 +74,67 @@ async def query_instant(promql: str, base_url: str | None = None) -> Dict[str, A
         return None
 
 
+async def query_range_series(
+    promql: str,
+    hours: float,
+    step: str = "5m",
+    base_url: str | None = None,
+) -> List[Dict[str, Any]] | None:
+    """Execute a range PromQL query over the last *hours* hours, unflattened.
+
+    Args:
+        promql: PromQL expression.
+        hours: Look-back window in hours (fractional for sub-hour windows).
+        step: Resolution step (e.g. ``"5m"``, ``"1m"``).
+        base_url: Prometheus base URL; defaults to the SSOT backend-VM address. The
+            standalone Prometheus MCP server passes its ``AUTOBOT_PROMETHEUS_URL`` (#18964).
+
+    Returns:
+        Prometheus ``data.result`` list (``[{"metric": {...}, "values": [[ts, val], ...]}]``),
+        or ``None`` on failure.
+    """
+    try:
+        end = datetime.now(timezone.utc).timestamp()
+        params = {"query": promql, "start": end - hours * 3600, "end": end, "step": step}
+        async with await get_http_client().get(
+            f"{base_url or _PROMETHEUS_BASE}/api/v1/query_range",
+            params=params,
+            timeout=_RANGE_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                logger.warning("Prometheus range query HTTP %s for %r", resp.status, promql)
+                return None
+            body = await resp.json()
+            if body.get("status") != "success":
+                logger.warning("Prometheus range query non-success for %r: %s", promql, body.get("error"))
+                return None
+            return body.get("data", {}).get("result", [])
+    except aiohttp.ClientError as exc:
+        logger.warning("Prometheus unreachable (range): %s", exc)
+        return None
+    except Exception as exc:
+        logger.error("Unexpected error in query_range_series: %s", exc)
+        return None
+
+
+def _flatten_series(series_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Flatten range series into ``{"timestamp", "value", "labels"}`` points."""
+    return [
+        {
+            "timestamp": datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat(),
+            "value": float(val),
+            "labels": series.get("metric", {}),
+        }
+        for series in series_list
+        for ts, val in series.get("values", [])
+    ]
+
+
 async def query_range(
     promql: str,
-    hours: int,
+    hours: float,
     step: str = "5m",
+    base_url: str | None = None,
 ) -> List[Dict[str, Any]]:
     """Execute a range PromQL query over the last *hours* hours.
 
@@ -84,49 +142,14 @@ async def query_range(
         promql: PromQL expression.
         hours: Look-back window in hours.
         step:  Resolution step (e.g. ``"5m"``, ``"1m"``).
+        base_url: Prometheus base URL; defaults to the SSOT backend-VM address.
 
     Returns:
         List of ``{"timestamp": ISO-str, "value": float, "labels": dict}``
         points, or ``[]`` on failure.
     """
     try:
-        now = datetime.now(timezone.utc)
-        start = now.timestamp() - hours * 3600
-        http_client = get_http_client()
-        params = {
-            "query": promql,
-            "start": start,
-            "end": now.timestamp(),
-            "step": step,
-        }
-        async with await http_client.get(
-            f"{_PROMETHEUS_BASE}/api/v1/query_range",
-            params=params,
-            timeout=_RANGE_TIMEOUT,
-        ) as resp:
-            if resp.status != 200:
-                logger.warning("Prometheus range query HTTP %s for %r", resp.status, promql)
-                return []
-            body = await resp.json()
-            if body.get("status") != "success":
-                logger.warning("Prometheus range query non-success for %r: %s", promql, body.get("error"))
-                return []
-            results = body.get("data", {}).get("result", [])
-            points: List[Dict[str, Any]] = []
-            for series in results:
-                metric = series.get("metric", {})
-                for ts, val in series.get("values", []):
-                    points.append(
-                        {
-                            "timestamp": datetime.fromtimestamp(float(ts), tz=timezone.utc).isoformat(),
-                            "value": float(val),
-                            "labels": metric,
-                        }
-                    )
-            return points
-    except aiohttp.ClientError as exc:
-        logger.warning("Prometheus unreachable (range): %s", exc)
-        return []
+        return _flatten_series(await query_range_series(promql, hours, step, base_url) or [])
     except Exception as exc:
         logger.error("Unexpected error in query_range: %s", exc)
         return []

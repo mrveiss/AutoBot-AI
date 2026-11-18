@@ -30,10 +30,12 @@ def _me(user_data):
         return TestClient(app, raise_server_exceptions=False).get("/api/auth/me")
 
 
-def test_a_superadmin_gets_no_granular_permissions_and_is_admin():
-    """The AC5 case. A frontend gating on ``permissions`` alone would hide everything from this caller."""
+def test_a_superadmin_gets_admins_permissions_and_is_admin():
+    """#19125: superadmin is the highest form of admin, so it gets admin's full set (a superset)."""
     body = _me({"username": "root", "role": "superadmin"}).json()
-    assert body["permissions"] == []
+    admin = _me({"username": "a", "role": "admin"}).json()
+    assert set(admin["permissions"]) <= set(body["permissions"])
+    assert body["permissions"]
     assert body["is_admin"] is True
 
 

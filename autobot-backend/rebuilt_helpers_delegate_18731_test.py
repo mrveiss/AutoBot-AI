@@ -35,13 +35,14 @@ def test_frontend_config_reads_the_ssot_websocket_url():
     assert frontend_config.ssot_config is ssot_config
 
 
-def test_sandbox_check_permission_delegates_to_files(monkeypatch):
+@pytest.mark.asyncio
+async def test_sandbox_check_permission_delegates_to_files(monkeypatch):
     from api import sandbox_files
 
-    kept = MagicMock(return_value={"username": "u"})
+    kept = AsyncMock(return_value={"username": "u"})
     monkeypatch.setattr(sandbox_files, "_check_file_permission", kept)
     request = object()
-    assert sandbox_files._check_permission(request, "view") == {"username": "u"}
+    assert await sandbox_files._check_permission(request, "view") == {"username": "u"}
     kept.assert_called_once_with(request, "view")
 
 
@@ -49,7 +50,7 @@ def test_sandbox_check_permission_delegates_to_files(monkeypatch):
 async def test_sandbox_tree_and_stats_use_the_files_walkers(monkeypatch, tmp_path):
     from api import sandbox_files
 
-    monkeypatch.setattr(sandbox_files, "_check_permission", lambda request, permission: {})
+    monkeypatch.setattr(sandbox_files, "_check_permission", AsyncMock(return_value={}))
     monkeypatch.setattr(sandbox_files, "_validate_path", lambda path: tmp_path)
     monkeypatch.setattr(sandbox_files, "SANDBOX_FILES_ROOT", tmp_path)
     tree = MagicMock(return_value=[])

@@ -15,6 +15,7 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
 import {
   usePersonality,
@@ -24,6 +25,7 @@ import {
 } from '@/composables/usePersonality'
 import { BaseAlert, BaseModal } from '@autobot/ui'
 
+const { t } = useI18n()
 const {
   profiles,
   enabled,
@@ -133,7 +135,7 @@ async function handleSave() {
   })
   saving.value = false
   if (result) {
-    showSuccess('Profile saved.')
+    showSuccess(t('settings.admin.personalitySettings.profileSaved'))
     await fetchProfiles()
   }
 }
@@ -141,7 +143,7 @@ async function handleSave() {
 async function handleActivate() {
   if (!selectedId.value) return
   const ok = await activateProfile(selectedId.value)
-  if (ok) showSuccess('Profile activated.')
+  if (ok) showSuccess(t('settings.admin.personalitySettings.profileActivated'))
 }
 
 async function handleReset() {
@@ -149,7 +151,7 @@ async function handleReset() {
   const result = await resetProfile(selectedId.value)
   if (result) {
     await selectProfile(selectedId.value)
-    showSuccess('Profile reset to default values.')
+    showSuccess(t('settings.admin.personalitySettings.profileReset'))
   }
 }
 
@@ -163,7 +165,7 @@ async function handleDelete() {
       selectedId.value = null
       Object.assign(editForm, {})
     }
-    showSuccess('Profile deleted.')
+    showSuccess(t('settings.admin.personalitySettings.profileDeleted'))
   }
 }
 
@@ -176,7 +178,7 @@ async function handleNewProfile() {
   if (result) {
     await fetchProfiles()
     await selectProfile(result.id)
-    showSuccess(`Profile "${name}" created.`)
+    showSuccess(t('settings.admin.personalitySettings.profileCreated', { name }))
   }
 }
 
@@ -198,7 +200,7 @@ async function handleDuplicate() {
   if (result) {
     await fetchProfiles()
     await selectProfile(result.id)
-    showSuccess(`Duplicated as "${copy.name}".`)
+    showSuccess(t('settings.admin.personalitySettings.profileDuplicated', { name: copy.name }))
   }
 }
 
@@ -301,9 +303,7 @@ onMounted(async () => {
 
       <!-- Error / success banners -->
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="successMsg" class="mb-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-green-700">
-        {{ successMsg }}
-      </div>
+      <BaseAlert v-if="successMsg" variant="success" class="mb-4" :message="successMsg" />
 
       <!-- Empty state -->
       <div v-if="!selectedId" class="flex flex-col items-center justify-center h-64 text-gray-400">

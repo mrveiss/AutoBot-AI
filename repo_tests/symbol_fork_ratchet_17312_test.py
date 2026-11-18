@@ -25,6 +25,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 # #15925: one canonical spelling of the repo root. Re-deriving it from
 # __file__ here would be a fork of exactly the kind this test's subject exists
 # to find -- the guard caught it, which is the system working.
@@ -44,7 +46,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
     findings-based floor cannot tell a clean tree from a broken walk. The floor
     is on files PARSED (CodeRabbit).
     """
-    listed = detector.tracked_python_files()
+    listed = detector.fork_scan_files()
     _clusters, parsed = detector.find_clusters(listed)
     assert detector.MIN_FILES_PARSED >= 1000, "a floor this low would not detect a collapse"
     assert parsed >= detector.MIN_FILES_PARSED, (
@@ -59,7 +61,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
 
 def test_a_collapsed_sweep_refuses_to_give_a_verdict(monkeypatch, capsys) -> None:
     """Contrast control for the floor: it must actually fire, not just exist."""
-    monkeypatch.setattr(detector, "tracked_python_files", lambda: [Path("only.py")])
+    monkeypatch.setattr(detector, "fork_scan_files", lambda: [Path("only.py")])
     assert detector.main([]) == 2, "a collapsed sweep must not return pass or fail"
     assert "sweep collapsed" in capsys.readouterr().err
 
@@ -118,8 +120,8 @@ def test_route_handlers_are_excluded_and_the_exclusion_is_load_bearing() -> None
     (8) and `get_status` (7) at the top. All were FastAPI handlers in separate
     routers -- normal design, not forks.
     """
-    handler = ast.parse("@router.get('/x')\ndef test_connection():\n    pass\n").body[0]
-    plain = ast.parse("def test_connection():\n    pass\n").body[0]
+    handler = parse_cache.parse("@router.get('/x')\ndef test_connection():\n    pass\n").body[0]
+    plain = parse_cache.parse("def test_connection():\n    pass\n").body[0]
     assert detector.is_route_handler(handler)
     assert not detector.is_route_handler(plain)
 
@@ -135,7 +137,7 @@ def test_route_handlers_are_excluded_and_the_exclusion_is_load_bearing() -> None
 )
 def test_route_handler_detection_does_not_overreach(source: str, expected: bool) -> None:
     """An over-broad exclusion silently shrinks the population it is measuring."""
-    assert detector.is_route_handler(ast.parse(source).body[0]) is expected
+    assert detector.is_route_handler(parse_cache.parse(source).body[0]) is expected
 
 
 def _subclasses_shared_namesake(cls: ast.ClassDef, origin: dict[str, tuple[str, str]]) -> bool:
@@ -211,7 +213,7 @@ def _independent_population() -> set[str]:
         if base.endswith("_test.py") or base.startswith("test_") or base == "conftest.py" or "tests" in parts:
             continue
         try:
-            tree = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (SyntaxError, OSError):
             continue
         body = tree.body
@@ -245,7 +247,7 @@ def _independent_population() -> set[str]:
 
 def test_the_population_matches_an_independent_derivation() -> None:
     """Rule 4: compare SETS, not counts — two implementations can agree on a total."""
-    mine = set(detector.find_clusters(detector.tracked_python_files())[0])
+    mine = set(detector.find_clusters(detector.fork_scan_files())[0])
     theirs = _independent_population()
     only_detector = sorted(mine - theirs)
     only_control = sorted(theirs - mine)
@@ -278,7 +280,7 @@ def test_a_single_definition_is_not_a_cluster(tmp_path, monkeypatch) -> None:
 
 def _effective_clusters() -> dict:
     """Live clusters minus those fully covered by the recorded exceptions (#18688)."""
-    raw = detector.find_clusters(detector.tracked_python_files())[0]
+    raw = detector.find_clusters(detector.fork_scan_files())[0]
     effective, problems = detector.apply_exceptions(raw, detector.load_exceptions())
     assert not problems, problems
     return effective

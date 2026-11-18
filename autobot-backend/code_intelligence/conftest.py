@@ -176,6 +176,10 @@ for _leaf in [
     "log_pattern_miner",
     "precommit_analyzer",
     "redis_optimizer",
+    # #19566: vue_analyzer has a colocated test; base_analyzer (stdlib + logging +
+    # status_enums only) must precede it so VueAnalyzer subclasses the real base.
+    "base_analyzer",
+    "vue_analyzer",
 ]:
     _load_real_submodule(_leaf)
 

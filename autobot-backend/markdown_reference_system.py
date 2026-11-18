@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 from autobot_shared.content_digest import content_digest
 from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs
 from autobot_shared.text_tokens import word_token_list
 from memory import MemoryManager
 
@@ -40,14 +41,13 @@ class MarkdownReferenceSystem:
         self,
         memory_manager: MemoryManager | None = None,
         docs_root: str = "docs",
-        knowledge_root: str = "data/system_knowledge",
+        knowledge_root: str | Path | None = None,
     ):
         """Initialize markdown reference system with document tracking tables."""
         self.memory_manager = memory_manager or MemoryManager()
         self.docs_root = Path(docs_root)
-        self.knowledge_root = Path(knowledge_root)
+        self.knowledge_root = Path(knowledge_root) if knowledge_root else system_knowledge_dirs().runtime
 
-        # Initialize additional tables for markdown management
         self._init_markdown_tables()
 
         logger.info("Markdown Reference System initialized")
