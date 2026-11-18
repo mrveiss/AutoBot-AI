@@ -450,10 +450,10 @@ in #16539.
 
 **Grep check:** `grep -rln "OllamaConnectionPool\|get_ollama_pool" autobot-backend/ | grep -v ollama_connection_pool` should show only `llm_shared/adapters/ollama_adapter_test.py` or nothing — no new production caller should appear without updating this entry.
 
-## Per-Service `User`, `Organization` and `UserService` Bindings
+## Per-Service `User`, `Organization`, `UserService` and `OrganizationService` Bindings
 
-**Files:** `autobot-backend/user_management/models/{user,organization}.py`, `autobot-slm-backend/user_management/models/{user,organization}.py`, `autobot-backend/user_management/services/user_service.py`, `autobot-slm-backend/user_management/services/user_service.py`
-**Shared core:** `autobot_shared/user_management/models/user.py` (`UserCore`) and `autobot_shared/user_management/user_service*.py`
+**Files:** `autobot-backend/user_management/models/{user,organization}.py`, `autobot-slm-backend/user_management/models/{user,organization}.py`, `autobot-backend/user_management/services/user_service.py`, `autobot-slm-backend/user_management/services/user_service.py`, `autobot-backend/user_management/services/organization_service.py`, `autobot-slm-backend/user_management/services/organization_service.py`
+**Shared core:** `autobot_shared/user_management/models/user.py` (`UserCore`), `autobot_shared/user_management/user_service*.py` and `autobot_shared/user_management/organization_service.py` (`OrganizationService`, abstract: raises `TypeError` when `organization_model`/`user_model` are unbound)
 **Issues:** #12647, #15068, #17312 (symbol-fork ratchet), #18449
 
 **Pattern bypassed:** "One definition per concept" as measured by `repo_tests/symbol_fork_baseline.json`.
@@ -461,16 +461,36 @@ in #16539.
 **Reason:** these names are NOT second implementations. The behaviour has exactly one
 definition in `autobot_shared`; each service keeps a thin binding that must be a concrete,
 separately mapped class: the two services attach different SQLAlchemy relationships and
-columns (backend: activity tracking and LLC columns; SLM: none) and register in different
+columns (backend: activity tracking and Company OS columns; SLM: none) and register in different
 mapper registries, so one shared mapped class would break `configure_mappers()` on one side.
-`UserService` bindings only set `user_model` and, in the backend, two hooks.
+`UserService` bindings only set `user_model` and, in the backend, two hooks. Each service's
+`OrganizationService` only binds its own concrete `Organization` and `User` mappings (two
+ClassVars); the behaviour has one definition in `autobot_shared`. Same registry-per-service
+constraint as `User`/`Organization`. Since the detector now counts a same-name subclass of a
+shared definition as a binding (#17312), `UserService` and `OrganizationService` no longer
+appear in `symbol_fork_baseline.json`; `User` and `Organization` do and stay, because they
+subclass `UserCore`/a differently named core, not a same-name shared class.
 `repo_tests/one_user_service_15068_test.py` pins that shape by behaviour: a class carrying the
 account-handling methods anywhere else is a failure whatever it is called.
 
 **Revisit when:** the two services share one SQLAlchemy registry, or the detector learns to
-treat a subclass of a shared definition as a binding rather than a second definition.
+treat a subclass of a differently named shared core (`UserCore`) as a binding. (Its same-name
+subclass half landed in #17312.)
 
-**Grep check:** `grep -rn "^class \(User\|Organization\|UserService\)\b" autobot-backend/user_management autobot-slm-backend/user_management autobot_shared/user_management` should list `UserService` in `autobot_shared` plus one `UserService`, `User` and `Organization` subclass binding per service.
+**Grep check:** `grep -rn "^class \(User\|Organization\|UserService\|OrganizationService\)\b" autobot-backend/user_management autobot-slm-backend/user_management autobot_shared/user_management` should list `UserService` and `OrganizationService` in `autobot_shared` plus one `UserService`, `OrganizationService`, `User` and `Organization` subclass binding per service.
+
+## SLM Admin `Base` and Shared User-Management `Base`
+
+**Files:** `autobot-slm-backend/models/database.py` (`Base`), `autobot_shared/user_management/models/base.py` (`Base`, re-exported by both services' `user_management/models/base.py`)
+**Issues:** #1878, #10862 (tablename collision guard), #17312 (symbol-fork ratchet)
+
+**Pattern bypassed:** "One definition per concept" as measured by `repo_tests/symbol_fork_baseline.json`.
+
+**Reason:** the two `Base` classes own different metadata registries bound to different PostgreSQL databases (`slm` and `slm_users`). `main.py` creates each registry's tables on its own engine. One shared `Base` would put both databases' tables in one metadata (each `create_all` would create the other database's tables) and would add the shared Base's `created_at`/`updated_at` columns to SLM tables that declare their own (a schema change). The shared `Base` is already the single definition for the backend and the SLM user-management side. `check_tablename_collisions` polices the split. `Base` stays in `symbol_fork_baseline.json`, as `User` and `Organization` do.
+
+**Revisit when:** the SLM admin models and user-management models move to one database, at which point `INTENTIONALLY_SHARED_TABLENAMES` ("roles") must also be resolved.
+
+**Grep check:** `grep -rn "^class Base(" autobot-slm-backend autobot_shared` should show exactly `models/database.py` and `user_management/models/base.py`.
 
 ## `config/loader.py` — Stdlib `logging`, Own YAML Read (not `load_config_file`)
 
@@ -493,3 +513,153 @@ imports `logging_manager`, at which point `load_yaml_config` should delegate to
 it and this entry be removed.
 
 **Grep check:** `grep -n "logging_manager" autobot_shared/config_file_loading.py` — if empty, this exception is obsolete.
+
+---
+
+## Memory graph vs knowledge-base visibility — two models on purpose
+
+**Files:** `autobot-backend/autobot_memory_graph/owner_scope.py`, `autobot-backend/knowledge/search_filters.py`
+**Issue:** #18825
+
+**Reason:** the two stores answer different questions with the same words, so one predicate would be wrong for one of them.
+
+| Word | Memory graph (`owner_scope.py`) | Knowledge base (`search_filters.py`) |
+|---|---|---|
+| owner | `owner_user_id`; a read sees only its own entities | `owner_id`; one input among several to `check_access` |
+| org | the owner's own entities inside an org context (org narrows, never grants) | `organization` visibility grants every member of the org, whoever owns the fact |
+| shared | `__shared__` owner: readable by every signed-in user | `shared` visibility: readable only by the users named in the fact's share list |
+| system | `__system__` owner: readable by NO scoped read, only `UNSCOPED_ALL_USERS` | `system` visibility: readable by every signed-in user |
+| admin | no bypass | explicit read APIs may pass `is_admin`; chat grounding never does |
+| group / access level | not modelled | `group` membership and `access_level` grant reads |
+
+The graph is a RediSearch TAG filter plus a pure-Python predicate over two stamped fields. The KB decision needs
+ownership-manager lookups (share lists, group membership). Sharing the predicate would either give graph entities a share list
+and groups they do not have, or flip `system` in one store. Sharing only the constants would hide that `shared` and `system`
+mean opposite things in the two places, so the graph names stay `__shared__` / `__system__` (reserved owner ids that no real
+user id can take) and the KB's stay lower-case visibility values.
+
+**Revisit when:** the graph gains sharing between users or groups; then reuse the KB's `check_access` rather than growing
+a third model in `owner_scope.py`.
+
+**Grep check:** `grep -n "OWNER_USER_FIELD\|SHARED_OWNER_ID" autobot-backend/autobot_memory_graph/owner_scope.py` -- if
+`owner_scope.py` ever imports from `knowledge/search_filters.py`, this exception is obsolete.
+
+## Monitoring Role — FHS `/etc` and `/var` Service Paths
+
+**Files:** `autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml`
+**Canonical it does not use:** `autobot.base_dir` (the one install root, #18880)
+**Issue:** #18556
+
+**Reason:** `alertmanager_config_dir`, `alertmanager_data_dir`, `prometheus_config_dir`
+and `prometheus_data_dir` (also `grafana_data_dir`) are `/etc/<svc>` and `/var/lib/<svc>`
+paths. These are the FHS locations for host-wide configuration and variable state, the
+paths the upstream packages and their systemd units use, and operators and backup tooling
+look for them there. Only the install directories (binaries) live under the install root,
+derived as `{{ autobot.base_dir | dirname }}/<svc>`.
+
+**Revisit when:** the platform decides to relocate service state under the install root.
+
+**Grep check:** `grep -n "_config_dir\|_data_dir" autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml` -- if no `/etc` or `/var` literal remains, this exception is obsolete.
+
+## Compose Postgres Variables — Same Concept, Compose's Own Values
+
+**Files:** `docker-compose.yml`, `autobot_shared/postgres_identity.py`
+**Canonical it does not use:** the fleet values of `AUTOBOT_POSTGRES_USER` and `SLM_DB_NAME`
+**Issue:** #19408
+
+**Reason:** Each name means one concept everywhere: `AUTOBOT_POSTGRES_USER` is the login role
+on the user-management database, and `SLM_DB_NAME` is the SLM control-plane database. Only
+the values differ. The postgres image creates one role, so compose uses the owner role
+(`COMPOSE_OWNER_ROLE`) where a fleet host has `autobot_app`, and keeps its existing database
+(`COMPOSE_SLM_DB_NAME`) where a fleet host has `slm`. Renaming either would move existing
+compose volumes. The compose SLM defaults to that owner role too; a non-default
+`SLM_POSTGRES_USER` must already exist, because compose creates only the owner role.
+
+**Enforced by:** `COMPOSE_KEY_VALUES` in `repo_tests/postgres_identity_one_source_19320_test.py`
+allows these values in compose files only.
+
+---
+
+## Infra Files That Look Alike and Stay Separate
+
+**Issue:** #18558
+
+The audit behind #18558 listed these next to two real copies, which now have one home each: the
+CI config fixture (`.github/actions/setup-python-suite/ci-config.yaml`) and the credential
+registration (`_shared/tasks/register_node_credentials.yml`).
+
+| Files | Measured on `a975fe87ad` | Why they stay separate |
+|---|---|---|
+| Workflow `concurrency:` blocks | 62 workflows, 55 of them 3 lines | GitHub Actions has no way to include a workflow-level `concurrency:` key. |
+| Jobs with their own `setup-python` | 13 workflows call it directly, 4 use `setup-python-suite`; 6 of the 13 install `requirements-ci.txt` | That action builds the test venv, its cache and the system packages, and does not put the venv on `PATH`. These jobs install on the runner's Python, some add packages or tolerate a failed install, so moving them would change what they run on. |
+| `docker/backend/Dockerfile`, `docker/slm/Dockerfile` | 183 and 103 lines | They share a `FROM`, but their package lists, requirement filters and health checks differ. A base image would need its own build and publish step. |
+
+**Keep in sync:** nothing. If two of these come to differ only by a name, extract them and drop the row.
+
+---
+
+## NPU Worker Pairing — Backend Resource, Not the SLM Node Registry
+
+**File:** `autobot-backend/api/npu_workers.py` (`/api/npu/workers*`)
+**Diverges from:** one fleet inventory in SLM `/api/nodes`
+**Issue:** #18735
+
+**Reason:** The SLM is the control plane for all services, so it sees and controls NPU workers, but
+through the backend's existing routes. Pairing and credentials stay in the backend, because moving
+them would change the worker credential flow and need redirects for installed workers. Maintainer
+decision on the split; the control work is #20625.
+
+**Sync cadence:** None; the SLM calls these routes and keeps no copy of the worker records. Reopen
+this decision if the SLM needs to hold NPU worker credentials itself.
+
+---
+
+## SLM First Admin Password Hash Crosses to the Main Backend
+
+**File:** `autobot-slm-backend/api/first_admin_internal.py` (`GET /api/internal/first-admin`)
+**Consumer:** `autobot-backend/user_management/services/person_link_service.py`
+**Diverges from:** the rule that no `response_model` carries a stored credential (#17865)
+**Issue:** #10200, PR #20607
+
+**What crosses:** the first SLM admin's password hash (`password_hash`), SLM to main backend, so that
+person keeps their password when the main app is installed and links them.
+
+**Reason:** maintainer ruling, https://github.com/mrveiss/AutoBot-AI/pull/20607#issuecomment-6689286310,
+matching the shared-users decision on #10200. The guard records it as a deliberate waiver in
+`repo_tests/no_secret_in_response_model_baseline_17865.py` (`_WAIVED`, keyed to this one route).
+
+**Constraint:** the route is reachable only with the internal service key. It is mounted on the
+unauthenticated health router, so the handler's own `verify_internal_api_key` check is the only gate
+and no user token, whatever its role, can substitute (`autobot-slm-backend/tests/api/test_first_admin_internal.py`
+asserts no key, a user token without the key, and a wrong key are refused, and the valid key succeeds).
+The hash is read once at first start and is never logged.
+
+**Second barrier:** every public nginx edge that proxies `/api` denies `/api/internal/` with a `location ^~` 404,
+so a browser session cannot reach the route even with the key injected (#20046; every file is discovered and
+checked by `repo_tests/internal_paths_denied_at_edge_20046_test.py`, which also pins this route under the denied
+prefix). The SLM vhost templates are already among the files it reads and all carry the deny.
+
+**Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
+logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.
+
+---
+
+## SLM API-Key Route Scoping — No Route Is Called With a User API Key
+
+**File:** `autobot-slm-backend/services/auth.py` (`get_api_key_user`, `require_key_permission`)
+**Diverges from:** the expectation that every dependency in the auth module has a production route behind it
+**Issue:** #20534, #16294
+
+**Reason:** maintainer decision (2026-11-17): no SLM route is called with a user API key, so none is
+scoped to one. Keys are created, stored, listed and revoked; they are not yet a way to call the SLM.
+`require_key_permission` is the mechanism, proved on a test route
+(`autobot-slm-backend/tests/api/test_api_key_route_scope_16040.py`). Which routes accept a key is
+the open product decision on #16294.
+
+**Baseline:** the two `declared:` entries (`get_api_key_user`, `require_key_permission`) in
+`repo_tests/unconnected_code_baseline.txt` stay as the record of this decision; the baseline is
+shrink-only and a declared entry is true only while its referencing files are exactly the live ones
+(`repo_tests/unconnected_code_gate_20512_test.py`, `test_declared_entries_describe_the_live_references`).
+
+**Review trigger:** when #16294 names a route that accepts a user API key, that route uses
+`require_key_permission` with a test, and both `declared:` baseline lines are deleted in the same PR.

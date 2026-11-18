@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import yaml
 
@@ -89,29 +89,12 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    ServiceRegistry,
+    get_deployment_registry,
 )
-
-
-
-
 
 
 # Port env aliases + defaults mirror autobot_shared/ssot_config.py;
 # health paths mirror autobot_shared/ssot_constants.py.
-
-
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry(config_file)
-    return _registry
 
 
 # --- end standalone replacements (#11761) -----------------------------------
@@ -135,7 +118,7 @@ class RollbackManager:
         self.rollback_dir = self.project_root / rollback_dir
         self.rollback_dir.mkdir(exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        self.service_registry = get_deployment_registry()
         self.backup_manager = BackupManager(backup_dir)
 
         # Rollback configuration

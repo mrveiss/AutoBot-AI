@@ -214,8 +214,6 @@ Migration order (safest to riskiest):
 
 ### Utilities
 16. src/conversation_file_manager.py
-17. autobot-backend/utils/service_discovery.py
-18. autobot-backend/utils/distributed_service_discovery.py
 19. backend/services/ai_stack_client.py
 20. backend/utils/paths_manager.py
 

@@ -41,6 +41,7 @@ def _real_entity_doc() -> Dict[str, Any]:
     value, which is the same class of lie these tests exist to catch.
     """
     from autobot_memory_graph.entities import EntityOperationsMixin
+    from autobot_memory_graph.owner_scope import OwnerScope
 
     return EntityOperationsMixin._build_entity_document(
         None,
@@ -49,6 +50,7 @@ def _real_entity_doc() -> Dict[str, Any]:
         name="Redis",
         observations=["an observation"],
         entity_metadata={},
+        owner=OwnerScope.for_user("user-a"),
     )
 
 
@@ -135,6 +137,7 @@ class TestTheLayerReadsAFieldThatExists:
     async def test_l2_renders_from_a_document_the_graph_would_store(self):
         from unittest.mock import AsyncMock
 
+        from autobot_memory_graph.owner_scope import OwnerScope
         from chat_history.layers import Layer2OnDemand
 
         doc = _real_entity_doc()
@@ -142,7 +145,9 @@ class TestTheLayerReadsAFieldThatExists:
         graph = AsyncMock()
         graph.search_entities = AsyncMock(return_value=[doc])
 
-        rendered = await Layer2OnDemand().render({"user_message": "How is Redis configured?", "memory_graph": graph})
+        rendered = await Layer2OnDemand().render(
+            {"user_message": "How is Redis configured?", "memory_graph": graph, "owner": OwnerScope.for_user("user-a")}
+        )
 
         assert "Redis" in rendered
         assert "in-memory store" in rendered

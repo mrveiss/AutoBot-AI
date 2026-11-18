@@ -92,10 +92,11 @@ async def main():
     # Store a simple test fact with OS context
     logger.info("\n3. Testing Fact Storage with OS Context...")
 
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
-    await kb.initialize()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     if not kb.initialized:
         logger.error("   ✗ KB init failed")

@@ -54,14 +54,14 @@
     # =========================================================================
     - name: Create backup directory
       ansible.builtin.file:
-        path: /opt/autobot/backups/system-updates
+        path: "{{ autobot.base_dir }}/backups/system-updates"
         state: directory
         mode: '0750'
       when: backup_before_update | bool
 
     - name: Backup current package list
       ansible.builtin.shell: |
-        dpkg --get-selections > /opt/autobot/backups/system-updates/package-list-{{ ansible_facts['date_time'].epoch }}.txt
+        dpkg --get-selections > {{ autobot.base_dir }}/backups/system-updates/package-list-{{ ansible_facts['date_time'].epoch }}.txt
       changed_when: false
       when:
         - ansible_facts['os_family'] == "Debian"
@@ -70,7 +70,7 @@
     - name: Backup apt sources
       ansible.builtin.copy:
         src: /etc/apt/sources.list
-        dest: "/opt/autobot/backups/system-updates/sources.list-{{ ansible_facts['date_time'].epoch }}"
+        dest: "{{ autobot.base_dir }}/backups/system-updates/sources.list-{{ ansible_facts['date_time'].epoch }}"
         remote_src: true
         mode: '0640'
       when:

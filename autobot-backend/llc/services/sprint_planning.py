@@ -29,6 +29,7 @@ from typing import Any, Dict, List
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import SprintStatus, WorkItemStatus
 from ..models.sprint import LLCSprint
 from ..models.work_item import LLCWorkItem
@@ -37,8 +38,17 @@ from .base import LLCServiceBase
 logger = logging.getLogger(__name__)
 
 
-class SprintNotFound(ValueError):
+class SprintNotFound(PublicMessageMixin, ValueError):
     """Raised when a sprint_id does not exist."""
+
+
+async def load_sprint(session: AsyncSession, sprint_id: uuid.UUID) -> LLCSprint:
+    """Fetch a sprint by id or raise :class:`SprintNotFound` (the one lookup, #18731)."""
+    result = await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))
+    sprint = result.scalar_one_or_none()
+    if sprint is None:
+        raise SprintNotFound(f"Sprint {sprint_id} not found")
+    return sprint
 
 
 class SprintPlanningService(LLCServiceBase):
@@ -249,9 +259,4 @@ class SprintPlanningService(LLCServiceBase):
     # ------------------------------------------------------------------
 
     async def _get_sprint(self, session: AsyncSession, sprint_id: uuid.UUID) -> LLCSprint:
-        stmt = select(LLCSprint).where(LLCSprint.id == sprint_id)
-        result = await session.execute(stmt)
-        sprint = result.scalar_one_or_none()
-        if sprint is None:
-            raise SprintNotFound(f"Sprint {sprint_id} not found")
-        return sprint
+        return await load_sprint(session, sprint_id)

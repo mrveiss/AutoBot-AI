@@ -405,6 +405,57 @@ async def disable_plugin(
     }
 
 
+@router.get("/plugins/audit")
+@with_error_handling(error_code_prefix="PLUGIN_AUDIT_GET")
+async def get_capability_audit_log(
+    limit: int = 100,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, List[CapabilityAuditEntry]]:
+    """
+    Fetch capability audit log from Redis.
+
+    Returns recent capability usage attempts (both granted and denied).
+    Used by operators to monitor plugin behavior and detect violations.
+
+    Issue #9049.
+
+    Args:
+        limit: Maximum number of audit entries to return (default 100)
+
+    Returns:
+        List of audit entries ordered by timestamp descending
+    """
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis unavailable",
+        )
+
+    # Fetch from Redis stream
+    entries = await redis.xrevrange(
+        "plugin:capability:audit",
+        count=min(limit, 1000),  # Cap at 1000
+    )
+
+    audit_entries = []
+    for entry_id, data in entries:
+        audit_entries.append(
+            CapabilityAuditEntry(
+                timestamp=_audit_field(data, "timestamp"),
+                plugin_name=_audit_field(data, "plugin_name"),
+                capability=_audit_field(data, "capability"),
+                # CapabilityChecker._log_capability_use writes str(context.granted),
+                # i.e. "True"/"False" -- casefold before comparing (#13274).
+                granted=_audit_field(data, "granted", "false").lower() == "true",
+                operation=_audit_field(data, "operation"),
+                metadata=_audit_field(data, "metadata"),
+            )
+        )
+
+    return {"entries": audit_entries, "total": len(audit_entries)}
+
+
 @router.get("/plugins/{plugin_name}")
 @with_error_handling(error_code_prefix="PLUGIN_GET")
 async def get_plugin_info(
@@ -627,57 +678,6 @@ def _audit_field(data: Dict, name: str, default: str = "") -> str:
     """
     value = decode_redis_value(data.get(name))
     return default if value is None else value
-
-
-@router.get("/plugins/audit")
-@with_error_handling(error_code_prefix="PLUGIN_AUDIT_GET")
-async def get_capability_audit_log(
-    limit: int = 100,
-    admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, List[CapabilityAuditEntry]]:
-    """
-    Fetch capability audit log from Redis.
-
-    Returns recent capability usage attempts (both granted and denied).
-    Used by operators to monitor plugin behavior and detect violations.
-
-    Issue #9049.
-
-    Args:
-        limit: Maximum number of audit entries to return (default 100)
-
-    Returns:
-        List of audit entries ordered by timestamp descending
-    """
-    redis = await get_async_redis_client(database="main")
-    if redis is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Redis unavailable",
-        )
-
-    # Fetch from Redis stream
-    entries = await redis.xrevrange(
-        "plugin:capability:audit",
-        count=min(limit, 1000),  # Cap at 1000
-    )
-
-    audit_entries = []
-    for entry_id, data in entries:
-        audit_entries.append(
-            CapabilityAuditEntry(
-                timestamp=_audit_field(data, "timestamp"),
-                plugin_name=_audit_field(data, "plugin_name"),
-                capability=_audit_field(data, "capability"),
-                # CapabilityChecker._log_capability_use writes str(context.granted),
-                # i.e. "True"/"False" -- casefold before comparing (#13274).
-                granted=_audit_field(data, "granted", "false").lower() == "true",
-                operation=_audit_field(data, "operation"),
-                metadata=_audit_field(data, "metadata"),
-            )
-        )
-
-    return {"entries": audit_entries, "total": len(audit_entries)}
 
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:

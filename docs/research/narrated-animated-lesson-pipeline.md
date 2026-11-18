@@ -197,3 +197,18 @@ as the plugin's internal orchestration; no core change.
 - `plugins/core-plugins/image-generation-plugin/main.py` `shutdown()` has a bare
   `except Exception: pass` around `unregister`, which silently swallows the error. Filed as
   #18023, together with the identical case in `video-generation-plugin`.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18015 — feat(plugin-sdk): a plugin cannot contribute HTTP routes or serve a static bundle
+- #18016 — feat(voice): TTS output has no word-level timings or captions — add [[mark]] alignment
+- #18017 — perf(voice): TTS client re-synthesizes every request — add a text-keyed, crash-safe output cache
+- #18018 — feat(document-ingest): PDF outline/bookmarks are discarded — split documents into declared sections
+- #18019 — feat(browser): no visual QA of generated HTML — contact sheets and structural checks for agent output
+- #18020 — feat(lesson-plugin): declarative beat spec and one deterministic renderer for narrated animated content
+- #18021 — feat(lesson-plugin): exact-rational answer grading and first-attempt scoring for question beats
+- #18022 — feat(plugins): lesson-generation plugin — document to narrated, animated, interactive lesson
+- #18023 — bug(plugins): image- and video-generation plugins swallow every exception on shutdown unregister
+- #18024 — Umbrella: narrated, animated lesson generation as a plugin (+ 4 core prerequisites)

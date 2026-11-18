@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import strict_git_env
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.ssot_config import config
+from security.upload_filename_policy import ZIP_EXTENSIONS, is_safe_file
 
 logger = get_logger(__name__)
 
@@ -153,7 +154,7 @@ def _find_plugin_root(extract_dir: Path) -> Path:
 
 
 async def install_from_zip(upload: UploadFile) -> InstallResult:
-    if not upload.filename or not upload.filename.lower().endswith(".zip"):
+    if not upload.filename or not is_safe_file(upload.filename, ZIP_EXTENSIONS):  # #19088: bare name, .zip only
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Upload must be a .zip file",

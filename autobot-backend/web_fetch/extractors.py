@@ -3,21 +3,25 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-web_fetch.extractors — HTML-to-Markdown conversion helpers and schema-driven extraction.
+web_fetch.extractors — SPA detection and schema-driven extraction over fetched pages.
 
 Issue #7400: Foundation package for unified web search/scrape/crawl.
 Issue #7405: Schema-driven structured data extraction via LLM.
+Issue #18826: HTML-to-text conversion moved out. Every HTML ingest path goes
+through :func:`web_fetch.profile.extract_page`, which produces the canonical
+``ExtractedDocument`` (:mod:`media.document.html_extraction`). The markdownify
+conversion and its BS4 fallback that lived here are gone with their callers.
 
-Delegates to existing markdownify/BS4 patterns.  Never re-implements SSRF
-guards or Jina logic — those live in media/link/pipeline.py.
+Never re-implements SSRF guards or Jina logic — those live in media/link/pipeline.py.
 """
 
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from media.document.html_extraction import CHROME_TAGS, INERT_TAGS
 
 logger = get_logger(__name__)
 
@@ -34,67 +38,9 @@ _MIN_CONTENT_CHARS = 500  # Minimum markdown length to consider a fetch successf
 
 
 def _strip_boilerplate(soup) -> None:
-    """Remove non-content tags in-place."""
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+    """Remove non-content tags in-place: the inert ones plus page chrome."""
+    for tag in soup(list(INERT_TAGS + CHROME_TAGS)):
         tag.decompose()
-
-
-def _extract_title(soup) -> str:
-    """Extract page title from og:title or <title>."""
-    og = soup.find("meta", property="og:title")
-    if og and og.get("content"):
-        return og["content"].strip()[:300]
-    tag = soup.find("title")
-    return tag.get_text(strip=True)[:300] if tag else ""
-
-
-def _html_to_markdown_via_markdownify(html: str) -> str:
-    """Convert HTML to markdown using markdownify library."""
-    try:
-        import markdownify
-
-        return markdownify.markdownify(html, heading_style="ATX", strip=["script", "style"])
-    except Exception as exc:
-        logger.debug("markdownify conversion failed: %s", exc)
-        return ""
-
-
-def _html_to_plain_text_via_bs4(html: str) -> str:
-    """Fallback: extract readable text from HTML using BeautifulSoup."""
-    try:
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, "html.parser")
-        _strip_boilerplate(soup)
-        main = soup.find("article") or soup.find("main") or soup.find("body")
-        if main is None:
-            return ""
-        text = main.get_text(separator="\n", strip=True)
-        return re.sub(r"\n{3,}", "\n\n", text).strip()
-    except Exception as exc:
-        logger.debug("bs4 text extraction failed: %s", exc)
-        return ""
-
-
-def extract_markdown(html: str) -> Tuple[str, str]:
-    """Convert raw HTML to (title, markdown) using markdownify then BS4 fallback.
-
-    Returns:
-        Tuple of (title, markdown_content).
-    """
-    try:
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, "html.parser")
-        title = _extract_title(soup)
-    except Exception:
-        title = ""
-
-    md = _html_to_markdown_via_markdownify(html)
-    if not md or len(md.strip()) < 100:
-        md = _html_to_plain_text_via_bs4(html)
-
-    return title, md.strip()
 
 
 def is_spa_content(markdown: str, html: str = "") -> bool:

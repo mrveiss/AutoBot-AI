@@ -337,7 +337,7 @@ class TestCausalReasoningIntegration:
             _make_module_stub(
                 "intelligence.streaming_executor",
                 ChunkType=MagicMock(),
-                StreamChunk=MagicMock,
+                ExecChunk=MagicMock,
                 StreamingCommandExecutor=MagicMock,
             )
             _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)

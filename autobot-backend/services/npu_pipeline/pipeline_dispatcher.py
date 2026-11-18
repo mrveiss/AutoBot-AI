@@ -24,19 +24,19 @@ logger = logging.getLogger(__name__)
 GB = 1024**3
 
 
-class WorkerState(str, Enum):
+class PipelineWorkerState(str, Enum):
     ONLINE = "online"
     OFFLINE = "offline"
     BUSY = "busy"
 
 
 @dataclass
-class WorkerNode:
+class PipelineWorker:
     """Represents a single NPU worker participating in the pipeline."""
 
     worker_id: str
     vram_bytes: int
-    state: WorkerState = WorkerState.ONLINE
+    state: PipelineWorkerState = PipelineWorkerState.ONLINE
     url: str = ""
 
     @property
@@ -50,7 +50,7 @@ class ShardPlan:
 
     model_id: str
     total_params: int
-    workers: List[WorkerNode]
+    workers: List[PipelineWorker]
     layers_per_worker: List[int]
     created_at: float = field(default_factory=time.monotonic)
 
@@ -60,12 +60,12 @@ class ShardPlan:
 
     def is_valid(self, registry: "PipelineDispatcher") -> bool:
         """Return False if any assigned worker is no longer online."""
-        current_ids = {w.worker_id for w in registry.workers if w.state == WorkerState.ONLINE}
+        current_ids = {w.worker_id for w in registry.workers if w.state == PipelineWorkerState.ONLINE}
         return all(wid in current_ids for wid in self.worker_ids)
 
 
 @dataclass
-class PipelineMetrics:
+class NpuPipelineMetrics:
     """Per-inference telemetry collected across all pipeline stages."""
 
     hop_count: int = 0
@@ -83,9 +83,9 @@ class PipelineMetrics:
 
 
 @dataclass
-class PipelineResult:
+class NpuPipelineResult:
     tokens: List[str]
-    metrics: PipelineMetrics
+    metrics: NpuPipelineMetrics
     fallback_used: bool = False
 
 
@@ -103,7 +103,7 @@ class PipelineDispatcher:
     _SHARD_CACHE_KEY_PREFIX = "npu:shard_plan:"
 
     def __init__(self, redis_client=None, tracing_service=None) -> None:
-        self._workers: List[WorkerNode] = []
+        self._workers: List[PipelineWorker] = []
         self._shard_cache: Dict[str, ShardPlan] = {}
         self._redis = redis_client
         self._tracing = tracing_service
@@ -115,10 +115,10 @@ class PipelineDispatcher:
     # ------------------------------------------------------------------
 
     @property
-    def workers(self) -> List[WorkerNode]:
+    def workers(self) -> List[PipelineWorker]:
         return list(self._workers)
 
-    def register_worker(self, worker: WorkerNode) -> None:
+    def register_worker(self, worker: PipelineWorker) -> None:
         self._workers = [w for w in self._workers if w.worker_id != worker.worker_id]
         self._workers.append(worker)
         self._invalidate_shard_cache(reason="worker.added")
@@ -144,7 +144,7 @@ class PipelineDispatcher:
             if cached.is_valid(self):
                 return cached
 
-        online = [w for w in self._workers if w.state == WorkerState.ONLINE]
+        online = [w for w in self._workers if w.state == PipelineWorkerState.ONLINE]
         if not online:
             raise RuntimeError("No online workers available for pipeline dispatch")
 
@@ -159,7 +159,7 @@ class PipelineDispatcher:
         return plan
 
     @staticmethod
-    def _distribute_layers(total_params: int, workers: List[WorkerNode]) -> List[int]:
+    def _distribute_layers(total_params: int, workers: List[PipelineWorker]) -> List[int]:
         """Distribute model layers proportionally to worker VRAM."""
         total_vram = sum(w.vram_bytes for w in workers)
         layers = [max(1, round(total_params * (w.vram_bytes / total_vram))) for w in workers]
@@ -178,7 +178,7 @@ class PipelineDispatcher:
         total_params: int,
         prompt: str,
         max_tokens: int = 8,
-    ) -> PipelineResult:
+    ) -> NpuPipelineResult:
         """
         Execute a pipeline inference run.
 
@@ -186,7 +186,7 @@ class PipelineDispatcher:
         drops during the run.  Emits telemetry via tracing_service when present.
         """
         self._run_count += 1
-        metrics = PipelineMetrics()
+        metrics = NpuPipelineMetrics()
         plan = self.plan_shards(model_id, total_params)
         fallback_used = False
 
@@ -205,18 +205,18 @@ class PipelineDispatcher:
 
         metrics.total_tokens = len(tokens)
         self._emit_metrics(metrics)
-        return PipelineResult(tokens=tokens, metrics=metrics, fallback_used=fallback_used)
+        return NpuPipelineResult(tokens=tokens, metrics=metrics, fallback_used=fallback_used)
 
     async def _run_pipeline(
         self,
         plan: ShardPlan,
         prompt: str,
         max_tokens: int,
-        metrics: PipelineMetrics,
+        metrics: NpuPipelineMetrics,
     ) -> List[str]:
         tokens: List[str] = []
         for i, worker in enumerate(plan.workers):
-            if worker.state != WorkerState.ONLINE:
+            if worker.state != PipelineWorkerState.ONLINE:
                 raise WorkerDroppedError(worker.worker_id)
             t0 = time.monotonic()
             chunk = await self._call_worker(worker, plan.layers_per_worker[i], prompt, max_tokens)
@@ -234,9 +234,9 @@ class PipelineDispatcher:
         total_params: int,
         prompt: str,
         max_tokens: int,
-        metrics: PipelineMetrics,
+        metrics: NpuPipelineMetrics,
     ) -> List[str]:
-        online = [w for w in self._workers if w.state == WorkerState.ONLINE]
+        online = [w for w in self._workers if w.state == PipelineWorkerState.ONLINE]
         if not online:
             raise RuntimeError("No workers available for fallback")
         worker = online[0]
@@ -252,7 +252,7 @@ class PipelineDispatcher:
 
     async def _call_worker(
         self,
-        worker: WorkerNode,
+        worker: PipelineWorker,
         layer_count: int,
         prompt: str,
         max_tokens: int,
@@ -261,7 +261,7 @@ class PipelineDispatcher:
         count = max(1, max_tokens // max(1, layer_count // 8 + 1))
         return [f"tok_{worker.worker_id}_{i}" for i in range(count)]
 
-    async def _simulate_layer_transfer(self, src: WorkerNode, dst: WorkerNode) -> float:
+    async def _simulate_layer_transfer(self, src: PipelineWorker, dst: PipelineWorker) -> float:
         """Return simulated transfer latency in ms."""
         await asyncio.sleep(0)
         return 2.5  # nominal 2.5 ms cross-host hop
@@ -270,7 +270,7 @@ class PipelineDispatcher:
     # Metrics / tracing
     # ------------------------------------------------------------------
 
-    def _emit_metrics(self, metrics: PipelineMetrics) -> None:
+    def _emit_metrics(self, metrics: NpuPipelineMetrics) -> None:
         if self._tracing is None:
             return
         try:

@@ -112,7 +112,7 @@ class MCPResourceContent(BaseModel):
 MCPContent = MCPTextContent | MCPImageContent | MCPResourceContent
 
 
-class MCPToolCallRequest(BaseModel):
+class MCPToolCallParams(BaseModel):
     """MCP tool call request structure."""
 
     name: MCPToolName

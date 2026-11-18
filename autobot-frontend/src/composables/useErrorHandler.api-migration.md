@@ -40,7 +40,7 @@ This document provides comprehensive migration examples for replacing 448+ API c
 
 ## 1. Simple GET Request
 
-### Real Example: WebResearchSettings.vue (lines 275-297)
+### Example: a settings view
 
 **Before** (23 lines):
 ```typescript
@@ -108,7 +108,7 @@ const { execute: loadSettings, loading: isUpdating } = useAsyncHandler(
 
 ## 2. POST with Success/Error Messages
 
-### Real Example: WebResearchSettings.vue (lines 327-346)
+### Example: a settings view
 
 **Before** (20 lines):
 ```typescript
@@ -162,7 +162,7 @@ const { execute: updateSettings, loading: isUpdating } = useAsyncHandler(
 
 ## 3. Multiple Sequential API Calls
 
-### Real Example: WebResearchSettings.vue (lines 275-297) - Full Pattern
+### Example: a settings view - Full Pattern
 
 **Before** (32 lines):
 ```typescript
@@ -234,7 +234,7 @@ const { execute: loadSettings, loading: isUpdating } = useAsyncHandler(
 
 ## 4. API Call with Rollback
 
-### Real Example: WebResearchSettings.vue (lines 299-324)
+### Example: a settings view
 
 **Before** (26 lines):
 ```typescript

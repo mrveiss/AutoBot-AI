@@ -7,6 +7,9 @@
 Extracted so the dispatcher in ``search.py`` stays within the function-length
 limit (#620).  The path delegates to VectorSearchEngine and falls back to a
 direct ChromaDB query.  Issue #398, #934, #3828.
+
+The serving predicate (#18820) is not applied here: ``SearchMixin.search`` applies it
+once to what every mode returns, so this path stays a plain store read.
 """
 
 from __future__ import annotations
@@ -28,8 +31,13 @@ class BasicVectorSearchMixin:
         top_k: int,
         similarity_top_k: int | None,
         filters: Dict[str, Any] | None,
+        hardware_backend: str = "auto",
     ) -> List[Dict[str, Any]]:
-        """Run the basic vector search, falling back to direct ChromaDB on error."""
+        """Run the basic vector search, falling back to direct ChromaDB on error.
+
+        ``hardware_backend="cpu"`` is how the NPU engine's own fallbacks re-enter ``KB.search`` for its
+        quarantine gate without dispatching back into the NPU leg they came from (#20940).
+        """
         self.ensure_initialized()
         similarity_top_k = similarity_top_k or top_k
 
@@ -49,7 +57,7 @@ class BasicVectorSearchMixin:
                 query=query,
                 top_k=similarity_top_k,
                 filters=filters,
-                hardware_backend="auto",
+                hardware_backend=hardware_backend,
             )
             # Convert canonical VectorSearchResult -> legacy dict format expected by callers
             results = [
