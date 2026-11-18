@@ -56,3 +56,24 @@ def test_raw_markup_never_survives_into_reply():
     cleaned = clean_reply_text(BAD)
     assert "TOOL_CALL" not in cleaned and "THOUGHT: click it" in cleaned
     assert clean_reply_text(GOOD) == GOOD
+
+
+def test_unhashable_dict_key_is_a_parse_error_not_a_crash():
+    """`{[1]:2}` makes ast.literal_eval raise TypeError (#21843)."""
+    reply = """<TOOL_CALL name="x" params='{[1]:2}'>go</TOOL_CALL>"""
+    assert "not valid JSON" in tool_call_parse_error(reply)
+    assert parse_failure_step(reply, 2)["tool"] == "tool_call_parse"
+    assert "TOOL_CALL" not in clean_reply_text(reply)
+
+
+def test_deeply_nested_args_are_a_parse_error_not_a_crash():
+    deep = "[" * 200_000 + "]" * 200_000
+    reply = f"""<TOOL_CALL name="x" params='{deep}'>go</TOOL_CALL>"""
+    assert tool_call_parse_error(reply) is not None
+    assert "TOOL_CALL" not in clean_reply_text(reply)
+
+
+def test_lenient_parser_keeps_every_entry_key_as_the_models_own_text():
+    """A value that spells `', 'key': '` becomes a sibling key; the dispatcher validates keys against the tool."""
+    raw = "{'a': 'it's', 'injected': 'x', 'b': 'y'}"
+    assert parse_tool_args(raw) == {"a": "it's", "injected": "x", "b": "y"}

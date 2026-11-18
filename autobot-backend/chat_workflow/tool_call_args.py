@@ -24,6 +24,8 @@ from chat_workflow.tool_call_grammar import TOOL_CALL_OPENING_RE, TOOL_CALL_PATT
 logger = get_logger(__name__)
 
 _PARSE_ERROR_SNIPPET_CHARS = 200
+#: Everything ``ast.literal_eval`` can raise on model-written text; none may escape the reply path (#21843).
+_LITERAL_EVAL_ERRORS = (ValueError, SyntaxError, TypeError, RecursionError, MemoryError)
 # `'key': '` at the start of a dict, or `', 'key': '` between entries.
 _QUOTED_KEY_START_RE = re.compile(r"(?:^\{\s*|'\s*,\s*)'(\w+)'\s*:\s*'")
 _QUOTED_DICT_END_RE = re.compile(r"'\s*\}\s*$")
@@ -58,12 +60,14 @@ def parse_tool_args(raw: str) -> dict:
         return json.loads(raw, strict=False)  # strict=False: raw newlines/tabs inside strings
     except json.JSONDecodeError as err:
         first_error = err
+    except RecursionError:  # a deeply nested blob is unparseable, not a crash
+        first_error = json.JSONDecodeError("nesting too deep", raw[:_PARSE_ERROR_SNIPPET_CHARS], 0)
     try:
         result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
         if isinstance(result, dict):
             logger.warning("Tool args parsed via ast.literal_eval fallback — LLM produced near-valid JSON")
             return result
-    except (ValueError, SyntaxError):
+    except _LITERAL_EVAL_ERRORS:  # `{[1]: 2}` is a TypeError, deep nesting a RecursionError/MemoryError
         pass
     if (recovered := _split_quoted_entries(raw)) is not None:
         logger.warning("Tool args recovered from unescaped apostrophes in single-quoted values (#21843)")
