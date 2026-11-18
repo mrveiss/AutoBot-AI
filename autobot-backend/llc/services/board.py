@@ -30,6 +30,8 @@ from ..models.board import LLCBoard, LLCBoardColumn
 from ..models.enums import BoardType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
+from .work_item_gated_done import DoneGate
 from .work_item_service import WorkItemService
 
 logger = logging.getLogger(__name__)
@@ -210,7 +212,7 @@ class BoardService(LLCServiceBase):
         """
         board = await self.get_board(session, board_id)
         if board is None:
-            raise ValueError(f"Board {board_id} not found")
+            raise CompanyOsNotFound(f"Board {board_id} not found")
 
         # Collect all statuses covered by this board's columns so we can
         # fetch matching work items in one query.
@@ -270,6 +272,28 @@ class BoardService(LLCServiceBase):
     # Move
     # ------------------------------------------------------------------
 
+    @staticmethod
+    async def _enforce_wip_limit(session: AsyncSession, board: LLCBoard, column: LLCBoardColumn) -> None:
+        """Raise WipLimitExceeded when *column* is at its limit."""
+        if column.wip_limit is None:
+            return
+        scope_filter = []
+        if board.project_id is not None:
+            scope_filter.append(LLCWorkItem.project_id == board.project_id)
+        if board.sprint_id is not None:
+            scope_filter.append(LLCWorkItem.sprint_id == board.sprint_id)
+
+        count_result = await session.execute(
+            select(func.count(LLCWorkItem.id)).where(
+                LLCWorkItem.company_id == board.company_id,
+                LLCWorkItem.status.in_(column.status_filter),
+                *scope_filter,
+            )
+        )
+        current_count = count_result.scalar_one()
+        if current_count >= column.wip_limit:
+            raise WipLimitExceeded(column.name, column.wip_limit, current_count)
+
     async def move_item(
         self,
         session: AsyncSession,
@@ -278,6 +302,7 @@ class BoardService(LLCServiceBase):
         column_id: str,
         actor_id: Optional[str] = None,
         acting_user: Optional[uuid.UUID] = None,
+        done_gate: Optional[DoneGate] = None,
     ) -> LLCWorkItem:
         """Move *work_item_id* into *column_id*, enforcing WIP limit.
 
@@ -291,7 +316,7 @@ class BoardService(LLCServiceBase):
         """
         board = await self.get_board(session, board_id)
         if board is None:
-            raise ValueError(f"Board {board_id} not found")
+            raise CompanyOsNotFound(f"Board {board_id} not found")
 
         col_result = await session.execute(
             select(LLCBoardColumn).where(
@@ -301,34 +326,21 @@ class BoardService(LLCServiceBase):
         )
         column = col_result.scalar_one_or_none()
         if column is None:
-            raise ValueError(f"Column {column_id} not found on board {board_id}")
+            raise CompanyOsNotFound(f"Column {column_id} not found on board {board_id}")
 
-        # WIP limit check
-        if column.wip_limit is not None:
-            scope_filter = []
-            if board.project_id is not None:
-                scope_filter.append(LLCWorkItem.project_id == board.project_id)
-            if board.sprint_id is not None:
-                scope_filter.append(LLCWorkItem.sprint_id == board.sprint_id)
-
-            count_result = await session.execute(
-                select(func.count(LLCWorkItem.id)).where(
-                    LLCWorkItem.company_id == board.company_id,
-                    LLCWorkItem.status.in_(column.status_filter),
-                    *scope_filter,
-                )
-            )
-            current_count = count_result.scalar_one()
-            if current_count >= column.wip_limit:
-                raise WipLimitExceeded(column.name, column.wip_limit, current_count)
-
+        await self._enforce_wip_limit(session, board, column)
         if not column.status_filter:
-            raise ValueError(f"Column {column_id} has no status_filter configured")
+            raise CompanyOsError(f"Column {column_id} has no status_filter configured")
 
         new_status = WorkItemStatus(column.status_filter[0])
         work_item_svc = WorkItemService(activity_log=self.activity_log)
         updated_item = await work_item_svc.transition_status(
-            session, work_item_id, new_status, company_id=str(board.company_id), acting_user=acting_user
+            session,
+            work_item_id,
+            new_status,
+            company_id=str(board.company_id),
+            acting_user=acting_user,
+            done_gate=done_gate,
         )
 
         await self._publish_board_event(

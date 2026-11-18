@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from autobot_shared import node_proxy
 from autobot_shared.isolated_git import git, make_repo
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -92,7 +93,7 @@ def world(tmp_path, monkeypatch):
 
 
 def _request(key: str | None = None):
-    return SimpleNamespace(headers={"X-Internal-API-Key": key} if key else {})
+    return SimpleNamespace(headers={node_proxy.INTERNAL_KEY_HEADER: key} if key else {})
 
 
 async def _post(commit: str, request=None, user=USER):

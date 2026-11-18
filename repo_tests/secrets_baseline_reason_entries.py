@@ -584,6 +584,11 @@ SPECIFIC_REASONS[
     "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
     "of the literal label reproduces this hash."
 )
+# The required-gate workflows' entries live in their own module (#18208): this table sits at the
+# 600-line ceiling, so the next group of entries moves out rather than trimming what is here.
+from repo_tests.secrets_baseline_reason_workflows import WORKFLOW_REASONS  # noqa: E402
+
+SPECIFIC_REASONS.update(WORKFLOW_REASONS)
 
 from repo_tests.secrets_baseline_reason_entries_slm_labels import SLM_LABEL_REASONS  # noqa: E402  (#18863)
 

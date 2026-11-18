@@ -12,25 +12,30 @@ import importlib
 import sys
 import uuid
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from autobot_shared.slm_credential_deletion import ACTION
+from autobot_shared.slm_credential_actions import INTERNAL_KEY_REALIGN, SSH_PASSWORD_DELETE
 from services.approval_gate_service import ApprovalGateService
+from services.slm_internal_key_realign_action import register_internal_key_realign_action
 from services.slm_ssh_password_action import register_ssh_password_action
+from testkit.fake_async_session import FakeAsyncSession
 from tests.conftest import load_real_auth_middleware
 
-_ID = uuid.uuid4()
+_ID = uuid.UUID(
+    "00000000-0000-4000-8000-00000000000a"
+)  # fixed: a random id gives each xdist worker a different test id
+_USER_ID = "00000000-0000-4000-8000-00000000000b"
 
 
 def _person(role: str, **over) -> dict:
     return {
         "username": role,
         "role": role,
-        "user_id": str(uuid.uuid4()),
+        "user_id": _USER_ID,
         "iat": 1,
         "auth_method": "jwt",
         "login_token": True,
@@ -50,12 +55,13 @@ def _row(action: str | None):
 
 @pytest.fixture
 def world(monkeypatch):
-    register_ssh_password_action()  # the production registration, admin_only included
+    register_ssh_password_action()  # the production registrations, admin_only included
+    register_internal_key_realign_action()
     real = load_real_auth_middleware()
     monkeypatch.setitem(sys.modules, "auth_middleware", real)
     monkeypatch.delitem(sys.modules, "api.approval_gates", raising=False)
     route = importlib.import_module("api.approval_gates")
-    state = SimpleNamespace(user=None, row=_row(ACTION))
+    state = SimpleNamespace(user=None, row=_row(SSH_PASSWORD_DELETE.name))
     resolve = AsyncMock(side_effect=lambda _request: state.user)
     monkeypatch.setattr(real, "resolve_human_user", resolve)
     monkeypatch.setattr(real, "admit_opted_in_service", AsyncMock(return_value=None))
@@ -64,7 +70,7 @@ def world(monkeypatch):
     monkeypatch.setattr(ApprovalGateService, "approve", approve)
     app = FastAPI()
     app.include_router(route.router)
-    app.dependency_overrides[route.get_db_session] = lambda: MagicMock()
+    app.dependency_overrides[route.get_db_session] = lambda: FakeAsyncSession()
     with patch("api.approval_gates_approver.audit_log", AsyncMock(return_value=True)) as audit:
         yield SimpleNamespace(
             client=TestClient(app, raise_server_exceptions=False), state=state, approve=approve, audit=audit
@@ -89,7 +95,7 @@ def test_a_non_admin_person_is_refused_403_and_audited_and_nothing_is_approved(w
     world.approve.assert_not_awaited()
     kwargs = world.audit.await_args.kwargs
     assert world.audit.await_args.args[0] == "approval.approve" and kwargs["result"] == "denied"
-    assert kwargs["durable"] is True and kwargs["details"]["action"] == ACTION
+    assert kwargs["durable"] is True and kwargs["details"]["action"] == SSH_PASSWORD_DELETE.name
 
 
 def test_the_interactive_human_check_still_applies_to_an_admin_credential(world) -> None:
@@ -103,3 +109,20 @@ def test_other_actions_keep_their_existing_approver_rule(world) -> None:
     world.state.user = _person("user")
     assert 200 <= _post(world).status_code < 300
     world.audit.assert_not_awaited()
+
+
+@pytest.mark.parametrize("role", ["user", "operator"])
+def test_a_non_admin_person_cannot_approve_a_key_realign(world, role) -> None:
+    world.state.row = _row(INTERNAL_KEY_REALIGN.name)
+    world.state.user = _person(role)
+    assert _post(world).status_code == 403
+    world.approve.assert_not_awaited()
+    kwargs = world.audit.await_args.kwargs
+    assert kwargs["result"] == "denied" and kwargs["details"]["action"] == INTERNAL_KEY_REALIGN.name
+
+
+def test_an_admin_approves_a_key_realign(world) -> None:
+    world.state.row = _row(INTERNAL_KEY_REALIGN.name)
+    world.state.user = _person("admin")
+    assert 200 <= _post(world).status_code < 300
+    world.approve.assert_awaited_once()

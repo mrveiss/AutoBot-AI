@@ -29,11 +29,13 @@ Usage:
 
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.threshold_constants import CategoryDefaults, StringParsingConstants
 from services.feature_flags_cache import (
@@ -164,7 +166,6 @@ class FeatureFlags(FeatureFlagCacheMixin, FeatureFlagStatsMixin, AsyncRedisClien
         self._cache = {}
         self._cache_ttl = FEATURE_FLAG_CACHE_TTL_SECONDS  # seconds, see feature_flags_cache
         self._last_refresh = {}
-        self._enforcement_default_logged = False
 
     async def get_enforcement_mode(self) -> EnforcementMode:
         """Current access control enforcement mode, cached for ``_cache_ttl`` seconds.
@@ -197,13 +198,13 @@ class FeatureFlags(FeatureFlagCacheMixin, FeatureFlagStatsMixin, AsyncRedisClien
             # read nothing as "off", so an install provisioning never reached
             # was indistinguishable from one deliberately disabled. log_only
             # blocks nothing -- it audits.
-            if not self._enforcement_default_logged:
-                logger.info(
-                    "Enforcement mode not set; using the provisioned default %s",
-                    PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value,
-                )
-                self._enforcement_default_logged = True
-            else:
+            if not log_once(
+                logger,
+                logging.INFO,
+                "enforcement_default",
+                "Enforcement mode not set; using the provisioned default %s",
+                PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value,
+            ):
                 logger.debug("Enforcement mode not set, using default %s", PROVISIONED_ENFORCEMENT_MODE_DEFAULT.value)
             return PROVISIONED_ENFORCEMENT_MODE_DEFAULT
 

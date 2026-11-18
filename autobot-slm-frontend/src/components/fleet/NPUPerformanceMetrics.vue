@@ -12,6 +12,7 @@
  * Issue #590 - NPU Dashboard Improvements.
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PollingPausedAlert, BaseSkeleton, formatUptime } from '@autobot/ui'
@@ -386,7 +387,7 @@ onMounted(() => metricsPoller.start(''))
               <!-- Last Report -->
               <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
-                  {{ node.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A' }}
+                  {{ node.timestamp ? formatFleetTime(node.timestamp) : 'N/A' }}
                 </p>
                 <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.lastReport') }}</p>
               </div>
