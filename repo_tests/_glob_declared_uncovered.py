@@ -309,4 +309,13 @@ GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
         "in the python filter would instead spend the twelve-shard suite on every documentation "
         "edit, which is the trade this record exists to keep visible (owner decision, #17930)",
     ),
+    # #21713: the promotion-base wiring guard reads every workflow; actionlint.yml already fires on
+    # that tree, so it runs the guard there instead of spending the suite on every workflow edit.
+    ".github/workflows/*.y*ml": (
+        {"repo_tests/release_promotion_base_wiring_21713_test.py"},
+        ".github/workflows/actionlint.yml",
+        "the guard reads only workflow YAML and repo_tests imports; actionlint.yml fires on every "
+        "workflow change, and covering `.github/workflows/**` in the python filter would run the "
+        "twelve-shard suite on each one (#21713)",
+    ),
 }
