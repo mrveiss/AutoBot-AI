@@ -438,7 +438,10 @@ def last_success_cursor(client: StructureClient) -> Optional[str]:
     for job in jobs.get("jobs") or []:
         if str(job.get("name", "")).startswith(CURSOR_JOB_PREFIX):
             text = job["name"][len(CURSOR_JOB_PREFIX) :]
-            parse_window_cursor(text)
+            try:
+                parse_window_cursor(text)
+            except StructureError as exc:
+                raise StructureError(f"run {runs[0]['id']}: {exc}") from exc
             return text.strip()
     return runs[0].get("run_started_at")
 

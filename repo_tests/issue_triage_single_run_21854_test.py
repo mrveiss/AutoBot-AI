@@ -20,6 +20,7 @@ so a renamed job or key cannot turn the guard into an empty pass.
 from __future__ import annotations
 
 import copy
+import sys
 
 import pytest
 from repo_tests._paths import repo_root
@@ -171,10 +172,13 @@ def test_each_way_the_cursor_can_break_is_caught(doc, expected):
 
 
 def test_the_real_cursor_job_matches_the_script_that_reads_it():
-    import sys
+    import importlib.util
 
-    sys.path.insert(0, str(repo_root() / "pipeline-scripts"))
-    import issue_structure
+    path = repo_root() / "pipeline-scripts" / "issue_structure.py"
+    spec = importlib.util.spec_from_file_location("issue_structure_for_cursor_guard", path)
+    issue_structure = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = issue_structure  # its own pipeline-scripts imports resolve via its sys.path insert
+    spec.loader.exec_module(issue_structure)
 
     doc = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     assert issue_structure.CURSOR_JOB_PREFIX == _PREFIX

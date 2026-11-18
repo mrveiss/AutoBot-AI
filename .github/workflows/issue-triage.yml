@@ -35,6 +35,15 @@
 #   a failed job never advances it. The changed set is capped (ISSUE_TRIAGE_MAX_CHANGED in
 #   issue_structure.py, oldest first) and the cursor then stops at the last processed issue;
 #   the backlog sweep runs only on schedule or dispatch.
+#   Behaviour change: the "could not classify" ask is no longer "once, on creation". It is now
+#   "once, if never asked and created within ASK_MAX_AGE_HOURS" (repository variable
+#   ISSUE_TRIAGE_ASK_MAX_AGE_HOURS, default 168), so it can fire on a later edit of a young issue.
+#   Recovery if a cursor job name ever fails to parse (the `window` job then fails with
+#   "unparseable window cursor" and every run stays red): the newest successful run holds the bad
+#   name, so delete that run (`gh run delete <run id>`, the `window` error names it as
+#   "run <id>: unparseable window cursor"). The next window then starts from the previous
+#   successful run's cursor, or from the 24h fallback when none is left. Nothing is lost: windows
+#   only ever re-cover issues, and every step is idempotent.
 #   Known limit: updated_at cannot tell a body edit from a label change, so triage may
 #   re-add an area label the text implies after a human removed it; selectLabels still
 #   applies nothing to an issue whose author already labelled it.
@@ -108,7 +117,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           # A deferral lasts at most a few runs (events and the 2h schedule); a week bounds it.
-          ASK_MAX_AGE_HOURS: '168'
+          ASK_MAX_AGE_HOURS: ${{ vars.ISSUE_TRIAGE_ASK_MAX_AGE_HOURS || '168' }}
           CHANGED: ${{ needs.window.outputs.changed }}
         with:
           script: |
