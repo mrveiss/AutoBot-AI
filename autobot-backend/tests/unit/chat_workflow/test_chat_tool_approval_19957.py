@@ -24,10 +24,8 @@ READ = {"name": "web_search", "params": {"query": "weather in Riga"}}
 
 
 def _graph():
-    try:
-        import chat_workflow.graph as graph_module
-    except ImportError as exc:  # env-dependent chain; a real regression still fails
-        pytest.skip(f"chat_workflow not importable here: {exc}")
+    import chat_workflow.graph as graph_module  # an import regression must fail these tests, never skip them
+
     return graph_module
 
 
@@ -177,7 +175,7 @@ async def test_with_the_line_store_down_no_card_is_raised_and_the_seam_refuses()
     assert message.type == "error" and filed == 0
 
 
-async def _governed(context, read=None):
+async def _governed(context, read=None, relaxed=None):
     """The turn context as chat builds it with the gate ON: the baseline overlaid on ``requires_approval_before``."""
     from unittest.mock import AsyncMock
 
@@ -191,18 +189,18 @@ async def _governed(context, read=None):
         ),
         patch("chat_workflow.session_work_item.SessionWorkItemService.get_work_item", AsyncMock(return_value=None)),
         patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)),
-        ai_line_world(),
+        ai_line_world(slm_relaxed=relaxed),
     ):
         # The verified company comes from the route's scope; apply_auth_role replaces anything in the bag.
         governed = await apply_session_governance("s1", dict(context), "user", {"org_id": VERIFIED_COMPANY})
     return governed
 
 
-async def _needs_approval(call, governed):
+async def _needs_approval(call, governed, relaxed=None):
     from services.ai_line_enforcement import call_needs_approval
 
     ctx = SimpleNamespace(requires_approval_before=governed["requires_approval_before"], context=governed)
-    with ai_line_world():
+    with ai_line_world(slm_relaxed=relaxed):
         return await call_needs_approval(call, ctx)
 
 
@@ -248,8 +246,16 @@ async def test_an_unreadable_session_declaration_fails_closed_and_holds_navigate
     governed = await _governed(
         {"declared_approval_categories": []}, read=AsyncMock(side_effect=ConnectionError("down"))
     )
-    assert "declared_approval_categories" not in governed, "unstamped, and a client's own value is dropped"
+    from autobot_shared.tool_catalogue import valid_approval_categories
+
+    assert (
+        set(governed["declared_approval_categories"]) == valid_approval_categories()
+    ), "every category, not a client's"
     assert await _needs_approval(NAVIGATE, governed) is True
+    # The administrator relaxed "browser actions" in the baseline: the unreadable declaration still holds navigate.
+    relaxed = ["browser actions"]
+    governed = await _governed({}, read=AsyncMock(side_effect=ConnectionError("down")), relaxed=relaxed)
+    assert await _needs_approval(NAVIGATE, governed, relaxed) is True
 
 
 def test_declared_categories_fall_back_to_the_overlaid_list_when_unstamped_or_malformed():
@@ -317,3 +323,55 @@ async def test_dispatching_approved_calls_drops_the_stamp_from_the_exec_ctx_copy
 
     assert key not in exec_ctx.context and exec_ctx.requires_approval_before == []
     assert state["context"] == {key: ["browser actions"]}, "graph state is untouched"
+
+
+@pytest.mark.asyncio
+async def test_a_delegate_spawned_in_an_approved_dispatch_still_inherits_the_declared_set():
+    from chat_workflow.graph_tool_dispatch import dispatch_approved_calls
+    from chat_workflow.run_authority import Inheritance
+
+    key = "declared_approval_categories"
+    state = {
+        "session_id": "s1",
+        "terminal_session_id": "t1",
+        "execution_history": [],
+        "llm_params": {"ollama_endpoint": "http://x", "selected_model": "m"},
+        "context": {key: ["browser actions"]},
+    }
+    exec_ctx = SimpleNamespace(context=dict(state["context"]), requires_approval_before=["browser actions"])
+    seen = {}
+
+    class Manager:
+        def _bind_spill_run(self, _sid):
+            pass
+
+        async def _process_tool_calls(self, *_a, ctx=None, **_k):
+            seen["declared"] = Inheritance.of(ctx).declared_categories  # what a delegate spawned here would inherit
+            yield (False, None)
+
+    await dispatch_approved_calls(Manager(), exec_ctx, state, [dict(CLICK)], 1, [], None)
+
+    assert key not in exec_ctx.context, "the clear stays: approved calls are not re-held"
+    assert seen["declared"] == ("browser actions",)
+
+
+def test_a_refused_result_fails_the_plan_step():
+    from chat_workflow import plan_runner
+
+    assert plan_runner.STATUS_OUTCOME["refused"] == plan_runner.FAIL
+
+
+@pytest.mark.asyncio
+async def test_a_pass_where_every_call_was_refused_settles_the_plan_step():
+    from unittest.mock import AsyncMock
+
+    graph = _graph()
+    settle = AsyncMock(return_value={"plan_progress": {"block": "", "step_id": None}})
+    state = _state(
+        [dict(CLICK, needs_approval=True)], approval_decision={"approved": False, "reason": "no", "bound": []}
+    )
+    with patch.object(graph, "advance_after_tools", settle):
+        out = await graph.execute_tools(state, {"configurable": {"manager": object()}})
+    (_manager_arg, _state_arg, entries), _ = settle.await_args
+    assert [e["status"] for e in entries] == ["refused"]
+    assert out["plan_progress"] == {"block": "", "step_id": None} and out["tool_calls"] == []

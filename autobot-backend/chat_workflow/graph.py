@@ -883,13 +883,13 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             emit_step_complete(
                 "execute_tools", _cot_exec_start, output_summary="approval denied", session_id=session_id
             )
-            history = [*state.get("execution_history", []), *refusals]
             return {
                 "should_continue": True,
-                "execution_history": history,
+                "execution_history": [*state.get("execution_history", []), *refusals],
                 "workflow_messages": messages,
                 "tool_calls": [],
                 "approval_decision": None,
+                **await advance_after_tools(manager, state, refusals),  # the refused step must not stay current
             }
 
     loop_state = planned_loop_update(state, tool_calls)  # #3254: before execution

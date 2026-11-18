@@ -52,7 +52,11 @@ class Inheritance:
             authority=authority_of(parent_ctx),
             work_item_id=getattr(parent_ctx, "work_item_id", None),
             approve_every_call=bool(getattr(parent_ctx, "approve_every_call", False)),
-            declared_categories=declared_categories_of(parent_ctx),
+            declared_categories=(
+                snapshot
+                if (snapshot := getattr(parent_ctx, "declared_snapshot", None)) is not None
+                else declared_categories_of(parent_ctx)
+            ),
         )
 
 

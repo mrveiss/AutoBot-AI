@@ -15,7 +15,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
@@ -403,6 +403,9 @@ class LLMIterationContext:
     # field, not a `context` key, for the reason auth_role is: `context` is copied from the request.
     # A call whose fingerprint is absent is still held; nothing in here ever lifts line 3.
     approved_fingerprints: frozenset = frozenset()
+    # #19957: the categories this run declared, taken before an approved dispatch clears them from `context`, so a
+    # delegate spawned in that dispatch inherits them (None: not captured; read `context` instead).
+    declared_snapshot: Optional[tuple] = None
     # #16950: authority inherited from the principals this run acts for -- a delegating
     # parent's gates, boundary and grants. Met with the run's own at every seam that
     # enforces one, so no hop can widen it. None: nothing inherited.

@@ -6,7 +6,7 @@
 
 from typing import Any, Dict, List, Tuple
 
-from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY, declared_categories_of
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -105,6 +105,7 @@ async def dispatch_approved_calls(
     # approved action (double-block); clearing it supersedes the seam gate on
     # the graph path while leaving it fully active for legacy/MCP callers
     # that never pass through the interrupt.
+    exec_ctx.declared_snapshot = declared_categories_of(exec_ctx)  # #19957: a delegate spawned below inherits it
     exec_ctx.requires_approval_before = []
     exec_ctx.context.pop(DECLARED_CATEGORIES_KEY, None)  # #19957: the stamped declared set is cleared with it
 

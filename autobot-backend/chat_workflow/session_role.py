@@ -269,7 +269,7 @@ async def apply_session_governance(
                 "Session approval categories unreadable for %s (%s); every category stays gated", session_id, exc
             )
             session_categories = None
-    # #19957: stamped before the overlay mixes the baseline in; None leaves it unstamped, so the overlay is what counts.
+    # #19957: stamped before the overlay mixes the baseline in; None (unreadable) stamps every category as declared.
     context = stamp_declared_categories(context, session_categories)
     if CHAT_APPROVAL_GATE_ENABLED:
         # #18294: all categories gated by default; only the SLM setting relaxes one.

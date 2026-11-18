@@ -73,11 +73,12 @@ def stamp_declared_categories(
     """Record what the work item and the session declared, before the baseline overlay mixes it in (#19957).
 
     Overwrites any client-supplied value: only the server decides what was declared. ``None`` (the session's
-    declaration could not be read) removes the key, so the overlaid list is what counts and every category holds.
+    declaration could not be read) stamps EVERY valid category as declared, so none holds less than before, even one
+    the administrator relaxed in the baseline.
     """
     base = dict(context or {})
     if session_categories is None:
-        base.pop(DECLARED_CATEGORIES_KEY, None)
+        base[DECLARED_CATEGORIES_KEY] = sorted(valid_approval_categories())
         return base
     declared = base.get("requires_approval_before")
     base[DECLARED_CATEGORIES_KEY] = union_categories(
