@@ -20,7 +20,9 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -65,7 +67,7 @@ async def list_agents(
 
 def _agent_row(node: AgentOrgNode, run: Any) -> Dict[str, Any]:
     """One agent in the list, with whether it can run and, when not, why (#20519)."""
-    reason = run_block_reason(node.status, node.adapter_type, node.adapter_config)
+    reason = run_block_reason(node.status, node.adapter_type, node.adapter_config, org_role=node.org_role)
     return {
         # Logical agent_id slug — kept as `id` for backward compatibility with
         # the heartbeat monitor; also exposed explicitly as `agent_id`.
@@ -127,9 +129,9 @@ async def trigger_heartbeat(
                 status_code=404,
                 detail=f"Agent {agent_id!r} not found or not configured",
             )
-        raise HTTPException(status_code=409, detail=f"Cannot run: {exc.reason}")
+        raise http_refusal(409, exc, scope="agents.trigger_heartbeat") from None
     except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
 
     agent_company = agent_cfg.get("company_id")

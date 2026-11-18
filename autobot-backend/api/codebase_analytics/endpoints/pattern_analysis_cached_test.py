@@ -61,7 +61,7 @@ class TestGetCachedPatternSummary:
         """ChromaDB collection unavailable degrades to 200 no_data."""
         stub_storage.get_pattern_collection_async = AsyncMock(return_value=None)
 
-        resp = client.get("/patterns/cached-summary")
+        resp = client.get("/patterns/cached-summary", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -74,7 +74,7 @@ class TestGetCachedPatternSummary:
         mock_collection.get.return_value = {"metadatas": []}
         stub_storage.get_pattern_collection_async = AsyncMock(return_value=mock_collection)
 
-        resp = client.get("/patterns/cached-summary")
+        resp = client.get("/patterns/cached-summary", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         assert resp.json()["status"] == "no_data"
@@ -83,7 +83,7 @@ class TestGetCachedPatternSummary:
         """A store-read failure degrades to 200 no_data instead of 500."""
         stub_storage.get_pattern_collection_async = AsyncMock(side_effect=RuntimeError("chromadb unavailable"))
 
-        resp = client.get("/patterns/cached-summary")
+        resp = client.get("/patterns/cached-summary", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         assert resp.json()["status"] == "no_data"
@@ -98,7 +98,7 @@ class TestGetCachedPatternSummary:
         }
         stub_storage.get_pattern_collection_async = AsyncMock(return_value=mock_collection)
 
-        resp = client.get("/patterns/cached-summary")
+        resp = client.get("/patterns/cached-summary", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -111,7 +111,7 @@ class TestGetCachedPatterns:
     def test_no_collection_returns_no_data(self, client, stub_storage):
         stub_storage.get_pattern_collection_async = AsyncMock(return_value=None)
 
-        resp = client.get("/patterns/cached-patterns")
+        resp = client.get("/patterns/cached-patterns", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -122,8 +122,27 @@ class TestGetCachedPatterns:
         """A store-read failure degrades to 200 no_data instead of 500."""
         stub_storage.get_pattern_collection_async = AsyncMock(side_effect=RuntimeError("chromadb unavailable"))
 
-        resp = client.get("/patterns/cached-patterns")
+        resp = client.get("/patterns/cached-patterns", params={"source_id": "src1"})
 
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "no_data"
+
+
+class TestSourceIsRequired:
+    """#20513: a cached read without a source is a 422, never the "default" partition."""
+
+    @pytest.mark.parametrize("path", ["/patterns/cached-summary", "/patterns/cached-patterns"])
+    def test_missing_source_is_422(self, client, stub_storage, path):
+        stub_storage.get_pattern_collection_async = AsyncMock(side_effect=AssertionError("store must not be read"))
+
+        resp = client.get(path)
+
+        assert resp.status_code == 422
+
+    def test_the_response_names_its_source(self, client, stub_storage):
+        stub_storage.get_pattern_collection_async = AsyncMock(return_value=None)
+
+        resp = client.get("/patterns/cached-summary", params={"source_id": "src1"})
+
+        assert resp.json()["source_id"] == "src1"

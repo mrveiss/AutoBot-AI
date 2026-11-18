@@ -4,8 +4,10 @@
 
 from typing import List
 
+from ...exceptions import PublicMessageMixin
 
-class CompanyOsError(ValueError):
+
+class CompanyOsError(PublicMessageMixin, ValueError):
     """The request makes no sense (400)."""
 
 

@@ -29,6 +29,7 @@ from security.enforcement_mode import (
     resolve_enforcement_mode,
     resolve_enforcement_mode_for_request,
 )
+from security.session_owner_claim import take_or_refresh
 from security.session_posture import (
     SessionPosture,
     authenticated_user,
@@ -136,16 +137,12 @@ class SessionOwnershipValidator:
             # ownership check on it. Refreshing one's own ownership (TTL refresh) is still allowed.
             existing = await self.get_session_owner(session_id)
             if existing and existing != username and not force:
-                logger.warning(
-                    "Refusing to reassign session %s... from %s to %s without force",
-                    session_id[:8],
-                    existing,
-                    username,
-                )
+                refusal = "Refusing to reassign session %s... from %s to %s without force"
+                logger.warning(refusal, session_id[:8], existing, username)
                 return False
 
-            ownership_key = self._get_ownership_key(session_id)
-            await self.redis.set(ownership_key, username, ex=self.ownership_ttl)
+            if not await take_or_refresh(self, session_id, existing, username, force):
+                return False
             for previous in {existing, previous_owner} - {None, username}:  # #20029: their list stops showing it
                 await self.redis.srem(self._get_user_sessions_key(previous), session_id)
 
@@ -527,7 +524,9 @@ class SessionOwnershipValidator:
         if (decided := await unowned_access(session_id, user_data, request)) is not None:
             return username, decided
         logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
-        await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
+        if not await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None):
+            # Another writer took it first (#20030): the normal comparison refuses; unknown is no owner, not "free"
+            return await self.get_session_owner(session_id) or "", None
         return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
 
     async def _resolve_ownership(
@@ -616,18 +615,12 @@ class SessionOwnershipValidator:
             username: Owner username
 
         Returns:
-            List of session IDs
+            List of session IDs. A Redis error propagates (#21664): "could not
+            read" must never look like "owns nothing" to a caller.
         """
-        try:
-            user_sessions_key = self._get_user_sessions_key(username)
-            sessions = await self.redis.smembers(user_sessions_key)
-            if not sessions:
-                return []
-            # Handle both bytes and str responses from Redis
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
-        except Exception as e:
-            logger.error("Failed to get user sessions: %s", e)
-            return []
+        sessions = await self.redis.smembers(self._get_user_sessions_key(username))
+        # Handle both bytes and str responses from Redis
+        return [s.decode() if isinstance(s, bytes) else s for s in sessions or ()]
 
     async def get_org_sessions(self, org_id: str) -> list[str]:
         """Get all sessions for an organization (#684)."""

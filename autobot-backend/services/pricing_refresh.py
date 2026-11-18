@@ -30,7 +30,8 @@ from typing import TYPE_CHECKING
 from celery.signals import worker_ready
 
 from autobot_shared.env_utils import env_float
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 if TYPE_CHECKING:
@@ -141,15 +142,6 @@ async def _write_baseline_fallback(store, summary: dict) -> dict:
     summary["indexed"] = await store.set_model_index(merged)
     summary["baseline_fallback"] = {"used": True, "model_count": len(merged)}
     return summary
-
-
-def _run_async(coro):
-    """Run an async coroutine from a sync Celery task."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
 
 async def _fetch(source, store, summary: dict) -> "dict[str, ModelPricing]":
@@ -264,7 +256,7 @@ def refresh_pricing_if_empty():
     coming up and accepting other work.
     """
     logger.info("pricing_refresh: worker-ready — checking for a first-boot refresh")
-    return _run_async(refresh_if_empty())
+    return run_in_worker_loop(refresh_if_empty())
 
 
 @worker_ready.connect
@@ -290,7 +282,7 @@ def refresh_pricing_daily(self):
     """Celery beat task: pull pricing from the live catalogues and cache it in Redis."""
     logger.info("pricing_refresh: starting refresh")
     try:
-        summary = _run_async(refresh_all())
+        summary = run_in_worker_loop(refresh_all())
         logger.info("pricing_refresh: complete — %s", {k: v for k, v in summary.items() if k != "crosscheck"})
         return summary
     except Exception as exc:
@@ -315,4 +307,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())

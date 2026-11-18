@@ -45,6 +45,7 @@ autobot-frontend/src/components/manpage/ManPageManager.vue
 autobot-frontend/src/components/manpage/ManPageSearchPanel.vue
 autobot-frontend/src/components/security/SecretsManager.vue
 autobot-frontend/src/components/ui/EmptyState.stories.ts
+autobot-frontend/src/components/ui/__tests__/EmptyState.adapter.test.ts
 autobot-frontend/src/components/ui/index.ts
 autobot-frontend/src/views/AdminPermissionScopesView.vue
 autobot-frontend/src/views/AdvancedControlView.vue

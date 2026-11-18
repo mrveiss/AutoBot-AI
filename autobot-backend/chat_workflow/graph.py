@@ -31,15 +31,24 @@ from langchain_core.runnables import RunnableConfig
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
-from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
-from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
+from chat_workflow.approval_binding import approval_card, bind_decision
+from chat_workflow.attachment_context import attachment_prompt, deliver_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
+from chat_workflow.graph_hooks import (
+    _emit_agent_execute_hook,
+    _emit_planned_agent_complete_hook,
+    _emit_planned_agent_error_hooks,
+)
+from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
+from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
 from chat_workflow.graph_tool_dispatch import (
     dispatch_approved_calls,
     emit_tool_call_hook,
     emit_tool_complete_hook,
     send_denied_message,
+    split_refused,
 )
+from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
     FINAL_ANSWER_INSTRUCTION,
@@ -126,11 +135,18 @@ class ChatState(TypedDict, total=False):
     # has already triggered a regeneration for this turn (capped at 1).
     judge_count: int
 
+    # Planner (#21023): ids only; the plan body lives in Redis. plan_progress = done/total/complete + step block.
+    plan_id: str | None
+    current_step_id: str | None
+    plan_progress: Dict[str, Any]
+
     # Tool-call loop detection (#3254)
     # Each entry is a frozenset fingerprint of (tool_name, args_hash) for one iteration.
     tool_call_fingerprints: List[str]
     tool_loop_count: int
     tool_loop_warning: str
+
+    stall_question: Dict[str, Any] | None  # #21022: the pending human question; None when nothing is asked
 
     # Error tracking
     error: str | None
@@ -188,6 +204,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             # #18430: a yes never outlives its turn (the checkpointer would otherwise carry it forward).
             "approval_decision": None,
             "pending_approval": None,
+            **NO_PLAN,  # #21023: a plan never outlives its turn
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -245,7 +262,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     session = await manager.get_or_create_session(state["session_id"])
     updated_context = dict(state.get("context", {}) or {})  # #20195: the seam stamps INTO this; the node returns it
     llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], updated_context)
-    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
+    await deliver_notices(state["session_id"], llm_params, config["configurable"].get("stream_callback"))  # #21006
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -345,6 +362,8 @@ def _build_llm_iteration_context(state: ChatState):
     loop_warning = state.get("tool_loop_warning", "")
     if loop_warning:
         initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
+
+    initial_prompt = with_plan_step(initial_prompt, state)  # #21023: the current plan step, if the turn has a plan
 
     # GH#11159/#11160: carry governed identity from the request context bag.
     agent_context, work_item_id, approval_cats = build_governed_identity(
@@ -475,36 +494,6 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
     return messages, llm_response, tool_calls, should_stop
 
 
-async def _emit_planned_agent_error_hooks(session_id, iteration, exc: Exception) -> None:
-    """Fire ON_AGENT_ERROR for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_ERROR.value,
-            session_id=session_id,
-            iteration=iteration,
-            error=str(exc),
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_ERROR failed (non-fatal): %s", _hook_exc)
-
-
-async def _emit_planned_agent_complete_hook(session_id, iteration, llm_response: str) -> None:
-    """Fire ON_AGENT_COMPLETE for the plan-only path (mirrors generate_response). GH#11202."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_COMPLETE.value,
-            session_id=session_id,
-            iteration=iteration,
-            response=llm_response or "",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
-
-
 async def _generate_response_planned(
     state: ChatState,
     manager,
@@ -588,22 +577,7 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
     for warning in (state.get("rlm_refinement_hint", ""), state.get("tool_loop_warning", "")):
         if warning:
             prompt = _inject_mid_conversation_warning(warning, prompt)
-    ctx.initial_prompt = prompt
-
-
-async def _emit_agent_execute_hook(session_id, iteration) -> None:
-    """Issue #3278: notify plugins before LLM execution."""
-    try:
-        from autobot_shared.plugin_sdk import Hook, HookRegistry
-
-        await HookRegistry().call_hook(
-            Hook.ON_AGENT_EXECUTE.value,
-            session_id=session_id,
-            iteration=iteration,
-            agent_type="chat_workflow",
-        )
-    except Exception as _hook_exc:  # noqa: BLE001
-        logger.debug("Plugin hook ON_AGENT_EXECUTE failed (non-fatal): %s", _hook_exc)
+    ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -820,21 +794,6 @@ async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dic
         return {}
 
 
-def route_after_judge(state: ChatState) -> str:
-    """Route after inline judge (#10599).
-
-    If the judge set a refinement hint and hasn't exhausted its one-shot
-    budget, loop back to generate_response.  Otherwise proceed to persist.
-    """
-    hint = state.get("rlm_refinement_hint", "")
-    judge_count = state.get("judge_count", 0)
-    if hint and judge_count == 1:
-        # judge_count==1 means the hint was just set on this pass; route back
-        # to generate_response for exactly one regeneration.
-        return "generate_response"
-    return "persist_conversation"
-
-
 async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     """Interrupt execution to request command approval from the user.
 
@@ -847,22 +806,8 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     if not shown:
         return {"pending_approval": None, "approval_decision": None}
     pending = shown[0]
-
     stream_cb = config["configurable"].get("stream_callback")
-
-    # Emit approval request to frontend before interrupting
-    approval_request = {
-        "type": "command_approval_request",
-        "content": pending.get("description", ""),
-        "metadata": {
-            "command": pending.get("command", ""),
-            "host": pending.get("host", ""),
-            "risk_level": pending.get("risk_level", "medium"),
-            "session_id": state["session_id"],
-            "terminal_session_id": state["terminal_session_id"],
-            "calls": ai_line_calls_shown(shown),
-        },
-    }
+    approval_request = approval_card(state, shown)  # emitted before the interrupt
     if stream_cb:
         stream_cb(approval_request)
 
@@ -872,6 +817,28 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     return {
         "pending_approval": pending,
         "approval_decision": bind_decision(decision, shown),
+    }
+
+
+async def _inline_dispatched_update(manager, state: ChatState, turn: tuple) -> dict:
+    """execute_tools for calls already run inline (GH#11958): no re-dispatch; loop check and plan step only."""
+    from chat_workflow.cot_events import emit_step_complete
+
+    messages, stream_cb, cot_start = turn
+    tool_calls, session_id = state.get("tool_calls", []), state.get("session_id")
+    logger.debug("execute_tools: %d call(s) already dispatched inline (session=%s)", len(tool_calls), session_id)
+    emit_step_complete(
+        "execute_tools",
+        cot_start,
+        output_summary="tools already dispatched inline — skipped re-dispatch",
+        session_id=session_id,
+    )
+    return {
+        "should_continue": state.get("should_continue", False),
+        "workflow_messages": messages,
+        "tool_calls": [],
+        **_inline_loop_update(state, tool_calls, messages, stream_cb, state.get("iteration_count", 0)),
+        **await advance_after_tools(manager, state, tool_calls),  # #21023: these are this pass's results
     }
 
 
@@ -906,33 +873,24 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     )
 
     if are_already_executed(tool_calls):
-        logger.debug("execute_tools: %d call(s) already dispatched inline (session=%s)", len(tool_calls), session_id)
-        emit_step_complete(
-            "execute_tools",
-            _cot_exec_start,
-            output_summary="tools already dispatched inline — skipped re-dispatch",
-            session_id=session_id,
-        )
-        return {
-            "should_continue": state.get("should_continue", False),
-            "workflow_messages": messages,
-            "tool_calls": [],
-            **_inline_loop_update(state, tool_calls, messages, stream_cb, iteration),
-        }
+        return await _inline_dispatched_update(manager, state, (messages, stream_cb, _cot_exec_start))
 
-    # If approval was needed and denied, skip execution
-    if decision and not decision.get("approved", False):
+    refusals: list = []
+    if decision and not decision.get("approved", False):  # #19957: the refused calls become results; the rest run
         send_denied_message(decision, iteration, messages, stream_cb)
-        emit_step_complete(
-            "execute_tools",
-            _cot_exec_start,
-            output_summary="approval denied — tools skipped",
-            session_id=session_id,
-        )
-        return {
-            "should_continue": False,
-            "workflow_messages": messages,
-        }
+        tool_calls, refusals = split_refused(tool_calls, decision)
+        if not tool_calls:
+            emit_step_complete(
+                "execute_tools", _cot_exec_start, output_summary="approval denied", session_id=session_id
+            )
+            return {
+                "should_continue": True,
+                "execution_history": [*state.get("execution_history", []), *refusals],
+                "workflow_messages": messages,
+                "tool_calls": [],
+                "approval_decision": None,
+                **await advance_after_tools(manager, state, refusals),  # the refused step must not stay current
+            }
 
     loop_state = planned_loop_update(state, tool_calls)  # #3254: before execution
     tool_loop_count = loop_state["tool_loop_count"]
@@ -944,10 +902,13 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     )
 
     # Issue #3254: tell the user why the assistant stopped.
-    if tool_loop_count >= _LOOP_ABORT_THRESHOLD:
+    if tool_loop_count >= _LOOP_ABORT_THRESHOLD and stall_mode(state) == "stop":  # "ask" says it at ask_human (#21022)
         _append_loop_abort_message(messages, stream_cb, iteration)
 
+    exec_history = [*exec_history, *refusals]
     await emit_tool_complete_hook(session_id, exec_history)
+    this_pass = exec_history[len(state.get("execution_history", [])) :]
+    plan_update = await advance_after_tools(manager, state, this_pass)  # #21023: one plan step per tool pass
 
     # Issue #3232: emit step complete for the execute_tools block.
     emit_step_complete(
@@ -962,7 +923,9 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         "execution_history": exec_history,
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
+        "approval_decision": None,  # #19957: a yes covers its batch only
         **loop_state,
+        **plan_update,
     }
 
 
@@ -1170,15 +1133,15 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
         # into the per-iteration entries _persist_workflow_messages now needs
         # to interleave with tool output.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
-
-        await manager._persist_conversation(session_id, session, state["user_message"], combined_response)
+        model = (state.get("llm_params") or {}).get("selected_model")  # the rolling-summary refresh folds with it
+        await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
         await manager._persist_workflow_messages(
             session_id,
             wf_messages,
             all_llm_responses,
-            selected_model=state.get("llm_params", {}).get("selected_model", ""),
+            selected_model=(state.get("llm_params") or {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
         )
@@ -1307,7 +1270,7 @@ def route_after_execution(state: ChatState) -> str:
             state.get("tool_loop_count", 0),
             state.get("session_id", "unknown"),
         )
-        return "persist_conversation"
+        return "announce_stall" if stall_mode(state) == "ask" else "persist_conversation"  # #21022
 
     if state.get("should_continue"):
         if state.get("iteration_count", 0) < limits.MAX_CONTINUATION_ITERATIONS:
@@ -1350,11 +1313,13 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
     builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
+    builder.add_node("create_plan", create_plan)  # Issue #21023
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("inline_judge_response", inline_judge_response)  # Issue #10599
     builder.add_node("request_approval", request_approval)
     builder.add_node("execute_tools", execute_tools)
+    add_stall_nodes(builder)  # Issue #21022
     builder.add_node("force_final_answer", force_final_answer)
     builder.add_node("persist_conversation", persist_conversation)
 
@@ -1363,7 +1328,8 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge("initialize_session", "detect_intent")
     builder.add_conditional_edges("detect_intent", route_after_intent)
     builder.add_edge("prepare_llm", "perform_knowledge_search")  # Issue #1718
-    builder.add_edge("perform_knowledge_search", "generate_response")  # Issue #1718
+    builder.add_edge("perform_knowledge_search", "create_plan")  # Issue #1718, #21023
+    builder.add_edge("create_plan", "generate_response")
     builder.add_conditional_edges("generate_response", route_after_generation)
     builder.add_conditional_edges("reflect_on_response", route_after_reflection)
     builder.add_conditional_edges("inline_judge_response", route_after_judge)  # Issue #10599

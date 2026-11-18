@@ -31,7 +31,7 @@ import os
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import tempfile
 import warnings
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 #: Markers that identify a source checkout root and nothing below it. Both must
@@ -148,6 +148,51 @@ def project_root() -> Path:
     the more expensive of the two.
     """
     return resolve_project_root(Path(__file__).resolve())
+
+
+#: Environment variable naming the code_source checkout. The alias ``PathConfig.code_source_dir``
+#: reads; read directly here for the same reason as ``BASE_DIR_ENV`` (callers that run before
+#: ``ssot_config`` can be imported).
+CODE_SOURCE_ENV = "AUTOBOT_CODE_SOURCE"
+
+#: The infrastructure tree's directory name, in a checkout, in code_source and (stale) beside the install.
+INFRASTRUCTURE_DIR_NAME = "autobot-infrastructure"
+
+
+def infrastructure_dir(
+    code_source: Path | None = None, base_dir: Path | None = None, fallback_root: Path | None = None
+) -> Path:
+    """Where ``autobot-infrastructure/`` is read from: code_source's copy, else the install's (#20578).
+
+    On a deployed host the SLM updates ``<code_source>/autobot-infrastructure`` and never the copy
+    beside the install (``<base_dir>/autobot-infrastructure``), which stays as the first install
+    left it; reading that one yields stale config, scripts and manifests. So code_source wins and
+    the install's copy is only for a node with no code_source (a checkout has both equal). With
+    neither present the code_source path is returned, so a caller's "file not found" names the
+    place the file belongs rather than the stale one.
+
+    The arguments exist so the order can be exercised on real directories; unset they follow
+    ``PathConfig``: ``AUTOBOT_CODE_SOURCE`` else :func:`project_root`, and :func:`install_base_dir`.
+    *fallback_root* answers for both when no root is determinable (an import-time caller that must
+    not raise names the root it already resolved); without it that raises ``ProjectRootUndeterminable``.
+    """
+    configured = os.environ.get(CODE_SOURCE_ENV)  # ssot-config-exempt: bootstrap, mirrors PathConfig.code_source_dir
+    code_source = code_source or (Path(configured) if configured else _root_or(project_root, fallback_root))
+    first = code_source / INFRASTRUCTURE_DIR_NAME
+    if first.is_dir():
+        return first
+    second = (base_dir or _root_or(install_base_dir, fallback_root)) / INFRASTRUCTURE_DIR_NAME
+    return second if second.is_dir() else first
+
+
+def _root_or(resolve: Callable[[], Path], fallback_root: Path | None) -> Path:
+    """``resolve()``, or *fallback_root* when that is undeterminable and one was named."""
+    try:
+        return resolve()
+    except ProjectRootUndeterminable:
+        if fallback_root is None:
+            raise
+        return fallback_root
 
 
 def install_base_dir(when_undeterminable: str | None = None) -> Path:

@@ -46,10 +46,12 @@ so the degradation is visible outside logs too, never silent.
 
 from __future__ import annotations
 
+import logging
 from typing import Awaitable, Callable, Dict
 
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config, env
@@ -132,7 +134,6 @@ class IngestGovernor:
 
     def __init__(self) -> None:
         self._bot_id_resolvers: Dict[str, BotIdResolver] = {}
-        self._warned_no_bot_id: set[str] = set()
 
     def register_bot_id_resolver(self, platform: str, resolver: BotIdResolver) -> None:
         """Register a dynamic bot-identity resolver for *platform* (#14028).
@@ -160,15 +161,16 @@ class IngestGovernor:
     async def _check_bot_self(self, platform: str, channel_id: str, author_id: str) -> IngestVerdict | None:
         bot_id = await self._bot_identity(platform)
         if not bot_id:
-            if platform not in self._warned_no_bot_id:
-                self._warned_no_bot_id.add(platform)
-                logger.warning(
-                    "Ingest governor: no bot identity resolved for platform=%s — the "
-                    "self-reply filter is a no-op until a resolver is registered or "
-                    "AUTOBOT_GATEWAY_BOT_ID_%s is set (#14028)",
-                    platform,
-                    platform.upper(),
-                )
+            log_once(
+                logger,
+                logging.WARNING,
+                f"no_bot_id:{platform}",
+                "Ingest governor: no bot identity resolved for platform=%s — the "
+                "self-reply filter is a no-op until a resolver is registered or "
+                "AUTOBOT_GATEWAY_BOT_ID_%s is set (#14028)",
+                platform,
+                platform.upper(),
+            )
             return None
         if author_id == bot_id:
             logger.warning(

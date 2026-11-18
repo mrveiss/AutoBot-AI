@@ -43,7 +43,7 @@ _ALL_SESSIONS = [
 
 
 def _manager(sessions=None):
-    manager = MagicMock(spec=["list_sessions_fast"])
+    manager = MagicMock(spec=["list_sessions_fast", "get_session_owner"])  # #21664: the durable-owner reader
     manager.list_sessions_fast = AsyncMock(return_value=list(sessions if sessions is not None else _ALL_SESSIONS))
     return manager
 
@@ -54,6 +54,7 @@ def _validator_owning_everything():
     ownership filter."""
     v = MagicMock()
     v.get_user_sessions = AsyncMock(return_value=[s["id"] for s in _ALL_SESSIONS])
+    v.redis.exists = AsyncMock(return_value=1)  # the index is marked complete (#21664)
     return v
 
 

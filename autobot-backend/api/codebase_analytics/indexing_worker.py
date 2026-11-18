@@ -58,7 +58,7 @@ while _SCRIPT_DIR in sys.path:
 
 from api.codebase_analytics.scanner import do_indexing_with_progress  # noqa: E402
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -95,4 +95,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

@@ -38,6 +38,68 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_TIMEOUT_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a workflow command step may run before its whole process group is killed "
+            "and the step fails with exit code 124 (#19807). Raising it gives slow allowlisted commands more time; "
+            "lowering it kills stuck commands sooner (services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+        range=(1, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_MAX_OUTPUT_BYTES",
+        type=int,
+        default=1048576,
+        description=(
+            "Bytes of stdout, and separately of stderr, a workflow command step keeps; the rest is "
+            "read and discarded and the step result is marked truncated (#19807). Raising it keeps "
+            "more of a chatty command's output in memory and in the step result "
+            "(services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+        range=(1024, 104857600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_WORKFLOW_COMMAND_CWD",
+        type=str,
+        default="",
+        description=(
+            "Directory workflow command steps run in (#19807). Empty means a dedicated "
+            "'autobot-workflow-commands' directory under the system temp directory, created on "
+            "first use, so a step does not start inside the application tree "
+            "(services/workflow_automation/command_step.py)."
+        ),
+        component="terminal",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Wall-clock ceiling on the SSH key-access probe that runs before a stored SSH password's deletion is "
+            "proposed (inline in enrollment) and again before it is deleted (#20046). The probe is killed at the "
+            "ceiling and counts as failed, so a hung node delays enrollment by at most this long and the proposal "
+            "waits for a later enrollment."
+        ),
+        component="slm",
+        range=(2.0, 60.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_APPROVAL_CLAIM_WRITE_TTL_SECONDS",
         type=int,
         default=300,
@@ -46,5 +108,21 @@ register_env_var(
             "so a worker dying in that window frees the session by itself (#20059)."
         ),
         component="execution",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SECURE_COMMAND_TIMEOUT_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a command run without its own policy (the secure command path and the attended shell) "
+            "may take before its whole process group is killed and it fails with exit code 124 (#20740). "
+            "Raising it gives slow commands more time; lowering it kills stuck ones sooner "
+            "(utils/command_utils.py)."
+        ),
+        component="terminal",
+        range=(1, 3600),
     )
 )

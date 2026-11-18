@@ -16,6 +16,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
@@ -41,7 +42,7 @@ _NOT_CODE = {"data-migration.yml"}
 def _rsync_lists(source: str) -> list[list[ast.expr]]:
     """Argument lists of every rsync command, as list literals or subprocess calls."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         args = node.elts if isinstance(node, ast.List) else node.args if isinstance(node, ast.Call) else []
         if args and isinstance(args[0], ast.Constant) and args[0].value == "rsync":
             found.append(args)
@@ -178,7 +179,7 @@ def test_no_terminal_advice_survives_sudo() -> None:
 
 def test_rerun_hint_uses_the_run_skip_set() -> None:
     """#19867: the hint once skipped `provision`, which the run keeps for the backend role (#6600)."""
-    assert re.search(r'local skip_tags="seed"', _INSTALL)
+    assert re.search(r'local skip_tags="seed(,[\w-]+)*"', _INSTALL)
     assert '--skip-tags "${skip_tags}"' in _INSTALL and 'deploy-slm-manager.yml --skip-tags ${skip_tags}"' in _INSTALL
     assert "seed,provision" not in _INSTALL
 

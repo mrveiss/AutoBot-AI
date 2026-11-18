@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -24,6 +25,18 @@ describe("ds-second-kit-component (#17571)", () => {
     const found = await second.check(fx("fail", "BaseButton.vue"));
     expect(found).toHaveLength(1);
     expect(found[0].severity).toBe("block");
+  });
+
+  it("honours the waiver on line 1 only, not one further down the file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ds-second-"));
+    const marker = "canonical: ignore ds-second-kit-component";
+    const waived = join(dir, "BaseButton.vue");
+    writeFileSync(waived, `<!-- ${marker} -->\n<template />\n`, "utf-8");
+    expect(await second.check(waived)).toEqual([]);
+    const buried = join(dir, "BaseCard.vue");
+    writeFileSync(buried, `<template />\n<!-- ${marker} -->\n`, "utf-8");
+    expect(await second.check(buried)).toHaveLength(1);
+    rmSync(dir, { recursive: true });
   });
 
   it("PASSES on a differently named file", async () => {
@@ -58,6 +71,17 @@ describe("ds-noncanonical-primitive-import matcher (#17571)", () => {
 
   it("honours the per-line waiver on a multi-line import's specifier line", () => {
     expect(lines("import {\n  A,\n} from './BaseCard.vue' // canonical: ignore ds-noncanonical-primitive-import")).toEqual([]);
+  });
+
+  it("honours the waiver on the specifier line of a split import", () => {
+    expect(lines("import {\n  A,\n} from\n  './BaseCard.vue' // canonical: ignore ds-noncanonical-primitive-import")).toEqual([]);
+  });
+
+  it("ignores an import-looking string, and reports kit deep paths and look-alike packages", () => {
+    expect(lines("const s = \"import('./BaseCard.vue')\"")).toEqual([]);
+    expect(lines("const s = 'x from ./BaseCard.vue'")).toEqual([]);
+    expect(lines("import B from '@autobot/ui/src/components/BaseCard.vue'")).toEqual([1]);
+    expect(lines("import B from '@autobot/ui-fork/BaseCard.vue'")).toEqual([1]);
   });
 
   it("ignores // and /* */ comments, trailing and multi-line", () => {

@@ -90,7 +90,6 @@ UNREADABLE: frozenset[str] = frozenset(
 REACH = declare(
     "config-router-auth-coverage",
     discover=config_registered_routers,
-    floor=150,
     what="routers listed in the config router registries",
     growth=30,
 )

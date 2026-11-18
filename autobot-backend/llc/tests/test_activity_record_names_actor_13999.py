@@ -34,9 +34,8 @@ MIN_CALLS_EXPECTED = 40
 FORWARDING_FUNCTIONS = {"record_bulk", "audit"}  # forward **entry on purpose; their callers are checked
 _LOG_RECEIVER = re.compile(r"(^|\.|_)(activity_log|log)$|^(svc|self)$")
 
-EXEMPT = {
-    # file -> (allowed omissions, why)
-    "scheduler/liveness_monitor.py": (1, "held by PR #19958 (scheduler/agents/replay are edited there)"),
+EXEMPT: dict[str, tuple[int, str]] = {
+    # file -> (allowed omissions, why). Empty: the last one, liveness_monitor, now audits through audit().
 }
 
 
@@ -261,20 +260,25 @@ async def test_relations_add_and_remove_record_the_actor_and_keep_their_metadata
 
 @pytest.mark.asyncio
 async def test_transition_to_done_records_the_actor_and_survives_a_service_principal():
-    from llc.models.enums import WorkItemStatus
+    from llc.models.enums import WorkItemStatus, WorkItemType
     from llc.services import work_item_service as wis
 
     can_finish = next(st for st, to in wis._ALLOWED_TRANSITIONS.items() if WorkItemStatus.DONE in to)
+
+    def _ungated():  # the agent's finish needs a review gate, and this type does not require review
+        return MagicMock(requires_review=AsyncMock(return_value=(False, None)))
+
     for kwargs, expected_type, expected_id in (
         ({"actor_user_id": _USER}, ActorType.USER, _USER),
-        ({"actor_agent_id": _AGENT}, ActorType.AGENT, _AGENT),
+        ({"actor_agent_id": _AGENT, "review_gate_svc": _ungated()}, ActorType.AGENT, _AGENT),
         ({"actor_user_id": "service-key"}, ActorType.SYSTEM, None),
     ):
         log = MagicMock(record=AsyncMock())
         svc = wis.WorkItemService(activity_log=log)
         svc._trigger_artifact_ingest = AsyncMock()
-        item = MagicMock(status=can_finish.value, version=1)
-        await svc.transition_to_done(_session_with(item), str(uuid.uuid4()), str(uuid.uuid4()), **kwargs)
+        company = uuid.uuid4()
+        item = MagicMock(status=can_finish.value, version=1, company_id=company, type=WorkItemType.TASK.value)
+        await svc.transition_to_done(_session_with(item), str(uuid.uuid4()), str(company), **kwargs)
         sent = log.record.await_args.kwargs
         assert (sent["actor_type"], sent["actor_id"]) == (expected_type, expected_id)
 

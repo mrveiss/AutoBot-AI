@@ -60,8 +60,9 @@ ALLOWED: dict[tuple[str, str | None], str] = {
 #: Reach floor. A discovery-based guard that finds no workflows reports a clean run having
 #: asserted nothing -- the failure #15826 catalogues across this repo's tree scanners. Measured at
 #: 45 when this landed; the floor is set well below that so ordinary additions and removals do not
-#: trip it, while a glob that stops matching does.
-MIN_PR_WORKFLOWS = 30
+#: trip it, while a glob that stops matching does. #18208 folded 16 pull_request workflows into ci.yml
+#: (45 -> 29 measured), so the floor moved 30 -> 20: the population shrank on purpose, the glob did not stop matching.
+MIN_PR_WORKFLOWS = 20
 
 
 def _document(path):

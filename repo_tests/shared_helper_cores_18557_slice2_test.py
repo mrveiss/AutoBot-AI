@@ -24,6 +24,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 AUTO_TOOLS = "autobot-backend/code_analysis/auto-tools/"
 MIGRATIONS = "autobot-infrastructure/autobot-backend/scripts/migrations/"
@@ -37,7 +39,9 @@ def _read(rel: str) -> str:
 
 def defined_functions(source: str) -> set[str]:
     """Names of every function/method defined anywhere in *source*."""
-    return {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return {
+        n.name for n in ast.walk(parse_cache.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def class_defines_init(source: str) -> bool:
@@ -47,7 +51,7 @@ def class_defines_init(source: str) -> bool:
 
 def referenced_names(source: str) -> set[str]:
     """Every bare name loaded in *source* (a private copy of a constant reads it)."""
-    return {n.id for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Name)}
+    return {n.id for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.Name)}
 
 
 def shell_functions(source: str) -> set[str]:
@@ -219,7 +223,7 @@ DELEGATING_TERMINAL = (
 def private_terminal_work(source: str) -> set[str]:
     """Names only the chat and audit delegates need: the handler reading one has a copy again."""
     found = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Attribute):
             found.add(node.attr)
             if node.attr == "audit_log" and not (isinstance(node.value, ast.Name) and node.value.id == "self"):
@@ -269,7 +273,7 @@ def test_deploy_wrappers_source_the_lib_and_define_none_of_it():
 # --- Row 5: the reason the worker entries stay separate ----------------------------------------
 def imports_autobot_shared(source: str) -> bool:
     """True when *source* imports ``autobot_shared``; a comment or string naming it does not count."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Import) and any(a.name.split(".")[0] == "autobot_shared" for a in node.names):
             return True
         if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "autobot_shared":
