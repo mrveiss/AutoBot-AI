@@ -67,7 +67,8 @@ export interface UseFetchEndpointOptions<TRaw, TOut, Ctx = undefined> {
    *
    * Opt-in, and only meaningful with `scopeToSource: true`. Routes whose backend
    * still accepts an optional source (`/api/quality/*`, `/api/code-generation/*`,
-   * `/api/reporting/*`, ...) leave it unset and are requested as before.
+   * `/api/reporting/trends`, ...) leave it unset and are requested as before.
+   * `/api/reporting/report` and `/summary` require one (#21463).
    */
   requireSource?: boolean
   /**

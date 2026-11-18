@@ -13,14 +13,12 @@
  * admin only on the backend, and the SLM proxy lets only an admin session through at all.
  */
 
-import { isHttpError, type InstalledTheme } from '@autobot/ui'
+import { isHttpError, RequestTimeoutError, type InstalledTheme } from '@autobot/ui'
 import i18n from '@/i18n'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 
 /** The proxy refused the body before the main backend saw it: its own size cap (413). */
 export const UPLOAD_TOO_LARGE_STATUS = 413
-/** The client's own message for a request that timed out (ApiClientBase `armAbort`). */
-const TIMEOUT_MESSAGE = /^Request timeout/
 /** What the proxy answers when the main backend does not. */
 const MAIN_APP_DOWN_STATUSES = [502, 503, 504]
 
@@ -34,7 +32,7 @@ export type { InstalledTheme }
  */
 export function isMainAppUnavailable(err: unknown): boolean {
   if (isHttpError(err)) return MAIN_APP_DOWN_STATUSES.includes(err.status)
-  return err instanceof TypeError || (err instanceof Error && TIMEOUT_MESSAGE.test(err.message))
+  return err instanceof TypeError || err instanceof RequestTimeoutError
 }
 
 export function useThemesApi() {

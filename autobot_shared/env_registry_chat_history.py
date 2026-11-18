@@ -149,3 +149,18 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_OWNER_INDEX_COMPLETE_TTL",
+        type=int,
+        default=86400,
+        range=(1, 2591999),
+        description=(
+            "Seconds the per-user marker that says the chat owner index is complete lives; without it the "
+            "index is rebuilt from the session files (security/session_owner_index.py, #21664). Kept below "
+            "the 30-day index TTL so the marker never outlives the index."
+        ),
+        component="chat",
+    )
+)

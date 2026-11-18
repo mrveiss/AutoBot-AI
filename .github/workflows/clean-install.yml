@@ -4,7 +4,7 @@ name: Clean install
 # fresh Ubuntu runner, then prove the SLM is usable. Two runs:
 #   no-tty -- the piped one-liner with no terminal, the auto-generated-password path (#17929);
 #   tty    -- under a pty, the two prompts answered as a person would.
-# A failure names its step: install, health, login or node.
+# A failure names its step: install, health, login, node or synced.
 #
 # Scheduled and dispatched runs execute the command extracted from INSTALL.md
 # (scripts/ci/install_oneliner.py) verbatim, so they install main exactly as a reader's copy does.
@@ -39,7 +39,18 @@ jobs:
   install:
     name: install (${{ matrix.mode }})
     # A fork's branch is not on this repository, so the installer could not clone it.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.head.repo.full_name == github.repository
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-24.04
     # #21325: observed passing maximum 1228 s (job) over 40 passing runs; 40 minutes is about 1.95x that,
     # where 75 let a hung apt call hold the job for an hour.

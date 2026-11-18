@@ -8,6 +8,8 @@
  * - `refreshAfterAnswer`: the re-read after a step answer. It goes through `refreshIfDisplayed`, so a
  *   slow reply for workflow A never replaces the displayed workflow B. The request still runs for a
  *   workflow that is not displayed, because it is what releases that step's answer lock.
+ * - `readStatus`: an explicit read that displays its result, unless another workflow was selected while it
+ *   was in flight (#21306).
  * - `restoreWaitingWorkflow`: after a reload with no `workflow` query nothing is displayed, so no
  *   approval card renders. The first active workflow (list order) with a `waiting_approval` step is
  *   displayed, but only while nothing has been displayed by the time its status arrives.
@@ -41,11 +43,17 @@ export function useWorkflowStatusRefresh<W extends Listed>(deps: StatusRefreshDe
     return read;
   }
 
-  /** Read one workflow's status and display it; null when the read failed. */
+  /**
+   * Read one workflow's status and display it; null when the read failed. The read is returned either way, but
+   * it is displayed only while the display is as it was when the read started, or already shows this workflow:
+   * a slow read for A must not replace a workflow B selected meanwhile (#21306).
+   */
   async function readStatus(workflowId: string): Promise<W | null> {
+    const shownBefore = currentWorkflow.value?.workflow_id;
     const response = await fetchStatus(workflowId);
     if (!response.success || !response.data) return null;
-    currentWorkflow.value = response.data.workflow;
+    const shownNow = currentWorkflow.value?.workflow_id;
+    if (shownNow === shownBefore || shownNow === workflowId) currentWorkflow.value = response.data.workflow;
     return response.data.workflow;
   }
 

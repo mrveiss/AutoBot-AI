@@ -28,7 +28,6 @@ from llc.exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
 from llc.models.budget import LLCAgentBudget, token_limit_blocks
 from llc.models.company_os_cost import CompanyOsCostEvent
 from llc.models.work_item import LLCWorkItem
-from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
@@ -120,6 +119,13 @@ def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Deci
         # cache is consulted at all, so a cold or unpopulated snapshot can
         # never affect a local model's cost.
         return Decimal("0")
+    # Deferred (#21596): llm_shared's package init probes PyTorch/CUDA, and this
+    # module is reached at llc.scheduler package import (Celery registration).
+    from llm_shared.pricing.sync_cache import (  # noqa: PLC0415 -- keeps llm_shared out of scheduler import
+        PricingCacheCold,
+        get_cached_price,
+    )
+
     try:
         pricing = get_cached_price(model)
     except PricingCacheCold:

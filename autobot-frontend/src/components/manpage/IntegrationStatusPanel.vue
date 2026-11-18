@@ -211,7 +211,7 @@ defineEmits<Emits>()
 
 .command-tag {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-2xl);
   font-size: 0.8rem;
