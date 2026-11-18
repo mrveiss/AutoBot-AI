@@ -39,7 +39,9 @@ comments are read and upserted by the one helper, ``.github/actions/upsert-pr-co
 from __future__ import annotations
 
 import argparse
+import datetime
 import logging
+import os
 import re
 import sys
 import urllib.parse
@@ -62,6 +64,10 @@ SWEEP_PAGE_SIZE = 100
 SWEEP_MAX_PAGES = 50  # 5,000 open issues; the backlog is about half that
 # Full checks per sweep run: each costs 2-4 API calls against the 1,000/hour GITHUB_TOKEN budget.
 SWEEP_MAX_CHECKS = 100
+# #21854: the workflow runs one at a time and every run covers what changed since the last
+# successful run's start; with no successful run on record this window bounds the first one.
+TRIAGE_WORKFLOW_FILE = "issue-triage.yml"
+FALLBACK_WINDOW_HOURS = int(os.environ.get("ISSUE_TRIAGE_FALLBACK_WINDOW_HOURS", "24"))
 
 ACTION_NONE = "none"
 ACTION_LINK = "link"
@@ -401,15 +407,56 @@ def sweep_targets(items: Iterable[Dict[str, Any]], cap: int = SWEEP_MAX_CHECKS) 
     return [number for _, number in ranked[:cap]]
 
 
+def last_success_start(client: StructureClient) -> Optional[str]:
+    """``run_started_at`` of the newest successful run of this workflow, or None."""
+    path = f"/repos/{client.repo}/actions/workflows/{TRIAGE_WORKFLOW_FILE}/runs?status=success&per_page=1"
+    runs = client.call("GET", path).get("workflow_runs") or []
+    return runs[0].get("run_started_at") if runs else None
+
+
+def fallback_since(now: Optional[datetime.datetime] = None) -> str:
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return (now - datetime.timedelta(hours=FALLBACK_WINDOW_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def changed_window(client: StructureClient) -> Tuple[str, List[int]]:
+    """``(since, open issues updated since)``: everything since the last successful run (#21854).
+
+    Runs are serialised, so a run's start bounds what the previous success could have seen; a
+    failed run never advances it, and the next run re-covers its issues.
+    """
+    since = last_success_start(client) or fallback_since()
+    items, complete = list_issues(client, {"state": "open", "since": since}, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
+    if not complete:
+        raise StructureError(f"{len(items)}+ issues changed since {since}; refusing a partial window")
+    return since, sorted(item["number"] for item in items)
+
+
+def write_outputs(values: Dict[str, str]) -> None:
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check").add_argument("--number", type=int, required=True)
-    sub.add_parser("sweep")
+    sub.add_parser("sweep").add_argument("--changed", default="", help="space-separated issue numbers to check too")
+    sub.add_parser("window")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     client = StructureClient(build_api())
-    numbers = [args.number] if args.command == "check" else sweep_targets(open_issues(client))
+    if args.command == "window":
+        since, changed = changed_window(client)
+        logger.info("window since %s: %d changed issue(s)", since, len(changed))
+        write_outputs({"since": since, "changed": " ".join(map(str, changed))})
+        return 0
+    if args.command == "check":
+        numbers = [args.number]
+    else:
+        numbers = sorted({*map(int, args.changed.split()), *sweep_targets(open_issues(client))})
     failed = []
     for number in numbers:
         try:
