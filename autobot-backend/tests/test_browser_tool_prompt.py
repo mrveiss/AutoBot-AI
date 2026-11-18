@@ -65,3 +65,15 @@ def test_manager_reminder_has_no_hand_written_browser_tool():
     reminder = src.split("TOOL NAME CORRECTION REQUIRED", 1)[1].split("Do NOT invent new tool names", 1)[0]
     for tool in tool_catalogue.BROWSER_PROMPT_TOOLS:
         assert f'"- {tool}:' not in reminder, tool
+
+
+def test_fallback_path_is_rendered_not_returned_raw():
+    pm = PromptManager(prompts_dir=str(_PROMPT_DIR))
+    # Case-insensitive match is the first fallback strategy.
+    rendered = pm.get("CHAT.SYSTEM_PROMPT_SIMPLE")
+    assert "{{ browser_tools_section }}" not in rendered
+    assert "`extract_content`" in rendered
+
+
+def test_section_keeps_one_fill_example():
+    assert 'name="fill"' in browser_tool_prompt.render_browser_tools_section()

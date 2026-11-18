@@ -23,10 +23,10 @@
  */
 import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 import { sanitizeChatHtml } from '@/utils/sanitize'
-import { renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
+import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
 
 const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a>)/i
-const BARE_URL_RE = /https?:\/\/[^\s<]+/g
+const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
 const TRAILING_PUNCT_RE = /[.,;:!?'"]+$/
 
 function stripAnsi(content: string): string {
@@ -72,27 +72,46 @@ export function linkifyBareUrls(html: string): string {
       return part.replace(BARE_URL_RE, (raw) => {
         const [url, tail] = splitTrailing(raw)
         if (!/^https?:\/\/./i.test(url)) return raw
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${tail}`
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${tail}`
       })
     })
     .join('')
 }
 
-/** Render raw chat message text to sanitised HTML. */
+const LINK_STASH = '\u0000'
+
+/** Swap every anchor for a placeholder so the inline passes cannot touch hrefs. */
+function stashAnchors(html: string): { text: string; anchors: string[] } {
+  const anchors: string[] = []
+  const text = html
+    .split(ANCHOR_RE)
+    .map((part, i) => {
+      if (i % 2 === 0) return part
+      anchors.push(part)
+      return `${LINK_STASH}${anchors.length - 1}${LINK_STASH}`
+    })
+    .join('')
+  return { text, anchors }
+}
+
+function restoreAnchors(text: string, anchors: string[]): string {
+  return text.replace(/\u0000(\d+)\u0000/g, (_m, n) => anchors[Number(n)])
+}
+
+/** Render raw chat message text to sanitised HTML (sanitising is always the LAST step). */
 export function formatChatMessageHtml(raw: string): string {
-  let content = stripProtocolTagsForDisplay(stripAnsi(raw))
+  let content = stripProtocolTagsForDisplay(stripAnsi(raw)).replace(/\u0000/g, '')
 
   content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_m, lang, code) => {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
   })
 
-  content = renderMarkdownLinks(content)
-
-  content = content
+  const { text, anchors } = stashAnchors(linkifyBareUrls(renderMarkdownLinks(content)))
+  const inline = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>')
 
-  return sanitizeChatHtml(linkifyBareUrls(content))
+  return sanitizeChatHtml(restoreAnchors(inline, anchors))
 }

@@ -670,7 +670,7 @@ class PromptManager:
             if fallback_prompt is None:
                 available_keys = sorted(self.prompts)
                 raise KeyError(f"Prompt '{prompt_key}' not found. Available prompts: " f"{available_keys}")
-            return fallback_prompt
+            return self.jinja_env.from_string(fallback_prompt).render(**merged_kwargs)
 
         try:
             template = self.templates[prompt_key]

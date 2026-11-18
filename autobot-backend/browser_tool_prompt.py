@@ -57,11 +57,14 @@ def _line(name: str) -> str:
 def render_browser_tools_section() -> str:
     """Markdown for the "Browser Tools" section body of both chat system prompts."""
     lines = "\n".join(_line(n) for n in browser_tool_names())
-    example = '<TOOL_CALL name="navigate" params=\'{"url":"https://example.com"}\'>Navigate to example.com</TOOL_CALL>'
+    example = (
+        '<TOOL_CALL name="navigate" params=\'{"url":"https://example.com"}\'>Navigate to example.com</TOOL_CALL>\n'
+        '<TOOL_CALL name="fill" params=\'{"selector":"input#search","value":"query"}\'>Fill search box</TOOL_CALL>'
+    )
     return (
         "You can browse the web. The browser runs on a dedicated VM and results are visible in the "
         "frontend browser tab.\n\n"
-        f"Call format:\n```\n{example}\n```\n\n"
+        f"Call format (examples):\n```\n{example}\n```\n\n"
         f"Tools:\n{lines}\n\n**Reading vs interacting:** {READ_RULE}"
     )
 

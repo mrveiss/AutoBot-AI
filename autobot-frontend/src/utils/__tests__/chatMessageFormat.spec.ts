@@ -8,7 +8,9 @@ const hrefs = (html: string): string[] =>
 
 describe('chat message formatter (#21771)', () => {
   it('a URL at a line end does not swallow the <br> or the next word', () => {
-    const html = formatChatMessageHtml('Navigated to: https://example.com/weather\nPage title: Forecast')
+    const html = formatChatMessageHtml(
+      'Navigated to: https://example.com/weather\nPage title: Forecast',
+    )
     expect(hrefs(html)).toEqual(['https://example.com/weather'])
     expect(html).toContain('</a><br>Page title: Forecast')
   })
@@ -50,5 +52,53 @@ describe('chat message formatter (#21771)', () => {
     expect(html).toContain('<strong>b</strong>')
     expect(html).toContain('<em>i</em>')
     expect(html).toContain('<code>c</code>')
+  })
+
+  describe('hostile input (output is the DOMPurify chat preset result)', () => {
+    const parse = (html: string): HTMLElement => {
+      const d = document.createElement('div')
+      d.innerHTML = html
+      return d
+    }
+
+    it('a quote in a bare URL cannot break out of the href attribute', () => {
+      const root = parse(
+        formatChatMessageHtml('go https://x.example/"class="evil" onmouseover="alert(1)'),
+      )
+      const a = root.querySelector('a')
+      expect(a).not.toBeNull()
+      expect(a?.getAttribute('class')).toBeNull()
+      expect(a?.getAttribute('onmouseover')).toBeNull()
+      expect(a?.getAttribute('href')).toBe('https://x.example/')
+    })
+
+    it('javascript: markdown links never become anchors', () => {
+      const root = parse(formatChatMessageHtml('[x](javascript:alert(1))'))
+      expect(root.querySelector('a')).toBeNull()
+      expect(root.innerHTML).not.toMatch(/href=/i)
+    })
+
+    it('data: markdown links never become anchors', () => {
+      const root = parse(formatChatMessageHtml('[x](data:text/html,<script>alert(1)</script>)'))
+      expect(root.querySelector('a')).toBeNull()
+      expect(root.querySelector('script')).toBeNull()
+    })
+
+    it('a script tag in text is removed', () => {
+      const root = parse(formatChatMessageHtml('hi <script>alert(1)</script> there'))
+      expect(root.querySelector('script')).toBeNull()
+    })
+  })
+
+  describe('inline passes leave links and prose alone', () => {
+    it('underscores and asterisks inside a URL stay in the href', () => {
+      const html = formatChatMessageHtml('see https://example.com/a*b*c and *real*')
+      expect(hrefs(html)).toEqual(['https://example.com/a*b*c'])
+      expect(html).toContain('<em>real</em>')
+    })
+
+    it('arr[0](x) in prose is not collapsed to its label', () => {
+      expect(formatChatMessageHtml('use arr[0](x) here')).toContain('arr[0](x)')
+    })
   })
 })

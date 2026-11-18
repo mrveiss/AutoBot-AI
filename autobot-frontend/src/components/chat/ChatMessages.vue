@@ -175,7 +175,7 @@
             <summary class="summary-toggle">
               {{ $t('chat.contextWindow.summaryToggle') }}
             </summary>
-            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
           </details>
         </div>
 
@@ -183,7 +183,7 @@
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
-            <div class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
             <div v-if="store.isTyping && isLastMessage(message)" class="typing-indicator">
               <div class="typing-dots">
                 <span></span>
@@ -194,7 +194,7 @@
           </div>
 
           <!-- Regular message content -->
-          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
 
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
@@ -564,6 +564,8 @@ import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { createEntityAnchorClickHandler } from '@/composables/chat/useEntityAnchors'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -862,6 +864,10 @@ const getContentClass = (message: ChatMessage): string => {
  * Key: message id + content length (cheap proxy for content identity).
  * Avoids re-running 11 regex ops for unchanged messages on every render.
  */
+const router = useRouter()
+// #9479: entity anchors rendered by the shared formatter navigate in-app.
+const handleContentClick = createEntityAnchorClickHandler(router)
+
 const formatCache = new Map<string, string>()
 const FORMAT_CACHE_MAX = 500
 
