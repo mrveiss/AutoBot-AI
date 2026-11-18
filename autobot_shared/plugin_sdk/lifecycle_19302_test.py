@@ -10,14 +10,14 @@ import textwrap
 
 import pytest
 
-from plugin_sdk.base import PluginManifest, PluginRegistry, PluginStatus
-from plugin_sdk.capabilities import CapabilityChecker, PluginCapability
-from plugin_sdk.hooks import HookRegistry
-from plugin_sdk.loader import PluginLoader
+from autobot_shared.plugin_sdk.base import PluginManifest, PluginRegistry, PluginStatus
+from autobot_shared.plugin_sdk.capabilities import CapabilityChecker, PluginCapability
+from autobot_shared.plugin_sdk.hooks import HookRegistry
+from autobot_shared.plugin_sdk.loader import PluginLoader
 
 _MODULE = """
-    from plugin_sdk import BasePlugin
-    from plugin_sdk.hooks import HookRegistry
+    from autobot_shared.plugin_sdk import BasePlugin
+    from autobot_shared.plugin_sdk.hooks import HookRegistry
 
     FIRED = []
 
@@ -32,6 +32,19 @@ _MODULE = """
             FIRED.append("{marker}")
             return "{marker}"
 """
+
+
+@pytest.fixture(autouse=True)
+def _restore_sys_modules():
+    """The loader installs dotted plugin packages and `plugin_sdk` aliases; leave sys.modules as found."""
+    before = dict(sys.modules)
+    yield
+    for key in set(sys.modules) - set(before):
+        del sys.modules[key]
+    # canonicalise_plugin_sdk() REPLACES existing entries with aliases; put every replaced value back.
+    for key, module in before.items():
+        if sys.modules.get(key) is not module:
+            sys.modules[key] = module
 
 
 @pytest.fixture
