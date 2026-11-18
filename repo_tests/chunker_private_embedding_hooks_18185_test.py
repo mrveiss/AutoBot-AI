@@ -22,6 +22,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _PRIVATE = frozenset(
@@ -40,7 +41,7 @@ def _is_chunker_module(rel: str) -> bool:
 def _reach_ins(source: str) -> list[str]:
     """Private hook names accessed on a receiver other than self/cls."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Attribute) and node.attr in _PRIVATE:
             if not (isinstance(node.value, ast.Name) and node.value.id in ("self", "cls")):
                 found.append(node.attr)

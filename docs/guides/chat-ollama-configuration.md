@@ -231,7 +231,7 @@ ollama_port = config.port.ollama         # Returns configured port (11434)
 ollama_url = f"http://{ollama_host}:{ollama_port}"
 ```
 
-The `ConfigManager` (instantiated as `global_config_manager` in `dependencies.py`)
+The `ConfigManager` (the `config_manager` instance exported by the `config` package)
 wraps all three layers. Its `get_host()` and `get_port()` methods implement the
 priority chain described below.
 
@@ -297,7 +297,7 @@ first successful result is used.
      |
      v
 [3] config.yaml endpoint (_get_ollama_endpoint)
-     |  Reads: backend.llm.ollama.endpoint via global_config_manager.get_nested()
+     |  Reads: backend.llm.ollama.endpoint via config_manager.get_nested()
      |  Validates URL starts with http:// or https://
      |
      +-- If valid -> append /api/generate -> DONE
@@ -323,7 +323,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks."""
         try:
-            endpoint = global_config_manager.get_nested(
+            endpoint = config_manager.get_nested(
                 "backend.llm.ollama.endpoint", None
             )
             if endpoint and endpoint.startswith(("http://", "https://")):
@@ -347,7 +347,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_for_model(self, model_name: str) -> str:
         """Get Ollama endpoint routed by model name (#1070)."""
         try:
-            base_url = global_config_manager.get_ollama_endpoint_for_model(
+            base_url = config_manager.get_ollama_endpoint_for_model(
                 model_name
             )
             if base_url and base_url.startswith(("http://", "https://")):
@@ -441,8 +441,8 @@ one more fallback layer:
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
-            default_model = global_config_manager.get_default_llm_model()
-            selected = global_config_manager.get_nested(
+            default_model = config_manager.get_default_llm_model()
+            selected = config_manager.get_nested(
                 "backend.llm.ollama.selected_model", default_model
             )
             if selected and isinstance(selected, str):
@@ -501,9 +501,9 @@ curl -sk -X POST https://localhost:8443/api/settings/ \
 **Method 5: Programmatic update**
 
 ```python
-from dependencies import global_config_manager
+from config import config_manager
 
-global_config_manager.update_llm_model("llama3.2:1b")
+config_manager.update_llm_model("llama3.2:1b")
 # Writes to both settings.json and config.yaml
 ```
 

@@ -15,7 +15,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.time_utils import now_utc
 from autobot_shared.tool_timeouts import TOOL_CALL_TIMEOUT_MS, TOOL_GROUP_TIMEOUT_MS
 from constants.threshold_constants import BatchConfig, RetryConfig
@@ -24,8 +24,8 @@ from constants.threshold_constants import BatchConfig, RetryConfig
 # Ask-the-human timeout — env-configurable, never hardcoded (#10553)
 # ---------------------------------------------------------------------------
 #: Seconds the loop suspends waiting for a human answer before escalating.
-#: Override with AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS (default: 300).
-ASK_HUMAN_TIMEOUT_SECONDS: int = env_int("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", 300)
+#: Defined once in SSOT (``config.llm``, #21024); AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS.
+ASK_HUMAN_TIMEOUT_SECONDS: int = _ssot_config.llm.ask_human_timeout_seconds
 
 # =============================================================================
 # Loop States and Phases
@@ -252,7 +252,7 @@ class AgentLoopConfig:
 
     # Ask-the-human (#10553) — configurable per-deployment via environment
     ask_human_timeout_seconds: int = field(default_factory=lambda: ASK_HUMAN_TIMEOUT_SECONDS)
-    ask_human_escalation_policy: str = "abandon"  # "abandon" | "default" | "re_ask"
+    ask_human_escalation_policy: str = field(default_factory=lambda: _ssot_config.llm.ask_human_escalation_policy)
 
     # Belief state prototype (MVA-1407) — off by default to avoid prod changes
     belief_state_enabled: bool = False

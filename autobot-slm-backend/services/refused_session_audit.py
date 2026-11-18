@@ -6,7 +6,8 @@
 
 Maintainer decision: audit these, grouped. One person gets one record per window, and the next record
 says how many refusals came since; the grouping is the shared ``RepeatGrouper`` (also the backend's
-role denials, #16333). The subject comes from a token whose signature has been checked, so nobody can
+role denials, #16333). A burst followed by silence shows as its first record alone
+(#20787). The subject comes from a token whose signature has been checked, so nobody can
 make up names to grow this; the tracked set is capped anyway. Like the permission gate's denials, a
 record that can't be written is logged and counted by the writer and never changes the 403.
 """

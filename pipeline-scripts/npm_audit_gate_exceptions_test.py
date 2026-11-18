@@ -35,6 +35,8 @@ from npm_audit_gate_test import BULK_LOG, _FakeNpm, _report
 # loader, and each failure mode the record can have gets one that trips it.
 
 _EXCUSED = "GHSA-t3st-t3st-t3st"
+# The shipped table, captured before any fixture patches it.
+_SHIPPED = dict(policy.ADVISORY_EXCEPTIONS)
 _UNKNOWN = "GHSA-aaaa-bbbb-cccc"
 
 
@@ -489,3 +491,21 @@ def test_a_genuine_upgrade_is_a_patch() -> None:
 def test_an_unreadable_range_counts_as_a_patch_so_the_exception_is_withdrawn() -> None:
     """A range this cannot parse must not become permission."""
     assert gate.entry_offers_a_patch("braces", _patch_entry(rng="not a range", fix={"name": "braces", "version": "9"}))
+
+
+def test_the_picomatch_exception_is_recorded_per_owner_decision() -> None:
+    """GHSA-fc5q-39xc-vjpf: no patched version exists; owner decision on #21736, expires 2026-12-17."""
+    entry = _SHIPPED["GHSA-fc5q-39xc-vjpf"]
+    assert entry.expires == "2026-12-17"
+    assert "#21736" in entry.reason
+
+
+def test_the_picomatch_exception_retires_when_a_patch_ships() -> None:
+    """A patched picomatch withdraws the exception; an affected-everywhere one (`*`) honours it."""
+    ghsa = "GHSA-fc5q-39xc-vjpf"
+    before = date(2026, 11, 17)
+    unpatched = {ghsa: False}
+    assert policy.exception_problems(unpatched, before) == ({ghsa}, [])
+    assert policy.exception_problems({ghsa: True}, before)[1], "a published patch must withdraw it"
+    assert policy.exception_problems(unpatched, date(2026, 12, 18))[1], "expired entries must fail"
+    assert policy.exception_problems({}, before)[1], "an advisory no longer reported must be removed"

@@ -11,12 +11,14 @@ admission is audited as ``AuditAction.SERVICE_KEY_ADMITTED``.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Dict, Optional
 
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 
 logger = get_logger(__name__)
 
@@ -98,19 +100,17 @@ async def _audit_admission(request: Request, caller: str) -> bool:
         return False
 
 
-_key_without_session_warned = False
-
-
 def warn_if_key_without_session(request: Request) -> None:
     """Name the likely cause once per process when a proxied call has the key but no usable session (#16333).
 
     The SLM proxy forwards the admin's own token beside the key. If the backend cannot verify that
     token, the SLM and backend JWT secrets probably differ: before #16333 the key hid it.
     """
-    global _key_without_session_warned
-    if not _key_without_session_warned and _key_presented(request):
-        _key_without_session_warned = True
-        logger.warning(
+    if _key_presented(request):
+        log_once(
+            logger,
+            logging.WARNING,
+            "key_without_session",
             "service key presented on %r without a session the backend can verify: the key is not an admin "
             "here (#16333); if this came through the SLM proxy, the SLM and backend JWT secrets may differ",
             request.url.path,

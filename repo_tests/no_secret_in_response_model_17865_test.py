@@ -45,6 +45,8 @@ from repo_tests.no_secret_in_response_model_baseline_17865 import (
 from repo_tests.no_secret_in_response_model_fixtures_17865 import DETECTOR_FIXTURES
 from repo_tests.no_secret_passthrough_detect_17899 import is_passthrough
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 #: `autobot_shared` is in here because leaving it out made the guard blind in the
 #: exact way its own docstring warns about: `UserListResponse` is routed from a
@@ -266,7 +268,7 @@ def _build_index(root: Path) -> Index:
 
     for rel in _python_files(root):
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError) as exc:
             # NOT skipped silently. A skip that the floor absorbs is exactly the
             # "did not look" that reads as "nothing found" (CodeRabbit, #17865).
@@ -469,7 +471,7 @@ def test_a_module_that_does_not_parse_is_reported_not_skipped(tmp_path):
     ],
 )
 def test_generic_response_models_are_unwrapped(expr, expected):
-    assert _model_names(ast.parse(expr, mode="eval").body) == expected
+    assert _model_names(parse_cache.parse(expr, mode="eval").body) == expected
 
 
 @pytest.mark.parametrize(

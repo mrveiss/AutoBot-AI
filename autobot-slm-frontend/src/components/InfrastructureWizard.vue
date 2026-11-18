@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal, usePollingJob } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePollingJob, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -13,7 +13,6 @@ import { BaseAlert, BaseModal, usePollingJob } from '@autobot/ui'
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { PLAYBOOK_EXECUTE_TIMEOUT_MS, POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { PlaybookInfo, PlaybookExecution } from '@/types/slm'

@@ -121,6 +121,7 @@ def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str,
 
     Grouped per user, role and route template, so a non-admin repeating a request can't flood the log.
     An unmatched route groups under one constant: the raw path is caller-chosen and would fill the tracker.
+    Repeats ride on the next row of the same key; a burst followed by silence shows as its first row (#20787).
     """
     user = user_data.get("username", "unknown")
     route = getattr(request.scope.get("route"), "path", None) or _UNMATCHED_ROUTE
@@ -134,7 +135,8 @@ def audit_role_denied(user_data: dict, allowed_roles: List[str], user_role: str,
         details={
             "roles_required": allowed_roles,
             "user_role": user_role,
-            "endpoint": str(request.url.path),
+            "endpoint": str(request.url.path),  # the first path of the window
+            "route": route,  # what the row groups: every path of this template (#20787)
             "repeats_since_last_record": repeats,
         },
     )

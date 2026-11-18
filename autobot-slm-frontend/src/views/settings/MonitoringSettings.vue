@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch } from '@autobot/ui'
+import { BaseAlert, BaseSwitch, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -15,7 +15,6 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('MonitoringSettings')
 const { t } = useI18n()

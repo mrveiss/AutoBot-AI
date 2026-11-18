@@ -14,6 +14,8 @@ import { useChatStore, type SessionActivity } from '@/stores/useChatStore'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 import { createDateFormatter } from '@/utils/formatHelpers'
 
+const formatDay = createDateFormatter({ kind: 'date' })
+
 const { t } = useI18n()
 
 const chatStore = useChatStore()
@@ -40,7 +42,7 @@ const groupedActivities = computed<ActivityGroup[]>(() => {
   const groups = new Map<string, SessionActivity[]>()
 
   activities.value.forEach(activity => {
-    const date = activity.timestamp.toLocaleDateString()
+    const date = formatDay(activity.timestamp)
     if (!groups.has(date)) {
       groups.set(date, [])
     }

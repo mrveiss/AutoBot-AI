@@ -30,7 +30,7 @@
             :href="row.href"
             target="_blank"
             rel="noopener noreferrer"
-            :class="[rowClass, { adv: row.item.adv }]"
+            :class="[rowIdle, { adv: row.item.adv }]"
             @click="emit('close')"
           >
             <NavItemIcon :item="row.item" class="h-4 w-4 shrink-0" />
@@ -39,7 +39,7 @@
           <router-link
             v-else
             :to="row.to ?? '/'"
-            :class="[rowClass, { adv: row.item.adv }, activeClass(row.to)]"
+            :class="[rowFor(row.to), { adv: row.item.adv }]"
             @click="emit('close')"
           >
             <NavItemIcon :item="row.item" class="h-4 w-4 shrink-0" />
@@ -49,7 +49,7 @@
 
         <div class="mt-1 border-t border-autobot-border pt-2">
           <p :class="headingClass">{{ $t('nav.settingsAndTools') }}</p>
-          <router-link v-for="item in toolItems" :key="item.to" :to="item.to" :class="[rowClass, activeClass(item.to)]" @click="emit('close')">
+          <router-link v-for="item in toolItems" :key="item.to" :to="item.to" :class="rowFor(item.to)" @click="emit('close')">
             <NavItemIcon :item="item" class="h-4 w-4 shrink-0" />
             <span>{{ $t(item.labelKey) }}</span>
           </router-link>
@@ -57,20 +57,20 @@
 
         <div v-if="userStore.isAdmin" class="mt-1 border-t border-autobot-border pt-2">
           <p :class="headingClass">{{ $t('nav.adminPanel') }}</p>
-          <router-link v-for="item in adminMenuItems" :key="item.to" :to="item.to" :class="[rowClass, activeClass(item.to)]" @click="emit('close')">
+          <router-link v-for="item in adminMenuItems" :key="item.to" :to="item.to" :class="rowFor(item.to)" @click="emit('close')">
             <NavItemIcon :item="item" class="h-4 w-4 shrink-0" />
             <span>{{ $t(item.labelKey) }}</span>
           </router-link>
         </div>
 
         <div class="mt-1 border-t border-autobot-border pt-2">
-          <button v-if="userStore.isAuthenticated" type="button" :class="rowClass" @click="emit('open-profile')">
+          <button v-if="userStore.isAuthenticated" type="button" :class="rowIdle" @click="emit('open-profile')">
             <span>{{ $t('nav.profileSettings') }}</span>
           </button>
-          <button type="button" :class="rowClass" @click="emit('open-status')">
+          <button type="button" :class="rowIdle" @click="emit('open-status')">
             <span>{{ $t('nav.systemStatus') }}</span>
           </button>
-          <router-link to="/about" :class="rowClass" @click="emit('close')">
+          <router-link to="/about" :class="rowIdle" @click="emit('close')">
             <span>{{ $t('nav.about') }}</span>
           </router-link>
         </div>
@@ -100,18 +100,22 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const rowClass =
-  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-start text-sm font-medium text-autobot-text-primary transition-colors duration-200 hover:bg-autobot-bg-tertiary'
+  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-start text-sm font-medium transition-colors duration-200'
+const rowIdle = `${rowClass} text-autobot-text-primary hover:bg-autobot-bg-tertiary`
 const headingClass = 'px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-autobot-text-secondary'
 
 const toolItems = computed(() => filterByFeatureFlag(profileMenuItems))
 const clusterItems = computed(() =>
-  navIconItems.filter((item) => item.requires !== 'serviceManagement' || userStore.hasServiceManagement),
+  navIconItems.filter((item) => item.requires !== 'admin' || userStore.isAdmin),
 )
 const rows = computed(() => [
   ...props.items.map((item) => ({ item, to: item.to as string | undefined, href: null as string | null })),
   ...clusterItems.value.map((item) => ({ item, to: item.to, href: item.href?.() ?? null })),
 ])
 
-const activeClass = (to?: string): string =>
-  to && route.path.startsWith(to) ? 'bg-autobot-primary text-autobot-text-inverse' : ''
+// One text colour per state: the active row swaps the idle colour, never stacks on it.
+const rowFor = (to?: string): string =>
+  to && route.path.startsWith(to)
+    ? `${rowClass} bg-autobot-primary text-autobot-text-on-primary`
+    : rowIdle
 </script>

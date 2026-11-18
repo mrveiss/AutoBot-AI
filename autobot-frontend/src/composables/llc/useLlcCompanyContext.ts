@@ -23,6 +23,7 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
+import { companyIdFromParams } from '@/router/llcGuards'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -40,7 +41,7 @@ export function useLlcCompanyContext() {
 
   /** Resolve and cache the active company id. Returns '' if none exists. */
   async function resolveCompanyId(): Promise<string> {
-    const fromParam = (route.params.companyId as string | undefined) ?? ''
+    const fromParam = companyIdFromParams(route.params)
     const fromQuery = (route.query.company as string | undefined) ?? ''
     let id = fromParam || fromQuery || companyStore.selectedCompanyId
     if (!id) {
