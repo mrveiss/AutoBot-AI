@@ -20,13 +20,13 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.env_utils import env_registered
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 #: Seconds a model-availability reading is reused before the provider is asked again.
-VERIFIER_MODEL_CHECK_TTL_S: int = env_int_clamped("VERIFIER_MODEL_CHECK_TTL_SECONDS", 300, min_v=10, max_v=86400)
+VERIFIER_MODEL_CHECK_TTL_S: int = env_registered("AUTOBOT_VERIFIER_MODEL_CHECK_TTL_SECONDS")
 
 # model -> (monotonic time read, available: True / False / None when the list could not be read)
 _readings: dict[str, tuple[float, bool | None]] = {}

@@ -24,14 +24,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_registered
 
 #: Characters of one argument value shown to the verifier (#21844). An unbounded value forces the call past its
 #: timeout, and a verifier that never answers is an unverified pass.
-VERIFIER_ARG_MAX_CHARS: int = env_int("VERIFIER_ARG_MAX_CHARS", 2000)
+VERIFIER_ARG_MAX_CHARS: int = env_registered("AUTOBOT_VERIFIER_ARG_MAX_CHARS")
 
 #: Characters of the whole user prompt sent to the verifier (#21844); the arguments are cut to what is left.
-VERIFIER_PROMPT_MAX_CHARS: int = env_int("VERIFIER_PROMPT_MAX_CHARS", 8000)
+VERIFIER_PROMPT_MAX_CHARS: int = env_registered("AUTOBOT_VERIFIER_PROMPT_MAX_CHARS")
 
 _TRUNCATION_MARKER = "...[truncated %d chars]"
 

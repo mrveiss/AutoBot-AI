@@ -13,6 +13,7 @@ registered in ``env_registry_agent_runtime.py`` (one registration).
 from __future__ import annotations
 
 from autobot_shared import env_registry_approvals  # noqa: F401  (registers the approval gate's vars, #18412)
+from autobot_shared import env_registry_verifier  # noqa: F401  (registers the pre-action verifier's vars, #21844)
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(

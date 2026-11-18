@@ -39,7 +39,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.env_utils import env_float, env_int, env_registered
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.spend_recording import report_spend
 from autobot_shared.ssot_constants import CategoryDefaults
@@ -101,12 +101,12 @@ PANEL_QUORUM: int = env_int("VERIFIER_PANEL_QUORUM", 1)
 VERIFIER_ENABLED: bool = os.environ.get("VERIFIER_ENABLED", "1") != "0"
 
 #: Token budget for the verifier LLM call.
-VERIFIER_MAX_TOKENS: int = env_int("VERIFIER_MAX_TOKENS", 512)
+VERIFIER_MAX_TOKENS: int = env_registered("VERIFIER_MAX_TOKENS")
 
 #: Timeout in seconds for the verifier LLM call. Kept well below the chat stream's own
 #: timeout (#21844): the verifier runs on its own small model (``AUTOBOT_VERIFIER_MODEL``),
 #: and a slow verifier must give up (fail-open, logged) rather than stall the turn.
-VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 10.0)
+VERIFIER_TIMEOUT_S: float = env_registered("VERIFIER_TIMEOUT_S", positive_finite=True)
 
 
 # ---------------------------------------------------------------------------
