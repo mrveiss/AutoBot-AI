@@ -25,12 +25,12 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from chat_workflow import limits
+from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
     normalize_tool_call_text,
-    strip_unparsed_tool_tags,
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from chat_workflow.vision_capability import model_supports_vision, refresh_vision_capability
@@ -2426,6 +2426,16 @@ before summarizing.
             yield (None, None, True)
             return
 
+        if (
+            not tool_calls
+            and iteration < self.MAX_CONTINUATION_ITERATIONS
+            and (failed_step := parse_failure_step(llm_response, iteration))
+        ):
+            logger.warning("[Issue #21843] Iteration %d: TOOL_CALL did not parse - feeding error back", iteration)
+            ctx.execution_history.append(failed_step)
+            yield (llm_response, tool_calls, False)
+            return
+
         if not tool_calls:
             logger.info(
                 "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
@@ -2950,7 +2960,7 @@ before summarizing.
         to assistant entries so that a ``terminal_output`` or other system message
         echoing the reply cannot suppress the assistant turn.
         """
-        content = strip_unparsed_tool_tags(llm_response or "").strip()
+        content = clean_reply_text(llm_response or "")
         if not content:
             return None
         assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
@@ -3012,7 +3022,7 @@ before summarizing.
             # final user-visible reply — strip any <TOOL_CALL ...> tag
             # that never matched the full grammar (genuinely unparsed)
             # so raw markup never renders. Guarded no-op otherwise.
-            content = strip_unparsed_tool_tags(wf_msg.content)
+            content = clean_reply_text(wf_msg.content)
             # Issue #4448: Extract KB-only citations into top-level sources list.
             # metadata.citations includes the always-appended llm_training entry —
             # filter it out so sources contains only knowledge-base references.
