@@ -15,7 +15,6 @@ Composes all functionality through mixins:
 import asyncio
 import functools
 import json
-import os
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
@@ -62,6 +61,7 @@ from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
 from .turn_control import CHAT_LLM_CALL_TIMEOUT_SECONDS, stream_graph_turn, stream_legacy_turn
+from .vision_capability import model_name_suggests_vision, resolve_model_supports_vision
 
 logger = get_logger(__name__)
 
@@ -104,27 +104,9 @@ VISION_TOOL_LOOKBACK_MESSAGES = env_int("CHAT_VISION_TOOL_LOOKBACK_MESSAGES", de
 # representative default, env-overridable — never hardcode a tunable).
 VISION_IMAGE_TOKEN_ESTIMATE = env_int("CHAT_VISION_IMAGE_TOKEN_ESTIMATE", default=1100)
 
-# Case-insensitive substrings of a model name that indicate vision support.
-# Ollama exposes no per-tag capability registry (unlike the fixed AIProvider
-# registry in modern_ai_integration.py), so this is the pragmatic gate.
-_DEFAULT_VISION_MODEL_PATTERNS = (
-    "llava,vision,gpt-4o,gpt-4-vision,claude-3,claude-4,gemini,qwen-vl,qwen2-vl,qwen2.5-vl,pixtral,bakllava"
-)
-VISION_MODEL_NAME_PATTERNS = tuple(
-    p.strip().lower()
-    for p in os.getenv("CHAT_VISION_MODEL_PATTERNS", _DEFAULT_VISION_MODEL_PATTERNS).split(",")
-    if p.strip()
-)
-
-
-def _model_supports_vision(model_name: str) -> bool:
-    """Heuristic vision-capability gate for the chat continuation loop (#11538).
-
-    Ollama exposes no per-tag capability registry, so this matches known
-    vision-model name substrings (env-overridable via CHAT_VISION_MODEL_PATTERNS).
-    """
-    name = (model_name or "").lower()
-    return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
+# Vision gate (#21770): the runtime's reported capabilities decide; the name patterns are only the
+# fallback. Both live in vision_capability.py; this alias keeps the historical import name.
+_model_supports_vision = model_name_suggests_vision
 
 
 def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
@@ -1948,6 +1930,7 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
         ollama_endpoint: str = "",
+        vision_capable: bool | None = None,
     ) -> dict:
         """Build LLM request payload.
 
@@ -1971,7 +1954,8 @@ before summarizing.
             payload["system"] = system_prompt
         if api_kwargs:
             payload.update(api_kwargs)
-        vision_ready = image_b64 and _model_supports_vision(selected_model)
+        supports_vision = vision_capable if vision_capable is not None else _model_supports_vision(selected_model)
+        vision_ready = image_b64 and supports_vision
         if vision_ready and self._image_fits_budget(current_prompt, selected_model):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
@@ -2069,6 +2053,7 @@ before summarizing.
             yield refusal
             yield (None, None)
             return
+        vision_capable = await resolve_model_supports_vision(selected_model, ollama_endpoint) if image_b64 else None
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -2076,6 +2061,7 @@ before summarizing.
             api_kwargs=api_kwargs,
             image_b64=image_b64,
             ollama_endpoint=ollama_endpoint,
+            vision_capable=vision_capable,
         )
         llm_response = ""
 
