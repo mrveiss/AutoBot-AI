@@ -3,7 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 
 /**
  * Pending-approval state, kept per chat (#21357, #680).
@@ -12,7 +12,7 @@ import { computed, ref, type Ref } from 'vue'
  * overwrote the open chat's. Now each chat carries its own; `hasPendingApproval` is the OPEN chat's, which is what
  * the polling guards read. Omitting `sessionId` targets the open chat.
  */
-export function usePendingApproval(currentSessionId: Ref<string | null>) {
+export function usePendingApproval(currentSessionId: Ref<string | null>, sessions: Ref<{ id: string }[]>) {
   const pendingSessionIds = ref<Set<string>>(new Set())
 
   const hasPendingApproval = computed(
@@ -31,6 +31,17 @@ export function usePendingApproval(currentSessionId: Ref<string | null>) {
     else next.delete(id)
     pendingSessionIds.value = next
   }
+
+  /** A chat that is deleted, cleared or replaced by a sync takes its flag with it. */
+  watch(
+    () => sessions.value.map(s => s.id),
+    ids => {
+      const live = new Set(ids)
+      const kept = [...pendingSessionIds.value].filter(id => live.has(id))
+      if (kept.length !== pendingSessionIds.value.size) pendingSessionIds.value = new Set(kept)
+    },
+    { flush: 'sync' }
+  )
 
   return { hasPendingApproval, isPendingApproval, setPendingApproval }
 }

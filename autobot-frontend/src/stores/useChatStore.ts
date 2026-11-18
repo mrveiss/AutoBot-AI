@@ -98,7 +98,7 @@ export const useChatStore = defineStore('chat', () => {
   // Issue #691: Track streaming preview text for real-time feedback
   const streamingPreview = ref<string>('')
   // Issue #680: pending approval, per chat (#21357), to prevent polling race conditions
-  const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(currentSessionId)
+  const { hasPendingApproval, isPendingApproval, setPendingApproval } = usePendingApproval(currentSessionId, sessions)
   const sidebarCollapsed = ref(false)
   // Issue #671: Track initialization state for loading indicators
   const isInitializing = ref(false)
