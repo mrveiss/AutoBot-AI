@@ -22,12 +22,12 @@ function draft() {
   }
 }
 
-function setup(initialCompany = 'c1') {
+function setup(initialCompany = 'c1', onSwitch?: () => void) {
   const companyId = ref(initialCompany)
   const d = draft()
   const reload = vi.fn(async () => {})
   const onDraftDiscarded = vi.fn()
-  useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded })
+  useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded, onSwitch })
   return { companyId, d, reload, onDraftDiscarded }
 }
 
@@ -100,5 +100,41 @@ describe('useWorkflowCompanySwitch', () => {
     companyId.value = 'c2'
     await flush()
     expect(onDraftDiscarded).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs onSwitch on a switch but not on the first resolution', async () => {
+    const onSwitch = vi.fn()
+    const { companyId } = setup('c1', onSwitch)
+    companyId.value = 'c2'
+    await flush()
+    expect(onSwitch).toHaveBeenCalledTimes(1)
+    const again = setup('', onSwitch)
+    again.companyId.value = 'c1'
+    await flush()
+    expect(onSwitch).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-fetches when a reload finishes after a newer switch, and only the newest notifies', async () => {
+    const companyId = ref('A')
+    const d = draft()
+    d.selectedStrategy.value = 'parallel'
+    const releases: Array<() => void> = []
+    const reload = vi.fn(() => new Promise<void>((res) => { releases.push(res) }))
+    const onDraftDiscarded = vi.fn()
+    useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded })
+    companyId.value = 'B'
+    await flush()
+    d.selectedStrategy.value = 'seq'
+    companyId.value = 'C'
+    await flush()
+    expect(reload).toHaveBeenCalledTimes(2)
+    releases[1]() // C's reload finishes first
+    await flush()
+    releases[0]() // B's late reload finishes after C began
+    await flush()
+    expect(reload).toHaveBeenCalledTimes(3) // stale B re-fetches so C's lists are not left overwritten
+    releases[2]()
+    await flush()
+    expect(onDraftDiscarded).toHaveBeenCalledTimes(1) // only C's switch notifies
   })
 })

@@ -723,8 +723,8 @@ import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
 import MediaGallery from '@/components/vision/MediaGallery.vue';
-import { getVisionHealth, getAutomationOpportunities } from '@/composables/useVisionApi';
-import type { AutomationOpportunity } from '@/types/visionMultimodal';
+import { getVisionHealth } from '@/composables/useVisionApi';
+import { useGuiAutomationOpportunities } from '@/composables/workflow/useGuiAutomationOpportunities';
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
@@ -827,16 +827,18 @@ const activeSection = computed<SectionType>(
   () => (route.params.section as SectionType) || 'overview'
 );
 const naturalLanguageInput = ref('');
-const requireApprovalBeforeRun = ref(true);
+const requireApprovalBeforeRun = ref(true); // user preference, company-independent: kept across a company switch
 const selectedStrategy = ref<string>('');
-const sessionId = ref(`session_${Date.now()}`);
+const sessionId = ref(`session_${Date.now()}`); // company-scoped: rotated + socket re-keyed on a company switch (#21520)
 
 // GUI Automation state (#1242)
-const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
-const guiAutomationLoading = ref(false);
+const {
+  opportunities: guiAutomationOpportunities, loading: guiAutomationLoading,
+  load: loadGuiAutomationOpportunities, reset: resetGuiAutomationOpportunities,
+} = useGuiAutomationOpportunities();
 
 // Media Gallery state
-const galleryItems = ref([]);
+const galleryItems = ref([]); // never populated from a company-scoped source, so nothing to reset on a company switch
 
 // Vision service health (#2373)
 const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
@@ -858,18 +860,6 @@ async function checkVisionHealth(): Promise<void> {
     visionHealthStatus.value = res.status === 'healthy' ? 'healthy' : 'degraded';
   } catch {
     visionHealthStatus.value = 'offline';
-  }
-}
-
-async function loadGuiAutomationOpportunities(): Promise<void> {
-  guiAutomationLoading.value = true;
-  try {
-    const res = await getAutomationOpportunities();
-    guiAutomationOpportunities.value = (res.opportunities || []) as AutomationOpportunity[];
-  } catch (e) {
-    logger.warn('Failed to load automation opportunities:', e);
-  } finally {
-    guiAutomationLoading.value = false;
   }
 }
 
@@ -1002,11 +992,14 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
 
+  const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
     naturalLanguageInput.value,
     sessionId.value,
     requireApprovalBeforeRun.value
   );
+  // The company changed while the reply was in flight: its plan belongs to the previous company.
+  if (sessionId.value !== requestSession) { pendingApproval.value = null; workflowPlan.value = null; return; }
 
   if (workflowId) {
     showToast(t('workflow.builder.created'), 'success');
@@ -1226,6 +1219,11 @@ onUnmounted(() => {
 
 useWorkflowCompanySwitch({ // keeps this instance on a company switch (#21520): drop the draft, reload
   companyId: () => String(route.params.companyId ?? ''), reload: refreshAll,
+  onSwitch: () => {
+    resetGuiAutomationOpportunities();
+    sessionId.value = `session_${Date.now()}`;
+    connectWebSocket(sessionId.value); // closes the previous company's socket first
+  },
   draft: { naturalLanguageInput, selectedStrategy, workflowPlan, pendingApproval, currentWorkflow, workflowNodes, selectedNodeId },
   onDraftDiscarded: () => showToast(t('workflow.builder.draftDiscardedOnCompanySwitch'), 'info'),
 });

@@ -236,6 +236,24 @@ describe('resolveAuditStatistics (#21513)', () => {
   })
 })
 
+describe('resolveAuditStatistics consistency (#21520 review)', () => {
+  it('derives a missing rate from the served counts, not the loaded rows', () => {
+    const out = resolveAuditStatistics(
+      { success_count: 90, denied_count: 5, failed_count: 5, error_count: 0 },
+      [{ result: 'failed' }, { result: 'failed' }]
+    )
+    expect(out?.success_rate).toBe(90)
+  })
+
+  it('lets an explicit null/undefined collection fall back to the safe default', () => {
+    const out = resolveAuditStatistics(
+      { top_users: null, top_operations: undefined, operations_by_type: null, entries_by_hour: null } as never,
+      []
+    )
+    expect(out).toMatchObject({ top_users: [], top_operations: [], operations_by_type: {}, entries_by_hour: {} })
+  })
+})
+
 describe('useAuditState.resolvedStatistics (#21513)', () => {
   function stub(results: string[], statistics?: Record<string, unknown>) {
     mockGet.mockImplementation((url: string) =>

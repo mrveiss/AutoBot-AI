@@ -239,20 +239,23 @@ export function resolveAuditStatistics(
   if (!server && entries.length === 0) return null
   const count = (result: AuditResult) => entries.filter((e) => e.result === result).length
   const success = served(server?.success_count) ?? count('success')
-  const terminal = entries.filter((e) => isTerminalAuditResult(e.result)).length
+  const denied = served(server?.denied_count) ?? count('denied')
+  const failed = served(server?.failed_count) ?? count('failed')
+  const error = served(server?.error_count) ?? count('error')
   return {
-    operations_by_type: {},
-    entries_by_hour: {},
-    top_users: [],
-    top_operations: [],
     ...server,
+    operations_by_type: server?.operations_by_type ?? {},
+    entries_by_hour: server?.entries_by_hour ?? {},
+    top_users: server?.top_users ?? [],
+    top_operations: server?.top_operations ?? [],
     total_entries: served(server?.total_entries) ?? entries.length,
     success_count: success,
-    denied_count: served(server?.denied_count) ?? count('denied'),
-    failed_count: served(server?.failed_count) ?? count('failed'),
-    error_count: served(server?.error_count) ?? count('error'),
-    success_rate:
-      served(server?.success_rate) ?? calculateSuccessRate(count('success'), terminal),
+    denied_count: denied,
+    failed_count: failed,
+    error_count: error,
+    // A rate the server did not send is derived from the SAME counts shown beside it (served or
+    // loaded-window), so the panel never disagrees with itself; `attempted` is in no count.
+    success_rate: served(server?.success_rate) ?? calculateSuccessRate(success, success + denied + failed + error),
   }
 }
 

@@ -17,6 +17,7 @@
  */
 import { watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 
 const logger = createLogger('useWorkflowCompanySwitch')
 
@@ -58,17 +59,36 @@ export interface WorkflowCompanySwitchOptions {
   reload: () => Promise<void>
   /** Called after a non-empty draft was dropped, to tell the user. */
   onDraftDiscarded: () => void
+  /**
+   * Synchronous reset of everything else company-scoped, run on every switch before the reload:
+   * revoke in-flight create/plan requests, rotate the session id, re-key the workflow socket, clear
+   * fetched lists. Anything company-independent (e.g. a UI preference) is deliberately left alone.
+   */
+  onSwitch?: () => void
 }
 
 export function useWorkflowCompanySwitch(opts: WorkflowCompanySwitchOptions) {
-  return watch(opts.companyId, async (next, previous) => {
-    // First resolution of the id (previous '') is a load, not a switch: onMounted handles it.
-    if (!previous || !next || next === previous) return
-    const hadDraft = discardWorkflowDraft(opts.draft)
+  // Latest switch owns the lists (#21159 pattern, useLatestRequest).
+  const switches = useLatestRequest()
+  async function safeReload(): Promise<void> {
     try {
       await opts.reload()
     } catch (err) {
       logger.error('Reloading the workflow builder after a company switch failed', err)
+    }
+  }
+  return watch(opts.companyId, async (next, previous) => {
+    // First resolution of the id (previous '') is a load, not a switch: onMounted handles it.
+    if (!previous || !next || next === previous) return
+    const token = switches.begin()
+    const hadDraft = discardWorkflowDraft(opts.draft)
+    opts.onSwitch?.()
+    await safeReload()
+    if (!switches.isCurrent(token)) {
+      // A newer switch began while this reload was in flight; its rows may have landed over the
+      // newer company's, so fetch once more for the company now shown. The newer switch notifies.
+      await safeReload()
+      return
     }
     if (hadDraft) opts.onDraftDiscarded()
   })

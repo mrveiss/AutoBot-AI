@@ -65,3 +65,63 @@ describe('SLM primary fill and its ink (#21567)', () => {
     expect(contrast(sky, '#000000')).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+/** Selector parts a state's attributes can satisfy; anything else (a class, a descendant) never matches :root. */
+type Attrs = { 'data-app'?: string; 'data-theme'?: string }
+function matches(sel: string, attrs: Attrs): boolean {
+  if (!/^:root(\[[^\]]+\]|:not\(\[[^\]]+\]\))*$/.test(sel)) return false
+  for (const [, neg, name, val] of sel.matchAll(/(:not\()?\[([a-z-]+)(?:='([^']*)')?\]/g)) {
+    const have = attrs[name as keyof Attrs]
+    const hit = val === undefined ? have !== undefined : have === val
+    if (neg ? hit : !hit) return false
+  }
+  return true
+}
+const specificity = (sel: string) => 1 + (sel.match(/\[/g) ?? []).length
+
+/** The value a custom property resolves to on <html>: highest specificity, later source wins. main.css
+ *  @imports slm-scheme.css at its top, so the scheme's rules precede main.css's own. */
+function cascade(prop: string, attrs: Attrs): string | undefined {
+  let best: { spec: number; order: number; value: string } | undefined
+  let order = 0
+  for (const css of [SCHEME, MAIN]) {
+    for (const [, sels, body] of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const decl = new RegExp(`(?:^|[;\\s])${prop}\\s*:\\s*([^;]+);`).exec(body)
+      order++
+      if (!decl) continue
+      for (const sel of sels.split(',').map((x) => x.trim())) {
+        if (!matches(sel, attrs)) continue
+        const spec = specificity(sel)
+        if (!best || spec > best.spec || (spec === best.spec && order >= best.order)) {
+          best = { spec, order, value: decl[1].trim() }
+        }
+      }
+    }
+  }
+  return best?.value
+}
+
+describe('SLM primary pair resolves through the cascade (#21567 review)', () => {
+  it('data-app=slm + high-contrast: the high-contrast yellow pair wins over every slm scheme', () => {
+    const attrs = { 'data-app': 'slm', 'data-theme': 'high-contrast' }
+    expect(cascade('--primary', attrs)).toBe('#facc15')
+    expect(cascade('--on-primary', attrs)).toBe('#000000')
+  })
+
+  it('data-app=slm with no theme attribute takes the light scheme pair, not the base sky', () => {
+    const attrs = { 'data-app': 'slm' }
+    const light = block(SCHEME, SCHEMES[0][1])
+    expect(cascade('--primary', attrs)).toBe(light['--primary'])
+    expect(cascade('--on-primary', attrs)).toBe(light['--on-primary'])
+  })
+
+  it('no scheme at all: --primary is the sky 500 and the ink is black', () => {
+    expect(cascade('--primary', {})).toBe('var(--color-primary-500)')
+    expect(cascade('--on-primary', {})).toBe('var(--color-black)')
+  })
+
+  it('the matcher ignores selectors a bare :root cannot satisfy', () => {
+    expect(matches(':root[data-theme=\'high-contrast\'] .card', { 'data-theme': 'high-contrast' })).toBe(false)
+    expect(matches(":root[data-app='slm']:not([data-theme])", { 'data-app': 'slm', 'data-theme': 'dark' })).toBe(false)
+  })
+})
