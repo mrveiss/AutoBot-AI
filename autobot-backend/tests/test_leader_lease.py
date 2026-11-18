@@ -15,6 +15,7 @@ import fakeredis
 import pytest
 
 from autobot_shared.leader_lease import LeaderLease
+from autobot_shared.redis_utils import COMPARE_AND_PEXPIRE_LUA
 
 
 def _lease(**kw) -> LeaderLease:
@@ -64,8 +65,9 @@ async def test_refresh_uses_atomic_lua_when_already_leader():
     redis.eval.assert_awaited_once()
     redis.set.assert_not_called()  # no non-atomic GET->PEXPIRE fallback
     script, numkeys, key, worker, ttl = redis.eval.call_args.args
+    assert script == COMPARE_AND_PEXPIRE_LUA
     assert numkeys == 1 and key == "test:leader" and worker == "worker-1"
-    assert ttl == str(lease.ttl_ms)
+    assert ttl == lease.ttl_ms and isinstance(ttl, int)  # the shared helper sends milliseconds as an int
 
 
 @pytest.mark.asyncio

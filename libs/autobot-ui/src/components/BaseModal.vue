@@ -13,14 +13,14 @@
   Public API is preserved unchanged from the app version:
     props   : modelValue (v-model), title, size (sm|md|lg), width (custom
               px/CSS width overriding size), showClose, closeOnOverlay,
-              scrollable, closeLabel, closeOnEsc and locked (#14777)
+              scrollable, closeLabel, closeOnEsc and locked (#14777), role (dialog|alertdialog)
     slots   : title (rich header, falls back to `title` prop), subtitle (block
               content under the title, #14777), default (body), actions (footer)
     emits   : update:modelValue, close
     attrs   : non-prop attributes land on the role="dialog" element, not the Teleport
 
   Accessibility (unchanged behavior):
-    - role="dialog" + aria-modal, labelled/described via generated ids
+    - role="dialog" (or role="alertdialog" for a confirmation of a destructive action) + aria-modal, labelled/described via generated ids
     - focus trap (Tab / Shift+Tab wrap), initial focus, focus restore on close
     - ESC to close, backdrop click to close (when closeOnOverlay)
     - body scroll lock while open (reference-counted for stacked modals)
@@ -40,6 +40,7 @@ import { useBodyScrollLock } from '../composables/useBodyScrollLock'
 defineOptions({ inheritAttrs: false })
 
 export type ModalSize = 'sm' | 'md' | 'lg'
+export type ModalRole = 'dialog' | 'alertdialog'
 
 interface Props {
   /** v-model binding for modal visibility */
@@ -74,6 +75,12 @@ interface Props {
    * button together, whatever those props say (#14777).
    */
   locked?: boolean
+  /**
+   * ARIA role of the dialog element. `alertdialog` is for a confirmation the user must answer
+   * (a destructive action); assistive technology announces its content at once. A declared prop,
+   * because a `role` passed as an attribute would be overridden by the element's own binding.
+   */
+  role?: ModalRole
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -84,6 +91,7 @@ const props = withDefaults(defineProps<Props>(), {
   closeLabel: 'Close',
   closeOnEsc: true,
   locked: false,
+  role: 'dialog',
 })
 
 const canOverlayClose = computed(() => props.closeOnOverlay && !props.locked)
@@ -161,7 +169,7 @@ const onAfterEnter = () => focusFirst()
         <div
           ref="dialogRef"
           v-bind="$attrs"
-          role="dialog"
+          :role="role"
           aria-modal="true"
           :aria-labelledby="titleId"
           :aria-describedby="descriptionId"

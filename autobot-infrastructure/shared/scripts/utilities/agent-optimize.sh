@@ -5,7 +5,7 @@
 # Agent Optimization Wrapper Script - In-Place Edition
 #
 # Provides easy access to agent optimization functionality with git-based backup.
-# Optimizes .claude/agents/ in-place using git for version control and rollback.
+# Optimizes the agents directory in-place using git for version control and rollback.
 #
 # Usage:
 #   ./scripts/utilities/agent-optimize.sh [OPTIONS]
@@ -36,7 +36,10 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 # Paths
-AGENT_DIR="$PROJECT_ROOT/.claude/agents"
+# The host's Claude Code user-level agents dir: ONE lookup, in Python (SSOT)
+AGENT_DIR="$(python3 -m autobot_shared.claude_config)" || { echo "Cannot resolve the Claude Code agents directory" >&2; exit 1; }
+# Absolute once, before any cd, and handed to the optimiser via --agent-dir so both agree
+AGENT_DIR="$(realpath -m -- "$AGENT_DIR")"
 OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"
 
 # Functions
@@ -75,12 +78,6 @@ check_requirements() {
         exit 1
     fi
 
-    # Check if in git repository
-    if ! git rev-parse --git-dir &> /dev/null; then
-        print_error "Not in a git repository"
-        exit 1
-    fi
-
     # Check optimizer script exists
     if [ ! -f "$OPTIMIZER_SCRIPT" ]; then
         print_error "Optimizer script not found: $OPTIMIZER_SCRIPT"
@@ -97,22 +94,35 @@ check_requirements() {
 run_optimization() {
     local force_flag=""
     local stats_flag="--stats"  # Always show stats
+    local mode_args=()          # empty = dry-run preview; writing needs --apply
+    local repo_flag=""
 
     if [ "$FORCE" = true ]; then
         force_flag="--force"
     fi
 
-    print_header "Running Agent Optimization (In-Place)"
+    if [ "$APPLY" = true ]; then
+        mode_args=(--apply)
+    fi
+    if [ "$ALLOW_ENCLOSING" = true ]; then
+        repo_flag="--allow-enclosing-repo"
+    fi
 
-    # Run Python optimizer
+    print_header "Agent Optimization ($([ "$APPLY" = true ] && echo APPLY || echo 'dry-run preview'))"
+    print_info "Agents directory: $AGENT_DIR"
+
+    # The optimizer prints the backup repository and refuses an unrelated enclosing one
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" --apply --git-backup --cache --strip-code-blocks --no-collapse-policy $force_flag $stats_flag
+    python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" "${mode_args[@]}" --git-backup --cache --strip-code-blocks --no-collapse-policy $repo_flag $force_flag $stats_flag
 
-    print_success "Optimization complete!"
-    print_info "Agents optimized in: $AGENT_DIR"
-    echo ""
-    print_info "To restore from backup:"
-    echo "  $0 --restore"
+    if [ "$APPLY" = true ]; then
+        print_success "Optimization complete!"
+        echo ""
+        print_info "To restore from backup:"
+        echo "  $0 --restore"
+    else
+        print_info "Preview only; nothing was written. Re-run with --apply to write."
+    fi
 }
 
 restore_agents() {
@@ -123,9 +133,9 @@ restore_agents() {
     cd "$PROJECT_ROOT"
 
     if [ -n "$tag" ]; then
-        python3 "$OPTIMIZER_SCRIPT" --restore "$tag"
+        python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --restore "$tag"
     else
-        python3 "$OPTIMIZER_SCRIPT" --restore
+        python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --restore
     fi
 
     print_success "Agents restored successfully"
@@ -135,7 +145,17 @@ list_backups() {
     print_header "Available Backup Tags"
 
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" --list-backups
+    python3 "$OPTIMIZER_SCRIPT" --agent-dir "$AGENT_DIR" --list-backups
+}
+
+# git against the agents repo with the ambient repository overrides removed; the variable
+# list is the Python optimiser's own (autobot_shared.paths.AMBIENT_GIT_VARS), one source.
+agents_git() {
+    local unset_args=() var
+    for var in $(python3 -c 'from autobot_shared.paths import AMBIENT_GIT_VARS; print(*AMBIENT_GIT_VARS)'); do
+        unset_args+=(-u "$var")
+    done
+    env "${unset_args[@]}" git -C "$AGENT_DIR" "$@"
 }
 
 show_status() {
@@ -153,13 +173,12 @@ show_status() {
     # Show git status
     echo ""
     print_info "Git status of agents directory:"
-    cd "$PROJECT_ROOT"
-    git status --short .claude/agents/ || print_info "No changes"
+    agents_git status --short . || print_info "No changes"
 
     # Show recent backup tags
     echo ""
     print_info "Recent backup tags:"
-    git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
+    agents_git tag --list 'agents-pre-optimization-*' --sort=-creatordate | head -5 || print_info "No backup tags found"
 
     # Check if optimization cache exists
     echo ""
@@ -183,7 +202,9 @@ USAGE:
     $0 [OPTIONS]
 
 OPTIONS:
-    --optimize        Run optimization (default action)
+    --optimize        Preview the optimization (default action; dry-run, writes nothing)
+    --apply           With --optimize: actually rewrite the files (git backup tag + commit)
+    --allow-enclosing-repo  With --apply: permit the agents dir to sit inside an unrelated git repo
     --restore         Restore from most recent git backup tag
     --restore TAG     Restore from specific git backup tag
     --list-backups    List all available backup tags
@@ -193,8 +214,11 @@ OPTIONS:
     --help            Show this help message
 
 EXAMPLES:
-    # Run optimization with default settings
+    # Preview what would change (writes nothing)
     $0 --optimize
+
+    # Rewrite the files, with a git backup tag first
+    $0 --optimize --apply
 
     # Force regeneration and show detailed stats
     $0 --optimize --force --stats
@@ -213,12 +237,12 @@ EXAMPLES:
 
 HOW IT WORKS:
     1. Creates timestamped git tag before optimization
-    2. Optimizes .claude/agents/ files in-place
+    2. Optimizes $AGENT_DIR/ files in-place
     3. Commits optimized files to git with statistics
     4. Fully reversible via git restore
 
 NOTES:
-    - Agents are optimized IN-PLACE in .claude/agents/
+    - Agents are optimized IN-PLACE in $AGENT_DIR/
     - Git tags provide backup and rollback capability
     - Original files preserved in git history
     - Cache prevents unnecessary reprocessing
@@ -230,6 +254,8 @@ EOF
 
 # Parse command line arguments
 FORCE=false
+APPLY=false
+ALLOW_ENCLOSING=false
 STATS=false
 ACTION="optimize"
 RESTORE_TAG=""
@@ -255,6 +281,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --status)
             ACTION="status"
+            shift
+            ;;
+        --apply)
+            APPLY=true
+            shift
+            ;;
+        --allow-enclosing-repo)
+            ALLOW_ENCLOSING=true
             shift
             ;;
         --force)

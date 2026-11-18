@@ -24,6 +24,7 @@ import logging  # stdlib: this module stays dependency-free (imported by ssot_co
 import os
 from typing import Any, Mapping, Optional
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_role_mirrors import FEATURE_ROUTERS_STRICT_DEFAULT, FEATURE_ROUTERS_STRICT_PRODUCTION
 
 logger = logging.getLogger(__name__)
@@ -82,14 +83,6 @@ NON_PRODUCTION_ENVIRONMENTS = frozenset({"development", "dev", "test", "ci"})
 #: Every recognised name; anything else is warned about once (and is production for safety).
 KNOWN_ENVIRONMENTS = NON_PRODUCTION_ENVIRONMENTS | {"production", "staging"}
 
-_warned: set[str] = set()
-
-
-def _warn_once(key: str, message: str, *args: object) -> None:
-    if key not in _warned:
-        _warned.add(key)
-        logger.warning(message, *args)
-
 
 def _env(environ: Optional[Mapping[str, str]]) -> Mapping[str, str]:
     return os.environ if environ is None else environ
@@ -103,7 +96,9 @@ def resolve_environment(canonical: Optional[str], alias: Optional[str]) -> str:
     """
     primary, legacy = (canonical or "").strip().lower(), (alias or "").strip().lower()
     if primary and legacy and primary != legacy:
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             "conflict",
             "%s=%r and %s=%r differ; %s wins",
             ENVIRONMENT_VAR,
@@ -114,7 +109,9 @@ def resolve_environment(canonical: Optional[str], alias: Optional[str]) -> str:
         )
     name = primary or legacy or ENVIRONMENT_DEFAULT
     if name not in KNOWN_ENVIRONMENTS:
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             f"unknown:{name}",
             "Unknown environment %r (known: %s); treated as production",
             name,

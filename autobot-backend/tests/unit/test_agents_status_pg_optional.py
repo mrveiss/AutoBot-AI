@@ -102,45 +102,31 @@ class TestFallbackAgentsFromRegistry:
         assert len(agents) >= 4, "Expected at least 4 default agents"
 
     def test_fallback_shapes(self):
-        """Every in-memory agent maps to an AgentStatusItem-compatible dict."""
-        from orchestration.agent_registry import AgentCapabilityRegistry
+        """The real fallback builder's items, fed through the real ``with_feed``, are status-shaped.
 
-        _ORCH_TYPE_MAP = {
-            "research": "analyzer",
-            "librarian": "analyzer",
-            "system_commands": "executor",
-            "orchestrator": "orchestrator",
-        }
+        Runs the module's own ``_fallback_agents_from_registry`` (not a local dict), so a change
+        to the fields it builds fails here. The route-level wiring to the feed helper is
+        asserted in ``tests/api/test_agent_status_17514.py`` (#21270).
+        """
+        from services.agent_activity_feed import with_feed
 
-        registry = AgentCapabilityRegistry(initialize_defaults=True)
+        fallback_fn = self._import_func("_fallback_agents_from_registry")
+        agents = fallback_fn()
+        assert agents, "the default registry must yield agents"
         required_keys = {
             "id",
             "name",
             "type",
             "status",
-            "currentTask",
-            "tasksCompleted",
-            "uptime",
-            "successRate",
             "recentTasks",
             "activityTimeline",
+            "activityWindowStart",
         }
-
-        for profile in registry.get_all().values():
-            item = {
-                "id": profile.agent_id,
-                "name": profile.agent_id.replace("_", " ").title(),
-                "type": _ORCH_TYPE_MAP.get(profile.agent_type, "worker"),
-                "status": profile.availability_status,
-                "currentTask": None,
-                "tasksCompleted": 0,
-                "uptime": 0,
-                "successRate": int(profile.success_rate * 100),
-                "recentTasks": [],
-                "activityTimeline": [],
-            }
-            assert required_keys == set(item.keys()), f"Missing keys for {profile.agent_id}"
-            assert isinstance(item["successRate"], int)
+        for agent in agents:
+            item = with_feed(agent, None)
+            assert required_keys == set(item.keys()), f"Wrong keys for {agent['id']}"
+            assert item["recentTasks"] is None and item["activityTimeline"] is None
+            assert item["activityWindowStart"] is None
             assert item["type"] in {"analyzer", "executor", "orchestrator", "worker"}
 
     def test_orch_type_map_covers_defaults(self):

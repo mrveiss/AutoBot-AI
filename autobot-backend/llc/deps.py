@@ -33,7 +33,9 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 import threading
+import traceback
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
@@ -41,12 +43,19 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
 from user_management.services import TenantContext
 
+logger = get_logger(__name__)
+
 _T = TypeVar("_T")
+
+# Fixed caller-facing text for a failed membership lookup; the cause is logged, never returned.
+MEMBERSHIP_LOOKUP_FAILED_DETAIL = "Membership lookup failed"
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -121,6 +130,51 @@ def _build_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     return _dep
 
 
+_LOGGED_FRAMES = 3
+
+
+def _frames_label(exc: BaseException) -> str:
+    """Innermost stack frames of *exc* as ``file:line in function``, no source lines, no message."""
+    frames = traceback.extract_tb(exc.__traceback__)[-_LOGGED_FRAMES:]
+    return " <- ".join(sanitize_log_value(f"{f.filename}:{f.lineno} in {f.name}") for f in reversed(frames))
+
+
+def log_unexpected(
+    log: logging.Logger,
+    scope: str,
+    exc: BaseException,
+    *,
+    headline: str = "Unexpected error",
+    level: int = logging.WARNING,
+) -> None:
+    """One redacted log line for an exception nobody planned for: class, text, innermost frames (#21579).
+
+    The traceback is never attached (no ``exc_info``): its text would carry the raw message past the redactor.
+    *scope* is neutralised like any other untrusted log value.
+    """
+    log.log(
+        level,
+        "%s for %s: %s: %s [at %s]",
+        headline,
+        sanitize_log_value(scope),
+        type(exc).__name__,
+        safe_log_text(exc),
+        _frames_label(exc),
+    )
+
+
+def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Exception) -> HTTPException:
+    """500 carrying only the fixed *detail*; the cause goes to *log*, redacted (#21396).
+
+    Exception text can hold driver messages and connection targets, so it never
+    reaches the response body. The log line carries the exception class, its
+    text through ``safe_log_text``, and the innermost frames (location only),
+    all on one line; *scope* is neutralised like any other untrusted log value.
+    """
+    log_unexpected(log, scope, exc, headline=detail, level=logging.ERROR)
+    return HTTPException(status_code=500, detail=detail)
+
+
 async def require_board_role(
     company_id: uuid.UUID,
     current_user: dict,
@@ -145,7 +199,7 @@ async def require_board_role(
             None,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
+        raise logged_server_error(logger, MEMBERSHIP_LOOKUP_FAILED_DETAIL, f"company {company_id}", exc) from exc
 
     if role not in allowed_roles:
         raise HTTPException(status_code=403, detail=detail)

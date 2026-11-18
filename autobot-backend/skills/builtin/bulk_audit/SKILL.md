@@ -26,7 +26,7 @@ Use for: hardcoded credentials/IPs, missing error handling, security anti-patter
    - Low: style, minor tech debt
 
 4. **Create a GitHub issue per category** (not one per file) — then attach each to the audit umbrella as a native sub-issue,
-   not just a checklist row (`issue` skill, Step 4):
+   not just a checklist row:
    ```bash
    gh issue create --title "Fix: <description>" \
      --body "$(cat <<'EOF'
