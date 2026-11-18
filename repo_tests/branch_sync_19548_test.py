@@ -316,9 +316,13 @@ def test_an_already_labelled_pr_gets_no_second_comment() -> None:
 # --------------------------------------------------------------- planning
 
 
-def _pull(number: int, ref: str, *, repo: str = REPO, base: str = "main", draft: bool = False) -> Dict[str, Any]:
+def _pull(
+    number: int, ref: str, *, repo: str = REPO, base: str = "main", draft: bool = False, labelled: bool = True
+) -> Dict[str, Any]:
+    """A PR payload; it holds a CI slot (``land-next``) unless ``labelled=False`` (owner rule 2026-11-18)."""
     head = {"ref": ref, "sha": HEAD_SHA, "repo": {"full_name": repo} if repo else None}
-    return {"number": number, "head": head, "base": {"ref": base}, "labels": [], "draft": draft}
+    labels = [{"name": core.LABEL_LAND_NEXT}] if labelled else [{"name": "ci"}]
+    return {"number": number, "head": head, "base": {"ref": base}, "labels": labels, "draft": draft}
 
 
 def test_the_plan_skips_forks_includes_drafts_and_leaves_other_bases_alone() -> None:
@@ -375,6 +379,32 @@ def test_prs_are_synced_oldest_first_and_a_branch_with_no_open_pr_is_skipped() -
     plan = core.plan_run(pulls, ["parked-b", "parked-a"], REPO)
     assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10"]
     assert plan.skipped[core.NO_OPEN_PR] == ["`parked-a` (no PR)", "`parked-b` (no PR)"]
+
+
+def test_only_land_next_prs_are_synced_the_label_alone_decides() -> None:
+    """Owner rule 2026-11-18 (#21806): sync only the PRs that hold a CI slot."""
+    pulls = [
+        _pull(41, "issue-41"),
+        _pull(42, "issue-42", labelled=False),
+        _pull(43, "issue-43", draft=True),
+        _pull(44, "issue-44", draft=True, labelled=False),
+        _pull(45, "issue-45", repo="someone/fork"),
+        _pull(46, "issue-46", base="issue-41"),
+    ]
+    plan = core.plan_run(pulls, ["issue-41", "issue-42", "parked-3"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-41", 41), ("issue-43", 43)]
+    assert plan.skipped[core.NO_SLOT] == ["#42 `issue-42`", "#44 `issue-44`"]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-3` (no PR)"], "a PR-less branch stays untouched"
+    assert plan.skipped[core.FORK] == ["#45"] and plan.skipped[core.OTHER_BASE] == ["#46 `issue-46`"]
+
+
+def test_the_label_is_matched_exactly_and_policy_still_wins_over_it() -> None:
+    near = _pull(51, "issue-51", labelled=False)
+    near["labels"] = [{"name": "land-next-later"}, {"name": "Land-Next"}]
+    plan = core.plan_run([near, _pull(52, "train-52"), _pull(53, "dependabot/pip/x")], [], REPO)
+    assert plan.targets == []
+    assert plan.skipped[core.NO_SLOT] == ["#51 `issue-51`"]
+    assert len(plan.skipped[core.POLICY]) == 2, "a labelled train or dependabot branch is still never synced"
 
 
 @pytest.mark.parametrize(
@@ -444,7 +474,7 @@ def test_open_pulls_paginates_and_fails_closed() -> None:
 
 def test_the_summary_names_every_outcome() -> None:
     summary = bs.render_summary({core.SYNCED: ["#1 `a`"], core.FORK: ["#3"]}, dry_run=False)
-    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK):
+    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK, core.NO_SLOT):
         assert f"| {outcome} |" in summary
     assert "| synced | 1 |" in summary and "- #1 `a`" in summary
 
