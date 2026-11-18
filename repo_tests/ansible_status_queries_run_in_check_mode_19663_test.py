@@ -60,7 +60,6 @@ def _ansible_yaml(root: Path) -> list[Path]:
 REACH = declare(
     "ansible-status-queries-check-mode-sweep",
     discover=_ansible_yaml,
-    floor=330,
     growth=40,
     skips=0,
     what="Ansible YAML files",

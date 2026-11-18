@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.isolated_git import isolated_git_env
+from autobot_shared.isolated_git import isolated_git_env, sandbox_path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = REPO_ROOT / "pipeline-scripts" / "check-pre-commit-hook-pr.sh"
@@ -74,7 +74,7 @@ def _run_wrapper(tmp_path: Path, hook_name: str, base: str, head: str) -> subpro
         cwd=tmp_path,
         capture_output=True,
         text=True,
-        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
     )
 
 
@@ -89,7 +89,7 @@ class TestArgvDispatch:
             cwd=tmp_path,
             capture_output=True,
             text=True,
-            env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+            env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
         )
         assert result.returncode == 2
         assert "not found" in result.stderr.lower()
@@ -213,7 +213,7 @@ def _run_wrapper_python(
         cwd=tmp_path,
         capture_output=True,
         text=True,
-        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
     )
 
 
@@ -228,7 +228,7 @@ class TestPythonValidatorMode:
             cwd=tmp_path,
             capture_output=True,
             text=True,
-            env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+            env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
         )
         assert result.returncode == 2
         assert "not found" in result.stderr.lower()
@@ -295,7 +295,7 @@ def _run_scoped(tmp_path: Path, hook_name: str, base: str, head: str) -> subproc
         cwd=tmp_path,
         capture_output=True,
         text=True,
-        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
     )
 
 

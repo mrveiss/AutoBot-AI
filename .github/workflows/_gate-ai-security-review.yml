@@ -1,0 +1,153 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# AI security review (#12973)
+#
+# Runs the `secreview` skill headless against the PR diff and posts its findings
+# table as a single PR comment, updated in place.
+#
+# ADVISORY ONLY — never a required check. The reviewer is probabilistic, so it
+# informs the human merge gate rather than gating merge itself. Static scanning
+# (bandit, semgrep, pip-audit, secret detection) lives in security.yml and is
+# not duplicated here; this job covers what pattern matchers structurally cannot
+# see — renames with un-updated call sites, missing ownership checks, fail-open
+# regressions, docstrings that contradict their code.
+#
+# Reviews are billed per run, so the job is deliberately narrow: filtered paths
+# only, no drafts, one run per PR head.
+#
+# Auth is the Claude Code subscription, NOT a metered API key (#12977). Generate
+# a long-lived token locally with `claude setup-token` and store it as the
+# CLAUDE_CODE_OAUTH_TOKEN repository secret. Do not reintroduce
+# ANTHROPIC_API_KEY here — that bills per token against a separate account.
+#
+# Until the secret exists the job skips with a notice rather than failing, so it
+# cannot red every PR.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: AI Security Review (reusable body)
+
+on:
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: "Subscription token for the review step"
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Security Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check for subscription token
+        id: key
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not configured — skipping AI security review. Generate one with 'claude setup-token' and add it as a repository secret to enable this job."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.key.outputs.configured == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        if: steps.key.outputs.configured == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install Claude Code
+        if: steps.key.outputs.configured == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2
+
+      # The skill enforces the ordering contract (diff only, table within 3 tool
+      # calls, verify after).
+      #
+      # The diff is untrusted input reaching a model, so a crafted PR could try
+      # to steer the review by embedding instructions in the code it changes.
+      # Two mitigations: tools are read-only, so the reviewer cannot edit the
+      # branch it is reviewing or reach the network, and its only output path is
+      # an advisory comment that gates nothing. Treat the comment as a lead to
+      # confirm, never as an authority.
+      #
+      # SHAs are passed via env and dereferenced as shell variables — never
+      # interpolated into the run block, which would be an injection seam.
+      - name: Run secreview
+        id: review
+        if: steps.key.outputs.configured == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+          if claude -p "Use the secreview skill to review the diff between ${BASE_SHA} and ${HEAD_SHA}. Output the findings table and the verdict line only — no preamble. If there are no findings, say so in one line." \
+              --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
+              > /tmp/secreview.md; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            # Advisory job — a transient API failure must not red the PR.
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secreview did not complete; posting no findings."
+          fi
+
+      - name: Build comment body
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- ai-security-review -->"
+            echo "## AI Security Review"
+            echo
+            cat /tmp/secreview.md
+            echo
+            echo "---"
+            echo "_Advisory only — this reviewer is probabilistic and does not gate merge._"
+            echo "_Findings are leads to confirm, not verdicts. Static scanning lives in \`security.yml\`._"
+            echo "_Anything worth keeping should be filed as an issue — a PR comment is not tracking._"
+          } > /tmp/comment.md
+
+      # #14155 review (finding D): the PR comment was the ONLY place these
+      # findings ever surfaced — no job summary, no artifact. Making the post
+      # non-fatal above therefore traded a false failure for *no signal*: on a
+      # fork PR the analysis runs, the 403 is swallowed, the job reports green,
+      # and a real finding sits in raw Actions logs nobody opens for a job
+      # documented as advisory and always-green.
+      #
+      # The step summary is written BEFORE the post attempt and is not
+      # conditional on it, so the findings survive whether or not the comment
+      # lands. It renders on the run page, which is reachable from the check
+      # regardless of who owns the head repo.
+      - name: Publish findings to the run summary
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        run: cat /tmp/comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Upsert by marker (#12984: the one shared action, every page of comments)
+      # so repeated pushes update one comment instead of appending a new one.
+      # #14153: same fork-hostile shape as ssot-coverage.yml — GITHUB_TOKEN
+      # is read-only on pull_request events from a fork, so this call 403s
+      # and would otherwise mark the (already advisory, never-required) job
+      # "fail" for a reason that has nothing to do with the review itself.
+      - name: Post or update PR comment
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/upsert-pr-comment
+        with:
+          marker: '<!-- ai-security-review -->'
+          body-file: /tmp/comment.md

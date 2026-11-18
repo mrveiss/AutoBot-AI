@@ -75,6 +75,67 @@ def merge_message(branch: str, base: str = "main") -> str:
     return f"Merge {base} into {branch} (auto-sync) [skip ci]"
 
 
+#: The one request that starts a suite on a synced head (#21577). The subject is fixed text plus the PR number
+#: in the issue-reference position the commit-subject rule needs; it carries no skip marker and no trailer.
+START_CI_SUBJECT = "chore(ci): start the suite on the synced head"
+SKIP_MARKER = "[skip ci]"
+SUITE_WORKFLOW_PATH = ".github/workflows/ci.yml"
+#: A run that never produced a verdict does not count as "the suite already started".
+RUNS_THAT_STARTED_NOTHING = frozenset({"cancelled", "skipped", "startup_failure"})
+_PR_NUMBER = re.compile(r"[1-9][0-9]{0,8}")
+
+
+def parse_pr_number(text: str) -> Optional[int]:
+    """The pull request number in *text* (an untrusted dispatch input): ASCII digits only, else None."""
+    return int(text) if _PR_NUMBER.fullmatch(text or "") else None
+
+
+def start_ci_message(number: int) -> str:
+    """The subject of the one empty commit that starts the suite; never the skip marker, never a trailer."""
+    return f"{START_CI_SUBJECT} (#{number})"
+
+
+def refuse_start_ci(pull: Dict[str, Any], repository: str, base: str, behind: Optional[int], local_head: str) -> str:
+    """Why a suite may NOT be started for this PR, or "" when it may.
+
+    Only an open, non-draft, same-repo PR into ``base`` whose branch is a sync target, is 0 behind ``base``
+    and whose head is the commit this run fetched. A branch behind ``base`` is refused, not merged first:
+    the ordinary sync merges it, then the request is made again.
+    """
+    head, number = pull.get("head") or {}, pull.get("number")
+    if pull.get("state") != "open":
+        return f"#{number} is not open"
+    if _is_fork(pull, repository):
+        return f"#{number} comes from a fork; nothing is ever pushed to a fork"
+    if (pull.get("base") or {}).get("ref") != base:
+        return f"#{number} does not target {base}"
+    if pull.get("draft"):
+        return f"#{number} is a draft; mark it ready for review first"
+    if _policy_bucket(head.get("ref", "")):
+        return f"#{number} is on branch {code(head.get('ref', ''))}, which the sync never writes to"
+    if behind is None or behind > 0:
+        count = "an unknown number of" if behind is None else str(behind)
+        return f"#{number} is {count} commit(s) behind {base}: let the sync merge it first, then ask again"
+    if not local_head or local_head != head.get("sha"):
+        return f"#{number}: its head is not the commit this run fetched (the branch moved); ask again"
+    return ""
+
+
+def suite_already_started(runs: Sequence[Dict[str, Any]], sha: str) -> bool:
+    """True when ``sha`` already has a ``pull_request`` run of the suite, in progress or completed.
+
+    A run counts when it is for exactly ``sha``, of the suite workflow, started by ``pull_request``, and is
+    not one that produced nothing (cancelled, skipped, failed to start). In progress has no conclusion yet.
+    """
+    return any(
+        run.get("head_sha") == sha
+        and run.get("event") == "pull_request"
+        and str(run.get("path") or "").startswith(SUITE_WORKFLOW_PATH)
+        and run.get("conclusion") not in RUNS_THAT_STARTED_NOTHING
+        for run in runs
+    )
+
+
 def classify_merge(returncode: int, output: str, unmerged: Sequence[str]) -> str:
     """``synced`` / ``conflict`` / ``error`` for one ``git merge``.
 

@@ -464,7 +464,7 @@ def test_a_raising_discover_is_named_as_the_cause_not_a_bare_traceback() -> None
     def _raises(_root):
         raise RuntimeError("enumeration exploded")
 
-    reach: Reach[object] = Reach(name="synthetic", discover=_raises, floor=1, what="things")
+    reach: Reach[object] = Reach(name="synthetic", discover=_raises, pinned_floor=1, what="things")
 
     with pytest.raises(ReachDiscoveryError) as caught:
         reach.examined(repo_root())
@@ -486,7 +486,7 @@ def test_a_floor_breach_is_still_a_floor_error() -> None:
     """
     from repo_tests._reach import Reach, ReachFloorError
 
-    reach: Reach[object] = Reach(name="synthetic-floor", discover=lambda _root: [], floor=5, what="things")
+    reach: Reach[object] = Reach(name="synthetic-floor", discover=lambda _root: [], pinned_floor=5, what="things")
 
     with pytest.raises(ReachFloorError):
         reach.examined(repo_root())

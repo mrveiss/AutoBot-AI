@@ -13,8 +13,12 @@ What counts against an owner: live files, plus soft-deleted files whose bytes st
 leave only through a human-approved proposal (#17038), so nothing here frees or purges anything;
 once that removal marks the queue row processed the file stops counting.
 
-``uploaded_by`` NULL is its own owner: one shared bucket for files stored with no named owner, held to
-the same quota. Agent-created files are charged to the agent's name for the same reason (#20217).
+Who is charged is ``quota_owner`` (#20678), falling back to ``uploaded_by`` for a row that has none: a
+human upload is charged to its uploader as before, and an agent-created file is charged to the human who
+owns the conversation (``conversation_file_quota_owner.OWNERLESS_AGENT_WRITE_RULE``), never to the agent's
+name, so one user's agent cannot exhaust the quota of another user's. ``uploaded_by`` keeps recording who
+wrote the file. A charge owner that is NULL is its own owner: one shared bucket, held to the same quota.
+Rows written before #20678 keep their old charge (agent name) until a human approves a proposal (#17038).
 """
 
 from __future__ import annotations
@@ -36,8 +40,9 @@ QUOTA_EXCEEDED = "conversation_file_quota_exceeded"
 
 # Bytes still on disk for an owner: live files, and deleted files whose removal has not happened.
 # The three statements below embed only this module constant; the owner and sizes are bound parameters (B608).
+_CHARGED = "COALESCE(quota_owner, uploaded_by)"  # who pays (#20678); a pre-#20678 row has no quota_owner
 _HELD = (
-    "uploaded_by IS ? AND (is_deleted = 0 OR file_id IN "
+    f"{_CHARGED} IS ? AND (is_deleted = 0 OR file_id IN "  # nosec B608 -- constants only, owner is bound
     "(SELECT file_id FROM file_cleanup_queue WHERE is_processed = 0))"
 )
 _USAGE_SQL = (
@@ -47,8 +52,8 @@ _USAGE_SQL = (
 )
 _INSERT_SQL = (
     "INSERT INTO conversation_files (file_id, session_id, original_filename, stored_filename, "  # nosec B608
-    "file_path, file_size, file_hash, mime_type, uploaded_by) "
-    "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? "
+    "file_path, file_size, file_hash, mime_type, uploaded_by, quota_owner) "
+    "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? "
     f"WHERE (SELECT COALESCE(SUM(file_size), 0) FROM conversation_files WHERE {_HELD}) + ? <= ?"
 )
 _RESIZE_SQL = (
@@ -119,7 +124,7 @@ async def insert_within_quota(connection, record: tuple, owner: str | None, size
 
 async def resize_within_quota(connection, row, size: int, file_hash: str) -> None:
     """Set an existing file's size only if its owner stays within quota (a content update can grow it)."""
-    owner, file_id = row["uploaded_by"], row["file_id"]
+    owner, file_id = row["quota_owner"] or row["uploaded_by"], row["file_id"]
     cursor = await connection.execute(_RESIZE_SQL, (size, file_hash, file_id, owner, file_id, size, USER_QUOTA_BYTES))
     if cursor.rowcount == 0:
         raise await _refuse(connection, owner)

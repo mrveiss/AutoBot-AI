@@ -23,6 +23,7 @@ import llc.api.company_os_plans as plans_api
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.api.company_os_plans import router as plans_router
 from llc.deps import get_session
+from llc.models.activity import LLCActivityLog
 from llc.models.company_os_plan import CompanyOsWorkflowPlan
 from llc.models.enums import MembershipRole
 from llc.models.goal import LLCGoal
@@ -41,6 +42,7 @@ COMPANY_A, COMPANY_B = uuid.uuid4(), uuid.uuid4()
 ADMIN_A, ADMIN_B, MEMBER_A, MEMBER_B = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 PREFIX = "/api/llc/company-os/workflow-plans"
 _TABLES = [
+    LLCActivityLog.__table__,
     Role.__table__,
     LLCCompanyMembership.__table__,
     LLCRoleAssignment.__table__,

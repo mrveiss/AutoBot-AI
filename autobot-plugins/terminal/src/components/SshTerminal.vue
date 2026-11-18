@@ -25,7 +25,6 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { createLogger } from '../utils'
-import { usePollingJob } from '../composables/usePollingJob'
 import { useWebSocket } from '../composables/useWebSocket'
 
 const logger = createLogger('SshTerminal')
@@ -36,7 +35,8 @@ const props = defineProps<{
   /** WebSocket base path for SSH connections. Defaults to /api/terminal/ws/ssh/ */
   wsBasePath?: string
   /**
-   * Auth token for the WebSocket handshake (#14991). The backend now
+   * Auth token for the WebSocket handshake (#14991), sent as the `bearer`
+   * subprotocol -- never in the URL (#18550). The backend
    * authenticates this connection; this shared package has no store of its
    * own to pull a token from, so the host application must resolve and pass
    * one. Connection is refused client-side when this is absent.
@@ -59,21 +59,25 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 
 const wsUrl = ref('')
+// #18550: the token rides in Sec-WebSocket-Protocol (['bearer', '<jwt>'], #16457),
+// never in the URL -- URLs land in access logs, proxies and browser history.
+const wsProtocols = ref<string[] | undefined>(undefined)
 
-const buildWsUrl = (): string | null => {
-  if (!props.authToken) return null
+const buildWsUrl = (): string => {
   const params = props.chatSessionId ? `?conversation_id=${props.chatSessionId}` : ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
   const basePath = props.wsBasePath ?? '/api/terminal/ws/ssh/'
-  const sep = params ? '&' : '?'
-  return `${protocol}//${host}${basePath}${props.hostId}${params}${sep}token=${encodeURIComponent(props.authToken)}`
+  return `${protocol}//${host}${basePath}${props.hostId}${params}`
 }
 
 const { send: wsSend, connect: wsConnect, disconnect: wsDisconnect, isConnected: wsIsConnected } = useWebSocket(wsUrl, {
   autoConnect: false,
   autoReconnect: false,
   parseJSON: false,
+  protocols: wsProtocols,
+  heartbeatInterval: 30000,
+  heartbeatMessage: { type: 'ping' },
   onOpen: () => {
     logger.info('SSH WebSocket connected')
     connectionState.value = 'connected'
@@ -157,15 +161,15 @@ const connect = () => {
   if (wsIsConnected.value) return
   connectionState.value = 'connecting'
   errorMessage.value = ''
-  const url = buildWsUrl()
-  if (url === null) {
+  if (!props.authToken) {
     logger.warn('No auth token available, cannot connect to SSH WebSocket')
     connectionState.value = 'error'
     errorMessage.value = 'Not authenticated'
     emit('error', 'Not authenticated')
     return
   }
-  wsUrl.value = url
+  wsUrl.value = buildWsUrl()
+  wsProtocols.value = ['bearer', props.authToken]
   logger.info('Connecting to SSH WebSocket')
   wsConnect()
 }
@@ -210,11 +214,6 @@ const handleMessage = (message: SSHTerminalMessage) => {
 const disconnect = () => { wsDisconnect() }
 const handleResize = () => { if (fitAddon) fitAddon.fit() }
 
-const { start: startHeartbeat, stop: stopHeartbeat } = usePollingJob(
-  async (_: string) => { if (wsIsConnected.value) sendToServer({ type: 'ping' }) },
-  { intervalMs: 30000, maxAttempts: Number.MAX_SAFE_INTEGER }
-)
-
 watch(() => props.hostId, (newId, oldId) => {
   if (newId !== oldId) {
     disconnect()
@@ -225,12 +224,10 @@ watch(() => props.hostId, (newId, oldId) => {
 onMounted(() => {
   initTerminal()
   connect()
-  startHeartbeat()
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
-  stopHeartbeat()
   window.removeEventListener('resize', handleResize)
   if (terminal) { terminal.dispose(); terminal = null }
 })

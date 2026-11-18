@@ -29,6 +29,26 @@ def _module():
 
 
 check = _module()
+_REAL_EGRESS_POLICY = check.assert_egress_policy
+
+
+@pytest.fixture(autouse=True)
+def _loopback_stack_is_allowed(monkeypatch):
+    """The fake stack listens on loopback, which the egress policy rightly refuses; the refusal has its own test."""
+
+    async def allow(_url: str) -> None:
+        return None
+
+    monkeypatch.setattr(check, "assert_egress_policy", allow)
+
+
+def test_an_address_the_egress_policy_refuses_is_a_named_failure_not_a_request(monkeypatch) -> None:
+    monkeypatch.setattr(check, "assert_egress_policy", _REAL_EGRESS_POLICY)
+    sent: list = []
+    monkeypatch.setattr(check.requests, "request", lambda *a, **k: sent.append(a))
+    status, body = check._request("http://127.0.0.1:1/api/system/health")
+    assert (status, sent) == (0, [])
+    assert "disallowed address" in body
 
 
 def _health(probe: dict | None) -> tuple:

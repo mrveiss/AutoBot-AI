@@ -73,7 +73,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "monitoring-version-literals",
     discover=_sources,
-    floor=523,  # mid-window: population 548, window (498, 548)
     growth=50,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="compose, infrastructure and Ansible yml/yaml/ini/sh files",
     roots=_ROOTS,

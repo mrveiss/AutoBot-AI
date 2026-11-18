@@ -57,9 +57,9 @@ async def test_repeats_in_the_window_write_nothing_and_the_next_record_counts_th
     for _ in range(50):
         await audit.note_refused_session("operator")
     assert writer.await_count == 1
-    subject, (at, repeats) = next(iter(audit._recent.items()))
+    subject, (at, repeats) = next(iter(audit._GROUPER._recent.items()))
     assert subject == "operator" and repeats == 49
-    audit._recent["operator"] = (at - audit.WINDOW_S - 1, repeats)
+    audit._GROUPER._recent["operator"] = (at - audit.WINDOW_S - 1, repeats)
     await audit.note_refused_session("operator")
     assert writer.await_count == 2 and "+49 refused" in writer.await_args.kwargs["subject"]
 
@@ -78,10 +78,10 @@ async def test_a_failed_write_doesnt_raise(audit, writer) -> None:
 
 
 def test_the_tracked_set_cant_grow_past_its_cap(audit) -> None:
-    audit._MAX_TRACKED = 3
+    audit._GROUPER.max_tracked = 3
     for number in range(20):
         assert audit.repeats_to_record(f"person-{number}") == 0
-    assert len(audit._recent) <= 3
+    assert len(audit._GROUPER._recent) <= 3
 
 
 def test_get_current_user_records_before_refusing() -> None:

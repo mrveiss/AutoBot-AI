@@ -101,7 +101,13 @@ async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
 async def _item(session: AsyncSession, *, status: WorkItemStatus, title: str):
     """Seed through the service, so the fixture cannot disagree with production."""
     svc = WorkItemService()
-    item = await svc.create(session, company_id=_COMPANY, type=WorkItemType.TASK, title=title)
+    item = await svc.create(
+        session,
+        company_id=_COMPANY,
+        type=WorkItemType.TASK,
+        title=title,
+        project_id=await harness.seed_project(session, _COMPANY),
+    )
     item.status = status.value
     await session.commit()
     return item

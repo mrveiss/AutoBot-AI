@@ -29,6 +29,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.one_session_scope_15068_test import _is_source_python
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _RETENTION_HOME = "autobot-backend/tasks/retention_audit.py"
@@ -48,7 +49,7 @@ def _callee(call: ast.Call) -> str:
 
 def _builds_retention_purge_event(source: str) -> bool:
     """True when `source` constructs an event whose `action=` is the retention purge."""
-    for call in _calls(ast.parse(source)):
+    for call in _calls(parse_cache.parse(source)):
         for kw in call.keywords:
             if kw.arg == "action" and isinstance(kw.value, ast.Constant) and kw.value.value == "retention_purge":
                 return True
@@ -57,7 +58,7 @@ def _builds_retention_purge_event(source: str) -> bool:
 
 def _decodes_jwt_payload(source: str) -> bool:
     """True when one function splits a token on '.' and base64url-decodes a part of it."""
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         names = {_callee(c) for c in _calls(fn)}
@@ -74,20 +75,20 @@ def _defines_node_event_writer(source: str) -> bool:
     """True when `source` defines a function named like the node-event writer."""
     return any(
         isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.lstrip("_") == "create_node_event"
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
     )
 
 
 def _spells_denylist_prefix(source: str) -> bool:
     """True when `source` holds the prefix as a string literal (docstrings are not the prefix)."""
-    return any(isinstance(n, ast.Constant) and n.value == _PREFIX for n in ast.walk(ast.parse(source)))
+    return any(isinstance(n, ast.Constant) and n.value == _PREFIX for n in ast.walk(parse_cache.parse(source)))
 
 
 def _defines_class(name: str):
     """Matcher: True when `source` defines a class called `name` (a retired concept's old name)."""
 
     def probe(source: str) -> bool:
-        return any(isinstance(n, ast.ClassDef) and n.name == name for n in ast.walk(ast.parse(source)))
+        return any(isinstance(n, ast.ClassDef) and n.name == name for n in ast.walk(parse_cache.parse(source)))
 
     return probe
 
@@ -98,7 +99,7 @@ def _defines_function(*names: str):
     def probe(source: str) -> bool:
         return any(
             isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in names
-            for n in ast.walk(ast.parse(source))
+            for n in ast.walk(parse_cache.parse(source))
         )
 
     return probe
@@ -108,7 +109,7 @@ def _constructs(name: str):
     """Matcher: True when `source` calls `name(...)`, i.e. builds the aggregate, not just imports it."""
 
     def probe(source: str) -> bool:
-        return any(_callee(c) == name for c in _calls(ast.parse(source)))
+        return any(_callee(c) == name for c in _calls(parse_cache.parse(source)))
 
     return probe
 
@@ -195,8 +196,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "concept-forks-17856-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3342,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

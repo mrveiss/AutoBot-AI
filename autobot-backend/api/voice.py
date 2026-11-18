@@ -25,6 +25,7 @@ from api.schemas_code import (
 )
 from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission, get_current_user
+from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -338,6 +339,7 @@ async def voice_clone_api(
     operation="voice_list_api",
     error_code_prefix="VOICE",
 )
+@service_opt_in("slm-voice-proxy")
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
