@@ -93,7 +93,10 @@ async def _rows(session: AsyncSession) -> list[LLCActivityLog]:
 
 
 async def _item(session: AsyncSession, company: str, title: str):  # noqa: ANN202
-    item = await WorkItemService().create(session, company_id=company, type=WorkItemType.TASK, title=title)
+    project_id = await harness.seed_project(session, company)  # every work item has a project (#18978)
+    item = await WorkItemService().create(
+        session, company_id=company, type=WorkItemType.TASK, title=title, project_id=project_id
+    )
     await session.commit()
     return item
 

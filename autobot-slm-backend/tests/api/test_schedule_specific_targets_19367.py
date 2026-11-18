@@ -31,8 +31,12 @@ import api.code_sync as code_sync  # noqa: E402
 _fake_db = types.ModuleType("services.database")
 _fake_db.db_service = None
 with patch.dict(sys.modules, {"services.database": _fake_db}):
-    (_executor,) = import_modules_with_real_orm(
-        (), path_loaded={"services.schedule_executor": SLM_ROOT / "services" / "schedule_executor.py"}
+    _events, _executor = import_modules_with_real_orm(
+        (),
+        path_loaded={
+            "services.node_events": SLM_ROOT / "services" / "node_events.py",
+            "services.schedule_executor": SLM_ROOT / "services" / "schedule_executor.py",
+        },
     )
 
 _db = REAL_MODULES["models.database"]
@@ -56,6 +60,12 @@ _CASES = {
 _IDS = [f"{t}-{n!r}" for t, n, _ in _CASES.values()]
 
 
+@pytest.fixture(autouse=True)
+def slm_external_url(monkeypatch):
+    """get_schedule_target_nodes resolves the SLM self node from this URL (#21036); the stubbed settings has none."""
+    monkeypatch.setattr(_executor.settings, "external_url", "http://slm.example.test:8000", raising=False)
+
+
 @pytest.fixture
 async def maker():
     with real_modules_swapped():
@@ -65,7 +75,16 @@ async def maker():
     factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
     async with factory() as db:
         for node_id, code_status in _NODES.items():
-            db.add(_db.Node(node_id=node_id, hostname=node_id, ip_address="node.example.test", code_status=code_status))
+            # Enrolled fleet nodes are online; the column default is "pending", which #21036 skips as not enrolled.
+            db.add(
+                _db.Node(
+                    node_id=node_id,
+                    hostname=node_id,
+                    ip_address="node.example.test",
+                    status="online",
+                    code_status=code_status,
+                )
+            )
         for sid, (target_type, target_nodes, _) in _CASES.items():
             row = {"id": sid, "name": f"s{sid}", "target_type": target_type, "target_nodes": target_nodes}
             db.add(_db.UpdateSchedule(cron_expression="0 2 * * *", **row))

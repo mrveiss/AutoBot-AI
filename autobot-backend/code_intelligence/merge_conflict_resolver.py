@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import discover_files
 
 logger = get_logger(__name__)
 
@@ -604,8 +605,7 @@ def analyze_repository(repo_path: str) -> Dict:
     conflict_files = []
     total_conflicts = 0
 
-    # Find files with conflicts
-    for py_file in repo.rglob("*.py"):
+    for py_file in discover_files(repo, ("*.py",)):
         if parser.has_conflicts(str(py_file)):
             conflicts = parser.parse_file(str(py_file))
             conflict_files.append(

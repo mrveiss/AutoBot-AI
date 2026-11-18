@@ -178,7 +178,7 @@ import type { EntityMessage } from '@/composables/knowledge/useKnowledgeEntities
 import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('EntityExtractor')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 // ============================================================================
@@ -342,7 +342,7 @@ function selectHistoryItem(item: ExtractionResult): void {
   extractionResult.value = item
 }
 
-const formatTime = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { hour: '2-digit', minute: '2-digit' } })
+const formatTime = createDateFormatter({ kind: 'time', locale: () => locale.value, intl: { hour: '2-digit', minute: '2-digit' } })
 </script>
 
 <style scoped>

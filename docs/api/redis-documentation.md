@@ -32,6 +32,8 @@ redis:
 ### Network Access
 - **Container-to-container**: `redis:6379`
 - **Host-to-container**: `127.0.0.1:6379` only. Redis is not published on other interfaces; other hosts reach it through the Docker network or an SSH tunnel, never an open port.
+
+The compose Redis also requires authentication. `docker/generate-secrets.sh` generates the credential as `AUTOBOT_REDIS_PASSWORD` in `docker/.env.secrets`, along with the ACL file Redis reads. To use `redis-cli` against it, set `REDISCLI_AUTH` to that password first. The commands below assume that where Redis has a password.
 - **Container-to-host**: `host.docker.internal:6379`
 - **Web Interface**: http://localhost:8001/
 

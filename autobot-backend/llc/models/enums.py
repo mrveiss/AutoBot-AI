@@ -458,6 +458,8 @@ class ActivityEventType(str, Enum):
 
     # Board instant controls (GH#8256 — FR-GOV-05)
     CONTROL_AGENT_PAUSED = "control.agent_paused"
+    # #21056: a pause request for an agent that is already paused; changes no state, so it is not a second "paused".
+    CONTROL_AGENT_PAUSE_REPEATED = "control.agent_pause_repeated"
     CONTROL_AGENT_RESUMED = "control.agent_resumed"
     CONTROL_AGENT_TERMINATED = "control.agent_terminated"
     # #15907: the periodic heartbeat switched on or off for one agent.
@@ -476,6 +478,9 @@ class ActivityEventType(str, Enum):
     ADAPTER_RUN_STARTED = "adapter_run.started"
     ADAPTER_RUN_COMPLETED = "adapter_run.completed"
     ADAPTER_RUN_FAILED = "adapter_run.failed"
+
+    # Budget (#21212): a dispatch the gate refused because the agent's budget is exhausted.
+    BUDGET_DISPATCH_REFUSED = "budget.dispatch_refused"
 
     # Notification
     NOTIFICATION_SENT = "notification.sent"

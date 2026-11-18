@@ -12,9 +12,13 @@ beforeEach(() => {
   })
   URL.createObjectURL = vi.fn(() => 'blob:mock-1')
   URL.revokeObjectURL = vi.fn()
+  vi.useFakeTimers()
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('saveFile (#20770)', () => {
   it('saves a blob through an attached anchor, then removes the anchor and revokes the URL', () => {
@@ -23,6 +27,13 @@ describe('saveFile (#20770)', () => {
     expect(URL.createObjectURL).toHaveBeenCalledWith(blob)
     expect(clicked).toEqual([{ href: 'blob:mock-1', download: 'report.csv', attached: true }])
     expect(document.querySelectorAll('a').length).toBe(0)
+  })
+
+  it('revokes the URL in a later task, not synchronously after the click (#20872)', () => {
+    saveBlob(new Blob(['x']), 'report.csv')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-1')
   })
 
@@ -36,6 +47,7 @@ describe('saveFile (#20770)', () => {
 
   it('saves a URL it did not create without revoking it', () => {
     saveUrl('data:image/png;base64,AAAA', 'timeline.png')
+    vi.runAllTimers()
     expect(clicked).toEqual([{ href: 'data:image/png;base64,AAAA', download: 'timeline.png', attached: true }])
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
@@ -46,6 +58,8 @@ describe('saveFile (#20770)', () => {
     })
     expect(() => saveBlob(new Blob(['x']), 'x.txt')).toThrow('blocked')
     expect(document.querySelectorAll('a').length).toBe(0)
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-1')
   })
 })

@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from utils.file_categorization import SKIP_DIRS
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 from .types import CodeLocation, PatternSeverity, RegexOpportunity
 
@@ -201,10 +201,6 @@ class RegexPatternDetector:
     # Minimum chain length to report
     MIN_CHAIN_LENGTH = 2
 
-    # Exclude patterns (test files, etc.)
-    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
-    EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
-
     def __init__(
         self,
         min_chain_length: int = 2,
@@ -219,7 +215,7 @@ class RegexPatternDetector:
             use_shared_cache: Whether to use shared ASTCache (Issue #607)
         """
         self.min_chain_length = min_chain_length
-        self.exclude_dirs = exclude_dirs or self.EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
         self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
 
     def detect_in_file(self, file_path: str) -> List[RegexOpportunity]:
@@ -282,11 +278,7 @@ class RegexPatternDetector:
         opportunities = []
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            # Check exclusions
-            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             file_opportunities = self.detect_in_file(str(py_file))
             opportunities.extend(file_opportunities)
 
