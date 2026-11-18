@@ -64,6 +64,12 @@ class EmitOnceFilter(logging.Filter):
     record to the same file and to stdout/stderr. The first handler of a ``sink`` to see a record writes it;
     later ones with the same ``sink`` drop it. Add it LAST on a handler, so a record another filter rejects
     is not marked as written.
+
+    Order dependency: the filter marks the record the moment it passes it. A filter added after this one that
+    rejects the record leaves the sink marked as written though nothing was written, and every later handler of
+    that sink then drops the record too -- it is lost for that sink. ``logging`` runs a handler's filters in the order
+    they were added, so ``addFilter(EmitOnceFilter(...))`` must be the last ``addFilter`` call on the handler
+    (``build_stdout_handler`` below shows the order).
     """
 
     def __init__(self, sink: str) -> None:
