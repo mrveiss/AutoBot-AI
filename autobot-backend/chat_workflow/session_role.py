@@ -19,7 +19,12 @@ import json
 import os
 from typing import List, Optional
 
-from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import (
+    DECLARED_CATEGORIES_KEY,
+    VERIFIED_ATTACHMENT_ACCESS_KEY,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+)
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -273,5 +278,5 @@ async def apply_session_governance(
     context = stamp_declared_categories(context, session_categories)
     if CHAT_APPROVAL_GATE_ENABLED:
         # #18294: all categories gated by default; only the SLM setting relaxes one.
-        context = await with_baseline_categories(context, session_categories or ())
+        context = await with_baseline_categories(context, context[DECLARED_CATEGORIES_KEY])  # declared stays gated
     return context

@@ -413,3 +413,46 @@ async def test_a_claude_code_delegate_spawned_in_an_approved_dispatch_still_refu
     with patch.object(ccb.ClaudeCodeBackend, "execute", new=mock_exec):
         await delegation._run_claude_code_subagent("subtask", "research_agent", 0, "user", inherited["value"])
     assert {"Write", "Edit"} <= set(mock_exec.await_args.args[0].metadata["disallowed_tools"])
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_declaration_with_a_relaxed_baseline_still_gates_the_claude_code_delegate():
+    """Unreadable declaration + "writing files" relaxed by the administrator: Write and Edit stay refused."""
+    from unittest.mock import AsyncMock
+
+    import services.execution.claude_code_backend as ccb
+    from chat_workflow import delegation
+    from chat_workflow.graph_tool_dispatch import dispatch_approved_calls
+    from chat_workflow.run_authority import Inheritance
+
+    relaxed = ["writing files"]
+    governed = await _governed({}, read=AsyncMock(side_effect=ConnectionError("down")), relaxed=relaxed)
+    assert "writing files" in governed["requires_approval_before"], "the parent's own seam gates it too"
+    state = {
+        "session_id": "s1",
+        "terminal_session_id": "t1",
+        "execution_history": [],
+        "llm_params": {"ollama_endpoint": "http://x", "selected_model": "m"},
+        "context": governed,
+    }
+    exec_ctx = SimpleNamespace(
+        context=dict(governed), requires_approval_before=list(governed["requires_approval_before"]), agent_context=None
+    )
+    inherited = {}
+
+    class Manager:
+        def _bind_spill_run(self, _sid):
+            pass
+
+        async def _process_tool_calls(self, *_a, ctx=None, **_k):
+            inherited["value"] = Inheritance.of(ctx)
+            yield (False, None)
+
+    await dispatch_approved_calls(Manager(), exec_ctx, state, [dict(CLICK)], 1, [], None)
+    assert exec_ctx.requires_approval_before == [], "control: the clear happened"
+    assert "writing files" in inherited["value"].authority.approval_gates
+
+    mock_exec = AsyncMock(return_value=SimpleNamespace(stdout="ok", stderr=""))
+    with patch.object(ccb.ClaudeCodeBackend, "execute", new=mock_exec):
+        await delegation._run_claude_code_subagent("subtask", "research_agent", 0, "user", inherited["value"])
+    assert {"Write", "Edit"} <= set(mock_exec.await_args.args[0].metadata["disallowed_tools"])
