@@ -8,8 +8,10 @@
  * The builder opts out of the layout's remount (`meta.keepOnCompanySwitch`, #21502), so its
  * instance survives a switch. Left alone it would keep showing the previous company's lists while
  * ApiClient sends the NEW company header on the next Save or Start. On a switch this therefore
- * (1) drops the unsaved draft, because it was composed for the previous company, (2) reloads the
- * builder's data in place, and (3) tells the user when a draft was dropped.
+ * (1) drops the unsaved draft, because it was composed for the previous company, (2) tells the user
+ * at once when a draft was dropped (independent of the reload, so a quick second switch cannot
+ * swallow the notice), and (3) reloads the builder's data in place, reporting a failed reload
+ * separately from the discard.
  *
  * The draft is discarded rather than re-bound: the natural-language goal, plan, pending approval
  * and canvas nodes were written against one company's context, and carrying them over would let
@@ -18,6 +20,7 @@
 import { watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useLatestRequest } from '@/composables/useLatestRequest'
+import { getSelectedCompanyId } from '@/utils/orgContext'
 
 const logger = createLogger('useWorkflowCompanySwitch')
 
@@ -34,12 +37,12 @@ export interface WorkflowDraftRefs {
 
 /** Clears the draft; returns true when there was anything to clear. */
 export function discardWorkflowDraft(d: WorkflowDraftRefs): boolean {
+  // currentWorkflow is the runner's selection of a SAVED workflow, not an edit: cleared, never counted.
   const hadDraft =
     d.naturalLanguageInput.value.trim() !== '' ||
     d.selectedStrategy.value !== '' ||
     d.workflowPlan.value !== null ||
     d.pendingApproval.value !== null ||
-    d.currentWorkflow.value !== null ||
     d.workflowNodes.value.length > 0
   d.naturalLanguageInput.value = ''
   d.selectedStrategy.value = ''
@@ -51,14 +54,26 @@ export function discardWorkflowDraft(d: WorkflowDraftRefs): boolean {
   return hadDraft
 }
 
+/**
+ * False while the sidebar has changed the selected company but the route has not followed yet: a request
+ * sent in that window carries the NEW company's X-Organization-Id for a goal composed for the OLD one.
+ * Either side unset is not a conflict (no header is sent without a selection).
+ */
+export function companyContextAgrees(routeCompanyId: string): boolean {
+  const selected = getSelectedCompanyId()
+  return !routeCompanyId || !selected || routeCompanyId === selected
+}
+
 export interface WorkflowCompanySwitchOptions {
   /** The company the route names ('' when none). */
   companyId: () => string
   draft: WorkflowDraftRefs
-  /** Reloads the builder's company data in place. */
-  reload: () => Promise<void>
-  /** Called after a non-empty draft was dropped, to tell the user. */
+  /** Reloads the builder's company data in place; resolves false when a load reported failure. */
+  reload: () => Promise<void | boolean>
+  /** Called as soon as a non-empty draft was dropped, to tell the user. */
   onDraftDiscarded: () => void
+  /** Called when the reload for the company now shown failed (rejected, or resolved false). */
+  onReloadFailed?: () => void
   /**
    * Synchronous reset of everything else company-scoped, run on every switch before the reload:
    * revoke in-flight create/plan requests, rotate the session id, re-key the workflow socket, clear
@@ -70,11 +85,13 @@ export interface WorkflowCompanySwitchOptions {
 export function useWorkflowCompanySwitch(opts: WorkflowCompanySwitchOptions) {
   // Latest switch owns the lists (#21159 pattern, useLatestRequest).
   const switches = useLatestRequest()
-  async function safeReload(): Promise<void> {
+  /** True when the reload completed without a failure. */
+  async function safeReload(): Promise<boolean> {
     try {
-      await opts.reload()
+      return (await opts.reload()) !== false
     } catch (err) {
       logger.error('Reloading the workflow builder after a company switch failed', err)
+      return false
     }
   }
   return watch(opts.companyId, async (next, previous) => {
@@ -83,13 +100,14 @@ export function useWorkflowCompanySwitch(opts: WorkflowCompanySwitchOptions) {
     const token = switches.begin()
     const hadDraft = discardWorkflowDraft(opts.draft)
     opts.onSwitch?.()
-    await safeReload()
+    if (hadDraft) opts.onDraftDiscarded() // now, not after the reload: a newer switch may preempt it
+    const ok = await safeReload()
     if (!switches.isCurrent(token)) {
-      // A newer switch began while this reload was in flight; its rows may have landed over the
-      // newer company's, so fetch once more for the company now shown. The newer switch notifies.
-      await safeReload()
+      // A newer switch began while this reload was in flight. Lists are ownership-guarded, but the
+      // other loaders are not, so fetch once more for the company now shown; the newer switch reports.
+      if (!(await safeReload())) opts.onReloadFailed?.()
       return
     }
-    if (hadDraft) opts.onDraftDiscarded()
+    if (!ok) opts.onReloadFailed?.()
   })
 }

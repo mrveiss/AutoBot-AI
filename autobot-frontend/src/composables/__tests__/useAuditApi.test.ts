@@ -276,6 +276,39 @@ describe('useAuditState.resolvedStatistics (#21513)', () => {
     expect(api.resolvedStatistics.value).toMatchObject({ total_entries: 90, success_count: 80, failed_count: 5, success_rate: 89 })
   })
 
+  it('counts a timed_out row as a final outcome in a row-derived rate (attempted stays out)', async () => {
+    stub(['success', 'timed_out', 'attempted'])
+    const api = useAuditState()
+    await api.loadLogs()
+    await api.loadStatistics()
+    expect(api.resolvedStatistics.value).toMatchObject({ success_count: 1, success_rate: 50 })
+  })
+
+  it('keeps a failed statistics request distinguishable from row-only estimates, and clears it on retry', async () => {
+    stub(['success'], { total_entries: 1 })
+    const api = useAuditState()
+    await api.loadLogs()
+    mockGet.mockImplementationOnce(() => Promise.reject(new Error('503')))
+    await api.loadStatistics()
+    expect(api.statisticsFailed.value).toBe(true)
+    expect(api.resolvedStatistics.value).toMatchObject({ success_count: 1, success_rate: 100 })
+    await api.loadStatistics()
+    expect(api.statisticsFailed.value).toBe(false)
+  })
+
+  it('keeps the failures-only response out of the entries the dashboard derives from', async () => {
+    stub(['success', 'denied'])
+    const api = useAuditState()
+    await api.loadLogs()
+    mockGet.mockImplementationOnce(() =>
+      Promise.resolve({ success: true, total_returned: 1, has_more: false, query: {}, entries: [{ id: 'f', operation: 'op', result: 'denied', timestamp: 1 }] })
+    )
+    await api.loadFailedOperations(24)
+    expect(api.failureEntries.value).toHaveLength(1)
+    expect(api.entries.value).toHaveLength(2)
+    expect(api.resolvedStatistics.value).toMatchObject({ success_rate: 50 })
+  })
+
   it('derives the counts from the entries when the response carries none', async () => {
     stub(['success', 'denied', 'attempted'], { total_entries: 3 })
     const api = useAuditState()

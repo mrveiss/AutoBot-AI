@@ -434,6 +434,7 @@
         <!-- Visual Builder Section -->
         <section v-if="activeSection === 'canvas'" class="section-canvas">
           <WorkflowCanvas
+            :key="canvasGeneration"
             :nodes="workflowNodes"
             :selected-node-id="selectedNodeId"
             @node-added="handleNodeAdded"
@@ -602,6 +603,7 @@
           <GUIAutomationControls
             :opportunities="guiAutomationOpportunities"
             :loading="guiAutomationLoading"
+            :load-failed="guiAutomationLoadFailed"
             @refresh="loadGuiAutomationOpportunities"
           />
         </section>
@@ -694,7 +696,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
-import { useWorkflowCompanySwitch } from '@/composables/workflow/useWorkflowCompanySwitch';
+import { useWorkflowCompanySwitch, companyContextAgrees } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -794,18 +796,9 @@ const {
   selectedNodeId,
   templates,
   hasActiveWorkflows,
-  loadOrchestrationStatus,
-  loadExecutionStrategies,
-  loadAgentCapabilities,
-  loadAgentPerformance,
-  loadExampleWorkflows,
-  loadActiveWorkflows,
-  applyWorkflowProgress,
-  loadCompletedWorkflows,
-  createWorkflowFromTemplate,
-  createWorkflowFromNaturalLanguage,
-  executeApiTemplate,
-  startWorkflow,
+  loadOrchestrationStatus, loadExecutionStrategies, loadAgentCapabilities, loadAgentPerformance, loadExampleWorkflows,
+  loadActiveWorkflows, invalidateCompanyScope, applyWorkflowProgress, loadCompletedWorkflows,
+  createWorkflowFromTemplate, createWorkflowFromNaturalLanguage, executeApiTemplate, startWorkflow,
   pauseWorkflow, resumeWorkflow, cancelWorkflow,
   stepsAwaitingApproval,
   approveStep, skipStep, approvePlan, rejectPlan,
@@ -829,11 +822,12 @@ const activeSection = computed<SectionType>(
 const naturalLanguageInput = ref('');
 const requireApprovalBeforeRun = ref(true); // user preference, company-independent: kept across a company switch
 const selectedStrategy = ref<string>('');
+const canvasGeneration = ref(0);
 const sessionId = ref(`session_${Date.now()}`); // company-scoped: rotated + socket re-keyed on a company switch (#21520)
 
 // GUI Automation state (#1242)
 const {
-  opportunities: guiAutomationOpportunities, loading: guiAutomationLoading,
+  opportunities: guiAutomationOpportunities, loading: guiAutomationLoading, loadFailed: guiAutomationLoadFailed,
   load: loadGuiAutomationOpportunities, reset: resetGuiAutomationOpportunities,
 } = useGuiAutomationOpportunities();
 
@@ -972,8 +966,9 @@ async function handleRefreshAgents(): Promise<void> {
   await Promise.all([loadAgentPerformance(), loadAgentCapabilities()]);
 }
 
-async function refreshAll(): Promise<void> {
-  await Promise.all([
+/** Resolves false when a company-scoped list failed to load (the loaders log HTTP failures, they do not throw). */
+async function refreshAll(): Promise<boolean> {
+  const [, , active, completed] = await Promise.all([
     loadOrchestrationStatus(),
     loadExecutionStrategies(),
     loadActiveWorkflows(),
@@ -981,6 +976,7 @@ async function refreshAll(): Promise<void> {
     loadExampleWorkflows(),
     checkVisionHealth(),
   ]);
+  return active && completed;
 }
 
 async function runExampleWorkflow(example: { goal: string; strategy: string }): Promise<void> {
@@ -991,6 +987,7 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
+  if (!companyContextAgrees(String(route.params.companyId ?? ''))) { showToast(t('workflow.builder.companySwitching'), 'warning'); return; }
 
   const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
@@ -1221,11 +1218,14 @@ useWorkflowCompanySwitch({ // keeps this instance on a company switch (#21520): 
   companyId: () => String(route.params.companyId ?? ''), reload: refreshAll,
   onSwitch: () => {
     resetGuiAutomationOpportunities();
+    invalidateCompanyScope(); // in-flight list reads and create/plan replies belong to the previous company
+    canvasGeneration.value++; // remounts WorkflowCanvas so its undo/redo history cannot restore the old draft
     sessionId.value = `session_${Date.now()}`;
     connectWebSocket(sessionId.value); // closes the previous company's socket first
   },
   draft: { naturalLanguageInput, selectedStrategy, workflowPlan, pendingApproval, currentWorkflow, workflowNodes, selectedNodeId },
   onDraftDiscarded: () => showToast(t('workflow.builder.draftDiscardedOnCompanySwitch'), 'info'),
+  onReloadFailed: () => showToast(t('workflow.builder.reloadAfterCompanySwitchFailed'), 'error'),
 });
 
 // Watch for active workflow changes

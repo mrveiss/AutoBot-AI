@@ -42,10 +42,11 @@
 :root {
   /* #21567: hover and ink follow the active scheme's primary pair. The base state
      (no scheme: sky --primary from main.css) takes black ink, 7.6:1 on #0ea5e9
-     where white is 2.8:1; every scheme and high-contrast redefine the pair. */
+     where white is 2.8:1; every scheme and high-contrast redefine the pair. Hover and
+     pressed fall back to sky-600 (5.1:1 under black ink; sky-700 would be 3.5:1). */
   --on-primary: var(--color-black);
   --color-primary-hover: var(--primary-h, var(--color-primary-600));
-  --color-primary-active: var(--primary-h, var(--color-primary-700));
+  --color-primary-active: var(--primary-h, var(--color-primary-600));
   --text-on-primary: var(--on-primary);
   /* #19872: white on the green and yellow fills is 2.28 / 1.92:1, so those two
      take dark ink (as the main app does). Red and sky carry white on their

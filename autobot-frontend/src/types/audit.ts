@@ -242,6 +242,10 @@ export function resolveAuditStatistics(
   const denied = served(server?.denied_count) ?? count('denied')
   const failed = served(server?.failed_count) ?? count('failed')
   const error = served(server?.error_count) ?? count('error')
+  // No count served: the rows alone decide the rate, over every FINAL outcome (timed_out included, attempted
+  // excluded). Counts the server did serve are the figures shown, so the rate is taken over those.
+  const anyServed = [server?.success_count, server?.denied_count, server?.failed_count, server?.error_count].some((v) => served(v) !== undefined)
+  const denominator = anyServed ? success + denied + failed + error : entries.filter((e) => isTerminalAuditResult(e.result)).length
   return {
     ...server,
     operations_by_type: server?.operations_by_type ?? {},
@@ -253,9 +257,8 @@ export function resolveAuditStatistics(
     denied_count: denied,
     failed_count: failed,
     error_count: error,
-    // A rate the server did not send is derived from the SAME counts shown beside it (served or
-    // loaded-window), so the panel never disagrees with itself; `attempted` is in no count.
-    success_rate: served(server?.success_rate) ?? calculateSuccessRate(success, success + denied + failed + error),
+    // A rate the server did not send is derived from the counts shown beside it, or from the final rows; `attempted` is in neither.
+    success_rate: served(server?.success_rate) ?? calculateSuccessRate(success, denominator),
   }
 }
 

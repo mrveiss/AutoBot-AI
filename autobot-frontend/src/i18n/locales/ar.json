@@ -4544,7 +4544,9 @@
       "stepApproved": "تمت الموافقة على الخطوة",
       "stepSkipped": "تم تخطي الخطوة",
       "rerunNotFound": "تعذر العثور على سير العمل لإعادة تشغيله",
-      "draftDiscardedOnCompanySwitch": "تم تغيير الشركة: تم تجاهل مسودة سير العمل غير المحفوظة وأُعيد تحميل المنشئ",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "جارٍ إعادة تشغيل \"{name}\"",
       "rerunFailed": "فشلت إعادة تشغيل سير العمل",
       "notificationsSaved": "تم حفظ إعدادات الإشعارات"
@@ -6006,6 +6008,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "إلغاء",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6956,6 +6959,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "تحديث",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",

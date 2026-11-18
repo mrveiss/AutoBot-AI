@@ -291,6 +291,8 @@ describe('the company layout remounts its routed view on a company switch (#2150
 
     await switchTo(m, 'llc-company-org-chart', 'c2')
     await click(m, 'org-view-people')
+    // Every held URL was actually requested: a hold nobody used would let the pending checks pass vacuously.
+    expect(calls).toEqual(expect.arrayContaining(urls))
 
     // While the org chart is in flight the view renders only its loading state (`v-else-if="isLoading"`
     // precedes the people branch), so the people list is not mounted at all.
@@ -355,6 +357,7 @@ describe('the company layout remounts its routed view on a company switch (#2150
     await switchTo(m, 'llc-company-org-chart', 'c2')
     await click(m, 'org-view-canvas')
 
+    expect(calls).toEqual(expect.arrayContaining(urls)) // same: every held URL was requested
     expect(m.wrapper.find('[data-testid="executor-rollup-loading"]').exists()).toBe(true)
     expect(m.wrapper.text()).not.toContain('Alpha')
     expect(canvasIds(m).filter((id) => id.includes('c1') || id.includes(DATA.c1.tool))).toEqual([])

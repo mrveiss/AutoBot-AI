@@ -4544,7 +4544,9 @@
       "stepApproved": "Krok zatwierdzony",
       "stepSkipped": "Krok pominięty",
       "rerunNotFound": "Nie znaleziono przepływu pracy do ponownego uruchomienia",
-      "draftDiscardedOnCompanySwitch": "Zmieniono firmę: niezapisany szkic przepływu pracy został odrzucony, a kreator załadowany ponownie",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Ponowne uruchamianie „{name}”",
       "rerunFailed": "Nie udało się ponownie uruchomić przepływu pracy",
       "notificationsSaved": "Zapisano ustawienia powiadomień"
@@ -6006,6 +6008,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6956,6 +6959,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",

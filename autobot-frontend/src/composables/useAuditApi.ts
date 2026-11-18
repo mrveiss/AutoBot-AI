@@ -134,6 +134,10 @@ export function useAuditState() {
 
   const entries = ref<AuditEntry[]>([])
   const statistics = ref<AuditStatistics | null>(null)
+  // Failed Operations rows live apart from `entries`: dashboard figures derive from the general log window.
+  const failureEntries = ref<AuditEntry[]>([])
+  // True when the last statistics request failed: the row-derived estimates are then NOT the server's figures.
+  const statisticsFailed = ref(false)
   const vmInfo = ref<{ vm_source: string; vm_name: string } | null>(null)
   const operationCategories = ref<Record<string, string[]>>({})
   const totalOperations = ref(0)
@@ -221,14 +225,18 @@ export function useAuditState() {
   }
 
   async function loadStatistics() {
+    statisticsFailed.value = false
     await wrapStats(async () => {
       try {
         const result = await auditApi.getStatistics()
         if (result && result.success) {
           statistics.value = result.statistics
           vmInfo.value = result.vm_info
+        } else {
+          statisticsFailed.value = true // getStatistics resolves null when the request failed
         }
       } catch (e) {
+        statisticsFailed.value = true
         logger.error('Failed to load audit statistics:', e)
       }
     })
@@ -279,8 +287,7 @@ export function useAuditState() {
       try {
         const result = await auditApi.getFailedOperations(hours)
         if (result && result.success) {
-          entries.value = result.entries
-          totalReturned.value = result.total_returned
+          failureEntries.value = result.entries
         }
       } catch (e) {
         logger.error('Failed to load failed operations:', e)
@@ -413,7 +420,7 @@ export function useAuditState() {
   // usePollingJob handles cleanup via its own onScopeDispose hook.
 
   return {
-    entries, statistics, vmInfo, operationCategories, totalOperations,
+    entries, failureEntries, statistics, statisticsFailed, vmInfo, operationCategories, totalOperations,
     loading, loadingStats, error, hasMore, totalReturned,
     filter, currentPage, pageSize, isPolling, pollingIntervalMs,
     selectedEntry, selectedSessionId, selectedUserId, sessionTrail, userTrail, loadingTrail,

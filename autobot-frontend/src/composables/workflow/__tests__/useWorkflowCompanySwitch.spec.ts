@@ -25,10 +25,11 @@ function draft() {
 function setup(initialCompany = 'c1', onSwitch?: () => void) {
   const companyId = ref(initialCompany)
   const d = draft()
-  const reload = vi.fn(async () => {})
+  const reload = vi.fn(async (): Promise<void | boolean> => {})
   const onDraftDiscarded = vi.fn()
-  useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded, onSwitch })
-  return { companyId, d, reload, onDraftDiscarded }
+  const onReloadFailed = vi.fn()
+  useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded, onReloadFailed, onSwitch })
+  return { companyId, d, reload, onDraftDiscarded, onReloadFailed }
 }
 
 async function flush() {
@@ -53,6 +54,13 @@ describe('discardWorkflowDraft', () => {
     expect(d.workflowNodes.value).toEqual([])
     expect(d.selectedNodeId.value).toBeNull()
     expect(d.workflowPlan.value).toBeNull()
+  })
+
+  it('clears a selected saved workflow without counting it as an unsaved draft', () => {
+    const d = draft()
+    d.currentWorkflow.value = { workflow_id: 'w1' }
+    expect(discardWorkflowDraft(d)).toBe(false)
+    expect(d.currentWorkflow.value).toBeNull()
   })
 
   it('treats whitespace alone as no draft', () => {
@@ -93,13 +101,40 @@ describe('useWorkflowCompanySwitch', () => {
     expect(onDraftDiscarded).not.toHaveBeenCalled()
   })
 
-  it('still reports the dropped draft when the reload fails', async () => {
-    const { companyId, d, reload, onDraftDiscarded } = setup()
+  it('reports a rejected reload separately from the discard', async () => {
+    const { companyId, d, reload, onDraftDiscarded, onReloadFailed } = setup()
     reload.mockRejectedValueOnce(new Error('network'))
     d.selectedStrategy.value = 'parallel'
     companyId.value = 'c2'
     await flush()
     expect(onDraftDiscarded).toHaveBeenCalledTimes(1)
+    expect(onReloadFailed).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a reload that resolved false (an HTTP failure logged by a loader) as failed', async () => {
+    const { companyId, reload, onDraftDiscarded, onReloadFailed } = setup()
+    reload.mockResolvedValueOnce(false)
+    companyId.value = 'c2'
+    await flush()
+    expect(onReloadFailed).toHaveBeenCalledTimes(1)
+    expect(onDraftDiscarded).not.toHaveBeenCalled()
+  })
+
+  it('does not report a failure for a successful reload', async () => {
+    const { companyId, reload, onReloadFailed } = setup()
+    reload.mockResolvedValueOnce(true)
+    companyId.value = 'c2'
+    await flush()
+    expect(onReloadFailed).not.toHaveBeenCalled()
+  })
+
+  it('does not treat only a selected saved workflow as a discarded draft', async () => {
+    const { companyId, d, onDraftDiscarded } = setup()
+    d.currentWorkflow.value = { workflow_id: 'w1' }
+    companyId.value = 'c2'
+    await flush()
+    expect(d.currentWorkflow.value).toBeNull()
+    expect(onDraftDiscarded).not.toHaveBeenCalled()
   })
 
   it('runs onSwitch on a switch but not on the first resolution', async () => {
@@ -114,7 +149,7 @@ describe('useWorkflowCompanySwitch', () => {
     expect(onSwitch).toHaveBeenCalledTimes(1)
   })
 
-  it('re-fetches when a reload finishes after a newer switch, and only the newest notifies', async () => {
+  it('re-fetches when a reload finishes after a newer switch; each switch that dropped a draft notified at once', async () => {
     const companyId = ref('A')
     const d = draft()
     d.selectedStrategy.value = 'parallel'
@@ -135,6 +170,24 @@ describe('useWorkflowCompanySwitch', () => {
     expect(reload).toHaveBeenCalledTimes(3) // stale B re-fetches so C's lists are not left overwritten
     releases[2]()
     await flush()
-    expect(onDraftDiscarded).toHaveBeenCalledTimes(1) // only C's switch notifies
+    expect(onDraftDiscarded).toHaveBeenCalledTimes(2) // B and C each dropped a draft and said so when it happened
+  })
+
+  it('notifies for the first switch even when a second switch (with no draft) preempts its reload', async () => {
+    const companyId = ref('A')
+    const d = draft()
+    d.selectedStrategy.value = 'parallel'
+    const releases: Array<() => void> = []
+    const reload = vi.fn(() => new Promise<void>((res) => { releases.push(res) }))
+    const onDraftDiscarded = vi.fn()
+    useWorkflowCompanySwitch({ companyId: () => companyId.value, draft: d, reload, onDraftDiscarded })
+    companyId.value = 'B'
+    await flush()
+    expect(onDraftDiscarded).toHaveBeenCalledTimes(1) // before B's reload finished
+    companyId.value = 'C' // no draft left to drop
+    await flush()
+    releases.forEach((r) => r())
+    await flush()
+    expect(onDraftDiscarded).toHaveBeenCalledTimes(1)
   })
 })
