@@ -14,8 +14,8 @@ stories and generated files are not scanned, as in the sibling guard.
 
 **(b) Util filenames.** The same relative path under both apps' ``src/utils`` where BOTH files
 are real implementations. A file that only imports and re-exports ``@autobot/ui`` is the fix,
-not the defect, so it is not counted: ``debugUtils.ts`` and ``formatHelpers.ts`` in the SLM
-are such files today.
+not the defect, so it is not counted. The SLM had two such files (``debugUtils.ts``,
+``formatHelpers.ts``); they are gone, every SLM caller imports the kit directly.
 
 **Two numbers, each exact and down-only against the base** (#19283). Each type pin counts
 names (a name declared in three places is one), so lowering it means a name stopped being
@@ -46,17 +46,11 @@ _SKIPPED_DIRS = {"node_modules", "dist"}
 # concept, #14908 moved the ApiClient options type into the kit (13 left), and #19910 then moved the
 # agent-ledger rows and the permission rule into the kit (one declaration, both apps import it) and
 # renamed the different-concept names (Agent, CacheStats, WebResearchSettings, the plugin audit row,
-# the TLS upload body). 2 left, each stated in TYPE_EXCEPTIONS with its reason.
-PINS = {"type_names_in_both_apps": 1, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+# the TLS upload body). #20173 then moved AuditQueryResponse into the kit: 0 left.
+PINS = {"type_names_in_both_apps": 0, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
 
-# Stated exceptions: a type name declared in both apps until the audit-entry shape is fixed once.
-TYPE_EXCEPTIONS = {
-    "AuditQueryResponse": (
-        "one backend envelope (`AuditQueryResponse`, entries are untyped dicts so no generated row type exists); the "
-        "main copy (types/audit.ts) is typed on the main `AuditEntry` (timestamp string, error_message, user_agent), "
-        "which the audit dashboard components read; it moves with AuditLogEntry once that row has one shape"
-    ),
-}
+# Stated exceptions: a type name declared in both apps. None left (#20173 moved AuditQueryResponse to the kit).
+TYPE_EXCEPTIONS: dict[str, str] = {}
 
 # Stated exceptions: a util filename implemented in both apps until its own PR lands.
 UTIL_EXCEPTIONS = {
@@ -65,9 +59,9 @@ UTIL_EXCEPTIONS = {
         "consolidation PR (maintainer decision 2026-10-28, waits for the PR holding the SLM copy)"
     ),
 }
-# formatHelpers.ts is the other expected duplicate. It is NOT counted today because the SLM's copy
-# is already a thin re-export of the kit; if it regrows an implementation this guard counts it,
-# and it must then be added above with its reason until the formatters PR removes the main copy.
+# formatHelpers.ts and debugUtils.ts are no longer duplicates: the SLM copies were removed (#14908)
+# and the SLM imports the kit directly. If an SLM copy regrows with an implementation this guard
+# counts it, and it must then be added above with its reason.
 
 
 def _ts_files(root: Path) -> list[Path]:

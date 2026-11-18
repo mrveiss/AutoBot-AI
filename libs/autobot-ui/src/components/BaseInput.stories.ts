@@ -8,7 +8,7 @@ import type { Meta, StoryObj } from '@storybook/vue3'
 import BaseInput, { type InputSize, type InputType } from './BaseInput.vue'
 
 const SIZES: InputSize[] = ['sm', 'md', 'lg']
-const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url']
+const TYPES: InputType[] = ['text', 'email', 'password', 'search', 'tel', 'url', 'number']
 
 const meta = {
   title: 'Kit/BaseInput',

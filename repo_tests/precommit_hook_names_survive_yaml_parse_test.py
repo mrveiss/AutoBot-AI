@@ -42,6 +42,8 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 yaml = pytest.importorskip("yaml")
 
 _REPO_ROOT = repo_root()
@@ -118,9 +120,9 @@ def test_the_config_exists_and_declares_the_hooks_this_guards() -> None:
         f"{_MIN_HOOKS_WITH_A_NAME}) — the population shrank or the sweep stopped matching"
     )
     with_ref = [name for name in names if "#" in name]
-    assert len(with_ref) >= _MIN_NAMES_CARRYING_AN_ISSUE_REF, (
-        f"only {len(with_ref)} hook names carry a '#' issue reference"
-    )
+    assert (
+        len(with_ref) >= _MIN_NAMES_CARRYING_AN_ISSUE_REF
+    ), f"only {len(with_ref)} hook names carry a '#' issue reference"
     space_hash = [name for name in names if re.search(r"\s#", name)]
     assert len(space_hash) >= _MIN_NAMES_WITH_A_SPACE_HASH, (
         f"only {len(space_hash)} hook names contain a space-'#' — the exact spelling "
@@ -132,8 +134,7 @@ def test_every_hook_name_parses_to_the_string_that_was_written() -> None:
     """#14923's acceptance criterion, checked by parsing rather than reading."""
     problems = truncated_names(_CONFIG.read_text(encoding="utf-8"))
     detail = "\n".join(
-        f"  line {lineno}: written {written!r} -> parsed {parsed!r}"
-        for lineno, written, parsed in problems
+        f"  line {lineno}: written {written!r} -> parsed {parsed!r}" for lineno, written, parsed in problems
     )
     assert not problems, (
         f"{len(problems)} hook name(s) lose text to a YAML comment:\n{detail}\n"
@@ -167,12 +168,12 @@ def test_the_detector_rejects_a_config_that_loses_a_name_to_a_comment() -> None:
     assert problems[0][1] == bad and problems[0][2] == "Guarded Thing", problems
     # `(#` is not a comment start, so the safe spelling must NOT be flagged —
     # a detector that flags everything is as useless as one that flags nothing.
-    assert not truncated_names(synthetic.replace(bad, good)), (
-        f"{good!r} is valid YAML for itself and must not be reported"
-    )
-    assert not truncated_names(synthetic.replace(bad, f"'{bad}'")), (
-        "a quoted name keeps its text and must not be reported"
-    )
+    assert not truncated_names(
+        synthetic.replace(bad, good)
+    ), f"{good!r} is valid YAML for itself and must not be reported"
+    assert not truncated_names(
+        synthetic.replace(bad, f"'{bad}'")
+    ), "a quoted name keeps its text and must not be reported"
 
 
 def test_every_gated_hook_id_resolves_to_an_untruncated_name() -> None:
@@ -200,7 +201,7 @@ def test_every_gated_hook_id_resolves_to_an_untruncated_name() -> None:
     """
     consumer = _REPO_ROOT / "pipeline-scripts" / "check_gating_precommit_hooks.py"
     assert consumer.is_file(), f"{consumer.name} is gone — #14921's gate has no subject"
-    tree = ast.parse(consumer.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(consumer.read_text(encoding="utf-8"))
     gated: tuple[str, ...] = ()
     for node in ast.walk(tree):
         targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
@@ -233,9 +234,7 @@ def test_every_gated_hook_id_resolves_to_an_untruncated_name() -> None:
     # truncated hook sat in GATING_HOOK_IDS.
     losses = {parsed: written for _, written, parsed in truncated_names(text)}
     truncated = {
-        hook_id: (losses[resolved[hook_id]], resolved[hook_id])
-        for hook_id in gated
-        if resolved[hook_id] in losses
+        hook_id: (losses[resolved[hook_id]], resolved[hook_id]) for hook_id in gated if resolved[hook_id] in losses
     }
     assert not truncated, (
         "a gated hook's printed name is not the name that was written "

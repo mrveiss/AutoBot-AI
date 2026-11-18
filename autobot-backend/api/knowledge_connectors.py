@@ -35,6 +35,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from redis.exceptions import RedisError
 
 from api._connector_auth_validation import validated_connector_auth
+from api._connector_keys import (
+    _HISTORY_KEY_SUFFIX,
+    _REDIS_KEY_PREFIX,
+    _connector_key,
+    _delete_connector_keys,
+    _history_key,
+)
+from api._connector_sync_claim import claim_or_refuse, run_claimed_sync
 from api._connector_sync_result import record_last_sync
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -43,9 +51,12 @@ from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.credential_store import get_credential_store
+from knowledge.connectors.job_state import JOB_KEY_SUFFIX as _JOB_KEY_SUFFIX
+from knowledge.connectors.job_state import read_job_state
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
+from knowledge.connectors.sync_lease import ConnectorSyncUnavailable, one_sync_per_connector
 from knowledge.schemas.connectors import (
     ConnectorCreateResponse,
     ConnectorDetailResponse,
@@ -95,20 +106,9 @@ _OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 
 # --- Redis helpers ---
 
-_REDIS_KEY_PREFIX = "connector:"
-_HISTORY_KEY_SUFFIX = ":history"
-_JOB_KEY_SUFFIX = ":job:current"
 _MAX_HISTORY = 50
 # Suffixes / infixes that mark non-config Redis keys under connector: namespace.
 _NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, _JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
-
-
-def _connector_key(connector_id: str) -> str:
-    return "%s%s" % (_REDIS_KEY_PREFIX, connector_id)
-
-
-def _history_key(connector_id: str) -> str:
-    return "%s%s%s" % (_REDIS_KEY_PREFIX, connector_id, _HISTORY_KEY_SUFFIX)
 
 
 # Config keys that hold an operator-configured *instance host* (#13625). These
@@ -259,16 +259,6 @@ async def _append_history(connector_id: str, result_data: Dict[str, Any]) -> Non
     await asyncio.to_thread(redis.ltrim, key, 0, _MAX_HISTORY - 1)
 
 
-async def _delete_connector_keys(connector_id: str) -> None:
-    """Remove connector config and history from Redis (Issue #1254)."""
-    redis = get_redis_client(database="knowledge")
-    await asyncio.to_thread(
-        redis.delete,
-        _connector_key(connector_id),
-        _history_key(connector_id),
-    )
-
-
 # --- Connector instance management ---
 
 
@@ -343,6 +333,7 @@ async def _record_failed_sync(connector_id: str, started_at: datetime, stage: st
     await _append_history(connector_id, entry)
 
 
+@one_sync_per_connector  # #20556
 async def _run_sync_background(connector_id: str, incremental: bool) -> None:
     """Background task: run sync and persist result + last_sync_at."""
     started_at = now_utc()
@@ -734,7 +725,8 @@ async def trigger_sync(
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
-    background_tasks.add_task(_run_sync_background, connector_id, incremental)
+    lease = await claim_or_refuse(connector_id)
+    background_tasks.add_task(run_claimed_sync, _run_sync_background.__wrapped__, connector_id, lease, incremental)
     logger.info("Triggered sync for connector %s (incremental=%s)", connector_id, incremental)
     return {
         "connector_id": connector_id,
@@ -780,10 +772,8 @@ async def get_sync_history(connector_id: str, limit: int = 20):
     error_code_prefix="KNOWLEDGE_CONNECTORS",
 )
 async def get_connector_job(connector_id: str):
-    """Return in-flight job state for a connector sync (Issue #8149).
-
-    Returns 404 when no sync is currently in flight (or the 24h TTL expired).
-    """
+    """Return a connector's sync job (Issue #8149): ``starting``/``running`` while one is in flight,
+    else the last finished one. 404 when there is neither (#20755, see ``job_state``)."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
         raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
@@ -794,16 +784,15 @@ async def get_connector_job(connector_id: str):
     if redis is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
-    job_key = "connector:%s:job:current" % connector_id
-    raw = await redis.get(job_key)
-    if raw is None:
-        raise HTTPException(status_code=404, detail="No active job for connector %s" % connector_id)
-
     try:
-        state = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
-    except Exception as exc:
+        state = await read_job_state(redis, connector_id)
+    except ConnectorSyncUnavailable:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+    except ValueError as exc:
         logger.warning("Malformed job state for connector %s: %s", connector_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
+    if state is None:
+        raise HTTPException(status_code=404, detail="No active job for connector %s" % connector_id)
 
     return {
         "connector_id": connector_id,

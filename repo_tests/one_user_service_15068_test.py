@@ -32,6 +32,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 sys.path.insert(0, str(repo_root() / "tools" / "lint"))
 import check_symbol_forks as detector  # noqa: E402
 
@@ -91,7 +93,7 @@ def _sweep() -> tuple[dict[str, list[str]], int]:
             continue
         try:
             source = (repo_root() / rel).read_text(encoding="utf-8")
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except (OSError, SyntaxError, ValueError):
             continue
         parsed += 1
@@ -131,7 +133,7 @@ def test_each_error_class_and_the_race_safe_insert_has_one_definition(name: str)
 def test_each_service_binds_the_shared_class_and_adds_only_its_hooks(rel: str) -> None:
     source = (repo_root() / rel).read_text(encoding="utf-8")
     assert len(source.splitlines()) <= MAX_BINDING_LINES, f"#15068: {rel} grew past a binding"
-    classes = [n for n in ast.parse(source).body if isinstance(n, ast.ClassDef)]
+    classes = [n for n in parse_cache.parse(source).body if isinstance(n, ast.ClassDef)]
     assert [c.name for c in classes] == ["UserService"], f"#15068: {rel} must define exactly one class"
     bases = [b.id for b in classes[0].bases if isinstance(b, ast.Name)]
     assert bases == ["SharedUserService"], f"#15068: {rel} must subclass the shared UserService, found {bases}"
@@ -149,18 +151,18 @@ def test_the_behaviour_detector_has_a_contrast_pair() -> None:
     renamed_copy = (
         "class AccountManager:\n" "    async def create_user(self): ...\n" "    async def change_password(self): ...\n"
     )
-    assert _copies_user_service(ast.parse(renamed_copy)) == ["AccountManager"], "a renamed copy is a copy"
+    assert _copies_user_service(parse_cache.parse(renamed_copy)) == ["AccountManager"], "a renamed copy is a copy"
     nested = "def factory():\n    class X:\n        def authenticate(self): ...\n        def delete_user(self): ...\n"
-    assert _copies_user_service(ast.parse(nested)) == ["X"], "a nested copy is a copy"
+    assert _copies_user_service(parse_cache.parse(nested)) == ["X"], "a nested copy is a copy"
 
     binding = (
         "class UserService(SharedUserService):\n"
         "    user_model = User\n"
         "    async def invalidate_other_sessions(self, user_id, token): ...\n"
     )
-    assert _copies_user_service(ast.parse(binding)) == [], "a binding is not a copy"
+    assert _copies_user_service(parse_cache.parse(binding)) == [], "a binding is not a copy"
     caller = "class Router:\n    async def create_user(self): ...\n    async def list_teams(self): ...\n"
-    assert _copies_user_service(ast.parse(caller)) == [], "one shared method name is not a copy"
+    assert _copies_user_service(parse_cache.parse(caller)) == [], "one shared method name is not a copy"
 
 
 def test_the_definition_check_has_a_contrast_pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

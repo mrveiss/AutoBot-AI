@@ -6,9 +6,7 @@
 /** #20250: an update can succeed and still leave nodes offline; that must not read as plain success. */
 import { onMounted, ref, watch } from 'vue'
 import { slmApiClient } from '@/utils/ApiClient'
-import { formatDateTime } from '@/utils/formatHelpers'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger, formatDateTime } from '@autobot/ui'
 
 const props = defineProps<{ updating?: boolean }>()
 

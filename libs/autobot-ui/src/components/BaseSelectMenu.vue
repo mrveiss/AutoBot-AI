@@ -176,7 +176,7 @@ const direction = computed(() => resolveDirection(props.dir))
 }
 
 .aui-select {
-  z-index: var(--aui-z-dropdown);
+  z-index: var(--aui-z-popover);
   min-width: var(--reka-select-trigger-width);
   max-height: var(--reka-select-content-available-height);
   overflow: hidden;

@@ -14,13 +14,16 @@ from pathlib import Path
 
 import pytest
 from repo_tests._ratchet_base import (
+    BaseHasNoTable,
     BaseUnavailable,
     added_entries,
     base_commit,
+    base_file_present,
     base_table,
     base_text,
     literal_in,
     raised_entries,
+    raised_known_entries,
 )
 
 from autobot_shared.isolated_git import git, make_repo
@@ -170,6 +173,67 @@ def test_a_frozenset_table_reads_as_a_set() -> None:
     assert literal_in(source, "EXEMPT") == frozenset({"a", "b"})
 
 
+def test_an_emptied_frozenset_table_reads_as_the_empty_set() -> None:
+    """#20382: once the exemption list drains, ``EXEMPT = frozenset()`` is still readable at the base."""
+    assert literal_in("EXEMPT = frozenset()\n", "EXEMPT") == frozenset()
+
+
 def test_added_entries_reports_only_additions_and_treats_a_missing_table_as_all_added() -> None:
     assert added_entries(frozenset({"a", "b"}), frozenset({"a", "c"})) == ["b"]
     assert added_entries(frozenset({"a"}), {}) == ["a"]
+
+
+def test_a_base_without_the_table_is_its_own_error_and_reads_empty_only_on_request(tmp_path, monkeypatch) -> None:
+    """#21573: 'the base has no such table' is a typed signal; callers never match its text."""
+    repo, _ = _history(tmp_path, "OTHER = {'x.py': 1}\n", "OTHER = {'x.py': 1}\nT = {'x.py': 5}\n")
+    _ci(monkeypatch)
+    with pytest.raises(BaseHasNoTable, match="no literal T = "):
+        base_table(repo, ("table.py",), "T")
+    assert issubclass(BaseHasNoTable, BaseUnavailable), "a caller catching BaseUnavailable keeps working"
+    assert base_table(repo, ("table.py",), "T", absent_as_empty=True) == {}
+    assert raised_entries({"x.py": 5}, base_table(repo, ("table.py",), "T", absent_as_empty=True)) == {
+        "x.py": (None, 5)
+    }
+
+
+def test_an_unresolvable_base_is_not_the_no_table_signal_even_when_empty_is_requested(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {'x.py': 1}\n")
+    _ci(monkeypatch, base_sha="1" * 40)
+    with pytest.raises(BaseUnavailable, match="AUTOBOT_RATCHET_BASE_SHA") as caught:
+        base_table(repo, ("table.py",), "T", absent_as_empty=True)
+    assert not isinstance(caught.value, BaseHasNoTable)
+
+
+def test_a_base_without_the_file_still_reads_empty_and_a_present_table_is_unchanged(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {'x.py': 700}\n", "T = {'x.py': 700}\n# head\n")
+    _ci(monkeypatch)
+    assert base_table(repo, ("absent.py",), "T") == {}
+    assert base_table(repo, ("absent.py",), "T", absent_as_empty=True) == {}
+    assert base_table(repo, ("table.py",), "T", absent_as_empty=True) == {"x.py": 700}
+
+
+def test_a_base_file_that_does_not_parse_still_raises_with_empty_requested(tmp_path, monkeypatch) -> None:
+    repo, _ = _history(tmp_path, "T = {\n", "T = {\n# head\n")
+    _ci(monkeypatch)
+    with pytest.raises(SyntaxError):
+        base_table(repo, ("table.py",), "T", absent_as_empty=True)
+
+
+def test_the_base_file_being_absent_is_told_from_its_table_being_empty(tmp_path, monkeypatch) -> None:
+    """#21573: only an absent file means the ratchet is new; an empty table is still compared."""
+    repo, _ = _history(tmp_path, "E = {}\nT = {'x.py': 1}\n", "E = {}\nT = {'x.py': 1}\n# head\n")
+    _ci(monkeypatch)
+    assert not base_file_present(repo, ("absent.py",))
+    assert base_file_present(repo, ("absent.py", "table.py")), "any of the paths counts"
+    assert base_file_present(repo, ("table.py",)) and base_table(repo, ("table.py",), "E") == {}
+    assert base_table(repo, ("table.py",), "T") == {"x.py": 1}
+    assert raised_entries({"x.py": 1}, base_table(repo, ("table.py",), "E")) == {"x.py": (None, 1)}
+
+
+def test_a_key_the_base_lacks_is_ignored_and_only_a_known_key_that_rose_is_reported() -> None:
+    base = {"rose": 1, "fell": 5, "same": 3}
+    now = {"rose": 2, "fell": 4, "same": 3, "new": 9}
+    assert raised_known_entries(now, base) == {"rose": (1, 2)}
+    assert raised_known_entries({"new": 9}, base) == {}
+    assert raised_known_entries(now, {}) == {}, "an empty base has no key that could have risen"
+    assert raised_entries({"new": 9}, base) == {"new": (None, 9)}, "the strict comparison still refuses it"

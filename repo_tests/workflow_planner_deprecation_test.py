@@ -31,6 +31,8 @@ from typing import List
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
 
@@ -100,7 +102,7 @@ def test_planner_instance_is_constructed_but_never_called():
     offenders = []
     for path in _production_sources():
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
         for node in ast.walk(tree):
@@ -113,7 +115,9 @@ def test_planner_instance_is_constructed_but_never_called():
             ):
                 offenders.append(f"{path.relative_to(_REPO)}:{node.lineno} -> .{_INSTANCE_ATTR}.{node.attr}")
 
-    assert not offenders, f"WorkflowPlanner is documented as unwired but is now called: {offenders}. {_WIRING_INSTRUCTIONS}"
+    assert (
+        not offenders
+    ), f"WorkflowPlanner is documented as unwired but is now called: {offenders}. {_WIRING_INSTRUCTIONS}"
 
 
 def test_unique_planner_methods_have_no_production_call_sites():
@@ -125,7 +129,9 @@ def test_unique_planner_methods_have_no_production_call_sites():
             if method in text:
                 offenders.append(f"{path.relative_to(_REPO)} -> {method}")
 
-    assert not offenders, f"Deprecated WorkflowPlanner methods referenced in production: {offenders}. {_WIRING_INSTRUCTIONS}"
+    assert (
+        not offenders
+    ), f"Deprecated WorkflowPlanner methods referenced in production: {offenders}. {_WIRING_INSTRUCTIONS}"
 
 
 def test_only_known_files_reference_the_planner():
@@ -152,28 +158,30 @@ def test_only_known_files_reference_the_planner():
     # Also guard the other direction: if a listed file stops mentioning it, the
     # reason recorded here is stale and should be re-checked.
     vanished = [p for p in allowed if p not in found]
-    assert not vanished, f"Expected reference(s) to WorkflowPlanner disappeared from {vanished}; update this allow-list."
+    assert (
+        not vanished
+    ), f"Expected reference(s) to WorkflowPlanner disappeared from {vanished}; update this allow-list."
 
 
 def test_module_and_package_record_the_deprecation():
     """The rationale must stay written down — this is what #12579 lacked."""
-    module_doc = ast.get_docstring(ast.parse(_MODULE.read_text(encoding="utf-8"))) or ""
+    module_doc = ast.get_docstring(parse_cache.parse(_MODULE.read_text(encoding="utf-8"))) or ""
     assert "DEPRECATED" in module_doc, "workflow_planner.py lost its deprecation notice"
     assert "#13751" in module_doc, "workflow_planner.py deprecation notice lost its issue reference"
     # The supersession must name the canonical replacements, not just say "dead".
     assert "create_workflow_plan" in module_doc
     assert "get_agent_recommendations_scored" in module_doc
 
-    package_doc = ast.get_docstring(ast.parse(_PACKAGE_INIT.read_text(encoding="utf-8"))) or ""
+    package_doc = ast.get_docstring(parse_cache.parse(_PACKAGE_INIT.read_text(encoding="utf-8"))) or ""
     assert "workflow_planner" in package_doc
-    assert "DEPRECATED" in package_doc.split("workflow_planner", 1)[1][:400], (
-        "orchestration/__init__.py no longer marks workflow_planner deprecated"
-    )
+    assert (
+        "DEPRECATED" in package_doc.split("workflow_planner", 1)[1][:400]
+    ), "orchestration/__init__.py no longer marks workflow_planner deprecated"
 
 
 def test_deprecated_code_is_retained_in_full():
     """Never-delete policy: deprecation must not become quiet removal."""
-    tree = ast.parse(_MODULE.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_MODULE.read_text(encoding="utf-8"))
     planner = next(
         (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "WorkflowPlanner"),
         None,

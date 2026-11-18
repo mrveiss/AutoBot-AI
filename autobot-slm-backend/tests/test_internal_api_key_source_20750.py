@@ -10,6 +10,7 @@ backend's own env file, so once the two differed nothing realigned them and noth
 """
 
 import json
+import os
 import shutil
 import subprocess  # nosec B404 -- runs ansible-playbook on a generated local playbook
 import sys
@@ -29,6 +30,12 @@ def _yaml(rel: str):
     return yaml.safe_load((_ANSIBLE / rel).read_text(encoding="utf-8"))
 
 
+def _include(task: dict) -> str:
+    """An include_tasks target, in either form: the bare path or ``{file: path, apply: ...}``."""
+    target = task.get("ansible.builtin.include_tasks", "")
+    return str(target.get("file", "") if isinstance(target, dict) else target)
+
+
 def _walk(node):
     if isinstance(node, dict):
         yield node
@@ -42,7 +49,7 @@ def _walk(node):
 @pytest.mark.parametrize("rel", ["roles/backend/tasks/main.yml", "playbooks/update-all-nodes.yml"])
 def test_install_and_update_resolve_the_key_through_the_one_shared_task(rel: str) -> None:
     tasks = list(_walk(_yaml(rel)))
-    includes = [t for t in tasks if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED)]
+    includes = [t for t in tasks if _include(t).endswith(_SHARED)]
     assert len(includes) == 1, f"{rel} resolves the key once, through {_SHARED}"
     readers = [t for t in tasks if "AUTOBOT_INTERNAL_API_KEY" in str(t.get("ansible.builtin.shell", ""))]
     assert not readers, f"{rel} reads the key itself, a second source: {[t.get('name') for t in readers]}"
@@ -84,8 +91,10 @@ def _run(tmp_path: Path, canonical: str, env_key: str, etc_key: str) -> tuple[di
         "internal_api_key_canonical_file": str(tmp_path / "slm-secrets.env"),
         "internal_api_key_current_env_files": [str(files["env"]), str(files["etc"])],
     }
-    cmd = ["ansible-playbook", "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
-    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": "/usr/bin:/bin:/usr/local/bin"}
+    ansible = shutil.which("ansible-playbook")  # the one the skip found, wherever it is installed
+    cmd = [ansible, "-i", "localhost,", "-c", "local", str(tmp_path / "p.yml"), "-e", json.dumps(extra)]
+    path = os.pathsep.join([os.path.dirname(ansible), "/usr/bin", "/bin", "/usr/local/bin"])
+    env = {"ANSIBLE_LOG_PATH": str(tmp_path / "a.log"), "PATH": path}
     out = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=120, check=False).stdout  # nosec B603
     renders = {}
     for line in out.splitlines():
@@ -175,13 +184,13 @@ def test_every_backend_env_render_writes_its_own_files_key(rel: str, index: int,
         assert (name in dest) == (name in key_arg), f"{rel}: the lookup names another file than {dest}"
     if rel != "roles/backend/tasks/env_only.yml":  # its caller, the updater, resolves first (below)
         tasks = list(_walk(_yaml(rel)))
-        resolves = [i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED)]
+        resolves = [i for i, t in enumerate(tasks) if _include(t).endswith(_SHARED)]
         assert resolves and min(resolves) < index, f"{rel}: renders before the key is resolved"
 
 
 def test_the_updater_resolves_before_it_renders_env_only() -> None:
     tasks = list(_walk(_yaml("playbooks/update-all-nodes.yml")))
-    resolve = next(i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_SHARED))
+    resolve = next(i for i, t in enumerate(tasks) if _include(t).endswith(_SHARED))
     render = next(
         i for i, t in enumerate(tasks) if (t.get("ansible.builtin.include_role") or {}).get("tasks_from") == "env_only"
     )

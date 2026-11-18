@@ -8,8 +8,6 @@ import type {
   WorkflowApproval
 } from '@/types/api'
 import type {
-  UserResponse,
-  TeamResponse,
   SessionInviteResponse,
   SessionRemoveResponse,
   SessionShareSecretResponse,
@@ -336,15 +334,6 @@ class ApiService {
 
   async getSystemMetrics(): Promise<ApiResponse> {
     return this.get(`${getApiBase()}/monitoring/hardware/system`)
-  }
-
-  // User Management API
-  async getUserById(userId: string): Promise<UserResponse> {
-    return this.get(`${getApiBase()}/user-management/users/${userId}`)
-  }
-
-  async getGroupById(groupId: string): Promise<TeamResponse> {
-    return this.get(`${getApiBase()}/user-management/teams/${groupId}`)
   }
 }
 

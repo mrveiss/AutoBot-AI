@@ -29,6 +29,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NEEDLES = ("metadata", "fact_data")
@@ -47,7 +48,7 @@ def _names_fact_metadata(arg: ast.AST) -> bool:
 def _raw_metadata_parses(source: str) -> list[int]:
     """Line numbers of `json.loads(...)` / `loads(...)` calls whose argument names fact metadata."""
     lines = []
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if not (isinstance(n, ast.Call) and n.args):
             continue
         f = n.func

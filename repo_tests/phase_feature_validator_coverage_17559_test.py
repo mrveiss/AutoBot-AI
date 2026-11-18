@@ -31,11 +31,13 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SYSTEM = Path("autobot-infrastructure/shared/scripts/phase_validation_system.py")
 
 
 def _system_tree() -> ast.Module:
-    return ast.parse((repo_root() / _SYSTEM).read_text(encoding="utf-8"))
+    return parse_cache.parse((repo_root() / _SYSTEM).read_text(encoding="utf-8"))
 
 
 class TestEveryDeclaredFeatureHasAValidator:

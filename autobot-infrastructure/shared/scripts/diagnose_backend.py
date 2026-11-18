@@ -60,7 +60,7 @@ def check_endpoint(url: str, name: str, timeout: int = 5) -> EndpointResult:
             url=url,
             name=name,
             elapsed=time.time() - start,
-            error="TIMEOUT after 5 seconds",
+            error=f"TIMEOUT after {timeout:g} seconds",
         )
     except requests.exceptions.ConnectionError as e:
         return EndpointResult(

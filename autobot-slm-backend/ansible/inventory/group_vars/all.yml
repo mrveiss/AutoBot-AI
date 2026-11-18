@@ -15,6 +15,13 @@
 autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 
 # ==========================================
+# SLM SECRETS FILE (#20941)
+# ==========================================
+# Where the SLM keeps the secrets every other service reads (root key, Redis credential,
+# chroma token). _shared/tasks/read_slm_secrets_root_key.yml reads it through this var.
+slm_secrets_env_path: "/etc/autobot/slm-secrets.env"
+
+# ==========================================
 # AI STACK PORT (#17856)
 # ==========================================
 # The ONE ansible literal for the AI-stack port. Every other home (inventory, role defaults,

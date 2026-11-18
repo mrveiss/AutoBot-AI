@@ -41,6 +41,7 @@ def _service(cls=_Bound):
     user = MagicMock(username="alice", password_hash=None)
     svc.get_user = AsyncMock(return_value=user)
     svc._audit_log = AsyncMock()
+    svc._guard_last_admin = AsyncMock()  # the last-admin guard has its own tests (#21018)
     return svc
 
 

@@ -3,9 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
-import { createLogger } from '@/utils/debugUtils'
-import { formatUptime } from '@/utils/formatHelpers'
+import { BaseAlert, PollingPausedAlert, createLogger, formatUptime } from '@autobot/ui'
 
 const logger = createLogger('AdminMonitoringView')
 /**
