@@ -46,8 +46,8 @@ async def test_request_carries_the_model_and_timeout_fails_open_and_is_logged():
         patch.object(guard.logger, "warning") as warn,
     ):
         obs = await guard._call_verifier_once("bash", {}, "why", None)
-    assert obs.degradation is guard.VerifierDegradation.CALL_FAILED
-    assert any("degraded (call_failed)" in str(c.args[0]) for c in warn.call_args_list)
+    assert obs.degradation is guard.VerifierDegradation.TIMEOUT
+    assert any("degraded (timeout)" in str(c.args[0]) for c in warn.call_args_list)
 
 
 @pytest.mark.asyncio

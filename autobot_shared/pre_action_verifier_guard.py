@@ -61,9 +61,11 @@ from autobot_shared.verifier_degradation import (
     VerifierDegradation,
     VerifierObservation,
     degraded_response_blocks,
+    failure_observation,
     parse_probability,
     parse_rationale,
 )
+from autobot_shared.verifier_model import configured_verifier_model, resolve_verifier_model
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
@@ -300,17 +302,7 @@ async def _select_verifier_provider(actor_provider: str | None) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _verifier_model_for(provider: Any) -> str | None:
-    """The SSOT verifier model when *provider* is the local Ollama one, else None (#21844).
-
-    The configured model names an Ollama tag; a different provider keeps its own default.
-    """
-    from autobot_shared.ssot_config import config
-    from llm_shared.models import ProviderType
-
-    if getattr(provider, "provider_name", None) != ProviderType.OLLAMA.value:
-        return None
-    return config.verifier_model or None
+_verifier_model_for = configured_verifier_model  # the sync, config-only half; the call resolves availability
 
 
 async def _call_verifier_once(
@@ -335,7 +327,7 @@ async def _call_verifier_once(
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     request = LLMRequest(
-        model_name=_verifier_model_for(provider),
+        model_name=await resolve_verifier_model(provider),
         messages=[
             {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
             {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
@@ -352,13 +344,15 @@ async def _call_verifier_once(
             timeout=VERIFIER_TIMEOUT_S,
         )
     except Exception as exc:
+        observation = failure_observation(exc)
         logger.warning(
-            "pre_action_verifier: LLM call failed (%s: %r) — degraded (call_failed), fail_closed=%s",
+            "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",
             type(exc).__name__,
             exc,
-            degraded_response_blocks(VerifierDegradation.CALL_FAILED),
+            observation.degradation.value,
+            degraded_response_blocks(observation.degradation),
         )
-        return VerifierObservation.failed(VerifierDegradation.CALL_FAILED, f"Verifier LLM error: {exc!r}")
+        return observation
 
     await report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata)
     return VerifierObservation.from_reply(

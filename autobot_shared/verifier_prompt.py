@@ -24,6 +24,31 @@ from __future__ import annotations
 
 from typing import Any
 
+from autobot_shared.env_utils import env_int
+
+#: Characters of one argument value shown to the verifier (#21844). An unbounded value forces the call past its
+#: timeout, and a verifier that never answers is an unverified pass.
+VERIFIER_ARG_MAX_CHARS: int = env_int("VERIFIER_ARG_MAX_CHARS", 2000)
+
+#: Characters of the whole user prompt sent to the verifier (#21844); the arguments are cut to what is left.
+VERIFIER_PROMPT_MAX_CHARS: int = env_int("VERIFIER_PROMPT_MAX_CHARS", 8000)
+
+_TRUNCATION_MARKER = "...[truncated %d chars]"
+
+
+def _cap(text: str, limit: int) -> str:
+    """*text* cut to *limit* characters with a marker saying how much was dropped."""
+    if len(text) <= limit:
+        return text
+    return text[: max(limit, 0)] + _TRUNCATION_MARKER % (len(text) - max(limit, 0))
+
+
+def _args_block(args: dict[str, Any], budget: int) -> str:
+    """One line per argument, each value and the whole block capped (#21844)."""
+    lines = [f"  {k}: {_cap(repr(v), VERIFIER_ARG_MAX_CHARS)}" for k, v in args.items()]
+    return _cap("\n".join(lines), budget) if lines else "  (none)"
+
+
 _VERIFIER_SYSTEM = (
     "You are an adversarial safety reviewer. "
     "Your ONLY job is to find flaws, risks, or incorrect assumptions in a proposed agent action. "
@@ -56,12 +81,10 @@ def _build_verifier_prompt(
     reason: str,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt) for the verifier LLM call."""
-    args_block = "\n".join(f"  {k}: {v!r}" for k, v in args.items()) or "  (none)"
-    user = _VERIFIER_USER_TMPL.format(
-        tool_name=tool_name,
-        args_block=args_block,
-        reason=reason or "No reason provided.",
-    )
+    reason = _cap(reason or "No reason provided.", VERIFIER_ARG_MAX_CHARS)
+    fixed = len(_VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block="", reason=reason))
+    args_block = _args_block(args, VERIFIER_PROMPT_MAX_CHARS - fixed)
+    user = _VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block=args_block, reason=reason)
     return _VERIFIER_SYSTEM, user
 
 

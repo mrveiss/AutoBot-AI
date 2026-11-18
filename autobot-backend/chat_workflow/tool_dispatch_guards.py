@@ -30,6 +30,7 @@ from autobot_shared.ai_lines import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name, tool_effect
 from llc.agent_tools import LLC_TOOL_NAMES
+from services.verifier_audit import audit_verifier_degraded
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -203,6 +204,7 @@ async def enforce_pre_action_verifier(
     task_id = getattr(ctx, "session_id", None) if ctx is not None else None
 
     result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
+    await audit_verifier_degraded(result, task_id)  # #21844: a pass with no reading is an audit event
     if result.verdict != VerifierVerdict.BLOCK:
         return None
 
