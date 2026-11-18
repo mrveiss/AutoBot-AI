@@ -110,6 +110,7 @@ slm_types:
   - 'autobot-slm-backend/**/*.py'
   - 'autobot_shared/**/*.py'
   - 'libs/slm-contract/src/generated/api.ts'
+  # retired #19834: 'autobot-slm-frontend/src/types/generated/api.ts'
   - 'autobot-slm-frontend/package.json'
   - 'autobot-slm-frontend/package-lock.json'
   - 'scripts/audit_api_wiring.py'
