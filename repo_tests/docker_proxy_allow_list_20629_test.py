@@ -139,6 +139,29 @@ def test_docker_being_down_is_a_clear_answer() -> None:
     assert proxy._handled(down, "stack", "x", "POST", "/containers/autobot-backend/restart")[0] == 503
 
 
+def test_docker_closing_the_socket_mid_body_is_a_clear_answer(tmp_path, monkeypatch) -> None:
+    """#20757: a real truncated answer on a Unix socket (IncompleteRead, an HTTPException) is a 503, not silence."""
+    import socket
+    import threading
+
+    path = str(tmp_path / "docker.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    server.listen(1)
+
+    def truncated_answer() -> None:
+        conn, _ = server.accept()
+        conn.recv(4096)
+        conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n{}")  # 2 of the 50 bytes, then gone
+        conn.close()
+        server.close()
+
+    threading.Thread(target=truncated_answer, daemon=True).start()
+    monkeypatch.setattr(proxy, "SOCKET_PATH", path)
+    status, body = proxy._handled(proxy.call_docker, "stack", "x", "POST", "/containers/autobot-backend/restart")
+    assert (status, body) == (503, {"error": "Docker isn't answering"})
+
+
 def test_the_proxy_does_not_act_on_itself() -> None:
     assert _ask("POST", "/containers/autobot-docker-proxy/stop")[0] == 403
 

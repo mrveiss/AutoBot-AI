@@ -43,6 +43,18 @@ describe('agentLabelMap', () => {
     expect(labels.get('node-0003-qrst')).toBe('Alex — Lead')
     expect(new Set(labels.values()).size).toBe(3)
   })
+
+  it('lengthens the suffix when two clashing ids end in the same 4 characters (#20706)', () => {
+    const labels = agentLabelMap([
+      agent('node-01-beef', 'Alex', { title: 'Engineer' }),
+      agent('node-02-beef', 'Alex', { title: 'Engineer' }),
+      agent('node-03-abcd', 'Alex', { title: 'Engineer' }),
+    ])
+    expect(labels.get('node-01-beef')).toBe('Alex — Engineer #1-beef')
+    expect(labels.get('node-02-beef')).toBe('Alex — Engineer #2-beef')
+    expect(labels.get('node-03-abcd')).toBe('Alex — Engineer #3-abcd')
+    expect(new Set(labels.values()).size).toBe(3)
+  })
 })
 
 describe('agentLabel', () => {

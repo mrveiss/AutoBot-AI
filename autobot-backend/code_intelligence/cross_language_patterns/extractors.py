@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
-from utils.file_categorization import SKIP_DIRS
 
 from .models import CrossLangPatternCategory, CrossLangPatternType, PatternLocation
 
@@ -72,10 +71,6 @@ _VALIDATION_PATTERNS: Dict[str, Pattern] = {
     "url": re.compile(r"url.*valid|isUrl|\.url\(", re.I),
     "uuid": re.compile(r"uuid|isUuid|\.uuid\(", re.I),
 }
-
-# Common skip directories
-# Canonical skip dirs (utils.file_categorization).
-_SKIP_DIRS: frozenset = frozenset(SKIP_DIRS)
 
 
 # Issue #1217: Truncate code blocks during extraction to limit memory

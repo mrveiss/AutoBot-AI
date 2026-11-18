@@ -26,7 +26,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["mcp", "admin", "mcp-tokens"])
 
-_VALID_SCOPES = {"kb", "memory", "agents"}
+_VALID_SCOPES = {"kb", "memory", "agents", "code"}
 _SECRET_BYTES = 32  # 256-bit entropy
 
 
@@ -46,7 +46,16 @@ _SECRET_BYTES = 32  # 256-bit entropy
 
 
 class CreateTokenRequest(BaseModel):
-    scopes: List[str] = Field(..., description="List of scopes: kb, memory, agents")
+    scopes: List[str] = Field(
+        ...,
+        description=(
+            "List of scopes: kb, memory, agents, code. The code scope grants "
+            "read access to the code graph across ALL indexed sources "
+            "(equivalent to the admin-gated analytics routes); code.similar "
+            "reads unowned, public and shared sources and refuses another "
+            "owner's private source."
+        ),
+    )
     label: str = Field(default="", description="Human-readable label for this token")
 
 
@@ -118,7 +127,7 @@ _INDEX_KEY = "mcp:tokens:index"
 )
 async def create_mcp_token(
     body: CreateTokenRequest,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> CreateTokenResponse:
     """Generate a new scoped MCP client token.
 
@@ -126,7 +135,11 @@ async def create_mcp_token(
     response and is never stored in plaintext — only the secret is kept in
     Redis as a lookup key.  Callers must save the token immediately.
 
-    Valid scopes: ``kb``, ``memory``, ``agents``.
+    Valid scopes: ``kb``, ``memory``, ``agents``, ``code``.  The ``code``
+    scope is admin-equivalent: it reads the code graph (symbols, callers,
+    paths) across all indexed sources, like the admin-gated analytics
+    routes.  ``code.similar`` reads unowned, public and shared sources and
+    refuses another owner's private source.
     """
     invalid = set(body.scopes) - _VALID_SCOPES
     if invalid:
@@ -184,7 +197,7 @@ async def create_mcp_token(
     error_code_prefix="MCP",
 )
 async def list_mcp_tokens(
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> ListTokensResponse:
     """List all active MCP tokens.
 
@@ -235,7 +248,7 @@ async def list_mcp_tokens(
 )
 async def revoke_mcp_token(
     token_id: str = Path(..., description="Token ID to revoke"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> RevokeTokenResponse:
     """Revoke an MCP token by its ID.
 

@@ -38,6 +38,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend/api",)
@@ -57,11 +58,9 @@ def _api_sources(root: Path) -> list[str]:
         return []
 
 
-#: Mid-window from REACH.window(): 416 non-test api modules measured 2026-10-11, window [376, 416].
 REACH = declare(
     "chat-history-async-calls-awaited",
     discover=_api_sources,
-    floor=465,  # re-pinned mid-window (train 45): population 450, window [410, 450]
     growth=40,
     what="non-test python modules",
     roots=_ROOTS,
@@ -95,7 +94,7 @@ def _consumed(call: ast.Call, parent: ast.AST | None) -> bool:
 
 def unawaited_calls(source: str, methods: frozenset[str]) -> list[str]:
     """``line:receiver.method`` for every chat-history async call that is not consumed."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     bound = _bound_managers(tree)
     found = []

@@ -24,6 +24,7 @@ import pytest
 
 from autobot_shared import egress_allowlist as al
 from autobot_shared.http_client_manager import HTTPClientManager
+from autobot_shared.logging_once import reset_log_once
 from services import (
     ai_stack_client,
     command_extraction_service,
@@ -186,7 +187,7 @@ async def _redis_status(n, base):
 
 def _policy(monkeypatch, value):
     monkeypatch.setattr(skill_proposer, "fetch_slm_policy_json", AsyncMock(return_value=value))
-    monkeypatch.setattr(skill_proposer, "_disabled_logged", False)
+    reset_log_once()
 
 
 async def _proposer(n, base):

@@ -28,6 +28,7 @@ from llm_shared.models import LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
+_CHAT_WORKFLOW_TIMEOUT_S = 25.0  # hang protection; one value for the wait and its message (#18056)
 
 # Performance optimization: O(1) lookup for message classification keywords (Issue #326)
 TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}
@@ -425,14 +426,15 @@ async def process_chat_message_with_timeout(
 ) -> ChatWorkflowResult:
     """Process chat message through async workflow"""
     try:
-        # Add timeout protection to prevent hanging - maximum 25 seconds
         workflow = await get_workflow_manager().get_workflow()
         result = await asyncio.wait_for(
-            workflow.process_chat_message(user_message, chat_id, user_id=user_id), timeout=25.0
+            workflow.process_chat_message(user_message, chat_id, user_id=user_id), timeout=_CHAT_WORKFLOW_TIMEOUT_S
         )
         return result
     except asyncio.TimeoutError:
-        logger.error(f"Chat workflow timed out after 25 seconds for message: {user_message[:50]}...")
+        logger.error(
+            "Chat workflow timed out after %.0f seconds for message: %s...", _CHAT_WORKFLOW_TIMEOUT_S, user_message[:50]
+        )
         # Return emergency fallback response
         return ChatWorkflowResult(
             response=(

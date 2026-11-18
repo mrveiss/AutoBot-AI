@@ -12,7 +12,7 @@ Endpoints:
     DELETE /api/admin/retention-policies/{type}      - Delete policy by type
     GET    /api/admin/retention-settings             - Active config + per-type storage counts
 
-Access: admin/superadmin role required (RBAC enforced via require_role dependency).
+Access: admin/superadmin role required (the one admin gate, ``check_admin_permission``).
 """
 
 import uuid
@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/admin")
 async def list_retention_policies(
     request: Request,
     user_id: uuid.UUID | None = Query(None, description="Filter by user_id (NULL = global)"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyListResponse:
     """
@@ -73,7 +73,7 @@ async def list_retention_policies(
 async def create_or_update_retention_policy(
     request: Request,
     policy: RetentionPolicyCreate,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -118,7 +118,7 @@ async def get_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -162,7 +162,7 @@ async def delete_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """
@@ -260,7 +260,7 @@ def _audit_retention_table() -> Dict[str, int]:
 @with_error_handling()
 async def get_retention_settings(
     request: Request,
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> Dict[str, Any]:
     """Return active retention configuration and per-type storage counts (GH#8995).
 

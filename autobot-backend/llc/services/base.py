@@ -4,19 +4,18 @@
 # Author: mrveiss
 """LLCServiceBase — shared DI slot for all LLC services."""
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
-if TYPE_CHECKING:
-    from .activity_log import LLCActivityLogService
+from .activity_log import LLCActivityLogService
 
 
 class LLCServiceBase:
     """Base class for all LLC services.
 
-    Subclasses receive the activity_log DI slot which is populated by the
-    LLC DI container once GH#8216 lands. Until then, the slot is None and
-    callers must guard with ``if self.activity_log``.
+    Every service owns a real :class:`LLCActivityLogService` (#20101): a caller may pass
+    another (a test double), but a service cannot be built without one, so an audit write
+    is never skipped for lack of a log and no call site guards on ``self.activity_log``.
     """
 
-    def __init__(self, activity_log: "Optional[LLCActivityLogService]" = None) -> None:
-        self.activity_log = activity_log
+    def __init__(self, activity_log: Optional[LLCActivityLogService] = None) -> None:
+        self.activity_log: LLCActivityLogService = activity_log if activity_log is not None else LLCActivityLogService()

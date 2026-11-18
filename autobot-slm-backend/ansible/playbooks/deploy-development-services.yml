@@ -56,6 +56,7 @@
         owner: autobot-service
         group: autobot-service
         mode: '0644'
+      diff: false  # the file carries secrets (#20941)
 
     - name: Create development systemd service for Vite dev server
       copy:

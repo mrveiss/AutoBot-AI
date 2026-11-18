@@ -509,6 +509,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import { saveTextFile } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -1133,15 +1134,7 @@ function exportDiagram() {
 
   const serializer = new XMLSerializer()
   const svgString = serializer.serializeToString(svg)
-  const blob = new Blob([svgString], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'system-architecture.svg'
-  link.click()
-
-  URL.revokeObjectURL(url)
+  saveTextFile(svgString, 'system-architecture.svg', 'image/svg+xml')
 }
 
 // ============================================================================

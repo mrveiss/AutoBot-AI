@@ -42,7 +42,7 @@ class _Owner:
 
     def __init__(self, *, is_active=True, deleted_at=None):
         self.username = "owner"
-        self.is_platform_admin = False
+        self.is_platform_admin = True  # #20631: a non-admin's key is refused for that, not for its standing
         self.is_active = is_active
         self.deleted_at = deleted_at
 

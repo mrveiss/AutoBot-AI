@@ -29,6 +29,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NEEDLES = ("metadata", "fact_data")
@@ -47,7 +48,7 @@ def _names_fact_metadata(arg: ast.AST) -> bool:
 def _raw_metadata_parses(source: str) -> list[int]:
     """Line numbers of `json.loads(...)` / `loads(...)` calls whose argument names fact metadata."""
     lines = []
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if not (isinstance(n, ast.Call) and n.args):
             continue
         f = n.func
@@ -72,8 +73,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "knowledge-metadata-parse-canonical",
     discover=_population,
-    # Mid-window from REACH.window(): population 46, skips 0, growth 10 -> (36, 46, 41).
-    floor=46,  # mid-window: population 51, window (41, 51)
     what="non-test knowledge_*.py route modules",
     roots=("autobot-backend/api",),
     growth=10,

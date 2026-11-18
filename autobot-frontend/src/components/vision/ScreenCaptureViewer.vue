@@ -208,19 +208,15 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, httpErrorText, isHttpError } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { usePollingJob } from '@/composables/usePollingJob';
-import {
-  visionMultimodalApiClient,
-  type ScreenAnalysisResponse,
-  type UIElement,
-  type ElementTypeInfo,
-} from '@/utils/VisionMultimodalApiClient';
+import { analyzeScreen, getElementTypes } from '@/composables/useVisionApi';
+import type { ScreenAnalysisResponse, UIElement, ElementTypeInfo } from '@/types/visionMultimodal';
 import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n();
@@ -275,21 +271,18 @@ const captureAndAnalyze = async () => {
   analyzing.value = true;
 
   try {
-    const response = await visionMultimodalApiClient.analyzeScreen({
+    const response = await analyzeScreen({
       include_multimodal: true,
     });
 
-    if (response.success && response.data) {
-      analyzeError.value = null;
-      analysisResult.value = response.data;
-      emit('analysis-complete', response.data);
-      logger.debug('Screen analysis complete:', response.data);
-    } else {
-      analyzeError.value = response.error || t('vision.screenCapture.toastAnalysisFailed');
-      logger.error('Analysis failed:', response.error);
-    }
+    analyzeError.value = null;
+    analysisResult.value = response;
+    emit('analysis-complete', response);
+    logger.debug('Screen analysis complete:', response);
   } catch (err) {
-    analyzeError.value = t('vision.screenCapture.toastFailedToAnalyze');
+    analyzeError.value = isHttpError(err)
+      ? httpErrorText(err, t('vision.screenCapture.toastAnalysisFailed'))
+      : t('vision.screenCapture.toastFailedToAnalyze');
     logger.error('Analysis error:', err);
   } finally {
     analyzing.value = false;
@@ -298,10 +291,8 @@ const captureAndAnalyze = async () => {
 
 const loadElementTypes = async () => {
   try {
-    const response = await visionMultimodalApiClient.getElementTypes();
-    if (response.success && response.data) {
-      elementTypes.value = response.data.element_types;
-    }
+    const response = await getElementTypes();
+    elementTypes.value = response.element_types ?? [];
   } catch (err) {
     logger.error('Failed to load element types:', err);
   }
