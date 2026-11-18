@@ -43,11 +43,9 @@
     # to the USER backend on co-located hosts, so SLM auth there returns 401.
     slm_api_url: "https://{{ hostvars[slm_manager_inventory_host]['ansible_host'] | default('127.0.0.1') }}/slm"
     slm_admin_user: "admin"
-    # Password comes from hostvars (set by slm_manager role) or override
-    slm_admin_password: >-
-      {{ hostvars[slm_manager_inventory_host]['slm_admin_password']
-         | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
-         | default('admin') }}
+    # The slm_manager role's fact when this runs after it (deploy-slm-manager.yml), else
+    # empty; the shared reader then resolves it -- never a default password (#19318).
+    slm_admin_password: "{{ hostvars[slm_manager_inventory_host]['slm_admin_password'] | default('') }}"
 
     # #9956: SLM manager roles are looked up by `slm_server` group membership
     # (see register-loop below), so its entry is NOT keyed by display name.
@@ -67,6 +65,9 @@
 
 
   tasks:
+    - name: "Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks: ../_shared/tasks/read_slm_admin_password.yml
+
     - name: "Authenticate with SLM API"
       ansible.builtin.uri:
         url: "{{ slm_api_url }}/api/auth/login"
@@ -81,6 +82,7 @@
       retries: 5
       delay: 5
       until: auth_result.status == 200
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Register fleet nodes"
       ansible.builtin.uri:
@@ -121,6 +123,7 @@
       loop_control:
         label: "{{ item }} ({{ hostvars[item].ansible_host }})"
       register: register_results
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Registration summary"
       ansible.builtin.debug:

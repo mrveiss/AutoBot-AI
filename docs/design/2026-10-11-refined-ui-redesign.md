@@ -221,7 +221,7 @@ that exists but does not serve the screen.
 | CeoChat | `…/ceo-chat` | `views/llc/CeoChatView.vue` |
 | Activity | `…/activity` | `views/llc/ActivityFeedView.vue` |
 | Portability | `…/portability` | `views/llc/CompanyPortabilityView.vue` |
-| CompanySecrets | `…/secrets` | `views/llc/SecretsView.vue` |
+| CompanySecrets | `…/secrets` | `views/llc/CompanySecretsView.vue` |
 | AutomationOverview / Automation / Templates / Runner / History | `…/automation/:section` | `WorkflowBuilderView` |
 | AutomationSetup | — **new** | four-move setup: connect, set the line per tool action, give the job, wire the trigger (#18430) |
 | BrowserAutomation | `…/automation/browser-automation` | (child route) |

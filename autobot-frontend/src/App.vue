@@ -52,7 +52,10 @@
     <CaptchaNotification />
 
     <!-- Toast Notifications Container (Issue #502) -->
-    <ToastContainer />
+    <ToastContainer
+      :label="$t('ui.toastContainer.notifications')"
+      :dismiss-label="$t('ui.toastContainer.dismissNotification')"
+    />
 
     <!-- Host Selection Dialog for Agent SSH Actions -->
     <HostSelectionDialog
@@ -114,7 +117,7 @@ import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import SystemStatusModal from '@/components/layout/SystemStatusModal.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
-import { SkipLink } from '@autobot/ui'
+import { SkipLink, ToastContainer } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { healthMonitor } from '@/utils/HealthMonitor.js';
@@ -124,7 +127,6 @@ import { smartMonitoringController, getAdaptiveInterval } from '@/config/Optimiz
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
-import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue';
@@ -280,14 +282,6 @@ export default {
       }
     };
 
-    // Named handlers for global error listeners (#2849)
-    const handleWindowError = (event: ErrorEvent) => {
-      handleGlobalError(event.error || event);
-    };
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      handleGlobalError(event.reason);
-    };
-
     // Unified loading event handlers
     const handleLoadingComplete = () => {
       logger.debug('Loading completed successfully');
@@ -391,9 +385,8 @@ export default {
       // nav rail can hide modules unavailable in this deployment mode.
       void runtimeFeaturesStore.load();
 
-      // Set up global error handling (#2849: use named handlers for cleanup)
-      window.addEventListener('error', handleWindowError);
-      window.addEventListener('unhandledrejection', handleUnhandledRejection);
+      // Window error/unhandledrejection listeners are owned by
+      // plugins/errorHandler.ts (#19458) — one registration, one benign filter.
 
       // CRITICAL FIX: Clear any stuck system notifications on startup
       logger.debug('Clearing stuck system notifications on startup...');
@@ -449,8 +442,6 @@ export default {
       logger.debug('Cleaning up optimized monitoring systems...');
 
       // Clean up listeners (#2849: remove all event listeners added in onMounted)
-      window.removeEventListener('error', handleWindowError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor

@@ -10,7 +10,7 @@
  * accessible password toggle, and MFA form accessibility.
  */
 
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { BaseAlert, BrandMark } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -33,6 +33,12 @@ const ssoProviders = ref<ActiveProviderResponse[]>([])
 const ssoLoading = ref(false)
 const ssoError = ref<string | null>(null)
 const mfaCode = ref('')
+
+// #20631: why the router or the SSO callback sent the visitor here.
+const queryErrorKey = computed(() => {
+  if (!route.query.error) return null
+  return route.query.error === 'admin_only' ? 'loginView.adminOnly' : 'loginView.ssoLoginFailed'
+})
 
 // #18892: return to the page that sent the operator here (same-app paths only).
 function goAfterLogin(): void {
@@ -179,6 +185,7 @@ onMounted(async () => {
 
           <!-- Error Message -->
           <BaseAlert v-if="authStore.error" variant="error" :message="authStore.error" />
+          <BaseAlert v-else-if="queryErrorKey" variant="error" :message="$t(queryErrorKey)" />
 
           <!-- Submit Button -->
           <button

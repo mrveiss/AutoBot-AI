@@ -39,11 +39,13 @@ def _alias_reads(text: str) -> re.Pattern[str] | None:
 
 
 #: Each with its reason. The resolver itself; the SSOT field's own documentation map; the
-#: ConfigRegistry default table, which no reader asks for this key.
+#: ConfigRegistry default table, which no reader asks for this key; the config defaults, built
+#: during redis_client's import.
 _ALLOWED = {
     "autobot_shared/embedding_model.py": "the resolver",
     "autobot-backend/config/ssot_mappings.py": "documents the SSOT field, reads nothing",
     "autobot-backend/config/registry_defaults.py": "registry default table; no reader asks for this key",
+    "autobot-backend/config/defaults.py": "built while redis_client imports, so it cannot read an override (#20008)",
 }
 
 

@@ -269,7 +269,7 @@ onUnmounted(() => {
   cursor: ew-resize;
   background: transparent;
   transition: background var(--duration-150);
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .resize-handle:hover,
@@ -326,8 +326,9 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.empty-state i {
-  font-size: 2.5rem;
+.empty-state .icon {
+  width: 2.5rem;
+  height: 2.5rem;
   opacity: 0.5;
 }
 
@@ -349,7 +350,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-.meta-item i {
+.meta-item .icon {
   color: var(--text-muted);
 }
 
@@ -357,7 +358,7 @@ onUnmounted(() => {
   color: var(--color-success);
 }
 
-.meta-item.relevance i {
+.meta-item.relevance .icon {
   color: var(--color-success);
 }
 

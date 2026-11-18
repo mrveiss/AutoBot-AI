@@ -21,12 +21,14 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
 import WorkItemBadge from './WorkItemBadge.vue'
 import HandoffModal from './HandoffModal.vue'
+import AgentHeartbeatControl from './AgentHeartbeatControl.vue'
 import {
   SIDEBAR_RAIL_ICONS,
   NOTE_TABS,
@@ -50,16 +52,21 @@ const props = defineProps<{
   node: OrgNode
   companyId: string
   terminating: boolean
+  /** Whether the viewer may pause/resume/terminate: the server refuses all but a company owner/admin (#21001). */
+  canControl?: boolean
 }>()
 
 const emit = defineEmits<{
   pause: [OrgNode]
   terminate: [OrgNode]
+  // #15907: the heartbeat switch changed; the parent owns the tree node and updates it.
+  heartbeat: [OrgNode, boolean]
 }>()
 
 const logger = createLogger('CanvasNodeSidebar')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 
 
 const RAIL_ICON_CLASS: Record<SidebarRailIcon, string> = {
@@ -184,10 +191,7 @@ function onHandoffDone(): void {
   void ensureAssignedItems()
 }
 
-function formatTime(ts: string | null): string {
-  if (!ts) return t('llc.orgChart.never')
-  return new Date(ts).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never') })
 
 </script>
 
@@ -471,7 +475,7 @@ function formatTime(ts: string | null): string {
           :key="icon"
           class="w-9 h-9 rounded-md flex items-center justify-center text-sm transition-colors"
           :class="activeRail === icon
-            ? 'bg-autobot-primary text-white'
+            ? 'bg-autobot-primary text-autobot-text-on-primary'
             : 'text-autobot-text-muted hover:bg-autobot-bg-elevated hover:text-autobot-text-secondary'"
           :data-testid="`sidebar-rail-${icon}`"
           role="tab"
@@ -493,7 +497,14 @@ function formatTime(ts: string | null): string {
       {{ t('llc.orgChart.humanNoAgentControls') }}
     </div>
     <div v-else-if="node.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
+      <AgentHeartbeatControl
+        :company-id="companyId"
+        :agent-id="node.id"
+        :enabled="node.heartbeat_enabled ?? false"
+        @changed="(on: boolean) => emit('heartbeat', node, on)"
+      />
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
         :class="node.status === 'paused'
           ? 'bg-green-600 text-white hover:bg-green-700'
@@ -504,6 +515,7 @@ function formatTime(ts: string | null): string {
         {{ node.status === 'paused' ? t('llc.orgChart.resumeAgent') : t('llc.orgChart.pauseAgent') }}
       </button>
       <button
+        v-if="canControl"
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
         :disabled="terminating"
         data-testid="org-drawer-terminate"
@@ -521,7 +533,6 @@ function formatTime(ts: string | null): string {
       :work-item-id="handoffItem.id"
       :company-id="companyId"
       direction="to_human"
-      :agent-assignee-id="node.node_id"
       @close="handoffItem = null"
       @done="onHandoffDone"
     />

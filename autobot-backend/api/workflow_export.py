@@ -27,6 +27,7 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.workflow_automation.command_step import require_command_permission
 from services.workflow_automation.routes import get_workflow_manager
 from services.workflow_serializer import WorkflowSerializer
 from services.workflow_sharing_service import WorkflowSharingService
@@ -130,6 +131,7 @@ async def import_workflow(
     """
     Import a workflow from an export document and create it under the requesting user.
     """
+    require_command_permission(current_user)  # #19807: imported steps run shell commands
     try:
         owner_id = current_user.get("user_id")
         new_id = await serializer.import_workflow(
@@ -254,6 +256,7 @@ async def clone_shared_workflow(
 
     Creates a new independent workflow owned by the requesting user.
     """
+    require_command_permission(current_user)  # #19807: cloned steps run shell commands
     try:
         new_owner_id = current_user.get("user_id")
         new_id = await sharing.clone_workflow(

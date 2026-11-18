@@ -10,14 +10,14 @@
  * AI skills across the AutoBot platform.
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSkills, useSkillGovernance, type SkillInfo } from '@/composables/useSkills'
 import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.vue'
 import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
 import ReposTab from '@/components/skills/ReposTab.vue'
 import DraftsTab from '@/components/skills/DraftsTab.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, PollingPausedAlert } from '@autobot/ui'
 
 const {
   skills,
@@ -52,7 +52,7 @@ const {
   promoteDraft,
   fetchGovernance,
   setGovernanceMode,
-  startApprovalPolling,
+  approvalPoller, startApprovalPolling,
   dismissDraftNotification,
 } = useSkillGovernance()
 
@@ -135,15 +135,11 @@ function selectCategory(cat: string | null): void {
 
 // --- Lifecycle ---
 
+let unmounted = false
+onUnmounted(() => { unmounted = true })
 onMounted(async () => {
-  await Promise.all([
-    initializeSkills(),
-    fetchGovernance(),
-    fetchApprovals(),
-    fetchRepos(),
-    fetchDrafts(),
-  ])
-  startApprovalPolling()
+  await Promise.all([initializeSkills(), fetchGovernance(), fetchApprovals(), fetchRepos(), fetchDrafts()])
+  if (!unmounted) startApprovalPolling()
 })
 
 watch(searchQuery, (val) => {
@@ -313,6 +309,8 @@ function categoryIcon(category: string): string {
       @test="testDraft"
       @promote="promoteDraft"
     />
+
+    <PollingPausedAlert :poller="approvalPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="startApprovalPolling" />
 
     <!-- Error Banner (active skills tab) -->
     <template v-if="activeTab === 'active'">

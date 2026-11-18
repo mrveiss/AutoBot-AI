@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import load_verified
+from knowledge.chunk_identity import resolve_chunk_id
 
 logger = get_logger(__name__)
 
@@ -298,13 +300,13 @@ def compute_blended_score(
         edge_weight:           Graph edge strength contribution (0-1).
         recency_score_value:   Time-based recency score (0-1).
         staleness_penalty_value: staleness_penalty() output (1=fresh, 0=max stale).
-        weights:               RerankWeights instance; defaults to RerankWeights().
+        weights:               RerankWeights instance; None reads RAGConfig.rerank_weights (#19280).
 
     Returns:
         Blended score in the same 0-1 range.
     """
     if weights is None:
-        weights = RerankWeights()
+        weights = shared_rerank_weights()
 
     total_weight = weights.reranker + weights.vector + weights.edge + weights.recency + weights.staleness
     if total_weight == 0.0:
@@ -364,7 +366,7 @@ async def fetch_staleness_scores(chunk_ids: List[str], weights: RerankWeights) -
         return None
 
 
-def _shared_rerank_weights() -> RerankWeights:
+def shared_rerank_weights() -> RerankWeights:
     """``RAGConfig.rerank_weights``, for a caller that passes none (#18141); lazy: rag_config imports this module."""
     from services.rag_config import get_rag_config
 
@@ -378,7 +380,7 @@ class ResultReranker:
     Uses the MS MARCO MiniLM model for efficient relevance scoring.
     """
 
-    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L6-v2"  # pinned in autobot_shared/pinned_model_registry.py (#19355)
 
     def __init__(self):
         """Initialize reranker."""
@@ -416,16 +418,16 @@ class ResultReranker:
         Args:
             results:       Result dicts to score in-place.
             scores:        Raw cross-encoder logits aligned with results.
-            weights:       Optional blend weights (defaults to RerankWeights()).
+            weights:       Optional blend weights; None reads RAGConfig.rerank_weights (#19280).
             staleness_map: Optional {chunk_id: staleness_score} pre-fetched by
                            the async caller.  When None or staleness weight is 0,
                            the penalty term is skipped.
         """
-        effective_weights = weights if weights is not None else RerankWeights()
+        effective_weights = weights if weights is not None else shared_rerank_weights()
         for i, result in enumerate(results):
             original_score = result.get("score", 0)
             result["original_score"] = original_score
-            chunk_id = result.get("chunk_id") or result.get("id", "")
+            chunk_id = resolve_chunk_id(result)  # #19280: the vector branch's staleness key
             result["rerank_score"] = final_rerank_score(
                 scores[i],
                 original_score,
@@ -473,11 +475,11 @@ class ResultReranker:
             if not results:
                 return results
 
-            effective_weights = weights if weights is not None else _shared_rerank_weights()
+            effective_weights = weights if weights is not None else shared_rerank_weights()
 
             # Issue #2547: pre-fetch staleness scores asynchronously before the
             # synchronous scoring loop runs.
-            chunk_ids = [r.get("chunk_id") or r.get("id", "") for r in results]
+            chunk_ids = [resolve_chunk_id(r) for r in results]
             staleness_map = await fetch_staleness_scores(chunk_ids, effective_weights)
 
             cross_encoder = await self._ensure_cross_encoder()
@@ -535,7 +537,10 @@ def get_cross_encoder():
                         "Loading shared CrossEncoder model: %s",
                         ResultReranker.MODEL_NAME,
                     )
-                    _cross_encoder_model = CrossEncoder(ResultReranker.MODEL_NAME)
+                    (_cross_encoder_model,) = load_verified(  # pinned revision, digests verified (#19355)
+                        ResultReranker.MODEL_NAME,
+                        lambda revision: CrossEncoder(ResultReranker.MODEL_NAME, revision=revision),
+                    )
                     logger.info("Shared CrossEncoder model loaded successfully")
                 except ImportError:
                     logger.warning("sentence-transformers not available, CrossEncoder disabled")

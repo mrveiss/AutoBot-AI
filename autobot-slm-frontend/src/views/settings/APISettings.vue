@@ -205,7 +205,7 @@ const config = {
   },
   port: {
     backend: {{ config.port.backend }},
-    frontend: {{ config.port.frontend }},
+    frontend: {{ config.port.frontendServed }},
     slmApi: {{ config.port.slmApi }},
     // ...
   }

@@ -15,6 +15,7 @@ Registration contract (import side effect, ordering): see ``env_registry``.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.fleet_constants import FLEET_CODE_SOURCE_DIR
 from autobot_shared.network_constants import NetworkConstants
 
 
@@ -57,10 +58,11 @@ _register(
 _register(
     "SLM_NODE_ID",
     str,
-    "00-SLM-Manager",
-    "Node id. The SLM backend uses it as the manager's own registry id (default shown). "
-    "slm/agent/agent.py accepts --node-id. "
-    "The agent refuses to start without one.",
+    None,
+    "This node's own SLM agent id, set per host by slm-agent.service (slm/agent/agent.py also "
+    "accepts --node-id); the agent refuses to start without one, so there is no default. "
+    "Deprecated as the SLM manager's id (#19322): that is AUTOBOT_SLM_NODE_ID "
+    "(MiscConfig.slm_node_id); the backend still honours this name when that one is unset.",
     "slm",
 )
 _register(
@@ -78,11 +80,60 @@ _register(
     "slm",
 )
 _register(
+    "SLM_ADMIN_PASSWORD",
+    str,
+    "",
+    "SLM admin password, the one name for it (#19318). Its home is SLM_ADMIN_PASSWORD in "
+    "slm-secrets.env (install.sh or the slm_manager role generates it). Empty means the SLM "
+    "creates the admin with a random password and never resets an existing one. No default "
+    "password. AUTOBOT_SLM_ADMIN_PASSWORD is a deprecated alias that only install.sh and "
+    "the shared ansible reader honour.",
+    "slm",
+)
+_register(
+    "SLM_ADMIN_PASSWORD_FILE",
+    str,
+    "",
+    "Path to a file holding the SLM admin password (the hardened compose overlay's mounted "
+    "secret). Seeds a fresh install only; an existing admin keeps its stored password (#19368). "
+    "Set but unreadable or empty stops the first start with an error.",
+    "slm",
+)
+_register(
+    "SLM_AUTH_LOOKUP_CACHE_TTL",
+    float,
+    60.0,
+    "Seconds an SLM process reuses its resolved API-key hashing setting (#19120); other workers follow within it.",
+    "slm",
+)
+_register(
+    "SLM_HMAC_API_KEY_SECRET",
+    str,
+    "",
+    (
+        "One-time import source for the API-key pepper (#16299, #19120). The pepper lives in "
+        "the SLM secrets store (secret slm_hmac_api_key_secret); this value is imported into it "
+        "when the store has none. No default: with neither set, creating a key fails closed."
+    ),
+    "slm",
+)
+_register(
     "SLM_USERS_DATABASE_URL",
     str,
     None,
     "SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the "
     "slm_users database on the colocated PostgreSQL.",
+    "slm",
+)
+_register(
+    "SLM_REPO_PATH",
+    str,
+    FLEET_CODE_SOURCE_DIR,
+    "The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that "
+    "contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py "
+    "as DEFAULT_REPO_PATH; drift checks, packaging "
+    "and the python-provision playbook path all resolve under it. The provision sudoers rule does not "
+    "follow an override (#19204), so leave it at the default unless that rule is changed too (#15708).",
     "slm",
 )
 

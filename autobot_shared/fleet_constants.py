@@ -23,6 +23,10 @@ held equal by ``repo_tests/defined_twice_18094_test.py``.
 #: ``autobot_shared.paths.install_base_dir``, which never guesses (#14544).
 FLEET_INSTALL_ROOT = "/opt/autobot"
 
+#: The code_source git CHECKOUT the SLM deploys from (Ansible's ``code_source_dir``): the default of
+#: ``SLM_REPO_PATH``. A directory INSIDE the install root, never the install root itself (#15708).
+FLEET_CODE_SOURCE_DIR = f"{FLEET_INSTALL_ROOT}/code_source"
+
 #: The SLM agent's code directory on a fleet node (#1121, #1129).
 FLEET_AGENT_DIR = f"{FLEET_INSTALL_ROOT}/autobot-slm-agent"
 

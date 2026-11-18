@@ -7,7 +7,6 @@ Authentication API endpoints for AutoBot
 Provides login, logout, and session management functionality
 """
 
-import datetime
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -33,7 +32,10 @@ from api.schemas_agent_requests import RS256RevokeRequest
 from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user, resolve_human_user
+from auth_refresh import decode_refresh_token as _decode_refresh_token  # tests patch this name here
+from auth_refresh import reject_if_account_not_live
 from auth_revocation import reject_if_revoked_by_password_change, revoked_by_password_change_for_introspection
+from autobot_shared.auth.configured_users import is_configured_user, verify_configured_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -101,7 +103,7 @@ async def _authenticate_and_build_user_data(username: str, password: str, ip_add
         user_data = {
             "username": user.username,
             "user_id": str(user.id),
-            "role": role_value(Role.ADMIN) if user.is_platform_admin else role_value(Role.USER),
+            "role": UserService.account_role(user),
             "email": user.email,
             "last_login": (user.last_login_at.isoformat() if user.last_login_at else None),
         }
@@ -356,13 +358,11 @@ async def _check_password_change_rate_limit(username: str, ip_address: str) -> N
 def _verify_current_password(username: str, current_password: str, ip_address: str) -> str:
     """Verify current password and return the hash. Raises HTTPException on failure."""
     allowed_users = get_auth_middleware().security_config.get("allowed_users", {})
-    if username not in allowed_users:
+    if not is_configured_user(allowed_users, username):
         raise HTTPException(status_code=404, detail="User not found in system")
 
-    user_config = allowed_users[username]
-    current_password_hash = user_config.get("password_hash", "")
-
-    if not get_auth_middleware().verify_password(current_password, current_password_hash):
+    user_config = verify_configured_user(allowed_users, username, current_password)
+    if user_config is None:
         get_auth_middleware().security_layer.audit_log(
             action="password_change_failed",
             user=username,
@@ -371,7 +371,7 @@ def _verify_current_password(username: str, current_password: str, ip_address: s
         )
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
-    return current_password_hash
+    return user_config["password_hash"]
 
 
 def _persist_password_change(username: str, new_password_hash: str) -> None:
@@ -484,42 +484,6 @@ async def signup(request: Request, signup_data: SignupRequest):
         raise HTTPException(status_code=500, detail="Registration failed. Please try again.")
 
 
-def _decode_refresh_token(token: str) -> Dict:
-    """Decode JWT for refresh, allowing recently expired tokens (1h grace).
-
-    Helper for refresh_token (#827).
-    Accepts both RS256 (new) and HS256 (legacy) tokens (#10196).
-    """
-    mw = get_auth_middleware()
-    token_alg = _peek_alg(token)
-    try:
-        if token_alg == "RS256":  # nosec B105  # JWT algorithm identifier, not a credential
-            payload = decode_jwt_no_verify_exp(
-                token,
-                public_key=mw.jwt_public_key,
-                algorithms=["RS256"],
-            )
-        else:
-            payload = decode_jwt_no_verify_exp(
-                token,
-                secret=mw.jwt_secret,
-                algorithms=["HS256"],
-            )
-    except JWTDecodeError as exc:
-        raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN) from exc
-
-    exp = payload.get("exp")
-    if exp:
-        exp_time = datetime.datetime.fromtimestamp(exp, tz=datetime.timezone.utc)
-        now = datetime.datetime.now(tz=datetime.timezone.utc)
-        if now > exp_time + datetime.timedelta(hours=1):
-            raise HTTPException(
-                status_code=401,
-                detail="Token expired beyond refresh window",
-            )
-    return payload
-
-
 @router.post("/refresh", response_model=AuthRefreshData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -539,6 +503,7 @@ async def refresh_token(request: Request):
     token = auth_header.split(" ")[1]
     payload = _decode_refresh_token(token)
     await reject_if_revoked_by_password_change(payload)  # a pre-password-change token cannot be refreshed (#18688)
+    await reject_if_account_not_live(payload)  # nor can one of a closed account, marker or not (#20443)
     if _is_session_revoked(payload):  # a logged-out session cannot be refreshed; an unreadable store reads as gone
         raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN)
 

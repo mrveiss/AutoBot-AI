@@ -23,15 +23,21 @@ from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from auth_middleware import get_current_user
+from services.workflow_secret_service import StepSecrets
 
 from . import routes
-from .models import ActiveWorkflow, AutomationMode
+from .models import ActiveWorkflow, AutomationMode, WorkflowStep
 from .workflow_ownership import caller_id, is_owner_or_admin
 from .ws_endpoint import may_control
 
 ALICE = {"username": "alice", "user_id": "u-alice", "role": "user"}
 BOB = {"username": "bob", "user_id": "u-bob", "role": "user"}
 ADMIN = {"username": "root", "user_id": "u-root", "role": "admin"}
+OPERATOR = {
+    "username": "alice",
+    "user_id": "u-alice",
+    "role": "admin",
+}  # only an administrator creates command workflows (#19807)
 
 
 def _workflow(owner_id: str | None, workflow_id: str = "wf-1") -> ActiveWorkflow:
@@ -59,7 +65,9 @@ class _Manager:
         return True
 
     def get_workflow_status(self, workflow_id):
-        return {"workflow_id": workflow_id}
+        """What the real manager returns: the workflow's own ``to_status_dict`` (#12363)."""
+        workflow = self.active_workflows.get(workflow_id) or self.completed_workflows.get(workflow_id)
+        return workflow.to_status_dict() if workflow else None
 
     def get_pending_approval(self, workflow_id):
         return None
@@ -188,6 +196,18 @@ def test_state_routes_allow_the_owner(monkeypatch, method, path):
     assert getattr(client, method)(path).status_code == 200
 
 
+def test_workflow_status_route_serves_the_real_status_dict(monkeypatch):
+    """The ``response_model`` must describe ``to_status_dict`` itself, not a stub of it (#12363)."""
+    workflow = _workflow("u-alice")
+    workflow.steps = [WorkflowStep(step_id="s1", command="ls", description="list")]
+    client, _ = _client(monkeypatch, ALICE, workflow)
+    response = client.get("/workflow_status/wf-1")
+    assert response.status_code == 200
+    body = response.json()["workflow"]
+    assert body == workflow.to_status_dict()
+    assert body["steps"][0]["step_id"] == "s1"
+
+
 def test_create_workflow_records_the_caller_as_owner(monkeypatch):
     """AC1 at the REST route: the workflow must carry the creator, not None."""
     recorded = {}
@@ -201,7 +221,7 @@ def test_create_workflow_records_the_caller_as_owner(monkeypatch):
     monkeypatch.setattr(routes, "get_workflow_manager", lambda: manager)
     app = FastAPI()
     app.include_router(routes.router)
-    app.dependency_overrides[get_current_user] = lambda: ALICE
+    app.dependency_overrides[get_current_user] = lambda: OPERATOR
     client = TestClient(app, raise_server_exceptions=False)
 
     response = client.post(
@@ -247,13 +267,13 @@ def test_secret_resolution_without_an_owner_resolves_nothing(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, frozenset())),
+        lambda: SimpleNamespace(resolve_secrets=lambda c, o: called.append(o) or (c, StepSecrets())),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", None)
 
     assert command == "echo ${secrets.TOKEN}"
-    assert names == frozenset()
+    assert not injected
     assert called == [], "the secret service must not be asked on behalf of a non-user"
 
 
@@ -264,12 +284,14 @@ def test_secret_resolution_with_an_owner_still_uses_it(monkeypatch):
     monkeypatch.setattr(
         executor,
         "get_workflow_secret_service",
-        lambda: SimpleNamespace(resolve_secrets=lambda c, o: (seen.append(o), ("resolved", frozenset({"TOKEN"})))[1]),
+        lambda: SimpleNamespace(
+            resolve_secrets=lambda c, o: (seen.append(o), ("resolved", StepSecrets({"TOKEN": "v"})))[1]
+        ),
     )
 
-    command, names = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
+    command, injected = executor._resolve_command_secrets("echo ${secrets.TOKEN}", "u-alice")
 
-    assert (command, names) == ("resolved", frozenset({"TOKEN"}))
+    assert command == "resolved" and injected.names == frozenset({"TOKEN"})
     assert seen == ["u-alice"]
 
 

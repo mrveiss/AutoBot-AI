@@ -46,23 +46,21 @@ def _reset_rag_config_singleton():
 def _isolate_hash_cache(tmp_path, monkeypatch):
     """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
 
-    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    ``knowledge.stale_filter`` reads ``doc_indexer.HASH_CACHE_FILE``
     through a module-level TTL memo.  Without isolation the suite picks up the
     real ``data/.doc_index_hashes.json`` that exists on any machine where the
     indexer has run, so the provenance filter drops every test-double chunk.
     Point the cache at an absent tmp path and reset the memo around each test.
     """
-    import services.rag_service as rag_mod
+    from knowledge.stale_filter import reset_hash_cache
 
     monkeypatch.setattr(
         "services.knowledge.doc_indexer.HASH_CACHE_FILE",
         tmp_path / "absent_doc_index_hashes.json",
     )
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
     yield
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
 
 
 class TestKnowledgeBaseAdapter:
@@ -429,17 +427,23 @@ class TestCrossEncoderReranking:
 class TestKBSynthesisSchemaCache:
     """Tests for module-level synthesis schema caching in RAGService (#4654)."""
 
+    @staticmethod
+    def _reset_cache() -> None:
+        """Reset the cache of the module RAGService was defined in (#12531).
+
+        Not ``from services.rag_service import ...``: another test can replace that
+        ``sys.modules`` entry, and the import then resets a cache this file's
+        ``RAGService`` never reads, so a warm cache answers and the loader is never called.
+        """
+        RAGService._get_kb_synthesis_context.__globals__["reset_synthesis_schema_cache"]()
+
     def setup_method(self) -> None:
         """Reset the module-level cache before each test (#12531)."""
-        from services.rag_service import reset_synthesis_schema_cache
-
-        reset_synthesis_schema_cache()
+        self._reset_cache()
 
     def teardown_method(self) -> None:
         """Reset the module-level cache after each test (#12531)."""
-        from services.rag_service import reset_synthesis_schema_cache
-
-        reset_synthesis_schema_cache()
+        self._reset_cache()
 
     @pytest.mark.asyncio
     async def test_load_synthesis_schema_called_only_once_across_multiple_calls(self) -> None:

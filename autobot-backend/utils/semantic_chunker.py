@@ -22,7 +22,13 @@ import numpy as np
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants
-from utils.semantic_chunker_base import SemanticChunk, SemanticChunkerBase
+from utils.semantic_chunker_base import (
+    SENTENCE_EMBEDDING_FALLBACKS,
+    SENTENCE_EMBEDDING_MODEL,
+    SemanticChunk,
+    SemanticChunkerBase,
+    load_sentence_transformer,
+)
 
 __all__ = ["AutoBotSemanticChunker", "SemanticChunk", "get_semantic_chunker"]
 
@@ -41,7 +47,7 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 
     def __init__(
         self,
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_model: str = SENTENCE_EMBEDDING_MODEL,
         percentile_threshold: float = 95.0,
         min_chunk_size: int = 100,
         max_chunk_size: int = 1000,
@@ -166,8 +172,6 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
     def _load_model_with_retry(self, device: str):
         import time
 
-        from sentence_transformers import SentenceTransformer
-
         max_retries = RetryConfig.DEFAULT_RETRIES
         retry_delay = TimingConstants.SERVICE_STARTUP_DELAY
 
@@ -183,7 +187,7 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
                     time.sleep(retry_delay)
                     retry_delay *= 2
 
-                return SentenceTransformer(self.embedding_model_name, device=device)
+                return load_sentence_transformer(self.embedding_model_name, device=device)
 
             except Exception as load_error:
                 error_str = str(load_error).lower()
@@ -205,7 +209,6 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
         raise RuntimeError("Model loading failed after retries")
 
     def _optimize_loaded_model(self, model, device: str):
-        from sentence_transformers import SentenceTransformer
 
         try:
             actual_device = next(model.parameters()).device
@@ -226,23 +229,25 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 
             if device != "cpu":
                 logger.info("Attempting fallback to CPU...")
-                return SentenceTransformer(self.embedding_model_name, device="cpu")
+                return load_sentence_transformer(self.embedding_model_name, device="cpu")
 
             raise
 
     async def _try_fallback_models(self) -> None:
-        from sentence_transformers import SentenceTransformer
 
-        for model_name in ("all-mpnet-base-v2", "all-MiniLM-L12-v2"):
+        for model_name in SENTENCE_EMBEDDING_FALLBACKS:
             try:
                 logger.info("Attempting fallback model loading on CPU: %s", model_name)
-                self._embedding_model = SentenceTransformer(model_name)
+                self._embedding_model = load_sentence_transformer(model_name)
                 logger.warning("Fallback to %s embedding model on CPU", model_name)
                 return
             except Exception as fallback_error:
                 logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
 
-        raise RuntimeError("Could not initialize any embedding model")
+        raise RuntimeError(
+            "Could not initialize any embedding model: each loads at its pinned revision and is "
+            "verified against its digest, so an offline host needs the pinned snapshots cached once (#19430)"
+        )
 
     async def _initialize_model(self) -> None:
         """Lazy initialize the sentence-transformer model on first use (async, thread-pool)."""

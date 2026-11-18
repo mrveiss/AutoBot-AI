@@ -123,9 +123,8 @@ jobs:
               '',
               'The ratchet only turns down. A file over 600 lines with no `KNOWN_LARGE`',
               'entry must be split; an entry whose file shrank must have its ceiling',
-              'lowered in **both** `scripts/python_file_size_known_large.py` and',
-              '`repo_tests/python_file_size_ratchet_baseline.py`; an entry that fell',
-              'under 600 must be removed, not lowered to 599.',
+              'lowered in `scripts/python_file_size_known_large.py` (the only record of',
+              'it); an entry that fell under 600 must be removed, not lowered to 599.',
               '',
               'Filed automatically by `.github/workflows/ratchet-base-guard.yml` (#15102).',
             ].join('\n');

@@ -115,7 +115,7 @@ def _make_redis_mock(store: dict | None = None):
                 yield k.encode()
 
     async def _redis_eval(script, numkeys, *args):
-        # Implements the _REFRESH_LUA contract: GET==ARGV[1] -> PEXPIRE 1
+        # Implements the COMPARE_AND_PEXPIRE_LUA contract: GET==ARGV[1] -> PEXPIRE 1
         key = args[0].decode() if isinstance(args[0], bytes) else args[0]
         expected = args[1].decode() if isinstance(args[1], bytes) else args[1]
         current = store.get(key)

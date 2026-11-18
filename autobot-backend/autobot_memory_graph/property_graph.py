@@ -30,6 +30,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Set, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH
 
 logger = get_logger(__name__)
 
@@ -128,12 +129,11 @@ class PropertyGraph:
 
         await graph.add_node("file:main.py", {"type": "file", "lang": "python"})
         await graph.add_node("bug:123",      {"type": "bug",  "severity": "high"})
-        await graph.add_edge("file:main.py", "bug:123", "CONTAINS",
-                              {"confidence": "0.9"})
+        await graph.add_edge("file:main.py", "bug:123", "CONTAINS", {"confidence": "0.9"})
 
         neighbours = await graph.get_neighbors("file:main.py", relation="CONTAINS")
         bugs = await graph.query_nodes({"type": "bug", "severity": "high"})
-        subgraph = await graph.subgraph("file:main.py", max_depth=2)
+        subgraph = await graph.subgraph("file:main.py")
         path = await graph.shortest_path("file:main.py", "bug:123")
 
     **Property serialisation:** All property values are stored as strings in
@@ -484,7 +484,7 @@ class PropertyGraph:
         self,
         start_node_id: str,
         relation: str | None = None,
-        max_depth: int = 2,
+        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
         direction: str = "outgoing",
     ) -> List[Dict[str, Any]]:
         """
@@ -523,7 +523,7 @@ class PropertyGraph:
     async def subgraph(
         self,
         center_node_id: str,
-        max_depth: int = 2,
+        max_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH,
         relation: str | None = None,
     ) -> Dict[str, Any]:
         """
@@ -577,7 +577,7 @@ class PropertyGraph:
         from_id: str,
         to_id: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = RAG_GRAPH_PATH_DEPTH,
         direction: str = "outgoing",
         hop_allowed: Callable[[str], Awaitable[bool]] | None = None,
     ) -> List[Dict[str, Any]] | None:

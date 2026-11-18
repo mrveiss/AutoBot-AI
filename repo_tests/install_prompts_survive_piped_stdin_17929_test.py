@@ -31,6 +31,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
 
 from tools.lint._comment_syntax import code_text
@@ -257,6 +258,15 @@ def _initial(source: str, name: str) -> str:
     lines = re.findall(rf"^{name}=.*$", source, re.MULTILINE)
     assert len(lines) == 1, f"install.sh initialises {name} {len(lines)} times at top level"
     return lines[0]
+
+
+@pytest.mark.parametrize(
+    "source", ["#!/bin/bash\nOTHER=1\n", "#!/bin/bash\nGIT_BRANCH=main\nGIT_BRANCH=dev\n"], ids=["missing", "duplicate"]
+)
+def test_the_initialisation_reader_rejects_a_missing_or_duplicate_assignment(source: str) -> None:
+    """The contrast pair for _initial: it must refuse, not pick one, when the script's shape changes."""
+    with pytest.raises(AssertionError, match="initialises GIT_BRANCH"):
+        _initial(source, "GIT_BRANCH")
 
 
 def _values(out: str) -> dict[str, str]:

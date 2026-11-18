@@ -21,11 +21,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.schemas_audit import AuditQueryResponse
 from api.schemas_system import (
     AuditCleanupData,
     AuditCleanupRequest,
     AuditOperationsData,
-    AuditQueryResponse,
     AuditStatisticsResponse,
 )
 from auth_middleware import check_admin_permission

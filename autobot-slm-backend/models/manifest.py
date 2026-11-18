@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_constants import ProtocolDefaults
 
 
 class UpdatePolicy(str, Enum):
@@ -45,9 +46,9 @@ class ServiceType(str, Enum):
 class ProtocolType(str, Enum):
     """Network protocol for ports."""
 
-    HTTP = "http"
-    HTTPS = "https"
-    TCP = "tcp"
+    HTTP = ProtocolDefaults.HTTP  # #19730
+    HTTPS = ProtocolDefaults.HTTPS
+    TCP = ProtocolDefaults.TCP
     UDP = "udp"
     UNIX = "unix"
 
