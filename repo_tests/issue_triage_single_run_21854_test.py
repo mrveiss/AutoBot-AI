@@ -29,9 +29,18 @@ yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflow")
 _WORKFLOW = repo_root() / ".github" / "workflows" / "issue-triage.yml"
 _PER_EVENT_MARKERS = ("github.event.issue", "github.event.action", "github.event.label", "inputs.")
 
+# Step-level `if` may read inputs.issue (the manual re-check) but never the triggering event.
+_EVENT_ONLY_MARKERS = ("github.event.issue", "github.event.action", "github.event.label")
+_WINDOWED = ("triage", "structure", "wording")
+
 GOOD = {
     "concurrency": {"group": "issue-triage-single-run", "cancel-in-progress": False},
-    "jobs": {"window": {"runs-on": "x"}, "triage": {"needs": "window", "runs-on": "x"}},
+    "jobs": {
+        "window": {"runs-on": "x"},
+        "triage": {"needs": "window", "runs-on": "x", "steps": [{"run": "x"}]},
+        "structure": {"needs": "window", "runs-on": "x", "steps": [{"if": "inputs.issue != ''", "run": "x"}]},
+        "wording": {"needs": ["window"], "runs-on": "x"},
+    },
 }
 
 
@@ -51,6 +60,12 @@ def violations(doc: dict) -> list[str]:
             found.append(f"job {job} has its own concurrency group")
         if any(marker in str(body.get("if", "")) for marker in _PER_EVENT_MARKERS):
             found.append(f"job {job} skips on an event-level condition")
+        for step in body.get("steps", []):
+            if any(marker in str(step.get("if", "")) for marker in _EVENT_ONLY_MARKERS):
+                found.append(f"job {job} has a step that skips on an event-level condition")
+        needs = body.get("needs", [])
+        if job in _WINDOWED and "window" not in ([needs] if isinstance(needs, str) else needs):
+            found.append(f"job {job} does not need the window job, so it would read only its own event")
     return found
 
 
@@ -84,6 +99,19 @@ def test_the_good_fixture_passes():
             "own concurrency group",
         ),
         (_variant(jobs={"j": {"if": "github.event.action == 'opened'"}}), "event-level condition"),
+        (_variant(jobs={"j": {"steps": [{"if": "github.event.action == 'edited'"}]}}), "step that skips"),
+        (
+            _variant(jobs={"triage": {"needs": "window"}, "structure": {"needs": "window"}, "wording": {}}),
+            "job wording does not need",
+        ),
+        (
+            _variant(jobs={"triage": {}, "structure": {"needs": "window"}, "wording": {"needs": "window"}}),
+            "job triage does not need",
+        ),
+        (
+            _variant(jobs={"triage": {"needs": "window"}, "structure": {"needs": "x"}, "wording": {"needs": "window"}}),
+            "job structure does not need",
+        ),
         (_variant(jobs={"j": {"if": "startsWith(github.event.label.name, 'phase:')"}}), "event-level condition"),
     ],
 )

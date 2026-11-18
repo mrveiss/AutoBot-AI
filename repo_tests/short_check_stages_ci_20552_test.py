@@ -107,7 +107,7 @@ def _render(expression: str, context: dict) -> str:
 
 def _verdict(job: dict, short_check: str, work: str, affected: bool = True) -> tuple[int, str]:
     """Run the real verdict.sh on the inputs the gate's own expressions produce for this state."""
-    inputs, context = (_gate_inputs(job), _needs_context(job, short_check, work, affected))
+    inputs, context = _gate_inputs(job), _needs_context(job, short_check, work, affected)
     return run_verdict(
         GATE_CONTEXT=inputs["context"],
         GATE_CHANGES_RESULT=_render(inputs["changes-result"], context),

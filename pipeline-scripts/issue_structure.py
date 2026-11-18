@@ -67,6 +67,10 @@ SWEEP_MAX_CHECKS = 100
 # #21854: the workflow runs one at a time and every run covers what changed since the last
 # successful run's start; with no successful run on record this window bounds the first one.
 TRIAGE_WORKFLOW_FILE = "issue-triage.yml"
+# Issues one run checks from the changed set (each costs 2-4 API calls here plus the triage and
+# wording jobs against the same 1,000/hour token budget); the rest wait for the next run.
+CHANGED_MAX = int(os.environ.get("ISSUE_TRIAGE_MAX_CHANGED", "50"))
+CURSOR_JOB_PREFIX = "Window cursor "
 FALLBACK_WINDOW_HOURS = int(os.environ.get("ISSUE_TRIAGE_FALLBACK_WINDOW_HOURS", "24"))
 
 ACTION_NONE = "none"
@@ -407,29 +411,48 @@ def sweep_targets(items: Iterable[Dict[str, Any]], cap: int = SWEEP_MAX_CHECKS) 
     return [number for _, number in ranked[:cap]]
 
 
-def last_success_start(client: StructureClient) -> Optional[str]:
-    """``run_started_at`` of the newest successful run of this workflow, or None."""
+def last_success_cursor(client: StructureClient) -> Optional[str]:
+    """Where the newest successful run said it had processed up to, else that run's start.
+
+    The run publishes the cursor in the name of its final ``cursor`` job (``CURSOR_JOB_PREFIX``),
+    which exists only when every other job succeeded - so a failed or partial run never advances it.
+    """
     path = f"/repos/{client.repo}/actions/workflows/{TRIAGE_WORKFLOW_FILE}/runs?status=success&per_page=1"
     runs = client.call("GET", path).get("workflow_runs") or []
-    return runs[0].get("run_started_at") if runs else None
+    if not runs:
+        return None
+    jobs = client.call("GET", f"/repos/{client.repo}/actions/runs/{runs[0]['id']}/jobs?per_page=100")
+    for job in jobs.get("jobs") or []:
+        if str(job.get("name", "")).startswith(CURSOR_JOB_PREFIX):
+            return job["name"][len(CURSOR_JOB_PREFIX) :].strip() or None
+    return runs[0].get("run_started_at")
+
+
+def _utc(moment: datetime.datetime) -> str:
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def fallback_since(now: Optional[datetime.datetime] = None) -> str:
     now = now or datetime.datetime.now(datetime.timezone.utc)
-    return (now - datetime.timedelta(hours=FALLBACK_WINDOW_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _utc(now - datetime.timedelta(hours=FALLBACK_WINDOW_HOURS))
 
 
-def changed_window(client: StructureClient) -> Tuple[str, List[int]]:
-    """``(since, open issues updated since)``: everything since the last successful run (#21854).
+def changed_window(client: StructureClient, cap: int = CHANGED_MAX) -> Tuple[str, List[int], str]:
+    """``(since, at most cap open issues updated since, until)``: the next window starts at ``until``.
 
-    Runs are serialised, so a run's start bounds what the previous success could have seen; a
-    failed run never advances it, and the next run re-covers its issues.
+    The oldest-updated ``cap`` issues are taken, and ``until`` is the last one's ``updated_at``,
+    so the run's success advances the window only over what it processed (#21854). When the
+    whole window fits, ``until`` is the moment before it was listed. Limit: more than ``cap``
+    issues sharing one updated_at second would repeat; the second-resolution tie is not broken.
     """
-    since = last_success_start(client) or fallback_since()
-    items, complete = list_issues(client, {"state": "open", "since": since}, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
-    if not complete:
-        raise StructureError(f"{len(items)}+ issues changed since {since}; refusing a partial window")
-    return since, sorted(item["number"] for item in items)
+    since = last_success_cursor(client) or fallback_since()
+    listed_at = _utc(datetime.datetime.now(datetime.timezone.utc))
+    params = {"state": "open", "since": since, "sort": "updated", "direction": "asc"}
+    items, _ = list_issues(client, params, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
+    if len(items) <= cap:
+        return since, sorted(item["number"] for item in items), listed_at
+    logger.warning("%d issues changed since %s; %d this run, the rest on the next", len(items), since, cap)
+    return since, sorted(item["number"] for item in items[:cap]), items[cap - 1]["updated_at"]
 
 
 def write_outputs(values: Dict[str, str]) -> None:
@@ -443,20 +466,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check").add_argument("--number", type=int, required=True)
-    sub.add_parser("sweep").add_argument("--changed", default="", help="space-separated issue numbers to check too")
+    sweep = sub.add_parser("sweep")
+    sweep.add_argument("--changed", default="", help="space-separated issue numbers to check")
+    sweep.add_argument("--backlog", action="store_true", help="also check the backlog entries the sweep ranks")
     sub.add_parser("window")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     client = StructureClient(build_api())
     if args.command == "window":
-        since, changed = changed_window(client)
-        logger.info("window since %s: %d changed issue(s)", since, len(changed))
-        write_outputs({"since": since, "changed": " ".join(map(str, changed))})
+        since, changed, until = changed_window(client)
+        logger.info("window %s .. %s: %d changed issue(s)", since, until, len(changed))
+        write_outputs({"since": since, "changed": " ".join(map(str, changed)), "until": until})
         return 0
     if args.command == "check":
         numbers = [args.number]
     else:
-        numbers = sorted({*map(int, args.changed.split()), *sweep_targets(open_issues(client))})
+        backlog = sweep_targets(open_issues(client)) if args.backlog else []
+        numbers = sorted({*map(int, args.changed.split()), *backlog})
     failed = []
     for number in numbers:
         try:

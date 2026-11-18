@@ -31,6 +31,10 @@
 #   displace a run that did the work. Nothing needs to stay per-issue-immediate: with no
 #   run in flight the first event starts a run at once, and `opened`'s one-time comment is
 #   decided by created_at >= window start plus an already-commented check.
+#   The window advances only through the final `cursor` job (its name carries the cursor), so
+#   a failed job never advances it. The changed set is capped (ISSUE_TRIAGE_MAX_CHANGED in
+#   issue_structure.py, oldest first) and the cursor then stops at the last processed issue;
+#   the backlog sweep runs only on schedule or dispatch.
 #   Known limit: updated_at cannot tell a body edit from a label change, so triage may
 #   re-add an area label the text implies after a human removed it; selectLabels still
 #   applies nothing to an issue whose author already labelled it.
@@ -68,13 +72,13 @@ jobs:
     outputs:
       since: ${{ steps.window.outputs.since }}
       changed: ${{ steps.window.outputs.changed }}
+      until: ${{ steps.window.outputs.until }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
-            .github/actions/upsert-pr-comment
 
       - name: Set up Python from .python-version
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -116,7 +120,9 @@ jobs:
             const ASK = 'Auto-triage could not confidently classify this issue';
             const { owner, repo } = context.repo;
 
+            const failed = [];
             for (const number of numbers) {
+              try {
               const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number });
               if (issue.pull_request) continue;
               const { labels, reason, suppressed } = selectLabels(issue);
@@ -140,7 +146,13 @@ jobs:
 
               await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
               console.log(`#${number} triage complete! Applied labels: ${labels.join(', ')}`);
+              } catch (error) {
+                // One bad issue must not strand the rest; the run still fails so the window holds.
+                console.log(`#${number} triage failed: ${error.message}`);
+                failed.push(number);
+              }
             }
+            if (failed.length) core.setFailed(`triage failed for: ${failed.join(', ')}`);
 
   structure:
     name: Issue structure (milestone, phase, parent)
@@ -166,22 +178,23 @@ jobs:
           python-version-file: '.python-version'
 
       - name: Check one issue
-        if: inputs.issue != ''
+        if: ${{ !cancelled() && inputs.issue != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           ISSUE_NUMBER: ${{ inputs.issue }}
         run: python3 pipeline-scripts/issue_structure.py check --number "$ISSUE_NUMBER"
 
-      # #21854: every run sweeps. `sweep` checks the issues changed since the last
-      # successful run plus the backlog entries its own priority picks.
-      - name: Sweep the changed and the disagreeing issues
-        if: inputs.issue == ''
+      # #21854: every run checks the issues changed since the last successful run; only
+      # schedule and dispatch also take the backlog entries the sweep ranks (about 400 calls).
+      - name: Check the changed issues (and the backlog on schedule or dispatch)
+        if: ${{ !cancelled() }}
         env:
+          BACKLOG: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '--backlog' || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CHANGED: ${{ needs.window.outputs.changed }}
-        run: python3 pipeline-scripts/issue_structure.py sweep --changed "$CHANGED"
+        run: python3 pipeline-scripts/issue_structure.py sweep --changed "$CHANGED" $BACKLOG
 
   # #19645: issue bodies must make sense to an outside contributor -- no automation
   # session ids, no internal process roles. Flagged, never blocked: a hit adds the
@@ -222,23 +235,49 @@ jobs:
           API_URL: ${{ github.api_url }}
           CHANGED: ${{ needs.window.outputs.changed }}
         run: |
-          set -euo pipefail
-          for number in $CHANGED; do
-            gh api "repos/$REPO/issues/$number" | jq '{issue: .}' > "$RUNNER_TEMP/event.json"
-            if [ "$(jq '.issue.pull_request != null' "$RUNNER_TEMP/event.json")" = true ]; then continue; fi
+          set -uo pipefail
+          # An absent label (a human removed it) is the state DELETE wants; any other error is a failure.
+          delete_label() {
+            local err
+            if ! err=$(gh api --method DELETE "repos/$REPO/issues/$1/labels/$2" 2>&1); then
+              case "$err" in *404*|*"Not Found"*) return 0 ;; *) echo "$err"; return 1 ;; esac
+            fi
+          }
+          out() { sed -n "s/^$1=//p" "$RUNNER_TEMP/scan.out"; }
+          scan_one() {
+            local number=$1
+            gh api "repos/$REPO/issues/$number" | jq '{issue: .}' > "$RUNNER_TEMP/event.json" || return 1
+            if [ "$(jq '.issue.pull_request != null' "$RUNNER_TEMP/event.json")" = true ]; then return 0; fi
             : > "$RUNNER_TEMP/scan.out"
             GITHUB_OUTPUT="$RUNNER_TEMP/scan.out" python3 scripts/lib/outward_wording.py issue \
-              --event "$RUNNER_TEMP/event.json" --out "$RUNNER_TEMP/wording.md"
-            out() { sed -n "s/^$1=//p" "$RUNNER_TEMP/scan.out"; }
+              --event "$RUNNER_TEMP/event.json" --out "$RUNNER_TEMP/wording.md" || return 1
             if [ "$(out comment)" = true ]; then
               GITHUB_TOKEN="$GH_TOKEN" python3 .github/actions/upsert-pr-comment/upsert_pr_comment.py \
                 --marker "$(out marker)" --body-file "$RUNNER_TEMP/wording.md" \
-                --number "$number" --repo "$REPO" --api-url "$API_URL"
+                --number "$number" --repo "$REPO" --api-url "$API_URL" || return 1
             fi
             # The REST add-labels call creates the label on first use; `gh issue edit
             # --add-label` refuses a label the repository does not have yet.
             case "$(out label)" in
-              add) gh api --method POST "repos/$REPO/issues/$number/labels" -f "labels[]=$(out label_name)" >/dev/null ;;
-              remove) gh api --method DELETE "repos/$REPO/issues/$number/labels/$(out label_name)" >/dev/null ;;
+              add) gh api --method POST "repos/$REPO/issues/$number/labels" -f "labels[]=$(out label_name)" >/dev/null || return 1 ;;
+              remove) delete_label "$number" "$(out label_name)" || return 1 ;;
             esac
+          }
+          failed=""
+          for number in $CHANGED; do
+            scan_one "$number" || failed="$failed #$number"
           done
+          if [ -n "$failed" ]; then echo "wording failed for:$failed"; exit 1; fi
+
+  # #21854: the only place the window advances. It exists only when triage, structure and
+  # wording all succeeded, and its NAME carries the cursor the next run's window starts at
+  # (issue_structure.py last_success_cursor): the moment before the window was listed, or,
+  # when the changed set was capped, the last processed issue's updated_at.
+  cursor:
+    name: Window cursor ${{ needs.window.outputs.until }}
+    needs: [window, triage, structure, wording]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - run: echo "next window starts at ${{ needs.window.outputs.until }}"
