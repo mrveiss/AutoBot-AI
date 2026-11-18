@@ -92,3 +92,11 @@ async def test_a_real_reading_writes_no_audit_event():
     with patch("services.audit_logger.audit_log", AsyncMock()) as log:
         assert not await audit_verifier_degraded(ok)
     log.assert_not_awaited()
+
+
+def test_an_empty_verifier_model_resolves_to_the_light_processing_model(monkeypatch) -> None:
+    from autobot_shared.ssot_config import config
+
+    monkeypatch.setattr(config, "verifier_model", "")
+    assert verifier_model.configured_verifier_model(_provider([])) == config.light_processing_model
+    assert verifier_model.configured_verifier_model(_provider([], name="anthropic")) is None

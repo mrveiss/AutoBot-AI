@@ -42,7 +42,9 @@ def configured_verifier_model(provider: Any) -> str | None:
 
     if getattr(provider, "provider_name", None) != ProviderType.OLLAMA.value:
         return None
-    return config.verifier_model or None
+    # An explicitly empty AUTOBOT_VERIFIER_MODEL means the light-processing model (its registered meaning), never the
+    # provider default, which is the chat model.
+    return config.verifier_model or config.light_processing_model or None
 
 
 def model_listed(model: str, names: list[str]) -> bool:
