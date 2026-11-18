@@ -27,6 +27,7 @@ from repo_tests._reach import declare
 
 from autobot_shared import paths
 from autobot_shared.isolated_git import make_repo
+from tools.lint import _parse_cache as parse_cache
 
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _TEST = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
@@ -98,7 +99,7 @@ def _hit(node: ast.AST) -> str | None:
 def repo_caches(source: str, rel: str) -> list[str]:
     """Each place *source* puts a cache under the checkout (outermost expression only, no double count)."""
     found, seen = [], set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if id(node) in seen or not isinstance(node, ast.expr):
             continue
         reason = _hit(node)

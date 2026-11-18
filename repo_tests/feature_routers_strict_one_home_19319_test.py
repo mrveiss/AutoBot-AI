@@ -28,6 +28,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.deployment_profile import feature_routers_strict_default
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -86,7 +87,7 @@ def _is_literal_default_call(call: ast.Call) -> bool:
 
 def _python_copies(text: str) -> bool:
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except (SyntaxError, ValueError):
         return bool(_LITERAL_ASSIGNMENT.search(text))
     return any(isinstance(n, ast.Call) and _is_literal_default_call(n) for n in ast.walk(tree))
@@ -115,7 +116,7 @@ def _live_files() -> dict[str, str]:
 
 
 def _tree(rel: str) -> ast.Module:
-    return ast.parse((_ROOT / rel).read_text(encoding="utf-8"))
+    return parse_cache.parse((_ROOT / rel).read_text(encoding="utf-8"))
 
 
 def _profile_values() -> dict[str, list[str]]:

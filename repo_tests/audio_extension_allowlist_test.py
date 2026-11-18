@@ -51,6 +51,7 @@ from repo_tests._reach import declare
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.ssot_constants import SecurityConstants
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 
@@ -74,7 +75,7 @@ def _literal_string_sets(source: str) -> list[set[str]] | None:
     defect this guard's floor exists to prevent.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return None
     found = []

@@ -26,6 +26,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
+from knowledge.fact_stream import collect_facts, stream_facts
 from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
@@ -992,26 +993,8 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         self.ensure_initialized()
 
         try:
-            fact_keys = await self._scan_redis_keys_async("fact:*")
-
-            if not fact_keys:
-                return []
-
-            if offset > 0:
-                fact_keys = fact_keys[offset:]
-            if limit is not None:
-                fact_keys = fact_keys[:limit]
-
-            facts = []
-            pipeline = self.redis().pipeline()
-            for key in fact_keys:
-                pipeline.hgetall(key)
-            facts_data = await pipeline.execute()
-
-            for key, fact_data in zip(fact_keys, facts_data):
-                fact = self._process_fact_data(key, fact_data, collection)
-                if fact:
-                    facts.append(fact)
+            stream = stream_facts(self.redis(), self._process_fact_data, collection, include_quarantined)
+            facts = await collect_facts(stream, offset, limit)
 
             return await apply_quarantine(facts, include_quarantined, audit_actor)
 

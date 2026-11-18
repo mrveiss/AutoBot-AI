@@ -24,15 +24,6 @@
 /api/browser/launch
 /api/browser/type
 
-# --- #12378: dev-speedup panel (aspirational, no backend) ---
-/api/dev-speedup/boilerplate
-/api/dev-speedup/format
-/api/dev-speedup/lint-fix
-/api/dev-speedup/optimize
-/api/dev-speedup/quick-search
-/api/dev-speedup/refactor-suggest
-/api/dev-speedup/snippet-generate
-/api/dev-speedup/test-generate
 
 # --- #12378: system restart / shutdown / backup (aspirational, no backend) ---
 /api/system/backup/create

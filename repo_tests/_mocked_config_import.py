@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from repo_tests._paths import repo_root
@@ -32,9 +33,10 @@ except BaseException as exc:
     sys.stdout.write(json.dumps({"autobot_shared": f"{type(exc).__name__}: {exc}"}) + "\\n")
     raise SystemExit(0)
 
+from autobot_shared.testfile_names import is_test_filename
+
 def _is_test(name):
-    leaf = name.rsplit(".", 1)[-1]
-    return leaf.endswith("_test") or leaf.startswith("test_") or leaf == "conftest" or ".tests" in name
+    return is_test_filename(name.rsplit(".", 1)[-1] + ".py", include_js=False) or ".tests" in name
 
 if spec["modules"]:
     targets = spec["modules"]
@@ -61,17 +63,18 @@ def run_sweep(
     in *cwd* (a MagicMock's ``__fspath__`` yields one, and it must never become a log directory).
     """
     pythonpath = os.pathsep.join(str(p) for p in (*roots, REPO_ROOT))
-    env = {**os.environ, "PYTHONPATH": pythonpath, "AUTOBOT_LOGS_DIR": str(cwd / "logs")}
     spec = json.dumps({"modules": list(modules), "excluded": sorted(excluded)})
-    result = subprocess.run(  # noqa: S603  # nosec B603  # fixed interpreter and inline script, no user input
-        [sys.executable, "-c", _SWEEP, spec],
-        cwd=cwd,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="autobot-logs-") as logs_dir:  # #20894: never under cwd
+        env = {**os.environ, "PYTHONPATH": pythonpath, "AUTOBOT_LOGS_DIR": logs_dir}
+        result = subprocess.run(  # noqa: S603  # nosec B603  # fixed interpreter and inline script, no user input
+            [sys.executable, "-c", _SWEEP, spec],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
     assert result.returncode == 0, f"sweep crashed:\n{result.stderr[-4000:]}"
     report: dict[str, object] = json.loads(result.stdout.strip().splitlines()[-1])
     assert "autobot_shared" not in report, f"the package itself failed to import: {report}"

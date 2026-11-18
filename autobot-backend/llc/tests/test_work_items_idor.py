@@ -75,7 +75,7 @@ def _make_idor_app(
 
     # Auth overrides.
     def _fake_user() -> dict:
-        return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID)}
+        return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID), "auth_method": "session"}
 
     def _fake_tenant() -> TenantContext:
         return TenantContext(
@@ -341,14 +341,14 @@ class TestWorkItemsIdorM4:
     def test_checkout_own_company_returns_200(self):
         org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=org, item_company_id=org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 200
 
     def test_checkout_cross_tenant_returns_404(self):
         caller_org = str(uuid.uuid4())
         other_org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=caller_org, item_company_id=other_org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 404
 
     # --- release ---
@@ -356,14 +356,14 @@ class TestWorkItemsIdorM4:
     def test_release_own_company_returns_200(self):
         org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=org, item_company_id=org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 200
 
     def test_release_cross_tenant_returns_404(self):
         caller_org = str(uuid.uuid4())
         other_org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=caller_org, item_company_id=other_org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 404
 
     # --- transition ---

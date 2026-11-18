@@ -521,3 +521,35 @@ class TestWindowsDriveQualifiedSegments:
         resolved = validate_relative_path("notes:2026-09-06.txt", tmp_path)
 
         assert resolved.name == "notes:2026-09-06.txt"
+
+
+class TestValidateRelativePathContainment20611:
+    """The string-prefix containment test refuses every escape and accepts the base itself."""
+
+    @pytest.mark.parametrize("segment", ["../x", "a/../../x", "a/..", "/etc/passwd", "\\..\\x", "C:/x"])
+    def test_traversal_and_absolute_segments_are_refused(self, tmp_path, segment) -> None:
+        with pytest.raises(ValueError):
+            validate_relative_path(segment, tmp_path)
+
+    def test_symlink_escaping_the_base_is_refused(self, tmp_path) -> None:
+        base = tmp_path / "base"
+        base.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (base / "link").symlink_to(outside)
+        with pytest.raises(ValueError, match="escapes base directory"):
+            validate_relative_path("link/secret.json", base)
+
+    def test_sibling_with_the_base_name_as_prefix_is_refused(self, tmp_path) -> None:
+        base = tmp_path / "chats"
+        base.mkdir()
+        (tmp_path / "chats_evil").mkdir()
+        (base / "link").symlink_to(tmp_path / "chats_evil")
+        with pytest.raises(ValueError, match="escapes base directory"):
+            validate_relative_path("link/x_chat.json", base)
+
+    def test_base_itself_resolves(self, tmp_path) -> None:
+        assert validate_relative_path(".", tmp_path) == tmp_path.resolve()
+
+    def test_file_under_the_base_resolves(self, tmp_path) -> None:
+        assert validate_relative_path("s_chat.json", tmp_path) == tmp_path.resolve() / "s_chat.json"

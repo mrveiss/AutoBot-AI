@@ -176,7 +176,7 @@ The split is deliberate and low-risk today. `ApiClient` is well-tested for mutat
 |---|---|
 | `useBrowserAutomation` | All browser commands — launch, navigate, click, screenshot, etc. |
 | `useAvailableModels` | GET but result consumed inline; mutation-style usage |
-| `useDevSpeedup` | Developer toggle mutations |
+| `useDevSpeedup` | GET templates and action history |
 | `useAgentRegistry` | Load list + load detail, two separate states |
 | `useAIDocument` | Edit / save / refine — three separate states |
 | `useKnowledgeStats` | GET stats, inline result |

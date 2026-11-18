@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.models.role import Role
 
+from .company_os.errors import CompanyOsNotFound
+
 
 async def role_exists_in_company(session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> bool:
     """True when ``role_id`` names a role owned by ``company_id`` (never a role of another company)."""
@@ -36,4 +38,4 @@ async def ensure_role_in_company(session: AsyncSession, company_id: uuid.UUID, r
     same :func:`role_exists_in_company` query.
     """
     if not await role_exists_in_company(session, company_id, role_id):
-        raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        raise CompanyOsNotFound(f"role {role_id} does not exist in company {company_id}")

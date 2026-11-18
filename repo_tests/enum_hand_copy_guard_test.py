@@ -55,6 +55,7 @@ and why only a census found them.
 from __future__ import annotations
 
 import ast
+import functools
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Set, Tuple
@@ -63,6 +64,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -133,8 +136,7 @@ def _tracked_python(root: Path = REPO_ROOT) -> List[str]:
 
 
 def is_test_path(rel: str) -> bool:
-    base = rel.rsplit("/", 1)[-1]
-    return base.startswith("test_") or base.endswith("_test.py") or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}"
 
 
 def enum_members(source: str) -> Dict[str, FrozenSet[str]]:
@@ -143,7 +145,7 @@ def enum_members(source: str) -> Dict[str, FrozenSet[str]]:
     Raises ``SyntaxError`` on unparseable input rather than returning empty: a
     file the sweep could not read is not a file with no enums in it.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     found: Dict[str, FrozenSet[str]] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -161,8 +163,13 @@ def enum_members(source: str) -> Dict[str, FrozenSet[str]]:
     return found
 
 
+@functools.lru_cache(maxsize=1)
 def _scan() -> Tuple[Dict[str, Set[str]], Dict[Tuple[str, str], FrozenSet[str]], List[str]]:
-    """Return (production name -> union of members, (test file, name) -> members, unreadable)."""
+    """Return (production name -> union of members, (test file, name) -> members, unreadable).
+
+    Memoised (#20814): four tests read the same sweep, which used to walk all
+    6,000+ files once per test. Callers only read the result.
+    """
     production: Dict[str, Set[str]] = defaultdict(set)
     tests: Dict[Tuple[str, str], FrozenSet[str]] = {}
     unreadable: List[str] = []

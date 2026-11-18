@@ -25,12 +25,13 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NAME = "is_credential_field"
 
 #: Every tree that holds tracked Python. Written out, not globbed, so a tree dropped from the
-#: sweep is a visible edit to this constant AND to `reach_scope_claim_17844_test`.
+#: sweep is a visible edit to this constant AND to `_reach_declared_scopes`.
 SCAN_ROOTS = (
     "autobot-backend",
     "autobot-slm-backend",
@@ -87,7 +88,7 @@ def _sites(source: str) -> int:
     twice), plus an aliased import. The `def` itself is a FunctionDef and not a reference.
     """
     count = 0
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Name) and node.id == _NAME and isinstance(node.ctx, ast.Load):
             count += 1
         elif isinstance(node, ast.Attribute) and node.attr == _NAME:

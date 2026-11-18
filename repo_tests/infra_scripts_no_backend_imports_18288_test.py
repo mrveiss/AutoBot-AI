@@ -41,6 +41,8 @@ from repo_tests._reach import declare
 from repo_tests.infra_backend_imports_allowlist_18288 import ALLOWLIST, BACKEND_TOOLS
 from repo_tests.infra_monitoring_import_path_15643_test import _assignments, _resolve_path_expr
 
+from tools.lint import _parse_cache as parse_cache
+
 SCAN_ROOTS = ("autobot-infrastructure",)
 #: The backend has well over two hundred top-level names; a derivation that found few broke.
 MIN_BACKEND_NAMES = 150
@@ -126,7 +128,7 @@ def own_tree_names(tree: ast.Module, path: Path, infra_root: Path) -> set[str]:
 
 def backend_imports(source: str, backend: frozenset[str], path: Path, infra_root: Path) -> set[str]:
     """The backend-only packages *source* imports that its own tree does not provide."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return (_imported_tops(tree) & backend) - own_tree_names(tree, path, infra_root)
 
 

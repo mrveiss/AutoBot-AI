@@ -118,7 +118,6 @@
 2|other|autobot-backend/api/anthropic_compat.py|"system"
 1|other|autobot-backend/api/batch_jobs.py|30
 10|other|autobot-backend/api/chat.py|"assistant"
-1|other|autobot-backend/api/chat.py|"user"
 1|other|autobot-backend/api/chat_compare.py|"user"
 2|other|autobot-backend/api/chat_embed.py|"user"
 1|other|autobot-backend/api/chat_sessions.py|100
@@ -161,7 +160,6 @@
 1|other|autobot-backend/api/npu_workers.py|http://192.168.1.100:8082
 2|other|autobot-backend/api/openai_compat.py|"assistant"
 2|other|autobot-backend/api/process_management.py|offset=0
-1|other|autobot-backend/api/redis_mcp/router.py|"user"
 2|other|autobot-backend/api/redis_mcp/router.py|10
 2|other|autobot-backend/api/redis_mcp/vector_search.py|10
 1|other|autobot-backend/api/schemas_code.py|5
@@ -173,7 +171,6 @@
 1|other|autobot-backend/api/state_tracking.py|100
 1|other|autobot-backend/api/task_memory.py|100
 1|other|autobot-backend/api/telegram_bot.py|"user"
-1|other|autobot-backend/api/terminal.py|30
 1|other|autobot-backend/api/terminal_handlers.py|"user"
 1|other|autobot-backend/api/user_management/users.py|50
 1|other|autobot-backend/api/user_management/users.py|offset=0
@@ -566,11 +563,10 @@
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/../../../etc/passwd
 1|other|autobot-backend/utils/path_validation.py|"/opt/autobot/backups/kb_backup.json
 1|other|autobot-backend/utils/service_client.py|30
-2|other|autobot-backend/utils/timeout_migration_examples.py|300
+1|other|autobot-backend/utils/timeout_migration_examples.py|300
 2|other|autobot-backend/voice_interface.py|https://alphacephei.com/vosk/models
 1|other|autobot-backend/voice_processing/providers/cloud/assemblyai_provider.py|https://api.assemblyai.com/v2
 1|other|autobot-backend/voice_processing/providers/cloud/deepgram_provider.py|https://api.deepgram.com/v1/listen
-1|other|autobot-backend/voice_processing/providers/lv/late_provider.py|300
 1|other|autobot-backend/voice_processing/realtime/openai_provider.py|https://api.openai.com/v1/realtime/sessions
 1|other|autobot-backend/web_fetch/fetcher.py|https://r.jina.ai/
 1|other|autobot-backend/web_fetch/site_mapper.py|http://www.sitemaps.org/schemas/sitemap/0.9
@@ -616,12 +612,10 @@
 1|other|autobot-frontend/src/composables/analytics/useCodeIntelScores.ts|'/opt/autobot
 1|other|autobot-frontend/src/composables/analytics/useSourceRegistry.ts|'/opt/autobot
 2|other|autobot-frontend/src/composables/chat/useContextOverflowProtection.ts|'system'
-1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
 2|other|autobot-frontend/src/composables/knowledge/useKnowledgeCategories.ts|100
 1|other|autobot-frontend/src/composables/useAIDocument.ts|50
 1|other|autobot-frontend/src/composables/useCodeIntelligence.ts|50
-1|other|autobot-frontend/src/composables/useCollaborationInvites.ts|offset=0
 3|other|autobot-frontend/src/composables/useKnowledgeCollaboration.ts|100
 3|other|autobot-frontend/src/composables/usePatternAnalysis.ts|50
 1|other|autobot-frontend/src/composables/usePlugins.ts|50
@@ -640,7 +634,6 @@
 2|ssot|autobot-frontend/src/test/utils/test-setup-helpers.ts|:3000
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
-1|other|autobot-frontend/src/utils/ErrorHandler.js|10
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
 1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
 1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
@@ -1054,7 +1047,6 @@
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|ssot|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|:8001
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
 1|other|autobot-slm-backend/ansible/reboot-node.yml|300
@@ -1125,7 +1117,6 @@
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|120
-1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/tts-worker/tasks/main.yml|https://download.pytorch.org/whl/cpu
 1|other|autobot-slm-backend/ansible/roles/vnc/tasks/main.yml|https://github.com/novnc/noVNC/archive/refs/tags/v{{
 1|other|autobot-slm-backend/ansible/roles/xrdp/tasks/main.yml|30
@@ -1145,7 +1136,6 @@
 1|ssot|autobot-slm-backend/api/slm_users.py|:5432
 1|other|autobot-slm-backend/api/tls.py|300
 1|other|autobot-slm-backend/api/updates.py|100
-4|other|autobot-slm-backend/api/websocket.py|30
 1|other|autobot-slm-backend/middleware/security_headers.py|https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
 1|ssot|autobot-slm-backend/migrations/add_agents.py|qwen3.5:9b
 2|other|autobot-slm-backend/migrations/migrate_system_secrets_to_vault.py|"postgresql://"

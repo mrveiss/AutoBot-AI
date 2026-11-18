@@ -34,6 +34,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared import fleet_constants
+from tools.lint import _parse_cache as parse_cache
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
 
 from tools.lint import _env_fork_scan as scan_mod  # isort: skip
@@ -121,7 +122,7 @@ def _band_name(node: ast.AST) -> str | None:
 def similarity_restatements(rel: str, source: str) -> list[str]:
     """A band assigned outside its home (at any depth), or paired with a literal fallback."""
     out: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         targets = node.targets if isinstance(node, ast.Assign) else []
         targets = [node.target] if isinstance(node, (ast.AnnAssign, ast.AugAssign)) else targets
         for name in filter(None, map(_band_name, targets)):
@@ -157,7 +158,7 @@ def install_root_literals(rel: str, source: str) -> list[str]:
     """Every non-docstring string constant outside ``fleet_constants`` that states the install root."""
     if rel == _FLEET_HOME:
         return []
-    tree, root = ast.parse(source), fleet_constants.FLEET_INSTALL_ROOT
+    tree, root = parse_cache.parse(source), fleet_constants.FLEET_INSTALL_ROOT
     prose = _docstrings(tree)
     return [
         f"{rel}:{node.lineno}: the install root as a literal -- import FLEET_INSTALL_ROOT from {_FLEET_HOME}"
@@ -168,7 +169,7 @@ def install_root_literals(rel: str, source: str) -> list[str]:
 
 def string_constants(source: str) -> int:
     """How many string constants a file holds: the reach of the install-root check over it."""
-    return sum(isinstance(n, ast.Constant) and isinstance(n.value, str) for n in ast.walk(ast.parse(source)))
+    return sum(isinstance(n, ast.Constant) and isinstance(n.value, str) for n in ast.walk(parse_cache.parse(source)))
 
 
 def settings_heartbeat_literals(rel: str, source: str) -> list[str]:
@@ -177,7 +178,7 @@ def settings_heartbeat_literals(rel: str, source: str) -> list[str]:
         return []
     return [
         f"{rel}:{node.lineno}: heartbeat_interval restated -- use DEFAULT_HEARTBEAT_INTERVAL from {_FLEET_HOME}"
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, ast.AnnAssign)
         and isinstance(node.target, ast.Name)
         and node.target.id == "heartbeat_interval"
@@ -211,7 +212,7 @@ def stale_baseline_entries(sources: dict[str, str]) -> list[str]:
 
 def _copy_line(source: str, name: str) -> int | None:
     """Line of the module-level ``name = <the install root>`` a standalone copy declares, else None."""
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == [name]:
             if isinstance(node.value, ast.Constant) and node.value.value == fleet_constants.FLEET_INSTALL_ROOT:
                 return node.lineno
