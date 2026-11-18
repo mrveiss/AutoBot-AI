@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.network_utils import is_local_ip
 from autobot_shared.ssot_config import config
-from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
+from models.database import EventSeverity, Node, NodeEvent, NodeEventType, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args
@@ -477,7 +477,7 @@ async def _audit_execute_event(
     event = NodeEvent(
         event_id=str(uuid.uuid4())[:16],
         node_id=node_id,
-        event_type=EventType.MANUAL_ACTION.value,
+        event_type=NodeEventType.MANUAL_ACTION.value,
         severity=severity.value,
         message=(f"Remote execution job {job_id} by {acting_user!r}: " f"exit_code={exit_code} cmd={short_cmd!r}"),
         details={

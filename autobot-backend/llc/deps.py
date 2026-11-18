@@ -33,7 +33,9 @@ Usage::
 
 from __future__ import annotations
 
-import functools
+import logging
+import threading
+import traceback
 import uuid
 from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
@@ -41,12 +43,19 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
 from user_management.services import TenantContext
 
+logger = get_logger(__name__)
+
 _T = TypeVar("_T")
+
+# Fixed caller-facing text for a failed membership lookup; the cause is logged, never returned.
+MEMBERSHIP_LOOKUP_FAILED_DETAIL = "Membership lookup failed"
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -66,12 +75,32 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@functools.lru_cache(maxsize=None)
+# ``functools.lru_cache`` does not lock a miss: two threads can both build the
+# value and hand out different ones. A lock around a dict makes "one per class"
+# true. Re-entrant because ``service_dep`` calls ``service_singleton`` under it.
+_REGISTRY_LOCK = threading.RLock()
+_SINGLETON_FACTORIES: dict[type, Callable[[], Any]] = {}
+_SERVICE_DEPS: dict[type, Callable[[], Any]] = {}
+
+
+def service_singleton(service_cls: Type[_T]) -> Callable[[], _T]:
+    """The ONE singleton factory for *service_cls*, shared by every user (#20889).
+
+    ``service_dep`` and ``services.accessors`` both resolve through here, so a
+    dependency-injected handler and a direct caller get the same instance.
+    """
+    with _REGISTRY_LOCK:
+        factory = _SINGLETON_FACTORIES.get(service_cls)
+        if factory is None:
+            factory = _SINGLETON_FACTORIES[service_cls] = lazy_singleton(service_cls)
+        return factory
+
+
 def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     """Return a zero-argument FastAPI dependency that yields the singleton
     instance of *service_cls*.
 
-    The returned callable is cached per class (``lru_cache``), so repeated
+    The returned callable is cached per class in a locked registry, so repeated
     calls with the same class return the same dependency function — avoiding
     redundant closure creation per request.
 
@@ -83,7 +112,15 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
         async def handler(svc: ApprovalService = Depends(_svc_dep)):
             ...
     """
-    _get = lazy_singleton(service_cls)
+    with _REGISTRY_LOCK:
+        dep = _SERVICE_DEPS.get(service_cls)
+        if dep is None:
+            dep = _SERVICE_DEPS[service_cls] = _build_dep(service_cls)
+        return dep
+
+
+def _build_dep(service_cls: Type[_T]) -> Callable[[], _T]:
+    _get = service_singleton(service_cls)
 
     def _dep() -> _T:
         return _get()
@@ -91,6 +128,51 @@ def service_dep(service_cls: Type[_T]) -> Callable[[], _T]:
     # Give the function a readable name for FastAPI dependency introspection.
     _dep.__name__ = f"_dep_{service_cls.__name__}"
     return _dep
+
+
+_LOGGED_FRAMES = 3
+
+
+def _frames_label(exc: BaseException) -> str:
+    """Innermost stack frames of *exc* as ``file:line in function``, no source lines, no message."""
+    frames = traceback.extract_tb(exc.__traceback__)[-_LOGGED_FRAMES:]
+    return " <- ".join(sanitize_log_value(f"{f.filename}:{f.lineno} in {f.name}") for f in reversed(frames))
+
+
+def log_unexpected(
+    log: logging.Logger,
+    scope: str,
+    exc: BaseException,
+    *,
+    headline: str = "Unexpected error",
+    level: int = logging.WARNING,
+) -> None:
+    """One redacted log line for an exception nobody planned for: class, text, innermost frames (#21579).
+
+    The traceback is never attached (no ``exc_info``): its text would carry the raw message past the redactor.
+    *scope* is neutralised like any other untrusted log value.
+    """
+    log.log(
+        level,
+        "%s for %s: %s: %s [at %s]",
+        headline,
+        sanitize_log_value(scope),
+        type(exc).__name__,
+        safe_log_text(exc),
+        _frames_label(exc),
+    )
+
+
+def logged_server_error(log: logging.Logger, detail: str, scope: str, exc: Exception) -> HTTPException:
+    """500 carrying only the fixed *detail*; the cause goes to *log*, redacted (#21396).
+
+    Exception text can hold driver messages and connection targets, so it never
+    reaches the response body. The log line carries the exception class, its
+    text through ``safe_log_text``, and the innermost frames (location only),
+    all on one line; *scope* is neutralised like any other untrusted log value.
+    """
+    log_unexpected(log, scope, exc, headline=detail, level=logging.ERROR)
+    return HTTPException(status_code=500, detail=detail)
 
 
 async def require_board_role(
@@ -117,7 +199,7 @@ async def require_board_role(
             None,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Membership lookup failed: {exc}") from exc
+        raise logged_server_error(logger, MEMBERSHIP_LOOKUP_FAILED_DETAIL, f"company {company_id}", exc) from exc
 
     if role not in allowed_roles:
         raise HTTPException(status_code=403, detail=detail)

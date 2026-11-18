@@ -78,6 +78,19 @@ server {
     root {{ slm_frontend_dir }}/current;
     index index.html;
 
+    # #20046: service-to-service only; the SLM and the backend call each other directly, never through this edge.
+    location ^~ /api/internal/ {
+        return 404;
+    }
+
+    location ^~ /slm/api/internal/ {
+        return 404;
+    }
+
+    location ^~ /autobot-api/internal/ {
+        return 404;
+    }
+
 {% if slm_colocated_frontend | default(false) | bool %}
     # ── Co-located mode (#2829) ───────────────────────────────
     # SLM API under /slm/api/, user backend at /api/, user frontend at /
@@ -230,7 +243,7 @@ server {
         # transcriber/knowledge media uploads (audio/video — .mp4/.m4a/.wav etc.)
         # with 413. User-backend uploads need a generous cap; the app enforces its
         # own per-file limit. Scoped here so SLM agent paths keep the 10m default.
-        client_max_body_size 1g;
+        {{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;

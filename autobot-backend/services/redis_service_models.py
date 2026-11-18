@@ -37,7 +37,7 @@ class ManagedServiceStatus:
 
 
 @dataclass
-class HealthStatus:
+class ServiceHealthReport:
     """Detailed health status"""
 
     overall_status: str  # "healthy", "degraded", "critical"

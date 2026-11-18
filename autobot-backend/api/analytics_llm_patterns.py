@@ -103,18 +103,6 @@ class PromptUsageRecord:
 
 
 @dataclass
-class CacheOpportunity:
-    """Identified caching opportunity"""
-
-    prompt_hash: str
-    prompt_preview: str
-    occurrence_count: int
-    potential_savings: float
-    avg_tokens: int
-    recommendation: str
-
-
-@dataclass
 class LLMPatternRecommendation:
     """A saving found in live prompt traffic, keyed to a count of prompts."""
 
@@ -151,7 +139,7 @@ class ModelUsageStats:
 # =============================================================================
 
 
-class LLMPatternAnalyzer(AsyncRedisClientMixin):
+class LLMUsagePatternAnalyzer(AsyncRedisClientMixin):
     """Engine for analyzing LLM usage patterns and identifying optimizations"""
 
     _redis_database = RedisDatabase.MAIN
@@ -779,18 +767,18 @@ import threading
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-_analyzer: LLMPatternAnalyzer | None = None
+_analyzer: LLMUsagePatternAnalyzer | None = None
 _analyzer_lock = threading.Lock()
 
 
-def get_pattern_analyzer() -> LLMPatternAnalyzer:
+def get_pattern_analyzer() -> LLMUsagePatternAnalyzer:
     """Get or create pattern analyzer singleton (thread-safe)"""
     global _analyzer
     if _analyzer is None:
         with _analyzer_lock:
             # Double-check after acquiring lock
             if _analyzer is None:
-                _analyzer = LLMPatternAnalyzer()
+                _analyzer = LLMUsagePatternAnalyzer()
     return _analyzer
 
 

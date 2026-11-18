@@ -27,7 +27,7 @@ from media.audio.pipeline import get_whisper_pipeline, transcribe_array, whisper
 from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
-from ..models import MultiModalInput, ProcessingResult
+from ..models import MultiModalInput, MultimodalResult
 from ..types import (
     CLOSE_COMMAND_WORDS,
     INTERACTION_COMMAND_WORDS,
@@ -171,9 +171,9 @@ class VoiceProcessor(BaseModalProcessor):
         input_data: MultiModalInput,
         processing_time: float,
         message: str,
-    ) -> ProcessingResult:
-        """Build a failed ProcessingResult with a stated reason. Issue #13207."""
-        return ProcessingResult(
+    ) -> MultimodalResult:
+        """Build a failed MultimodalResult with a stated reason. Issue #13207."""
+        return MultimodalResult(
             result_id=f"voice_{input_data.input_id}",
             input_id=input_data.input_id,
             modality_type=input_data.modality_type,
@@ -190,7 +190,7 @@ class VoiceProcessor(BaseModalProcessor):
         input_data: MultiModalInput,
         result: Dict[str, Any],
         processing_time: float,
-    ) -> ProcessingResult:
+    ) -> MultimodalResult:
         """Apply the configured confidence threshold to a completed result.
 
         Issue #13207: confidence_threshold was read from config and then never
@@ -205,7 +205,7 @@ class VoiceProcessor(BaseModalProcessor):
                 confidence,
                 self.confidence_threshold,
             )
-        return ProcessingResult(
+        return MultimodalResult(
             result_id=f"voice_{input_data.input_id}",
             input_id=input_data.input_id,
             modality_type=input_data.modality_type,
@@ -221,7 +221,7 @@ class VoiceProcessor(BaseModalProcessor):
             ),
         )
 
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def process(self, input_data: MultiModalInput) -> MultimodalResult:
         """Process audio input (voice commands, speech)"""
         start_time = time.time()
 
@@ -234,7 +234,7 @@ class VoiceProcessor(BaseModalProcessor):
         if input_data.modality_type != ModalityType.AUDIO:
             # #6755 LSP exception contract: don't raise — parent
             # `BaseModalProcessor.process` only declares NotImplementedError;
-            # subclasses must return a failure ProcessingResult, not propagate
+            # subclasses must return a failure MultimodalResult, not propagate
             # ValueError. Same fix pattern as #6658 / VisionProcessor.
             return self._failure_result(
                 input_data,
@@ -265,14 +265,14 @@ class VoiceProcessor(BaseModalProcessor):
         """Return the confidence the audio pipeline actually reported. Issue #13207.
 
         The base implementation returns a flat 0.5 for every result, which made
-        ProcessingResult.confidence meaningless and left confidence_threshold
+        MultimodalResult.confidence meaningless and left confidence_threshold
         with nothing to compare against.
         """
         if isinstance(processing_data, dict):
             return float(processing_data.get("confidence", 0.0))
         return 0.0
 
-    def _build_disabled_result(self, input_data: MultiModalInput, processing_time: float) -> ProcessingResult:
+    def _build_disabled_result(self, input_data: MultiModalInput, processing_time: float) -> MultimodalResult:
         """Report that voice is switched off, not that the hardware is broken."""
         self.logger.info("Voice processing requested while multimodal.voice.enabled is false")
         return self._failure_result(

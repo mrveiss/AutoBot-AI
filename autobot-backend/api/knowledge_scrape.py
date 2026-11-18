@@ -20,7 +20,8 @@ API contract::
       "url":    "https://...",
       "render": "auto" | "fast" | "playwright",   # default: "auto"
       "ingest": true | false,                       # default: false
-      "format": "markdown" | "html" | "json"        # default: "markdown"
+      "format": "markdown" | "html" | "json",       # default: "markdown"
+      "profile": "document"                         # default: "document" (#18826)
     }
 
     200 OK::
@@ -47,6 +48,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.knowledge_web_profile import require_profile_or_501
 from api.schemas_knowledge_web import ScrapeMetadata, ScrapeRequest, ScrapeResponse
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
@@ -72,7 +74,8 @@ async def scrape_url(request: ScrapeRequest) -> ScrapeResponse:
     ChromaDB via :mod:`web_fetch.ingest`.
     """
     render_mode = RenderMode(request.render)
-    result: FetchResult = await WebFetcher.fetch(request.url, render=render_mode)
+    profile = require_profile_or_501(request.profile)
+    result: FetchResult = await WebFetcher.fetch(request.url, render=render_mode, profile=profile)
 
     if not result.success:
         raise HTTPException(

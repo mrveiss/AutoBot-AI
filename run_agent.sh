@@ -213,9 +213,10 @@ echo "Starting Playwright Service Docker container..."
 # Ensure playwright-server.js exists and is a file
 if [ ! -f "$PROJECT_ROOT/playwright-server.js" ]; then
     echo "⚠️  playwright-server.js not found in project root. Checking for it..."
-    if [ -f "$PROJECT_ROOT/tests/playwright-server.js" ]; then
-        echo "📋 Copying playwright-server.js from tests directory..."
-        cp "$PROJECT_ROOT/tests/playwright-server.js" "$PROJECT_ROOT/playwright-server.js"
+    if [ -f "$PROJECT_ROOT/autobot-browser-worker/playwright-server.js" ]; then
+        echo "📋 Copying playwright-server.js from autobot-browser-worker..."
+        cp "$PROJECT_ROOT/autobot-browser-worker/playwright-server.js" "$PROJECT_ROOT/playwright-server.js"
+        cp "$PROJECT_ROOT/autobot-browser-worker/session-store.js" "$PROJECT_ROOT/autobot-browser-worker/element-index.js" "$PROJECT_ROOT/"
     else
         echo "❌ playwright-server.js not found. Playwright container cannot start."
         echo "   Please ensure playwright-server.js exists in the project root."
@@ -258,7 +259,8 @@ if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
 else
     echo "❌ Playwright container not found. Please run setup_agent.sh to deploy it."
     echo "   Or manually start the VNC-enabled container with:"
-    echo "   docker-compose -f docker/compose/docker-compose.playwright-vnc.yml up -d"
+    echo "   docker compose --env-file docker/.env.secrets -f autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml up -d"
+    echo "   (VNC_PASSWORD comes from docker/.env.secrets; create it with: bash docker/generate-secrets.sh)"
     exit 1
 fi
 

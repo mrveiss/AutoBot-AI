@@ -6,9 +6,7 @@
  * PATCH, so a save must still send every field it owns, and a load must apply
  * the three new ones.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-
-vi.setConfig({ testTimeout: 30_000 }) // first dynamic import of the preference stack is cold under CI load
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
 
 const apiGet = vi.fn()
 const apiPatch = vi.fn()
@@ -30,6 +28,17 @@ async function fresh() {
   const variant = (await import('../useThemeVariant')).useThemeVariant()
   return { prefs, ui, variant }
 }
+
+/**
+ * Each test resets modules and re-imports the preference stack. The first import
+ * also pays the cold transform of the whole graph, which under load outran the
+ * default 10 s test timeout (pre-push, #18254). Warm the transform once here, with
+ * its own budget, so every test measures only its own work.
+ */
+const COLD_IMPORT_MS = 60_000
+beforeAll(async () => {
+  await Promise.all([import('../usePreferences'), import('../useUiMode'), import('../useThemeVariant')])
+}, COLD_IMPORT_MS)
 
 beforeEach(() => {
   localStorage.clear()
@@ -165,5 +174,30 @@ describe('every appearance field follows the sign-in rule', () => {
     expect(usePreferences().layoutDensity.value).toBe('spacious')
     expect(usePreferences().fontSize.value).toBe('large')
     expect(localStorage.getItem('autobot-theme')).toBe('dark')
+  })
+})
+
+describe('theme_preset round trip (#18252)', () => {
+  it("sends 'auto' when no preset is chosen, and a named preset by name", async () => {
+    const { prefs } = await fresh()
+    const theme = (await import('../useTheme')).useTheme()
+    expect(theme.preset.value).toBeNull()
+    await prefs.saveAppearanceToBackend()
+    expect((apiPatch.mock.calls[0][1] as Record<string, unknown>).theme_preset).toBe('auto')
+
+    theme.setPreset('midnight')
+    await prefs.saveAppearanceToBackend()
+    expect((apiPatch.mock.calls[1][1] as Record<string, unknown>).theme_preset).toBe('midnight')
+  })
+
+  it.each([
+    [{ theme_preset: 'auto', theme: 'dark', accent_color: 'theme' }, null],
+    [{ theme_preset: 'auto', theme: 'system', accent_color: 'theme' }, 'auto'],
+    [{ theme_preset: 'midnight', theme: 'dark', accent_color: 'indigo' }, 'midnight'],
+  ])('a fresh sign-in with %o selects preset %s', async (account, expected) => {
+    apiGet.mockResolvedValue({ data: { preferences: account } })
+    const { prefs } = await fresh()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
+    expect((await import('../useTheme')).useTheme().preset.value).toBe(expected)
   })
 })

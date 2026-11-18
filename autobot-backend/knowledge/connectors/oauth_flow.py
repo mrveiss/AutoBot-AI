@@ -67,6 +67,10 @@ class OAuthProvider:
     # ssot_config.auth setting names of extra operator-supplied client config
     # (e.g. a tenant or region) that must be set before authorization can start.
     extra_client_config_settings: Tuple[str, ...] = ()
+    # RFC 8628 device-authorization endpoint; empty means no device-code flow (#19241).
+    device_authorization_url: str = ""
+    # RFC 7009 revocation endpoint; empty means revoke is local-only (#19241).
+    revocation_url: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +203,22 @@ def build_authorize_url(
 # ---------------------------------------------------------------------------
 
 
+class TokenEndpointError(RuntimeError):
+    """A token endpoint answered with an error (RFC 6749 §5.2); ``error`` keeps its code (#19241).
+
+    A RuntimeError subclass, so every existing ``except RuntimeError`` still applies.
+    The description is redacted before it enters the message: these messages are logged.
+    """
+
+    def __init__(self, status: int, body: dict) -> None:
+        from autobot_shared.secret_redaction import redact_text  # noqa: PLC0415
+
+        self.status = status
+        self.error = str(body.get("error") or "")
+        detail = redact_text(str(body.get("error_description") or self.error or "unknown error"))
+        super().__init__("token endpoint returned HTTP %d: %s" % (status, detail))
+
+
 def _apply_client_auth(
     provider: OAuthProvider | None, payload: dict, client_id: str, client_secret: str
 ) -> Tuple[dict, dict]:
@@ -275,9 +295,7 @@ async def _send_token_request(session, token_url: str, payload: dict, provider, 
     ) as resp:
         body = await resp.json(content_type=None)
         if resp.status >= 400:
-            # Token endpoints return {"error": "...", "error_description": "..."}.
-            detail = body.get("error_description") or body.get("error") or "unknown error"
-            raise RuntimeError("token endpoint returned HTTP %d: %s" % (resp.status, detail))
+            raise TokenEndpointError(resp.status, body if isinstance(body, dict) else {})
         return _unwrap_envelope(body, provider)
 
 

@@ -18,7 +18,7 @@ literal reproduction in the PR description; ``connection_manager.py``'s own
 
 from unittest.mock import patch
 
-from autobot_shared.redis_management import connection_manager as cm_mod
+from autobot_shared.redis_management import endpoint as _endpoint
 from autobot_shared.redis_management.connection_manager import RedisConnectionManager
 from config.registry import ConfigRegistry
 
@@ -83,7 +83,7 @@ class TestBoundedRecursion:
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_VM_REDIS", raising=False)
-        monkeypatch.setattr(cm_mod, "_get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
 
         depths: list[int] = []
         max_depth = [0]

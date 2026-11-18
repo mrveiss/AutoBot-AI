@@ -162,11 +162,12 @@ def _server_called_urls() -> list[str]:
     health probes call (``config.llm.lmstudio_host`` and ``config.vllm_host``, both full URLs).
     Prometheus is deliberately absent: its host is derived two ways (``vm.main`` vs ``REDIS_VM_IP``), pending #18326.
     """
+    from autobot_shared.deployment_profile import try_frontend_url
     from autobot_shared.network_constants import ServiceURLs
     from autobot_shared.ssot_config import config
 
     return [
-        config.frontend_url,
+        *filter(None, [try_frontend_url(config)]),  # unset AUTOBOT_FRONTEND_SERVED_BY: left out, not guessed (#19326)
         *(
             f"{scheme}://{host}:{config.port.vnc}"
             for host in (config.vm.main, config.vm.browser)
@@ -236,6 +237,16 @@ def strict_origin(url: object) -> Optional[str]:
     raw = f"{scheme}://{authority}".lower()
     default_port = _DEFAULT_PORTS.get(scheme.lower())
     return origin if raw == origin or (default_port and raw + f":{default_port}" == origin) else None
+
+
+def operator_origins(entries: Iterable[object]) -> frozenset[str]:
+    """Strictly shaped origins of operator-listed URLs, minus literal link-local/metadata/unspecified hosts.
+
+    For an operator-named allowlist of exact origins that is NOT the SSOT service set (e.g. LLM tracing
+    destinations, #19933): the same strictness as :func:`is_internal_origin`, the same refused hosts as
+    :func:`_normalized`, without trusting any SSOT service.
+    """
+    return frozenset(o for o in (strict_origin(e) for e in entries) if o and not _never_internal(o))
 
 
 async def is_internal_origin(url: str) -> bool:

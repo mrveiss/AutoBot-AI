@@ -400,7 +400,7 @@ pytest autobot-backend/tests/ -v -k error_catalog
 - **Error Messages:** `autobot-backend/static/error_messages.yaml`
 - **Catalog Loader:** `src/utils/error_catalog.py`
 - **HTTP Helpers:** `src/utils/catalog_http_exceptions.py`
-- **Error Boundaries:** `src/utils/error_boundaries.py`
+- **Error Boundaries:** `autobot_shared/error_boundaries/` (moved from the backend in #18554)
 - **Tests:** `autobot-backend/utils/catalog_http_exceptions.py`
 
 ---
