@@ -28,8 +28,9 @@ from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
-from services.ansible_utils import ansible_config_env, ansible_run_failure
+from services.ansible_utils import ansible_config_env, ansible_run_failure, bare_inventory_args
 from services.encryption import decrypt_data
+from services.node_ssh_password import propose_password_deletion
 from services.yaml_scalar import yaml_double_quoted
 
 logger = logging.getLogger(__name__)
@@ -329,8 +330,7 @@ class DeploymentService:
         return [
             ansible_cmd,
             str(playbook_path),
-            "-i",
-            f"{host},",
+            *bare_inventory_args(host),
             "-e",
             f"target_roles={roles_str}",
             "-e",
@@ -458,9 +458,8 @@ class DeploymentService:
         # Update auth method to key-based (SSH keys deployed during enrollment)
         node.auth_method = "key"
 
-        # #19483: no automated path deletes a stored credential (#17038); proposing it is #20046.
-
         await db.commit()
+        await propose_password_deletion(node)  # #19483/#20046: proposed to the review queue, never deleted here
 
         logger.info("Enrollment completed for node %s - auth_method set to key", node.node_id)
 
@@ -569,8 +568,7 @@ class DeploymentService:
         return [
             self._find_ansible_playbook(),
             str(playbook_path),
-            "-i",
-            f"{host},",
+            *bare_inventory_args(host),
             *self._enrollment_var_args(host, node_id, ssh_user, ssh_port, admin_url, slm_pubkey),
         ]
 

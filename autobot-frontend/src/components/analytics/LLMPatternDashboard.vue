@@ -325,6 +325,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue'
 import { useShowMore } from '@autobot/ui'
 import { useExpansion } from '@/composables/useExpansion'
@@ -430,10 +431,7 @@ const formatCategory = (category: string): string => {
   return category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-const formatDateLabel = (dateStr: string): string => {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
+const formatDateLabel = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } })
 
 const maxModelCost = computed((): number => {
   if (!modelComparison.value.length) return 0

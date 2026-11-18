@@ -33,6 +33,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _BACKEND = Path("autobot-backend/api/knowledge.py")
 _OFFICE = Path("autobot-backend/api/knowledge_office_upload.py")
 _CONSTANTS = Path("autobot-frontend/src/constants/knowledgeUpload.ts")
@@ -53,7 +55,7 @@ def _python_set_literal(source: str, name: str) -> set[str]:
     cannot make a populated set read as an empty one -- an empty set here would
     make every comparison below pass vacuously.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
@@ -88,7 +90,7 @@ def _ts_int(source: str, name: str) -> int:
 
 
 def _python_int(source: str, name: str) -> int:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in tree.body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             target = node.targets[0]

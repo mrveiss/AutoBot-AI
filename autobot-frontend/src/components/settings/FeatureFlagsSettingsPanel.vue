@@ -91,11 +91,14 @@ import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
-import featureFlagsApiClient, {
-  type EnforcementMode,
-  type FeatureFlagsStatus,
-  type ViolationStatistics,
-} from '@/utils/FeatureFlagsApiClient';
+import {
+  getAccessControlMetrics,
+  getFeatureFlagsStatus,
+  removeEndpointEnforcement,
+  setEndpointEnforcement,
+  updateEnforcementMode,
+} from '@/composables/useFeatureFlagsApi';
+import type { EnforcementMode, FeatureFlagsStatus, ViolationStatistics } from '@/types/featureFlags';
 import EnforcementModeSelector from '@/components/feature-flags/EnforcementModeSelector.vue';
 import EndpointEnforcement from '@/components/feature-flags/EndpointEnforcement.vue';
 import FlagChangeHistory from '@/components/feature-flags/FlagChangeHistory.vue';
@@ -122,19 +125,25 @@ const loadData = async () => {
   error.value = '';
 
   try {
-    const [statusResponse, metricsResponse] = await Promise.all([
-      featureFlagsApiClient.getFeatureFlagsStatus(),
-      featureFlagsApiClient.getAccessControlMetrics({ days: 7, include_details: true }),
+    // The status is required (a failure is fatal); the metrics are optional, so their failure
+    // (403, 500, timeout) must not discard the status that did load.
+    const [statusResult, metricsResult] = await Promise.allSettled([
+      getFeatureFlagsStatus(),
+      getAccessControlMetrics({ days: 7, include_details: true }),
     ]);
 
+    if (statusResult.status === 'rejected') throw statusResult.reason;
+    const statusResponse = statusResult.value;
     if (!statusResponse.success || !statusResponse.data) {
-      throw new Error(statusResponse.error || t('featureFlags.failedToLoadStatus'));
+      throw new Error(t('featureFlags.failedToLoadStatus'));
     }
 
-    featureFlagsStatus.value = statusResponse.data;
+    featureFlagsStatus.value = statusResponse.data as FeatureFlagsStatus;
 
-    if (metricsResponse.success && metricsResponse.data) {
-      accessMetrics.value = metricsResponse.data;
+    if (metricsResult.status === 'rejected') {
+      logger.warn('Access-control metrics unavailable:', metricsResult.reason);
+    } else if (metricsResult.value.success && metricsResult.value.data) {
+      accessMetrics.value = metricsResult.value.data as unknown as ViolationStatistics;
     }
   } catch (err) {
     logger.error('Failed to load feature flags data:', err);
@@ -149,10 +158,10 @@ const handleModeChange = async (mode: EnforcementMode) => {
   updating.value = true;
 
   try {
-    const response = await featureFlagsApiClient.updateEnforcementMode(mode);
+    const response = await updateEnforcementMode(mode);
 
     if (!response.success) {
-      throw new Error(response.error || t('featureFlags.failedToUpdateMode'));
+      throw new Error(response.message || t('featureFlags.failedToUpdateMode'));
     }
 
     if (featureFlagsStatus.value) {
@@ -177,10 +186,10 @@ const handleAddEndpointOverride = async (endpoint: string, mode: EnforcementMode
   updating.value = true;
 
   try {
-    const response = await featureFlagsApiClient.setEndpointEnforcement(endpoint, mode);
+    const response = await setEndpointEnforcement(endpoint, mode);
 
     if (!response.success) {
-      throw new Error(response.error || t('featureFlags.failedToAddOverride'));
+      throw new Error(response.message || t('featureFlags.failedToAddOverride'));
     }
 
     if (featureFlagsStatus.value) {
@@ -202,10 +211,10 @@ const handleUpdateEndpointOverride = async (endpoint: string, mode: EnforcementM
   updating.value = true;
 
   try {
-    const response = await featureFlagsApiClient.setEndpointEnforcement(endpoint, mode);
+    const response = await setEndpointEnforcement(endpoint, mode);
 
     if (!response.success) {
-      throw new Error(response.error || t('featureFlags.failedToUpdateOverride'));
+      throw new Error(response.message || t('featureFlags.failedToUpdateOverride'));
     }
 
     if (featureFlagsStatus.value) {
@@ -227,10 +236,10 @@ const handleRemoveEndpointOverride = async (endpoint: string) => {
   updating.value = true;
 
   try {
-    const response = await featureFlagsApiClient.removeEndpointEnforcement(endpoint);
+    const response = await removeEndpointEnforcement(endpoint);
 
     if (!response.success) {
-      throw new Error(response.error || t('featureFlags.failedToRemoveOverride'));
+      throw new Error(response.message || t('featureFlags.failedToRemoveOverride'));
     }
 
     if (featureFlagsStatus.value) {
@@ -252,16 +261,13 @@ const handleRefreshMetrics = async (days?: number) => {
   loadingMetrics.value = true;
 
   try {
-    const response = await featureFlagsApiClient.getAccessControlMetrics({
-      days: days || 7,
-      include_details: true,
-    });
+    const response = await getAccessControlMetrics({ days: days || 7, include_details: true });
 
     if (!response.success) {
-      throw new Error(response.error || t('featureFlags.failedToLoadMetrics'));
+      throw new Error(t('featureFlags.failedToLoadMetrics'));
     }
 
-    accessMetrics.value = response.data || null;
+    accessMetrics.value = (response.data as unknown as ViolationStatistics | null | undefined) || null;
     showToast(t('featureFlags.metricsRefreshed'), 'success', 2000);
     operationError.value = null;
   } catch (err) {

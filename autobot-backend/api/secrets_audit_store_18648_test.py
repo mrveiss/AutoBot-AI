@@ -43,7 +43,15 @@ class FakeStore:
 @pytest.fixture
 def store():
     fake = FakeStore()
-    with patch("services.audit_logger.canonical.emit", fake.emit):
+
+    async def record_committed(event):  # a required record is awaited until committed (#20557)
+        fake.emit(event)
+        return True
+
+    with (
+        patch("services.audit_logger.canonical.emit", fake.emit),
+        patch("services.audit_logger.canonical.record_committed", record_committed),
+    ):
         yield fake
 
 
@@ -140,6 +148,9 @@ FAMILIES = {
 }
 
 
+WRITE_THEN_OUTCOME = {"secret.update", "secret.delete"}
+
+
 class TestRecordLandsInTheAuditStore:
     """(a) every operation family writes one record to the store."""
 
@@ -147,7 +158,14 @@ class TestRecordLandsInTheAuditStore:
     def test_success_record_is_stored(self, client, store, operation):
         response = FAMILIES[operation](client)
         assert response.status_code in (200, 201), response.text
-        assert store.actions() == [(operation, "success")]
+        # #20557: an irreversible update or delete records before the write and again with its outcome.
+        # The first says "attempted" (#20665): only the second claims the write happened.
+        expected = (
+            [(operation, "attempted"), (operation, "success")]
+            if operation in WRITE_THEN_OUTCOME
+            else [(operation, "success")]
+        )
+        assert store.actions() == expected
         event = store.events[0]
         assert event.actor_id == "user-42"
         assert event.category.name == "SECURITY"
@@ -162,6 +180,7 @@ class TestRecordLandsInTheAuditStore:
         assert client.get("/api/secrets/").status_code == 500
         assert store.actions() == [
             ("secret.access", "failed"),
+            ("secret.delete", "attempted"),  # #20557/#20665: the record written before the write
             ("secret.delete", "denied"),
         ]
 
@@ -223,7 +242,7 @@ class TestAnUnreachableStoreNeverFailsTheOperation:
 
         failing = AsyncMock(side_effect=LoggerDown(f"cannot reach {KNOWN_VALUE}"))
         with patch("api.secrets_audit.audit_log", failing), caplog.at_level(logging.DEBUG):
-            response = _delete(client)
+            response = _list(client)
         assert response.status_code == 200
         assert "LoggerDown" in caplog.text
         assert KNOWN_VALUE not in caplog.text
@@ -273,10 +292,18 @@ class TestHandlerErrorLogsCarryTheClassNameOnly:
 class TestAnUnrecordedWriteIsReported:
     """AuditLogger.log reports a failed write by returning False, not by raising."""
 
-    def test_a_false_return_is_logged_and_the_operation_completes(self, client, caplog):
+    def test_a_false_return_is_logged_and_a_best_effort_operation_completes(self, client, caplog):
+        with patch("api.secrets_audit.audit_log", AsyncMock(return_value=False)), caplog.at_level(logging.DEBUG):
+            response = _list(client)
+        assert response.status_code == 200
+        assert "did not record LIST" in caplog.text
+
+    def test_a_false_return_stops_a_credential_delete(self, client, caplog):
+        """#20557: a delete is irreversible, so its record is written first and is not best-effort."""
         with patch("api.secrets_audit.audit_log", AsyncMock(return_value=False)), caplog.at_level(logging.DEBUG):
             response = _delete(client)
-        assert response.status_code == 200
+        assert response.status_code == 503
+        client.manager.delete_secret.assert_not_called()
         assert "did not record DELETE" in caplog.text
 
 
@@ -306,4 +333,4 @@ class TestTheOldLocalFunctionRecordedNothing:
 
     def test_the_route_now_reaches_the_store(self, client, store):
         _delete(client)
-        assert len(store.events) == 1
+        assert [e.metadata["details"].get("phase") for e in store.events] == ["before_write", "completed"]

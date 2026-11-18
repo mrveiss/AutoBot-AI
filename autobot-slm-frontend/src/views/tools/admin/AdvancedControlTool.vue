@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, isHttpError } from '@autobot/ui'
+import { BaseAlert, isHttpError, createLogger, createDateFormatter } from '@autobot/ui'
 /**
  * AdvancedControlTool - Agent desktop streaming + human takeover admin panel.
  *
@@ -32,8 +32,6 @@ import {
   type AdvancedControlTakeoverStatus,
   type AdvancedControlSessionAction,
 } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('AdvancedControlTool')

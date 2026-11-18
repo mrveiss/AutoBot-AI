@@ -13,6 +13,7 @@ Routes:
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
@@ -24,8 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text, sanitize_log_value
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET, current_claude_model
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
-from llc.deps import assert_company_access, service_dep
+from llc.deps import assert_company_access, log_unexpected, service_dep
 from llc.services.agent_hire_service import (
     AgentHirePending,
     HirePayload,
@@ -49,8 +52,8 @@ _approval_service = service_dep(ApprovalService)
 # Model tier constants (GH#8486)
 # ---------------------------------------------------------------------------
 
-SONNET_MODEL = "claude-sonnet-4-6"
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+SONNET_MODEL = CLAUDE_SONNET
+HAIKU_MODEL = CLAUDE_HAIKU  # tier aliases and earlier-generation IDs are accepted and resolved (#20884)
 
 _VALID_MODELS = {SONNET_MODEL, HAIKU_MODEL}
 
@@ -208,13 +211,11 @@ def _validated_default_cron() -> str:
         # prevent -- `get_next()` is what raises CroniterBadDateError.
         croniter(raw).get_next()
     except Exception as exc:
-        logger.error(
-            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
-            "falling back to %r so hired agents are schedulable",
-            raw,
-            exc,
-            _FALLBACK_HEARTBEAT_CRON,
+        headline = (
+            f"AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON={sanitize_log_value(raw, max_chars=64)} is not a valid cron; "
+            "falling back so hired agents are schedulable"
         )
+        log_unexpected(logger, "agent_hires.default_heartbeat_cron", exc, headline=headline, level=logging.ERROR)
         return _FALLBACK_HEARTBEAT_CRON
     return raw
 
@@ -232,7 +233,8 @@ class AgentHireRequest(BaseModel):
     model: Optional[str] = Field(
         None,
         description=(
-            f"Model override. Supported: {SONNET_MODEL!r} (default), {HAIKU_MODEL!r}. "
+            f"Model override. Supported: {SONNET_MODEL!r} (default), {HAIKU_MODEL!r}; "
+            "the tier aliases 'sonnet' and 'haiku' name them. "
             "Use Haiku for execution-only assistant agents."
         ),
     )
@@ -284,7 +286,7 @@ async def _fetch_agent_config(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else {}
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not fetch adapter_config for agent %r: %s", agent_id, exc)
+        log_unexpected(logger, f"agent_hires.adapter_config {agent_id}", exc)
     return None
 
 
@@ -301,7 +303,7 @@ async def _fetch_company_model_overrides(
         if row and row[0]:
             return dict(row[0]) if isinstance(row[0], dict) else None
     except Exception as exc:  # noqa: BLE001
-        logger.debug("Could not fetch company model_tier_overrides for %r: %s", company_id, exc)
+        log_unexpected(logger, f"agent_hires.model_tier_overrides {company_id}", exc, level=logging.DEBUG)
     return None
 
 
@@ -375,7 +377,7 @@ async def create_agent_hire(
         )
         await session.commit()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not persist hire record (table may not exist): %s", exc)
+        log_unexpected(logger, "agent_hires.persist_hire_record", exc)
         await session.rollback()
 
     return AgentHireRead(
@@ -410,7 +412,7 @@ async def list_agent_hires(
         )
         rows = result.fetchall()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("llc_agent_hires table not available: %s", exc)
+        log_unexpected(logger, "agent_hires.hire_table", exc)
         return []
 
     return [
@@ -437,7 +439,7 @@ def _validate_hire(body: AgentHireRequest) -> str:
 
     Extracted from ``hire_agent`` (#15907, function length); the checks are unchanged.
     """
-    resolved_model = body.model or SONNET_MODEL
+    resolved_model = current_claude_model(body.model) or SONNET_MODEL
     if resolved_model not in _VALID_MODELS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -532,7 +534,7 @@ def _hire_response(company_id: uuid.UUID, body: AgentHireRequest, hire: HirePayl
         company_id=str(company_id),
         reports_to=hire.reports_to,
         instructions_file_path=hire.instructions_file_path,
-        agents_md=_render_agents_md(body, company_id, hire.model == HAIKU_MODEL),
+        agents_md=_render_agents_md(body, company_id, current_claude_model(hire.model) == HAIKU_MODEL),
     )
 
 
@@ -541,7 +543,7 @@ async def _require_manager_here(session: AsyncSession, company_id: uuid.UUID, re
     try:
         await AgentOrgService(session).assert_manager_in_company(reports_to, company_id)
     except ValueError as exc:
-        logger.warning("Refused hire in company %s: %s", company_id, exc)
+        logger.warning("Refused hire in company %s: %s", company_id, safe_log_text(repr(exc)))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="reports_to is not an agent of this company"
         ) from exc
