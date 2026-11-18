@@ -64,3 +64,9 @@ def test_final_reply_entry_carries_streamed_identity():
 
 def test_no_marker_falls_back_to_fresh_identity():
     assert streamed_prose_identity([]) == (None, None)
+
+
+def test_several_streamed_segments_in_one_iteration_persist_under_the_last_ones_identity():
+    markers = [stream_identity_marker(_chunk("seg-1"), 1, []), stream_identity_marker(_chunk("seg-2"), 1, [])]
+    streamed_id, _ = streamed_prose_identity(markers)
+    assert streamed_id == "seg-2"

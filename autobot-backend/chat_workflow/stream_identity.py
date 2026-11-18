@@ -7,7 +7,7 @@
 Streaming chunks are never persisted; the completed reply is rebuilt from the
 accumulated text. Without help it got a fresh uuid and the persist-time clock,
 so a reload could not be matched to what was streamed. The first ``response``
-chunk of an iteration leaves an internal ``segment_complete`` marker (already
+chunk of each streamed segment leaves an internal ``segment_complete`` marker (already
 skipped by the persister) holding the streamed ``message_id`` and chunk time.
 """
 
@@ -37,9 +37,15 @@ def stream_identity_marker(chunk: Any, iteration: int, existing: list) -> Workfl
 
 
 def streamed_prose_identity(iter_messages: Iterable[WorkflowMessage]) -> tuple[str | None, float | None]:
-    """(message_id, created_at) of the iteration's first streamed reply, or (None, None)."""
+    """(message_id, created_at) of the iteration's LAST streamed reply segment, or (None, None).
+
+    An iteration can stream several reply segments, each with its own id. The persisted reply is one message
+    holding all the prose, so it takes the last segment's identity: the one a reload sorts and matches by, and the
+    one that does not leave an earlier streamed segment standing next to a second copy of the same text (#21846).
+    """
+    found: tuple[str | None, float | None] = (None, None)
     for msg in iter_messages:
         meta = msg.metadata or {}
         if msg.type == _MARKER_TYPE and meta.get("internal") and meta.get("completed_type") == "response":
-            return meta.get("message_id"), msg.timestamp
-    return None, None
+            found = (meta.get("message_id"), msg.timestamp)
+    return found
