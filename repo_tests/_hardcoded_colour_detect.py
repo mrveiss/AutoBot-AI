@@ -401,6 +401,15 @@ def _scan_white_on_primary(repo: Path) -> dict[str, int]:
 
 
 # --- #21543: the same defect written as Tailwind classes ----------------------------------------
+#: What this scan cannot see (#21566), so a clean result is read at its reach:
+#:  * a fill and its label on different elements (``bg-autobot-primary`` on a parent, ``text-white`` on a
+#:    child): the pair is read inside one class string only. The parent/child sweep of 2026-11 found one
+#:    (``AboutView.vue``), converted by hand;
+#:  * the fill written as CSS (``background: var(--color-primary)``) with the label in another rule: that is
+#:    the #20425 guard's reach (``primary_fill_label_reads_text_on_primary_20425_test.py``), same-rule only;
+#:  * the component kit (``libs/autobot-ui``): its sources are not in ``_WHITE_ON_PRIMARY_TREES``; a grep
+#:    finds no primary fill with a white label there today, and a pair added there is not reported;
+#:  * a label whose colour comes from a variable or a prop rather than a ``text-`` utility.
 #: ``bg-autobot-primary`` is ``--color-primary``, so ``text-white`` on it is the #20425 defect in class
 #: form. One element is one string of class tokens; a run of class tokens ends at any quote, ``;``,
 #: ``<`` or ``>``, so the pair is read inside one class attribute, ternary branch, object key or
@@ -410,7 +419,11 @@ _CLASS_RUN = re.compile(rf"{_CLASS_TOKEN}(?:\s+{_CLASS_TOKEN})*")
 _VARIANTS = r"(?:[\w\[\]-]+:)*!?"
 _OPACITY = r"(?:/[\w.\[\]%]+)?"
 _PRIMARY_FILL_CLASS = re.compile(rf"^{_VARIANTS}bg-autobot-primary(?:-(?:hover|active|light|dark|bg))?{_OPACITY}$")
-_WHITE_LABEL_CLASS = re.compile(rf"^{_VARIANTS}text-(?:white|\[(?:white|#fff(?:fff)?)\]){_OPACITY}$", re.IGNORECASE)
+#: A white label, or the second token (#21566): ``text-inverse`` is ``--on-primary`` only under the five
+#: explicit themes, so it is not the token that labels a primary fill.
+_WHITE_LABEL_CLASS = re.compile(
+    rf"^{_VARIANTS}text-(?:white|autobot-text-inverse|\[(?:white|#fff(?:fff)?)\]){_OPACITY}$", re.IGNORECASE
+)
 _CLASS_FORM_SUFFIXES = {".vue", ".ts", ".tsx", ".js", ".css"}
 _TEST_PATH_PARTS = ("node_modules", "__tests__")
 
