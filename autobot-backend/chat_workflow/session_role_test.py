@@ -145,7 +145,7 @@ def test_session_categories_hold_tool_at_seam_end_to_end():
     overlays) → the PRE-EXECUTION seam gate holds a matching tool (correct stage)."""
     from types import SimpleNamespace
 
-    from chat_workflow.tool_handler import ToolHandlerMixin
+    from tests.unit.chat_workflow.test_ai_line_support import run_guard
 
     # What _apply_session_role puts on the context when the gate flag is on.
     context = {"requires_approval_before": ["pushing commits"]}
@@ -154,11 +154,11 @@ def test_session_categories_hold_tool_at_seam_end_to_end():
         requires_approval_before=context["requires_approval_before"],
         work_item_id=None,
     )
-    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    ctx.context = {}
     results: list[dict] = []
     # git_push is in "pushing commits" → held pending approval BEFORE execution.
-    held = mixin._enforce_work_item_approval({"name": "git_push"}, ctx, results)
+    held, _ = run_guard({"name": "git_push"}, ctx, results)
     assert held is not None and held.type == "approval_required"
     assert results[0]["status"] == "pending_approval"
     # web_search is not in any declared category → not held.
-    assert mixin._enforce_work_item_approval({"name": "web_search"}, ctx, []) is None
+    assert run_guard({"name": "web_search"}, ctx, [])[0] is None

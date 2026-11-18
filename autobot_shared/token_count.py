@@ -42,7 +42,7 @@ from typing import Any, Dict, Optional
 
 from autobot_shared.doc_chunking import estimate_tokens as _chars_estimate
 
-__all__ = ["estimate_fast", "exact_from_usage", "resolve_tokens"]
+__all__ = ["estimate", "estimate_fast", "exact_from_usage", "resolve_tokens"]
 
 
 def estimate_fast(text: str) -> int:
@@ -55,6 +55,21 @@ def estimate_fast(text: str) -> int:
     if not text:
         return 0
     return _chars_estimate(text)
+
+
+#: Named estimators for :func:`estimate`. ``words`` exists for settings that were tuned in
+#: whitespace-delimited words (the pipeline chunker's ``max_tokens``): it keeps their output
+#: stable, but it counts a CJK run as ONE token (#13694), so new code uses ``fast``.
+ESTIMATE_METHODS = ("fast", "words")
+
+
+def estimate(text: str, method: str = "fast") -> int:
+    """Estimate tokens by a named method: ``"fast"`` (chars/4) or ``"words"`` (whitespace split)."""
+    if method == "fast":
+        return estimate_fast(text)
+    if method == "words":
+        return len(text.split())
+    raise ValueError(f"unknown token estimate method {method!r}; expected one of {ESTIMATE_METHODS}")
 
 
 def exact_from_usage(usage: Optional[Dict[str, Any]]) -> Optional[int]:

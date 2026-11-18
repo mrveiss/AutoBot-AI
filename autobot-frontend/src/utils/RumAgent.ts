@@ -7,8 +7,11 @@
  * Issue #476: Added Prometheus metrics export via /api/rum/metrics endpoint.
  */
 
+import { saveTextFile } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
+import { pushCapped, RUM_MAX_ERRORS } from '@/utils/rumBufferCap'
 
 // Issue #981: Use scoped logger — console.* was causing [object Object] in log output
 const logger = createLogger('RumAgent')
@@ -183,11 +186,17 @@ interface RumReport {
   recentIssues: Array<ApiCall | ErrorInfo>
 }
 
+function emptyMetrics(): RumMetrics {
+  return { apiCalls: [], errors: [], userInteractions: [], webSocketEvents: [], pageMetrics: {}, resourceTimings: [], sessionDuration: 0 }
+}
+
 class RumAgent {
   private isEnabled: boolean
   private sessionId: string
   private startTime: number
   private metrics: RumMetrics
+  // Session totals (#21583): metrics.apiCalls keeps only the latest RUM_MAX_API_CALLS, the summary counts every call.
+  private sessionApiCalls = { total: 0, slow: 0, timeouts: 0 }
   private thresholds: {
     slowApiCall: number
     verySlowApiCall: number
@@ -210,20 +219,13 @@ class RumAgent {
   private pendingWsEvents: PrometheusWebSocketMetric[]
   private pendingResources: PrometheusResourceMetric[]
   private pendingCriticalIssues: PrometheusCriticalIssueMetric[]
+  private intervals: ReturnType<typeof setInterval>[] = [] // periodic timers, ended by stop() (#18254)
 
   constructor() {
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('rum_enabled') === 'true'
     this.sessionId = this.generateSessionId()
     this.startTime = performance.now()
-    this.metrics = {
-      apiCalls: [],
-      errors: [],
-      userInteractions: [],
-      webSocketEvents: [],
-      pageMetrics: {},
-      resourceTimings: [],
-      sessionDuration: 0
-    }
+    this.metrics = emptyMetrics()
     this.thresholds = {
       slowApiCall: 1000, // ms
       verySlowApiCall: 5000, // ms
@@ -252,7 +254,6 @@ class RumAgent {
   }
 
   private initialize(): void {
-
     this.monitorPagePerformance()
     this.monitorResourceTimings()
     this.monitorErrors()
@@ -277,10 +278,10 @@ class RumAgent {
     })
   }
 
-  // API Call Monitoring
-  trackApiCall(method: string, url: string, startTime: number, endTime: number, status: string | number, error?: Error | null): ApiCall {
+  // API Call Monitoring. A call is a timeout when the caller classified it so by type (#21583) or it outlived the threshold.
+  trackApiCall(method: string, url: string, startTime: number, endTime: number, status: string | number, error?: Error | null, timedOut = false): ApiCall {
     const duration = endTime - startTime
-    const isTimeout = duration > this.thresholds.timeoutThreshold
+    const isTimeout = timedOut || duration > this.thresholds.timeoutThreshold
     const isSlow = duration > this.thresholds.slowApiCall
     const isVerySlow = duration > this.thresholds.verySlowApiCall
 
@@ -297,16 +298,18 @@ class RumAgent {
       sessionId: this.sessionId
     }
 
-    this.metrics.apiCalls.push(apiCall)
+    const totals = this.sessionApiCalls
+    this.sessionApiCalls = { total: totals.total + 1, slow: totals.slow + Number(isSlow), timeouts: totals.timeouts + Number(isTimeout) }
+    pushCapped(this.metrics.apiCalls, apiCall)
 
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
       const statusStr = typeof status === 'number'
         ? (status >= 200 && status < 400 ? 'success' : 'error')
         : String(status)
-      const errorType = error ? 'network' : (isTimeout ? 'timeout' : undefined)
+      const errorType = isTimeout ? 'timeout' : (error ? 'network' : undefined)
 
-      this.pendingApiCalls.push({
+      pushCapped(this.pendingApiCalls, {
         endpoint: this.normalizeEndpoint(url),
         method,
         status: isTimeout ? 'timeout' : statusStr,
@@ -325,7 +328,6 @@ class RumAgent {
       logger.warn('🐌 VERY SLOW API', apiCall)
     } else if (isSlow) {
       logger.warn('⚠️ SLOW API', apiCall)
-    } else {
     }
 
     return apiCall
@@ -391,25 +393,12 @@ class RumAgent {
 
   // Error Monitoring
 
-  // #10352: messages that browsers surface as window 'error' events but are
-  // NOT real application errors (no stack, self-correcting). Reporting them as
-  // critical javascript_errors creates false 🚨 alarms in RUM.
-  private static readonly BENIGN_ERROR_MESSAGES = [
-    'ResizeObserver loop limit exceeded',
-    'ResizeObserver loop completed with undelivered notifications',
-  ]
-
-  static isBenignError(message: string | undefined | null): boolean {
-    if (!message) return false
-    return RumAgent.BENIGN_ERROR_MESSAGES.some((m) => message.includes(m))
-  }
-
   private monitorErrors(): void {
     // Global error handler
     window.addEventListener('error', (event) => {
       // #10352: "ResizeObserver loop ..." is a benign browser notice (fires
       // with no real error/stack) — never report it as a CRITICAL js error.
-      if (RumAgent.isBenignError(event.message)) return
+      if (isBenignBrowserNotice(event.message, event.error)) return
       this.trackError('javascript_error', {
         message: event.message,
         filename: event.filename,
@@ -438,23 +427,12 @@ class RumAgent {
       userAgent: navigator.userAgent
     }
 
-    this.metrics.errors.push(error)
+    pushCapped(this.metrics.errors, error, RUM_MAX_ERRORS)
 
     // #10938: Send structured event to /api/rum/event so the per-event rum.log
     // captures it. errorData is nested under `data` as the backend formatter expects.
     this.sendRumEvent(type, errorData)
-
-    // Issue #476: Queue for Prometheus reporting
-    if (this.prometheusEnabled) {
-      const isRejection = type === 'unhandled_promise_rejection'
-      const page = this.getCurrentPage()
-      this.pendingJsErrors.push({
-        error_type: type,
-        page,
-        is_rejection: isRejection,
-        component: errorData.component as string | undefined
-      })
-    }
+    this.queueJsErrorMetric(type, errorData)
 
     // Reduce noise from expected network errors during backend connection attempts
     if (type !== 'network_error' && type !== 'http_error') {
@@ -462,6 +440,17 @@ class RumAgent {
     }
 
     this.reportCriticalIssue(type, error)
+  }
+
+  // Issue #476: Queue a tracked error for Prometheus reporting
+  private queueJsErrorMetric(type: string, errorData: RumMetadata): void {
+    if (!this.prometheusEnabled) return
+    pushCapped(this.pendingJsErrors, {
+      error_type: type,
+      page: this.getCurrentPage(),
+      is_rejection: type === 'unhandled_promise_rejection',
+      component: errorData.component as string | undefined
+    }, RUM_MAX_ERRORS)
   }
 
   // Issue #476: Get current page name for metrics
@@ -605,7 +594,7 @@ class RumAgent {
 
     // Issue #476: Queue for Prometheus reporting
     if (this.prometheusEnabled) {
-      this.pendingCriticalIssues.push({
+      pushCapped(this.pendingCriticalIssues, {
         issue_type: type
       })
     }
@@ -620,17 +609,12 @@ class RumAgent {
 
   // Periodic reporting
   private setupPeriodicReporting(): void {
-    setInterval(() => {
-      this.generateReport()
-    }, 30000) // Every 30 seconds
+    this.intervals.push(setInterval(() => this.generateReport(), 30000)) // Every 30 seconds
   }
 
   // Issue #476: Setup Prometheus metrics reporting
   private setupPrometheusReporting(): void {
-    // Send metrics periodically
-    setInterval(() => {
-      this.flushPrometheusMetrics()
-    }, this.prometheusReportInterval)
+    this.intervals.push(setInterval(() => this.flushPrometheusMetrics(), this.prometheusReportInterval))
 
     // Send session end metrics on page unload
     window.addEventListener('beforeunload', () => {
@@ -701,7 +685,7 @@ class RumAgent {
       const blob = new Blob([JSON.stringify(metrics)], { type: 'application/json' })
       navigator.sendBeacon(this.prometheusEndpoint, blob)
     } else {
-      // Use fetch with keepalive for better reliability
+      // eslint-disable-next-line no-restricted-syntax -- telemetry beacon keepalive, must never throw or log out
       fetch(this.prometheusEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -729,6 +713,7 @@ class RumAgent {
       userAgent: navigator.userAgent,
       data: errorData
     }
+    // eslint-disable-next-line no-restricted-syntax -- telemetry beacon keepalive, must never throw or log out
     fetch(this.rumEventEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -769,18 +754,24 @@ class RumAgent {
     localStorage.setItem('rum_prometheus_enabled', 'false')
   }
 
+  /** End the periodic timers (#18254): this singleton otherwise outlives its loader -- in tests, jsdom. */
+  stop(): void {
+    this.intervals.splice(0).forEach((id) => clearInterval(id))
+  }
+
   generateReport(): RumReport {
     const now = performance.now()
     const sessionDuration = now - this.startTime
+    const apiTotals = this.getApiCallTotals()
 
     const report: RumReport = {
       sessionId: this.sessionId,
       sessionDuration,
       timestamp: new Date().toISOString(),
       summary: {
-        totalApiCalls: this.metrics.apiCalls.length,
-        slowApiCalls: this.metrics.apiCalls.filter(call => call.isSlow).length,
-        timeoutApiCalls: this.metrics.apiCalls.filter(call => call.isTimeout).length,
+        totalApiCalls: apiTotals.total,
+        slowApiCalls: apiTotals.slow,
+        timeoutApiCalls: apiTotals.timeouts,
         totalErrors: this.metrics.errors.length,
         userInteractions: this.metrics.userInteractions.length,
         webSocketEvents: this.metrics.webSocketEvents.length
@@ -791,7 +782,6 @@ class RumAgent {
       ]
     }
 
-
     const reports = JSON.parse(localStorage.getItem('rum_reports') || '[]')
     reports.push(report)
     localStorage.setItem('rum_reports', JSON.stringify(reports.slice(-20)))
@@ -800,6 +790,11 @@ class RumAgent {
   }
 
   // Get current metrics
+  /** Every API call of the session (#21583); metrics.apiCalls keeps only the latest RUM_MAX_API_CALLS. */
+  getApiCallTotals(): { total: number; slow: number; timeouts: number } {
+    return { ...this.sessionApiCalls }
+  }
+
   getMetrics(): RumMetrics & { sessionId: string; sessionDuration: number } {
     return {
       ...this.metrics,
@@ -818,13 +813,7 @@ class RumAgent {
       timestamp: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `rum-data-${this.sessionId}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(JSON.stringify(data, null, 2), `rum-data-${this.sessionId}.json`, 'application/json')
   }
 
   // Manual control methods
@@ -839,15 +828,8 @@ class RumAgent {
   }
 
   clear(): void {
-    this.metrics = {
-      apiCalls: [],
-      errors: [],
-      userInteractions: [],
-      webSocketEvents: [],
-      pageMetrics: {},
-      resourceTimings: [],
-      sessionDuration: 0
-    }
+    this.metrics = emptyMetrics()
+    this.sessionApiCalls = { total: 0, slow: 0, timeouts: 0 }
     localStorage.removeItem('rum_reports')
     localStorage.removeItem('rum_critical_issues')
   }

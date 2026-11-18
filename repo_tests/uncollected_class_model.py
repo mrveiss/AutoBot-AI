@@ -69,6 +69,8 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _PYTEST_INI = _REPO_ROOT / "pytest.ini"
 
@@ -116,12 +118,10 @@ def _parse_source(source: str, path: Path | None) -> ast.Module:
     (#15007).
     """
     try:
-        return ast.parse(source)
+        return parse_cache.parse(source)
     except SyntaxError as exc:
         named = (
-            "<source>" if path is None
-            else path.relative_to(_REPO_ROOT) if path.is_relative_to(_REPO_ROOT)
-            else path
+            "<source>" if path is None else path.relative_to(_REPO_ROOT) if path.is_relative_to(_REPO_ROOT) else path
         )
         raise AssertionError(
             f"{named}:{exc.lineno or 0} is not parseable Python ({exc.msg}). "
@@ -285,8 +285,7 @@ def _init_state(
     under-reporting this whole guard exists to catch.
     """
     if any(
-        isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "__init__"
-        for child in node.body
+        isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "__init__" for child in node.body
     ):
         return True
     unknown = False
@@ -303,9 +302,7 @@ def _init_state(
     return None if unknown else False
 
 
-def _has_init(
-    node: ast.ClassDef, classes: dict[str, ast.ClassDef], module: Path | None = None
-) -> bool:
+def _has_init(node: ast.ClassDef, classes: dict[str, ast.ClassDef], module: Path | None = None) -> bool:
     """Whether pytest would refuse this class for having a constructor.
 
     An unresolvable base counts as one. See ``_init_state`` for why that
@@ -314,9 +311,7 @@ def _has_init(
     return _init_state(node, classes, module) is not False
 
 
-def _collected_classes(
-    classes: dict[str, ast.ClassDef], module: Path | None = None
-) -> set[str]:
+def _collected_classes(classes: dict[str, ast.ClassDef], module: Path | None = None) -> set[str]:
     """The class names pytest would collect from this module.
 
     Three rules, applied in pytest's own order of precedence. See the module
@@ -378,9 +373,7 @@ def uncollected_test_methods(source: str, module: Path | None = None) -> list[tu
     return _uncollected_from_tree(_parse_source(source, module), module)
 
 
-def _uncollected_from_tree(
-    tree: ast.Module, module: Path | None = None
-) -> list[tuple[str, str, int]]:
+def _uncollected_from_tree(tree: ast.Module, module: Path | None = None) -> list[tuple[str, str, int]]:
     """``uncollected_test_methods`` over an already-parsed tree."""
     function_prefixes, _ = _prefixes()
     classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
@@ -393,15 +386,12 @@ def _uncollected_from_tree(
         found.extend(
             (name, child.name, child.lineno)
             for child in node.body
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and child.name.startswith(function_prefixes)
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith(function_prefixes)
         )
     return found
 
 
-def _unresolvable_bases(
-    node: ast.ClassDef, classes: dict[str, ast.ClassDef], module: Path | None
-) -> set[str]:
+def _unresolvable_bases(node: ast.ClassDef, classes: dict[str, ast.ClassDef], module: Path | None) -> set[str]:
     """The bases of ``node`` whose ``__init__`` state this model cannot settle."""
     unresolvable = set()
     for base in node.bases:
@@ -504,4 +494,3 @@ def _offenders_by_tree() -> dict[str, tuple[str, ...]]:
 
 def _population_by_tree() -> dict[str, int]:
     return _scan()[1]
-

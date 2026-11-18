@@ -15,10 +15,8 @@ from media.audio.diarization_service import (
     is_diarization_available,
 )
 from media.audio.ffmpeg_service import FFmpegService, get_ffmpeg_service
-from media.audio.pipeline import AudioPipeline
 
 __all__ = [
-    "AudioPipeline",
     "FFmpegService",
     "get_ffmpeg_service",
     "DiarizationService",

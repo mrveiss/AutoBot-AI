@@ -55,7 +55,8 @@ GENERATOR_SITES = [
         "autobot_secrets_root_key:",
     ),
     (
-        "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml",
+        # #19051: the back-fill moved here so the builtin updater runs it too.
+        "autobot-slm-backend/ansible/roles/slm_manager/tasks/secrets_root_key.yml",
         "AUTOBOT_SECRETS_ROOT_KEY={{",
     ),
     ("docker/generate-secrets.sh", "b64_32)"),

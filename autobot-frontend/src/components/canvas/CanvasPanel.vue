@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveTextFile } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useCanvasStore } from '@/stores/useCanvasStore'
 import type { CanvasCell as CellType } from '@/types/canvas'
@@ -147,13 +148,7 @@ function onExport(format: string, types: string[]) {
     pdf: 'text/plain',
   }
   const extMap: Record<string, string> = { markdown: 'md', html: 'html', json: 'json', pdf: 'txt' }
-  const blob = new Blob([format === 'json' ? JSON.stringify(cells, null, 2) : content], {
-    type: mimeMap[format] ?? 'text/plain',
-  })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `canvas.${extMap[format] ?? 'txt'}`
-  a.click()
-  URL.revokeObjectURL(a.href)
+  const text = format === 'json' ? JSON.stringify(cells, null, 2) : content
+  saveTextFile(text, `canvas.${extMap[format] ?? 'txt'}`, mimeMap[format] ?? 'text/plain')
 }
 </script>

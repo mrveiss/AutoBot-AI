@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.secret_redaction import LOG_MASK
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -41,15 +42,14 @@ def _mask_phone(phone: object) -> str:
 
     WhatsApp recipient numbers are PII; logging them in clear text trips CodeQL's
     clear-text-logging-of-sensitive-data query (GH#9725). Routing every logged
-    number through this helper keeps logs debuggable (last 4) without exposing the
-    full number.
+    number through this helper keeps logs debuggable (last 4) without the full number.
     """
     if not phone:
         return "<none>"
     digits = "".join(ch for ch in str(phone) if ch.isdigit())
     if len(digits) <= 4:
-        return "***"
-    return f"***{digits[-4:]}"
+        return LOG_MASK
+    return f"{LOG_MASK}{digits[-4:]}"
 
 
 _OPT_STATUS_KEY_PREFIX = "whatsapp:opt_status:"

@@ -41,7 +41,7 @@ from constants.threshold_constants import TimingConstants
 from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
 from intelligence.streaming_executor import (
     ChunkType,
-    StreamChunk,
+    ExecChunk,
     StreamingCommandExecutor,
 )
 from intelligence.tool_selector import OSAwareToolSelector
@@ -238,9 +238,9 @@ class IntelligentAgent:
 
     async def _handle_high_confidence_goal(
         self, processed_goal: ProcessedGoal, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Handle goals with high confidence (>0.5)."""
-        yield StreamChunk(
+        yield ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content=f"💡 I understand you want to: {processed_goal.explanation}",
@@ -253,14 +253,14 @@ class IntelligentAgent:
         )
 
         for warning in processed_goal.warnings:
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.COMMENTARY,
                 content=f"⚠️ {warning}",
                 metadata={"type": "warning"},
             )
 
-        yield StreamChunk(
+        yield ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.STATUS,
             content="🔧 Selecting the best tools for your system...",
@@ -278,9 +278,9 @@ class IntelligentAgent:
 
     async def _handle_partial_confidence_goal(
         self, processed_goal: ProcessedGoal, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Handle goals with partial confidence (0.2-0.5)."""
-        yield StreamChunk(
+        yield ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content="🤔 I'm not entirely sure what you want. Let me suggest some possibilities...",
@@ -292,14 +292,14 @@ class IntelligentAgent:
 
         similar_intents = await self.goal_processor.get_similar_intents(user_input, limit=3)
         if similar_intents:
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.COMMENTARY,
                 content="💭 Here are some similar requests I can help with:",
                 metadata={"suggestions": True},
             )
             for i, intent in enumerate(similar_intents, 1):
-                yield StreamChunk(
+                yield ExecChunk(
                     timestamp=self._get_timestamp(),
                     chunk_type=ChunkType.COMMENTARY,
                     content=f"{i}. {intent.explanation} (confidence: {intent.confidence:.2f})",
@@ -309,9 +309,9 @@ class IntelligentAgent:
         async for chunk in self._handle_complex_goal(user_input):
             yield chunk
 
-    async def _handle_low_confidence_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_low_confidence_goal(self, user_input: str) -> AsyncGenerator[ExecChunk, None]:
         """Handle goals with low confidence (<0.2)."""
-        yield StreamChunk(
+        yield ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content="🧠 This is a complex request. Let me analyze it using advanced reasoning...",
@@ -320,18 +320,18 @@ class IntelligentAgent:
         async for chunk in self._handle_complex_goal(user_input):
             yield chunk
 
-    def _create_not_initialized_chunk(self) -> StreamChunk:
+    def _create_not_initialized_chunk(self) -> ExecChunk:
         """Create chunk for uninitialized agent error. Issue #620."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content="❌ Agent not initialized. Please initialize first.",
             metadata={"initialization_required": True},
         )
 
-    def _create_processing_error_chunk(self, error: Exception) -> StreamChunk:
+    def _create_processing_error_chunk(self, error: Exception) -> ExecChunk:
         """Create chunk for processing error. Issue #620."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content=f"❌ Error processing request: {str(error)}",
@@ -340,7 +340,7 @@ class IntelligentAgent:
 
     async def _route_goal_by_confidence(
         self, processed_goal: ProcessedGoal, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Route goal to handler based on confidence level. Issue #620."""
         if processed_goal.confidence > 0.5:
             async for chunk in self._handle_high_confidence_goal(processed_goal, user_input):
@@ -354,7 +354,7 @@ class IntelligentAgent:
 
     async def process_natural_language_goal(
         self, user_input: str, context: Dict[str, Any] | None = None
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Process natural language input and execute appropriate commands. Issue #620."""
         if not self.state.initialized:
             yield self._create_not_initialized_chunk()
@@ -364,7 +364,7 @@ class IntelligentAgent:
         self.state.add_to_context("user_input", user_input, context=context or {})
 
         try:
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.STATUS,
                 content="🤔 Understanding your request...",
@@ -380,38 +380,38 @@ class IntelligentAgent:
             logger.error("Error processing goal: %s", e)
             yield self._create_processing_error_chunk(e)
 
-    def _create_install_required_chunk(self) -> StreamChunk:
+    def _create_install_required_chunk(self) -> ExecChunk:
         """Create chunk indicating tool installation is required. Issue #620."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content="📦 Need to install required tool first",
             metadata={"install_required": True},
         )
 
-    def _create_install_failed_chunk(self) -> StreamChunk:
+    def _create_install_failed_chunk(self) -> ExecChunk:
         """Create chunk indicating tool installation cannot proceed. Issue #620."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content="❌ Required tool cannot be installed on this system",
             metadata={"installation_failed": True},
         )
 
-    def _create_no_command_chunk(self) -> StreamChunk:
+    def _create_no_command_chunk(self) -> ExecChunk:
         """Create chunk indicating no suitable command was found. Issue #620."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content="❌ No suitable command found for this goal",
             metadata={"no_command_found": True},
         )
 
-    def _yield_tool_warnings(self, tool_selection) -> List[StreamChunk]:
+    def _yield_tool_warnings(self, tool_selection) -> List[ExecChunk]:
         """Generate warning chunks for tool selection warnings. Issue #620."""
         chunks = []
         chunks.append(
-            StreamChunk(
+            ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.COMMENTARY,
                 content=f"🛠️ {tool_selection.explanation}",
@@ -420,7 +420,7 @@ class IntelligentAgent:
         )
         for warning in tool_selection.warnings:
             chunks.append(
-                StreamChunk(
+                ExecChunk(
                     timestamp=self._get_timestamp(),
                     chunk_type=ChunkType.COMMENTARY,
                     content=f"⚠️ {warning}",
@@ -431,7 +431,7 @@ class IntelligentAgent:
 
     async def _execute_tool_selection(
         self, tool_selection, processed_goal: ProcessedGoal, user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Execute tool with optional installation. Issue #620."""
         if tool_selection.requires_install:
             yield self._create_install_required_chunk()
@@ -463,7 +463,7 @@ class IntelligentAgent:
                 )
                 return
 
-    async def _handle_complex_goal(self, user_input: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_complex_goal(self, user_input: str) -> AsyncGenerator[ExecChunk, None]:
         """Issue #665: Refactored to use extracted helper methods."""
         try:
             yield self._create_analysis_status_chunk()
@@ -479,9 +479,9 @@ class IntelligentAgent:
             logger.error("Error in complex goal handling: %s", e)
             yield self._create_llm_error_chunk(e)
 
-    def _create_analysis_status_chunk(self) -> StreamChunk:
+    def _create_analysis_status_chunk(self) -> ExecChunk:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.STATUS,
             content="🧠 Analyzing request with AI reasoning...",
@@ -503,9 +503,9 @@ class IntelligentAgent:
         )
         return response.content
 
-    def _create_analysis_result_chunk(self, llm_response: str) -> StreamChunk:
+    def _create_analysis_result_chunk(self, llm_response: str) -> ExecChunk:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.COMMENTARY,
             content=f"🎯 AI Analysis: {llm_response}",
@@ -514,13 +514,13 @@ class IntelligentAgent:
 
     async def _process_parsed_commands(
         self, commands: List[Dict[str, str]], user_input: str
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[ExecChunk, None]:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length.
 
         Process parsed commands with safety validation and execution.
         """
         if not commands:
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.COMMENTARY,
                 content=(
@@ -537,7 +537,7 @@ class IntelligentAgent:
                 continue
 
             explanation = command_info.get("explanation", "")
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.COMMENTARY,
                 content=f"➡️ Step {i}: {explanation}",
@@ -547,16 +547,16 @@ class IntelligentAgent:
             async for chunk in self._execute_command_with_safety(command, user_input):
                 yield chunk
 
-    def _create_llm_error_chunk(self, error: Exception) -> StreamChunk:
+    def _create_llm_error_chunk(self, error: Exception) -> ExecChunk:
         """Issue #665: Extracted from _handle_complex_goal to reduce function length."""
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content=f"❌ Error in AI analysis: {str(error)}",
             metadata={"llm_error": True},
         )
 
-    async def _execute_command_with_safety(self, command: str, user_input: str) -> AsyncGenerator[StreamChunk, None]:
+    async def _execute_command_with_safety(self, command: str, user_input: str) -> AsyncGenerator[ExecChunk, None]:
         """Execute a command with safety validation (Issue #315)."""
         if self.command_validator.is_command_safe(command):
             async for chunk in self.streaming_executor.execute_with_streaming(command, user_input, timeout=300):
@@ -564,7 +564,7 @@ class IntelligentAgent:
                 if chunk.chunk_type == ChunkType.COMPLETE:
                     break
         else:
-            yield StreamChunk(
+            yield ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.ERROR,
                 content=f"⚠️ Command blocked by security policy: {command}",
@@ -578,25 +578,25 @@ class IntelligentAgent:
                 return f"sudo {install_command}"
         return install_command
 
-    def _create_install_result_chunk(self, success: bool) -> StreamChunk:
+    def _create_install_result_chunk(self, success: bool) -> ExecChunk:
         """Create chunk for installation result. Issue #620."""
         if success:
-            return StreamChunk(
+            return ExecChunk(
                 timestamp=self._get_timestamp(),
                 chunk_type=ChunkType.STATUS,
                 content="✅ Tool installed successfully",
                 metadata={"installation_success": True},
             )
-        return StreamChunk(
+        return ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.ERROR,
             content="❌ Tool installation failed",
             metadata={"installation_failed": True},
         )
 
-    async def _install_tool(self, install_command: str, goal: ProcessedGoal) -> AsyncGenerator[StreamChunk, None]:
+    async def _install_tool(self, install_command: str, goal: ProcessedGoal) -> AsyncGenerator[ExecChunk, None]:
         """Install a required tool. Issue #620."""
-        yield StreamChunk(
+        yield ExecChunk(
             timestamp=self._get_timestamp(),
             chunk_type=ChunkType.STATUS,
             content="📦 Installing required tool...",

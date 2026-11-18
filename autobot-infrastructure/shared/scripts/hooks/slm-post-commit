@@ -28,7 +28,16 @@ SLM_AGENT_URL="${SLM_AGENT_URL:-http://localhost:8000}"
 SLM_CODE_SOURCE="${SLM_CODE_SOURCE:-true}"
 # SLM server URL for direct notification (fallback when agent not running)
 SLM_SERVER_URL="${SLM_SERVER_URL:-http://172.16.168.19:8000}"
-SLM_NODE_ID="${SLM_NODE_ID:-33792bf5}"
+# #19322: this node's own registered id. An exported SLM_NODE_ID wins; otherwise the
+# deployed agent config's node_id (slm_agent role: {{ slm_agent_dir }}/config.yaml), since
+# a git shell never inherits the agent unit's environment. The old literal fallback, a
+# fixed uuid4()[:8] of one machine, made every other node notify as that machine.
+SLM_AGENT_CONFIG="${SLM_AGENT_CONFIG:-${AUTOBOT_BASE_DIR:-/opt/autobot}/autobot-slm-agent/config.yaml}"
+agent_node_id() {
+    [ -r "$1" ] || return 0
+    sed -n 's/^node_id:[[:space:]]*"\{0,1\}\([A-Za-z0-9_-]*\)"\{0,1\}[[:space:]]*$/\1/p' "$1" | head -n 1
+}
+SLM_NODE_ID="${SLM_NODE_ID:-$(agent_node_id "$SLM_AGENT_CONFIG")}"
 
 # Only notify if this is marked as a code source node
 if [ "$SLM_CODE_SOURCE" != "true" ]; then
@@ -69,7 +78,9 @@ elif curl -s -X POST \
 fi
 
 # If local agent not available, notify SLM server directly
-if [ "$AGENT_NOTIFIED" != "true" ]; then
+if [ "$AGENT_NOTIFIED" != "true" ] && [ -z "$SLM_NODE_ID" ]; then
+    echo "[SLM] Warning: agent not reachable and no node id (SLM_NODE_ID / $SLM_AGENT_CONFIG) -- SLM not notified"
+elif [ "$AGENT_NOTIFIED" != "true" ]; then
     # Create server notification payload (different schema)
     SERVER_PAYLOAD=$(cat <<EOFSERVER
 {

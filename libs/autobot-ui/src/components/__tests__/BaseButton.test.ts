@@ -3,15 +3,19 @@
 //
 // BaseButton behavioral tests (#14786 batch 1). Covers every ButtonVariant
 // and ButtonSize the component's own type unions expose, the disabled/loading
-// interplay, the type/block/aria-busy attrs, and slot content — 24 consumers
-// across both apps depend on this contract.
+// interplay, the type/block/aria-busy attrs, and slot content — every consumer
+// in both apps (the main app's local fork was retired into it, #18849) depend on this contract.
 
 import { describe, it, expect, vi } from 'vitest'
+import { h } from 'vue'
 import { mount } from '@vue/test-utils'
+import buttonSource from '../BaseButton.vue?raw'
 import BaseButton, { type ButtonVariant, type ButtonSize } from '../BaseButton.vue'
 
-const VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'danger']
-const SIZES: ButtonSize[] = ['sm', 'md', 'lg']
+const VARIANTS: ButtonVariant[] = [
+  'primary', 'secondary', 'ghost', 'error', 'success', 'warning', 'info', 'outline', 'link',
+]
+const SIZES: ButtonSize[] = ['xs', 'sm', 'md', 'lg', 'xl']
 
 describe('BaseButton', () => {
   it('renders a real <button> with default slot content', () => {
@@ -106,5 +110,115 @@ describe('BaseButton', () => {
     const wrapper = mount(BaseButton, { attrs: { onClick } })
     await wrapper.trigger('click')
     expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the icon-left slot before the label', () => {
+    // fails if the icon-left slot is dropped or rendered after the label
+    const wrapper = mount(BaseButton, {
+      slots: { default: 'Add', 'icon-left': '<i data-testid="icon" />' },
+    })
+    expect(wrapper.element.firstElementChild?.getAttribute('data-testid')).toBe('icon')
+    expect(wrapper.text()).toBe('Add')
+  })
+
+  it('hides the icon-left slot while loading, showing the spinner instead', () => {
+    // fails if the icon renders beside the spinner (main-button behaviour: icons hidden while loading)
+    const wrapper = mount(BaseButton, {
+      props: { loading: true },
+      slots: { default: 'Save', 'icon-left': '<i data-testid="icon" />' },
+    })
+    expect(wrapper.find('[data-testid="icon"]').exists()).toBe(false)
+    expect(wrapper.find('.aui-btn__spinner').exists()).toBe(true)
+  })
+
+  it('does not fire click on a disabled or loading button', async () => {
+    // fails if a loading/disabled button can still trigger the parent's handler
+    const onClick = vi.fn()
+    await mount(BaseButton, { props: { disabled: true }, attrs: { onClick } }).trigger('click')
+    await mount(BaseButton, { props: { loading: true }, attrs: { onClick } }).trigger('click')
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
+  it('passes aria-label through to the native button', () => {
+    // fails if attrs stop falling through to the root (icon-only buttons would lose their name)
+    const wrapper = mount(BaseButton, { attrs: { 'aria-label': 'Close' } })
+    expect(wrapper.attributes('aria-label')).toBe('Close')
+  })
+
+  it('renders as a link through `as`, passing href and omitting button-only attrs', () => {
+    // fails if `as` stops choosing the element, or type/disabled leak onto a link
+    const wrapper = mount(BaseButton, {
+      props: { as: 'a' },
+      attrs: { href: '/docs' },
+      slots: { default: 'Docs' },
+    })
+    expect(wrapper.element.tagName).toBe('A')
+    expect(wrapper.attributes('href')).toBe('/docs')
+    expect(wrapper.attributes('type')).toBeUndefined()
+    expect(wrapper.attributes('disabled')).toBeUndefined()
+  })
+
+  it('renders a component passed as `as` and forwards `to` (router-link without a router import)', () => {
+    // fails if the kit stops accepting a component, which is how callers supply RouterLink
+    const Link = { props: ['to'], template: '<a :href="to"><slot /></a>' }
+    const wrapper = mount(BaseButton, { props: { as: Link }, attrs: { to: '/x' }, slots: { default: 'Go' } })
+    expect(wrapper.attributes('href')).toBe('/x')
+    expect(wrapper.classes()).toContain('aui-btn--primary')
+  })
+
+  it('marks a disabled link aria-disabled instead of using the disabled attribute', () => {
+    // fails if a non-button element receives `disabled` or loses its disabled semantics
+    const wrapper = mount(BaseButton, { props: { as: 'a', disabled: true } })
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    expect(wrapper.attributes('disabled')).toBeUndefined()
+  })
+
+  it.each([
+    ['disabled', { disabled: true }],
+    ['loading', { loading: true }],
+  ])('makes a %s link inert: no navigation, no caller click, out of the tab order', (_, state) => {
+    // fails if a disabled/loading `as="a"` still navigates, runs its @click, or takes focus
+    const onClick = vi.fn()
+    const wrapper = mount(BaseButton, { props: { as: 'a', ...state }, attrs: { href: '#x', onClick } })
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    wrapper.element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(onClick).not.toHaveBeenCalled()
+    expect(wrapper.attributes('tabindex')).toBe('-1')
+  })
+
+  it('blocks a disabled RouterLink-like component whose own root click handler navigates', () => {
+    // fails if the inert guard runs after the component's own handler (RouterLink's navigate)
+    const navigate = vi.fn((e: MouseEvent) => e.preventDefault())
+    const RouterLinkLike = { props: ['to'], setup: (p: { to: string }, { slots }: { slots: Record<string, () => unknown> }) => () => h('a', { href: p.to, onClick: navigate }, slots.default?.()) }
+    const disabled = mount(BaseButton, { props: { as: RouterLinkLike, disabled: true }, attrs: { to: '/x' } })
+    disabled.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(navigate).not.toHaveBeenCalled()
+    const enabled = mount(BaseButton, { props: { as: RouterLinkLike }, attrs: { to: '/x' } })
+    enabled.element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(navigate).toHaveBeenCalledOnce()
+  })
+
+  it('leaves an enabled link alone: it navigates, runs its @click and keeps its tab stop', () => {
+    // contrast case: fails if the inert guard fires when the link is enabled
+    const onClick = vi.fn()
+    const wrapper = mount(BaseButton, { props: { as: 'a' }, attrs: { href: '#x', onClick } })
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    wrapper.element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(onClick).toHaveBeenCalledOnce()
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
+  })
+
+  it('never shows a hover or active state on an aria-disabled element', () => {
+    // fails if a `:hover:not(:disabled)` rule can still match a disabled link
+    const states = buttonSource.match(/:(hover|active):not\(:disabled\)[^{,]*/g) ?? []
+    expect(states.length).toBeGreaterThan(0)
+    expect(states.every((s) => s.includes(":not([aria-disabled='true'])"))).toBe(true)
+  })
+
+  it('styles through kit tokens only: no literal colour or box-shadow in the source', () => {
+    // fails if a raw palette value or a shadow enters the component (design system: tokens, no shadows)
+    expect(buttonSource).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|box-shadow/)
   })
 })

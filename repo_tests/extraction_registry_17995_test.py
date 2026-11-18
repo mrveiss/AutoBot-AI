@@ -35,6 +35,7 @@ from repo_tests.extraction_registry import (
     seeds_post_commit_list,
 )
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = DEFAULT_ROOTS + TOOLING_ROOTS
@@ -56,8 +57,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "extraction-registry-sweep",
     discover=_source_population,
-    # Mid-window, from REACH.window() = (5233, 5533, 5383) at the pin.
-    floor=5383,
     what="python source and tests",
     roots=_ROOTS,
     growth=300,
@@ -69,7 +68,7 @@ def _offenders() -> list[str]:
     found: list[str] = []
     for rel in REACH.examined(root):
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
         for entry in (e for e in REGISTRY if e.status == GUARDED):
@@ -109,7 +108,7 @@ def test_every_entry_is_well_formed_and_its_canonical_symbol_exists() -> None:
             leaf = e.symbol.rsplit(".", 1)[-1]
             names = {
                 n.name
-                for n in ast.walk(ast.parse((root / e.canonical).read_text(encoding="utf-8")))
+                for n in ast.walk(parse_cache.parse((root / e.canonical).read_text(encoding="utf-8")))
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
             }
             assert leaf in names, f"{e.canonical} does not define {leaf}; the registry names a symbol that is gone"
@@ -156,7 +155,7 @@ _SOURCE_ROOT_LOOKALIKE = "async def r(sid):\n    s = await get_source(sid)\n    
     ],
 )
 def test_detector_contrast_pair(detector, source: str, expected: bool) -> None:
-    assert detector(ast.parse(source)) is expected
+    assert detector(parse_cache.parse(source)) is expected
 
 
 #: Every provider that opens a session, per service. Checking the file for ANY call would let
@@ -169,7 +168,7 @@ _PROVIDERS = {
 
 def _providers_not_using_the_scope(source: str, names: tuple[str, ...]) -> list[str]:
     """Names of `names` that are missing or do not call `async_session_scope`."""
-    funcs = {n.name: n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+    funcs = {n.name: n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
     bad = []
     for name in names:
         fn = funcs.get(name)

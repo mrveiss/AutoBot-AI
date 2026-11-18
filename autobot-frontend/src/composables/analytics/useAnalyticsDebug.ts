@@ -18,6 +18,8 @@ import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 import type { ToastType } from '@/composables/useToast'
+import { createDateFormatter } from '@/utils/formatHelpers'
+import { hasSourceIdInUrl } from '@/utils/sourceIdInUrl'
 
 const logger = createLogger('useAnalyticsDebug')
 
@@ -33,17 +35,21 @@ export interface UseAnalyticsDebugDeps {
   declarationAnalysis: Ref<unknown[]>
   duplicateAnalysis: Ref<unknown[]>
   stopJobPolling: () => void
+  /** Adds the selected source's id to a URL; the source-scoped analytics routes require it (#20513). */
+  withSourceId: (url: string) => string
   t: (key: string, params?: Record<string, unknown>) => string
   notify: (msg: string, type?: ToastType) => void
 }
 
-// Endpoint configs for API health check (#1588)
-const _testEndpointConfigs = [
-  { name: 'Declarations', path: `${getApiBase()}/analytics/codebase/declarations` },
-  { name: 'Duplicates', path: `${getApiBase()}/analytics/codebase/duplicates` },
-  { name: 'Hardcodes', path: `${getApiBase()}/analytics/codebase/hardcodes` },
-  { name: 'NPU', path: `${getApiBase()}/npu/status` },
-  { name: 'Stats', path: `${getApiBase()}/analytics/codebase/stats` },
+// Endpoint configs for API health check (#1588). #20513: the analytics routes
+// require `source_id`, so they are built from `withSourceId`; `scoped` marks
+// the ones that need it, and they are skipped (not failed) with no source selected.
+const _testEndpointConfigs = (withSourceId: (url: string) => string) => [
+  { name: 'Declarations', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/declarations`) },
+  { name: 'Duplicates', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/duplicates`) },
+  { name: 'Hardcodes', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/hardcodes`) },
+  { name: 'NPU', scoped: false, path: `${getApiBase()}/npu/status` },
+  { name: 'Stats', scoped: true, path: withSourceId(`${getApiBase()}/analytics/codebase/stats`) },
 ]
 
 export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
@@ -59,6 +65,7 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
     declarationAnalysis,
     duplicateAnalysis,
     stopJobPolling,
+    withSourceId,
     t,
     notify,
   } = deps
@@ -111,33 +118,39 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
       'analytics.codebase.status.testingApis',
     )
     try {
-      const results: string[] = []
-      for (const ep of _testEndpointConfigs) {
+      // Typed outcomes: the counts must not depend on matching words inside the
+      // (translatable) log lines. A skipped endpoint is neither passed nor failed (#20513).
+      const lines: string[] = []
+      let passed = 0
+      let failed = 0
+      let ran = 0
+      for (const ep of _testEndpointConfigs(withSourceId)) {
+        if (ep.scoped && !hasSourceIdInUrl(ep.path)) {
+          lines.push(t('analytics.codebase.notify.apiTestSkippedNoSource', { name: ep.name }))
+          continue
+        }
+        ran += 1
         try {
           await apiClient.get<unknown>(ep.path)
-          results.push(`${ep.name}: OK`)
+          passed += 1
+          lines.push(`${ep.name}: OK`)
         } catch (err) {
+          failed += 1
           const msg =
             err instanceof Error ? err.message : String(err)
-          results.push(`${ep.name}: FAIL (${msg})`)
+          lines.push(`${ep.name}: FAIL (${msg})`)
         }
       }
-      const passed = results.filter((r) =>
-        r.includes('OK'),
-      ).length
-      const failed = results.filter((r) =>
-        r.includes('FAIL'),
-      ).length
       notify(
         t('analytics.codebase.notify.apiTestResults', {
           passed,
-          total: results.length,
+          total: ran,
         }),
         failed === 0 ? 'success' : 'warning',
       )
       logger.debug(
         'API Test Results:',
-        results.join('\n'),
+        lines.join('\n'),
       )
     } catch (error: unknown) {
       const errorMessage =
@@ -248,17 +261,7 @@ export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {
     return 'grade-f'
   }
 
-  const formatTimestamp = (
-    timestamp: string | number | Date | undefined,
-  ): string => {
-    if (!timestamp) return 'Unknown'
-    try {
-      const date = new Date(timestamp)
-      return date.toLocaleString()
-    } catch {
-      return String(timestamp)
-    }
-  }
+  const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 
   const getScoreClass = (score: number): string => {
     if (score >= 80) return 'score-high'

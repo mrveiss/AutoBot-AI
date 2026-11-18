@@ -14,7 +14,7 @@ This file stays as the import path every call site already uses, matching the sh
 already used for `base_service`, `organization_service` and `team_service`.
 
 `rbac_middleware` and `_permission_cache` are re-exported deliberately: call sites import
-both (`api/secrets.py`, `api/envelope_secrets.py`, `user_management/services/user_service.py`),
+both (`api/secrets.py`, `api/envelope_secrets.py`),
 and `_permission_cache` crosses the module boundary despite the underscore. Re-exporting the
 singleton keeps one instance per process, which is what the cache invalidation depends on.
 """
@@ -32,7 +32,7 @@ from autobot_shared.user_management.middleware.rbac_middleware import (  # noqa:
     configure_rbac,
     rbac_middleware,
 )
-from user_management.config import get_deployment_config
+from user_management.config import get_rbac_deployment_config
 from user_management.database import db_session_context
 from user_management.services import TenantContext, UserService
 
@@ -44,7 +44,7 @@ configure_rbac(
         db_session_context=db_session_context,
         user_service_cls=UserService,
         tenant_context_cls=TenantContext,
-        get_deployment_config=get_deployment_config,
+        get_deployment_config=get_rbac_deployment_config,
     )
 )
 

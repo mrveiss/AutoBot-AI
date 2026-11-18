@@ -22,7 +22,13 @@ import numpy as np
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import RetryConfig, TimingConstants
-from utils.semantic_chunker_base import SemanticChunk, SemanticChunkerBase
+from utils.semantic_chunker_base import (
+    SENTENCE_EMBEDDING_FALLBACKS,
+    SENTENCE_EMBEDDING_MODEL,
+    SemanticChunk,
+    SemanticChunkerBase,
+    load_sentence_transformer,
+)
 
 __all__ = ["AutoBotSemanticChunker", "SemanticChunk", "get_semantic_chunker"]
 
@@ -41,7 +47,7 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 
     def __init__(
         self,
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_model: str = SENTENCE_EMBEDDING_MODEL,
         percentile_threshold: float = 95.0,
         min_chunk_size: int = 100,
         max_chunk_size: int = 1000,
@@ -166,8 +172,6 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
     def _load_model_with_retry(self, device: str):
         import time
 
-        from sentence_transformers import SentenceTransformer
-
         max_retries = RetryConfig.DEFAULT_RETRIES
         retry_delay = TimingConstants.SERVICE_STARTUP_DELAY
 
@@ -183,7 +187,7 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
                     time.sleep(retry_delay)
                     retry_delay *= 2
 
-                return SentenceTransformer(self.embedding_model_name, device=device)
+                return load_sentence_transformer(self.embedding_model_name, device=device)
 
             except Exception as load_error:
                 error_str = str(load_error).lower()
@@ -205,7 +209,6 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
         raise RuntimeError("Model loading failed after retries")
 
     def _optimize_loaded_model(self, model, device: str):
-        from sentence_transformers import SentenceTransformer
 
         try:
             actual_device = next(model.parameters()).device
@@ -226,23 +229,25 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
 
             if device != "cpu":
                 logger.info("Attempting fallback to CPU...")
-                return SentenceTransformer(self.embedding_model_name, device="cpu")
+                return load_sentence_transformer(self.embedding_model_name, device="cpu")
 
             raise
 
     async def _try_fallback_models(self) -> None:
-        from sentence_transformers import SentenceTransformer
 
-        for model_name in ("all-mpnet-base-v2", "all-MiniLM-L12-v2"):
+        for model_name in SENTENCE_EMBEDDING_FALLBACKS:
             try:
                 logger.info("Attempting fallback model loading on CPU: %s", model_name)
-                self._embedding_model = SentenceTransformer(model_name)
+                self._embedding_model = load_sentence_transformer(model_name)
                 logger.warning("Fallback to %s embedding model on CPU", model_name)
                 return
             except Exception as fallback_error:
                 logger.error("Failed to load fallback model %s: %s", model_name, fallback_error)
 
-        raise RuntimeError("Could not initialize any embedding model")
+        raise RuntimeError(
+            "Could not initialize any embedding model: each loads at its pinned revision and is "
+            "verified against its digest, so an offline host needs the pinned snapshots cached once (#19430)"
+        )
 
     async def _initialize_model(self) -> None:
         """Lazy initialize the sentence-transformer model on first use (async, thread-pool)."""
@@ -339,88 +344,6 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
             logger.error("Error computing sentence embeddings: %s", e)
             return self._create_fallback_embeddings(len(sentences))
 
-    # Backwards-compatible alias: `npu_semantic_search._generate_embedding_gpu_fallback`
-    # still imports and calls `_compute_sentence_embeddings_async` directly.
-    async def _compute_sentence_embeddings_async(self, sentences: List[str]) -> np.ndarray:
-        return await self._compute_embeddings(sentences)
-
-    # ------------------------------------------------------------------
-    # Synchronous entry points — kept for two live external callers:
-    #   autobot-backend/npu_semantic_search.py:521  (CPU final fallback)
-    #   autobot-infrastructure/.../npu_performance_measurement.py:187/192
-    # ------------------------------------------------------------------
-
-    def _sync_try_fallback_models(self, device: str) -> None:
-        """Try loading fallback models synchronously."""
-        from sentence_transformers import SentenceTransformer
-
-        self._embedding_model = SentenceTransformer("all-mpnet-base-v2")
-
-        if device == "cuda":
-            try:
-                import torch
-
-                has_meta_tensors = any(p.device.type == "meta" for p in self._embedding_model.parameters())
-                if has_meta_tensors:
-                    self._embedding_model = self._embedding_model.to_empty(device=device)
-                else:
-                    self._embedding_model = self._embedding_model.to(device)
-            except Exception as device_error:
-                logger.warning("Failed to move model to GPU: %s, using CPU", device_error)
-                device = "cpu"
-                # Reference `torch` to satisfy linters about unused import in the try block.
-                _ = torch
-
-        logger.warning("Fallback to all-mpnet-base-v2 embedding model on %s", device)
-
-    def _sync_initialize_model(self) -> None:
-        """Synchronous model initialization for non-async fallback paths (blocking)."""
-        if self._embedding_model is not None:
-            return
-
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            device = self._detect_device()
-            self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
-
-            actual_device = next(self._embedding_model.parameters()).device
-            logger.info(
-                "Embedding model '%s' loaded on device: %s",
-                self.embedding_model_name,
-                actual_device,
-            )
-
-            self._embedding_model = self._apply_gpu_precision(self._embedding_model, device)
-
-        except Exception as e:
-            logger.error("Failed to load embedding model %s: %s", self.embedding_model_name, e)
-            try:
-                import torch
-
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                self._sync_try_fallback_models(device)
-            except Exception as fallback_error:
-                logger.error("Failed to load fallback model: %s", fallback_error)
-                raise RuntimeError("Could not initialize any embedding model")
-
-    def _compute_sentence_embeddings(self, sentences: List[str]) -> np.ndarray:
-        """Synchronous embedding wrapper for backward compatibility.
-
-        Live callers: `npu_semantic_search._generate_fallback_embedding` and
-        `autobot-infrastructure/.../npu_performance_measurement.py`.
-
-        #7469: previously this had a hand-rolled try-loop / sync-fallback
-        pattern that BLOCKED the event loop on the in-async path
-        (running encoder synchronously inline). Migrated to the shared
-        ``run_or_schedule`` helper which uses a threadpool detour in
-        the in-async case — same final result, doesn't block the loop.
-        Caller still sees the same return shape.
-        """
-        from autobot_shared.async_compat import run_or_schedule
-
-        return run_or_schedule(self._compute_sentence_embeddings_async(sentences))
-
     # ------------------------------------------------------------------
     # Coherence scoring (CPU-only utility — not on hot chunk_text path)
     # ------------------------------------------------------------------
@@ -431,7 +354,7 @@ class AutoBotSemanticChunker(SemanticChunkerBase):
             return 1.0
 
         try:
-            embeddings = await self._compute_sentence_embeddings_async(sentences)
+            embeddings = await self._compute_embeddings(sentences)
             if len(embeddings) <= 1:
                 return 1.0
 

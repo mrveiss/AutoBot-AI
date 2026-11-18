@@ -1,0 +1,15 @@
+{
+  "_contract": "Recorded per-service exceptions to the symbol-fork ratchet (#18688). An entry says: this symbol is bound at `canonical` and at each of `sites` (path:qualname, exact), for `reason`, tracked by `issue`. A cluster whose every binding is the canonical site or a recorded site is not a fork; ANY other binding of the name still counts. Shrink-only: an entry missing a reason or issue is rejected, and a recorded site that no longer exists is reported stale. See docs/developer/RATCHET_BASELINES.md.",
+  "exceptions": [
+    {
+      "symbol": "get_current_user",
+      "canonical": "autobot-backend/auth_middleware.py:get_current_user",
+      "sites": [
+        "autobot-slm-backend/services/auth.py:get_current_user",
+        "autobot-backend/api/user_management/dependencies.py:get_current_user"
+      ],
+      "reason": "SLM binding: separate service with its own auth stack. user_management binding: delegating wrapper kept as a distinct dependency_overrides key.",
+      "issue": "https://github.com/mrveiss/AutoBot-AI/issues/18688"
+    }
+  ]
+}

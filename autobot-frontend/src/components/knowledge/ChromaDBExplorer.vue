@@ -9,7 +9,7 @@
         </svg>
         <h1>ChromaDB Explorer</h1>
       </div>
-      <p class="header-subtitle">Browse and search vector collections at port 8100</p>
+      <p class="header-subtitle">{{ $t('knowledge.chromaExplorer.subtitle') }}</p>
     </div>
 
     <!-- Error Alert -->
@@ -58,23 +58,12 @@
           <p>No collections found</p>
         </div>
 
-        <div v-else class="collections-list">
-          <button
-            v-for="collection in collections"
-            :key="collection.name"
-            @click="selectCollection(collection)"
-            class="collection-item"
-            :class="{ active: selectedCollection?.name === collection.name }"
-          >
-            <div class="collection-info">
-              <span class="collection-name">{{ collection.name }}</span>
-              <span class="collection-count">{{ collection.count }} documents</span>
-            </div>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
+        <ChromaCollectionList
+          v-else
+          :collections="collections"
+          :selected-name="selectedCollection?.name"
+          @select="selectCollection"
+        />
       </div>
 
       <!-- Collection Details -->
@@ -147,6 +136,7 @@
             >
               <div class="result-header">
                 <span class="result-id">{{ result.id }}</span>
+                <ResearchQuarantineBadge v-if="result.quarantined" />
                 <span v-if="result.distance !== null" class="result-distance">
                   {{ result.distance.toFixed(4) }}
                 </span>
@@ -206,6 +196,7 @@
             >
               <div class="document-header">
                 <span class="document-id">{{ doc.id }}</span>
+                <ResearchQuarantineBadge v-if="doc.quarantined" />
                 <span v-if="doc.embedding_dim" class="embedding-info">
                   {{ doc.embedding_dim }}D embedding
                 </span>
@@ -239,9 +230,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import ChromaCollectionList from './ChromaCollectionList.vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
+import ResearchQuarantineBadge from './ResearchQuarantineBadge.vue'
 
 const logger = createLogger('ChromaDBExplorer')
 const apiClient = useApiClient()
@@ -258,12 +251,10 @@ interface DocumentItem {
   document: string | null
   metadata: Record<string, unknown> | null
   embedding_dim: number | null
+  quarantined: boolean
 }
 
-interface SearchResultItem {
-  id: string
-  document: string | null
-  metadata: Record<string, unknown> | null
+interface SearchResultItem extends Omit<DocumentItem, 'embedding_dim'> {
   distance: number | null
 }
 
@@ -332,6 +323,7 @@ async function loadDocuments() {
         documents: (string | null)[]
         metadatas: (Record<string, unknown> | null)[]
         embedding_dim: number | null
+        quarantined_ids?: string[]
       }
       total: number
       error?: string
@@ -340,13 +332,14 @@ async function loadDocuments() {
     )
 
     if (response.success && response.data) {
-      const { ids, documents: docs, metadatas, embedding_dim } = response.data
+      const { ids, documents: docs, metadatas, embedding_dim, quarantined_ids = [] } = response.data
 
       documents.value = ids.map((id: string, idx: number) => ({
         id,
         document: docs?.[idx] || null,
         metadata: metadatas?.[idx] || null,
-        embedding_dim: embedding_dim || null
+        embedding_dim: embedding_dim || null,
+        quarantined: quarantined_ids.includes(id)
       }))
 
       logger.info(`Loaded ${documents.value.length} documents`)
@@ -418,19 +411,70 @@ function prevPage() {
 }
 
 function toggleMetadata(idx: number) {
-  if (expandedDocs.value.has(idx)) {
-    expandedDocs.value.delete(idx)
-  } else {
-    expandedDocs.value.add(idx)
-  }
+  if (!expandedDocs.value.delete(idx)) expandedDocs.value.add(idx)
 }
 
-onMounted(() => {
-  loadCollections()
-})
+onMounted(loadCollections)
 </script>
 
 <style scoped>
+/* ChromaCollectionList carries no styles of its own (#12730). */
+.collections-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-2);
+}
+
+:deep(.collection-item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--duration-150) ease;
+  margin-bottom: var(--spacing-1);
+}
+
+:deep(.collection-item:hover) {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+}
+
+:deep(.collection-item.active) {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+:deep(.collection-info) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  flex: 1;
+}
+
+:deep(.collection-name) {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+:deep(.collection-count) {
+  font-size: var(--text-xs);
+  opacity: 0.7;
+}
+
+:deep(.collection-item svg) {
+  width: var(--spacing-4);
+  height: var(--spacing-4);
+  flex-shrink: 0;
+}
+
 /* Issue #8999: ChromaDB Explorer Design */
 
 .chroma-explorer {
@@ -612,62 +656,6 @@ onMounted(() => {
 /* ============================================
  * COLLECTIONS LIST
  * ============================================ */
-
-.collections-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-2);
-}
-
-.collection-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: var(--spacing-3);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-align: left;
-  transition: all var(--duration-150) ease;
-  margin-bottom: var(--spacing-1);
-}
-
-.collection-item:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-default);
-}
-
-.collection-item.active {
-  background: var(--color-info-bg);
-  border-color: var(--color-info);
-  color: var(--color-info);
-}
-
-.collection-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  flex: 1;
-}
-
-.collection-name {
-  font-size: var(--text-sm);
-  font-weight: 500;
-}
-
-.collection-count {
-  font-size: var(--text-xs);
-  opacity: 0.7;
-}
-
-.collection-item svg {
-  width: var(--spacing-4);
-  height: var(--spacing-4);
-  flex-shrink: 0;
-}
 
 /* ============================================
  * LOADING & EMPTY STATES
@@ -858,7 +846,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   border-radius: var(--radius-md);
   color: white;

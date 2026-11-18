@@ -4,13 +4,14 @@
 # Author: mrveiss
 """Every router gated under #16375 declares the *canonical* gate, by identity.
 
-Why identity and not a name. Three distinct functions in this repo are called
-``check_admin_permission`` -- ``auth_middleware.py``, ``api/audit.py`` and
-``api/redis_service.py`` -- and they do not agree on a return type, let alone on
-what they enforce. A test asserting the string would pass on any of the three,
-so it would not distinguish the gate from a same-named function that happens to
-be imported. ``test_the_name_is_ambiguous`` pins that collision, so this file's
-reason for existing fails loudly if the collision is ever resolved.
+Why identity and not a name. Until #18688 three distinct functions were called
+``check_admin_permission`` (``auth_middleware.py``, ``api/audit.py`` and
+``api/redis_service.py``) and they disagreed on return type and enforcement. A
+test asserting the string passes on any same-named function that happens to be
+imported, so it cannot tell the gate from a lookalike. ``audit`` and
+``redis_service`` now use the one canonical function;
+``test_the_name_resolves_to_one_canonical_function`` pins that, and the identity
+assertions below stay as the per-router guard against a lookalike coming back.
 
 Why here and not in ``api/api_endpoint_migrations_test.py``. That file is PARKED
 at module scope (#15173, #5359 Option C): nothing in it executes, in CI or
@@ -53,12 +54,14 @@ def test_the_table_is_not_empty():
     assert len(GATED_ROUTERS) >= 6
 
 
-def test_the_name_is_ambiguous():
-    """The premise of this file: ``check_admin_permission`` is not a unique name.
+def test_the_name_resolves_to_one_canonical_function():
+    """``check_admin_permission`` is ONE function repo-wide (#18688), the SLM copies aside.
 
-    If this ever fails because the repo converged on one definition, the identity
-    assertions stay correct -- but this file's docstring no longer describes why
-    they are necessary, so it should be rewritten rather than deleted.
+    This file used to assert three distinct same-named functions, which is why
+    the identity assertions below are necessary: a Depends on a same-named local
+    copy would have passed a by-name check. ``audit`` and ``redis_service`` now
+    bind ``auth_middleware.check_admin_permission`` itself. If a local copy comes
+    back this fails, and the identity assertions stay what catches it per router.
     """
     import api.audit
     import api.redis_service
@@ -69,7 +72,10 @@ def test_the_name_is_ambiguous():
         api.audit.check_admin_permission,
         api.redis_service.check_admin_permission,
     }
-    assert len(candidates) == 3, "expected three distinct same-named functions"
+    assert candidates == {auth_middleware.check_admin_permission}, "a same-named local copy has returned"
+    for module in (api.audit, api.redis_service):
+        defined_here = getattr(module.check_admin_permission, "__module__", None) == module.__name__
+        assert not defined_here, f"{module.__name__} defines its own check_admin_permission"
 
 
 @pytest.mark.parametrize(("module_name", "gate_name", "gate_module"), GATED_ROUTERS)

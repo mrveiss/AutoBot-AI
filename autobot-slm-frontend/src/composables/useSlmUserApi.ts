@@ -26,26 +26,26 @@
  */
 
 import slmApiClient from '@/utils/ApiClient'
-import type { components } from '@/types/generated/api'
+import type { components, operations } from '@/types/generated/api'
 
 // =============================================================================
 // Type Definitions — derived from the generated OpenAPI contract
 // =============================================================================
 
-// Both /slm-users and /autobot-users serve the `autobot_shared` user schemas
-// (the generated names are FastAPI's disambiguation of two same-named models).
-export type RoleResponse =
-  components['schemas']['autobot_shared__user_management__schemas__user__RoleResponse']
-export type SlmUserResponse =
-  components['schemas']['autobot_shared__user_management__schemas__user__UserResponse']
+// Both /slm-users and /autobot-users serve the `autobot_shared` user schemas.
+// Taken from the create operation rather than by schema name: the generated
+// name is qualified while another SLM model shares it and unqualified once none
+// does (#17312), and an operation's shape survives that rename.
+type CreateSlmUser = operations['create_slm_user_api_slm_users_post']
+export type CreateUserPayload = CreateSlmUser['requestBody']['content']['application/json']
+export type SlmUserResponse = CreateSlmUser['responses'][201]['content']['application/json']
+export type RoleResponse = NonNullable<SlmUserResponse['roles']>[number]
 export type SlmUserListResponse = components['schemas']['UserListResponse']
-export type CreateUserPayload =
-  components['schemas']['autobot_shared__user_management__schemas__user__UserCreate']
 export type PasswordChange = components['schemas']['PasswordChange']
 
-export type TeamResponse = components['schemas']['TeamResponse']
-export type TeamListResponse = components['schemas']['TeamListResponse']
-export type CreateTeamPayload = components['schemas']['TeamCreate']
+export type AutobotTeamResponse = components['schemas']['AutobotTeamResponse']
+export type AutobotTeamListResponse = components['schemas']['AutobotTeamListResponse']
+export type CreateTeamPayload = components['schemas']['AutobotTeamCreate']
 export type TeamMemberAdd = components['schemas']['TeamMemberAdd']
 
 // Serialise pagination params onto the endpoint (the canonical client takes a
@@ -105,12 +105,12 @@ export function useSlmUserApi() {
   // AutoBot Teams
   // ===========================================================================
 
-  async function getTeams(skip = 0, limit = 100): Promise<TeamListResponse> {
-    return slmApiClient.get<TeamListResponse>(withPaging('/autobot-teams', skip, limit))
+  async function getTeams(skip = 0, limit = 100): Promise<AutobotTeamListResponse> {
+    return slmApiClient.get<AutobotTeamListResponse>(withPaging('/autobot-teams', skip, limit))
   }
 
-  async function createTeam(data: CreateTeamPayload): Promise<TeamResponse> {
-    return slmApiClient.post<TeamResponse>('/autobot-teams', data)
+  async function createTeam(data: CreateTeamPayload): Promise<AutobotTeamResponse> {
+    return slmApiClient.post<AutobotTeamResponse>('/autobot-teams', data)
   }
 
   async function deleteTeam(teamId: string): Promise<void> {

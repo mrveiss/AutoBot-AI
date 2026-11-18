@@ -40,6 +40,8 @@ from __future__ import annotations
 
 import re
 
+import yaml
+
 __all__ = ["split_frontmatter", "strip_frontmatter"]
 
 # A fence is exactly three dashes on its own line, optionally followed by horizontal
@@ -94,6 +96,17 @@ def split_frontmatter(text: str) -> tuple[str | None, str]:
         return yaml_text, text[consumed:]
 
     return None, text
+
+
+def parse_frontmatter_mapping(text: str):
+    """The YAML front matter of *text*, loaded; ``{}`` when absent, empty or malformed YAML (#18731)."""
+    raw, _ = split_frontmatter(text)
+    if raw is None:
+        return {}
+    try:
+        return yaml.safe_load(raw) or {}
+    except yaml.YAMLError:
+        return {}
 
 
 def strip_frontmatter(text: str) -> str:

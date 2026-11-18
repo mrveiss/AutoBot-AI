@@ -29,6 +29,7 @@ import type {
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
+import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
 export type { KnowledgeDocument, SearchResult }
@@ -191,6 +192,27 @@ export interface BackendSearchResult {
   node_id: string
 }
 
+/** A backend search hit as a SearchResult; `metadata.factType` keeps the fact's raw type (#21037). */
+function toSearchResult(result: BackendSearchResult, score: number): SearchResult {
+  const meta = result.metadata
+  return {
+    document: {
+      id: meta?.fact_id || result.node_id,
+      title: meta?.title || 'Untitled',
+      content: result.content,
+      type: meta?.type || 'document',
+      category: meta?.category || 'General',
+      source: meta?.source || 'Unknown',
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: meta?.stored_at ? new Date(meta.stored_at) : new Date(),
+      metadata: { factType: meta?.type },
+    } as KnowledgeDocument,
+    score,
+    highlights: [result.content?.substring(0, 200) + '...' || ''],
+  }
+}
+
 /**
  * KnowledgeRepository - Consolidated Knowledge Base API Repository
  *
@@ -218,21 +240,7 @@ export class KnowledgeRepository extends ApiRepository {
     // Backend returns { results: [...], total_results: N, ... }
     // Transform results to match expected SearchResult format
     const results = response.data.results || []
-    return results.map((result: BackendSearchResult) => ({
-      document: {
-        id: result.metadata?.fact_id || result.node_id,
-        title: result.metadata?.title || 'Untitled',
-        content: result.content,
-        type: result.metadata?.type || 'document',
-        category: result.metadata?.category || 'General',
-        source: result.metadata?.source || 'Unknown',
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: result.metadata?.stored_at ? new Date(result.metadata.stored_at) : new Date()
-      } as KnowledgeDocument,
-      score: result.score,
-      highlights: [result.content?.substring(0, 200) + '...' || '']
-    }))
+    return results.map(result => toSearchResult(result, result.score))
   }
 
   // RAG-enhanced search — migrated from /rag_search to /search (#10666)
@@ -447,8 +455,7 @@ export class KnowledgeRepository extends ApiRepository {
    * Get document by ID
    */
   async getDocument(documentId: string): Promise<KnowledgeDocument> {
-    const response = await this.get<KnowledgeDocument>(`${getApiBase()}/knowledge_base/documents/${documentId}`)
-    return response.data
+    return factToDocument(documentId, (await this.get<FactByKeyBody>(factByKeyUrl(documentId))).data)
   }
 
   /**
@@ -511,21 +518,7 @@ export class KnowledgeRepository extends ApiRepository {
 
     // Transform results to match SearchResult format
     const results = ((response.data as { results?: BackendSearchResult[] }).results || response.data || []) as BackendSearchResult[]
-    return results.map((result: BackendSearchResult) => ({
-      document: {
-        id: result.metadata?.fact_id || result.node_id,
-        title: result.metadata?.title || 'Untitled',
-        content: result.content,
-        type: result.metadata?.type || 'document',
-        category: result.metadata?.category || 'General',
-        source: result.metadata?.source || 'Unknown',
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: result.metadata?.stored_at ? new Date(result.metadata.stored_at) : new Date()
-      } as KnowledgeDocument,
-      score: result.score || 0,
-      highlights: [result.content?.substring(0, 200) + '...' || '']
-    }))
+    return results.map(result => toSearchResult(result, result.score || 0))
   }
 
   /**

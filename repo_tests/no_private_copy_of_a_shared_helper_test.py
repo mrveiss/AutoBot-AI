@@ -18,6 +18,8 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 # ---------------------------------------------------------------------------
 # A checker CI runs as a script must import the helper the way a script can
 # ---------------------------------------------------------------------------
@@ -64,7 +66,7 @@ def test_a_script_invoked_checker_imports_the_helper_as_a_sibling() -> None:
             offenders.append(f"{rel}: invoked by a workflow but absent from the tree")
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError, UnicodeDecodeError) as exc:
             # An unreadable checker is a checker this guard did not examine. A
             # `continue` here let it escape while still counting toward the

@@ -14,11 +14,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288): `utils.memory_optimization` is a backend module. The old root here was
+# autobot-infrastructure/shared/, which holds no `utils` package, so the import always failed.
+# It puts the backend and the repository root (for `autobot_shared`) on its own path, so it runs
+# from any directory with no PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from utils.memory_optimization import (
+from utils.memory_optimization import (  # noqa: E402
     MemoryOptimizedLogging,
     get_memory_monitor,
     optimize_memory_usage,

@@ -14,7 +14,7 @@
  * Author: mrveiss
  */
 
-import { getConfig, getServiceUrl as ssotGetServiceUrl, getApiBase } from './ssot-config';
+import { getConfig, getServiceUrl as ssotGetServiceUrl, getApiBase, getBackendUrl } from './ssot-config';
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -110,13 +110,7 @@ export default class ServiceDiscovery {
     // For backend service, check proxy mode FIRST before any SSOT/env lookup (#919)
     // When VITE_API_BASE_URL is not set, all API calls go through nginx proxy (relative URLs)
     if (serviceName === 'backend') {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-      if (!apiBaseUrl) {
-        this.log('Backend service using proxy mode (empty URL) - requests via nginx at .21');
-        return '';
-      }
-      this.log(`Using VITE_API_BASE_URL for backend:`, apiBaseUrl);
-      return apiBaseUrl;
+      return getBackendUrl(); // #19821: the one backend-origin rule (proxy mode unless VITE_API_BASE_URL)
     }
 
     // Try SSOT helper function for non-backend services
@@ -169,14 +163,8 @@ export default class ServiceDiscovery {
         protocol: cfg.httpProtocol,
         fallbackHosts: [cfg.vm.main, 'localhost', '127.0.0.1']
       },
-      redis: {
-        envVar: 'VITE_REDIS_URL',
-        hostVar: 'VITE_REDIS_HOST',
-        portVar: 'VITE_REDIS_PORT',
-        port: String(cfg.port.redis),
-        protocol: 'redis',
-        fallbackHosts: [cfg.vm.redis, 'localhost', '127.0.0.1']
-      },
+      // No redis entry: a browser never dials Redis (#19232). Host/port for display come
+      // from cfg.vm.redis / cfg.port.redis; the backend owns the one Redis URL builder.
       // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
       vnc_desktop: {
         envVar: 'VITE_DESKTOP_VNC_URL',
@@ -351,7 +339,6 @@ export default class ServiceDiscovery {
       // Handle regular services using defaults (which now uses SSOT)
       const serviceMap = {
         'npu_worker': 'npu_worker',
-        'redis': 'redis',
         'browser': 'browser',
         'ai_stack': 'ai_stack'
       };
@@ -408,6 +395,7 @@ export default class ServiceDiscovery {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+        // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
         const response = await fetch(testUrl, {
           method: 'HEAD',
           signal: controller.signal,
@@ -434,18 +422,9 @@ export default class ServiceDiscovery {
       // DORMANT: VNC health-check preserved for #5136 re-integration (#1130).
       if (serviceName.startsWith('vnc_')) {
         testEndpoint = '/vnc.html';
-      } else if (serviceName === 'redis') {
-        clearTimeout(timeoutId);
-        return {
-          serviceName,
-          url,
-          accessible: true,
-          status: 200,
-          statusText: 'Redis URL resolved',
-          note: 'Redis connectivity requires specialized client'
-        };
       }
 
+      // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
       const response = await fetch(`${url}${testEndpoint}`, {
         method: 'HEAD',
         signal: controller.signal,

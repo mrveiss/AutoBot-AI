@@ -190,7 +190,7 @@
               ref="fileInput"
               type="file"
               multiple
-              :accept="KNOWLEDGE_UPLOAD_ACCEPT"
+              :accept="uploadAccept"
               @change="handleFileSelect"
               style="display: none"
             />
@@ -401,6 +401,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * Knowledge Upload Component (Issue #747)
  *
@@ -421,16 +422,12 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { parseTags } from '@/utils/tagHelpers'
 import { resetFormFields } from '@/utils/formHelpers'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import {
-  KNOWLEDGE_UPLOAD_ACCEPT,
-  KNOWLEDGE_UPLOAD_EXTENSIONS,
-  KNOWLEDGE_UPLOAD_MAX_BYTES,
-  KNOWLEDGE_UPLOAD_MAX_MB
-} from '@/constants/knowledgeUpload'
+import { KNOWLEDGE_UPLOAD_ACCEPT, KNOWLEDGE_UPLOAD_EXTENSIONS } from '@/constants/knowledgeUpload'
+import { useKnowledgeUploadLimit } from '@/composables/knowledge/useKnowledgeUploadLimit'
+import { useChunkedUpload } from '@/composables/knowledge/useChunkedUpload'
 import { useUploadProgress } from '@/composables/useUploadProgress'
 import { useExpansion } from '@/composables/useExpansion'
 import { useTransientError } from '@/composables/useTransientError'
-import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeUpload')
@@ -461,6 +458,8 @@ interface FileItem {
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
 const { getFileIcon } = useKnowledgeIcons()
+const { maxMb, loadLimit, exceedsLimit } = useKnowledgeUploadLimit()
+const { loadLimits, uploadInChunks, cancelUpload, isMedia, uploadAccept, maxBytesFor } = useChunkedUpload(KNOWLEDGE_UPLOAD_ACCEPT)
 const {
   progress: uploadProgress,
   startProgress,
@@ -729,14 +728,15 @@ async function addFiles(files: File[]): Promise<void> {
 
   for (const file of files) {
     // Validate file size
-    if (file.size > KNOWLEDGE_UPLOAD_MAX_BYTES) {
-      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: KNOWLEDGE_UPLOAD_MAX_MB }))
+    const maxBytes = maxBytesFor(file.name)
+    if (maxBytes ? file.size > maxBytes : exceedsLimit(file.size)) {
+      showError(t('knowledge.upload.errorFileTooLarge', { name: file.name, max: maxBytes ? Math.floor(maxBytes / 1048576) : maxMb.value }))
       continue
     }
 
     // Validate file type
     const ext = getFileExtension(file.name).toLowerCase()
-    if (!KNOWLEDGE_UPLOAD_EXTENSIONS.includes(ext)) {
+    if (!isMedia(file.name) && !KNOWLEDGE_UPLOAD_EXTENSIONS.includes(ext)) {
       showError(t('knowledge.upload.errorUnsupportedFormat', { name: file.name }))
       continue
     }
@@ -798,9 +798,8 @@ function readFileAsText(file: File): Promise<string> {
 
 function removeFile(index: number): void {
   const file = selectedFiles.value[index]
-  if (file && isFileExpanded(file.id)) {
-    collapseAllFiles()
-  }
+  if (file && isFileExpanded(file.id)) collapseAllFiles()
+  if (file) void cancelUpload(file.file)
   selectedFiles.value.splice(index, 1)
 }
 
@@ -846,16 +845,12 @@ async function uploadFiles(): Promise<void> {
         // Determine category (use override or auto-detected or default)
         const category = fileEntry.category || fileItem.suggestedCategory || 'Uploads'
 
-        // Simulate progress updates
-        const progressInterval = setInterval(() => {
-          if (fileItem.progress < 90) {
-            fileItem.progress += 10
-          }
-        }, 100)
-
-        await controller.addFileDocument(fileItem.file, category, tags)
-
-        clearInterval(progressInterval)
+        const target = isMedia(fileItem.file.name) ? 'transcript' : 'document' // #19713
+        if (target === 'transcript' || exceedsLimit(fileItem.file.size)) {
+          await uploadInChunks(fileItem.file, { target, category, tags }, (percent) => { fileItem.progress = percent })
+        } else {
+          await controller.addFileDocument(fileItem.file, category, tags)
+        }
         fileItem.progress = 100
         fileItem.status = 'completed'
         uploadedCount++
@@ -965,6 +960,8 @@ function generateId(): string {
 
 onMounted(() => {
   controller.loadCategories()
+  loadLimit()
+  loadLimits()
 })
 </script>
 
@@ -1017,8 +1014,8 @@ onMounted(() => {
   border-bottom: 1px solid var(--border-default);
 }
 
-.method-header i {
-  font-size: var(--text-xl);
+.method-header .icon {
+  width: var(--text-xl); height: var(--text-xl);
   color: var(--color-primary);
 }
 
@@ -1175,7 +1172,7 @@ onMounted(() => {
 
 .drop-zone-content {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .drop-zone-content.compact {
@@ -1201,17 +1198,17 @@ onMounted(() => {
   margin-bottom: var(--spacing-4);
 }
 
-.drop-icon-wrapper i {
-  font-size: var(--text-4xl);
+.drop-icon-wrapper .icon {
+  width: var(--text-4xl); height: var(--text-4xl);
   color: var(--text-tertiary);
   transition: all var(--duration-200);
 }
 
-.drag-valid .drop-icon-wrapper i {
+.drag-valid .drop-icon-wrapper .icon {
   color: var(--color-success);
 }
 
-.drag-invalid .drop-icon-wrapper i {
+.drag-invalid .drop-icon-wrapper .icon {
   color: var(--color-error);
 }
 
@@ -1262,7 +1259,7 @@ onMounted(() => {
   margin: var(--spacing-0);
 }
 
-.files-header h5 i {
+.files-header h5 .icon {
   color: var(--color-primary);
 }
 
@@ -1378,8 +1375,8 @@ onMounted(() => {
   font-size: 0.625rem;
 }
 
-.suggested-category i {
-  font-size: 0.5rem;
+.suggested-category .icon {
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .file-actions {
@@ -1519,7 +1516,7 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.preview-truncated i {
+.preview-truncated .icon {
   color: var(--color-info);
 }
 
