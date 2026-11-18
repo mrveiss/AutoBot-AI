@@ -490,3 +490,39 @@ def test_a_placeholder_segment_reaches_a_parameter_route(tmp_path: Path) -> None
         f"{_MAIN}/a.ts": _HELPER + "apiClient.get(`${plantedUrl()}/${id}/x`)\n",
     }
     assert "route:autobot-backend/api/planted_param.py:GET /{provider}/x" not in _fired(tmp_path, files)
+
+
+_OWNER = (
+    "import { useCaller } from './caller'\n"
+    "import { useApiClient } from '@/utils/ApiClient'\n"
+    "const api = useApiClient()\n" + _HELPER + "useCaller({ api, plantedUrl })\n"
+)
+_CALLER = "export function useCaller(deps) {\n  return deps.api.get(`${deps.plantedUrl()}/orphan`)\n}\n"
+
+
+@pytest.mark.parametrize(
+    ("label", "owner", "caller", "connected"),
+    [
+        ("a helper handed in by the file that imports the caller", _OWNER, _CALLER, True),
+        (
+            "a helper whose owner does not import the caller",
+            _OWNER.replace("import { useCaller } from './caller'\n", ""),
+            _CALLER,
+            False,
+        ),
+        (
+            "a handed-in call through a client that is not recognised",
+            _OWNER,
+            _CALLER.replace("deps.api", "deps.fetcher"),
+            False,
+        ),
+        ("a handed-in call of another method", _OWNER, _CALLER.replace(".get(", ".delete("), False),
+        ("a handed-in call of another helper", _OWNER, _CALLER.replace("plantedUrl", "otherUrl"), False),
+    ],
+)
+def test_a_route_reached_through_a_helper_handed_to_the_calling_file_counts_as_connected(
+    tmp_path: Path, label: str, owner: str, caller: str, connected: bool
+) -> None:
+    """#21307: ``deps.api.get(`${deps.helper()}/x`)`` follows the helper the importing file declares."""
+    files = {**_PLANTED, f"{_MAIN}/owner.ts": owner, f"{_MAIN}/caller.ts": caller}
+    assert (_KEY not in _fired(tmp_path, files)) is connected, label

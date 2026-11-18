@@ -15,8 +15,12 @@ Unlike the verb-blind callers of ``_unconnected_routes._reached``, these connect
 * every call segment that is a placeholder meets a route PARAMETER: ``GET /uploads/${id}`` does not reach the
   literal route ``GET /uploads/expired``, which a router serves before ``/{id}``.
 
-Only a call through a recognised client receiver counts (``console.log(`${h()}/x`)`` and ``fetch`` do not), and a
-helper declared in another file is not followed.
+Only a call through a recognised client receiver counts (``console.log(`${h()}/x`)`` and ``fetch`` do not).
+
+A helper declared in another file is followed in one case: the file declaring it IMPORTS the calling file and hands
+the helper (and the client) in, so the call reads ``deps.api.get(`${deps.conversationApi()}/preview/${id}`)``
+(#21307: the composable that builds the URL composes the one that calls it). The receiver and the helper are
+then reached through one member access; a helper of a file that does not import the caller is not followed.
 """
 
 from __future__ import annotations
@@ -34,6 +38,9 @@ _URL_HELPER = re.compile(
 )
 _METHOD_OPTION = re.compile(r"""(['"]?)method\1\s*:\s*['"](?P<verb>\w+)['"]""")
 _PATH_TAIL = r"/[^`'\"\s]*"
+#: The module stem of each ``import ... from '<path>/<stem>[.ext]'`` in a file.
+_IMPORT_STEM = re.compile(r"""from\s+['"][^'"]*?/(\w+)(?:\.\w+)?['"]""")
+_MEMBER = r"(?:\w+\.)?"  # ``deps.`` in front of a receiver or helper handed in as a member of a parameter object
 HelperCalls = dict[tuple[str, str], set[str]]
 
 
@@ -92,11 +99,15 @@ def _verb(verb: str, arguments: str) -> str:
     return verb.upper() if verb in ("get", "post", "put", "patch", "delete") else ""
 
 
-def _calls_of(helper: re.Match[str], calls: str, receivers: dict[str, str]) -> set[tuple[str, str]]:
-    name, path = helper.group(1), "/api" + helper.group(2)
-    names = "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True))
+def _calls_of(
+    helper: re.Match[str], calls: str, receivers: dict[str, str], handed_in: bool = False
+) -> set[tuple[str, str]]:
+    """The calls in *calls* through *helper*; *handed_in* reads the client and the helper as members of a parameter."""
+    member = _MEMBER if handed_in else ""
+    name, path = member + helper.group(1), "/api" + helper.group(2)
+    names = member + "(?:" + "|".join(re.escape(n) for n in sorted(receivers, key=len, reverse=True)) + ")"
     arg = rf"(?:`\$\{{{name}\(\)\}}({_PATH_TAIL})?`|{name}\(\))\s*[,)]"
-    site = re.compile(rf"(?<![\w.$])(?:{names})\s*\.\s*({_VERBS})\s*(?:<[^()]*>)?\s*\(\s*{arg}")
+    site = re.compile(rf"(?<![\w.$]){names}\s*\.\s*({_VERBS})\s*(?:<[^()]*>)?\s*\(\s*{arg}")
     found = set()
     for m in site.finditer(calls):
         if verb := _verb(m.group(1), _own_arguments(calls, m.end(1))):
@@ -113,19 +124,42 @@ def helper_calls_in(rel: str, text: str) -> set[tuple[str, str]]:
     return found
 
 
+def _handed_in_calls(rel: str, text: str, texts: dict[str, str]) -> HelperCalls:
+    """The calls through *rel*'s URL helpers made in the files it imports, which it hands the helper and client."""
+    receivers, _script, own_calls = prepared_text(rel, text)
+    helpers = list(_URL_HELPER.finditer(own_calls))
+    stems = set(_IMPORT_STEM.findall(text))
+    out: HelperCalls = {}
+    for other, other_text in texts.items():
+        if other == rel or not helpers or other.rsplit("/", 1)[-1].split(".")[0] not in stems:
+            continue
+        calls = prepared_text(other, other_text)[2]
+        for helper in helpers:
+            for found in _calls_of(helper, calls, receivers, handed_in=True):
+                out.setdefault(found, set()).add(other)
+    return out
+
+
 def helper_calls(tree: Tree, frontends: tuple[str, ...], norm_path, exclude: tuple[str, ...]) -> HelperCalls:
     """``{(METHOD, normalised path): {files}}`` for the helper-built calls, tests/mocks out."""
-    out: HelperCalls = {}
-    for rel in tree.select(".ts", ".vue", ".js", ".tsx", under=frontends):
-        if any(x in rel for x in exclude):
-            continue
-        text = tree.text(rel)
+    texts = {
+        rel: tree.text(rel)
+        for rel in tree.select(".ts", ".vue", ".js", ".tsx", under=frontends)
+        if not any(x in rel for x in exclude)
+    }
+    raw: HelperCalls = {}
+    for rel, text in texts.items():
         if "getApiBase" not in text:
             continue
-        for verb, raw in helper_calls_in(rel, text):
-            path = norm_path(raw)
-            if path.count("{") == path.count("}"):
-                out.setdefault((verb, path), set()).add(rel)
+        for found in helper_calls_in(rel, text):
+            raw.setdefault(found, set()).add(rel)
+        for found, files in _handed_in_calls(rel, text, texts).items():
+            raw.setdefault(found, set()).update(files)
+    out: HelperCalls = {}
+    for (verb, call), files in raw.items():
+        path = norm_path(call)
+        if path.count("{") == path.count("}"):
+            out.setdefault((verb, path), set()).update(files)
     return out
 
 
