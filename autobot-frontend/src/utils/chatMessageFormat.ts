@@ -26,8 +26,9 @@ import { sanitizeChatHtml } from '@/utils/sanitize'
 import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
 
 const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a\s*>)/i
+const PRE_RE = /(<pre\b[\s\S]*?<\/pre>)/
 const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
-const TRAILING_PUNCT_RE = /[.,;:!?'"]+$/
+const TRAILING_PUNCT_CHARS = '.,;:!?\'"'
 
 function stripAnsi(content: string): string {
   return content
@@ -43,24 +44,22 @@ function stripAnsi(content: string): string {
 
 /** Split a matched URL into [href, trailing text that is not part of it]. */
 function splitTrailing(raw: string): [string, string] {
-  let url = raw
-  let tail = ''
-  for (;;) {
-    const punct = TRAILING_PUNCT_RE.exec(url)
-    if (punct) {
-      tail = punct[0] + tail
-      url = url.slice(0, punct.index)
-      continue
-    }
-    const opens = (url.match(/\(/g) || []).length
-    const closes = (url.match(/\)/g) || []).length
-    if (url.endsWith(')') && closes > opens) {
-      tail = ')' + tail
-      url = url.slice(0, -1)
-      continue
-    }
-    return [url, tail]
+  let end = raw.length
+  let opens = 0
+  let closes = 0
+  for (const ch of raw) {
+    if (ch === '(') opens++
+    else if (ch === ')') closes++
   }
+  while (end > 0) {
+    const ch = raw[end - 1]
+    if (TRAILING_PUNCT_CHARS.includes(ch)) end--
+    else if (ch === ')' && closes > opens) {
+      closes--
+      end--
+    } else break
+  }
+  return [raw.slice(0, end), raw.slice(end)]
 }
 
 /** Wrap bare URLs in anchors, leaving existing anchors untouched. */
@@ -80,18 +79,16 @@ export function linkifyBareUrls(html: string): string {
 
 const LINK_STASH = '\u0000'
 
-/** Swap every anchor for a placeholder so the inline passes cannot touch hrefs. */
-function stashAnchors(html: string): { text: string; anchors: string[] } {
-  const anchors: string[] = []
-  const text = html
-    .split(ANCHOR_RE)
+/** Swap every match of `re` (one capture group) for a placeholder, appending the originals to `store`. */
+function stash(html: string, re: RegExp, store: string[]): string {
+  return html
+    .split(re)
     .map((part, i) => {
       if (i % 2 === 0) return part
-      anchors.push(part)
-      return `${LINK_STASH}${anchors.length - 1}${LINK_STASH}`
+      store.push(part)
+      return `${LINK_STASH}${store.length - 1}${LINK_STASH}`
     })
     .join('')
-  return { text, anchors }
 }
 
 function restoreAnchors(text: string, anchors: string[]): string {
@@ -106,7 +103,10 @@ export function formatChatMessageHtml(raw: string): string {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
   })
 
-  const { text, anchors } = stashAnchors(linkifyBareUrls(renderMarkdownLinks(content)))
+  // Code blocks are set aside before the link passes; anchors before the inline passes.
+  const anchors: string[] = []
+  const prose = stash(content, PRE_RE, anchors)
+  const text = stash(linkifyBareUrls(renderMarkdownLinks(prose)), ANCHOR_RE, anchors)
   const inline = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')

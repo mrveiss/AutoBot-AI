@@ -101,4 +101,14 @@ describe('chat message formatter (#21771)', () => {
       expect(formatChatMessageHtml('use arr[0](x) here')).toContain('arr[0](x)')
     })
   })
+
+  it('a fenced block is not rewritten by the link passes', () => {
+    const html = formatChatMessageHtml('```md\n[label](relative.md) and *x*\n```')
+    expect(html).toContain('[label](relative.md) and *x*')
+  })
+
+  it('many surplus closing parentheses stay out of the href quickly', () => {
+    const html = formatChatMessageHtml('https://example.com/a' + ')'.repeat(20000))
+    expect(hrefs(html)).toEqual(['https://example.com/a'])
+  })
 })

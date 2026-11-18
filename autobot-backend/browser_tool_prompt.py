@@ -79,4 +79,5 @@ def render_tool_name_reminder_lines() -> str:
 def template_vars() -> "dict[str, str]":
     """Jinja variables every prompt template can use (merged by ``PromptManager.get``)."""
     # Markup: the Jinja env autoescapes plain strings, which would entity-encode the TOOL_CALL examples.
-    return {"browser_tools_section": Markup(render_browser_tools_section())}  # nosec B704 - repo-generated text
+    section = Markup(render_browser_tools_section())  # nosec B704  # repo-generated text
+    return {"browser_tools_section": section}
