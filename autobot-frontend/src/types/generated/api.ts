@@ -1290,7 +1290,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -1312,7 +1312,7 @@ export interface paths {
         };
         /**
          * List Chats
-         * @description List all available chat sessions with improved error handling (consolidated).
+         * @description List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
          *
          *     Issue #744: Requires authenticated user.
          */
@@ -5164,9 +5164,10 @@ export interface paths {
         put?: never;
         /**
          * Clear All Knowledge
-         * @description Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+         * @description Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
          *
-         *     Issue #744: Requires admin authentication.
+         *     Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+         *     the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
          */
         post: operations["clear_all_knowledge_api_knowledge_base_clear_all_post"];
         delete?: never;
@@ -13664,8 +13665,8 @@ export interface paths {
          * Mcp Redis Vector Operations
          * @description MCP tool: Direct Redis vector store operations.
          *
-         *     Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-         *     should be further restricted at the application level.
+         *     Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+         *     wipe, for an admin user only, and the wipe runs after a human approves it.
          */
         post: operations["mcp_redis_vector_operations_api_knowledge_mcp_redis_vector_operations_post"];
         delete?: never;
@@ -17157,8 +17158,8 @@ export interface paths {
          * Rollback To Revision
          * @description Roll back entity config to a prior revision (#1404).
          *
-         *     Creates a new revision capturing the rollback so the action is
-         *     itself part of the audit trail.
+         *     Applies the snapshot to the live config, then records a revision so the
+         *     action is part of the audit trail (#18478). Unknown entities return 400.
          */
         post: operations["rollback_to_revision_api_config_revisions__entity_type___entity_id___revision_id__rollback_post"];
         delete?: never;
@@ -17222,10 +17223,7 @@ export interface paths {
         };
         /**
          * List Specialized Agents
-         * @description List all AutoBot specialized agents from .claude/agents/ (#1794).
-         *
-         *     Returns agent definitions parsed from markdown files including
-         *     name, description, tools, color, model, and category.
+         * @description List the host's Claude Code agents from the configured agents dir (#1794).
          *
          *     Issue #744: Requires admin authentication.
          */
@@ -19725,6 +19723,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/knowledge-wipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Knowledge Wipe Plan
+         * @description Read only: the databases and indexes a wipe would delete.
+         */
+        get: operations["knowledge_wipe_plan_api_admin_knowledge_wipe_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/knowledge-wipe/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Knowledge Wipe
+         * @description Propose the wipe -- a request, not an execution.
+         */
+        post: operations["propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/dashboard/overview": {
         parameters: {
             query?: never;
@@ -21254,12 +21292,16 @@ export interface paths {
         };
         /**
          * Get Current Indexing Job
-         * @description Get the status of the currently running indexing job (if any)
+         * @description Get the status of the currently running indexing job, if it belongs to ``source_id``.
+         *
+         *     One job runs at a time across all sources (#20491). A job that belongs to another
+         *     source is not reported: the answer for this source is its own request queued behind
+         *     that job (``status: "queued"``, ``task_id: null``), else idle (#20513).
          *
          *     Returns:
-         *     - has_active_job: Whether an indexing job is currently running
-         *     - task_id: The current job's task ID (if running)
-         *     - source_id: The source it indexes: one job runs at a time across all sources (#20491)
+         *     - has_active_job: Whether an indexing job of this source is running or queued
+         *     - task_id: The current job's task ID (if running or just finished)
+         *     - source_id: The source it indexes (always the requested one when a job is named)
          *     - status: Current job status
          *     - progress: Current progress details
          */
@@ -21418,6 +21460,31 @@ export interface paths {
          * @description Real code problems per source (#1710); ``file_category`` (#20493) narrows to e.g. ``code``/``test``.
          */
         get: operations["get_codebase_problems_api_analytics_codebase_problems_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analytics/codebase/index/run-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Index Run State
+         * @description Return how the source's newest indexing run ended and when the last complete one finished.
+         *
+         *     ``run`` is ``null`` (and ``partial`` false) for a source with no recorded run.
+         *     ``partial`` is true when the newest run did not complete: the findings in
+         *     storage may be from an interrupted run and must be shown labelled.
+         *     A run left ``running`` past its hard timeout is reported ``abandoned``.
+         */
+        get: operations["get_index_run_state_api_analytics_codebase_index_run_state_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -33569,7 +33636,7 @@ export interface paths {
         post?: never;
         /**
          * Delete Secret
-         * @description Delete a secret; 409 with the dependents listed unless ``confirm_dependents`` (#20640).
+         * @description Delete a secret; 409 with the dependents listed unless ``dependents_digest`` confirms that set (#20640).
          */
         delete: operations["delete_secret_api_v2_secrets__secret_id__delete"];
         options?: never;
@@ -49406,9 +49473,10 @@ export interface paths {
         };
         /**
          * Export All Conversations
-         * @description Export all conversations as a bulk JSON archive (#1808).
+         * @description Export the caller's conversations as a bulk JSON archive (#1808, #21666).
          *
-         *     Returns a JSON file containing every conversation stored on this instance.
+         *     Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
+         *     instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
          */
         get: operations["export_all_conversations_api_conversations_conversations_export_all_get"];
         put?: never;
@@ -52968,7 +53036,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Release Work Item */
+        /**
+         * Release Work Item
+         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
+         *     person is refused (409). Not enforced: that the caller IS that agent (open, #20521).
+         */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
         options?: never;
@@ -53383,7 +53455,8 @@ export interface paths {
          *     1. Branch name: ``llc/{work_item_id}`` (and variants)
          *     2. PR body: ``Closes #llc-{work_item_id}``
          *
-         *     On PR merge → transition the work item to ``in_review``.
+         *     On PR merge → hand the work item to its reviewer through the review handoff, or leave it
+         *     where it is with a comment saying why (#21591).
          *     On PR close without merge → add a comment to the work item.
          */
         post: operations["handle_github_webhook_api_llc_webhooks_github_post"];
@@ -53478,6 +53551,8 @@ export interface paths {
          *     The company check is not incidental: ``transition_status`` takes
          *     ``company_id`` and this route is reached with an agent's context, so an
          *     item belonging to another company must 404 rather than transition.
+         *
+         *     Only an item the agent holds changes (404 as if missing, #21586); one waiting on its reviewer is 409.
          */
         post: operations["update_work_item_status_api_llc_agent_work_items__item_id__status_post"];
         delete?: never;
@@ -53832,7 +53907,7 @@ export interface paths {
          * @description Manual run cancel (board only).
          *
          *     Sets run status = cancelled, calls adapter.cancel() best-effort,
-         *     and releases the Redis checkout lock when a work item was held.
+         *     and releases every work-item checkout the run made (and their Redis fences).
          */
         post: operations["cancel_run_api_llc_agents__agent_id__runs__run_id__cancel_post"];
         delete?: never;
@@ -57372,6 +57447,11 @@ export interface components {
             specialized_agents?: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Specialized Available
+             * @default true
+             */
+            specialized_available: boolean;
             /** Summary */
             summary?: {
                 [key: string]: unknown;
@@ -57579,6 +57659,8 @@ export interface components {
             model?: string | null;
             /** Category */
             category?: string | null;
+            /** Tier */
+            tier?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57600,6 +57682,11 @@ export interface components {
             categories?: {
                 [key: string]: unknown;
             };
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
             /**
              * Timestamp
              * @default
@@ -57868,7 +57955,7 @@ export interface components {
             capabilities?: string | null;
             /**
              * Model
-             * @description Model override. Supported: 'claude-sonnet-4-6' (default), 'claude-haiku-4-5-20251001'. Use Haiku for execution-only assistant agents.
+             * @description Model override. Supported: 'claude-sonnet-5-5' (default), 'claude-haiku-5-5'; the tier aliases 'sonnet' and 'haiku' name them. Use Haiku for execution-only assistant agents.
              */
             model?: string | null;
             /**
@@ -58101,7 +58188,10 @@ export interface components {
         AgentPauseRequest: {
             /** Reason */
             reason?: string | null;
-            /** Paused By */
+            /**
+             * Paused By
+             * @description Ignored; the actor is the verified caller.
+             */
             paused_by?: string | null;
         } & {
             [key: string]: unknown;
@@ -58277,8 +58367,7 @@ export interface components {
         };
         /**
          * AgentStatusItem
-         * @description One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
-         *     A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514).
+         * @description Home dashboard "Agent Activity Monitor" agent (#10502); an unmeasured field is None, never 0 (#17514, #21270).
          */
         AgentStatusItem: {
             /** Id */
@@ -58307,11 +58396,13 @@ export interface components {
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
             /** Activitytimeline */
             activityTimeline?: {
                 [key: string]: unknown;
-            }[];
+            }[] | null;
+            /** Activitywindowstart */
+            activityWindowStart?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -60566,11 +60657,6 @@ export interface components {
             company_id: string;
             type: components["schemas"]["ApprovalType"];
             /**
-             * Requested By Agent Id
-             * Format: uuid
-             */
-            requested_by_agent_id: string;
-            /**
              * Payload
              * @default {}
              */
@@ -61061,6 +61147,50 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditEntryResponse
+         * @description One audit row, as ``AuditEntry.to_response_dict`` sends it (#20173).
+         *
+         *     ``timestamp`` is epoch SECONDS; the operation's data is in ``details``.
+         *     ``result`` is the canonical audit event's ``outcome`` (``services/audit/taxonomy.py``),
+         *     an open string: operation rows say success/denied/failed/error/attempted, identity
+         *     rows add verified/backup-code and more. It is never narrowed to a Literal, which
+         *     would turn one off-vocabulary row into a 500 for the whole query.
+         */
+        AuditEntryResponse: {
+            /** Id */
+            id: string;
+            /** Timestamp */
+            timestamp: number;
+            /** Date */
+            date: string;
+            /** Operation */
+            operation: string;
+            /** Result */
+            result: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** User Role */
+            user_role?: string | null;
+            /** Resource */
+            resource?: string | null;
+            /** Vm Source */
+            vm_source?: string | null;
+            /** Vm Name */
+            vm_name?: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Performance Ms */
+            performance_ms?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -61115,9 +61245,7 @@ export interface components {
             /** Has More */
             has_more: boolean;
             /** Entries */
-            entries: {
-                [key: string]: unknown;
-            }[];
+            entries: components["schemas"]["AuditEntryResponse"][];
             /** Query */
             query: {
                 [key: string]: unknown;
@@ -65564,13 +65692,14 @@ export interface components {
          * ClearAllResponse
          * @description Shape of ``POST /api/knowledge_base/clear_all``.
          *
-         *     DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
-         *     vectors — vector store is cleared as part of ``kb.clear_all()``.
+         *     The route deletes nothing (#21048, #17038): it proposes a knowledge wipe, and the wipe runs only after a
+         *     human approves it. ``approval_id`` names the pending approval; ``items_removed`` and ``items_before`` stay
+         *     for compatibility and are 0 because nothing was removed by this request.
          */
         ClearAllResponse: {
             /**
              * Status
-             * @description 'success' | 'error'
+             * @description Approval status of the wipe request, 'pending' until a human decides
              */
             status: string;
             /**
@@ -65588,6 +65717,16 @@ export interface components {
              * @default
              */
             message: string;
+            /**
+             * Approval Id
+             * @description Id of the pending wipe approval in the Approvals inbox
+             */
+            approval_id?: string | null;
+            /**
+             * Action
+             * @description The approval action the wipe runs under
+             */
+            action?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -66926,10 +67065,6 @@ export interface components {
             company_id: string;
             /** Body */
             body: string;
-            /** Author Agent Id */
-            author_agent_id?: string | null;
-            /** Author User Id */
-            author_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -67034,6 +67169,44 @@ export interface components {
             parent_org_id?: string | null;
             /** @default onboarding */
             llc_status: components["schemas"]["LLCCompanyStatus"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMemberRow
+         * @description One person in the members list.
+         */
+        CompanyMemberRow: {
+            /** Id */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** User Id */
+            user_id: string;
+            /** Role */
+            role: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Display Name */
+            display_name: string;
+            /** Is Active */
+            is_active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyMembersResponse
+         * @description The members and the caller's own standing, which does not depend on there being any.
+         */
+        CompanyMembersResponse: {
+            /** Members */
+            members: components["schemas"]["CompanyMemberRow"][];
+            /** Viewer Role */
+            viewer_role?: string | null;
+            /** Viewer Can Manage */
+            viewer_can_manage: boolean;
+            /** Viewer Grantable Roles */
+            viewer_grantable_roles: string[];
         } & {
             [key: string]: unknown;
         };
@@ -79517,10 +79690,27 @@ export interface components {
         GraphRequest: {
             /**
              * Max Facts
-             * @description Maximum facts to include
+             * @description Facts per page (page through with offset)
              * @default 50
              */
             max_facts: number;
+            /**
+             * Offset
+             * @description Facts and bucket records to skip, so a client can page to every one the caller may read (#20945)
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Cursor
+             * @description Facts only: the `cursor` of the previous response's facts section. The scan resumes there, so every readable fact is reachable however deep the listing is; `offset` then pages bucket records only (#20945)
+             */
+            cursor?: string | null;
+            /**
+             * Include Buckets
+             * @description Include one section per non-fact knowledge bucket (#20945)
+             * @default true
+             */
+            include_buckets: boolean;
             /**
              * Max Depth
              * @description Maximum relation depth
@@ -79554,12 +79744,92 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * GraphSection
+         * @description Visible total vs this page of one graph section (the facts, or one knowledge bucket).
+         */
+        GraphSection: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Total
+             * @description Records the caller may read (a lower bound when truncated)
+             */
+            total?: number | null;
+            /**
+             * Returned
+             * @description Records on this page
+             */
+            returned: number;
+            /**
+             * Limited
+             * @description True while readable records remain past this page
+             */
+            limited: boolean;
+            /**
+             * Truncated
+             * @description True when the scan cap cut the listing short
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Budget Exhausted
+             * @description True when the per-request scan budget ended before a readable record or the end of data
+             * @default false
+             */
+            budget_exhausted: boolean;
+            /**
+             * Failed
+             * @description True when the section's source could not be read; total is unknown
+             * @default false
+             */
+            failed: boolean;
+            /**
+             * Cursor
+             * @description Facts section only: pass as `cursor` to continue the scan
+             */
+            cursor?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** GraphSpec */
         GraphSpec: {
             /** Nodes */
             nodes?: components["schemas"]["NodeSpec"][];
             /** Transitions */
             transitions?: components["schemas"]["TransitionSpec"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GraphStats
+         * @description Counts of one multi-source graph response.
+         */
+        GraphStats: {
+            /** Sections */
+            sections?: components["schemas"]["GraphSection"][];
+            /**
+             * Total Entities
+             * @default 0
+             */
+            total_entities: number;
+            /**
+             * Total Relations
+             * @default 0
+             */
+            total_relations: number;
+            /**
+             * Categories
+             * @default 0
+             */
+            categories: number;
+            /**
+             * Facts
+             * @default 0
+             */
+            facts: number;
         } & {
             [key: string]: unknown;
         };
@@ -80039,6 +80309,11 @@ export interface components {
             paused_at?: string | null;
             /** Paused By */
             paused_by?: string | null;
+            /**
+             * Paused By Name
+             * @description Display name of the user in paused_by; null for system actors or unknown users.
+             */
+            paused_by_name?: string | null;
             /** Error Detail */
             error_detail?: string | null;
             /** Error At */
@@ -80408,8 +80683,6 @@ export interface components {
         };
         /** HumanClaimRequest */
         HumanClaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -80420,8 +80693,6 @@ export interface components {
          * @description The same accepted-and-ignored fields as a claim.
          */
         HumanUnclaimRequest: {
-            /** User Id */
-            user_id?: string | null;
             /** Company Id */
             company_id?: string | null;
         } & {
@@ -82972,10 +83243,7 @@ export interface components {
             data: {
                 [key: string]: unknown;
             };
-            /** Stats */
-            stats: {
-                [key: string]: unknown;
-            };
+            stats: components["schemas"]["GraphStats"];
         } & {
             [key: string]: unknown;
         };
@@ -84795,8 +85063,6 @@ export interface components {
         LabelAssign: {
             /** Label Ids */
             label_ids: string[];
-            /** Assigned By */
-            assigned_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -84808,8 +85074,6 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
-            /** Created By */
-            created_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95082,7 +95346,7 @@ export interface components {
         };
         /**
          * RelationCreate
-         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         * @description ``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller.
          */
         RelationCreate: {
             /** Company Id */
@@ -95090,10 +95354,6 @@ export interface components {
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -95135,6 +95395,8 @@ export interface components {
         ReleaseRequest: {
             /** Agent Id */
             agent_id: string;
+            /** Run Id */
+            run_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -98220,11 +98482,6 @@ export interface components {
             name: string;
             /** Value */
             value: string;
-            /**
-             * Actor
-             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
-             */
-            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -100765,8 +101022,6 @@ export interface components {
              * Format: uuid
              */
             approval_id: string;
-            /** Decided By */
-            decided_by?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -108033,8 +108288,6 @@ export interface components {
             assignee_agent_id?: string | null;
             /** Assignee User Id */
             assignee_user_id?: string | null;
-            /** Created By Agent Id */
-            created_by_agent_id?: string | null;
             /** Labels */
             labels?: string[] | null;
             /** Requires Approval Before */
@@ -118155,6 +118408,11 @@ export interface operations {
                 max_facts?: number;
                 /** @description Include category nodes */
                 include_categories?: boolean;
+                /** @description Facts and bucket records to skip */
+                offset?: number;
+                /** @description Resume the facts scan (see GraphRequest) */
+                cursor?: string | null;
+                include_buckets?: boolean;
             };
             header?: never;
             path?: never;
@@ -135095,6 +135353,50 @@ export interface operations {
             };
         };
     };
+    knowledge_wipe_plan_api_admin_knowledge_wipe_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    propose_knowledge_wipe_api_admin_knowledge_wipe_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     get_dashboard_overview_api_analytics_dashboard_overview_get: {
         parameters: {
             query?: never;
@@ -136843,7 +137145,10 @@ export interface operations {
     };
     get_current_indexing_job_api_analytics_codebase_index_current_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -136857,6 +137162,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -136993,6 +137307,38 @@ export interface operations {
                 source_id: string;
                 problem_type?: string | null;
                 file_category?: components["schemas"]["ProblemCategory"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_index_run_state_api_analytics_codebase_index_run_state_get: {
+        parameters: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -153107,7 +153453,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -153541,7 +153887,7 @@ export interface operations {
     delete_secret_api_v2_secrets__secret_id__delete: {
         parameters: {
             query?: {
-                confirm_dependents?: boolean;
+                dependents_digest?: string | null;
             };
             header?: never;
             path: {
@@ -174412,7 +174758,10 @@ export interface operations {
     };
     export_all_conversations_api_conversations_conversations_export_all_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Instance-wide export of every user's conversations; admin only */
+                all_users?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -174425,6 +174774,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -177304,9 +177662,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CompanyMembersResponse"];
                 };
             };
             /** @description Validation Error */
@@ -178808,9 +179164,7 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query?: {
-                actor?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 name: string;
@@ -181902,8 +182256,6 @@ export interface operations {
         parameters: {
             query: {
                 company_id: string;
-                uploaded_by_agent_id?: string | null;
-                uploaded_by_user_id?: string | null;
             };
             header?: never;
             path: {
@@ -182083,10 +182435,6 @@ export interface operations {
             query?: {
                 /** @description Accepted for compatibility; ignored. */
                 company_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_agent_id?: string | null;
-                /** @description Accepted for compatibility; ignored. */
-                actor_user_id?: string | null;
             };
             header?: never;
             path: {

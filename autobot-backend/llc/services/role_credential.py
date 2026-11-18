@@ -35,6 +35,7 @@ from ..models.secret import LLCSecret
 from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 
 def _secret_company_key(company_id: uuid.UUID) -> str:
@@ -93,9 +94,9 @@ class RoleCredentialService(LLCServiceBase):
         )
         row = result.first()
         if row is None:
-            raise ValueError(f"secret {secret_id} does not exist in company {company_id}")
+            raise CompanyOsNotFound(f"secret {secret_id} does not exist in company {company_id}")
         if row[0] is not None:
-            raise ValueError(f"secret {secret_id} is revoked and cannot be attached to a role")
+            raise CompanyOsError(f"secret {secret_id} is revoked and cannot be attached to a role")
 
     async def attach(
         self,
@@ -107,14 +108,14 @@ class RoleCredentialService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleCredential:
         if company_id is None or role_id is None or secret_id is None:
-            raise ValueError("company_id, role_id and secret_id are all required")
+            raise CompanyOsError("company_id, role_id and secret_id are all required")
 
         await require_company_admin(session, company_id, actor_user_id)
         await self._require_role(session, company_id, role_id)
         await self._require_secret(session, company_id, secret_id)
 
         if await self.get(session, company_id, role_id, secret_id) is not None:
-            raise ValueError(f"secret {secret_id} is already attached to role {role_id}")
+            raise CompanyOsError(f"secret {secret_id} is already attached to role {role_id}")
 
         attachment = LLCRoleCredential(company_id=company_id, role_id=role_id, secret_id=secret_id)
         session.add(attachment)

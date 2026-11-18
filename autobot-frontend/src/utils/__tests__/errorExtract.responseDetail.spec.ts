@@ -160,9 +160,8 @@ describe('describeFailedResponse — the status line stays first and intact', ()
   })
 
   it('keeps every existing status-matching call site working', async () => {
-    // These predicates live in ErrorHandler.js, ApiClient.ts:425, useLlcCompanyStore.ts,
-    // useWebResearchStore.ts, useKnowledgeGraphRAG.ts and MemoryPrivacyPanel.vue. A fix
-    // that replaced the message instead of extending it would have broken all of them
+    // The status line is what users and logs read, and it matches the kit HttpError's format. A fix
+    // that replaced the message instead of extending it would break
     // with nothing failing to say so.
     const unavailable = await describeFailedResponse(
       failing(503, 'Service Unavailable', JSON.stringify({ detail: 'model warming up' }))

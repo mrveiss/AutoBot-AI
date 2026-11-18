@@ -150,6 +150,7 @@ async def upload_conversation_file(
             user_id=user_data.get("username"),
             description=description,
             file_hash=file_hash,
+            content_type=file.content_type,
         )
         file_info = ConversationFileInfo(**file_info_dict)
 
@@ -160,9 +161,7 @@ async def upload_conversation_file(
             session_id,
             {"filename": file.filename, "file_id": file_info.file_id, "size": len(content)},
         )
-
         upload_id = f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
-
         return FileUploadResponse(
             success=True,
             message=f"File '{file.filename}' uploaded successfully to conversation",

@@ -61,6 +61,7 @@ import repo_tests.one_bm25_formula_18183_test as _bm25_guard  # noqa: F401 -- re
 import repo_tests.one_brand_mark_and_announcer_18240_test as _brand_mark_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_circuit_breaker_18554_test as _circuit_breaker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_claim_model_18086_test as _claim_model_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_compare_and_delete_script_19631_test as _compare_delete_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_content_digest_15722_test as _content_digest_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_deployment_mode_detector_12771_test as _deployment_mode_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_fact_read_authorization_18184_test as _fact_read_guard  # noqa: F401 -- registers its scope

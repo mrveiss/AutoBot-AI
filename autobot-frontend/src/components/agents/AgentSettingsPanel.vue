@@ -361,7 +361,7 @@ onMounted(() => {
           <button
             type="button"
             :disabled="!hasChanges || !isValid || isSaving"
-            class="px-5 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+            class="px-5 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             @click="saveSettings"
           >
             <svg

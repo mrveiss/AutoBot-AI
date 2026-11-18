@@ -85,6 +85,8 @@ import inspect
 import threading
 from typing import Any, Coroutine, TypeVar
 
+from autobot_shared.logging_once import first_time
+
 __all__ = [
     "register_main_loop",
     "run_or_schedule",
@@ -122,18 +124,13 @@ def _run_in_fresh_loop_thread(coro: Coroutine[Any, Any, T]) -> T:
         return pool.submit(asyncio.run, coro).result()
 
 
-# Call sites (module, function) already warned about in this process.
-_FALLBACK_WARNED: set[tuple[str, str]] = set()
-
-
 def _warn_fallback_once() -> None:
     """Log (once per call site per process) that a sync caller blocks the loop it needs (#20887)."""
     # frame 0 = here, 1 = _run_under_running_loop, 2 = run_or_schedule, 3 = the caller
     frame = inspect.stack()[3]
     site = (frame.frame.f_globals.get("__name__", "?"), frame.function)
-    if site in _FALLBACK_WARNED:
+    if not first_time(__name__, "fallback:%s.%s" % site):  # once per call site (module, function)
         return
-    _FALLBACK_WARNED.add(site)
     _log_threadsafe(
         "warning",
         "run_or_schedule called synchronously on the API loop thread; falling back to a "

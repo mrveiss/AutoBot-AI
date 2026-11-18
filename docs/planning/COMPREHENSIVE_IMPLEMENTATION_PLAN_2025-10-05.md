@@ -43,27 +43,27 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | ID | Severity | Type | Area | Issue Description | Effort | Agent Assignment | Dependencies | Priority |
 |---|---|---|---|---|---|---|---|---|
-| **I-001** | CRITICAL | Security | Backend | Complete access control bypass - ANY user can access ANY files | 2d | security-auditor + senior-backend-engineer | I-002 | 1 |
-| **I-002** | CRITICAL | Stability | Backend | Missing database initialization - will crash on first operation | 1d | database-engineer + senior-backend-engineer | None | 2 |
-| **I-003** | CRITICAL | Security | NPU | No authentication on worker management endpoints | 2d | security-auditor + senior-backend-engineer | None | 3 |
-| **I-004** | CRITICAL | Security | NPU | No authorization checks on worker operations | 1d | security-auditor | I-003 | 4 |
-| **I-005** | CRITICAL | Security | NPU | SSRF vulnerability - URL validation missing | 0.5d | security-auditor | None | 5 |
-| **I-006** | CRITICAL | Performance | Backend | Event loop blocking causing 10x+ performance degradation | 1d | performance-engineer | None | 6 |
-| **I-007** | CRITICAL | Stability | Backend | Context window overflow causing LLM failures | 1d | ai-ml-engineer | None | 7 |
-| **I-008** | CRITICAL | Stability | Backend | Race conditions leading to data corruption risk | 2d | senior-backend-engineer | I-002 | 8 |
-| **I-009** | CRITICAL | Performance | Knowledge Base | Search performance overhead on every query | 2d | performance-engineer + database-engineer | None | 9 |
-| **I-010** | HIGH | Quality | Backend | Zero test coverage (1,406 LOC untested) | 4d | testing-engineer | I-001 to I-008 | 10 |
-| **I-011** | HIGH | Security | NPU | No rate limiting on worker endpoints | 1d | senior-backend-engineer | I-003 | 11 |
-| **I-012** | HIGH | Security | Backend | Additional security vulnerability #1 | 0.5d | security-auditor | I-001 | 12 |
-| **I-013** | HIGH | Performance | Backend | Additional performance issue #1 | 0.5d | performance-engineer | I-006 | 13 |
-| **I-014** | HIGH | Functionality | Knowledge Base | Non-functional host selection UI | 2d | frontend-engineer + senior-backend-engineer | None | 14 |
-| **I-015** | MEDIUM | Security | Backend | Additional security vulnerability #2 | 0.5d | security-auditor | I-001 | 15 |
-| **I-016** | MEDIUM | Performance | Backend | Additional performance issue #2 | 0.5d | performance-engineer | I-006 | 16 |
-| **I-017** | MEDIUM | Quality | Knowledge Base | Code quality violations | 0.5d | code-reviewer | None | 17 |
-| **I-018** | MEDIUM | Quality | Knowledge Base | Missing test coverage | 2d | testing-engineer | I-010 | 18 |
-| **I-019** | MEDIUM | Quality | Backend | Code quality gaps | 0.5d | code-reviewer | None | 19 |
-| **I-020** | MEDIUM | Documentation | Backend | Documentation gaps | 2d | documentation-engineer | I-001 to I-008 | 20 |
-| **I-021** | MEDIUM | Performance | NPU | Connection pooling optimization | 2d | performance-engineer | None | 21 |
+| **I-001** | CRITICAL | Security | Backend | Complete access control bypass - ANY user can access ANY files | 2d | autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | I-002 | 1 |
+| **I-002** | CRITICAL | Stability | Backend | Missing database initialization - will crash on first operation | 1d | autobot-dev-skills:senior-developer (database-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | None | 2 |
+| **I-003** | CRITICAL | Security | NPU | No authentication on worker management endpoints | 2d | autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | None | 3 |
+| **I-004** | CRITICAL | Security | NPU | No authorization checks on worker operations | 1d | autobot-dev-skills:reviewer (security-auditor lens) | I-003 | 4 |
+| **I-005** | CRITICAL | Security | NPU | SSRF vulnerability - URL validation missing | 0.5d | autobot-dev-skills:reviewer (security-auditor lens) | None | 5 |
+| **I-006** | CRITICAL | Performance | Backend | Event loop blocking causing 10x+ performance degradation | 1d | autobot-dev-skills:senior-developer (performance-engineer lens) | None | 6 |
+| **I-007** | CRITICAL | Stability | Backend | Context window overflow causing LLM failures | 1d | autobot-dev-skills:senior-developer (ai-ml-engineer lens) | None | 7 |
+| **I-008** | CRITICAL | Stability | Backend | Race conditions leading to data corruption risk | 2d | autobot-dev-skills:senior-developer (senior-backend-engineer lens) | I-002 | 8 |
+| **I-009** | CRITICAL | Performance | Knowledge Base | Search performance overhead on every query | 2d | autobot-dev-skills:senior-developer (performance-engineer lens) + autobot-dev-skills:senior-developer (database-engineer lens) | None | 9 |
+| **I-010** | HIGH | Quality | Backend | Zero test coverage (1,406 LOC untested) | 4d | autobot-dev-skills:senior-developer (testing-engineer lens) | I-001 to I-008 | 10 |
+| **I-011** | HIGH | Security | NPU | No rate limiting on worker endpoints | 1d | autobot-dev-skills:senior-developer (senior-backend-engineer lens) | I-003 | 11 |
+| **I-012** | HIGH | Security | Backend | Additional security vulnerability #1 | 0.5d | autobot-dev-skills:reviewer (security-auditor lens) | I-001 | 12 |
+| **I-013** | HIGH | Performance | Backend | Additional performance issue #1 | 0.5d | autobot-dev-skills:senior-developer (performance-engineer lens) | I-006 | 13 |
+| **I-014** | HIGH | Functionality | Knowledge Base | Non-functional host selection UI | 2d | autobot-dev-skills:senior-developer (frontend-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | None | 14 |
+| **I-015** | MEDIUM | Security | Backend | Additional security vulnerability #2 | 0.5d | autobot-dev-skills:reviewer (security-auditor lens) | I-001 | 15 |
+| **I-016** | MEDIUM | Performance | Backend | Additional performance issue #2 | 0.5d | autobot-dev-skills:senior-developer (performance-engineer lens) | I-006 | 16 |
+| **I-017** | MEDIUM | Quality | Knowledge Base | Code quality violations | 0.5d | autobot-dev-skills:reviewer (code-reviewer lens) | None | 17 |
+| **I-018** | MEDIUM | Quality | Knowledge Base | Missing test coverage | 2d | autobot-dev-skills:senior-developer (testing-engineer lens) | I-010 | 18 |
+| **I-019** | MEDIUM | Quality | Backend | Code quality gaps | 0.5d | autobot-dev-skills:reviewer (code-reviewer lens) | None | 19 |
+| **I-020** | MEDIUM | Documentation | Backend | Documentation gaps | 2d | autobot-dev-skills:writer (documentation-engineer lens) | I-001 to I-008 | 20 |
+| **I-021** | MEDIUM | Performance | NPU | Connection pooling optimization | 2d | autobot-dev-skills:senior-developer (performance-engineer lens) | None | 21 |
 
 **Total Effort:** 30 working days (with parallel execution across 6 weeks)
 
@@ -77,11 +77,11 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1-2 | Backend access control implementation | I-001 | security-auditor + senior-backend-engineer | User-based file access control system |
-| 1-2 | NPU authentication system | I-003 | security-auditor + senior-backend-engineer | JWT-based worker authentication |
-| 3 | NPU authorization checks | I-004 | security-auditor | Role-based authorization layer |
-| 3 | NPU SSRF validation | I-005 | security-auditor | URL whitelist validation |
-| 4-5 | Security audit and validation | All | security-auditor | Security scan report (zero vulnerabilities) |
+| 1-2 | Backend access control implementation | I-001 | autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | User-based file access control system |
+| 1-2 | NPU authentication system | I-003 | autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | JWT-based worker authentication |
+| 3 | NPU authorization checks | I-004 | autobot-dev-skills:reviewer (security-auditor lens) | Role-based authorization layer |
+| 3 | NPU SSRF validation | I-005 | autobot-dev-skills:reviewer (security-auditor lens) | URL whitelist validation |
+| 4-5 | Security audit and validation | All | autobot-dev-skills:reviewer (security-auditor lens) | Security scan report (zero vulnerabilities) |
 
 **Phase Gate:** Security audit must pass with zero critical/high vulnerabilities before proceeding
 
@@ -98,11 +98,11 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1 | Database initialization system | I-002 | database-engineer + senior-backend-engineer | Automated DB init on startup |
-| 2-3 | Race condition elimination | I-008 | senior-backend-engineer | Thread-safe data operations |
-| 2 | Event loop blocking fixes | I-006 | performance-engineer | Async I/O implementation |
-| 3 | Context window overflow handling | I-007 | ai-ml-engineer | Token limit enforcement |
-| 4-5 | Stability testing and validation | All | testing-engineer | 24-hour stability test report |
+| 1 | Database initialization system | I-002 | autobot-dev-skills:senior-developer (database-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | Automated DB init on startup |
+| 2-3 | Race condition elimination | I-008 | autobot-dev-skills:senior-developer (senior-backend-engineer lens) | Thread-safe data operations |
+| 2 | Event loop blocking fixes | I-006 | autobot-dev-skills:senior-developer (performance-engineer lens) | Async I/O implementation |
+| 3 | Context window overflow handling | I-007 | autobot-dev-skills:senior-developer (ai-ml-engineer lens) | Token limit enforcement |
+| 4-5 | Stability testing and validation | All | autobot-dev-skills:senior-developer (testing-engineer lens) | 24-hour stability test report |
 
 **Phase Gate:** All critical stability tests must pass (crash recovery, data integrity, performance)
 
@@ -120,9 +120,9 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1-2 | Knowledge Base search optimization | I-009 | performance-engineer + database-engineer | Indexed search with caching |
-| 3 | NPU rate limiting implementation | I-011 | senior-backend-engineer | Token bucket rate limiter |
-| 3 | Performance benchmarking | All | performance-engineer | Performance test report |
+| 1-2 | Knowledge Base search optimization | I-009 | autobot-dev-skills:senior-developer (performance-engineer lens) + autobot-dev-skills:senior-developer (database-engineer lens) | Indexed search with caching |
+| 3 | NPU rate limiting implementation | I-011 | autobot-dev-skills:senior-developer (senior-backend-engineer lens) | Token bucket rate limiter |
+| 3 | Performance benchmarking | All | autobot-dev-skills:senior-developer (performance-engineer lens) | Performance test report |
 
 **Phase Gate:** Performance benchmarks must meet SLA (API < 200ms, search < 100ms)
 
@@ -140,10 +140,10 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1-4 | Backend test suite (1,406 LOC) | I-010 | testing-engineer | Unit + integration tests |
-| 5-6 | Knowledge Base test coverage | I-018 | testing-engineer | Component + E2E tests |
-| 7 | NPU worker test coverage | I-021 | testing-engineer | API + integration tests |
-| Daily | CI/CD integration | All | devops-engineer | Automated test pipeline |
+| 1-4 | Backend test suite (1,406 LOC) | I-010 | autobot-dev-skills:senior-developer (testing-engineer lens) | Unit + integration tests |
+| 5-6 | Knowledge Base test coverage | I-018 | autobot-dev-skills:senior-developer (testing-engineer lens) | Component + E2E tests |
+| 7 | NPU worker test coverage | I-021 | autobot-dev-skills:senior-developer (testing-engineer lens) | API + integration tests |
+| Daily | CI/CD integration | All | autobot-dev-skills:senior-developer (devops-engineer lens) | Automated test pipeline |
 
 **Phase Gate:** Minimum 80% code coverage, all tests passing, 100% critical path coverage
 
@@ -161,13 +161,13 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1-2 | Knowledge Base host selection fix | I-014 | frontend-engineer + senior-backend-engineer | Functional multi-host selector |
-| 2 | Backend security issue #1 | I-012 | security-auditor | Security patch |
-| 2 | Backend security issue #2 | I-015 | security-auditor | Security patch |
-| 3 | Backend performance issue #1 | I-013 | performance-engineer | Performance optimization |
-| 3 | Backend performance issue #2 | I-016 | performance-engineer | Performance optimization |
-| 4 | Code quality review | I-017, I-019 | code-reviewer | Code quality report |
-| 5 | Integration testing | All | testing-engineer | Integration test report |
+| 1-2 | Knowledge Base host selection fix | I-014 | autobot-dev-skills:senior-developer (frontend-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) | Functional multi-host selector |
+| 2 | Backend security issue #1 | I-012 | autobot-dev-skills:reviewer (security-auditor lens) | Security patch |
+| 2 | Backend security issue #2 | I-015 | autobot-dev-skills:reviewer (security-auditor lens) | Security patch |
+| 3 | Backend performance issue #1 | I-013 | autobot-dev-skills:senior-developer (performance-engineer lens) | Performance optimization |
+| 3 | Backend performance issue #2 | I-016 | autobot-dev-skills:senior-developer (performance-engineer lens) | Performance optimization |
+| 4 | Code quality review | I-017, I-019 | autobot-dev-skills:reviewer (code-reviewer lens) | Code quality report |
+| 5 | Integration testing | All | autobot-dev-skills:senior-developer (testing-engineer lens) | Integration test report |
 
 **Phase Gate:** Code review approval, all functionality working, integration tests passing
 
@@ -185,11 +185,11 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Day | Task | Issues | Agent | Deliverable |
 |---|---|---|---|---|
-| 1-2 | NPU connection pooling | I-021 | performance-engineer | Connection pool implementation |
-| 2-3 | Documentation updates | I-020 | documentation-engineer | Complete API documentation |
-| 3-4 | User guide updates | All | documentation-engineer | Updated user guides |
-| 5 | Final integration testing | All | testing-engineer | Final test report |
-| 5 | Production deployment | All | devops-engineer | Production release |
+| 1-2 | NPU connection pooling | I-021 | autobot-dev-skills:senior-developer (performance-engineer lens) | Connection pool implementation |
+| 2-3 | Documentation updates | I-020 | autobot-dev-skills:writer (documentation-engineer lens) | Complete API documentation |
+| 3-4 | User guide updates | All | autobot-dev-skills:writer (documentation-engineer lens) | Updated user guides |
+| 5 | Final integration testing | All | autobot-dev-skills:senior-developer (testing-engineer lens) | Final test report |
+| 5 | Production deployment | All | autobot-dev-skills:senior-developer (devops-engineer lens) | Production release |
 
 **Phase Gate:** Full system integration test passing, documentation complete, production ready
 
@@ -245,16 +245,16 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 | Agent Type | Total Days | Weeks Active | Peak Load | Utilization |
 |---|---|---|---|---|
-| security-auditor | 7.5d | 3 weeks | Week 1 (2 agents) | 25% |
-| senior-backend-engineer | 10d | 4 weeks | Week 1-2 (2 agents) | 42% |
-| database-engineer | 3d | 2 weeks | Week 2-3 (1 agent) | 25% |
-| performance-engineer | 7.5d | 4 weeks | Week 2-3 (2 agents) | 31% |
-| ai-ml-engineer | 1d | 1 week | Week 2 (1 agent) | 20% |
-| testing-engineer | 8d | 3 weeks | Week 3-4 (3 agents) | 44% |
-| frontend-engineer | 2d | 1 week | Week 5 (1 agent) | 40% |
-| code-reviewer | 1d | 1 week | Week 5 (1 agent) | 20% |
-| documentation-engineer | 4d | 1 week | Week 6 (1 agent) | 80% |
-| devops-engineer | 2d | 2 weeks | Week 4, 6 (1 agent) | 20% |
+| autobot-dev-skills:reviewer (security-auditor lens) | 7.5d | 3 weeks | Week 1 (2 agents) | 25% |
+| autobot-dev-skills:senior-developer (senior-backend-engineer lens) | 10d | 4 weeks | Week 1-2 (2 agents) | 42% |
+| autobot-dev-skills:senior-developer (database-engineer lens) | 3d | 2 weeks | Week 2-3 (1 agent) | 25% |
+| autobot-dev-skills:senior-developer (performance-engineer lens) | 7.5d | 4 weeks | Week 2-3 (2 agents) | 31% |
+| autobot-dev-skills:senior-developer (ai-ml-engineer lens) | 1d | 1 week | Week 2 (1 agent) | 20% |
+| autobot-dev-skills:senior-developer (testing-engineer lens) | 8d | 3 weeks | Week 3-4 (3 agents) | 44% |
+| autobot-dev-skills:senior-developer (frontend-engineer lens) | 2d | 1 week | Week 5 (1 agent) | 40% |
+| autobot-dev-skills:reviewer (code-reviewer lens) | 1d | 1 week | Week 5 (1 agent) | 20% |
+| autobot-dev-skills:writer (documentation-engineer lens) | 4d | 1 week | Week 6 (1 agent) | 80% |
+| autobot-dev-skills:senior-developer (devops-engineer lens) | 2d | 2 weeks | Week 4, 6 (1 agent) | 20% |
 
 ---
 
@@ -664,50 +664,50 @@ Comprehensive audit of CLAUDE.md workflow violations identified 21 critical issu
 
 ```
 Week 1: CRITICAL SECURITY
-├─ Day 1-2: Backend Access Control (I-001) [security-auditor + senior-backend-engineer]
-├─ Day 1-2: NPU Authentication (I-003) [security-auditor + senior-backend-engineer]
-├─ Day 3: NPU Authorization (I-004) [security-auditor]
-├─ Day 3: NPU SSRF Validation (I-005) [security-auditor]
-└─ Day 4-5: Security Audit [security-auditor]
+├─ Day 1-2: Backend Access Control (I-001) [autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+├─ Day 1-2: NPU Authentication (I-003) [autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+├─ Day 3: NPU Authorization (I-004) [autobot-dev-skills:reviewer (security-auditor lens)]
+├─ Day 3: NPU SSRF Validation (I-005) [autobot-dev-skills:reviewer (security-auditor lens)]
+└─ Day 4-5: Security Audit [autobot-dev-skills:reviewer (security-auditor lens)]
     GATE: Zero security vulnerabilities
 
 Week 2: CRITICAL STABILITY
-├─ Day 1: Database Initialization (I-002) [database-engineer + senior-backend-engineer]
-├─ Day 2-3: Race Conditions (I-008) [senior-backend-engineer]
-├─ Day 2: Event Loop Blocking (I-006) [performance-engineer]
-├─ Day 3: Context Overflow (I-007) [ai-ml-engineer]
-└─ Day 4-5: Stability Testing [testing-engineer]
+├─ Day 1: Database Initialization (I-002) [autobot-dev-skills:senior-developer (database-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+├─ Day 2-3: Race Conditions (I-008) [autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+├─ Day 2: Event Loop Blocking (I-006) [autobot-dev-skills:senior-developer (performance-engineer lens)]
+├─ Day 3: Context Overflow (I-007) [autobot-dev-skills:senior-developer (ai-ml-engineer lens)]
+└─ Day 4-5: Stability Testing [autobot-dev-skills:senior-developer (testing-engineer lens)]
     GATE: 99.9% uptime, zero crashes
     PRODUCTION DEPLOY: Security + Stability Fixes
 
 Week 2-3: CRITICAL PERFORMANCE
-├─ Day 1-2: Search Optimization (I-009) [performance-engineer + database-engineer]
-├─ Day 3: Rate Limiting (I-011) [senior-backend-engineer]
-└─ Day 3: Performance Benchmarking [performance-engineer]
+├─ Day 1-2: Search Optimization (I-009) [autobot-dev-skills:senior-developer (performance-engineer lens) + autobot-dev-skills:senior-developer (database-engineer lens)]
+├─ Day 3: Rate Limiting (I-011) [autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+└─ Day 3: Performance Benchmarking [autobot-dev-skills:senior-developer (performance-engineer lens)]
     GATE: API < 200ms, Search < 100ms
 
 Week 3-4: COMPREHENSIVE TESTING
-├─ Day 1-4: Backend Tests (I-010) [testing-engineer]
-├─ Day 5-6: Knowledge Base Tests (I-018) [testing-engineer]
-├─ Day 7: NPU Tests [testing-engineer]
-└─ Daily: CI/CD Integration [devops-engineer]
+├─ Day 1-4: Backend Tests (I-010) [autobot-dev-skills:senior-developer (testing-engineer lens)]
+├─ Day 5-6: Knowledge Base Tests (I-018) [autobot-dev-skills:senior-developer (testing-engineer lens)]
+├─ Day 7: NPU Tests [autobot-dev-skills:senior-developer (testing-engineer lens)]
+└─ Daily: CI/CD Integration [autobot-dev-skills:senior-developer (devops-engineer lens)]
     GATE: 80%+ coverage, all tests passing
     PRODUCTION DEPLOY: Performance Fixes + Test Suite
 
 Week 5: QUALITY IMPROVEMENTS
-├─ Day 1-2: Host Selection Fix (I-014) [frontend-engineer + senior-backend-engineer]
-├─ Day 2: Security Issues (I-012, I-015) [security-auditor]
-├─ Day 3: Performance Issues (I-013, I-016) [performance-engineer]
-├─ Day 4: Code Quality (I-017, I-019) [code-reviewer]
-└─ Day 5: Integration Testing [testing-engineer]
+├─ Day 1-2: Host Selection Fix (I-014) [autobot-dev-skills:senior-developer (frontend-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens)]
+├─ Day 2: Security Issues (I-012, I-015) [autobot-dev-skills:reviewer (security-auditor lens)]
+├─ Day 3: Performance Issues (I-013, I-016) [autobot-dev-skills:senior-developer (performance-engineer lens)]
+├─ Day 4: Code Quality (I-017, I-019) [autobot-dev-skills:reviewer (code-reviewer lens)]
+└─ Day 5: Integration Testing [autobot-dev-skills:senior-developer (testing-engineer lens)]
     GATE: Code review approval, all functionality working
 
 Week 6: OPTIMIZATION & POLISH
-├─ Day 1-2: Connection Pooling (I-021) [performance-engineer]
-├─ Day 2-3: API Documentation (I-020) [documentation-engineer]
-├─ Day 3-4: User Guides [documentation-engineer]
-├─ Day 5: Final Integration Testing [testing-engineer]
-└─ Day 5: Production Deployment [devops-engineer]
+├─ Day 1-2: Connection Pooling (I-021) [autobot-dev-skills:senior-developer (performance-engineer lens)]
+├─ Day 2-3: API Documentation (I-020) [autobot-dev-skills:writer (documentation-engineer lens)]
+├─ Day 3-4: User Guides [autobot-dev-skills:writer (documentation-engineer lens)]
+├─ Day 5: Final Integration Testing [autobot-dev-skills:senior-developer (testing-engineer lens)]
+└─ Day 5: Production Deployment [autobot-dev-skills:senior-developer (devops-engineer lens)]
     GATE: Full system integration test passing
     PRODUCTION DEPLOY: Final Release
 ```

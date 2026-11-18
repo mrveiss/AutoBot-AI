@@ -32,7 +32,7 @@ _HELPER = _ROOT / "docker/apt/apt-retry"
 _ACTION = _ROOT / ".github/actions/setup-python-suite/action.yml"
 _WORKFLOWS = [
     _ROOT / ".github/workflows" / name
-    for name in ("clean-install.yml", "docker-smoke-test.yml", "hardened-smoke-test.yml")
+    for name in ("clean-install.yml", "_gate-docker-smoke.yml", "hardened-smoke-test.yml")
 ]
 
 # -- a HUNG command is bounded: wrapper attempts, job steps, apt network bounds, expect wait (#21325) --

@@ -124,7 +124,7 @@ if ($sourceDir -ne $InstallPath) {
 
     # Copy specific directories and files to avoid permission issues with symlinks
     $itemsToCopy = @("app", "config", "gui", "installer", "nssm", "scripts", "tests",
-                     "requirements.txt", "README.md", "INSTALLATION.md", "QUICK_START.md",
+                     "requirements.txt", "requirements-gui.txt", "README.md", "INSTALLATION.md", "QUICK_START.md",
                      "DEPLOYMENT_SUMMARY.md", "BUILDING.md", "LICENSE.txt",
                      "launch-gui.bat", "launch-gui.ps1")
 

@@ -25,6 +25,7 @@ from utils.chromadb_client import get_all_paginated
 from ..analyzers import normalize_hardcode_record
 from ..problem_dedup import dedupe_same_location_problems
 from ..problem_query import ProblemCategory, problem_where, select_category
+from ..run_status import with_run_state
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
 from .shared import (
@@ -166,7 +167,7 @@ def _build_indexing_response(
     active_task: dict,
     source_id: str,
     stats: dict | None = None,
-) -> JSONResponse:
+) -> dict:
     """
     Build standardized indexing-in-progress response.
 
@@ -179,17 +180,15 @@ def _build_indexing_response(
         stats: Optional existing stats to include
 
     Returns:
-        JSONResponse with indexing status
+        Response body with indexing status
     """
-    return JSONResponse(
-        {
-            "status": "indexing",
-            "source_id": source_id,
-            "message": message,
-            "indexing": active_task,
-            "stats": stats,
-        }
-    )
+    return {
+        "status": "indexing",
+        "source_id": source_id,
+        "message": message,
+        "indexing": active_task,
+        "stats": stats,
+    }
 
 
 @router.get("/stats")
@@ -199,6 +198,7 @@ def _build_indexing_response(
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_codebase_stats(source_id: SourceIdQuery):
     """
     Get real codebase statistics from storage.
@@ -220,7 +220,7 @@ async def get_codebase_stats(source_id: SourceIdQuery):
                 active_task,
                 source_id,
             )
-        return JSONResponse({**no_data_response("ChromaDB connection failed.", stats=None), "source_id": source_id})
+        return {**no_data_response("ChromaDB connection failed.", stats=None), "source_id": source_id}
 
     # Issue #1710: Per-source stats use source-scoped document ID
     stats_doc_id = f"codebase_stats_{require_source_id(source_id, 'stats document id')}"
@@ -231,9 +231,7 @@ async def get_codebase_stats(source_id: SourceIdQuery):
         # Issue #540, #665: Show indexing status even on query failure
         if active_task:
             return _build_indexing_response("Indexing in progress.", active_task, source_id)
-        return JSONResponse(
-            {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
-        )
+        return {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
 
     # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
@@ -244,9 +242,7 @@ async def get_codebase_stats(source_id: SourceIdQuery):
                 active_task,
                 source_id,
             )
-        return JSONResponse(
-            {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
-        )
+        return {**no_data_response("No codebase data found. Run indexing first.", stats=None), "source_id": source_id}
 
     # Parse and return stats (Issue #315 - use extracted helper)
     stats_metadata = results["metadatas"][0]
@@ -266,7 +262,7 @@ async def get_codebase_stats(source_id: SourceIdQuery):
         response["message"] = "Showing previous stats. New indexing in progress."
         response["indexing"] = active_task
 
-    return JSONResponse(response)
+    return response
 
 
 def _fetch_hardcodes_from_redis(
@@ -348,6 +344,7 @@ _normalize_hardcode_record = normalize_hardcode_record
     operation="get_hardcoded_values",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_hardcoded_values(
     source_id: SourceIdQuery,
     hardcode_type: str | None = None,
@@ -378,14 +375,12 @@ async def get_hardcoded_values(
         all_hardcodes = _fetch_hardcodes_from_memory(_in_memory_storage, hardcode_type, source_id)
         storage_type = "memory"
     else:
-        return JSONResponse(
-            {
-                "status": "no_data",
-                "source_id": source_id,
-                "message": "No codebase data found. Run indexing first.",
-                "hardcodes": [],
-            }
-        )
+        return {
+            "status": "no_data",
+            "source_id": source_id,
+            "message": "No codebase data found. Run indexing first.",
+            "hardcodes": [],
+        }
 
     # Issue #5290: normalize before sorting/returning so legacy and new
     # records share one shape on the wire.
@@ -394,16 +389,14 @@ async def get_hardcoded_values(
     # Sort by file and line number
     all_hardcodes.sort(key=lambda x: (x.get("file", ""), x.get("line", 0)))
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "source_id": source_id,
-            "hardcodes": all_hardcodes,
-            "total_count": len(all_hardcodes),
-            "hardcode_types": list(set(h.get("type", "unknown") for h in all_hardcodes)),
-            "storage_type": storage_type,
-        }
-    )
+    return {
+        "status": "success",
+        "source_id": source_id,
+        "hardcodes": all_hardcodes,
+        "total_count": len(all_hardcodes),
+        "hardcode_types": list(set(h.get("type", "unknown") for h in all_hardcodes)),
+        "storage_type": storage_type,
+    }
 
 
 def _parse_problem_metadata(metadata: dict) -> dict:
@@ -592,6 +585,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_codebase_problems(
     source_id: SourceIdQuery,
     problem_type: str | None = None,
@@ -634,14 +628,12 @@ async def get_codebase_problems(
         )
     )
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "source_id": source_id,
-            **state,
-            "problems": all_problems,
-            "total_count": len(all_problems),
-            "problem_types": list(set(p.get("type", "unknown") for p in all_problems)),
-            "storage_type": storage_type,
-        }
-    )
+    return {
+        "status": "success",
+        "source_id": source_id,
+        **state,
+        "problems": all_problems,
+        "total_count": len(all_problems),
+        "problem_types": list(set(p.get("type", "unknown") for p in all_problems)),
+        "storage_type": storage_type,
+    }
