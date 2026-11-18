@@ -38,6 +38,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.agent_model_tiers import BACKEND_VAR_TIERS, TIER_MODELS
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SSOT = "autobot_shared/ssot_config.py"
@@ -92,7 +93,7 @@ def _module_assignments(source: str) -> dict[str, list[ast.expr]]:
                 for handler in getattr(node, "handlers", []):
                     visit(handler.body)
 
-    visit(ast.parse(source).body)
+    visit(parse_cache.parse(source).body)
     return found
 
 
@@ -140,7 +141,7 @@ def test_agent_config_ollama_models_are_the_canonical_local_models() -> None:
 
 def _env_registry_defaults() -> dict[str, str]:
     out: dict[str, str] = {}
-    for call in ast.walk(ast.parse(_read(_ENV_REGISTRY))):
+    for call in ast.walk(parse_cache.parse(_read(_ENV_REGISTRY))):
         if isinstance(call, ast.Call) and getattr(call.func, "id", "") == "EnvVarSpec":
             kw = {k.arg: k.value for k in call.keywords}
             name, default = kw.get("name"), kw.get("default")
@@ -214,7 +215,7 @@ def test_the_model_key_scan_sees_a_model_when_one_exists() -> None:
 def _tier_maps(source: str, models: frozenset[str]) -> list[int]:
     """Line numbers of dict literals (or `dict(k=v)` calls) with >= 2 values naming a canonical model."""
     hits = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict):
             values = node.values
         elif isinstance(node, ast.Call) and getattr(node.func, "id", "") == "dict":
@@ -403,7 +404,9 @@ def test_a_canonical_reader_imports_the_ssot_and_holds_no_model_literal(rel: str
     source = _read(rel)
     assert "autobot_shared.ssot_config" in source, f"{rel} no longer reads the SSOT"
     literals = [
-        n.value for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Constant) and n.value in _local_models()
+        n.value
+        for n in ast.walk(parse_cache.parse(source))
+        if isinstance(n, ast.Constant) and n.value in _local_models()
     ]
     assert not literals, f"#15502: {rel} holds model literal(s) {sorted(set(literals))}; use the constants"
 

@@ -15,7 +15,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { useLoadingState } from '@/composables/useLoadingState'
-import type { AuditApiEntry, AuditQueryResponse } from '@/types/audit'
+import type { AuditApiEntry, AuditDashboardResponse } from '@/types/audit'
 
 const logger = createLogger('SecretsAuditApi')
 
@@ -41,17 +41,8 @@ export function useSecretsAuditApi() {
     const params = new URLSearchParams()
 
     if (options?.operationFilter && options.operationFilter !== 'all') {
-      const operationMap: Record<string, string> = {
-        'access': 'secret.access',
-        'inject': 'secret.inject',
-        'copy': 'secret.copy',
-        'reveal': 'secret.reveal',
-        'create': 'secret.create',
-        'read': 'secret.read',
-        'update': 'secret.update',
-        'delete': 'secret.delete'
-      }
-      const backendOp = operationMap[options.operationFilter] || options.operationFilter
+      // The backend writes `secret.<verb>` (api/secrets_audit.py SECRET_OPERATIONS)
+      const backendOp = `secret.${options.operationFilter}`
       params.append('operation', backendOp)
     }
 
@@ -69,7 +60,7 @@ export function useSecretsAuditApi() {
 
     return wrap(async () => {
       try {
-        const data = await api.get<AuditQueryResponse<AuditApiEntry>>(
+        const data = await api.get<AuditDashboardResponse<AuditApiEntry>>(
           `${getApiBase()}/audit/logs?${params.toString()}`
         )
 

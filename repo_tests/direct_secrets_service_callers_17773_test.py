@@ -44,6 +44,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Class names whose import means "this module talks to a secrets service directly".
 _SERVICE_CLASSES = frozenset({"EnvelopeSecretsService", "SecretsService"})
 
@@ -159,7 +161,7 @@ def _imports_a_service_class(source: str) -> bool:
     as a skip instead, and ``test_every_module_in_the_population_parses`` makes
     it loud.
     """
-    module = ast.parse(source)
+    module = parse_cache.parse(source)
 
     imported: set[str] = set()
     for node in ast.walk(module):
@@ -310,7 +312,7 @@ def test_the_delete_path_still_takes_no_authorizing_vault() -> None:
     delete = next(
         (
             node
-            for node in ast.walk(ast.parse(source))
+            for node in ast.walk(parse_cache.parse(source))
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "delete"
         ),
         None,

@@ -9,10 +9,13 @@ import pytest
 
 from llc.models.enums import AssigneeType, WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
+from llc.services.work_item_gated_done import DoneGate
 from llc.services.work_item_service import (
     InvalidTransition,
     WorkItemService,
 )
+
+PROJECT_ID = uuid.uuid4()  # the project every work item must belong to (#18978)
 
 
 def _make_item(**kwargs) -> LLCWorkItem:
@@ -26,6 +29,8 @@ def _make_item(**kwargs) -> LLCWorkItem:
         "priority": WorkItemPriority.MEDIUM,
         "version": 1,
         "labels": [],
+        "parent_id": None,
+        "project_id": PROJECT_ID,
         "checkout_run_id": None,
         "checkout_locked_at": None,
         "assignee_agent_id": None,
@@ -78,6 +83,7 @@ class TestCreate:
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
                 title="My task",
+                project_id=str(PROJECT_ID),
                 priority=WorkItemPriority.HIGH,
             )
         assert item.identifier == "PRJ-1"
@@ -89,12 +95,13 @@ class TestCreate:
     async def test_create_sets_parent_id(self, service, mock_session):
         parent_id = str(uuid.uuid4())
         with patch.object(service, "_next_identifier", new=AsyncMock(return_value="PRJ-2")):
-            with patch.object(service, "get", new=AsyncMock(return_value=None)):
+            with patch.object(service, "get", new=AsyncMock(return_value=_make_item(id=uuid.UUID(parent_id)))):
                 item = await service.create(
                     mock_session,
                     company_id=str(uuid.uuid4()),
                     type=WorkItemType.SUBTASK,
                     title="Child",
+                    project_id=str(PROJECT_ID),
                     parent_id=parent_id,
                 )
         assert str(item.parent_id) == parent_id
@@ -111,6 +118,7 @@ class TestCreate:
                     company_id=str(uuid.uuid4()),
                     type=WorkItemType.SUBTASK,
                     title="Child with inherited goal",
+                    project_id=str(PROJECT_ID),
                     parent_id=parent_id,
                 )
         assert item.goal_id == inherited_goal_id
@@ -127,6 +135,7 @@ class TestCreate:
                     company_id=str(uuid.uuid4()),
                     type=WorkItemType.SUBTASK,
                     title="Child with explicit goal",
+                    project_id=str(PROJECT_ID),
                     parent_id=parent_id,
                     goal_id=explicit_goal_id,
                 )
@@ -143,6 +152,7 @@ class TestCreate:
                     company_id=str(uuid.uuid4()),
                     type=WorkItemType.SUBTASK,
                     title="Child without goal",
+                    project_id=str(PROJECT_ID),
                     parent_id=parent_id,
                 )
         assert item.goal_id is None
@@ -159,6 +169,7 @@ class TestCreate:
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.BUG,
                 title="Recovery item",
+                project_id=str(PROJECT_ID),
                 assignee_agent_id=agent_id,
             )
         assert item.assignee_type == AssigneeType.AGENT.value
@@ -173,6 +184,7 @@ class TestCreate:
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
                 title="Assigned to human",
+                project_id=str(PROJECT_ID),
                 assignee_user_id=user_id,
             )
         assert item.assignee_type == AssigneeType.USER.value
@@ -186,6 +198,7 @@ class TestCreate:
                 company_id=str(uuid.uuid4()),
                 type=WorkItemType.TASK,
                 title="Unassigned",
+                project_id=str(PROJECT_ID),
             )
         assert item.assignee_type is None
 
@@ -200,7 +213,8 @@ class TestStatusTransitions:
     async def test_valid_in_progress_to_done(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.IN_PROGRESS)
         mock_session._db_result.scalar_one_or_none.return_value = item
-        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.DONE)
+        ungated = DoneGate(review_gate_svc=AsyncMock(requires_review=AsyncMock(return_value=(False, None))))
+        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.DONE, done_gate=ungated)
         assert result.status == WorkItemStatus.DONE
         assert result.completed_at is not None
 

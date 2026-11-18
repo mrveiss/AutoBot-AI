@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 _ADMIN_ROLE_NAME = "admin"
 
 
-async def _find_admin_role_id(session: AsyncSession):
+async def find_admin_role_id(session: AsyncSession):
     """Return the UUID of the system 'admin' role, or None if not yet seeded."""
     result = await session.execute(select(Role).where(Role.name == _ADMIN_ROLE_NAME, Role.is_system.is_(True)))
     role = result.scalar_one_or_none()
@@ -93,7 +93,7 @@ async def seed_default_admin(session: AsyncSession) -> None:
         logger.error("Admin seed: AUTOBOT_ADMIN_PASSWORD was refused, so no admin was created: %s", reason)
         return
 
-    admin_role_id = await _find_admin_role_id(session)
+    admin_role_id = await find_admin_role_id(session)
     role_ids = [admin_role_id] if admin_role_id is not None else None
     if admin_role_id is None:
         logger.warning(

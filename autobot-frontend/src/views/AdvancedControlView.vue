@@ -5,7 +5,7 @@
   AdvancedControlView — admin-only Advanced Control panel (#12162, #12102,
   #11506 T1 — Stage 1; #12169, #12102 — Stage 2 streaming sessions;
   #12173, #12102 — Stage 3 system monitoring + emergency-stop). Tabbed
-  shell wired to AdvancedControlApiClient's takeover-management, desktop
+  shell wired to the typed API client's takeover-management, desktop
   streaming, and system-monitoring endpoints.
 -->
 <template>
@@ -420,7 +420,7 @@
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { formatUptime } from '@/utils/formatHelpers'
+import { formatUptime, createDateFormatter } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
 import { useAdvancedControl } from '@/composables/useAdvancedControl'
@@ -433,7 +433,7 @@ import type {
   TakeoverStatus,
   StreamingSession,
   StreamingSessionRequest,
-} from '@/utils/AdvancedControlApiClient'
+} from '@/types/advancedControl'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
@@ -523,14 +523,7 @@ function clearError(): void {
   error.value = null
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
-}
+const formatDate = createDateFormatter({ emptyText: '—' })
 
 const priorityBadgeClasses: Record<TakeoverPriority, string> = {
   LOW: 'badge-info',

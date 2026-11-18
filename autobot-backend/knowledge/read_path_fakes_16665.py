@@ -49,7 +49,7 @@ class FakeKB:
     async def search(self, *args, **kwargs):
         return all_facts()
 
-    async def get_all_facts(self, limit=None):
+    async def get_all_facts(self, limit=None, offset=0):
         return all_facts()
 
     def get_fact(self, fact_id):
@@ -91,5 +91,5 @@ class QuarantineGatedKB(FakeKB):
         hits = await gate_response(self._held(), include_unservable, include_quarantined, audit_actor)
         return {"results": hits} if self.dict_results else hits
 
-    async def get_all_facts(self, limit=None, include_quarantined=False, audit_actor=None):
+    async def get_all_facts(self, limit=None, offset=0, include_quarantined=False, audit_actor=None):
         return await apply_quarantine(self._held(), include_quarantined, audit_actor)

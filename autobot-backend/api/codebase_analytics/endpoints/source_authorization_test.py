@@ -242,9 +242,10 @@ class TestPatternAnalyzeBodyAuthz:
     async def _call(self, user, src):
         from api.codebase_analytics.endpoints import pattern_analysis as pa
 
-        req = pa.PatternAnalysisRequest(source_id="s1", path="/tmp/proj")
+        req = pa.PatternAnalysisRequest(source_id="s1", path="sub")
         delay = _FakeDelay()
         with (
+            patch.object(pa, "scan_path_in_source", AsyncMock(return_value="/srv/s1/sub")),
             patch.object(pa.run_pattern_analysis, "delay", delay),
             patch.object(pa, "store_latest_task_id", AsyncMock()),
             patch("api.codebase_analytics.endpoints.pattern_analysis.get_current_user", AsyncMock(return_value=user)),

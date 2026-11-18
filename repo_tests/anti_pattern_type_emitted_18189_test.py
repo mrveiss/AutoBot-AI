@@ -25,6 +25,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ENUM = "AntiPatternType"
@@ -33,7 +34,7 @@ _ENUM = "AntiPatternType"
 def _emitted_members(source: str) -> set[str]:
     """Members used as `pattern_type=AntiPatternType.<NAME>` in a call."""
     found: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         for kw in node.keywords:

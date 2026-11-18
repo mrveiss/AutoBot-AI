@@ -17,11 +17,10 @@
 
 import { ref, onMounted } from 'vue'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { GPUNodeStatus } from '@/types/slm'
-import { HttpError, useMetricsSummary } from '@autobot/ui'
+import { HttpError, useMetricsSummary, createLogger } from '@autobot/ui'
 // Types and the pure summary helper live in fleetMetricsModel.ts (#18225).
 import { summariseGpus } from './fleetMetricsModel'
 import type {
@@ -35,7 +34,7 @@ import type {
   MonitoringAlertsWire,
   NpuNodesWire,
 } from './fleetMetricsModel'
-// Metric shapes shared with autobot-frontend's useInstallMetrics.ts — see the kit
+// Metric shapes shared with useInstallMetricsApi.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
 // directly in this file), so it is re-exported but not locally imported —

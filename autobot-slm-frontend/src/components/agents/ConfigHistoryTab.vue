@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, createDateFormatter } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -16,7 +16,6 @@ import { BaseButton } from '@autobot/ui'
 
 import { useI18n } from 'vue-i18n'
 import { ref, watch } from 'vue'
-import { createDateFormatter } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,

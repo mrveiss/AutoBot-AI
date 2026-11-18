@@ -23,6 +23,7 @@ import re
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SERVER = "autobot-browser-worker/playwright-server.js"
@@ -87,7 +88,7 @@ def _path_after(parts: list[ast.AST], index: int) -> str | None:
 
 def browser_paths(source: str) -> list[tuple[int, str]]:
     """``(line, path)`` of every browser-port URL path an f-string builds in *source*."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     bases = _base_url_names(tree)
     found = []
     for node in ast.walk(tree):

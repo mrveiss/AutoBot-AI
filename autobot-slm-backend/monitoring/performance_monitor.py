@@ -17,7 +17,6 @@ import sys
 import time
 import traceback
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List
 
 import aiofiles
@@ -25,6 +24,7 @@ import aiohttp
 import psutil
 from metrics_types import DatabaseMetrics, HostPerformanceMetrics, InterVMMetrics, ServiceMetrics
 
+from autobot_shared.log_dir import FirstWriteFileHandler
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
@@ -33,7 +33,6 @@ from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
 config = ConfigManager()
 
 # Performance monitoring configuration
@@ -84,7 +83,7 @@ class FleetPerformanceMonitor:
         self.metrics_history = []
         self.alert_history = []
         self.redis_client = None
-        self.performance_data_path = Path(ssot_config.path.base_dir) / "logs" / "performance"
+        self.performance_data_path = ssot_config.path.logs_path / "performance"
         self.performance_data_path.mkdir(parents=True, exist_ok=True)
 
     def setup_logging(self, log_level: str):
@@ -94,12 +93,7 @@ class FleetPerformanceMonitor:
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             handlers=[
                 logging.StreamHandler(),
-                logging.FileHandler(
-                    os.path.join(
-                        ssot_config.path.base_dir,
-                        "logs/performance_monitor.log",
-                    )
-                ),
+                FirstWriteFileHandler(str(ssot_config.path.logs_path / "performance_monitor.log")),
             ],
         )
 

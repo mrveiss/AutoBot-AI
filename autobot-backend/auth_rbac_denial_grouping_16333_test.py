@@ -37,7 +37,9 @@ def test_repeats_on_one_route_write_one_row(layer):
     for item in range(50):
         _deny("bob", path=f"/admin/items/{item}")  # one template, many paths: still one route
     assert layer.audit_log.call_count == 1
-    assert layer.audit_log.call_args.kwargs["details"]["repeats_since_last_record"] == 0
+    details = layer.audit_log.call_args.kwargs["details"]
+    assert details["repeats_since_last_record"] == 0
+    assert details["route"] == "/admin/items/{item_id}"  # #20787: the row names what it groups
 
 
 def test_the_next_row_counts_what_the_window_absorbed(layer):

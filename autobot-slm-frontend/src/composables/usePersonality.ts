@@ -21,7 +21,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import slmApiClient from '@/utils/ApiClient'
 
 const logger = createLogger('usePersonality')
