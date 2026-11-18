@@ -12,6 +12,7 @@ import re
 from typing import Any, AsyncIterator, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.token_count import estimate
 
 from ..base import BaseExtractor, PipelineContext
 from ..models import ProcessedChunk
@@ -129,13 +130,18 @@ class SemanticChunker(BaseExtractor):
         """
         Estimate token count. Helper for _chunk_text (Issue #665).
 
+        Delegates to the shared ``token_count`` authority (#17855), requesting the
+        ``words`` method: ``max_tokens`` was tuned in words, so switching to the
+        chars/4 estimate would change every re-ingested document's chunk sizes.
+        Known limit (#13694): a CJK run counts as one word.
+
         Args:
             text: Text string
 
         Returns:
             Estimated token count
         """
-        return len(text.split())
+        return estimate(text, method="words")
 
     def _calculate_offsets(self, full_text: str, chunk_text: str, chunk_index: int) -> tuple[int, int]:
         """

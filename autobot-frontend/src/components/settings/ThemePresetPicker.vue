@@ -13,10 +13,10 @@
     <div class="picker-header">
       <h3 class="picker-title">
         <Icon name="palette" size="md" />
-        Theme Presets
+        {{ t('ui.themePresets.title') }}
       </h3>
       <p class="picker-description">
-        Choose a pre-configured theme or customize your own color scheme
+        {{ t('ui.themePresets.description') }}
       </p>
     </div>
 
@@ -34,8 +34,8 @@
           <div class="preview-accent"></div>
         </div>
         <div class="preset-info">
-          <span class="preset-name">{{ THEME_PRESETS[presetKey].name }}</span>
-          <span class="preset-description">{{ THEME_PRESETS[presetKey].description }}</span>
+          <span class="preset-name">{{ t(THEME_PRESETS[presetKey].nameKey) }}</span>
+          <span class="preset-description">{{ t(THEME_PRESETS[presetKey].descriptionKey) }}</span>
         </div>
         <div v-if="preset === presetKey" class="preset-check">
           <Icon name="check-circle" size="sm" />
@@ -47,14 +47,14 @@
     <details class="advanced-controls">
       <summary class="advanced-summary">
         <Icon name="sliders-h" size="sm" />
-        Advanced Customization
+        {{ t('ui.themePresets.advanced') }}
       </summary>
       <div class="advanced-content">
         <!-- Manual Theme Control -->
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="sun" size="sm" />
-            Base Theme
+            {{ t('ui.themePresets.baseTheme') }}
           </legend>
           <div class="option-group">
             <button
@@ -66,7 +66,7 @@
               type="button"
             >
               <Icon :name="getThemeIcon(themeOption)" size="sm" />
-              <span>{{ themeLabels[themeOption] }}</span>
+              <span>{{ t(themeLabelKeys[themeOption]) }}</span>
             </button>
           </div>
         </fieldset>
@@ -75,7 +75,7 @@
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="palette" size="sm" />
-            Accent Color
+            {{ t('ui.preferences.accentColor') }}
           </legend>
           <div class="accent-grid">
             <button
@@ -88,29 +88,30 @@
               type="button"
             >
               <span class="accent-swatch"></span>
-              <span class="accent-label">{{ accentLabels[colorOption] }}</span>
+              <span class="accent-label">{{ t(accentLabelKeys[colorOption]) }}</span>
             </button>
           </div>
         </fieldset>
       </div>
     </details>
 
-    <!-- Screen reader announcements -->
-    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
-      {{ announcement }}
-    </div>
+    <!-- Deployed (SLM) themes, #18240 -->
+    <div class="px-6 pb-6"><AdditionalThemesGroup /></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { getThemeIcon } from '@/composables/themeIcons'
+import { useI18n } from 'vue-i18n'
 import { useTheme, type Theme, type ThemePreset, type AccentColor } from '@/composables/useTheme'
-import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import Icon from '@/components/ui/Icon.vue'
+import AdditionalThemesGroup from '@/components/settings/AdditionalThemesGroup.vue'
+import { useAnnounce } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ThemePresetPicker')
+const { t } = useI18n()
 
-// Initialize theme composable
 const {
   preset,
   theme,
@@ -121,31 +122,20 @@ const {
   availablePresets,
   availableThemes,
   availableAccents,
-  themeLabels,
-  accentLabels,
+  themeLabelKeys,
+  accentLabelKeys,
   THEME_PRESETS,
 } = useTheme()
 
-// Screen reader announcements
-const announcement = ref('')
-
-/**
- * Helper function to announce changes to screen readers
- */
-function announceChange(message: string): void {
-  announcement.value = message
-  setTimeout(() => {
-    announcement.value = ''
-  }, 1000)
-}
+// Screen reader announcements: the kit's one live region (#18240)
+const { announce: announceChange } = useAnnounce()
 
 /**
  * Handle preset selection
  */
 function handleSelectPreset(presetKey: ThemePreset): void {
   setPreset(presetKey)
-  const presetName = THEME_PRESETS[presetKey].name
-  announceChange(`Theme preset changed to ${presetName}`)
+  announceChange(t('ui.themeToggle.presetChanged', { name: t(THEME_PRESETS[presetKey].nameKey) }))
   logger.debug(`Theme preset changed to: ${presetKey}`)
 }
 
@@ -154,7 +144,7 @@ function handleSelectPreset(presetKey: ThemePreset): void {
  */
 function handleSetTheme(themeOption: Theme): void {
   setTheme(themeOption)
-  announceChange(`Base theme changed to ${themeLabels[themeOption]}`)
+  announceChange(t('ui.themeToggle.baseThemeChanged', { name: t(themeLabelKeys[themeOption]) }))
   logger.debug(`Base theme changed to: ${themeOption}`)
 }
 
@@ -163,21 +153,10 @@ function handleSetTheme(themeOption: Theme): void {
  */
 function handleSetAccent(colorOption: AccentColor): void {
   setAccentColor(colorOption)
-  announceChange(`Accent color changed to ${accentLabels[colorOption]}`)
+  announceChange(t('ui.themeToggle.accentChanged', { name: t(accentLabelKeys[colorOption]) }))
   logger.debug(`Accent color changed to: ${colorOption}`)
 }
 
-/**
- * Get icon name for theme option
- */
-function getThemeIcon(themeOption: Theme): IconName {
-  const icons: Record<Theme, IconName> = {
-    dark: 'moon',
-    light: 'sun',
-    system: 'desktop',
-  }
-  return icons[themeOption]
-}
 </script>
 
 <style scoped>
@@ -190,19 +169,6 @@ function getThemeIcon(themeOption: Theme): IconName {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
   overflow: hidden;
-}
-
-/* Screen reader only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 /* ============================================
@@ -304,95 +270,95 @@ function getThemeIcon(themeOption: Theme): IconName {
 
 /* Preset-specific preview colors */
 [data-preset="auto"] .preview-bg {
-  background: linear-gradient(135deg, #1a1a1a 50%, #f5f5f5 50%);
+  background: linear-gradient(135deg, var(--preset-preview-auto-dark) 50%, var(--preset-preview-auto-light) 50%);
 }
 
 [data-preset="catppuccin-mocha"] .preview-bg {
-  background: #1e1e2e;
+  background: var(--preset-preview-catppuccin-mocha-bg);
 }
 
 [data-preset="catppuccin-mocha"] .preview-accent {
-  background: #9333ea;
+  background: var(--preset-preview-catppuccin-mocha-accent);
 }
 
 [data-preset="catppuccin-latte"] .preview-bg {
-  background: #eff1f5;
+  background: var(--preset-preview-catppuccin-latte-bg);
 }
 
 [data-preset="catppuccin-latte"] .preview-accent {
-  background: #9333ea;
+  background: var(--preset-preview-catppuccin-latte-accent);
 }
 
 [data-preset="solarized-dark"] .preview-bg {
-  background: #002b36;
+  background: var(--preset-preview-solarized-dark-bg);
 }
 
 [data-preset="solarized-dark"] .preview-accent {
-  background: #14b8a6;
+  background: var(--preset-preview-solarized-dark-accent);
 }
 
 [data-preset="solarized-light"] .preview-bg {
-  background: #fdf6e3;
+  background: var(--preset-preview-solarized-light-bg);
 }
 
 [data-preset="solarized-light"] .preview-accent {
-  background: #14b8a6;
+  background: var(--preset-preview-solarized-light-accent);
 }
 
 [data-preset="high-contrast-dark"] .preview-bg {
-  background: #000000;
+  background: var(--preset-preview-high-contrast-dark-bg);
 }
 
 [data-preset="high-contrast-light"] .preview-bg {
-  background: #ffffff;
+  background: var(--preset-preview-high-contrast-light-bg);
 }
 
 [data-preset="brand-dark"] .preview-bg {
-  background: #0a0a0a;
+  background: var(--preset-preview-brand-dark-bg);
 }
 
 [data-preset="brand-dark"] .preview-accent {
-  background: #14b8a6;
+  background: var(--preset-preview-brand-dark-accent);
 }
 
 [data-preset="brand-light"] .preview-bg {
-  background: #ffffff;
+  background: var(--preset-preview-brand-light-bg);
 }
 
 [data-preset="brand-light"] .preview-accent {
-  background: #14b8a6;
+  background: var(--preset-preview-brand-light-accent);
 }
 
 [data-preset="midnight"] .preview-bg {
-  background: #0a0a1a;
+  background: var(--preset-preview-midnight-bg);
 }
 
 [data-preset="midnight"] .preview-accent {
-  background: #6366f1;
+  background: var(--preset-preview-midnight-accent);
 }
 
 [data-preset="sunset"] .preview-bg {
-  background: #fff8f0;
+  background: var(--preset-preview-sunset-bg);
 }
 
 [data-preset="sunset"] .preview-accent {
-  background: #f97316;
+  background: var(--preset-preview-sunset-accent);
 }
 
 [data-preset="forest"] .preview-bg {
-  background: #0a1a0a;
+  background: var(--preset-preview-forest-bg);
 }
 
 [data-preset="forest"] .preview-accent {
-  background: #10b981;
+  background: var(--preset-preview-forest-accent);
 }
 
 [data-preset="rose"] .preview-bg {
-  background: #fff0f5;
+  background: var(--preset-preview-rose-bg);
 }
 
 [data-preset="rose"] .preview-accent {
-  background: #ec4899;
+  background: var(--preset-preview-rose-accent);
 }
 
 /* ============================================
@@ -548,37 +514,37 @@ function getThemeIcon(themeOption: Theme): IconName {
   box-shadow: var(--shadow-sm);
 }
 
-/* Accent swatch colors */
+[data-accent="theme"] .accent-swatch { background: var(--primary); } /* accent swatch colors; "theme" is the Refined ink */
 [data-accent="blue"] .accent-swatch {
-  background: #3b82f6;
+  background: var(--accent-swatch-blue);
 }
 
 [data-accent="green"] .accent-swatch {
-  background: #10b981;
+  background: var(--accent-swatch-green);
 }
 
 [data-accent="purple"] .accent-swatch {
-  background: #9333ea;
+  background: var(--accent-swatch-purple);
 }
 
 [data-accent="orange"] .accent-swatch {
-  background: #f97316;
+  background: var(--accent-swatch-orange);
 }
 
 [data-accent="pink"] .accent-swatch {
-  background: #ec4899;
+  background: var(--accent-swatch-pink);
 }
 
 [data-accent="teal"] .accent-swatch {
-  background: #14b8a6;
+  background: var(--accent-swatch-teal);
 }
 
 [data-accent="indigo"] .accent-swatch {
-  background: #6366f1;
+  background: var(--accent-swatch-indigo);
 }
 
 [data-accent="red"] .accent-swatch {
-  background: #ef4444;
+  background: var(--accent-swatch-red);
 }
 
 .accent-label {

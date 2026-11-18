@@ -6,7 +6,7 @@ Comprehensive test suite for Phase 4: Cache Consolidation
 
 Tests the unified AdvancedCacheManager with backward compatibility for:
 - backend/utils/cache_manager.py (SimpleCacheManager wrapper)
-- src/utils/knowledge_cache.py (knowledge-specific methods)
+- utils/advanced_cache_manager.py (knowledge-specific methods)
 
 Ensures all features from 3 cache managers are preserved in one unified implementation.
 """

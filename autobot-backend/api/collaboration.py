@@ -27,6 +27,7 @@ from api.schemas_agent import (
 from api.schemas_workflows import SessionPresenceResponse, SessionShareSecretResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from models.collaboration_event import CollaborationEvent
@@ -101,16 +102,10 @@ async def _fetch_and_validate_secret(secret_id: uuid.UUID, user_id: uuid.UUID, d
     secret = result.scalar_one_or_none()
 
     if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Secret not found",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
 
     if secret.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only share secrets you own",
-        )
+        raise fixed_refusal(status.HTTP_403_FORBIDDEN)
 
     return secret
 

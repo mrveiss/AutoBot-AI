@@ -15,7 +15,7 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import global_config_manager
+from config import config_manager
 from autobot_shared.redis_client import get_async_redis_client
 
 # Setup logging
@@ -31,7 +31,7 @@ async def reset_knowledge_base_index():
         logger.error("Redis client not available")
         return
 
-    index_name = global_config_manager.get_nested("memory.redis.index_name", "autobot_knowledge_index")
+    index_name = config_manager.get_nested("memory.redis.index_name", "autobot_knowledge_index")
 
     logger.info("Resetting knowledge base index: %s", index_name)
 

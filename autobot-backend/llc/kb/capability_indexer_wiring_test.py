@@ -30,6 +30,7 @@ from unittest.mock import patch
 import pytest
 
 from llc.kb.capability_indexer import AgentCapabilityIndexer
+from testkit.fake_async_session import FakeAsyncSession
 
 AGENT_ID = "agent-1"
 COMPANY_ID = "co-1"
@@ -45,29 +46,15 @@ _ROW = {
 }
 
 
-class _FakeSession:
-    def __init__(self, row):
-        self._row = row
-
-    async def execute(self, *_args, **_kwargs):
-        return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: self._row))
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_exc):
-        return False
-
-
 def _factory_returning(row):
     """Stands in for `get_async_session_factory` at the database boundary.
 
     Two levels of callable, matching production: `_fetch_agent_row` does
     `factory = get_async_session_factory()` and then `async with factory()`.
     Returning the session directly makes the second call fail with
-    "'_FakeSession' object is not callable".
+    "'FakeAsyncSession' object is not callable".
     """
-    session_factory = lambda: _FakeSession(row)  # noqa: E731 - a one-line stub reads better inline
+    session_factory = lambda: FakeAsyncSession(default_result=[row])  # noqa: E731 - a one-line stub reads better inline
     return lambda: session_factory
 
 

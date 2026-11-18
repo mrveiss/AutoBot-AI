@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from knowledge.ownership import KnowledgeOwnership
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -32,7 +34,7 @@ def _make_kb_result(
         "content": content,
         "source": source,
         "score": score,
-        "metadata": {"chunk_id": chunk_id, "title": "AutoBot Docs"},
+        "metadata": {"chunk_id": chunk_id, "title": "AutoBot Docs", "owner_id": "alice", "visibility": "private"},
     }
 
 
@@ -59,7 +61,7 @@ class TestBuildCitationsFromKbResults:
     """Unit tests for the citation builder helper."""
 
     def test_single_result_produces_citation(self) -> None:
-        from api.chat import _build_citations_from_kb_results
+        from api.chat_citations import _build_citations_from_kb_results
 
         kb_results = [_make_kb_result()]
         citations = _build_citations_from_kb_results(kb_results)
@@ -73,19 +75,19 @@ class TestBuildCitationsFromKbResults:
         assert abs(cit.score - 0.87) < 1e-6
 
     def test_empty_kb_results_produces_empty_list(self) -> None:
-        from api.chat import _build_citations_from_kb_results
+        from api.chat_citations import _build_citations_from_kb_results
 
         assert _build_citations_from_kb_results([]) == []
 
     def test_caps_at_five_citations(self) -> None:
-        from api.chat import _build_citations_from_kb_results
+        from api.chat_citations import _build_citations_from_kb_results
 
         kb_results = [_make_kb_result(chunk_id=f"c-{i}") for i in range(8)]
         citations = _build_citations_from_kb_results(kb_results)
         assert len(citations) == 5
 
     def test_missing_metadata_falls_back_gracefully(self) -> None:
-        from api.chat import _build_citations_from_kb_results
+        from api.chat_citations import _build_citations_from_kb_results
 
         result = {"content": "bare result", "score": 0.5}
         citations = _build_citations_from_kb_results([result])
@@ -111,12 +113,13 @@ def _make_llm_response(content: str = "Here is the answer.") -> MagicMock:
     return resp
 
 
-async def _run_process_chat_message(kb_results: list, use_kb: bool = True):
+async def _run_process_chat_message(kb_results: list, use_kb: bool = True, author_id: str | None = "alice"):
     """Run process_chat_message with minimal real dependencies mocked out."""
     message = _make_chat_message(use_knowledge_base=use_kb)
 
     mock_kb = AsyncMock()
     mock_kb.search = AsyncMock(return_value=kb_results)
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
     mock_llm_service = AsyncMock()
     mock_llm_service.chat = AsyncMock(return_value=_make_llm_response())
@@ -152,7 +155,7 @@ async def _run_process_chat_message(kb_results: list, use_kb: bool = True):
             knowledge_base=mock_kb,
             config={},
             request_id="req-001",
-            author_id=None,
+            author_id=author_id,
         )
 
 
@@ -201,3 +204,50 @@ class TestProcessChatMessageCitations:
         assert result.citations == []
         assert result.grounding is not None
         assert result.grounding.grounded is False
+
+
+class TestCitationsAreScopedToTheAuthor:
+    """#16665: a citation never carries a fact the message author may not read."""
+
+    @pytest.mark.asyncio
+    async def test_another_users_private_fact_is_not_cited(self) -> None:
+        result = await _run_process_chat_message([_make_kb_result("alice private")], author_id="bob")
+
+        assert result.citations == []
+        assert result.grounding.grounded is False
+        assert "alice private" not in repr(result.model_dump())
+
+    @pytest.mark.asyncio
+    async def test_a_turn_with_no_author_is_cited_nothing(self) -> None:
+        result = await _run_process_chat_message([_make_kb_result("alice private")], author_id=None)
+
+        assert result.citations == []
+
+    @pytest.mark.asyncio
+    async def test_the_owner_is_cited_their_own_private_fact(self) -> None:
+        result = await _run_process_chat_message([_make_kb_result("alice private")], author_id="alice")
+
+        assert len(result.citations) == 1
+
+
+class TestEnhanceWithKnowledgeBaseIsScopedToTheAuthor:
+    """#16665: the AI-stack chat path puts only the author's readable facts into the prompt."""
+
+    @staticmethod
+    def _kb() -> MagicMock:
+        kb = MagicMock()
+        kb.search = AsyncMock(return_value=[_make_kb_result("alice private")])
+        kb.ownership_manager = KnowledgeOwnership(None)
+        return kb
+
+    @pytest.mark.asyncio
+    async def test_another_users_private_fact_is_not_in_the_context(self) -> None:
+        from api.chat import _enhance_with_knowledge_base
+
+        message = _make_chat_message()
+        for_bob = await _enhance_with_knowledge_base(message, self._kb(), "bob")
+        for_nobody = await _enhance_with_knowledge_base(message, self._kb())
+        for_alice = await _enhance_with_knowledge_base(message, self._kb(), "alice")
+
+        assert for_bob == (None, []) and for_nobody == (None, [])
+        assert "alice private" in for_alice[0]

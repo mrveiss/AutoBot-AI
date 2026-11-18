@@ -15,7 +15,7 @@ Added 7 new API endpoints for complete host management:
 MODIFIED FILES
 --------------
 1. slm-server/models/database.py
-   - Added EventType enum (13 event types)
+   - Added NodeEventType enum (13 event types)
    - Added EventSeverity enum (4 severity levels)
    - Added NodeEvent model
    - Added Certificate model

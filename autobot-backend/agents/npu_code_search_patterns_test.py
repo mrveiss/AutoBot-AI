@@ -6,21 +6,21 @@
 
 from agents.npu_code_search_patterns import (
     LANGUAGE_PATTERNS,
-    detect_language,
     extract_code_elements,
     extract_element_code,
     extract_elements_by_pattern,
+    language_name_for_extension,
 )
 
 
 def test_detect_language_known_extensions():
-    assert detect_language(".py") == "python"
-    assert detect_language(".JS") == "javascript"
-    assert detect_language(".md") == "markdown"
+    assert language_name_for_extension(".py") == "python"
+    assert language_name_for_extension(".JS") == "javascript"
+    assert language_name_for_extension(".md") == "markdown"
 
 
 def test_detect_language_unknown_extension_returns_unknown():
-    assert detect_language(".zzz") == "unknown"
+    assert language_name_for_extension(".zzz") == "unknown"
 
 
 def test_extract_elements_by_pattern_group_one():

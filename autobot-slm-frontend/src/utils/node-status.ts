@@ -11,7 +11,7 @@
  * Issue #737 Phase 3: Unified data models
  */
 
-import type { NodeStatus, HealthStatus, ServiceStatus } from '@/types/slm'
+import type { NodeStatus, NodeHealthStatus, ServiceStatus } from '@/types/slm'
 
 /**
  * Status categories for styling purposes.
@@ -129,14 +129,14 @@ export function getStatusLabel(status: string): string {
 /**
  * Check if status indicates node is operational.
  */
-export function isOperational(status: NodeStatus | HealthStatus | string): boolean {
+export function isOperational(status: NodeStatus | NodeHealthStatus | string): boolean {
   return ['healthy', 'online', 'degraded'].includes(status)
 }
 
 /**
  * Check if status indicates node needs attention.
  */
-export function needsAttention(status: NodeStatus | HealthStatus | string): boolean {
+export function needsAttention(status: NodeStatus | NodeHealthStatus | string): boolean {
   return ['degraded', 'unhealthy', 'error', 'failed'].includes(status)
 }
 

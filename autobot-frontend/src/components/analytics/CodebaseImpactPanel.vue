@@ -35,7 +35,7 @@
       v-else-if="notIndexed"
       icon="database"
       :title="$t('analytics.codebase.impact.notIndexedTitle')"
-      :description="$t('analytics.codebase.impact.notIndexedBody')"
+      :message="$t('analytics.codebase.impact.notIndexedBody')"
     />
 
     <div v-else-if="result" class="impact-result">
@@ -96,7 +96,7 @@
         v-else
         icon="check-circle"
         :title="$t('analytics.codebase.impact.noCallersTitle')"
-        :description="$t('analytics.codebase.impact.noCallersBody')"
+        :message="$t('analytics.codebase.impact.noCallersBody')"
       />
 
       <details v-if="(result.unresolved_edge_count ?? 0) > 0" class="impact-skipped">
@@ -200,7 +200,7 @@ async function run(): Promise<void> {
 
 .metric-value {
   display: block;
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
 }
 

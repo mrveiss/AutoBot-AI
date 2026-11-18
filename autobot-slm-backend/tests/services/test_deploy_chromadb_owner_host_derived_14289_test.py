@@ -56,8 +56,8 @@ def test_deploy_yml_loads_the_shared_role_active_facts():
     `vars_files` load makes chromadb_service_owner resolve correctly there."""
     play = _deploy_play()
     vars_files = [str(v) for v in play.get("vars_files") or []]
-    assert any(v.endswith("role_active_facts.yml") for v in vars_files), (
-        "deploy.yml no longer loads playbooks/vars/role_active_facts.yml -- a caller with "
+    assert any(v.endswith("group_vars/all.yml") for v in vars_files), (
+        "deploy.yml no longer loads inventory/group_vars/all.yml -- a caller with "
         "no group_vars sibling would see role_redis_active/role_ai_stack_active as undefined"
     )
 
@@ -101,14 +101,13 @@ def test_no_chromadb_owner_derivation_anywhere_reads_target_roles_or_role_list()
     )
 
 
-def test_the_two_group_vars_copies_and_deploy_yml_agree_on_the_derivation():
-    """Both `role_active_facts.yml` copies already derive
-    `chromadb_service_owner` from `role_redis_active` (guarded byte-for-byte
-    by `ansible/tests/check_role_facts_synced.py`). deploy.yml's `vars_files`
-    entry must point at the SAME file, or the two "stacks" resolve the same
-    variable name to two different formulas depending on which one happened
-    to link group_vars."""
-    canonical = _ANSIBLE / "playbooks" / "vars" / "role_active_facts.yml"
+def test_group_vars_and_deploy_yml_read_the_same_single_definition():
+    """The one `role_active_facts.yml` derives `chromadb_service_owner` from
+    `role_redis_active` (#14678; single-source guard:
+    `tools/lint/check_role_facts_single_source.py`). deploy.yml's
+    `vars_files` entry must point at that SAME file, so the formula cannot
+    differ between a run that discovers group_vars and one that does not."""
+    canonical = _ANSIBLE / "inventory" / "group_vars" / "all.yml"
     text = canonical.read_text(encoding="utf-8")
     owner_line = next(ln for ln in text.splitlines() if ln.startswith("chromadb_service_owner:"))
     assert "role_redis_active" in owner_line, f"{canonical} no longer derives ownership from host state"
@@ -116,6 +115,4 @@ def test_the_two_group_vars_copies_and_deploy_yml_agree_on_the_derivation():
     play = _deploy_play()
     vars_files = [Path(v) for v in play.get("vars_files") or []]
     resolved = {(_ANSIBLE / v).resolve() for v in vars_files}
-    assert (
-        canonical.resolve() in resolved
-    ), "deploy.yml's vars_files does not point at the canonical role_active_facts.yml"
+    assert canonical.resolve() in resolved, "deploy.yml's vars_files does not point at the single role_active_facts.yml"

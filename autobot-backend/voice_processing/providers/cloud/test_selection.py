@@ -15,31 +15,31 @@ from voice_processing.providers import selection
 @pytest.fixture(autouse=True)
 def _reset_override():
     """Ensure the in-process override never leaks between tests."""
-    selection.set_active_provider(None)
+    selection.set_active_asr_provider(None)
     yield
-    selection.set_active_provider(None)
+    selection.set_active_asr_provider(None)
 
 
 def test_env_selected_reads_and_normalizes():
     with patch.dict(os.environ, {"TRANSCRIBER_ASR_PROVIDER": "  Deepgram "}):
-        assert selection.get_active_provider_id() == "deepgram"
+        assert selection.get_active_asr_provider_id() == "deepgram"
 
 
 def test_env_unset_is_none():
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("TRANSCRIBER_ASR_PROVIDER", None)
-        assert selection.get_active_provider_id() is None
+        assert selection.get_active_asr_provider_id() is None
 
 
 def test_override_beats_env():
     with patch.dict(os.environ, {"TRANSCRIBER_ASR_PROVIDER": "google"}):
-        selection.set_active_provider("assemblyai")
-        assert selection.get_active_provider_id() == "assemblyai"
+        selection.set_active_asr_provider("assemblyai")
+        assert selection.get_active_asr_provider_id() == "assemblyai"
 
 
 def test_set_active_provider_rejects_unknown():
     with pytest.raises(ValueError):
-        selection.set_active_provider("not-a-provider")
+        selection.set_active_asr_provider("not-a-provider")
 
 
 def test_list_available_reflects_configuration():

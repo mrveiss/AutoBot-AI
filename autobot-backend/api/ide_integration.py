@@ -19,7 +19,6 @@ Key Features:
 
 import ast
 import asyncio
-import hashlib
 import json
 import re
 from typing import Any, Dict, List, Set, Tuple
@@ -54,6 +53,7 @@ from api.schemas_code import (
 )
 from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.content_digest import content_digest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -308,7 +308,7 @@ class IDEIntegrationEngine:
         import time as _time
 
         start_time = _time.time()
-        content_hash = hashlib.sha256(request.content.encode()).hexdigest()[:16]
+        content_hash = content_digest(request.content, width=16)
         cache_key = f"{request.file_path}:{content_hash}"
 
         cached = self._get_cached_analysis(cache_key, content_hash, request.file_path)
@@ -733,7 +733,7 @@ _engine: IDEIntegrationEngine | None = None
 _engine_lock = asyncio.Lock()
 
 
-async def get_engine() -> IDEIntegrationEngine:
+async def get_ide_integration_engine() -> IDEIntegrationEngine:
     """Get or create the global IDE integration engine."""
     global _engine
 
@@ -762,7 +762,7 @@ async def analyze_code(request: IDEAnalysisRequest) -> IDEAnalysisResponse:
 
     This is the main endpoint for IDE integration.
     """
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     return await engine.analyze(request)
 
 
@@ -774,7 +774,7 @@ async def analyze_code(request: IDEAnalysisRequest) -> IDEAnalysisResponse:
 )
 async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
     """Get available quick fixes for a diagnostic."""
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     return await engine.get_quick_fixes(request)
 
 
@@ -786,7 +786,7 @@ async def get_quick_fixes(request: QuickFixRequest) -> QuickFixResponse:
 )
 async def get_hover_info(request: HoverRequest) -> HoverResponse:
     """Get hover information for a position."""
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     return await engine.get_hover(request)
 
 
@@ -798,7 +798,7 @@ async def get_hover_info(request: HoverRequest) -> HoverResponse:
 )
 async def get_rules() -> Dict[str, Any]:
     """Get list of all available analysis rules."""
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     rules = engine.get_available_rules()
     return {
         "rules": rules,
@@ -815,7 +815,7 @@ async def get_rules() -> Dict[str, Any]:
 )
 async def update_config(config: IDEConfigurationUpdate, _: bool = Depends(check_admin_permission)) -> Dict[str, Any]:
     """Update IDE integration configuration."""
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     engine.update_configuration(config)
     return {"updated": True}
 
@@ -866,7 +866,7 @@ async def batch_analyze(
     requests: List[IDEAnalysisRequest],
 ) -> Dict[str, Any]:
     """Analyze multiple files in batch."""
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
 
     # Issue #619: Parallelize independent file analyses
     results = await asyncio.gather(*[engine.analyze(request) for request in requests], return_exceptions=True)
@@ -898,7 +898,7 @@ async def get_completions(request: CompletionRequest) -> CompletionResponse:
     Returns:
         Ranked list of completion items
     """
-    engine = await get_engine()
+    engine = await get_ide_integration_engine()
     return await engine.complete(request)
 
 
@@ -908,7 +908,7 @@ async def probe_ide_integration(
 ) -> ComponentHealth:
     """Issue #3333: probe registration for ide_integration module."""
     try:
-        engine = await get_engine()
+        engine = await get_ide_integration_engine()
         rules_loaded = len(engine.rules)
         return ComponentHealth(
             name="ide_integration",

@@ -8,7 +8,7 @@ Subagent Task Definition (#4348)
 Defines task data structures for subagent spawning and execution:
 - SubagentTask: Individual task for a spawned subagent
 - SubagentContext: Shared context passed to subagents
-- TaskResult: Result from completed subagent execution
+- SubagentTaskResult: Result from completed subagent execution
 """
 
 import time
@@ -68,7 +68,7 @@ class SubagentTask:
 
 
 @dataclass
-class TaskResult:
+class SubagentTaskResult:
     """Result from a completed subagent task."""
 
     task_id: str
@@ -94,7 +94,7 @@ class TaskResult:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TaskResult":
+    def from_dict(cls, data: Dict[str, Any]) -> "SubagentTaskResult":
         """Create from dictionary."""
         return cls(
             task_id=data.get("task_id", ""),
@@ -109,7 +109,7 @@ class TaskResult:
 
 
 @dataclass
-class ConflictResolution:
+class SubagentConflictResolution:
     """Resolution of conflicts between subagent outputs."""
 
     conflict_id: str = field(default_factory=lambda: str(uuid4()))

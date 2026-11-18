@@ -12,8 +12,8 @@ life of the task.  Commands are exec'd into the running container via
 Key design decisions
 --------------------
 - Security hardening: same network/cap/user restrictions as SecureSandboxExecutor.
-  _apply_sandbox_security() copies the exact constraint set from that module so
-  the two paths can never diverge independently.
+  Both modules take the constraint set from autobot_shared.container_hardening
+  (#17267), so the two paths cannot diverge.
 - Snapshot/branch: ``docker commit`` captures the full filesystem state tagged
   as ``autobot-workspace-<task_id>:<checkpoint_name>``.  The orchestration
   CheckpointResumer's Redis-backed step checkpointing is wired in via
@@ -43,6 +43,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from autobot_shared.container_hardening import CONTAINER_PIDS_LIMIT, hardening_kwargs
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -60,7 +61,7 @@ _IDLE_EXPIRY_SECONDS: int = env_int("AUTOBOT_WORKSPACE_IDLE_SECONDS", 4 * 3600)
 _WORKSPACE_MEMORY_LIMIT: str = os.environ.get("AUTOBOT_WORKSPACE_MEM_LIMIT", "512m")
 _WORKSPACE_CPU_QUOTA: int = env_int("AUTOBOT_WORKSPACE_CPU_QUOTA", 100000)
 # GH#11059: caps PIDs so a workspace fork-bomb cannot exhaust the host (Linux pids cgroup controller).
-_WORKSPACE_PIDS_LIMIT: int = env_int("AUTOBOT_WORKSPACE_PIDS_LIMIT", 512)
+_WORKSPACE_PIDS_LIMIT: int = CONTAINER_PIDS_LIMIT  # shared env-backed value (#17267)
 _WORKSPACE_IMAGE: str = os.environ.get("AUTOBOT_WORKSPACE_IMAGE", "alpine:3.18")
 _CONTAINER_PREFIX: str = "autobot-workspace-"
 _REDIS_KEY_PREFIX: str = "autobot:workspace:"
@@ -528,14 +529,15 @@ class TaskWorkspaceManager:
 
 
 # ---------------------------------------------------------------------------
-# Security — mirrors SecureSandboxExecutor._prepare_container_config()
+# Security — shares autobot_shared.container_hardening with SecureSandboxExecutor
 # ---------------------------------------------------------------------------
 
 
 def _apply_sandbox_security(task_id: str, volume_name: str) -> dict[str, Any]:
     """
     Build Docker container kwargs that enforce the SAME security constraints
-    as SecureSandboxExecutor._prepare_container_config() (GH#10544).
+    as SecureSandboxExecutor._prepare_container_config() (GH#10544), by taking
+    them from autobot_shared.container_hardening.hardening_kwargs (#17267).
 
     Kept as a standalone function so it can be unit-tested independently and
     so both the per-command and per-task paths share one canonical definition.
@@ -544,16 +546,14 @@ def _apply_sandbox_security(task_id: str, volume_name: str) -> dict[str, Any]:
         "command": ["tail", "-f", "/dev/null"],  # long-running: container stays up
         "detach": True,
         "remove": False,
-        "network_mode": "none",  # no network — same as SecureSandboxExecutor HIGH
-        "read_only": False,  # workspace MUST be writable (unlike ephemeral sandbox)
-        "security_opt": ["no-new-privileges"],
-        "cap_drop": ["ALL"],
-        "cap_add": [],
-        "mem_limit": _WORKSPACE_MEMORY_LIMIT,
-        "memswap_limit": _WORKSPACE_MEMORY_LIMIT,
-        "cpu_quota": _WORKSPACE_CPU_QUOTA,
-        "cpu_period": 100000,
-        "pids_limit": _WORKSPACE_PIDS_LIMIT,  # GH#11059: fork-bomb / host-PID exhaustion guard
+        # no network; writable rootfs (a workspace persists); pids cap = GH#11059 fork-bomb guard
+        **hardening_kwargs(
+            network_mode="none",
+            read_only=False,
+            memory_limit=_WORKSPACE_MEMORY_LIMIT,
+            cpu_quota=_WORKSPACE_CPU_QUOTA,
+            pids_limit=_WORKSPACE_PIDS_LIMIT,
+        ),
         "volumes": {volume_name: {"bind": "/workspace", "mode": "rw"}},
         "working_dir": "/workspace",
         "environment": {

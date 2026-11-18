@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 import type { Meta } from '@storybook/vue3'
-import type { FleetMetricsDetailed } from '@/composables/usePrometheusMetrics'
+import type { FleetMetricsDetailed } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from './FleetMetricsCard.vue'
 
 const sampleMetrics: FleetMetricsDetailed = {

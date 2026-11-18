@@ -16,7 +16,7 @@ all of them, and the ones it missed were the ones that act rather than report:
   and `redis`, leaving Redis Stack serving data on a node that had released
   the role -- under `ignore_errors: true`, so a wrong unit name and a right
   one produced identical output.
-* `ansible/upgrade-backend-agent.yml` gave the agent a discovery list of two
+* `ansible/upgrade-backend-agent.yml` (retired by #19040) gave the agent a discovery list of two
   absent units and no present one.
 * Two installers -- `install-bare-metal.sh` and `code_analysis/install.sh` --
   `apt-get install`ed plain Redis, which starts cleanly and then fails on the

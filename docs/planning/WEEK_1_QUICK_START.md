@@ -27,11 +27,11 @@
 
 ## 🚀 Launch Commands (Copy-Paste Ready)
 
-### Step 1: Launch Database Engineer Agent
+### Step 1: Launch autobot-dev-skills:senior-developer (database-engineer lens) agent
 
 ```
 Task(
-    subagent_type="database-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the database-engineer lens: /autobot-dev-skills:engineering database-engineer
     description="Database schema initialization",
     prompt="""**WEEK 1 - TASKS 1.1, 1.2, 1.3: Database Schema Initialization**
 
@@ -73,11 +73,11 @@ File: planning/tasks/week-1-database-initialization-detailed-guide.md
 )
 ```
 
-### Step 2: Launch Backend Engineer Agent
+### Step 2: Launch autobot-dev-skills:senior-developer (senior-backend-engineer lens) agent
 
 ```
 Task(
-    subagent_type="senior-backend-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the senior-backend-engineer lens: /autobot-dev-skills:engineering senior-backend-engineer
     description="Backend startup integration",
     prompt="""**WEEK 1 - TASK 1.4: Backend Startup Integration**
 
@@ -117,11 +117,11 @@ See guide for complete implementations of both options.
 )
 ```
 
-### Step 3: Launch Testing Engineer Agent
+### Step 3: Launch autobot-dev-skills:senior-developer (testing-engineer lens) agent
 
 ```
 Task(
-    subagent_type="testing-engineer",
+    subagent_type="autobot-dev-skills:senior-developer",  # load the testing-engineer lens: /autobot-dev-skills:engineering testing-engineer
     description="Database initialization tests",
     prompt="""**WEEK 1 - TASKS 1.5, 1.6: Comprehensive Testing**
 
@@ -186,7 +186,7 @@ When launching agents:
    - Testing engineer completes Tasks 1.5, 1.6
 
 4. **Code Review** (After all agents complete)
-   - Launch `code-reviewer` agent
+   - Launch `autobot-dev-skills:reviewer` agent (code-reviewer lens)
    - Verify all implementations
    - Check test coverage reports
 
@@ -280,7 +280,7 @@ curl -X POST https://<backend-ip>:8443/api/files/conversation/upload \
   - Testing engineer: Tasks 1.5, 1.6 (7 hours) - can start after 1.2
 
 - **Day 3:** Code review and validation
-  - Code review by code-reviewer agent
+  - Code review by autobot-dev-skills:reviewer (code-reviewer lens) agent
   - Run comprehensive test suite
   - Fix any issues identified
 

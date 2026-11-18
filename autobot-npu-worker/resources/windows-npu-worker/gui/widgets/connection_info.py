@@ -5,18 +5,20 @@ Connection Info Widget - Display network connection information with copy functi
 """
 
 import logging
+
+from gui.utils.app_config import DEFAULT_WORKER_PORT
+from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
+    QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTextEdit,
-    QMessageBox,
-    QGridLayout,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Slot, QTimer
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ except Exception as e:
 class ConnectionInfoWidget(QWidget):
     """Widget displaying connection information with copy-to-clipboard functionality"""
 
-    def __init__(self, worker_id: str = "N/A", port: int = 8082, parent=None):
+    def __init__(self, worker_id: str = "N/A", port: int = DEFAULT_WORKER_PORT, parent=None):
         super().__init__(parent)
         logger.debug("ConnectionInfoWidget.__init__ starting")
         self.worker_id = worker_id
@@ -73,8 +75,23 @@ class ConnectionInfoWidget(QWidget):
     def init_ui(self):
         """Initialize user interface"""
         layout = QVBoxLayout(self)
+        layout.addWidget(self._build_worker_group())
+        layout.addWidget(self._build_platform_group())
+        layout.addWidget(self._build_network_group())
+        layout.addWidget(self._build_registration_group())
 
-        # Worker Info Group
+        # Refresh button at bottom
+        refresh_layout = QHBoxLayout()
+        refresh_layout.addStretch()
+        refresh_btn = QPushButton("🔄 Refresh Network Info")
+        refresh_btn.clicked.connect(self.update_connection_info)
+        refresh_layout.addWidget(refresh_btn)
+        layout.addLayout(refresh_layout)
+
+        layout.addStretch()
+
+    def _build_worker_group(self) -> QGroupBox:
+        """Worker ID and port rows (part of init_ui)."""
         worker_group = QGroupBox("Worker Information")
         worker_layout = QGridLayout(worker_group)
 
@@ -93,10 +110,10 @@ class ConnectionInfoWidget(QWidget):
         self.port_label = QLabel(str(self.port))
         self.port_label.setStyleSheet("font-weight: bold;")
         worker_layout.addWidget(self.port_label, 1, 1)
+        return worker_group
 
-        layout.addWidget(worker_group)
-
-        # Platform Info Group
+    def _build_platform_group(self) -> QGroupBox:
+        """System and NPU status rows (part of init_ui)."""
         platform_group = QGroupBox("Platform Information")
         platform_layout = QGridLayout(platform_group)
 
@@ -107,10 +124,10 @@ class ConnectionInfoWidget(QWidget):
         platform_layout.addWidget(QLabel("NPU Status:"), 1, 0)
         self.npu_status_label = QLabel("Detecting...")
         platform_layout.addWidget(self.npu_status_label, 1, 1)
+        return platform_group
 
-        layout.addWidget(platform_group)
-
-        # Network Interfaces Group
+    def _build_network_group(self) -> QGroupBox:
+        """Network interface listing (part of init_ui)."""
         network_group = QGroupBox("Network Interfaces")
         network_layout = QVBoxLayout(network_group)
 
@@ -123,42 +140,40 @@ class ConnectionInfoWidget(QWidget):
         copy_network_btn = QPushButton("Copy All Network Info")
         copy_network_btn.clicked.connect(self._copy_network_info)
         network_layout.addWidget(copy_network_btn)
+        return network_group
 
-        layout.addWidget(network_group)
+    def _url_row(self, caption: str, url_label: QLabel, style: str, on_copy) -> QHBoxLayout:
+        """One selectable URL with its copy button (part of _build_registration_group)."""
+        row = QHBoxLayout()
+        row.addWidget(QLabel(caption))
+        url_label.setStyleSheet(style)
+        url_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        row.addWidget(url_label)
+        row.addStretch()
 
-        # Backend Registration Group
+        copy_btn = QPushButton("Copy URL")
+        copy_btn.clicked.connect(on_copy)
+        row.addWidget(copy_btn)
+        return row
+
+    def _build_registration_group(self) -> QGroupBox:
+        """Registration and health URLs plus the config snippet (part of init_ui)."""
         registration_group = QGroupBox("Add to Backend Settings")
         registration_layout = QVBoxLayout(registration_group)
 
-        # Primary endpoint
-        endpoint_layout = QHBoxLayout()
-        endpoint_layout.addWidget(QLabel("Registration URL:"))
-        self.endpoint_label = QLabel("http://N/A:8082")
-        self.endpoint_label.setStyleSheet("font-weight: bold; font-family: monospace;")
-        self.endpoint_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        endpoint_layout.addWidget(self.endpoint_label)
-        endpoint_layout.addStretch()
-
-        copy_endpoint_btn = QPushButton("Copy URL")
-        copy_endpoint_btn.clicked.connect(self._copy_endpoint)
-        endpoint_layout.addWidget(copy_endpoint_btn)
-
-        registration_layout.addLayout(endpoint_layout)
-
-        # Health check URL
-        health_layout = QHBoxLayout()
-        health_layout.addWidget(QLabel("Health Check:"))
-        self.health_label = QLabel("http://N/A:8082/health")
-        self.health_label.setStyleSheet("font-family: monospace;")
-        self.health_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        health_layout.addWidget(self.health_label)
-        health_layout.addStretch()
-
-        copy_health_btn = QPushButton("Copy URL")
-        copy_health_btn.clicked.connect(self._copy_health_url)
-        health_layout.addWidget(copy_health_btn)
-
-        registration_layout.addLayout(health_layout)
+        self.endpoint_label = QLabel(f"http://N/A:{self.port}")
+        registration_layout.addLayout(
+            self._url_row(
+                "Registration URL:",
+                self.endpoint_label,
+                "font-weight: bold; font-family: monospace;",
+                self._copy_endpoint,
+            )
+        )
+        self.health_label = QLabel(f"http://N/A:{self.port}/health")
+        registration_layout.addLayout(
+            self._url_row("Health Check:", self.health_label, "font-family: monospace;", self._copy_health_url)
+        )
 
         # Configuration snippet
         registration_layout.addWidget(QLabel("Configuration Snippet:"))
@@ -171,18 +186,7 @@ class ConnectionInfoWidget(QWidget):
         copy_config_btn = QPushButton("Copy Configuration")
         copy_config_btn.clicked.connect(self._copy_config)
         registration_layout.addWidget(copy_config_btn)
-
-        layout.addWidget(registration_group)
-
-        # Refresh button at bottom
-        refresh_layout = QHBoxLayout()
-        refresh_layout.addStretch()
-        refresh_btn = QPushButton("🔄 Refresh Network Info")
-        refresh_btn.clicked.connect(self.update_connection_info)
-        refresh_layout.addWidget(refresh_btn)
-        layout.addLayout(refresh_layout)
-
-        layout.addStretch()
+        return registration_group
 
     @Slot()
     def update_connection_info(self):
@@ -244,8 +248,8 @@ class ConnectionInfoWidget(QWidget):
             config_snippet = get_registration_config(self.port)
             self.config_text.setText(config_snippet)
         else:
-            self.endpoint_label.setText("http://N/A:8082")
-            self.health_label.setText("http://N/A:8082/health")
+            self.endpoint_label.setText(f"http://N/A:{self.port}")
+            self.health_label.setText(f"http://N/A:{self.port}/health")
             self.config_text.setText("# No network interface detected")
 
     def set_worker_id(self, worker_id: str):
