@@ -1737,7 +1737,7 @@ watch(layoutMode, () => {
 }
 
 .panel-header .close-btn {
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .panel-content {

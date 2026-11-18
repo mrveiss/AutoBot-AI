@@ -44,6 +44,7 @@ import { ref, computed, onUnmounted, inject, useAttrs } from 'vue'
 import type { Component, AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from './AsyncErrorFallback.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { withTimeout } from '@/utils/withTimeout'
 
 const logger = createLogger('AsyncComponentWrapper')
 
@@ -121,7 +122,12 @@ async function loadComponent(attempt = 1): Promise<void> {
     startProgressAnimation()
 
 
-    const component = await props.componentLoader()
+    // #21628: a load slower than `timeout` fails into the retry loop below instead of waiting forever.
+    const component = await withTimeout(
+      Promise.resolve(props.componentLoader()),
+      props.timeout,
+      `Loading ${props.componentName} timed out after ${props.timeout}ms`
+    )
 
     if (component) {
       asyncComponent.value = component.default || component
