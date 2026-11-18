@@ -193,9 +193,8 @@ async def _governed(context, read=None):
         patch("chat_workflow.attachment_floor.stamp_attachment_floor", AsyncMock(side_effect=lambda c, _s: c)),
         ai_line_world(),
     ):
-        governed = await apply_session_governance(
-            "s1", {"verified_company_id": VERIFIED_COMPANY, **context}, "user", {}
-        )
+        # The verified company comes from the route's scope; apply_auth_role replaces anything in the bag.
+        governed = await apply_session_governance("s1", dict(context), "user", {"org_id": VERIFIED_COMPANY})
     return governed
 
 
@@ -212,6 +211,7 @@ async def test_navigate_runs_in_real_chat_where_the_baseline_overlay_is_applied_
     governed = await _governed({})
     assert "browser actions" in governed["requires_approval_before"], "control: the overlay put the category in"
     assert await _needs_approval({"name": "navigate", "params": {"url": "https://example.test"}}, governed) is False
+    assert governed["verified_company_id"] == VERIFIED_COMPANY, "control: click resolves to line 2, not line 3"
     assert await _needs_approval(CLICK, governed) is True
 
 
