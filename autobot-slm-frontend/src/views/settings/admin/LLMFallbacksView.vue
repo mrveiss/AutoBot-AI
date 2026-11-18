@@ -61,7 +61,7 @@ const formatRecent = createRecencyFormatter({
   style: 'narrow',
   maxUnit: 'day',
   olderThanMs: 3_600_000,
-  older: createDateFormatter({ kind: 'time' }),
+  older: createDateFormatter({ locale: () => locale.value, kind: 'time' }),
 })
 
 // #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)

@@ -16,11 +16,10 @@ Two passes, in this order:
    is moved to ``.staging/quarantine``. Nothing is deleted. Only the staging directory is read.
 """
 
-import asyncio
-
 from celery import shared_task
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from llc.services.accessors import get_attachment_service
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
@@ -45,7 +44,7 @@ logger = get_logger(__name__)
 )
 def run_attachment_file_sweep(self: object) -> dict:  # type: ignore[type-arg]
     """Celery entry point. Returns the counts so a run is legible from the result."""
-    return asyncio.run(_async_sweep())
+    return run_in_worker_loop(_async_sweep())
 
 
 async def _async_sweep() -> dict:

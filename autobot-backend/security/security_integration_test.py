@@ -6,7 +6,7 @@ Tests how security components work together with the rest of the AutoBot system
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,6 +17,7 @@ from autobot_shared.status_enums import CommandRisk
 from secure_command_executor import SecureCommandExecutor
 from security_layer import SecurityLayer
 from tests.fixtures.audit_trail import InMemoryAuditTrail
+from tests.fixtures.fake_process import finished_process
 
 
 @pytest.fixture
@@ -73,10 +74,7 @@ class TestSecuritySystemIntegration:
     async def test_end_to_end_safe_command_execution(self, security_layer):
         """Test complete safe command execution workflow"""
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"test output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"test output\n")
 
             result = await security_layer.execute_command("echo 'integration test'", "test_user", "admin")
 
@@ -122,10 +120,7 @@ class TestSecuritySystemIntegration:
 
         # Admin should be able to execute commands
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"admin output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"admin output\n")
 
             result = await security_layer.execute_command("ls -la", "admin_user", "admin")
             assert result["status"] == "success"
@@ -285,10 +280,7 @@ class TestDockerSandboxIntegration:
         executor.require_approval_callback = auto_approve_callback
 
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"sandboxed output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"sandboxed output\n")
 
             # Execute moderate risk command (should use sandbox)
             result = await executor.run_shell_command("rm test.txt")
@@ -313,10 +305,7 @@ class TestSecuritySystemResilience:
 
         # Command execution should still work
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
-            mock_process = AsyncMock()
-            mock_process.communicate.return_value = (b"output\n", b"")
-            mock_process.returncode = 0
-            mock_subprocess.return_value = mock_process
+            mock_subprocess.return_value = finished_process(b"output\n")
 
             result = await security_layer.execute_command("echo test", "user", "admin")
             assert result["status"] == "success"

@@ -258,7 +258,7 @@ A third "rule-disabled-globally" mechanism is **deliberately not provided** — 
 ### Wave 0 — Foundation (1 PR)
 Runner skeletons (Python, Frontend, Infra), Makefile targets, weekly cron workflow, `/canonical-audit` slash command, one trivial smoke-test rule per layer (e.g. `py-print` aliasing existing `no-print-console`) to prove the pipeline.
 
-### Wave 1 — High-priority backend BLOCK rules (1 PR per rule, parallel via `parallel` skill)
+### Wave 1 — High-priority backend BLOCK rules (1 PR per rule, parallel via `/autobot-dev-skills:lifecycle parallel`)
 - `py-datetime-now` (#7436)
 - `py-redis-factory` (#7439 extension)
 - `py-error-decorator` (#7435 — supersedes `decorator-order`)
@@ -294,7 +294,7 @@ The 18 existing pre-commit hooks stay in place during all 5 waves. After Wave 5 
 | Pre-commit becomes too slow (>5s) | AST cache shared across rules; FE/Infra runners skipped when no relevant files staged; `--max-time` budget per rule |
 | False positives block legitimate commits | Every BLOCK rule ships with ≥10 fixture-pair tests (positive + negative + waiver); first 2 weeks after Wave 1 lands, monitor escape rate |
 | Rules drift from canonical patterns | Each rule's docstring links to its #7458 issue and to the canonical example file; weekly audit catches drift |
-| 22+ rules = 22+ approval reviews | Use `parallel` skill: each Wave 2/3/4 rule lands in its own worktree, batched 3-at-a-time |
+| 22+ rules = 22+ approval reviews | Use `/autobot-dev-skills:lifecycle parallel`: each Wave 2/3/4 rule lands in its own worktree, batched 3-at-a-time |
 | Frontend runner adds Node startup cost to every commit | Runner short-circuits if no FE files staged (`*.vue`, `*.ts`, `*.mjs`, `*.css` outside excluded dirs) |
 | Trend history lost when artifacts expire (90d default) | Workflow runs `actions/upload-artifact` with `retention-days: 365` for canonical audits; older trend data accepted as lossy |
 

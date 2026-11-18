@@ -16,7 +16,7 @@ vi.mock('@/utils/authToken', async (importOriginal) => ({
 }));
 
 import { ApiClient } from '@/utils/ApiClient';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { resetCircuitBreakers } from '@/utils/apiCircuitBreaker';
 
 const json = (body: unknown, status = 200) =>
@@ -89,6 +89,20 @@ describe('ApiClient on the kit transport (#14908)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('typed callRaw applies a relocated relative VITE_API_BASE_PATH and leaves non-/api keys alone (#12363)', async () => {
+    vi.stubEnv('VITE_API_BASE_PATH', '/v2');
+    try {
+      fetchMock.mockImplementation(async () => json({}));
+      const loose = new ApiClient() as unknown as { callRaw: (m: string, p: string, i?: unknown) => Promise<Response> };
+      await loose.callRaw('get', '/api/chat/sessions');
+      await loose.callRaw('get', '/v1/models');
+      expect(fetchMock.mock.calls[0][0]).toBe('/v2/chat/sessions');
+      expect(fetchMock.mock.calls[1][0]).toBe('/v1/models');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   // #20053: VITE_API_BASE_PATH may be an absolute URL, and callers build `${getApiBase()}/x` endpoints.
   describe('with an absolute VITE_API_BASE_PATH (#20053)', () => {
     const BASE = 'https://api.example/api';
@@ -102,6 +116,19 @@ describe('ApiClient on the kit transport (#14908)', () => {
       await new ApiClient().get(endpoint);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer live-jwt');
+    });
+
+    it('typed call/callRaw use the configured base, keep the bearer and the auth 401 exemption (#12363)', async () => {
+      const client = new ApiClient();
+      const loose = client as unknown as { callRaw: (m: string, p: string, i?: unknown) => Promise<Response> };
+      await loose.callRaw('get', '/api/chat/sessions');
+      expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/chat/sessions`);
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer live-jwt');
+      fetchMock.mockImplementation(async () => new Response('{}', { status: 401 }));
+      clearStoredAuth.mockClear();
+      await loose.callRaw('post', '/api/auth/login');
+      expect(fetchMock.mock.calls[1][0]).toBe(`${BASE}/auth/login`);
+      expect(clearStoredAuth).not.toHaveBeenCalled();
     });
 
     it('goes through for getApiBase()-built endpoints on post and rawRequest too', async () => {
@@ -136,6 +163,18 @@ describe('ApiClient on the kit transport (#14908)', () => {
       vi.stubEnv('VITE_API_BASE_PATH', '/api');
       await expect(new ApiClient().get('https://api.example/api/x')).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('typed call over the contract (#12363)', () => {
+    it('the base is origin-only, so a contract key is requested once under /api, never /api/api', async () => {
+      // The contract keys already start with /api; the main base must therefore carry no path of its own.
+      expect(new URL(getBackendUrl() || 'http://origin.test').pathname).toBe('/');
+      fetchMock.mockImplementation(async () => json({}));
+      await new ApiClient().call('delete', '/api/chats/{chat_id}', { path: { chat_id: 'c 1' } });
+      const url: string = fetchMock.mock.calls[0][0];
+      expect(url.endsWith('/api/chats/c%201')).toBe(true);
+      expect(url).not.toContain('/api/api/');
     });
   });
 });
