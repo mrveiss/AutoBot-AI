@@ -44,8 +44,8 @@ from api.redis_mcp.rbac import (
     ToolAccess,
     check_tool_permission,
     get_tool_access,
-    is_admin_only_database,
     is_agent_index,
+    is_restricted_database,
     read_keys,
     validate_key_namespace,
     validate_read_scope,
@@ -434,7 +434,7 @@ async def _enforce_read_scope(
     ok, error = validate_read_scope(args, is_admin)
     if not ok:
         raise HTTPException(status_code=403, detail=error)
-    sensitive = is_admin_only_database(args.get("database")) or not is_agent_index(args)
+    sensitive = is_restricted_database(args.get("database")) or not is_agent_index(args)
     if not (is_admin and access == ToolAccess.READ and sensitive):
         return
     from knowledge.root_read import audit_admin_read, audit_unavailable  # noqa: PLC0415
