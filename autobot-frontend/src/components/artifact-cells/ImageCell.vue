@@ -43,6 +43,7 @@
             :src="img.url"
             :alt="img.revised_prompt || promptText || $t('imageCell.generated', 'AI generated image')"
             class="generated-image"
+            referrerpolicy="no-referrer"
             loading="lazy"
             @error="onImageError(index)"
           />
@@ -106,6 +107,7 @@
             :src="images[lightboxIndex]?.url"
             :alt="images[lightboxIndex]?.revised_prompt || promptText || ''"
             class="lightbox-image"
+            referrerpolicy="no-referrer"
           />
           <p v-if="images[lightboxIndex]?.revised_prompt" class="lightbox-caption">
             {{ images[lightboxIndex].revised_prompt }}
@@ -153,7 +155,7 @@ const props = withDefaults(defineProps<ImageCellProps>(), {
 
 // #13424: a data URL must be a png/jpeg/webp base64 image (svg and html can carry script); anything else
 // must be an http(s) or same-origin path. Keep in step with SAFE_DATA_IMAGE_RE in browser_tool_handler.py.
-const RENDERABLE_IMAGE_URL = /^(?:data:image\/(?:png|jpeg|webp);base64,|https?:\/\/|\/(?!\/))/i
+const RENDERABLE_IMAGE_URL = /^(?:data:image\/(?:png|jpeg|webp);base64,|https?:\/\/|\/(?![\/\\]))/i
 const isRenderableImageUrl = (url?: string): boolean => !!url && RENDERABLE_IMAGE_URL.test(url)
 
 // Derived data from richPayload
