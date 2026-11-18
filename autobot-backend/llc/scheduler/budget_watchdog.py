@@ -27,7 +27,7 @@ from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session_factory
 from user_management.models.organization import Organization
 
-from ..models.budget import LLCAgentBudget
+from ..models.budget import LLCAgentBudget, token_limit_blocks
 from ..services.accessors import get_budget_service
 from .base import PollLoopScheduler
 
@@ -76,15 +76,18 @@ class BudgetWatchdog(PollLoopScheduler):
           BudgetService.check_budget / _derive_status semantics.
         """
         result = await session.execute(
-            select(LLCAgentBudget).where(or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit > 0))
+            select(LLCAgentBudget).where(or_(LLCAgentBudget.budget_limit > 0, LLCAgentBudget.token_limit.is_not(None)))
         )
         rows = list(result.scalars().all())
 
         for row in rows:
             budget_mode = str(row.budget_mode)
-            token_limit = int(row.token_limit) if row.token_limit is not None else 0
-            if budget_mode == "tokens" and token_limit > 0:
+            token_limit = int(row.token_limit) if row.token_limit is not None else None
+            if budget_mode == "tokens" and token_limit is not None:
                 tokens_spent = int(row.tokens_spent)
+                if token_limit_blocks(tokens_spent, token_limit) and token_limit <= 0:
+                    await self._hard_stop_agent(session, row)
+                    continue
                 ratio = Decimal(str(tokens_spent)) / Decimal(str(token_limit))
             else:
                 limit = Decimal(str(row.budget_limit))

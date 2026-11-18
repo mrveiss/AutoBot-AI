@@ -135,6 +135,7 @@ import { useModal } from '@/composables/useModal'
 import { useFocusTrap, useFocusRestore, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandPermissions } from '@/composables/useCommandPermissions'
+import { approvalErrorMessage } from '@/utils/approvalResult'
 
 const logger = createLogger('CommandPermissionDialog')
 const { t } = useI18n()
@@ -191,7 +192,7 @@ const handleAllow = async () => {
       emit('approved', { command: props.command ?? '', result: data, rememberChoice: rememberForSession.value })
       closeDialog()
     } else {
-      errorApprove.value = new Error(data.error ?? t('ui.commandPermission.executionFailed'))
+      errorApprove.value = new Error(approvalErrorMessage(data, t) ?? t('ui.commandPermission.executionFailed'))
       logger.error('Command approval error:', data.error)
     }
   } catch (err) {
@@ -209,6 +210,13 @@ const handleDeny = async () => {
         closeDialog()
         return
       }
+      // Any other refusal means the approval is still pending: keep the dialog open, do not emit `denied`.
+      const refusal = approvalErrorMessage(data, t)
+      if (refusal) {
+        errorApprove.value = new Error(refusal)
+        logger.error('Command denial refused:', data.error)
+        return
+      }
     } else {
       logger.warn('handleDeny: terminal_session_id is missing')
     }
@@ -216,8 +224,9 @@ const handleDeny = async () => {
     closeDialog()
   } catch (err) {
     logger.error('Command denial error:', err)
-    emit('denied', { command: props.command ?? '', reason: 'User denied permission' })
-    closeDialog()
+    // The request failed, not necessarily the denial: the server may have recorded it before the reply was lost.
+    const detail = err instanceof Error ? err.message : String(err)
+    errorApprove.value = new Error(t('ui.commandPermission.denyFailed', { error: detail }))
   }
 }
 

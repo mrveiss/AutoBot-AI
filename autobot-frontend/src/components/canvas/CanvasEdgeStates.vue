@@ -12,7 +12,7 @@
     </svg>
     <h3 class="text-lg font-medium text-text-secondary">Your canvas is empty</h3>
     <button
-      class="px-4 py-2 bg-autobot-primary text-white rounded-lg hover:opacity-90 flex items-center gap-2"
+      class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:opacity-90 flex items-center gap-2"
       aria-label="Add your first cell"
       @click="$emit('add-cell')"
     >
@@ -56,7 +56,7 @@
     <span class="text-4xl" aria-hidden="true">⚠</span>
     <h3 class="text-lg font-medium">Failed to load canvas</h3>
     <button
-      class="px-4 py-2 bg-autobot-primary text-white rounded hover:opacity-90"
+      class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded hover:opacity-90"
       aria-label="Retry loading canvas"
       @click="$emit('retry')"
     >

@@ -282,11 +282,55 @@ def test_the_source_resolves_to_a_tree_containing_autobot_shared(playbook: Path)
 def test_an_explicit_code_source_dir_wins_and_a_missing_source_fails_clearly() -> None:
     assert _shared_parent(_PLAYBOOK, code_source_dir="/srv/cs") == "/srv/cs"
     tasks = _shared_block()["block"]
-    check = next(t for t in tasks if "ansible.builtin.assert" in t)
+    check = next(t for t in tasks if t.get("ansible.builtin.assert", {}).get("that") == "shared_src.stat.exists")
     assert "code_source_dir" in check["ansible.builtin.assert"]["fail_msg"]
     stat_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.stat" in t)
     tar_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.command" in t)
     assert stat_idx < tasks.index(check) < tar_idx
+
+
+def _anchor_holds(playbook_dir: str) -> bool:
+    """Evaluate the derived-tree anchor (#20509) for a playbook directory, as Ansible would.
+
+    The anchor stats a path under ``shared_parent`` (rendered from the block's own vars, the tree the
+    archive is built from); the assert passes when that file exists.
+    """
+    import jinja2
+
+    tasks = _shared_block()
+    locate = next(t for t in tasks["block"] if "Find this task file" in t["name"])
+    env = jinja2.Environment()
+    env.filters["dirname"] = os.path.dirname
+    parent = env.from_string(tasks["vars"]["shared_parent"]).render(playbook_dir=playbook_dir)
+    path = env.from_string(locate["ansible.builtin.stat"]["path"]).render(
+        playbook_dir=playbook_dir, shared_parent=parent
+    )
+    return Path(path).is_file()
+
+
+def test_the_anchor_holds_for_both_callers_fails_at_another_depth_and_skips_an_explicit_source() -> None:
+    tasks = _shared_block()["block"]
+    locate = next(t for t in tasks if "Find this task file" in t["name"])
+    anchor = next(t for t in tasks if "Fail when the derived source tree" in t["name"])
+    assert anchor["ansible.builtin.assert"]["that"] == "shared_anchor.stat.exists"
+    assert locate["register"] == "shared_anchor" and tasks.index(locate) < tasks.index(anchor)
+    assert locate["when"] == anchor["when"] == "(code_source_dir | default('', true)) == ''"
+    assert _anchor_holds(str(_PLAYBOOK.parent)) and _anchor_holds(str(_DEPLOY_PLAYBOOK.parent))
+    assert not _anchor_holds(str(_PLAYBOOK.parent / "nested"))
+    assert not _anchor_holds(str(_ANSIBLE))
+    path = locate["ansible.builtin.stat"]["path"]
+    assert path.startswith("{{ shared_parent }}/") and "playbook_dir" not in path
+    assert locate["delegate_to"] == "localhost" and locate["run_once"] is True
+
+
+def test_the_anchor_does_not_depend_on_the_checkout_directory_name(tmp_path: Path) -> None:
+    """A checkout whose root folder is named differently still anchors; a tree without the file does not."""
+    tree = tmp_path / "renamed-checkout" / "autobot-slm-backend" / "ansible"
+    (tree / "playbooks").mkdir(parents=True)
+    (tree / "roles" / "_shared" / "tasks").mkdir(parents=True)
+    assert not _anchor_holds(str(tree / "playbooks"))
+    (tree / "roles" / "_shared" / "tasks" / "install_agent_autobot_shared.yml").write_text("---\n", encoding="utf-8")
+    assert _anchor_holds(str(tree / "playbooks"))
 
 
 def test_the_play_notifies_only_handlers_the_slm_agent_role_defines() -> None:

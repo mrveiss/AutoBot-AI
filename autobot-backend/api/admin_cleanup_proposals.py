@@ -67,15 +67,10 @@ async def _propose(
         raise HTTPException(status.HTTP_409_CONFLICT, f"Not proposable: {plan.refused}")
     if not plan.targets:
         raise HTTPException(status.HTTP_409_CONFLICT, "There is nothing to remove")
-    service = ApprovalGateService(session)
-    node = node_identity()
-    pending = await service.list_approvals(
-        status=ApprovalStatus.PENDING.value,
-        approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        extra_where=(Approval.context["action"].astext == action, Approval.context["node"].astext == node),
-        limit=1,
-    )
-    if pending:
+    service, node = ApprovalGateService(session), node_identity()
+    extra = (Approval.context["action"].astext == action, Approval.context["node"].astext == node)
+    status_, kind = ApprovalStatus.PENDING.value, ApprovalType.DESTRUCTIVE_ACTION.value
+    if await service.list_approvals(status=status_, approval_type=kind, extra_where=extra, limit=1):
         raise HTTPException(status.HTTP_409_CONFLICT, _ALREADY_PENDING)
     try:
         approval = await service.create_approval(
