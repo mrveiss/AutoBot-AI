@@ -69,7 +69,7 @@ _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
 
 _SERVICES = {
     "slm": (
-        _REPO_ROOT / "autobot-slm-frontend" / "src" / "types" / "generated" / "api.ts",
+        _REPO_ROOT / "libs" / "slm-contract" / "src" / "generated" / "api.ts",
         _REPO_ROOT / "autobot-slm-backend",
     ),
     "main": (
