@@ -153,4 +153,11 @@ def test_the_refusal_outranks_the_generic_prefix_in_nginx_matching() -> None:
     """A regex location beats a plain prefix; the refusal must not be an exact/prefix block either."""
     out = _render("192.0.2.10")
     assert "location ~ ^/slm/api/(" in out
-    assert "location ^~ /slm/api/" not in out
+    assert "location ^~ /slm/api/ " not in out  # only the internal-prefix deny below is a ^~ block
+
+
+def test_the_internal_slm_api_is_denied_at_the_edge() -> None:
+    """#20046: the SLM's service-to-service routes are not reachable through the public /slm/api/ proxy."""
+    out = _render("192.0.2.10")
+    assert "return 404;" in _block(out, "location ^~ /slm/api/internal/ ")
+    assert out.index("location ^~ /slm/api/internal/ ") < out.index("location /slm/api/ {")

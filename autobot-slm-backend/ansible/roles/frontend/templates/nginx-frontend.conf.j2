@@ -178,6 +178,11 @@ server {
         return 404;
     }
 
+    # #20046: the SLM API's service-to-service routes are denied at this edge too; ^~ beats the /slm/api/ prefix.
+    location ^~ /slm/api/internal/ {
+        return 404;
+    }
+
     # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority.
     # The /api/ block does not set Upgrade/Connection headers, so WebSocket
     # requests to /api/ws/live would fail with 403 if they matched /api/.
