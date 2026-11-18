@@ -83,7 +83,7 @@ def test_migration_passes_role_name_not_deploy_role():
         _run(_roles_mod.run_role_full_procedure(role, "00-SLM-Manager"))
 
     kwargs = fake_exec.execute_playbook.call_args.kwargs
-    assert kwargs["extra_vars"] == {"role_name": "tts-worker"}
+    assert kwargs["extra_vars"] == {"role_name": "tts-worker", "target_host": "00-SLM-Manager"}
     assert "deploy_role" not in kwargs["extra_vars"]
     assert kwargs["limit"] == ["00-SLM-Manager"]
 
@@ -161,7 +161,7 @@ def _extra_vars_for(playbook: str, name: str) -> dict:
 def test_slm_agent_registry_path_skips_the_common_role_19040():
     """Migrate/Redeploy and the co-located update must not run `common` (admin user, SSH keys, UFW)."""
     extra = _extra_vars_for("playbooks/deploy-slm-agent.yml", "slm-agent")
-    assert extra == {"role_name": "slm-agent", "slm_agent_run_common": False}
+    assert extra == {"role_name": "slm-agent", "slm_agent_run_common": False, "target_host": "00-SLM-Manager"}
 
 
 def test_other_roles_do_not_get_the_skip_var_19040():

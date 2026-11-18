@@ -2,7 +2,7 @@
 
 ## Status
 
-**Status**: Proposed (records the maintainer decisions of 2026-10-27; the open questions in the last section are not decided here)
+**Status**: Rejected (2026-11-02), by the maintainer: "slm is firs thing user installs and is the point from which other functionality gets installed, we keep it separate". See [ADR-012](012-slm-first-and-separate.md). The rest of this document is kept as the record of what was proposed. The `/admin` section that landed from it stays, for main-app administration only.
 
 Refines [ADR-008](008-frontend-shared-code-boundary.md) (the two-SPA boundary) for the case where there is one SPA. Does not change [ADR-005](005-single-frontend-mandate.md) or [ADR-010](010-role-separation-count-agnostic-placement.md).
 
@@ -73,7 +73,7 @@ Which implementation survives in each duplicate row is #17814's decision, taken 
 
 ### 2. Who may enter: the permission table, at two levels
 
-- The `/admin` parent carries `meta.permission: 'service.management'` and the router guard checks it with the **table-derived** predicate (`userStore.hasServiceManagement`, built from the generated `ROLE_PERMISSIONS`; or `usePermissions().holdsPermission`, never `hasPermission`, whose admin bypass #13854 ruled out). A caller without it is redirected, as the existing `meta.admin` / `meta.minRole` guards do.
+- The `/admin` parent carries `meta.admin: true`, so the router guard admits only an administrative role (`isAdmin`, `ADMIN_ROLES` in `autobot-frontend/src/constants/roles.ts`). `service.management` is held by the operator role and does not open the SLM, on the UI or on the SLM backend (#20631). A caller who is not an admin is redirected, as the existing `meta.admin` / `meta.minRole` guards do.
 - Children that are `meta.admin: true` in the SLM today keep `meta.admin: true`: an administrative role (`admin`, `superadmin` — `ADMIN_ROLES` in `autobot-frontend/src/constants/roles.ts`). This reproduces the SLM's `is_admin` gate exactly; it does not widen it.
 - #19843 makes "every `/admin` child declares one of the two" a CI guard.
 - The UI check is routing only. The SLM backend's own `require_permission` gates (`autobot-slm-backend/services/auth.py`, `PermissionGate` over `evaluate_permission`) remain the authority and are unchanged by the port.
@@ -96,7 +96,7 @@ The SLM backend keeps its own deployment (`slm` role in ADR-010; its own machine
 
 ### 5. i18n: the SLM tree nests under `admin.*`
 
-#19839 moves every SLM key `<ns>.<rest>` to `admin.<ns>.<rest>` in each of the 11 user-app locales, next to the 5 `admin.*` children that already exist (no top-level name overlaps were measured). The merged values are the lifting rule's current output, so the step is a move, not a retranslation; keys still in English count toward `repo_tests/i18n_untranslated_ratchet_test.py` like any other. Once #19842 deletes the SLM locale directory the generator has no target; its `--check` step goes with `slm-frontend-check.yml`.
+#19839 moves every SLM key `<ns>.<rest>` to `admin.<ns>.<rest>` in each of the 11 user-app locales, next to the 5 `admin.*` children that already exist (no top-level name overlaps were measured). The merged values are the lifting rule's current output, so the step is a move, not a retranslation; keys still in English count toward `scripts/list_untranslated.py` like any other, and a key that moves keeps its translation (`repo_tests/i18n_untranslated_ratchet_test.py`). Once #19842 deletes the SLM locale directory the generator has no target; its `--check` step goes with `slm-frontend-check.yml`.
 
 ### 6. The kit boundary (ADR-008) is unchanged
 

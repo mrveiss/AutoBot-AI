@@ -298,6 +298,10 @@
         </div>
       </header>
 
+      <!-- Steps waiting for approval: every tab; the runner tab shows them inline (#17677) -->
+      <StepApprovalList :steps="activeSection === 'runner' ? [] : stepsAwaitingApproval"
+        :workflow-id="currentWorkflow?.workflow_id ?? ''" :approve="handleApproveStep" :skip="handleSkipStep" />
+
       <!-- Loading State -->
       <div v-if="loading && !hasData" class="loading-container">
         <LoadingSpinner size="lg" />
@@ -430,6 +434,7 @@
         <!-- Visual Builder Section -->
         <section v-if="activeSection === 'canvas'" class="section-canvas">
           <WorkflowCanvas
+            :key="canvasGeneration"
             :nodes="workflowNodes"
             :selected-node-id="selectedNodeId"
             @node-added="handleNodeAdded"
@@ -495,12 +500,17 @@
             </div>
 
             <!-- Pending Approval -->
-            <div v-if="pendingApproval" class="approval-panel">
-              <div class="approval-header">
-                <Icon name="clipboard-check" />
-                <h4>{{ $t('workflow.views.planAwaitingApproval') }}</h4>
-              </div>
-
+            <ApprovalEnvelope
+              v-if="pendingApproval"
+              class="approval-panel"
+              icon="clipboard-check"
+              :title="$t('workflow.views.planAwaitingApproval')"
+              :approve-label="$t('workflow.views.approveAndRun')"
+              :reject-label="$t('workflow.views.reject')"
+              :deciding="deciding"
+              @approve="handleApprovePlan"
+              @reject="handleRejectPlan"
+            >
               <div class="approval-summary">
                 <p>{{ pendingApproval.plan_summary }}</p>
                 <div class="approval-meta">
@@ -524,16 +534,7 @@
                   <code class="step-command">{{ step.command }}</code>
                 </div>
               </div>
-
-              <div class="approval-actions">
-                <BaseButton variant="success" size="sm" @click="handleApprovePlan">
-                  <Icon name="check" /> {{ $t('workflow.views.approveAndRun') }}
-                </BaseButton>
-                <BaseButton variant="error" size="sm" @click="handleRejectPlan">
-                  <Icon name="times" /> {{ $t('workflow.views.reject') }}
-                </BaseButton>
-              </div>
-            </div>
+            </ApprovalEnvelope>
           </div>
         </section>
 
@@ -547,8 +548,9 @@
             @pause-workflow="handlePauseWorkflow"
             @resume-workflow="handleResumeWorkflow"
             @cancel-workflow="handleCancelWorkflow"
-            @approve-step="handleApproveStep"
-            @skip-step="handleSkipStep"
+            :approve-step="handleApproveStep"
+            :skip-step="handleSkipStep"
+            @select-workflow="selectWorkflow"
             @refresh="loadActiveWorkflows"
           />
         </section>
@@ -601,6 +603,7 @@
           <GUIAutomationControls
             :opportunities="guiAutomationOpportunities"
             :loading="guiAutomationLoading"
+            :load-failed="guiAutomationLoadFailed"
             @refresh="loadGuiAutomationOpportunities"
           />
         </section>
@@ -693,6 +696,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
+import { useWorkflowCompanySwitch, companyContextAgrees } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -702,9 +706,14 @@ import {
 } from '@/composables/useWorkflowBuilder';
 import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
+import { useRunnerSelection } from '@/composables/workflow/useRunnerSelection';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
+import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue';
+import StepApprovalList from '@/components/workflow/StepApprovalList.vue';
+import { usePlanDecision } from '@/composables/usePlanDecision';
+import { useStepAnswerToast } from '@/composables/useStepAnswerToast';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
@@ -716,10 +725,8 @@ import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
 import MediaGallery from '@/components/vision/MediaGallery.vue';
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-} from '@/utils/VisionMultimodalApiClient';
+import { getVisionHealth } from '@/composables/useVisionApi';
+import { useGuiAutomationOpportunities } from '@/composables/workflow/useGuiAutomationOpportunities';
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
@@ -778,6 +785,7 @@ const {
   activeWorkflows,
   completedWorkflows,
   currentWorkflow,
+  workflowPlan,
   pendingApproval,
   orchestrationStatus,
   executionStrategies,
@@ -788,36 +796,21 @@ const {
   selectedNodeId,
   templates,
   hasActiveWorkflows,
-  loadOrchestrationStatus,
-  loadExecutionStrategies,
-  loadAgentCapabilities,
-  loadAgentPerformance,
-  loadExampleWorkflows,
-  loadActiveWorkflows,
-  applyWorkflowProgress,
-  loadCompletedWorkflows,
-  createWorkflowFromTemplate,
-  createWorkflowFromNaturalLanguage,
-  executeApiTemplate,
-  startWorkflow,
-  pauseWorkflow,
-  resumeWorkflow,
-  cancelWorkflow,
-  approveStep,
-  skipStep,
-  approvePlan,
-  rejectPlan,
-  addNode,
-  removeNode,
-  updateNodePosition,
-  connectNodes,
-  disconnectNodes,
-  clearCanvas,
-  exportCanvasToSteps,
+  loadOrchestrationStatus, loadExecutionStrategies, loadAgentCapabilities, loadAgentPerformance, loadExampleWorkflows,
+  loadActiveWorkflows, invalidateCompanyScope, applyWorkflowProgress, loadCompletedWorkflows,
+  createWorkflowFromTemplate, createWorkflowFromNaturalLanguage, executeApiTemplate, startWorkflow,
+  pauseWorkflow, resumeWorkflow, cancelWorkflow,
+  stepsAwaitingApproval,
+  approveStep, skipStep, approvePlan, rejectPlan,
+  addNode, removeNode, updateNodePosition, connectNodes, disconnectNodes, clearCanvas, exportCanvasToSteps,
   getWorkflowStatus,
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
+const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
+  t, showToast, navigateToRunner: () => navigateTo('runner'),
+  activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+});
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -827,16 +820,19 @@ const activeSection = computed<SectionType>(
   () => (route.params.section as SectionType) || 'overview'
 );
 const naturalLanguageInput = ref('');
-const requireApprovalBeforeRun = ref(true);
+const requireApprovalBeforeRun = ref(true); // user preference, company-independent: kept across a company switch
 const selectedStrategy = ref<string>('');
-const sessionId = ref(`session_${Date.now()}`);
+const canvasGeneration = ref(0);
+const sessionId = ref(`session_${Date.now()}`); // company-scoped: rotated + socket re-keyed on a company switch (#21520)
 
 // GUI Automation state (#1242)
-const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
-const guiAutomationLoading = ref(false);
+const {
+  opportunities: guiAutomationOpportunities, loading: guiAutomationLoading, loadFailed: guiAutomationLoadFailed,
+  load: loadGuiAutomationOpportunities, reset: resetGuiAutomationOpportunities,
+} = useGuiAutomationOpportunities();
 
 // Media Gallery state
-const galleryItems = ref([]);
+const galleryItems = ref([]); // never populated from a company-scoped source, so nothing to reset on a company switch
 
 // Vision service health (#2373)
 const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
@@ -854,28 +850,10 @@ function onVisionNavClick(event: MouseEvent): void {
 
 async function checkVisionHealth(): Promise<void> {
   try {
-    const res = await visionMultimodalApiClient.getVisionHealth();
-    if (res.success && res.data) {
-      visionHealthStatus.value = res.data.status === 'healthy' ? 'healthy' : 'degraded';
-    } else {
-      visionHealthStatus.value = 'offline';
-    }
+    const res = await getVisionHealth();
+    visionHealthStatus.value = res.status === 'healthy' ? 'healthy' : 'degraded';
   } catch {
     visionHealthStatus.value = 'offline';
-  }
-}
-
-async function loadGuiAutomationOpportunities(): Promise<void> {
-  guiAutomationLoading.value = true;
-  try {
-    const res = await visionMultimodalApiClient.getAutomationOpportunities();
-    if (res.success && res.data) {
-      guiAutomationOpportunities.value = res.data.opportunities || [];
-    }
-  } catch (e) {
-    logger.warn('Failed to load automation opportunities:', e);
-  } finally {
-    guiAutomationLoading.value = false;
   }
 }
 
@@ -988,8 +966,9 @@ async function handleRefreshAgents(): Promise<void> {
   await Promise.all([loadAgentPerformance(), loadAgentCapabilities()]);
 }
 
-async function refreshAll(): Promise<void> {
-  await Promise.all([
+/** Resolves false when a company-scoped list failed to load (the loaders log HTTP failures, they do not throw). */
+async function refreshAll(): Promise<boolean> {
+  const [, , active, completed] = await Promise.all([
     loadOrchestrationStatus(),
     loadExecutionStrategies(),
     loadActiveWorkflows(),
@@ -997,6 +976,7 @@ async function refreshAll(): Promise<void> {
     loadExampleWorkflows(),
     checkVisionHealth(),
   ]);
+  return active && completed;
 }
 
 async function runExampleWorkflow(example: { goal: string; strategy: string }): Promise<void> {
@@ -1007,12 +987,16 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
+  if (!companyContextAgrees(String(route.params.companyId ?? ''))) { showToast(t('workflow.builder.companySwitching'), 'warning'); return; }
 
+  const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
     naturalLanguageInput.value,
     sessionId.value,
     requireApprovalBeforeRun.value
   );
+  // The company changed while the reply was in flight: its plan belongs to the previous company.
+  if (sessionId.value !== requestSession) { pendingApproval.value = null; workflowPlan.value = null; return; }
 
   if (workflowId) {
     showToast(t('workflow.builder.created'), 'success');
@@ -1024,27 +1008,16 @@ async function createFromNaturalLanguage(): Promise<void> {
   }
 }
 
-async function handleApprovePlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await approvePlan(pendingApproval.value.workflow_id);
-  if (success) {
-    showToast(t('workflow.builder.planApproved'), 'success');
+const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
+  pendingApproval,
+  approvePlan,
+  rejectPlan,
+  notify: (key, kind) => showToast(t(key), kind),
+  onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
-  } else {
-    showToast(t('workflow.builder.planApproveFailed'), 'error');
-  }
-}
-
-async function handleRejectPlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await rejectPlan(pendingApproval.value.workflow_id, 'User rejected');
-  if (success) {
-    showToast(t('workflow.builder.planRejected'), 'info');
-  }
-}
+  },
+});
 
 function handleNodeAdded(node: WorkflowNode): void {
   addNode(node);
@@ -1102,8 +1075,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   };
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
-    showToast(t('workflow.builder.saved', { name }), 'success');
-    navigateTo('runner');
+    if (await handleViewWorkflow(workflowId)) showToast(t('workflow.builder.saved', { name }), 'success');
   } else {
     showToast(t('workflow.builder.saveFailed'), 'error');
   }
@@ -1146,13 +1118,6 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
   }
 }
 
-async function handleStartWorkflow(workflowId: string): Promise<void> {
-  const success = await startWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.started'), 'success');
-  }
-}
-
 async function handlePauseWorkflow(workflowId: string): Promise<void> {
   const success = await pauseWorkflow(workflowId);
   if (success) {
@@ -1174,19 +1139,9 @@ async function handleCancelWorkflow(workflowId: string): Promise<void> {
   }
 }
 
-async function handleApproveStep(workflowId: string, stepId: string): Promise<void> {
-  const success = await approveStep(workflowId, stepId);
-  if (success) {
-    showToast(t('workflow.builder.stepApproved'), 'success');
-  }
-}
-
-async function handleSkipStep(workflowId: string, stepId: string): Promise<void> {
-  const success = await skipStep(workflowId, stepId);
-  if (success) {
-    showToast(t('workflow.builder.stepSkipped'), 'info');
-  }
-}
+const { answerWithToast } = useStepAnswerToast();
+const handleApproveStep = (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve');
+const handleSkipStep = (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip');
 
 /**
  * Open a workflow named in the URL (#13963).
@@ -1203,19 +1158,6 @@ async function openWorkflowFromQuery(): Promise<void> {
   const workflowId = workflowIdFromQuery(route.query);
   if (!workflowId) return;
   await handleViewWorkflow(workflowId);
-}
-
-async function handleViewWorkflow(workflowId: string): Promise<void> {
-  // Issue #1367: Load the selected workflow before switching to runner
-  navigateTo('runner');
-  const local = activeWorkflows.value.find(
-    (wf) => wf.workflow_id === workflowId,
-  );
-  if (local) {
-    currentWorkflow.value = local;
-  } else {
-    await getWorkflowStatus(workflowId);
-  }
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {
@@ -1270,6 +1212,20 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnectWebSocket();
+});
+
+useWorkflowCompanySwitch({ // keeps this instance on a company switch (#21520): drop the draft, reload
+  companyId: () => String(route.params.companyId ?? ''), reload: refreshAll,
+  onSwitch: () => {
+    resetGuiAutomationOpportunities();
+    invalidateCompanyScope(); // in-flight list reads and create/plan replies belong to the previous company
+    canvasGeneration.value++; // remounts WorkflowCanvas so its undo/redo history cannot restore the old draft
+    sessionId.value = `session_${Date.now()}`;
+    connectWebSocket(sessionId.value); // closes the previous company's socket first
+  },
+  draft: { naturalLanguageInput, selectedStrategy, workflowPlan, pendingApproval, currentWorkflow, workflowNodes, selectedNodeId },
+  onDraftDiscarded: () => showToast(t('workflow.builder.draftDiscardedOnCompanySwitch'), 'info'),
+  onReloadFailed: () => showToast(t('workflow.builder.reloadAfterCompanySwitchFailed'), 'error'),
 });
 
 // Watch for active workflow changes
@@ -1941,31 +1897,9 @@ watch(hasActiveWorkflows, (hasActive) => {
   justify-content: flex-end;
 }
 
-/* Approval Panel */
+/* Approval Panel: the frame is ApprovalEnvelope; only its place in the section stays here. */
 .approval-panel {
   margin-top: var(--spacing-6);
-  background: var(--bg-secondary);
-  border: 1px solid var(--color-warning);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-5);
-}
-
-.approval-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-  margin-bottom: var(--spacing-4);
-}
-
-.approval-header svg {
-  width: var(--text-xl);
-  height: var(--text-xl);
-  color: var(--color-warning);
-}
-
-.approval-header h4 {
-  margin: var(--spacing-0);
-  color: var(--text-primary);
 }
 
 .approval-summary p {
@@ -2024,12 +1958,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   overflow-x: auto;
-}
-
-.approval-actions {
-  display: flex;
-  gap: var(--spacing-3);
-  justify-content: flex-end;
 }
 
 /* Agents Section */

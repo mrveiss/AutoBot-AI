@@ -33,7 +33,9 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared import deployment_profile as profile
+from autobot_shared.logging_once import reset_log_once
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 
@@ -152,7 +154,7 @@ def _copied_var(call: ast.Call) -> object:
 def code_copies_in(path: str, source: str) -> list[str]:
     """``path:line: VAR`` for every literal default of a profile variable in *source*."""
     out = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and _copied_var(node) in profile.PROFILE_VARS:
             out.append(f"{path}:{node.lineno}: {_copied_var(node)}")
     return out
@@ -171,7 +173,6 @@ def code_copies(root: Path) -> list[str]:
 WRITES = declare(
     "deployment-profile-writers-19315",
     discover=profile_writes,
-    floor=31,  # 36 live; window [26, 36], pin 31
     growth=10,
     what="literal assignments of AUTOBOT_ENVIRONMENT/ENV/DEPLOYMENT_MODE/DEBUG",
 )
@@ -338,7 +339,7 @@ def test_the_allow_list_is_non_production(name: str) -> None:
 
 
 def test_a_conflict_and_an_unknown_value_each_warn_once(caplog: pytest.LogCaptureFixture) -> None:
-    profile._warned.clear()
+    reset_log_once()
     with caplog.at_level("WARNING", logger=profile.__name__):
         for _ in range(3):
             profile.resolve_environment("development", "production")

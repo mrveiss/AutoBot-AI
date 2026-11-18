@@ -42,6 +42,7 @@ from typing import Any, Dict
 from langchain.agents import initialize_agent, AgentType
 from langchain.tools import Tool, StructuredTool
 from langchain_anthropic import ChatAnthropic
+from autobot_shared.ssot_claude_models import CLAUDE_SONNET  # the one place a pinned model ID is written
 
 # AutoBot backend configuration
 AUTOBOT_BACKEND_URL = "https://<backend-ip>:8443"
@@ -267,7 +268,7 @@ def create_autobot_agent():
 
     # Initialize LLM (using Anthropic Claude)
     llm = ChatAnthropic(
-        model="claude-sonnet-4-5-20250929",
+        model=CLAUDE_SONNET,
         temperature=0,
         anthropic_api_key="your-api-key"
     )
@@ -371,6 +372,7 @@ import asyncio
 from langchain.agents import AgentExecutor
 from langchain.tools import StructuredTool
 from langchain_anthropic import ChatAnthropic
+from autobot_shared.ssot_claude_models import CLAUDE_SONNET  # the one place a pinned model ID is written
 
 
 async def create_async_mcp_tool(
@@ -409,7 +411,7 @@ async def run_async_agent():
         ),
     ]
 
-    llm = ChatAnthropic(model="claude-sonnet-4-5-20250929", temperature=0)
+    llm = ChatAnthropic(model=CLAUDE_SONNET, temperature=0)
 
     agent = initialize_agent(
         tools=tools,

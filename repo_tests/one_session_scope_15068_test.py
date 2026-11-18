@@ -26,6 +26,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot_shared/db_session.py"
@@ -44,7 +45,7 @@ def _is_key(node: ast.AST) -> bool:
 
 def _seeds_post_commit_list(source: str) -> bool:
     """True when `source` assigns to `<x>.info[<the post-commit key>]`."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -92,8 +93,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "post-commit-seed-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3221,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
@@ -156,7 +155,7 @@ _PROVIDERS = {
 
 def _providers_not_using_the_scope(source: str, names: tuple[str, ...]) -> list[str]:
     """Names of `names` that are missing or do not call `async_session_scope`."""
-    funcs = {n.name: n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+    funcs = {n.name: n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
     bad = []
     for name in names:
         fn = funcs.get(name)

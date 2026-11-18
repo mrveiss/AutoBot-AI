@@ -68,7 +68,7 @@
     - name: Configure passwordless sudo for autobot user
       ansible.builtin.copy:
         dest: /etc/sudoers.d/autobot-nopasswd
-        content: "{{ slm_agent_user }} ALL=(ALL) NOPASSWD: ALL"  # pragma: allowlist secret
+        content: "{{ slm_agent_user }} ALL=(ALL) NOPASSWD: ALL\n"  # pragma: allowlist secret
         mode: '0440'
         validate: '/usr/sbin/visudo -cf %s'
 

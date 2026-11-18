@@ -43,7 +43,7 @@ for _entry in (str(_REPO_ROOT), str(_BACKEND_DIR)):
     if _entry not in sys.path:
         sys.path.insert(0, _entry)
 
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 from services.feature_flags import (  # noqa: E402
     EnforcementMode,
     FeatureFlags,
@@ -99,4 +99,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())

@@ -32,7 +32,8 @@ const NS = 'monitoring.validationDashboard'
 const props = defineProps<{ report: ValidationReport; service: ValidationDashboardStatus | null; readAt: string }>()
 const { t, te } = useI18n()
 
-const percent = (value: number): string => t(`${NS}.percent`, { value: value.toFixed(1) })
+const percent = (value: number | null): string =>
+  value === null ? t(`${NS}.phases.notScored`) : t(`${NS}.percent`, { value: value.toFixed(1) })
 const yesNo = (value: boolean): string => t(`${NS}.${value ? 'yes' : 'no'}`)
 /** The generator's own word when this screen has no translation for it. */
 const health = (value: string): string => (te(`${NS}.health.${value}`) ? t(`${NS}.health.${value}`) : value)

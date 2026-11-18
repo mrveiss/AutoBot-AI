@@ -5,13 +5,14 @@
 """KB collection lifecycle manager (GH#8235).
 
 Canonical naming and lifecycle for ChromaDB collections across all LLC entities.
-Collections are created on entity creation and archived on entity deletion,
+Collections are created by their first write (#19725) and archived on entity deletion,
 with document merging support for ephemeral entities (sprints, work items).
 """
 
 import uuid
 from typing import Optional
 
+from autobot_shared import kb_collection_prefixes as kb_prefixes
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
@@ -32,11 +33,11 @@ class KbCollectionManager:
     """
 
     # Collection name prefixes
-    COMPANY_PREFIX = "company"
-    PROJECT_PREFIX = "project"
-    SPRINT_PREFIX = "sprint"
-    WORK_ITEM_PREFIX = "work_item"
-    AGENT_PREFIX = "agent"
+    COMPANY_PREFIX = kb_prefixes.COMPANY_PREFIX
+    PROJECT_PREFIX = kb_prefixes.PROJECT_PREFIX
+    SPRINT_PREFIX = kb_prefixes.SPRINT_PREFIX
+    WORK_ITEM_PREFIX = kb_prefixes.WORK_ITEM_PREFIX
+    AGENT_PREFIX = kb_prefixes.AGENT_PREFIX
 
     # Collection suffixes (optional per entity)
     AGENTS_SUFFIX = "agents"
@@ -72,6 +73,9 @@ class KbCollectionManager:
         suffix: Optional[str] = None,
     ) -> str:
         """Create ChromaDB collection if not exists; idempotent.
+
+        No production caller since entities stopped creating one (#19725); that issue's
+        health-scan proposal is its next caller.
 
         Args:
             entity_type: Type of entity
@@ -134,7 +138,7 @@ class KbCollectionManager:
             try:
                 original = await kb._async_chroma_client.get_collection(original_name)
             except Exception:
-                logger.warning(
+                logger.debug(  # the usual case: a collection appears only on its first write (#19725)
                     "Collection %s does not exist; nothing to archive",
                     original_name,
                 )

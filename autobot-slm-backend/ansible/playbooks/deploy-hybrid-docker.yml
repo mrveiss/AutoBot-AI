@@ -219,7 +219,7 @@
               environment:
                 - NODE_ENV=production
                 - VITE_BACKEND_HOST={{ backend_host }}
-                - VITE_BACKEND_PORT=8001
+                - VITE_BACKEND_PORT={{ backend_port }}
                 - VITE_REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
                 - VITE_AI_STACK_HOST={{ hostvars['autobot-aiml']['ansible_host'] }}
                 - VITE_BROWSER_HOST={{ hostvars['autobot-browser']['ansible_host'] }}

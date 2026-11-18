@@ -31,6 +31,7 @@ from llc.tests.approval_enforcement_support_test import (  # noqa: F401
     _budget,
     _decide,
     _hire,
+    _live_member,
     _member,
     _post,
     _request,
@@ -312,7 +313,7 @@ async def test_a_hire_approved_over_the_decide_route_is_activated_and_scheduled(
     session_factory, _edges
 ) -> None:  # noqa: ANN001
     approval_id = (await _hire(session_factory)).json()["approval_id"]
-    await _member(session_factory, _BOARD, "owner")
+    await _live_member(session_factory, _BOARD, "owner")
     resp = await _post(
         _board_app(session_factory, user_id=_BOARD),
         f"/api/llc/approvals/{approval_id}/decide",

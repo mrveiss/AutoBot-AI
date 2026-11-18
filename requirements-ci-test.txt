@@ -10,11 +10,16 @@
 # Installed by .github/actions/setup-python-suite, which resolves it against the
 # CPU-only PyTorch index alongside requirements-ci.txt.
 
+# Every package below that constraints/shared.txt constrains is listed bare and takes its
+# version from there, so a bump edits that one file (#21471). The -c line carries it into
+# every install of this file, including the ones that do not pass -c themselves.
+-c constraints/shared.txt
+
 # Test runner and the parallel/split plugins the sharded suite depends on.
 pytest
 pytest-asyncio
 pytest-cov
-pytest-xdist==3.8.0
+pytest-xdist
 pytest-split==0.11.0
 
 # Redis test double, used by the tests that do not need the real service.

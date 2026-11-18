@@ -208,16 +208,37 @@
     quiet: true
   when: llm_pull_models | default(true)
 
-- name: "Models | Pull models appropriate for this node"
-  ansible.builtin.command:
-    cmd: "ollama pull {{ item }}"
-  loop: "{{ _llm_models_to_pull }}"
+# #20082: a large download on a new node can drop or run out of disk. Retry it, and if it still
+# fails say which model and how much room was left, so nobody has to go and look.
+- name: "Models | Pull models, retrying a failed download"
   when: llm_pull_models | default(true)
   become: true
-  register: _model_pull
-  changed_when: "'pulling' in (_model_pull.stderr | default(''))"
-  failed_when: _model_pull.rc != 0
   tags: ['llm', 'models']
+  block:
+    - name: "Models | Pull models appropriate for this node"
+      ansible.builtin.command:
+        cmd: "ollama pull {{ item }}"
+      loop: "{{ _llm_models_to_pull }}"
+      register: _model_pull
+      until: _model_pull.rc == 0
+      retries: "{{ llm_pull_retries }}"
+      delay: "{{ llm_pull_retry_delay }}"
+      changed_when: "'pulling' in (_model_pull.stderr | default(''))"
+      failed_when: _model_pull.rc != 0
+  rescue:
+    - name: "Models | Read the free disk space for the failure message"
+      ansible.builtin.command:
+        cmd: "df -h --output=avail {{ llm_models_dir }}"
+      register: _llm_models_disk
+      changed_when: false
+      failed_when: false
+
+    - name: "Models | Stop this host, naming what failed"
+      ansible.builtin.fail:
+        msg: >-
+          Pulling {{ _model_pull.results | default([]) | selectattr('rc', 'defined') | rejectattr('rc', 'eq', 0)
+          | map(attribute='item') | join(', ') }} failed after {{ llm_pull_retries }} retries.
+          Free space for {{ llm_models_dir }}: {{ _llm_models_disk.stdout_lines | default([]) | last | default('unknown') }}.
 
 
 # #15502: a pull that returned 0 is not proof the model is usable. Check presence, and name the
