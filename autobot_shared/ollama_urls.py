@@ -14,6 +14,8 @@ are stripped, since every URL built here is a native ``/api/...`` one), and a
 path-prefixed gateway base. A query string or fragment is NOT supported.
 """
 
+from urllib.parse import urlsplit, urlunsplit
+
 from autobot_shared.ssot_constants import (
     PATH_OLLAMA_CHAT,
     PATH_OLLAMA_EMBEDDINGS,
@@ -33,16 +35,22 @@ _OLLAMA_API_PATHS = (
 )
 
 
+def _strip_suffix(path: str) -> str:
+    """Drop one known API path, else one API-root suffix, from a URL path."""
+    for suffix in _OLLAMA_API_PATHS + _API_ROOT_SUFFIXES:
+        if path.endswith(suffix):
+            return path[: -len(suffix)].rstrip("/")
+    return path
+
+
 def ollama_api_url(base_url: str, path: str) -> str:
-    """``base_url`` (with or without a known API path) -> URL ending in ``path`` once."""
-    base = base_url.rstrip("/")
-    for known in _OLLAMA_API_PATHS:
-        if base.endswith(known):
-            return base[: -len(known)].rstrip("/") + path
-    for root in _API_ROOT_SUFFIXES:
-        if base.endswith(root):
-            return base[: -len(root)].rstrip("/") + path
-    return base + path
+    """``base_url`` (with or without a known API path) -> URL ending in ``path`` once.
+
+    Suffixes are stripped from the URL path only, never from the authority.
+    """
+    parts = urlsplit(base_url.rstrip("/"))
+    stripped = _strip_suffix(parts.path)
+    return urlunsplit((parts.scheme, parts.netloc, stripped, parts.query, parts.fragment)) + path
 
 
 def ollama_generate_url(base_url: str) -> str:

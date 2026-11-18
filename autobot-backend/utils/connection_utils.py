@@ -180,7 +180,7 @@ class ConnectionTester:
         # so this keeps the explicit response block instead of post_json().
         async with get_http_client().tracked_request(
             "POST",
-            endpoint,
+            ollama_generate_url(endpoint),
             json=test_payload,
             timeout=gen_timeout,
         ) as resp:

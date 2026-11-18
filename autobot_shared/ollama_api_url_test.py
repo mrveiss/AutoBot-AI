@@ -88,3 +88,11 @@ def test_prefixed_api_root_keeps_its_prefix():
 def test_query_string_is_unsupported_and_pinned():
     # Not a supported form: the path is appended after the query, unchanged.
     assert ollama_generate_url("http://ollama.example:11434?x=1") == "http://ollama.example:11434?x=1/api/generate"
+
+
+@pytest.mark.parametrize("host", ["api", "v1"])
+def test_host_named_like_an_api_root_is_not_stripped(host):
+    base = f"http://{host}"
+    assert ollama_generate_url(base) == f"http://{host}/api/generate"
+    assert ollama_base_url(base) == base
+    assert ollama_generate_url(base + "/api") == f"http://{host}/api/generate"
