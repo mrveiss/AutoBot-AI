@@ -23,14 +23,8 @@ SLM frontend (``autobot-slm-frontend/src/utils/ApiClient.ts``, ``SlmApiClient.re
   path (loose: it errs toward "connected").
 * ``${getSlmApiBase()}/x`` in a template -> ``/api`` + ``/x`` (same base, written out).
 
-Two file-local forms resolve to those clients (#20910):
-
-* a path constant, ``const SETUP_RESET = '/setup/reset'`` (or a template, ``const url = `/x${qs}` ``):
-  ``client.post(SETUP_RESET)``, ``${LEDGER}/claims`` and ``wrapper(url)`` read as the value. The latest
-  declaration above the use applies, whichever function declared it.
-* a request wrapper, ``function read(path: string) { ... client.rawRequest(`${LEDGER}${path}`) }`` or
-  ``async function apiRequest(method, path) { ... client.get(path) }``: a call ``read('/claims')`` or
-  ``apiRequest('GET', '/config/defaults')`` is the client's base + the wrapper's prefix + the path.
+A same-file URL helper (``const uploadsUrl = () => `${getApiBase()}/x` ``) is followed by
+``_unconnected_helper_calls``, which keeps the verb: its calls connect only a route of the same method (#21307).
 
 Main frontend (``autobot-frontend/src/utils/ApiClient.ts``): the base is the host (``baseUrl`` is
 ``''`` in proxy mode) and the ``/api`` is written at the call site, which ``frontend_calls`` already
@@ -296,6 +290,15 @@ def _call_text(rel: str, code: str, script: str) -> str:
     return script + "\n" + strip_html_comments(SCRIPT_BODY.sub("", code))
 
 
+def prepared_text(rel: str, text: str) -> tuple[dict[str, str], str, str]:
+    """``(receivers, script, calls)`` of one file: its clients, its code sans comments, the text calls are read from."""
+    receivers = _receivers(rel, text)
+    lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
+    code = _inline_constants(lines)
+    script = frontend_code_text(rel, code)
+    return receivers, script, _call_text(rel, code, script)
+
+
 def _file_calls(rel: str, text: str) -> set[str]:
     """Raw ``base + path`` strings the client calls in one file make.
 
@@ -303,12 +306,8 @@ def _file_calls(rel: str, text: str) -> set[str]:
     call (#20910). The call is matched across the whole text, so a call whose path sits on the line after
     ``client.post<T>(`` is seen (``_PATH`` already allows the newline).
     """
-    receivers = _receivers(rel, text)
+    receivers, script, calls = prepared_text(rel, text)
     pattern, out = _site_pattern(receivers), set[str]()
-    lines = ["" if (ln.lstrip()[:2] in _COMMENT_PREFIXES or ln.strip() == "*") else ln for ln in text.splitlines()]
-    code = _inline_constants(lines)
-    script = frontend_code_text(rel, code)
-    calls = _call_text(rel, code, script)
     out.update(receivers[m.group(1)] + m.group(2) for m in pattern.finditer(calls) if m.group(2) != "/api")
     out.update(_wrapper_calls(calls, _wrappers(script, receivers)))
     if rel.startswith(_SLM_ROOT):
