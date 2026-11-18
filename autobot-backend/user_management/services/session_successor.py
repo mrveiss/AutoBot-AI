@@ -201,34 +201,46 @@ async def _apply(
     return len(plan)
 
 
-async def reassign_user_sessions(
-    db: AsyncSession, user_id: uuid.UUID, actor: str, manager: Any = None, validator: Any = None
-) -> dict[str, int]:
-    """Hand every session *user_id* owns to a successor; returns ``{"sessions_reassigned": n}``."""
-    user = await db.get(User, user_id)
-    if user is None:
-        return {"sessions_reassigned": 0}
-    manager = manager or _default_manager()
+async def _planned_handovers(db: AsyncSession, user: User, actor: str, manager: Any) -> list[Handover]:
+    """Who receives each session *user* owns, writing nothing; raises ``SessionReassignError`` to refuse."""
     owned, unreadable = await owned_sessions(manager, user.username)
     if unreadable:
         emit_security(
             AuditAction.SESSION_REASSIGN,
             actor,
             resource_type="user",
-            resource_id=str(user_id),
+            resource_id=str(user.id),
             outcome="denied",
             metadata={"unreadable_sessions": unreadable},
         )
         raise SessionReassignError(f"{len(unreadable)} session file(s) cannot be read, so their owners are unknown")
-    if not owned:
-        return {"sessions_reassigned": 0}
     try:
-        plan = await plan_handovers(db, user_id, owned)
+        return await plan_handovers(db, user.id, owned) if owned else []
     except SessionReassignError:
         emit_security(
-            AuditAction.SESSION_REASSIGN, actor, resource_type="user", resource_id=str(user_id), outcome="denied"
+            AuditAction.SESSION_REASSIGN, actor, resource_type="user", resource_id=str(user.id), outcome="denied"
         )
         raise
+
+
+async def check_user_sessions(db: AsyncSession, user_id: uuid.UUID, actor: str, manager: Any = None) -> None:
+    """Refuse now if a removal would be refused, before anything that cannot be undone has moved."""
+    user = await db.get(User, user_id, with_for_update=True)  # an owner assignment waits, or sees this (#20030)
+    if user is not None:
+        await _planned_handovers(db, user, actor, manager or _default_manager())
+
+
+async def reassign_user_sessions(
+    db: AsyncSession, user_id: uuid.UUID, actor: str, manager: Any = None, validator: Any = None
+) -> dict[str, int]:
+    """Hand every session *user_id* owns to a successor; returns ``{"sessions_reassigned": n}``."""
+    user = await db.get(User, user_id, with_for_update=True)  # an owner assignment waits, or sees this (#20030)
+    if user is None:
+        return {"sessions_reassigned": 0}
+    manager = manager or _default_manager()
+    plan = await _planned_handovers(db, user, actor, manager)
+    if not plan:
+        return {"sessions_reassigned": 0}
     names = await usernames_of(db, {h.successor_id for h in plan})
     validator = validator or await _default_validator()
     return {"sessions_reassigned": await _apply(manager, validator, actor, user_id, plan, names, user.username)}

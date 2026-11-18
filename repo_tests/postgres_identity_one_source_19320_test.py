@@ -35,12 +35,13 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared import postgres_identity as pg
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 
 _USERS_HOSTS = {pg.USERS_DB_HOST, pg.COMPOSE_DB_HOST}
-_SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_DB_HOST}
+_SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_SLM_DB_HOST}
 #: Postgres key -> the values the identity table allows for it. AUTOBOT_DB_USER/NAME as
 #: literals exist only in compose files, as deprecated aliases (#19408).
 KEY_VALUES: dict[str, set[str]] = {
@@ -145,7 +146,7 @@ def _node_findings(node: ast.AST, docstrings: set[int]) -> list[tuple[str, objec
 
 def python_findings(rel: str, source: str) -> list[str]:
     """Every literal Postgres default in one Python file, as ``path:line: key=value``."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)}
     out = []
     for node in ast.walk(tree):

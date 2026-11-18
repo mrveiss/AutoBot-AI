@@ -67,7 +67,7 @@
       # accepts the URL: postgresql+asyncpg://... -> postgresql://...
       DUMP_URL="$(printf '%s' "${RAW_URL}" | sed -E 's#^(postgres(ql)?)\+[a-z0-9_]+://#\1://#')"
     elif [ -n "${AUTOBOT_POSTGRES_HOST:-}" ]; then
-      # Discrete AUTOBOT_POSTGRES_* vars: credentials go through libpq's own variables, since a raw
+      # Discrete AUTOBOT_POSTGRES_* vars: credentials go through the libpq variables, since a raw
       # password in a URL breaks on "@", ":", "/" or "%" and the shell here cannot encode it (#19812).
       export PGUSER="${AUTOBOT_POSTGRES_USER:-autobot_app}" PGPASSWORD="${AUTOBOT_POSTGRES_PASSWORD:-}"
       DUMP_URL="postgresql://${AUTOBOT_POSTGRES_HOST}:${AUTOBOT_POSTGRES_PORT:-5432}/${AUTOBOT_POSTGRES_DB:-autobot_users}"

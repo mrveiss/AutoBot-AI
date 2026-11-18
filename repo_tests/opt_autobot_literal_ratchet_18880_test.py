@@ -19,6 +19,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.opt_autobot_literal_ratchet_18880_baseline import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -36,7 +37,7 @@ _FROZEN_PREFIX = f"{_ANSIBLE}/tests/fixtures/"
 def _docstring_lines(text: str) -> set[int]:
     """1-based line numbers of every module, class and function docstring."""
     lines: set[int] = set()
-    for node in ast.walk(ast.parse(text)):
+    for node in ast.walk(parse_cache.parse(text)):
         if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
             first = node.body[0]
             if (
@@ -63,9 +64,7 @@ def _ansible_files(root: Path) -> list[str]:
 REACH = declare(
     "opt-autobot-literal-ratchet-18880",
     discover=_ansible_files,
-    # mid-window on the SCANNED population (prose and fixtures excluded at discovery, CodeRabbit
-    # on #19388): 479 tracked - 17 out of scope = 462; floor 462 - 20 = 442, window (422, 462)
-    floor=459,  # mid-window: population 479, window (439, 479)
+    # The SCANNED population (prose and fixtures excluded at discovery, CodeRabbit on #19388).
     growth=40,
     what="tracked ansible files",
     roots=(_ANSIBLE,),

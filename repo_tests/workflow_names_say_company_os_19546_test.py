@@ -70,13 +70,12 @@ def llc_names(file_name: str, doc: object) -> list[str]:
 
 
 #: Re-measured with a throwaway count of `_workflow_files()` against this tree, not
-#: carried across (#15928); pinned mid-window as `_reach` requires (#17356). `growth=10`
-#: absorbs an ordinary new workflow or two before a deliberate re-pin; `skips=0`
+#: carried across (#15928); the floor is computed from the base commit (#19676). `growth=10`
+#: absorbs an ordinary new workflow or two; `skips=0`
 #: because an unparseable workflow fails the test below rather than being skipped.
 REACH = declare(
     "workflow-visible-name-sweep",
     discover=_workflow_files,
-    floor=65,
     growth=10,
     skips=0,
     what="workflow files",

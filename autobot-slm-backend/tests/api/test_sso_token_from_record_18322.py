@@ -84,10 +84,15 @@ def _run(path: str, service: MagicMock):
 
 
 @pytest.mark.parametrize("path", ["oauth", "ldap", "saml"])
-@pytest.mark.parametrize(("is_admin", "role"), [(False, "user"), (True, "admin")])
-def test_the_token_role_comes_from_the_record(path, is_admin, role):
-    (payload,) = _run(path, _service(user=_record(is_admin)))
-    assert payload["role"] == role and payload["admin"] is is_admin and payload["sub"] == "sso-user"
+def test_the_token_role_comes_from_the_record(path):
+    (payload,) = _run(path, _service(user=_record(True)))
+    assert payload["role"] == "admin" and payload["admin"] is True and payload["sub"] == "sso-user"
+
+
+@pytest.mark.parametrize("path", ["oauth", "ldap", "saml"])
+def test_a_record_that_is_not_an_admin_gets_no_token(path):
+    """The SLM is an admin-only console (#20628): the record's role decides, and a non-admin's signs nothing."""
+    assert _run(path, _service(user=_record(False))) == []
 
 
 @pytest.mark.parametrize("path", ["oauth", "ldap", "saml"])

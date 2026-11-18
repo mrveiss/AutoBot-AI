@@ -21,10 +21,23 @@ WHAT COUNTS AS USER-VISIBLE, and the boundary is the whole design:
   component's own prop (`message`, `caption`, `hint`, `tooltip`) is user-visible
   and not seen (review finding on #17395);
 - (#12732 only) a SCRIPT literal: in `<script>`, a string literal in the
-  position `.value = '...'`, `message: '...'`, `title: '...'`, `confirm('...')`,
-  `alert('...')` or `Error('...')` that starts with a capital followed by a
-  lowercase letter and is at least five characters long. This is a regex over
-  the script blocks; it has no second derivation (see the ratchet test).
+  position `.value = '...'`, `message: '...'`, `title: '...'`, `label: '...'`,
+  `zeroText: '...'`, `nullText: '...'`, `confirm('...')`, `alert('...')` or `Error('...')`
+  whose text has one of three shapes, the same three for every key:
+  * prose: a capital followed by a lowercase letter, at least five characters
+    (`Total Nodes`);
+  * a byte size: a number and a byte unit, `0 B`, `0B`, `1.5 KB`, `2 GiB` (#19885);
+  * an acronym plural: two or more capitals and an `s`, `SLOs`, `APIs` (#19885);
+  * after `label:` only, a number with a time unit, `1h`, `24h`, `7d` (#20765).
+  This is a regex over the script blocks; it has no second derivation (see the
+  ratchet test). `label:`, `zeroText:` and `nullText:` and the two short shapes
+  were added by #19885, whose sites (`zeroText: '0B'`, `nullText: '0 B'`,
+  `label: 'SLOs'`) the prose rule alone could not see. Still not matched: a short
+  word (`Chat`), a bare acronym (`PDF`), and a number with a time unit
+  under any other key (`m.value = '3d'`, which is as often a mode identifier as visible text).
+  `.ts` files are scanned only where `formatter_files()` in
+  `_hardcoded_ui_literal_detect.py` says (`src/utils/format*.ts`, #19885), and
+  only by the #12732 ratchet; every other `.ts` file is not scanned.
 
 WHAT DOES NOT COUNT, listed because an unstated exclusion is how a guard ends up
 measuring nothing:
@@ -50,6 +63,8 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from typing import NamedTuple
+
+from tools.lint._comment_syntax import SCRIPT_ELEMENT, SCRIPT_ELEMENT_FLAGS
 
 #: Attributes a user reads. `aria-*` included: a screen reader is a user.
 _VISIBLE_ATTRS = frozenset({"placeholder", "title", "alt", "aria-label", "aria-description", "label"})
@@ -88,12 +103,28 @@ _CODE_IDENTIFIER = re.compile(r"^([A-Za-z][a-z0-9]*[A-Z][A-Za-z0-9]*|[A-Za-z][A-
 
 # Closing tags tolerate whitespace and attributes (`</script >`), as browsers do (CodeQL py/bad-tag-filter).
 _SCRIPT_BLOCK = re.compile(r"<(script|style)\b[^>]*>.*?</\1\b[^>]*>", re.DOTALL | re.IGNORECASE)
-_SCRIPT_BODY = re.compile(r"<script\b[^>]*>(.*?)</script\b[^>]*>", re.DOTALL | re.IGNORECASE)
+#: The one SFC `<script>` body extractor, built from the shared element pattern; `_unconnected_frontend.py` reuses it.
+SCRIPT_BODY = re.compile(SCRIPT_ELEMENT, SCRIPT_ELEMENT_FLAGS)
 #: The closing quote is the opening one (backreference), so `alert("Can't connect")` is one
 #: literal; the other two quote characters may occur inside it (#18802).
 _SCRIPT_LITERAL = re.compile(
-    r"""(?:\.value\s*=|message:|title:|confirm\(|alert\(|Error\()\s*([`'"])([A-Z][a-z](?:(?!\1).){3,}?)\1"""
+    r"""(?:\.value\s*=|message:|title:|label:|zeroText:|nullText:|confirm\(|alert\(|Error\()"""
+    r"""\s*([`'"])((?:[A-Z][a-z](?:\\.|(?!\1).){3,}?)|\d+(?:\.\d+)?\s?[KMGTP]?i?B|[A-Z]{2,}s)\1"""
 )
+#: A number with a time unit, `1h`, `24h`, `7d`, `30 min` -- but only after `label:` (#20765). A general
+#: unit shape would flag `viewMode === '3d'`; `label:` is the one key whose value is always shown. A
+#: whole-tree measurement found these four sites and no other `label:` time value (0 false positives,
+#: also for a quoted `'label'` key and a fractional `1.5h`).
+_LABEL_TIME_LITERAL = re.compile(r"""(?<!\w)['"]?label['"]?\s*:\s*([`'"])(\d+(?:\.\d+)?\s?(?:ms|s|min|m|h|d|w))\1""")
+
+
+def _script_texts(source: str) -> list[str]:
+    """The text of every script-kind literal in a script body: the shared rule plus the label time unit."""
+    return [m.group(2) for m in _SCRIPT_LITERAL.finditer(source)] + [
+        m.group(2) for m in _LABEL_TIME_LITERAL.finditer(source)
+    ]
+
+
 KINDS = ("template-text", "attribute", "script")
 
 
@@ -192,9 +223,14 @@ def literals_in_source(source: str, label: str) -> list[str]:
 def script_literals(source: str) -> list[str]:
     """Every script-kind literal, from the `<script>` blocks only."""
     found: list[str] = []
-    for block in _SCRIPT_BODY.findall(source):
-        found += [m.group(2) for m in _SCRIPT_LITERAL.finditer(block)]
+    for block in SCRIPT_BODY.findall(source):
+        found += _script_texts(block)
     return found
+
+
+def ts_literals(source: str) -> list[tuple[str, str]]:
+    """Every script-kind literal in a `.ts` module, read as one script body (#19885)."""
+    return [("script", text) for text in _script_texts(source)]
 
 
 def literals_in(source: str) -> list[tuple[str, str]]:

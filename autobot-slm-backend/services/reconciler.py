@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_once import log_once
 from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from config import settings
@@ -61,6 +62,8 @@ from services.service_remediation_tracker import (
     clear_service_remediation,
     log_restart_result,
     read_service_remediation,
+    settle_remediation,
+    tracker_after_restart,
     write_service_remediation,
 )
 from services.service_upsert import load_node_services, remove_stale_services, upsert_service
@@ -230,11 +233,8 @@ MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
     "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
 )
 
-# #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
-# "log once, not every call" warnings -- that function runs on every
-# _forgive_if_expired, up to once per reconcile pass per degraded node.
-_expiry_floor_override_logged = False
-_reconcile_interval_type_warning_logged = False
+# #14465 review, round 7: _effective_tracker_expiry_s's warnings are "log once, not every call" (log_once)
+# -- that function runs on every _forgive_if_expired, up to once per reconcile pass per degraded node.
 
 
 def _effective_tracker_expiry_s() -> int:
@@ -324,25 +324,27 @@ def _effective_tracker_expiry_s() -> int:
     today but would otherwise silently collapse a legitimately large
     configured interval down to the 60s fallback with no warning).
     """
-    global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
-
     reconcile_interval = getattr(settings, "reconcile_interval", 60)
     if not isinstance(reconcile_interval, int):
-        if not _reconcile_interval_type_warning_logged:
-            logger.warning(
-                "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
-                "remediation-tracker expiry floor margin",
-                reconcile_interval,
-            )
-            _reconcile_interval_type_warning_logged = True
+        log_once(
+            logger,
+            logging.WARNING,
+            "reconcile_interval_type",
+            "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
+            "remediation-tracker expiry floor margin",
+            reconcile_interval,
+        )
         reconcile_interval = 60
 
     single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
     floor = max(REMEDIATION_COOLDOWN, single_node_attempt_ceiling_s) + reconcile_interval + 1
     effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
-    if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
-        logger.warning(
+    if effective != REMEDIATION_TRACKER_EXPIRY_S:
+        log_once(
+            logger,
+            logging.WARNING,
+            "expiry_floor_override",
             "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
             "(max(REMEDIATION_COOLDOWN=%ds, ceiling=%ds) + reconcile_interval=%ds + 1)",
             REMEDIATION_TRACKER_EXPIRY_S,
@@ -351,7 +353,6 @@ def _effective_tracker_expiry_s() -> int:
             single_node_attempt_ceiling_s,
             reconcile_interval,
         )
-        _expiry_floor_override_logged = True
 
     return effective
 
@@ -1430,15 +1431,8 @@ class ReconcilerService:
         # undo it. Captured by _handle_service_restart_result's own commit().
         await db.refresh(service)
         fresh_tracker = read_service_remediation(service)
-        write_service_remediation(
-            service,
-            {
-                "count": fresh_tracker["count"] + 1 if not success else 0,
-                "last_attempt": now,
-                "exhausted": False,
-                "last_cause": cause,  # #16712 AC: exhaustion must name the cause
-            },
-        )
+        # #20796: a start counts until it settles; #16712 AC: exhaustion names the cause.
+        write_service_remediation(service, tracker_after_restart(fresh_tracker, success, cause))
 
         await self._handle_service_restart_result(db, node, service, success, fresh_tracker)
         return True
@@ -1897,8 +1891,7 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        if status != SystemdState.FAILED.value:
-            existing_extra.pop("remediation", None)  # #16712: recovery resets it
+        settle_remediation(existing_extra, status, now)  # #16712, #20796: continuous uptime resets it
         service.extra_data = existing_extra
         return is_churning
 

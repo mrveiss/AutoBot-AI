@@ -61,7 +61,7 @@ const emit = defineEmits<{ 'update:open': [open: boolean] }>()
 
 <style>
 .aui-popover {
-  z-index: var(--aui-z-dropdown);
+  z-index: var(--aui-z-popover);
   width: 18rem;
   max-width: calc(100vw - 2 * var(--aui-space-4));
   padding: var(--aui-space-4);

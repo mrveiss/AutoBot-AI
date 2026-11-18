@@ -38,6 +38,12 @@ class UserService(SharedUserService):
 
         return await reassign_user_memory(str(user_id), str(reassign_to))
 
+    async def check_session_reassign(self, user_id: uuid.UUID) -> None:
+        """Refuse a removal whose sessions could not be handed over, writing nothing (#20029)."""
+        from user_management.services.session_successor import check_user_sessions  # noqa: PLC0415
+
+        await check_user_sessions(self.session, user_id, str(self.context.user_id or "system"))
+
     async def reassign_sessions(self, user_id: uuid.UUID) -> dict[str, Any]:
         """Hand the user's chat sessions to a successor, or refuse the removal (#20029)."""
         from user_management.services.session_successor import reassign_user_sessions  # noqa: PLC0415

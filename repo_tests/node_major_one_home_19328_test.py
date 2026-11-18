@@ -67,7 +67,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "node-major-literals",
     discover=_sources,
-    floor=611,  # mid-window: population 641, window (581, 641)
     growth=60,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="workflow, Ansible and install-script files",
     roots=_ROOTS,

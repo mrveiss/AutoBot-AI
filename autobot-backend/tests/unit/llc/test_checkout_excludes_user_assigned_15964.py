@@ -26,11 +26,14 @@ from __future__ import annotations
 import ast
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import or_
 
+from llc.models.enums import AssigneeType, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_queue import claimable_by
+from llc.services.work_item_service import WorkItemService
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
@@ -99,31 +102,75 @@ def test_the_rule_rejects_the_predicate_this_issue_was_filed_about() -> None:
     )
 
 
-def test_checkout_clears_the_user_assignee_when_an_agent_claims() -> None:
-    """`checkout` must not leave `assignee_user_id` set on an agent-claimed row.
-
-    Read from the source: the write sits inside an async method that needs a
-    session and a live row. What matters for the invariant is that the
-    assignment exists at all, next to the `assignee_agent_id` write.
-    """
-    source = (BACKEND_ROOT / "llc" / "services" / "work_item_service.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    checkout = next(
-        (n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "checkout"),
+def _function(path: str, name: str) -> ast.AST:
+    """The (async) function *name* parsed from a backend source file."""
+    source = (BACKEND_ROOT / path).read_text(encoding="utf-8")
+    node = next(
+        (
+            n
+            for n in ast.walk(ast.parse(source))
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
+        ),
         None,
     )
-    assert checkout is not None, "checkout() not found — this test's anchor moved"
+    assert node is not None, f"{name}() not found in {path} — this test's anchor moved"
+    return node
 
+
+def test_checkout_clears_the_user_assignee_when_an_agent_claims() -> None:
+    """An agent checkout must not leave `assignee_user_id` set on the claimed row.
+
+    Read from the source: the write needs a session and a live row. `checkout`
+    delegates the stamping to `stamp_agent_checkout`, so the pin is two-part:
+    `checkout` calls the stamp, and the stamp clears the user next to the
+    `assignee_agent_id` write.
+    """
+    checkout = _function("llc/services/work_item_service.py", "checkout")
+    calls_stamp = any(
+        isinstance(n, ast.Call) and getattr(n.func, "id", None) == "stamp_agent_checkout" for n in ast.walk(checkout)
+    )
+    assert calls_stamp, "checkout() no longer calls stamp_agent_checkout, which clears the user assignee (#15964)."
+
+    stamp = _function("llc/services/work_item_own_task.py", "stamp_agent_checkout")
     cleared = any(
         isinstance(node, ast.Assign)
         and isinstance(node.value, ast.Constant)
         and node.value.value is None
         and any(isinstance(t, ast.Attribute) and t.attr == "assignee_user_id" for t in node.targets)
-        for node in ast.walk(checkout)
+        for node in ast.walk(stamp)
     )
     assert cleared, (
-        "checkout() sets assignee_agent_id and assignee_type = agent but never "
+        "stamp_agent_checkout() sets assignee_agent_id and assignee_type = agent but never "
         "clears assignee_user_id, so an agent-claimed row keeps naming a user "
         "assignee too (#15964)."
     )
+
+
+async def test_checking_out_an_unlocked_user_assigned_item_leaves_only_the_agent_assignee() -> None:
+    """Behavioural (#21032): drive ``WorkItemService.checkout`` on a real row object, not the source text.
+
+    The row is user-assigned and unlocked. After the checkout it must name the agent alone: user id null,
+    the agent id, and assignee type agent.
+    """
+    agent_id = str(uuid.uuid4())
+    item = LLCWorkItem(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        type=WorkItemType.TASK,
+        title="user owned",
+        status=WorkItemStatus.BACKLOG,
+        assignee_user_id=uuid.uuid4(),
+        assignee_type=AssigneeType.USER.value,
+        checkout_run_id=None,
+        checkout_locked_at=None,
+        version=1,
+    )
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=item))
+
+    with patch("llc.services.work_item_service.get_async_redis_client", new=AsyncMock(return_value=None)):
+        claimed = await WorkItemService().checkout(session, str(item.id), agent_id)
+
+    assert claimed.assignee_user_id is None
+    assert claimed.assignee_agent_id == uuid.UUID(agent_id)
+    assert claimed.assignee_type == AssigneeType.AGENT.value

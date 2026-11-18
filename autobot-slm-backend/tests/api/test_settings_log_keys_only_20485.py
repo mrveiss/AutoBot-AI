@@ -100,3 +100,13 @@ async def test_create_logs_key_not_value(settings_mod, caplog):
         await settings_mod.create_setting("some.key", _data(), _db(None), {})
     assert "some.key" in caplog.text
     assert VALUE_MARKER not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_time_config_logs_no_submitted_value(settings_mod, caplog):
+    config = SimpleNamespace(timezone=VALUE_MARKER, ntp_servers=[VALUE_MARKER])
+    settings_mod._upsert_setting = AsyncMock()
+    with caplog.at_level(logging.DEBUG):
+        await settings_mod.put_time_config(config, _db(None), {})
+    assert "Time config updated" in caplog.text
+    assert VALUE_MARKER not in caplog.text

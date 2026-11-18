@@ -172,3 +172,20 @@ describe('BaseAccordion RTL', () => {
     expect(document.activeElement).toBe(triggers()[2])
   })
 })
+
+describe('BaseAccordion value shape (#20382)', () => {
+  it('type="single" opens the section when given a one-element array', async () => {
+    await render({ type: 'single', modelValue: ['c'] })
+    expect(expanded()).toEqual([false, false, true, false])
+  })
+
+  it('type="multiple" opens the section when given a bare string', async () => {
+    await render({ type: 'multiple', modelValue: 'c' })
+    expect(expanded()).toEqual([false, false, true, false])
+  })
+
+  it('fits defaultValue to type as well', async () => {
+    await render({ type: 'single', defaultValue: ['d'] })
+    expect(expanded()).toEqual([false, false, false, true])
+  })
+})

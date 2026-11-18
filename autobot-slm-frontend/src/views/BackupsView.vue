@@ -15,14 +15,13 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { formatBytes } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import type { Backup, BackupRequest } from '@/types/slm'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, formatBytes } from '@autobot/ui'
 
 const { showToast } = useToast()
 // #13307: confirm/error strings go through i18n like the rest of the view;

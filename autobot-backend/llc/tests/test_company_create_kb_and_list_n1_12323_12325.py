@@ -100,37 +100,18 @@ def _membership() -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_create_commits_after_kb_and_serialize(monkeypatch):
-    """Happy path: KB ensured + response serialized, then exactly one commit."""
-    ensure = AsyncMock()
+async def test_create_commits_once_and_makes_no_kb_collection(monkeypatch):
+    """Happy path: response serialized, one commit, and no empty collections (#19725)."""
+    ensure = AsyncMock(side_effect=RuntimeError("chroma down"))  # creating a company doesn't depend on it
     monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", ensure)
     svc = _create_svc()
     membership = _membership()
     async with _client(_app(svc, membership)) as client:
         resp = await client.post("/api/llc/companies/", json={"name": "NewCo"})
     assert resp.status_code == 201, resp.text
-    # KB collections created for the 3 canonical suffixes.
-    assert ensure.await_count == 3
+    ensure.assert_not_awaited()
     svc.session.commit.assert_awaited_once()
     svc.session.rollback.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_create_kb_failure_rolls_back_no_commit(monkeypatch):
-    """A KB failure must roll the INSERT back and never commit (#12323)."""
-    monkeypatch.setattr(
-        companies.KbCollectionManager,
-        "ensure_collection",
-        AsyncMock(side_effect=RuntimeError("chroma down")),
-    )
-    svc = _create_svc()
-    membership = _membership()
-    async with _client(_app(svc, membership)) as client:
-        resp = await client.post("/api/llc/companies/", json={"name": "NewCo"})
-    assert resp.status_code == 500
-    # The company INSERT is rolled back and never committed → no committed-but-500 row.
-    svc.session.commit.assert_not_called()
-    svc.session.rollback.assert_awaited()
 
 
 @pytest.mark.asyncio

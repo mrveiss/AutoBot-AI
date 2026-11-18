@@ -115,6 +115,7 @@ def _load_module():
         "api": MagicMock(),
         "api.code_source": MagicMock(),
         "api.memory_lifecycle_proxy": MagicMock(),
+        "api.node_ssh_password_internal": MagicMock(),
         "api.code_sync": MagicMock(),
         "api.performance": MagicMock(),
         "api.personality_proxy": MagicMock(),

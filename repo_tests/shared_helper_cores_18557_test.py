@@ -24,6 +24,8 @@ import os
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROLE_DIR = "autobot-backend/llc/services"
 _ROLE_GUARD = f"{_ROLE_DIR}/_role_guard.py"
 _COMPANY_OS_LOADERS = f"{_ROLE_DIR}/company_os/loaders.py"
@@ -46,7 +48,7 @@ def _read(rel: str) -> str:
 
 
 def _functions(source: str) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
 
