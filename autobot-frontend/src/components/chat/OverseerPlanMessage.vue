@@ -173,7 +173,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 
 .step-preview.running .step-number {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .step-info {
