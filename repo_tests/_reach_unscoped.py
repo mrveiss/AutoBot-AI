@@ -34,6 +34,8 @@ UNSCOPED = frozenset(
         # #21048: every tracked file, since an automatic caller of the KB setup script could live in any
         # component; the population is the whole tree, so no prefix describes it.
         "kb-wipe-never-invoked",
+        # #21383: every tracked .py/.sh file, since a new index drop or database flush can land in any component.
+        "kb-destructive-paths",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
