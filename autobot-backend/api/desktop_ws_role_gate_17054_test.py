@@ -62,9 +62,9 @@ def _gate(user: dict | None):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("role", ["admin", "operator"])
+@pytest.mark.parametrize("role", ["admin", "superadmin", "operator"])
 async def test_a_role_holding_desktop_control_is_admitted(role: str) -> None:
-    """These two hold `mcp.desktop.control` in ROLE_PERMISSIONS."""
+    """These hold `mcp.desktop.control` in ROLE_PERMISSIONS (superadmin via #19125)."""
     ws = _FakeWS()
     device_seam, user_seam = _gate(_as_user(role))
 
@@ -170,30 +170,25 @@ def test_the_gate_reads_the_canonical_permission_source() -> None:
     assert role_has_permission(Role.USER, Permission.MCP_DESKTOP_CONTROL) is False
 
 
-def test_superadmin_is_refused_and_that_is_the_tables_answer_not_this_gates() -> None:
-    """Documented consequence, asserted so it cannot change unnoticed.
+def test_superadmin_holds_desktop_control_through_the_table_not_a_bypass() -> None:
+    """#19125 (owner decision 2026-10-21): superadmin is the highest form of admin.
 
-    `ROLE_PERMISSIONS[Role.SUPERADMIN]` is empty by the #13854 decision, so a
-    superadmin does not hold `mcp.desktop.control` and this gate refuses it. If
-    that is wrong, the fix is to give superadmin its ROLE_PERMISSIONS entries --
-    one place, asserted here -- and NOT a bypass in the gate.
+    Its `ROLE_PERMISSIONS` entry is derived from admin's, so it holds
+    `mcp.desktop.control` and this gate admits it. The gate still asks the table
+    and has no `is_admin_role` bypass.
     """
-    assert ROLE_PERMISSIONS.get(Role.SUPERADMIN) == []
-    assert role_has_permission(Role.SUPERADMIN, Permission.MCP_DESKTOP_CONTROL) is False
+    assert Permission.MCP_DESKTOP_CONTROL in ROLE_PERMISSIONS[Role.SUPERADMIN]
+    assert role_has_permission(Role.SUPERADMIN, Permission.MCP_DESKTOP_CONTROL) is True
 
 
 @pytest.mark.asyncio
-async def test_a_superadmin_handshake_is_refused_today() -> None:
-    """The behaviour that follows from the table, stated at the socket.
-
-    Paired with the test above: one asserts the table's answer, this asserts the
-    socket honours it. If superadmin gains the permission, this flips and the
-    pair still describes the system truthfully.
-    """
+async def test_a_superadmin_handshake_is_admitted() -> None:
+    """The behaviour that follows from the table, stated at the socket."""
     ws = _FakeWS()
     device_seam, user_seam = _gate(_as_user("superadmin"))
 
     with device_seam, user_seam:
         result = await ws_security.enforce_ws_desktop_auth(ws)
 
-    assert result is None
+    assert result is not None, "superadmin holds desktop.control (#19125) and must be admitted"
+    assert ws.closed_with is None

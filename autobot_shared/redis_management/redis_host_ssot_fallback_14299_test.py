@@ -52,6 +52,8 @@ def _load_connection_manager():
 
 
 _cm = pytest.importorskip("redis") and _load_connection_manager()
+# #19232: the host chain lives in the one endpoint resolver the manager reads.
+from autobot_shared.redis_management import endpoint as _endpoint  # noqa: E402
 
 
 def _mgr():
@@ -78,8 +80,8 @@ class TestSsotRedisHostFallback:
         vars set, NetworkConstants resolves to '' (ConfigRegistry
         unavailable). ssot_config's own default ('127.0.0.1') must still
         produce a non-empty, connectable host."""
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: None)
-        monkeypatch.setattr(_cm.NetworkConstants, "REDIS_VM_IP", "", raising=False)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint.NetworkConstants, "REDIS_VM_IP", "", raising=False)
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
 
@@ -94,7 +96,7 @@ class TestSsotRedisHostFallback:
         Ansible-templated component already falls back to."""
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
 
-        assert _cm.RedisConnectionManager._ssot_redis_host() == "127.0.0.1"
+        assert _endpoint.ssot_redis_host() == "127.0.0.1"
 
     def test_ssot_config_honours_an_explicit_autobot_redis_host(self, monkeypatch):
         """ssot_config reads AUTOBOT_REDIS_HOST itself — a deployment that
@@ -103,7 +105,7 @@ class TestSsotRedisHostFallback:
         something else")."""
         monkeypatch.setenv("AUTOBOT_REDIS_HOST", "10.0.0.9")
 
-        assert _cm.RedisConnectionManager._ssot_redis_host() == "10.0.0.9"
+        assert _endpoint.ssot_redis_host() == "10.0.0.9"
 
     def test_ssot_redis_host_never_raises_when_ssot_config_unavailable(self, monkeypatch):
         """A process where autobot_shared.ssot_config itself cannot import
@@ -120,14 +122,14 @@ class TestSsotRedisHostFallback:
 
         monkeypatch.setattr(builtins, "__import__", _blocked_import)
 
-        assert _cm.RedisConnectionManager._ssot_redis_host() == ""
+        assert _endpoint.ssot_redis_host() == ""
 
     def test_main_database_config_uses_the_resolved_host_not_the_frozen_default(self, monkeypatch):
         """The actual reported symptom: database='main' specifically. A fresh
         manager (full __init__) must not carry an empty host for 'main' when
         every upstream tier is empty and only ssot_config's default answers."""
-        monkeypatch.setattr(_cm, "_get_config_manager", lambda: None)
-        monkeypatch.setattr(_cm.NetworkConstants, "REDIS_VM_IP", "", raising=False)
+        monkeypatch.setattr(_endpoint, "get_config_manager", lambda: None)
+        monkeypatch.setattr(_endpoint.NetworkConstants, "REDIS_VM_IP", "", raising=False)
         monkeypatch.delenv("REDIS_HOST", raising=False)
         monkeypatch.delenv("AUTOBOT_REDIS_HOST", raising=False)
 

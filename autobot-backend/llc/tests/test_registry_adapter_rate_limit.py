@@ -374,6 +374,24 @@ class TestDispatchRegistryAdapterRateLimitTranslation:
         ):
             await _dispatch_registry_adapter(adapter, agent, {})  # must not raise
 
+    async def test_failed_run_still_charges_the_tokens_it_spent(self):
+        """A turn-limit run spent real tokens: the budget sees them before the run fails (#20202)."""
+        agent = _make_agent()
+        adapter = _make_adapter_returning(LLCRunStatus.FAILED)
+        spent = AdapterRunStatus(status=LLCRunStatus.FAILED, error="turn limit", tokens_in=120, tokens_out=30)
+        adapter.status = AsyncMock(return_value=spent)
+        ingest = AsyncMock()
+
+        with (
+            patch("llc.scheduler.heartbeat_scheduler._issue_run_key", AsyncMock(return_value=(None, None))),
+            patch("llc.scheduler.heartbeat_scheduler._revoke_run_key", AsyncMock()),
+            patch("llc.scheduler.heartbeat_scheduler._ingest_adapter_usage", ingest),
+        ):
+            with pytest.raises(AdapterRunFailed):
+                await _dispatch_registry_adapter(adapter, agent, {})
+
+        ingest.assert_awaited_once_with(agent, spent)
+
 
 # ---------------------------------------------------------------------------
 # 7. End-to-end: RATE_LIMITED status -> ProviderRateLimited -> backoff
@@ -390,10 +408,12 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     redis = _make_redis()
 
     session_mock = AsyncMock()
-    # First execute call: SELECT retry_count + UPDATE to RUNNING.
+    # Execute calls, in order (#19582): SELECT retry_count + agent_id, the per-agent row
+    # lock, then the UPDATE that claims RUNNING -- reported as one row claimed, so the
+    # run is not superseded.
     retry_count_result = MagicMock()
-    retry_count_result.scalar_one_or_none.return_value = 0
-    session_mock.execute = AsyncMock(side_effect=[retry_count_result, None])
+    retry_count_result.first.return_value = MagicMock(retry_count=0, agent_id=_AGENT_ID)
+    session_mock.execute = AsyncMock(side_effect=[retry_count_result, MagicMock(), MagicMock(rowcount=1)])
     session_mock.commit = AsyncMock()
     ctx_mgr_running = MagicMock()
     ctx_mgr_running.__aenter__ = AsyncMock(return_value=session_mock)

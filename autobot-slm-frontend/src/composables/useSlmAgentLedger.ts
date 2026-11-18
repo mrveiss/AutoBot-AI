@@ -21,15 +21,20 @@ import {
   sendLedgerAsk,
   type LedgerAskOutcome,
   type LedgerSection,
+  type ActivityRow,
+  type ClaimRow,
+  type ConflictRow,
+  type IdleSubscriberRow,
+  type PeerMessageRow,
+  type PresenceRow,
 } from '@autobot/ui'
 import { slmApiClient } from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 type Schemas = components['schemas']
-export type ClaimRow = Schemas['ClaimRow']
+/** The ledger row shapes are the kit's, one declaration for both consoles (#19910). */
+export type { ActivityRow, ClaimRow, ConflictRow, IdleSubscriberRow, PeerMessageRow, PresenceRow }
 export type ContentionRow = Schemas['ContentionRow']
-export type ConflictRow = Schemas['ConflictRow']
-export type ActivityRow = Schemas['ActivityRow']
 export type DevLoopActionRow = Schemas['DevLoopActionRow']
 export type LedgerSourceStatus = Schemas['LedgerSourceStatus']
 
@@ -61,10 +66,17 @@ export function useSlmAgentLedger() {
   const conflicts: Ref<LedgerSection<ConflictRow>> = ref(loadingLedgerSection())
   const activity: Ref<LedgerSection<ActivityRow>> = ref(loadingLedgerSection())
   const devLoopIssues: Ref<LedgerSection<number>> = ref(loadingLedgerSection())
+  // Live state, read from the user backend's snapshot (#18632).
+  const presence: Ref<LedgerSection<PresenceRow>> = ref(loadingLedgerSection())
+  const peerMessages: Ref<LedgerSection<PeerMessageRow>> = ref(loadingLedgerSection())
+  const idleSubscribers: Ref<LedgerSection<IdleSubscriberRow>> = ref(loadingLedgerSection())
 
   async function refresh(): Promise<void> {
-    const [s, n, c, x, a, d] = await Promise.all([
+    const [s, p, m, i, n, c, x, a, d] = await Promise.all([
       read<LedgerSourceStatus>('/sources', 'sources'),
+      read<PresenceRow>('/presence', 'agents'),
+      read<PeerMessageRow>('/peer-messages', 'recipients'),
+      read<IdleSubscriberRow>('/idle-subscribers', 'subscribers'),
       read<ContentionRow>('/contention', 'resources'),
       read<ClaimRow>('/claims', 'claims'),
       read<ConflictRow>('/conflicts', 'conflicts'),
@@ -72,6 +84,9 @@ export function useSlmAgentLedger() {
       read<number>('/dev-loop', 'issues'),
     ])
     sources.value = s
+    presence.value = p
+    peerMessages.value = m
+    idleSubscribers.value = i
     contention.value = n
     claims.value = c
     conflicts.value = x
@@ -79,5 +94,5 @@ export function useSlmAgentLedger() {
     devLoopIssues.value = d
   }
 
-  return { sources, contention, claims, conflicts, activity, devLoopIssues, refresh }
+  return { sources, presence, peerMessages, idleSubscribers, contention, claims, conflicts, activity, devLoopIssues, refresh }
 }

@@ -11,6 +11,9 @@ llm_models_dir: /var/lib/ollama
 # Installation
 llm_install_ollama: true
 llm_pull_models: true
+# #20082: how many times a failed model download is retried, and the seconds between tries.
+llm_pull_retries: 3
+llm_pull_retry_delay: 30
 
 # Minimum Ollama the model list below needs (#18128).
 #

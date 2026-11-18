@@ -20,7 +20,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 _HOOK = repo_root() / "tools" / "git-hooks" / "pre-push"
 _GIT_ROOT_LIB = repo_root() / "scripts" / "lib" / "git-root.sh"
@@ -44,7 +44,7 @@ def _kit_budget(project: Path) -> int:
     # Paths go in as positional args, never into the script text: a space in the tmp
     # path would split, and the budget would silently fall back to TEST_TIMEOUT.
     argv = ["bash", "-c", script, "kit_related_budget", str(_GIT_ROOT_LIB), str(project)]
-    done = subprocess.run(argv, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+    done = subprocess.run(argv, capture_output=True, text=True, check=True, env=isolated_git_env())
     return int(done.stdout)
 
 
@@ -54,11 +54,10 @@ def test_a_project_path_with_a_space_is_counted_not_split(tmp_path: Path) -> Non
 
 
 def _project_with_tests(tmp_path: Path, count: int) -> Path:
-    env = scrubbed_git_env()
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=env)
+    make_repo(tmp_path)
     for i in range(count):
         (tmp_path / f"t{i}.test.ts").write_text("", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "."], check=True, env=env)
+    git(tmp_path, "add", ".")
     return tmp_path
 
 
@@ -69,7 +68,7 @@ def _type_check_timeout(value: str | None) -> tuple[int, str]:
     script = (
         f"MAX_BUDGET={_constant('MAX_BUDGET')}\nwarn() {{ echo \"WARN $*\" >&2; }}\n{func.group(0)}\ntype_check_timeout"
     )
-    env = scrubbed_git_env()
+    env = isolated_git_env()
     env.pop("AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT", None)
     if value is not None:
         env["AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT"] = value
@@ -112,7 +111,7 @@ def test_the_count_is_right_even_when_git_exports_GIT_DIR(tmp_path: Path) -> Non
     project = _project_with_tests(tmp_path / "p", 150)
     func = re.search(r"^kit_related_budget\(\) \{\n(?:.*\n)*?\}$", _source(), re.MULTILINE).group(0)
     prelude = "\n".join(f"{n}={_constant(n)}" for n in ("TEST_TIMEOUT", "MAX_BUDGET", "VITEST_COST_PER_FILE"))
-    env = scrubbed_git_env()
+    env = isolated_git_env()
     env["GIT_DIR"] = str(repo_root() / ".git")
     script = f'. "$1"\n{prelude}\n{func}\nkit_related_budget "$2"'
     argv = ["bash", "-c", script, "kit_related_budget", str(_GIT_ROOT_LIB), str(project)]
@@ -131,7 +130,7 @@ def test_pytest_workers_reads_a_leading_zero_as_decimal() -> None:
     func = re.search(r"^pytest_workers\(\) \{\n(?:.*\n)*?\}$", _source(), re.MULTILINE)
     assert func, "the hook no longer defines pytest_workers"
     for raw, expected in (("08", "8"), ("09", "9"), ("0", "0"), ("4", "4")):
-        env = scrubbed_git_env()
+        env = isolated_git_env()
         env["AUTOBOT_PREPUSH_PYTEST_WORKERS"] = raw
         script = f'warn() {{ echo "WARN $*" >&2; }}\n{func.group(0)}\npytest_workers'
         done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True, env=env)

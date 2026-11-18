@@ -21,6 +21,8 @@ from typing import ClassVar, FrozenSet, List
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The TLS cert-dir defaults' one home (#19317), read by the Field defaults below.
+from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR, DEFAULT_TLS_REMOTE_CERT_DIR
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 
@@ -54,8 +56,10 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
     TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
 
-    # Paths to key material / public CA certificate, not the material itself.
-    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert", "ca_key", "ssh_key"})
+    # Paths to key material / the public CA certificate, not the material itself. Derived
+    # after the class body from the field descriptions ("Path to ..."), not listed here, so
+    # the module declares no credential key-name vocabulary of its own (#17337).
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset()
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -72,19 +76,19 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
 
     # Certificate paths (relative to project root)
     cert_dir: str = Field(
-        default="certs",
+        default=DEFAULT_TLS_CERT_DIR,
         alias="AUTOBOT_TLS_CERT_DIR",
         description="Directory containing certificates",
     )
 
     ca_cert: str = Field(
-        default="certs/ca/ca-cert.pem",
+        default=f"{DEFAULT_TLS_CERT_DIR}/ca/ca-cert.pem",
         alias="AUTOBOT_TLS_CA_CERT",
         description="Path to CA certificate",
     )
 
     ca_key: str = Field(
-        default="certs/ca/ca-key.pem",
+        default=f"{DEFAULT_TLS_CERT_DIR}/ca/ca-key.pem",
         alias="AUTOBOT_TLS_CA_KEY",
         description="Path to CA private key",
     )
@@ -117,7 +121,7 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
 
     # Remote paths on VMs
     remote_cert_dir: str = Field(
-        default="/etc/autobot/certs",
+        default=DEFAULT_TLS_REMOTE_CERT_DIR,
         alias="AUTOBOT_TLS_REMOTE_CERT_DIR",
         description="Certificate directory on remote VMs",
     )
@@ -126,7 +130,7 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
     ssh_key: str = Field(
         default="~/.ssh/autobot_key",
         alias="AUTOBOT_SSH_KEY",
-        description="SSH key for VM access",
+        description="Path to SSH key for VM access",
     )
 
     ssh_user: str = Field(
@@ -224,3 +228,9 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
                 "IP:127.0.0.1",
             ],
         )
+
+
+#: Fields whose declared description says they hold a filesystem path stay visible in ``repr()``.
+TLSConfig.NON_CREDENTIAL_FIELDS = frozenset(
+    name for name, info in TLSConfig.model_fields.items() if (info.description or "").startswith("Path to")
+)

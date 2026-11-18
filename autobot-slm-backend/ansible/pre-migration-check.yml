@@ -17,7 +17,7 @@
     required_space_gb: "{{ required_space_gb | default(100) }}"
     buffer_percent: "{{ buffer_percent | default(20) }}"
     min_free_gb: "{{ min_free_gb | default(10) }}"
-    destination_path: "{{ destination_path | default('/opt/autobot') }}"
+    destination_path: "{{ destination_path | default(autobot.base_dir) }}"
 
   tasks:
     # =========================================================================

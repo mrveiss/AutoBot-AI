@@ -32,17 +32,11 @@ executable import; `test_the_detector_finds_a_real_import` is the matching posit
 control, because a detector that finds nothing anywhere would pass the first test
 while asserting nothing.
 
-## What is NOT fixed here
+## What happened to ``batch_load``
 
-``batch_load`` (``POST /api/batch-jobs/load``) keeps its dead import, so the
-assertions above are scoped to the three repaired functions by name rather than to
-the file as a whole. Repairing it means making live an endpoint that carries no
-``Depends(get_current_user)`` while all fourteen of its siblings in this file do --
-a decision about an authentication surface, not a crash fix. The PR body carries
-the options and the evidence.
-
-No test here enshrines that broken state. A guard asserting the import is still
-present would fail on the day someone fixes it, which is worse than no guard.
+It was not repaired: #18765 rebuilt it to dispatch each sub-request through ``request.app``
+(``api/batch_dispatch.py``), so it no longer imports an app at all. The assertions above stay
+scoped to the three helpers by name.
 """
 
 from __future__ import annotations
@@ -50,7 +44,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -118,9 +112,10 @@ def test_the_repaired_helpers_no_longer_import_the_dead_module() -> None:
 def test_the_repaired_helpers_take_the_app_as_a_parameter() -> None:
     """They must receive the live app, not reach for a global one."""
     source = _SOURCE.read_text(encoding="utf-8")
-    for name in ("get_chat_sessions", "get_settings"):
+    # #21653: get_chat_sessions also takes the caller's username, for the ownership filter.
+    for name, expected in (("get_chat_sessions", ["app", "username"]), ("get_settings", ["app"])):
         args = [a.arg for a in _function(source, name).args.args]
-        assert args == ["app"], f"{name} takes {args}, expected ['app']"
+        assert args == expected, f"{name} takes {args}, expected {expected}"
 
 
 def test_the_route_supplies_request_app_to_both_helpers() -> None:
@@ -154,17 +149,18 @@ async def test_get_settings_prefers_live_app_state() -> None:
 async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
     """Pre-fix this raised ModuleNotFoundError before touching app.state."""
     manager = Mock()
-    manager._get_chats_directory = Mock(return_value="/nonexistent-batch-jobs-probe")
+    manager.list_sessions_fast = AsyncMock(return_value=[])
     app = SimpleNamespace(state=SimpleNamespace(chat_history_manager=manager))
-    result = await get_chat_sessions(app)
+    # A named caller: a nameless one fails closed before the manager is read (#21664).
+    with patch("api.chat_sessions._filter_user_sessions", new=AsyncMock(return_value=[])):
+        result = await get_chat_sessions(app, "alice")
     assert result == {"sessions": []}
-    # Reaching the mock at all is the proof: the probe directory does not exist, so a
-    # pre-fix ModuleNotFoundError died before app.state was ever touched. `assert_called()`
-    # takes no message, so this rationale is a comment -- as a trailing string it built a
-    # tuple that was evaluated and discarded, which read like an assertion message.
-    manager._get_chats_directory.assert_called()
+    # Reaching the mock at all is the proof: a pre-fix ModuleNotFoundError died before
+    # app.state was ever touched. `assert_awaited()` takes no message, so this rationale
+    # is a comment -- as a trailing string it would build a discarded tuple.
+    manager.list_sessions_fast.assert_awaited()
 
 
 @pytest.mark.asyncio
 async def test_get_chat_sessions_without_a_manager_is_empty_not_an_error() -> None:
-    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace())) == {"sessions": []}
+    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace()), "alice") == {"sessions": []}

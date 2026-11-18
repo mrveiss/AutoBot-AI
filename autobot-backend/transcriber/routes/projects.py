@@ -8,14 +8,23 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from transcriber.database import Database
-from transcriber.deps import DEFAULT_USER, authenticate, caller_can_access, caller_id_of, caller_is_admin, get_db
+from transcriber.deps import (
+    DEFAULT_USER,
+    authenticate,
+    caller_can_access,
+    caller_id_of,
+    caller_is_admin,
+    get_transcriber_db_from_request,
+)
 from transcriber.models import ProjectOut, TranscriberProjectCreate, TranscriberProjectUpdate
 
 router = APIRouter(tags=["transcriber-projects"], dependencies=[Depends(authenticate)])
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
-async def create_project(body: TranscriberProjectCreate, request: Request, db: Database = Depends(get_db)):
+async def create_project(
+    body: TranscriberProjectCreate, request: Request, db: Database = Depends(get_transcriber_db_from_request)
+):
     pid = await db.create_project(body.name, body.description, user_id=caller_id_of(request))
     project = await db.get_project(pid)
     return ProjectOut(**project)
@@ -24,7 +33,7 @@ async def create_project(body: TranscriberProjectCreate, request: Request, db: D
 @router.get("/projects", response_model=list[ProjectOut])
 async def list_projects(
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -38,7 +47,7 @@ async def list_projects(
 
 
 @router.get("/projects/{project_id}", response_model=ProjectOut)
-async def get_project(project_id: int, request: Request, db: Database = Depends(get_db)):
+async def get_project(project_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")
@@ -50,7 +59,7 @@ async def update_project(
     project_id: int,
     body: TranscriberProjectUpdate,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
 ):
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
@@ -63,7 +72,7 @@ async def update_project(
 
 
 @router.delete("/projects/{project_id}", status_code=204)
-async def delete_project(project_id: int, request: Request, db: Database = Depends(get_db)):
+async def delete_project(project_id: int, request: Request, db: Database = Depends(get_transcriber_db_from_request)):
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")

@@ -60,9 +60,9 @@ export const NoMoreRetries: Story = {
 
 export const WithStack: Story = {
   args: {
-    error: Object.assign(new Error('timeout: The component took too long to load.'), {
+    error: Object.assign(new Error('Async component timed out after 10000ms.'), {
       stack: [
-        'Error: timeout: The component took too long to load.',
+        'Error: Async component timed out after 10000ms.',
         '    at loadComponent (AsyncComponentWrapper.vue:125)',
         '    at async Promise.all (index 0)',
         '    at async setup (AsyncComponentWrapper.vue:236)',

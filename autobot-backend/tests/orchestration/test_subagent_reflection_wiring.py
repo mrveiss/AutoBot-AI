@@ -10,7 +10,7 @@ Verifies that:
 - SUBAGENT_REFLECTION_ENABLED=true: _execute_batch_with_reflection is called
   and routes tasks through get_subagent_dispatcher().
 - Dispatcher errors fall back to direct _safe_execute (no tasks dropped).
-- SubagentTask.timeout field fix: spawn_parallel_tasks no longer AttributeErrors
+- SubagentDispatchTask.timeout field fix: spawn_parallel_tasks no longer AttributeErrors
   on task.timeout_seconds.
 """
 
@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from orchestration.execution_strategies._parallel import ParallelStrategy
-from orchestration.subagent_dispatcher import SubagentTask, get_subagent_dispatcher
+from orchestration.subagent_dispatcher import SubagentDispatchTask, get_subagent_dispatcher
 
 
 def _make_agent_task(task_id: str = "t1", description: str = "do work") -> types.SimpleNamespace:
@@ -46,14 +46,14 @@ class TestSubagentTaskTimeoutField:
         async def noop():
             return "done"
 
-        task = SubagentTask(task_id="t1", func=noop, timeout=10, enable_reflection=False)
+        task = SubagentDispatchTask(task_id="t1", func=noop, timeout=10, enable_reflection=False)
         dispatcher = get_subagent_dispatcher.__wrapped__() if hasattr(get_subagent_dispatcher, "__wrapped__") else None
         dispatcher = MagicMock()
         dispatcher.max_parallel = 5
         dispatcher.spawn_parallel_tasks = AsyncMock(return_value={"t1": "done"})
 
         # Directly test the field is 'timeout', not 'timeout_seconds'
-        assert hasattr(task, "timeout"), "SubagentTask must have 'timeout' field"
+        assert hasattr(task, "timeout"), "SubagentDispatchTask must have 'timeout' field"
         assert not hasattr(task, "timeout_seconds"), "Field must be 'timeout', not 'timeout_seconds'"
         assert task.timeout == 10
 
@@ -153,13 +153,13 @@ class TestExecuteBatchWithReflection:
         # _get_subagent_dispatcher is a module-level function; patch it directly.
         with patch(
             "orchestration.execution_strategies._parallel._get_subagent_dispatcher",
-            return_value=(SubagentTask, mock_dispatcher),
+            return_value=(SubagentDispatchTask, mock_dispatcher),
         ):
             result = await strategy._execute_batch_with_reflection(tasks, {})
 
         mock_dispatcher.spawn_parallel_tasks.assert_called_once()
-        # Verify enable_reflection=True was passed to each SubagentTask
-        dispatched: list[SubagentTask] = mock_dispatcher.spawn_parallel_tasks.call_args.args[0]
+        # Verify enable_reflection=True was passed to each SubagentDispatchTask
+        dispatched: list[SubagentDispatchTask] = mock_dispatcher.spawn_parallel_tasks.call_args.args[0]
         assert all(t.enable_reflection for t in dispatched)
         assert set(result.keys()) == {"t1", "t2"}
 

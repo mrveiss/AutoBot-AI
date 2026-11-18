@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
+from command_run_policy import CommandRunPolicy
 from constants.network_constants import NetworkConstants
+from secure_command_results import CommandResultBuilders
 from security.command_patterns import (
     FORBIDDEN_COMMANDS,
     HIGH_RISK_COMMANDS,
@@ -30,6 +32,7 @@ from security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
+from security.command_segments import command_segments, unparsed_segment_reasons
 from services.tool_output_filter import get_tool_output_filter
 from utils.command_utils import execute_shell_command
 
@@ -197,34 +200,6 @@ def _check_argument_aware_risk(command: str) -> Tuple["CommandRisk", List[str]] 
                     [f"export of dangerous env-var: {var}={value_part!r}"],
                 )
 
-    # 5. #7406: `cmd1; cmd2` chained-command separator with a high-risk
-    # right-hand side. shlex.split keeps `;` glued to the preceding token,
-    # so split on it manually and recurse on each sub-command. Take the
-    # highest risk seen across all sub-commands.
-    if any(";" in t for t in tokens):
-        # Re-split on the raw `;` separator to get the actual sub-command
-        # boundaries (shlex preserves `;` as a literal — strip it back out).
-        sub_commands = [s.strip() for s in command.split(";") if s.strip()]
-        if len(sub_commands) > 1:
-            from typing import cast
-
-            highest_risk: "CommandRisk" | None = None
-            all_reasons: List[str] = []
-            for sub in sub_commands:
-                sub_result = _check_argument_aware_risk(sub)
-                if sub_result is None:
-                    continue
-                sub_risk, sub_reasons = sub_result
-                # Take the strictest risk (FORBIDDEN > HIGH > MODERATE > SAFE).
-                if highest_risk is None or sub_risk.rank > highest_risk.rank:
-                    highest_risk = sub_risk
-                all_reasons.extend(sub_reasons)
-            if highest_risk is not None:
-                return (
-                    cast("CommandRisk", highest_risk),
-                    [f"Chained command (`;` separator): {r}" for r in all_reasons],
-                )
-
     return None
 
 
@@ -263,7 +238,7 @@ def _check_dangerous_env_var_prefix(command: str) -> List[str] | None:
 # Issue #765: Path constants now imported from security.command_patterns
 
 
-class SecurityPolicy:
+class CommandSecurityPolicy:
     """Security policy for command execution.
 
     Issue #765: Now uses centralized patterns from security.command_patterns.
@@ -325,7 +300,7 @@ class SecurityPolicy:
         }
 
 
-class SecureCommandExecutor:
+class SecureCommandExecutor(CommandResultBuilders):
     """
     Secure command executor with sandboxing and permission controls.
 
@@ -341,7 +316,7 @@ class SecureCommandExecutor:
 
     def __init__(
         self,
-        policy: SecurityPolicy | None = None,
+        policy: CommandSecurityPolicy | None = None,
         require_approval_callback=None,
         use_docker_sandbox: bool = False,
         is_admin: bool = False,
@@ -352,14 +327,14 @@ class SecureCommandExecutor:
         Initialize secure command executor
 
         Args:
-            policy: Security policy to use (default: SecurityPolicy())
+            policy: Security policy to use (default: CommandSecurityPolicy())
             require_approval_callback: Async callback function for user approval
             use_docker_sandbox: Whether to execute commands in Docker container
             is_admin: Whether current user has admin privileges (for permission v2)
             project_path: Current project path (for approval memory)
             user_id: Current user ID (for approval memory)
         """
-        self.policy = policy or SecurityPolicy()
+        self.policy = policy or CommandSecurityPolicy()
         self.require_approval_callback = require_approval_callback
         self.use_docker_sandbox = use_docker_sandbox
         self.docker_image = "autobot-sandbox:latest"
@@ -667,6 +642,21 @@ class SecureCommandExecutor:
 
         return None
 
+    def _assess_chained_risk(self, command: str, segments: List[str]) -> tuple[CommandRisk, List[str]]:
+        """The strictest risk across ``segments`` (#7406, #19462).
+
+        Whole-line patterns run first: some (a fork bomb) span the separators
+        the split removes.
+        """
+        dangerous = self._check_dangerous_patterns(command) + unparsed_segment_reasons(segments)
+        if dangerous:
+            return CommandRisk.FORBIDDEN, [f"Dangerous pattern: {p}" for p in dangerous]
+        assessed = [(segment, *self.assess_command_risk(segment)) for segment in segments]
+        risk = max((seg_risk for _seg, seg_risk, _r in assessed), key=lambda r: r.rank)
+        label = "Chained command" if len(segments) > 1 else "Command"
+        reasons = [f"{label} `{seg}`: {reason}" for seg, _risk, rs in assessed for reason in rs]
+        return risk, reasons
+
     def assess_command_risk(self, command: str) -> tuple[CommandRisk, List[str]]:
         """
         Assess the risk level of a command.
@@ -688,6 +678,13 @@ class SecureCommandExecutor:
         if dangerous_env_vars:
             reasons = [f"Dangerous env-var prefix: {var}" for var in dangerous_env_vars]
             return CommandRisk.FORBIDDEN, reasons
+
+        # #19462: a line running several commands is as risky as its riskiest
+        # one -- naming `cat x | sh` by `cat` alone rated it SAFE.
+        segments = command_segments(command)
+        # `(cmd)`, `{ cmd; }`, `time cmd` and `cmd;` are judged as cmd, not `(cmd`.
+        if len(segments) > 1 or (segments and segments[0] != command):
+            return self._assess_chained_risk(command, segments)
 
         # #7384: argument-aware risk for tools whose base command is
         # allowlisted but whose flags / arguments elevate them to attack
@@ -759,153 +756,6 @@ class SecureCommandExecutor:
         ]
         return " ".join(docker_cmd)
 
-    def _build_blocked_result(
-        self,
-        risk: CommandRisk,
-        reasons: List[str],
-        message: str,
-    ) -> Dict[str, Any]:
-        """
-        Build result dict for blocked/denied commands.
-
-        Issue #281: Extracted helper for blocked result building.
-
-        Args:
-            risk: Risk level of command
-            reasons: List of risk reasons
-            message: Error message for stderr
-
-        Returns:
-            Result dict with error status and security info
-        """
-        return {
-            "stdout": "",
-            "stderr": message,
-            "return_code": 1,
-            "status": "error",
-            "security": {"risk": risk.value, "reasons": reasons, "blocked": True},
-        }
-
-    def _build_error_result(
-        self,
-        risk: CommandRisk,
-        reasons: List[str],
-        error_type: str,
-        error_msg: str,
-    ) -> Dict[str, Any]:
-        """
-        Build result dict for execution errors.
-
-        Issue #281: Extracted helper for error result building.
-
-        Args:
-            risk: Risk level of command
-            reasons: List of risk reasons
-            error_type: Type of error (timeout, error)
-            error_msg: Error message
-
-        Returns:
-            Result dict with error status
-        """
-        return_code = 124 if error_type == "timeout" else 1
-        security_info = {"risk": risk.value, "reasons": reasons, error_type: True}
-        if error_type == "error":
-            security_info["error"] = error_msg
-
-        return {
-            "stdout": "",
-            "stderr": error_msg,
-            "return_code": return_code,
-            "status": "error",
-            "security": security_info,
-        }
-
-    def _build_permission_deny_result(self, command: str, rule_info: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Issue #665: Extracted from run_shell_command to reduce function length.
-
-        Build result dict for permission rule denied commands.
-
-        Args:
-            command: The denied command
-            rule_info: Permission rule info dict
-
-        Returns:
-            Result dict with error status and permission info
-        """
-        logger.warning(f"Command denied by permission rule: {command}")
-        description = rule_info.get("description", "Denied")
-        return {
-            "stdout": "",
-            "stderr": f"Command denied by permission rule: {description}",
-            "return_code": 1,
-            "status": "error",
-            "security": {
-                "risk": CommandRisk.FORBIDDEN.value,
-                "reasons": [rule_info.get("description", "Denied by rule")],
-                "blocked": True,
-                "permission_rule": rule_info,
-            },
-        }
-
-    def _build_auto_approved_log_entry(
-        self,
-        command: str,
-        risk: CommandRisk,
-        reasons: List[str],
-        rule_info: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
-        """
-        Issue #665: Extracted from run_shell_command to reduce function length.
-
-        Build log entry for auto-approved commands.
-
-        Args:
-            command: The command being executed
-            risk: Risk level of command
-            reasons: Risk assessment reasons
-            rule_info: Optional permission rule info
-
-        Returns:
-            Log entry dict for command history
-        """
-        auto_approved_by = "permission_rule"
-        if rule_info and rule_info.get("from_memory"):
-            auto_approved_by = "approval_memory"
-
-        return {
-            "command": command,
-            "risk": risk.value,
-            "reasons": reasons,
-            "timestamp": asyncio.get_running_loop().time(),
-            "approved": True,
-            "executed": False,
-            "auto_approved_by": auto_approved_by,
-        }
-
-    def _build_standard_log_entry(self, command: str, risk: CommandRisk, reasons: List[str]) -> Dict[str, Any]:
-        """
-        Issue #665: Extracted from run_shell_command to reduce function length.
-
-        Build standard log entry for risk-based assessment.
-
-        Args:
-            command: The command being executed
-            risk: Risk level of command
-            reasons: Risk assessment reasons
-
-        Returns:
-            Log entry dict for command history
-        """
-        return {
-            "command": command,
-            "risk": risk.value,
-            "reasons": reasons,
-            "timestamp": asyncio.get_running_loop().time(),
-            "approved": False,
-            "executed": False,
-        }
-
     async def _handle_forbidden_command(
         self,
         command: str,
@@ -940,6 +790,7 @@ class SecureCommandExecutor:
         log_entry: Dict[str, Any],
         force_approval: bool,
         permission_action: str | None,
+        policy: CommandRunPolicy | None = None,
     ) -> Dict[str, Any] | None:
         """
         Issue #665: Extracted from run_shell_command to reduce function length.
@@ -960,6 +811,12 @@ class SecureCommandExecutor:
         needs_approval = (
             force_approval or permission_action == "ask" or risk in {CommandRisk.HIGH, CommandRisk.MODERATE}
         )
+
+        if needs_approval and policy is not None and policy.refuse_approval:
+            logger.warning("Command refused: it needs approval and cannot wait for one: %s", command)
+            log_entry["error"] = "Approval required, refused without waiting"
+            self.command_history.append(log_entry)
+            return self._build_blocked_result(risk, reasons, "Command requires approval and was refused")
 
         if needs_approval:
             approved = await self._request_approval(command, risk, reasons)
@@ -1010,7 +867,7 @@ class SecureCommandExecutor:
 
         return security_info
 
-    def _prepare_command_for_execution(self, command: str, risk: CommandRisk) -> str:
+    def _prepare_command_for_execution(self, command: str, risk: CommandRisk, shown: str | None = None) -> str:
         """
         Prepare command for execution, optionally wrapping in Docker sandbox.
 
@@ -1024,7 +881,7 @@ class SecureCommandExecutor:
             The command to execute (possibly wrapped in Docker)
         """
         if self.use_docker_sandbox and risk != CommandRisk.SAFE:
-            logger.info("Executing in Docker sandbox: %s", command)
+            logger.info("Executing in Docker sandbox: %s", command if shown is None else shown)
             return self._build_docker_command(command)
         return command
 
@@ -1051,12 +908,6 @@ class SecureCommandExecutor:
         Returns:
             Error result dictionary
         """
-        if isinstance(error, asyncio.TimeoutError):
-            logger.error("Command timed out: %s", command)
-            log_entry["error"] = "Command timed out"
-            self.command_history.append(log_entry)
-            return self._build_error_result(risk, reasons, "timeout", "Command execution timed out after 5 minutes")
-
         logger.error("Command execution error: %s", error)
         log_entry["error"] = str(error)
         self.command_history.append(log_entry)
@@ -1069,6 +920,7 @@ class SecureCommandExecutor:
         reasons: List[str],
         log_entry: Dict[str, Any],
         rule_info: Dict[str, Any] | None = None,
+        policy: CommandRunPolicy | None = None,
     ) -> Dict[str, Any]:
         """
         Execute a command after permission/risk checks.
@@ -1087,24 +939,32 @@ class SecureCommandExecutor:
         """
         _filter = get_tool_output_filter()
         prepared_command = _filter.prepare_command(command)
-        actual_command = self._prepare_command_for_execution(prepared_command, risk)
+        shown = command if policy is None else policy.show(command)
+        actual_command = self._prepare_command_for_execution(prepared_command, risk, shown)
 
         try:
-            result = await execute_shell_command(actual_command)
+            result = await execute_shell_command(actual_command, policy)
             log_entry["executed"] = True
             log_entry["return_code"] = result["return_code"]
-            result["stdout"] = _filter.filter(
-                prepared_command,
-                result.get("stdout", ""),
-                exit_code=result["return_code"],
-            )
+            if result.get("timed_out"):  # the runner killed it at its deadline (#20740): audit it as such
+                logger.error("Command timed out: %s", shown)
+                log_entry["error"] = "Command timed out"
+            filter_command, filter_stdout = self._filter_inputs(prepared_command, result.get("stdout", ""), policy)
+            result["stdout"] = _filter.filter(filter_command, filter_stdout, exit_code=result["return_code"])
             self.command_history.append(log_entry)
             result["security"] = self._build_execution_security_info(risk, reasons, log_entry, rule_info)
+            result["security"]["timeout"] = bool(result.get("timed_out"))
             return result
         except Exception as e:
-            return self._handle_execution_error(command, risk, reasons, log_entry, e)
+            return self._handle_execution_error(shown, risk, reasons, log_entry, e)
 
-    async def run_shell_command(self, command: str, force_approval: bool = False, tool: str = "Bash") -> Dict[str, Any]:
+    async def run_shell_command(
+        self,
+        command: str,
+        force_approval: bool = False,
+        tool: str = "Bash",
+        policy: CommandRunPolicy | None = None,
+    ) -> Dict[str, Any]:
         """
         Securely execute a shell command with risk assessment and sandboxing.
 
@@ -1115,38 +975,45 @@ class SecureCommandExecutor:
             command: The shell command to execute
             force_approval: Force user approval regardless of risk level
             tool: Tool name for permission matching (default: "Bash")
+            policy: Limits for an unattended caller (#19807): allowlist, child bounds,
+                refusal instead of approval, and redaction wherever the command is recorded.
 
         Returns:
             Dictionary containing execution results and security info
         """
-        permission_action, rule_info = await self.check_permission_rules(command, tool)
+        shown = command if policy is None else policy.show(command)
+        if blocked := self._unattended_block(command, policy):
+            return blocked
+        permission_action, rule_info = await self._permission_for(command, tool, policy)
 
         if permission_action == "deny":
-            return self._build_permission_deny_result(command, rule_info)
+            return self._build_permission_deny_result(shown, rule_info)
 
         if permission_action == "allow":
-            logger.info(f"Command auto-approved by permission rule: {command[:50]}...")
-            risk, reasons = self.assess_command_risk(command)
-            log_entry = self._build_auto_approved_log_entry(command, risk, reasons, rule_info)
-            return await self._execute_command(command, risk, reasons, log_entry, rule_info)
+            logger.info(f"Command auto-approved by permission rule: {shown[:50]}...")
+            risk, reasons = self._assess_for(command, policy)
+            log_entry = self._build_auto_approved_log_entry(shown, risk, reasons, rule_info)
+            if policy is not None and risk.blocks:  # a rule never lifts a block for an unattended caller
+                return await self._handle_forbidden_command(shown, risk, reasons, log_entry)
+            return await self._execute_command(command, risk, reasons, log_entry, rule_info, policy)
 
         # Risk-based assessment fallback
-        risk, reasons = self.assess_command_risk(command)
-        log_entry = self._build_standard_log_entry(command, risk, reasons)
+        risk, reasons = self._assess_for(command, policy)
+        log_entry = self._build_standard_log_entry(shown, risk, reasons)
 
         # #13845: ask ``.blocks`` rather than comparing against FORBIDDEN alone.
         # DANGEROUS is the terminal layer's blocking verdict for the same enum;
         # an equality check here would run a command that layer refuses.
         if risk.blocks:
-            return await self._handle_forbidden_command(command, risk, reasons, log_entry)
+            return await self._handle_forbidden_command(shown, risk, reasons, log_entry)
 
         denial_result = await self._handle_approval_flow(
-            command, risk, reasons, log_entry, force_approval, permission_action
+            shown, risk, reasons, log_entry, force_approval, permission_action, policy
         )
         if denial_result:
             return denial_result
 
-        return await self._execute_command(command, risk, reasons, log_entry)
+        return await self._execute_command(command, risk, reasons, log_entry, None, policy)
 
     def get_command_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent command history for audit purposes"""

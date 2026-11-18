@@ -176,7 +176,7 @@ async def test_file_upload_endpoint_emits_document_uploaded(registry, monkeypatc
     monkeypatch.setattr(files_api, "_log_upload_audit", lambda *a, **kw: None)
 
     auth = MagicMock()
-    auth.check_file_permissions.return_value = (True, {"user_id": "tester"})
+    auth.check_file_permissions = AsyncMock(return_value=(True, {"user_id": "tester"}))
     monkeypatch.setattr(files_api, "get_auth_middleware", lambda: auth)
 
     upload = UploadFile(filename="notes.txt", file=io.BytesIO(b"hello world"))

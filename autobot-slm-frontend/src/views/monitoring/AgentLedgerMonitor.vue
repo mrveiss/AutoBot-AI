@@ -32,14 +32,21 @@
     </div>
 
     <section :id="`slm-ledger-panel-${active}`" role="tabpanel" :aria-labelledby="`slm-ledger-tab-${active}`" tabindex="0">
-      <template v-if="active === 'contention'">
+      <LedgerLivePanel
+        v-if="active === 'now'"
+        :presence="ledger.presence.value"
+        :peer-messages="ledger.peerMessages.value"
+        :idle-subscribers="ledger.idleSubscribers.value"
+        :labels="labels"
+      />
+      <template v-else-if="active === 'contention'">
         <p class="m-0 mb-3 text-(--aui-color-text-muted)">{{ t('monitoring.agentLedger.silenceMeansHold') }}</p>
         <LedgerSectionState :section="ledger.contention.value" :empty="t('monitoring.agentLedger.empty.contention')" :labels="labels">
           <div class="flex flex-col gap-3">
             <BaseCard v-for="(r, ri) in ledger.contention.value.rows" :key="r.scope" data-testid="slm-ledger-resource">
               <h3 class="m-0 mb-2 flex items-center gap-2 text-sm">
                 <code>{{ r.scope }}</code>
-                <BaseBadge :variant="r.contended ? 'warning' : 'neutral'" size="sm">{{ t('monitoring.agentLedger.waiting', { n: r.waiters.length }) }}</BaseBadge>
+                <BaseBadge :variant="r.contended ? 'warning' : 'neutral'" size="sm" tone="solid">{{ t('monitoring.agentLedger.waiting', { n: r.waiters.length }) }}</BaseBadge>
               </h3>
               <div v-for="(h, hi) in r.holders" :key="h.task_id" class="flex flex-wrap items-center gap-2">
                 <span>{{ t('monitoring.agentLedger.heldBy', { agent: h.agent_id, company: companyOf(h.company_id) }) }}</span>
@@ -101,8 +108,9 @@ import { BaseBadge, BaseButton, BaseCard, LedgerSectionState, type LedgerAskOutc
 import { askHolderToRelease, useSlmAgentLedger } from '@/composables/useSlmAgentLedger'
 import LedgerBlindSpots from '@/components/monitoring/ledger/LedgerBlindSpots.vue'
 import LedgerDevLoop from '@/components/monitoring/ledger/LedgerDevLoop.vue'
+import LedgerLivePanel from '@/components/monitoring/ledger/LedgerLivePanel.vue'
 
-type TabId = 'contention' | 'claims' | 'conflicts' | 'devLoop' | 'activity'
+type TabId = 'now' | 'contention' | 'claims' | 'conflicts' | 'devLoop' | 'activity'
 type AskState = LedgerAskOutcome['state'] | 'sending'
 
 const CLAIM_COLUMNS = ['scope', 'agent', 'company', 'mode', 'intent', 'expires', 'renewals'] as const
@@ -112,7 +120,7 @@ const ASK_TEXT_KEY = {
 
 const { t } = useI18n()
 const ledger = useSlmAgentLedger()
-const active = ref<TabId>('contention')
+const active = ref<TabId>('now')
 const tabEls = ref<HTMLButtonElement[]>([])
 
 const labels = computed<LedgerStateLabels>(() => ({
@@ -127,6 +135,7 @@ const tabs = computed(() => {
   const count = (s: { state: string; rows: unknown[] }) => (s.state === 'ready' ? ` (${s.rows.length})` : '')
   const tab = (id: TabId, n = '') => ({ id, label: t(`monitoring.agentLedger.tabs.${id}`) + n })
   return [
+    tab('now'),
     tab('contention', count(ledger.contention.value)),
     tab('claims', count(ledger.claims.value)),
     tab('conflicts', count(ledger.conflicts.value)),

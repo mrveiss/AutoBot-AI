@@ -31,7 +31,7 @@ How AutoBot versions, tags, and changelogs are produced. Issue refs: #1296 (desi
 3. **Generate release notes** — `git-cliff --latest --strip header` → `RELEASE_NOTES.md`.
 4. **Compile fragments** — `compile_changelog.py` writes `changelog/{version}.md` (fragments first, git-cliff commit log after) and archives fragments to `changelog/{version}/fragments/`.
 5. **Regenerate `CHANGELOG.md`** — git-cliff rewrites the full history index from scratch.
-6. **Commit + tag + release** — bot commits the changelog files, tags `vX.Y.Z`, pushes, and creates a (prerelease) GitHub Release with the compiled notes as body.
+6. **Commit + tag + release** — bot commits the changelog files, tags `vX.Y.Z`, pushes, and creates a GitHub Release with the compiled notes as body.
 
 `release` only receives pushes via `main` promotions (Dependabot security merges now land on `main` directly, like everything else, since `main` is the default branch), so releases are cut at promotion time.
 

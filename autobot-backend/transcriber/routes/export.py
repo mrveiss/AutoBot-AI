@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, get_db
+from transcriber.deps import authenticate, caller_can_access, get_transcriber_db_from_request
 from transcriber.export.segments import build_segment_list
 from transcriber.models import TranscriberExportRequest
 
@@ -33,7 +33,7 @@ async def export_recording(
     recording_id: int,
     body: TranscriberExportRequest,
     request: Request,
-    db: Database = Depends(get_db),
+    db: Database = Depends(get_transcriber_db_from_request),
 ):
     rec = await db.get_recording(recording_id)
     if not rec or not caller_can_access(rec, request):

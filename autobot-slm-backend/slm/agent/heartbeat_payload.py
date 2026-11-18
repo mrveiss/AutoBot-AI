@@ -62,6 +62,7 @@ def build_heartbeat_payload(
     code_version: str | None,
     role_detector: Any,
     definitions_loaded: bool,
+    heartbeat_interval_s: int | None = None,
 ) -> Dict:
     """
     Build the complete heartbeat payload.
@@ -72,6 +73,8 @@ def build_heartbeat_payload(
         code_version: Current code version hash.
         role_detector: Detector used to build the role report.
         definitions_loaded: Whether role definitions have been fetched yet.
+        heartbeat_interval_s: This agent's heartbeat interval; the SLM sizes its
+            self-heartbeat stand-down window from it (#19292).
 
     Returns:
         Dictionary payload matching HeartbeatRequest schema.
@@ -84,6 +87,8 @@ def build_heartbeat_payload(
         "uptime_seconds": health.get("uptime_seconds", 0),
         "hostname": health.get("hostname"),
     }
+    if heartbeat_interval_s:
+        extra_data["heartbeat_interval_s"] = int(heartbeat_interval_s)
     # #16280: forwarded only when the collector probed, so an absent key keeps
     # meaning "this agent does not report GPUs" and [] keeps meaning "none present".
     if "gpu" in health:

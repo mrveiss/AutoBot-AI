@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from knowledge.ownership import KnowledgeOwnership
 from memory.agent_diary import AgentDiaryService
 
 # ---------------------------------------------------------------------------
@@ -25,6 +26,7 @@ def _make_kb_mock(store_result=None, search_result=None, all_facts_result=None):
     kb.store_fact = AsyncMock(return_value=store_result or {"status": "success", "fact_id": "fact-001"})
     kb.search = AsyncMock(return_value=search_result or [])
     kb.get_all_facts = AsyncMock(return_value=all_facts_result or [])
+    kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     return kb
 
 
@@ -36,6 +38,8 @@ def _result_with_ts(ts: str, agent: str = "agent_a") -> dict:
             "diary_timestamp": ts,
             "source": agent,
             "category": AgentDiaryService.CATEGORY,
+            "owner_id": "alice",
+            "visibility": "private",
         },
     }
 
@@ -96,7 +100,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=all_facts)
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            entries = await diary.read("agent_a", last_n=3)
+            entries = await diary.read("agent_a", last_n=3, user_id="alice")
 
         timestamps = [e["metadata"]["diary_timestamp"] for e in entries]
         assert timestamps == sorted(timestamps, reverse=True)
@@ -107,7 +111,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=all_facts)
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            entries = await diary.read("agent_a", last_n=2)
+            entries = await diary.read("agent_a", last_n=2, user_id="alice")
         assert len(entries) == 2
 
     @pytest.mark.asyncio
@@ -121,7 +125,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=all_facts)
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            entries = await diary.read("agent_a", last_n=10)
+            entries = await diary.read("agent_a", last_n=10, user_id="alice")
 
         assert len(entries) == 2
         assert all(e["metadata"]["source"] == "agent_a" for e in entries)
@@ -131,7 +135,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=[])
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            entries = await diary.read("agent_x")
+            entries = await diary.read("agent_x", user_id="alice")
         assert entries == []
 
     @pytest.mark.asyncio
@@ -140,7 +144,7 @@ class TestRead:
         kb.get_all_facts = AsyncMock(side_effect=RuntimeError("KB down"))
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            entries = await diary.read("agent_y")
+            entries = await diary.read("agent_y", user_id="alice")
         assert entries == []
 
     @pytest.mark.asyncio
@@ -149,7 +153,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=[])
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            await diary.read("agent_a")
+            await diary.read("agent_a", user_id="alice")
         kb.get_all_facts.assert_awaited_once()
         kb.search.assert_not_awaited()
 
@@ -159,7 +163,7 @@ class TestRead:
         kb = _make_kb_mock(all_facts_result=[])
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            await diary.read("agent_a")
+            await diary.read("agent_a", user_id="alice")
         kb.get_all_facts.assert_awaited_once_with(limit=500)
 
 
@@ -171,10 +175,12 @@ class TestRead:
 class TestSearch:
     @pytest.mark.asyncio
     async def test_search_passes_correct_filters(self):
-        kb = _make_kb_mock(search_result=[{"content": "match", "metadata": {}}])
+        kb = _make_kb_mock(
+            search_result=[{"content": "match", "metadata": {"owner_id": "alice", "visibility": "private"}}]
+        )
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
-            results = await diary.search("agent_a", "some query", n=3)
+            results = await diary.search("agent_a", "some query", n=3, user_id="alice")
 
         assert len(results) == 1
         _, kwargs = kb.search.call_args
@@ -198,3 +204,31 @@ class TestSearch:
             diary = AgentDiaryService()
             results = await diary.search("agent_z", "query")
         assert results == []
+
+
+class TestReadsAreScopedToTheUser:
+    """#16665: an entry another user owns is never returned; the owner still reads it."""
+
+    @pytest.mark.asyncio
+    async def test_read_withholds_another_users_private_entry(self):
+        kb = _make_kb_mock(all_facts_result=[_result_with_ts("2025-01-01T00:00:00+00:00")])
+        with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
+            diary = AgentDiaryService()
+            for_bob = await diary.read("agent_a", user_id="bob")
+            for_alice = await diary.read("agent_a", user_id="alice")
+            for_nobody = await diary.read("agent_a")
+
+        assert for_bob == [] and for_nobody == []
+        assert len(for_alice) == 1
+
+    @pytest.mark.asyncio
+    async def test_search_withholds_another_users_private_entry(self):
+        kb = _make_kb_mock(search_result=[_result_with_ts("2025-01-01T00:00:00+00:00")])
+        with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
+            diary = AgentDiaryService()
+            for_bob = await diary.search("agent_a", "q", user_id="bob")
+            for_alice = await diary.search("agent_a", "q", user_id="alice")
+            for_nobody = await diary.search("agent_a", "q")
+
+        assert for_bob == [] and for_nobody == []
+        assert len(for_alice) == 1
