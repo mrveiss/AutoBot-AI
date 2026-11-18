@@ -561,6 +561,7 @@
 
 <script setup lang="ts">
 import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
+import { visibleMessages } from '@/utils/internalMessage'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
@@ -691,7 +692,7 @@ const showEmptyState = computed(() => {
 
 // Computed
 const filteredMessages = computed(() => {
-  return store.currentMessages.filter(message => {
+  return visibleMessages(store.currentMessages).filter(message => { // #21846: never an internal marker
     // Issue #650: Check both top-level type AND metadata.display_type for filtering
     // Backend now sends display_type in metadata for proper categorization
     const displayType = message.type || message.metadata?.display_type || 'response'
