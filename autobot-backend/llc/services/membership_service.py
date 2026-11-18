@@ -15,6 +15,7 @@ from typing import Any, Optional, Sequence
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..exceptions import PublicMessageMixin
 from ..models.activity import ActorType
 from ..models.enums import ActivityEventType, MembershipRole
 from ..models.membership import LLCCompanyMembership
@@ -23,11 +24,11 @@ from .base import LLCServiceBase
 logger = logging.getLogger(__name__)
 
 
-class MemberAlreadyExistsError(Exception):
+class MemberAlreadyExistsError(PublicMessageMixin, Exception):
     """Raised when a membership already exists for (company, user)."""
 
 
-class MemberNotFoundError(Exception):
+class MemberNotFoundError(PublicMessageMixin, Exception):
     """Raised when a membership does not exist for (company, user)."""
 
 
@@ -38,17 +39,16 @@ class MembershipService(LLCServiceBase):
         self, session: AsyncSession, company_id: str, actor_id: str, event: Any, entity_id: str, **change: Any
     ) -> None:
         """Audit one change, in the caller's transaction: a change that cannot be audited does not commit."""
-        if self.activity_log:
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=ActorType.USER,
-                actor_id=actor_id,
-                event_type=event,
-                entity_type="membership",
-                entity_id=entity_id,
-                **change,
-            )
+        await self.activity_log.record(
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=actor_id,
+            event_type=event,
+            entity_type="membership",
+            entity_id=entity_id,
+            **change,
+        )
 
     async def add_member(
         self,

@@ -125,6 +125,7 @@ async def test_orchestrator_argv_has_sudo_n_batchmode_one_call_all_units_env_bac
     assert run.argv == [
         *_FULL_SSH_PREFIX[:-1],
         "svc@node.example.test",
+        "sudo -n systemctl reset-failed -- a.service b.service 2>/dev/null; "
         "sudo -n systemctl restart -- a.service b.service",
     ]
     assert run.kwargs == {"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.STDOUT}
@@ -194,7 +195,11 @@ async def _execute(category="restart"):
 async def test_roles_argv_has_dash_n_one_call_all_units_and_timeout_120(monkeypatch, roles_role):
     run = _Runner(monkeypatch, out=b"OUT", err=b"ERR")
     body = await _execute()
-    assert run.argv == [*_FULL_SSH_PREFIX, "sudo -n systemctl restart -- a.service b.service"]
+    assert run.argv == [
+        *_FULL_SSH_PREFIX,
+        "sudo -n systemctl reset-failed -- a.service b.service 2>/dev/null; "
+        "sudo -n systemctl restart -- a.service b.service",
+    ]
     assert run.kwargs == {"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.PIPE}
     assert run.timeout == 120.0
     assert body == {"success": True, "node_id": "n1", "role_name": "r", "category": "restart", "output": "OUTERR"}
@@ -205,7 +210,7 @@ async def test_roles_argv_has_dash_n_one_call_all_units_and_timeout_120(monkeypa
     [
         ({"rc": 1, "out": b"o", "err": b"e"}, False, "oe"),
         ({"rc": 1, "out": b"x" * 3000}, False, "x" * 2000),
-        ({"timeout": True}, False, "Timeout after 120 seconds"),
+        ({"timeout": True}, False, f"Timeout after {roles._SSH_ACTION_TIMEOUT_S:g} seconds"),
         ({"spawn_error": OSError("boom")}, False, "Error: SSH command failed"),
     ],
 )
@@ -213,6 +218,16 @@ async def test_roles_reports_each_failure_to_the_user(monkeypatch, roles_role, k
     _Runner(monkeypatch, **kwargs)
     body = await _execute()
     assert (body["success"], body["output"]) == (success, output)
+
+
+@pytest.mark.parametrize("category", ["restart", "build"])
+async def test_roles_wait_and_timeout_message_follow_the_constant(monkeypatch, roles_role, category):
+    """Both read _SSH_ACTION_TIMEOUT_S: a non-default value moves the wait and the message together (#18056)."""
+    monkeypatch.setattr(roles, "_SSH_ACTION_TIMEOUT_S", 30.0)
+    run = _Runner(monkeypatch, timeout=True)
+    body = await _execute(category)
+    assert run.timeout == 30.0
+    assert body["output"] == "Timeout after 30 seconds"
 
 
 async def test_roles_restart_without_units_is_422_and_the_other_category_is_untouched(monkeypatch, roles_role):

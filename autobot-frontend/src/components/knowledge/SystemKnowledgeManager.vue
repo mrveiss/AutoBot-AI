@@ -195,7 +195,7 @@ import { useKnowledgeJobs } from '@/composables/knowledge/useKnowledgeJobs';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
-import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
+import { formatCategoryName as formatKey, formatLocalTime } from '@/utils/formatHelpers';
 import { useHostSelection } from '@/composables/useHostSelection';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -270,7 +270,7 @@ export default {
     const { isLoading: isVectorizing } = useLoadingState()
 
     const addLogEntry = (message, status) => {
-      const time = new Date().toLocaleTimeString();
+      const time = formatLocalTime(new Date());
       activityLog.value.unshift({ time, message, status });
       if (activityLog.value.length > 10) {
         activityLog.value.pop();

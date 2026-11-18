@@ -49,6 +49,8 @@ import yaml
 #: instead of colliding inside a long test.
 from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED, GLOB_RUN_BY_A_DEDICATED_WORKFLOW
 
+from tools.lint import _parse_cache as parse_cache
+
 #: The two modules whose own text must never enter the scanned population: this
 #: guard and the record it imports. Both hold quoted glob strings that are the
 #: RECORD rather than a read of the tree, so scanning either rediscovers every
@@ -152,7 +154,7 @@ def glob_declarations_in(source: str) -> set[str]:
     # tested rather than a substring of it. A constant containing a newline or a
     # quote is source-as-data or prose, never a pathspec.
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return set()
     found = set()
@@ -169,7 +171,11 @@ def glob_declarations_in(source: str) -> set[str]:
 
 def _probe_path(glob: str) -> str:
     """A concrete path the *glob* would match, for the filter's own matcher."""
-    return glob.replace("**/", "").replace("**", "x").replace("*", "x")
+    # A leading `**/` matches zero directories; a mid-path one must probe a real subdirectory, or
+    # `docs/**/*.md` probes `docs/x.md` and is wrongly "covered" by a top-level `docs/*.md` (#17930).
+    head, sep, rest = glob.partition("**/")
+    probe = head + sep.replace("**/", "" if not head else "sub/") + rest
+    return probe.replace("**", "x").replace("*", "x")
 
 
 def _declared() -> tuple[dict[str, set[str]], int]:

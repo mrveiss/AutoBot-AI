@@ -6,7 +6,7 @@
 FastAPI Dependency Injection Module
 
 This module provides dependency injection functions for FastAPI endpoints,
-removing the need for components to directly import and use global_config_manager.
+removing the need for components to directly import and use config_manager.
 """
 
 import threading
@@ -22,7 +22,7 @@ def provide_config_manager() -> ConfigManager:
 
     Returns the application-wide singleton ConfigManager so that route
     handlers can receive it via ``Depends(provide_config_manager)`` instead of
-    importing ``global_config_manager`` directly.  Tests can override
+    importing ``config_manager`` directly.  Tests can override
     this dependency with ``app.dependency_overrides[provide_config_manager]``.
 
     Returns:

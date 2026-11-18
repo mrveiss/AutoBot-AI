@@ -76,6 +76,7 @@ from pathlib import Path
 import pytest
 
 from autobot_shared.paths import project_root
+from tools.lint import _parse_cache as parse_cache
 
 #: Final segments with one of these suffixes name a file that must be on disk.
 #: A segment with any other suffix, or none, is treated as a directory and skipped
@@ -182,7 +183,7 @@ def _file_anchors(module: Path) -> list[tuple[int, str, Path]]:
     Raises rather than returning ``[]`` when the module cannot be read. See
     ``UNPARSEABLE IS AN UNKNOWN, NOT AN ABSENCE`` in the module docstring.
     """
-    tree = ast.parse(module.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(module.read_text(encoding="utf-8"))
     found: list[tuple[int, str, Path]] = []
     for division in _outermost_divisions(tree):
         peeled = _literal_segments(division)
@@ -318,17 +319,17 @@ class TestTheExtractorItself:
         ],
     )
     def test_each_anchor_spelling_resolves_to_the_right_depth(self, expression: str, levels: int) -> None:
-        division = ast.parse(expression, mode="eval").body
+        division = parse_cache.parse(expression, mode="eval").body
         peeled = _literal_segments(division)
         assert peeled is not None
         assert _anchor_levels(peeled[0]) == levels
 
     def test_a_non_literal_segment_is_not_guessed_at(self) -> None:
-        division = ast.parse('Path(__file__).parent / name / "a.yaml"', mode="eval").body
+        division = parse_cache.parse('Path(__file__).parent / name / "a.yaml"', mode="eval").body
         assert _literal_segments(division) is None
 
     def test_an_anchor_that_is_not_the_module_file_is_ignored(self) -> None:
-        division = ast.parse('Path(cwd).parent / "a.yaml"', mode="eval").body
+        division = parse_cache.parse('Path(cwd).parent / "a.yaml"', mode="eval").body
         peeled = _literal_segments(division)
         assert peeled is not None
         assert _anchor_levels(peeled[0]) is None
@@ -383,5 +384,5 @@ class TestTheExtractorItself:
         assert unreadable[0][1].startswith("SyntaxError")
 
     def test_a_chain_is_counted_once_not_per_link(self) -> None:
-        tree = ast.parse('Path(__file__).parent / "a" / "b" / "c.yaml"')
+        tree = parse_cache.parse('Path(__file__).parent / "a" / "b" / "c.yaml"')
         assert len(_outermost_divisions(tree)) == 1

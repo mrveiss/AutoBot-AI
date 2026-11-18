@@ -96,11 +96,11 @@ Pre-requisite: request the `groups` scope (OIDC) or configure
 OAuth client secrets and LDAP bind passwords are **encrypted at rest** with
 AES-256-GCM and stored in the `system_secrets` table (key scheme
 `sso:provider:{id}:{field}`); the provider `config` holds only `{field}_ref`
-references — never plaintext. Field encryption uses `AUTOBOT_FIELD_ENCRYPTION_KEY`.
+references — never plaintext.
 
 ### 5.2 Migrating legacy plaintext secrets (#9687)
 If you are upgrading from a build that stored secrets in plaintext config:
-1. Ensure `AUTOBOT_FIELD_ENCRYPTION_KEY` is set (the migration fails fast otherwise).
+1. Ensure `SLM_ENCRYPTION_KEY` or `SLM_SECRET_KEY` is set (the migration fails fast otherwise).
 2. Run `autobot-slm-backend/migrations/migrate_sso_secrets_to_system_secret.py`.
    It encrypts each `client_secret`/`bind_password`, writes it to `system_secrets`,
    replaces the config value with a `{field}_ref`, and rolls back on any error.
@@ -126,4 +126,4 @@ If you are upgrading from a build that stored secrets in plaintext config:
 | Roles not applied | `groups` scope/claim missing, or mapped role name not found | Confirm the IdP emits groups; check role names exist (org or system). |
 | User keeps access after logout | RS256 authority token (not SLM-issued) | Expected until #10278; shorten token TTL. |
 | Google session persists after logout | Google has no OIDC end_session endpoint | Expected; only the AutoBot session is revoked. |
-| Secret decryption errors | `AUTOBOT_FIELD_ENCRYPTION_KEY` changed/missing | Restore the key; re-enter secrets if lost. |
+| Secret decryption errors | The SLM encryption key changed or is missing | Restore the key; re-enter secrets if lost. |

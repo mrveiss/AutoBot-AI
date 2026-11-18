@@ -17,6 +17,7 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery
 from autobot_shared.code_graph import compute_node_id, extract_dotted_callee, module_path_from_rel_path
 from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
 from autobot_shared.env_utils import blank_to_none, env_float
@@ -682,8 +683,8 @@ def _build_call_graph_response(
     error_code_prefix="CODEBASE",
 )
 async def get_call_graph(
+    source_id: SourceIdQuery,
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
-    source_id: str | None = Query(None, description="#12330: scope call graph to the selected code source"),
 ):
     """Get function call graph.
 
@@ -703,8 +704,7 @@ async def get_call_graph(
     if not refresh:
         cached_data = await _get_cached_call_graph(str(project_root))
         if cached_data:
-            cached_data["from_cache"] = True
-            return JSONResponse(cached_data)
+            return JSONResponse({**cached_data, "from_cache": True, "source_id": source_id})
 
     python_files = await _get_python_files(project_root)
     files_total = len(python_files)
@@ -741,4 +741,4 @@ async def get_call_graph(
     )
     await _set_cached_call_graph(str(project_root), response_data)
 
-    return JSONResponse(response_data)
+    return JSONResponse({**response_data, "source_id": source_id})

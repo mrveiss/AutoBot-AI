@@ -199,7 +199,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { BaseTable, type BaseTableColumn, BaseButton } from '@autobot/ui'
+import { BaseTable, type BaseTableColumn, BaseButton, saveBlob } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -291,13 +291,7 @@ async function triggerDownload(res: Response, defaultFilename: string): Promise<
   const disposition = res.headers.get('content-disposition') ?? ''
   const match = disposition.match(/filename="?([^";\n]+)"?/)
   const filename = match?.[1] ?? defaultFilename
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 100)
+  saveBlob(await res.blob(), filename)
 }
 
 function extractSecretPlaceholders(json: unknown): string[] {
@@ -487,7 +481,7 @@ async function executeImport(): Promise<void> {
 }
 
 .page-title {
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin: 0 0 var(--spacing-xs);
@@ -524,7 +518,7 @@ async function executeImport(): Promise<void> {
 }
 
 .card-title {
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-xs);
   color: var(--text-primary);
@@ -544,7 +538,7 @@ async function executeImport(): Promise<void> {
 }
 
 .export-hint {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--color-text-tertiary, var(--text-secondary));
   margin: 0 0 var(--spacing-md);
 }
@@ -557,7 +551,7 @@ async function executeImport(): Promise<void> {
 }
 
 .subsection-title {
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   font-weight: var(--font-weight-semibold);
   margin: 0 0 var(--spacing-sm);
   color: var(--text-primary);
@@ -605,7 +599,7 @@ async function executeImport(): Promise<void> {
 
 .drop-zone-label {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 /* Import actions */
@@ -630,7 +624,7 @@ async function executeImport(): Promise<void> {
   border-radius: var(--radius-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .preview-warnings h5,
@@ -661,7 +655,7 @@ async function executeImport(): Promise<void> {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 /* Secret mapping */
@@ -673,7 +667,7 @@ async function executeImport(): Promise<void> {
 }
 
 .secret-hint {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0 0 var(--spacing-sm);
 }
@@ -687,7 +681,7 @@ async function executeImport(): Promise<void> {
 
 .secret-label {
   font-family: var(--font-family-mono, monospace);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-primary);
   min-width: 180px;
 }
@@ -697,7 +691,7 @@ async function executeImport(): Promise<void> {
   padding: var(--spacing-xs) var(--spacing-sm);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
 }
@@ -711,7 +705,7 @@ async function executeImport(): Promise<void> {
 }
 
 .hint-text {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -720,7 +714,7 @@ async function executeImport(): Promise<void> {
   margin-top: var(--spacing-md);
   border-radius: var(--radius-md);
   padding: var(--spacing-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .result-success {

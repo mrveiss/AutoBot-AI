@@ -45,10 +45,8 @@ import {
   type OrphanStorageListResponse,
 } from '@/composables/useAutobotApi'
 import type { SlmUserResponse } from '@/composables/useSlmUserApi'
-import { formatFileSize } from '@/utils/formatHelpers'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, formatFileSize, createLogger } from '@autobot/ui'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()

@@ -297,7 +297,7 @@ onMounted(refreshAll)
       </div>
 
       <div class="flex items-center gap-3 pt-4 border-t border-autobot-border">
-        <button type="submit" data-test="save" class="px-4 py-2 bg-autobot-primary text-white rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50" :disabled="saving || !hasChanges || anyInvalid">
+        <button type="submit" data-test="save" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50" :disabled="saving || !hasChanges || anyInvalid">
           {{ saving ? $t('settings.admin.webResearchSettings.saving') : $t('settings.admin.webResearchSettings.save') }}
         </button>
         <button type="button" data-test="discard" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50" :disabled="saving || !hasChanges" @click="discard">

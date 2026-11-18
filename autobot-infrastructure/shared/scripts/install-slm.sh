@@ -374,14 +374,14 @@ setup_code() {
 setup_slm_backend() {
     log "Setting up SLM backend..."
 
-    # Create slm-server directory if it doesn't exist yet
     mkdir -p "$SLM_SERVER_DIR"
     chown autobot:autobot "$SLM_SERVER_DIR"
 
-    # Create Python virtual environment
-    sudo -u autobot python3 -m venv "$SLM_SERVER_DIR/venv"
+    # shellcheck source=scripts/lib/python_floor.sh
+    source "$PROJECT_ROOT/scripts/lib/python_floor.sh" && python_floor_build_venv "$PROJECT_ROOT" "$SLM_SERVER_DIR/venv" autobot || {
+        echo "FATAL: the SLM venv on the .python-version floor failed -- refusing an unpinned interpreter (#14172, #20932)" >&2; exit 1
+    }
 
-    # Install dependencies
     sudo -u autobot "$SLM_SERVER_DIR/venv/bin/pip" install --quiet --upgrade pip
 
     if [[ -f "$SLM_SERVER_DIR/requirements.txt" ]]; then
@@ -479,8 +479,7 @@ server {
 
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always; add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # SLM Admin UI (static files or dev server)
@@ -495,8 +494,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # WebSocket endpoint for SLM (must be before /api/ to take priority)
-    # Issue #3108: include full proxy headers
+    # WebSocket endpoint for SLM (must be before /api/ to take priority; #3108: full proxy headers)
     location /api/ws {
         proxy_pass http://127.0.0.1:8000/api/ws;
         proxy_http_version 1.1;
@@ -509,6 +507,7 @@ server {
         proxy_read_timeout 86400;
     }
 
+    location ^~ /api/internal/ { return 404; }  # #20046: service-to-service only
     # SLM API (local backend at port 8000)
     location /api/ {
         proxy_pass http://127.0.0.1:8000/api/;
@@ -521,6 +520,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    location ^~ /autobot-api/internal/ { return 404; }  # #20046: service-to-service only
     # AutoBot Backend API (main backend at ${DEV_HOST}:8001)
     # Issue #729 - Proxy for migrated admin functionality
     location /autobot-api/ {

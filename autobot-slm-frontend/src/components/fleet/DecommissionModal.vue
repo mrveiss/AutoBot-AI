@@ -13,8 +13,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoles, type DecommissionPreflight } from '@/composables/useRoles'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, createLogger } from '@autobot/ui'
 
 const logger = createLogger('DecommissionModal')
 

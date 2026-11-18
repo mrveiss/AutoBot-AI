@@ -29,6 +29,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatLocalTime } from '@/utils/formatHelpers'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/ui/Icon.vue'
@@ -82,10 +83,7 @@ const statusTooltip = computed(() => {
   const baseTooltip = statusText.value
 
   if (props.timestamp) {
-    const time = typeof props.timestamp === 'string'
-      ? new Date(props.timestamp)
-      : props.timestamp
-    const timeString = time.toLocaleTimeString()
+    const timeString = formatLocalTime(props.timestamp)
     return t('ui.messageStatus.statusAtTime', { status: baseTooltip, time: timeString })
   }
 

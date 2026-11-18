@@ -20,7 +20,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.ai_lines import CONVERSATION_TOOLS, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY, resolve_scope
+from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+    declared_categories_of,
+    resolve_scope,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name, tool_effect
 from llc.agent_tools import LLC_TOOL_NAMES
@@ -333,7 +339,7 @@ async def enforce_ai_line(
         user_id=context.get(VERIFIED_USER_KEY),  # the personal scope of a user with no company
         requested_by=str(getattr(ctx, "session_id", None) or "chat"),
         surface="chat_tool",
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
         hold_in_approvals=not is_command,

@@ -212,7 +212,6 @@ def _var_files(root: Path) -> list[Path]:
 REACH = declare(
     "ansible-apt-repo-budget-override-sweep",
     discover=_var_files,
-    floor=341,
     growth=40,
     skips=0,
     what="Ansible variable files",

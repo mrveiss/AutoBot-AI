@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Iterator, List, Tuple
 
 import yaml
-from ansible.parsing.splitter import split_args
 
 FREE_FORM = {"shell", "command", "raw", "script"}
 PREFIX = "ansible.builtin."
@@ -26,19 +25,26 @@ PREFIX = "ansible.builtin."
 MIN_BLOCKS = 100
 
 
-def blocks_in(node: object) -> Iterator[Tuple[str, str]]:
-    """(task name, free-form text) for every free-form module in a parsed YAML document."""
+def blocks_in(node: object, is_list_item: bool = False) -> Iterator[Tuple[str, str]]:
+    """(task name, free-form text) for every free-form module in a parsed YAML document.
+
+    Only a mapping that is an item of a list is a task, as in a play's ``tasks``, a ``block`` or a tasks
+    file. A key that merely has a module's name, such as a ``shell`` variable in ``group_vars``, is not (#20705).
+    """
     if isinstance(node, dict):
         for key, value in node.items():
-            if isinstance(key, str) and key.removeprefix(PREFIX) in FREE_FORM and isinstance(value, str):
+            is_module = isinstance(key, str) and key.removeprefix(PREFIX) in FREE_FORM
+            if is_list_item and is_module and isinstance(value, str):
                 yield str(node.get("name", "(unnamed)")), value
             yield from blocks_in(value)
     elif isinstance(node, list):
         for item in node:
-            yield from blocks_in(item)
+            yield from blocks_in(item, is_list_item=True)
 
 
 def parses(text: str) -> bool:
+    from ansible.parsing.splitter import split_args  # only here, so the walk can be tested without ansible-core
+
     try:
         split_args(text)
     except Exception:  # noqa: BLE001 - whatever the splitter raises, Ansible refuses the task

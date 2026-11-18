@@ -12,6 +12,9 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
   vars:
     autobot_user: autobot
     autobot_group: autobot
@@ -21,7 +24,7 @@
     # #19322: this machine's own agent node id, from the agent's SLM_NODE_ID. No literal
     # default: '01-Backend' named a different node, and nothing in this play reads it yet.
     slm_node_id: "{{ lookup('env', 'SLM_NODE_ID') }}"
-    slm_admin_url: "{{ lookup('env', 'SLM_ADMIN_URL') | default('http://' + (slm_host | default('127.0.0.1')) + ':' + (slm_port | default(8000) | string), true) }}"
+    slm_admin_url: "{{ lookup('env', 'SLM_ADMIN_URL') | default('http://' + (slm_host | default('127.0.0.1')) + ':' + (slm_backend_port | string), true) }}"
     # SLM server's public key - will be fetched dynamically
     slm_server_pubkey: "{{ lookup('env', 'SLM_PUBKEY') | default('', true) }}"
     # Emergency admin user - fallback access when SSH keys fail

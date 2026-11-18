@@ -494,7 +494,7 @@ async def record_filter_savings(command: str, savings: int) -> None:
         key = f"tool_filter_savings:{category}"
         await redis.incrby(key, savings)
     except Exception:
-        logger.debug("record_filter_savings: failed for %s", command)
+        logger.debug("record_filter_savings: failed for category %s", category)
 
 
 # ---------------------------------------------------------------------------

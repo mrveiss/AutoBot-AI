@@ -36,6 +36,11 @@ class _Proc:
         return b"out", b"err"
 
 
+def _reset(action: str, sudo: str, units: str) -> str:
+    """The start-limit reset a start or restart is preceded by (#20767); nothing for other actions."""
+    return f"{sudo} systemctl reset-failed -- {units} 2>/dev/null; " if action in ("start", "restart") else ""
+
+
 def _install(monkeypatch, expire: bool = False) -> dict:
     """Fake the spawn and the wait. Called IN the test body: tests/api/conftest.py's runtest hook
     blocks the real spawn at call time, and only a patch made inside the body wins over it."""
@@ -61,10 +66,15 @@ def _install(monkeypatch, expire: bool = False) -> dict:
 @pytest.mark.parametrize(
     ("sudo_n", "action", "units", "remote"),
     [
-        (True, "restart", ["a", "b"], "sudo -n systemctl restart -- a b"),
-        (False, "restart", ["a", "b"], "sudo systemctl restart -- a b"),
+        (
+            True,
+            "restart",
+            ["a", "b"],
+            "sudo -n systemctl reset-failed -- a b 2>/dev/null; sudo -n systemctl restart -- a b",
+        ),
+        (False, "restart", ["a", "b"], "sudo systemctl reset-failed -- a b 2>/dev/null; sudo systemctl restart -- a b"),
         (True, "stop", ["a"], "sudo -n systemctl stop -- a"),
-        (False, "start", ["a"], "sudo systemctl start -- a"),
+        (False, "start", ["a"], "sudo systemctl reset-failed -- a 2>/dev/null; sudo systemctl start -- a"),
     ],
 )
 async def test_the_remote_command_follows_the_explicit_parameters(monkeypatch, sudo_n, action, units, remote):
@@ -123,7 +133,10 @@ async def test_an_invalid_unit_name_is_refused_before_anything_is_spawned(monkey
 async def test_a_valid_unit_name_passes_the_contrast(monkeypatch, unit):
     spawned = _install(monkeypatch)
     await service_restart.run_systemctl_over_ssh(_BASE, "start", [unit], use_noninteractive_sudo=True, timeout=1)
-    assert spawned["argv"][-1] == f"sudo -n systemctl start -- {unit}"
+    assert (
+        spawned["argv"][-1]
+        == f"sudo -n systemctl reset-failed -- {unit} 2>/dev/null; sudo -n systemctl start -- {unit}"
+    )
 
 
 @pytest.mark.parametrize("unit", ["foo;id", "$(id)", "`id`", "a b", "a\nid"])
@@ -152,7 +165,7 @@ async def test_a_non_allowlisted_action_raises(monkeypatch, action):
 async def test_every_allowlisted_action_is_accepted(monkeypatch, action):
     spawned = _install(monkeypatch)
     await service_restart.run_systemctl_over_ssh(_BASE, action, ["a"], use_noninteractive_sudo=True, timeout=1)
-    assert spawned["argv"][-1] == f"sudo -n systemctl {action} -- a"
+    assert spawned["argv"][-1] == f"{_reset(action, 'sudo -n', 'a')}sudo -n systemctl {action} -- a"
 
 
 @pytest.mark.parametrize(("tolerate", "tail"), [(True, " || true"), (False, "")])
@@ -161,7 +174,7 @@ async def test_tolerate_failure_appends_exactly_or_true(monkeypatch, tolerate, t
     await service_restart.run_systemctl_over_ssh(
         _BASE, "restart", ["a"], use_noninteractive_sudo=False, timeout=1, tolerate_failure=tolerate
     )
-    assert spawned["argv"][-1] == f"sudo systemctl restart -- a{tail}"
+    assert spawned["argv"][-1] == f"sudo systemctl reset-failed -- a 2>/dev/null; sudo systemctl restart -- a{tail}"
 
 
 def test_the_executor_no_longer_accepts_a_raw_shell_suffix():

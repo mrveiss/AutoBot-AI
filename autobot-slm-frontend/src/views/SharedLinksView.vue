@@ -113,10 +113,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseBadge, BaseTable, type BaseTableColumn } from '@autobot/ui'
+import { BaseBadge, BaseTable, type BaseTableColumn, createLogger, createDateFormatter } from '@autobot/ui'
 import { useAutobotApi, type SharedLinkAdminItem } from '@/composables/useAutobotApi'
-import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('SharedLinksView')
 const { t } = useI18n()

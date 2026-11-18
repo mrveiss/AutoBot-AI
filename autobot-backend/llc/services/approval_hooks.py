@@ -23,11 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.approval_four_eyes import FourEyesError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from models.approval import Approval
 from services.agent_org_service import AgentOrgService
+from services.approval_execution import review_decision
 
+from ..exceptions import PublicMessageMixin, refusal_text_keeping_public_reason
 from ..models.activity import ActorType
-from ..models.budget import LLCAgentBudget
+from ..models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
 from .activity_log import LLCActivityLogService
 from .agent_hire_service import HirePayload, insert_hired_agent, schedule_hired_agent
@@ -38,8 +41,12 @@ logger = get_logger(__name__)
 _activity_log = LLCActivityLogService()
 
 
-class ApprovalHookError(Exception):
-    """The action behind an approval cannot be applied; the decision must not be recorded."""
+class ApprovalHookError(PublicMessageMixin, Exception):
+    """The action behind an approval cannot be applied; the decision must not be recorded.
+
+    Public: the messages are written here. A refusal wrapping another exception states a fixed text and
+    logs the cause where it is caught, so no wrapped message reaches the caller.
+    """
 
 
 class BudgetOverridePayload(BaseModel):
@@ -51,7 +58,7 @@ class BudgetOverridePayload(BaseModel):
 
     agent_id: str = Field(min_length=1, max_length=255)
     budget_limit: Optional[Decimal] = Field(None, gt=0, lt=Decimal("1000000000"))
-    token_limit: Optional[int] = Field(None, gt=0)
+    token_limit: Optional[int] = Field(None, ge=TOKEN_LIMIT_MIN, le=TOKEN_LIMIT_MAX)
     budget_mode: Optional[Literal["dollars", "tokens"]] = None
     alert_threshold: Optional[float] = None
     reason: Optional[str] = None
@@ -180,7 +187,10 @@ async def _sprint_close_approved(session: AsyncSession, approval: Approval, deci
             session, sprint_id=ask.sprint_id, approval_id=approval.id, decided_by=decided_by
         )
     except ValueError as exc:
-        raise ApprovalHookError(str(exc)) from exc
+        logger.warning("Sprint close refused for approval %s: %s", approval.id, safe_log_text(exc))
+        raise ApprovalHookError(
+            refusal_text_keeping_public_reason(exc, "the sprint cannot be closed in its current state")
+        ) from exc
     return {"sprint_id": str(ask.sprint_id)}
 
 
@@ -203,21 +213,31 @@ _FOUR_EYES_TYPES = frozenset({ApprovalType.HIRE.value, ApprovalType.BUDGET_OVERR
 async def review_decider(
     session: AsyncSession, approval: Approval, decision: ApprovalStatus, decided_by: uuid.UUID
 ) -> bool:
-    """Apply the four-eyes rule (#8214, #18430) to an APPROVED hire or budget override; True when it is a self-approval.
+    """Check who may approve (#8214, #18430, #18978) before the decision commits; True when it is a self-approval.
+
+    A hire or budget override follows the four-eyes rule here; an approval naming an action follows that action's
+    own review (:func:`services.approval_execution.review_decision`).
 
     A requester may always reject their own request. A refusal raises :class:`ApprovalHookError`, which rolls
     the decision back and leaves the approval pending for another admin. A requester that names no person
     (an agent, or a row from before requesters were pinned to the verified caller) is not the decider, so it
     passes unflagged rather than stranding the request; nothing stored is rewritten (#17038).
     """
-    if decision != ApprovalStatus.APPROVED or approval.approval_type not in _FOUR_EYES_TYPES:
+    if decision != ApprovalStatus.APPROVED:
         return False
     try:
+        if approval.approval_type not in _FOUR_EYES_TYPES:
+            return await review_decision(approval, session, decided_by)
         return await require_four_eyes(
             approval, session, decided_by, what=f"a {approval.approval_type}", unidentified_requester_ok=True
         )
-    except FourEyesError as exc:
+    except FourEyesError as exc:  # an author template: "<what> needs a different <who> than the one who asked"
         raise ApprovalHookError(str(exc)) from exc
+    except ValueError as exc:
+        logger.warning("Approval %s refused at review: %s", approval.id, safe_log_text(exc))
+        raise ApprovalHookError(
+            refusal_text_keeping_public_reason(exc, "this decision is not permitted on this approval")
+        ) from exc
 
 
 async def run_post_decision_hook(
