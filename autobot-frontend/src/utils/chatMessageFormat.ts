@@ -106,8 +106,8 @@ export function linkifyBareUrls(html: string): string {
     .join('')
 }
 
-// A private-use code point: it cannot occur in rendered text, and it is not a control character.
-const LINK_STASH = '\uE000'
+// A Unicode noncharacter (not a control character, and unlike a private-use point it is never a font glyph): it cannot occur in rendered text.
+const LINK_STASH = '\uFDD0'
 
 /** Swap every match of `re` (one capture group) for a placeholder, appending the originals to `store`. */
 function stash(html: string, re: RegExp, store: string[]): string {
@@ -122,7 +122,7 @@ function stash(html: string, re: RegExp, store: string[]): string {
 }
 
 function restoreAnchors(text: string, anchors: string[]): string {
-  return text.replace(/\uE000(\d+)\uE000/g, (_m, n) => anchors[Number(n)])
+  return text.replace(/\uFDD0(\d+)\uFDD0/g, (_m, n) => anchors[Number(n)])
 }
 
 /** Render raw chat message text to sanitised HTML (sanitising is always the LAST step). */
