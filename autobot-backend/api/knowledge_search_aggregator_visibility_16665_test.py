@@ -99,7 +99,7 @@ async def test_get_facts_for_graph_with_category_filter_returns_the_owners_own_f
     must still see their own fact through that path."""
     import json
 
-    from api.knowledge_search_aggregator import _get_facts_for_graph
+    from api.knowledge_graph_facts import visible_facts_page
 
     raw_fact = {
         "id": "f1",
@@ -110,8 +110,6 @@ async def test_get_facts_for_graph_with_category_filter_returns_the_owners_own_f
     kb.ownership_manager = KnowledgeOwnership(redis_client=object())
     kb.get_facts_in_category = AsyncMock(return_value={"success": True, "facts": [raw_fact]})
 
-    facts = await _get_facts_for_graph(
-        kb, category_filter="cat1", max_facts=10, user_id="u1", user_org_id=None, user_group_ids=[], is_admin=False
-    )
+    facts = (await visible_facts_page(kb, "cat1", 10, 0, "u1", None, [], False)).facts
 
     assert [f["id"] for f in facts] == ["f1"], f"owner u1 must see their own fact: {facts}"

@@ -23,6 +23,12 @@ import pytest
 
 from autobot_shared.db_session import async_session_scope
 from autobot_shared.user_management import password_epoch
+from autobot_shared.user_management.last_platform_admin import (
+    LAST_PLATFORM_ADMIN_CODE,
+    LAST_PLATFORM_ADMIN_RETRY_CODE,
+    LastPlatformAdminError,
+    LastPlatformAdminRetry,
+)
 from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -73,20 +79,36 @@ def store(monkeypatch):
     password_epoch.reset_epoch_store()
 
 
-def _client(user, monkeypatch):
+def _client(user, monkeypatch, last_admin=False):
     class Service(UserService):
         user_model = SimpleNamespace()
+
+        async def update_user(self, user_id, **changes):  # records what a refused request must not have done
+            session.profile_writes.append(changes)
 
         async def get_user(self, user_id, *, include_deleted=False):
             return None if user.deleted_at and not include_deleted else user
 
         async def _audit_log(self, *args, **kwargs):
-            return None
+            session.audits.append(kwargs.get("outcome") or args[4:])
 
+    calls = []
+
+    async def database_check(_session, _model, _user_id):  # the DB query; the guard, audit and refusal are real
+        calls.append(1)
+        if last_admin == "late" and len(calls) == 1:  # passes the early check, refuses while the changes apply
+            return
+        if last_admin == "retry":
+            raise LastPlatformAdminRetry()
+        if last_admin:  # True, or "late" on its second call
+            raise LastPlatformAdminError()
+
+    # The module whose globals the service's own method reads (the helper may load it under another object).
+    monkeypatch.setitem(UserService._guard_last_admin.__globals__, "ensure_not_last_platform_admin", database_check)
     monkeypatch.setattr(scim, "UserService", Service)
     monkeypatch.setattr(scim, "TenantContext", TenantContext)
     session = FakeAsyncSession()
-    session.info = {}
+    session.info, session.profile_writes, session.audits = {}, [], []
 
     async def db():
         async with async_session_scope(lambda: session) as scoped:
@@ -169,6 +191,73 @@ async def test_delete_answers_503_then_a_repeat_finds_the_soft_deleted_user(stor
 
     assert (await _call(transport, "DELETE", f"/scim/v2/Users/{user.id}")).status_code == 204
     assert "alice" in store.epochs
+
+
+def _put_inactive():
+    return {"userName": "alice", "emails": [{"value": "new@x.io", "primary": True}], "name": {"givenName": "New"},
+            "active": False}  # fmt: skip
+
+
+def _patch_rename_then_inactive():
+    return {"Operations": [
+        {"op": "replace", "path": "displayName", "value": "Renamed"},
+        {"op": "replace", "path": "active", "value": False},
+    ]}  # fmt: skip
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+async def test_deprovisioning_the_last_platform_admin_is_a_scim_409(store, monkeypatch, method):
+    """#21018: refused with the stable code and no scimType (RFC 7644 3.12 has none), no session revoked, and
+    NOTHING else of the request applied: the profile changes of the same PUT/PATCH are never written."""
+    user = _user()
+    session, transport = _client(user, monkeypatch, last_admin=True)
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive(), "DELETE": None}[method]
+    kwargs = {"json": body} if body else {}
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", **kwargs)
+
+    assert response.status_code == 409
+    error = response.json()["detail"]
+    assert LAST_PLATFORM_ADMIN_CODE in error["detail"] and "scimType" not in error and error["status"] == "409"
+    assert user.is_active is True and user.deleted_at is None and store.tries == []
+    assert session.profile_writes == [] and (user.email, user.display_name) == ("a@x.io", "A")
+    assert session.audits == ["denied"]  # the refusal is audited, by the real guard
+    assert session.commits == 1  # and committed: only that audit row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PUT", "PATCH"])
+async def test_a_refusal_that_arises_while_applying_is_a_scim_409_and_commits_nothing(store, monkeypatch, method):
+    """#21018: the guard refused after the early check passed (a state change between them); the request's
+    changes are rolled back, not committed with the denial row, and the IdP gets the 409, not a 500."""
+    user = _user()
+    session, transport = _client(user, monkeypatch, last_admin="late")
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive()}[method]
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", json=body)
+
+    assert response.status_code == 409
+    assert LAST_PLATFORM_ADMIN_CODE in response.json()["detail"]["detail"]
+    assert session.commits == 0 and session.rollbacks >= 1 and store.tries == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+async def test_a_transient_lock_failure_is_a_scim_503_with_retry_after_not_the_409(store, monkeypatch, method):
+    """#21018: the IdP retries a 503; the change was not judged, so nothing of it is applied or audited as denied."""
+    user = _user()
+    session, transport = _client(user, monkeypatch, last_admin="retry")
+    body = {"PUT": _put_inactive(), "PATCH": _patch_rename_then_inactive(), "DELETE": None}[method]
+    kwargs = {"json": body} if body else {}
+
+    response = await _call(transport, method, f"/scim/v2/Users/{user.id}", **kwargs)
+
+    assert response.status_code == 503 and int(response.headers["Retry-After"]) >= 1
+    error = response.json()["detail"]
+    assert LAST_PLATFORM_ADMIN_RETRY_CODE in error["detail"] and error["status"] == "503"
+    assert user.is_active is True and user.deleted_at is None and store.tries == []
+    assert session.profile_writes == [] and session.audits == ["failure"]
 
 
 @pytest.mark.asyncio

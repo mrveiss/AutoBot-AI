@@ -62,7 +62,7 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 import DocumentChangeFeed from '@/components/knowledge/DocumentChangeFeed.vue'
-import { formatFileSize, formatISOString } from '@/utils/formatHelpers'
+import { formatFileSize, formatISOString, isoDateStamp } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import {
@@ -257,7 +257,7 @@ const exportStats = async () => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `knowledge-statistics-${new Date().toISOString().split('T')[0]}.json`
+  a.download = `knowledge-statistics-${isoDateStamp()}.json`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -292,7 +292,7 @@ ${(popularTags.value || []).slice(0, 10).map(tag => `- ${tag.name}: ${tag.count}
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `knowledge-report-${new Date().toISOString().split('T')[0]}.md`
+  a.download = `knowledge-report-${isoDateStamp()}.md`
   a.click()
   URL.revokeObjectURL(url)
 }

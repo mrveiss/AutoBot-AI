@@ -349,8 +349,16 @@ _ADDED = (
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py",
 )
 
+#: Required fast-guard membership, pinned HERE so dropping a guard from the list file fails
+#: this test instead of silently shrinking the gate (#21082).
+_REQUIRED_GUARDS = ("repo_tests/lint/canonical/rules/test_py_celery_private_event_loop.py",)
+
 
 class TestFastGate:
+    def test_required_guards_are_in_the_fast_gate_independent_of_the_list_file(self) -> None:
+        assert set(_REQUIRED_GUARDS) <= set(_guard_list())
+        assert [g for g in _REQUIRED_GUARDS if not (repo_root() / g).is_file()] == []
+
     def test_the_guard_set_is_distinct_existing_guards_including_todays(self) -> None:
         guards = _guard_list()
         assert len(guards) == len(set(guards)) and len(guards) >= len(_ADDED)
