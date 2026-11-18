@@ -64,6 +64,14 @@ export function companyContextAgrees(routeCompanyId: string): boolean {
   return !routeCompanyId || !selected || routeCompanyId === selected
 }
 
+/**
+ * Wraps a builder action so it runs only while `agrees()` holds (#21520); otherwise it is skipped and
+ * returns undefined. `agrees` is where the user is told, so every gated handler shares one refusal.
+ */
+export function gateOnCompany<A extends unknown[], R>(agrees: () => boolean, fn: (...args: A) => R): (...args: A) => R | undefined {
+  return (...args) => (agrees() ? fn(...args) : undefined)
+}
+
 export interface WorkflowCompanySwitchOptions {
   /** The company the route names ('' when none). */
   companyId: () => string

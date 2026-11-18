@@ -696,7 +696,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
-import { useWorkflowCompanySwitch, companyContextAgrees } from '@/composables/workflow/useWorkflowCompanySwitch';
+import { useWorkflowCompanySwitch, companyContextAgrees, gateOnCompany } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -1015,6 +1015,7 @@ const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
   approvePlan,
   rejectPlan,
   notify: (key, kind) => showToast(t(key), kind),
+  companyAgrees: () => companyAgrees(),
   onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
@@ -1117,30 +1118,20 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
   }
 }
 
-async function handlePauseWorkflow(workflowId: string): Promise<void> {
-  const success = await pauseWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.paused'), 'info');
-  }
-}
-
-async function handleResumeWorkflow(workflowId: string): Promise<void> {
-  const success = await resumeWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.resumed'), 'success');
-  }
-}
-
-async function handleCancelWorkflow(workflowId: string): Promise<void> {
-  const success = await cancelWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.cancelled'), 'info');
-  }
-}
+// #21520: run controls act on a workflow loaded for the company on screen, so they wait for the route to follow a switch.
+const handlePauseWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await pauseWorkflow(id)) showToast(t('workflow.builder.paused'), 'info');
+});
+const handleResumeWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await resumeWorkflow(id)) showToast(t('workflow.builder.resumed'), 'success');
+});
+const handleCancelWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await cancelWorkflow(id)) showToast(t('workflow.builder.cancelled'), 'info');
+});
 
 const { answerWithToast } = useStepAnswerToast();
-const handleApproveStep = (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve');
-const handleSkipStep = (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip');
+const handleApproveStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve'));
+const handleSkipStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip'));
 
 /**
  * Open a workflow named in the URL (#13963).
