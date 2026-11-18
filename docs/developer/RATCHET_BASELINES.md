@@ -613,7 +613,8 @@ folder cannot read as a clean 0.
   measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
   `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
   never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
-  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`. That mapping is empty
+  now; existing explicit pins are transitional and are retired in follow-up batches.
 
 ## Path-filter entries are declared in place, not in a table (#21205)
 
