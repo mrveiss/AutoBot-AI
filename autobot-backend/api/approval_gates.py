@@ -39,12 +39,14 @@ from services.approval_execution import context_change_violation, is_registered_
 from services.approval_gate_service import ApprovalGateService
 from services.knowledge.collection_space_stamp_action import register_stamp_action
 from services.project_backfill_action import register_project_backfill_action
+from services.workflow_automation.step_approval_gate import register_workflow_step_resume
 
 logger = get_logger(__name__)
 router = APIRouter()
 register_stamp_action()  # registered with the router so the handler exists before any approve()
 register_ai_line_change_action()  # #18430: a person's approval is what changes an AI line
 register_project_backfill_action()  # #18978: a person's approval is what back-fills work item projects
+register_workflow_step_resume()  # #20917: a person's approval is what releases a waiting workflow step
 
 
 # -- Helpers -----------------------------------------------------------

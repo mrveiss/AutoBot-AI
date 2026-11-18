@@ -58,7 +58,7 @@ const HUMAN_NODE = {
 
 function mountSidebar(node: typeof AGENT_NODE | typeof HUMAN_NODE) {
   return mount(CanvasNodeSidebar, {
-    props: { node, companyId: 'c1', terminating: false },
+    props: { node, companyId: 'c1', terminating: false, canControl: true },
     global: { plugins: [i18n], stubs: { HandoffModal: true } },
   })
 }

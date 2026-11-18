@@ -46,9 +46,11 @@ def test_importing_the_service_registers_nothing():
         "import user_management.services.person_link_service\n"
         "assert KnownProbes.FIRST_ADMIN_LINK not in _PROBES"
     )
-    subprocess.run(
-        [sys.executable, "-c", code], check=True, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
-    )
+    backend = Path(__file__).resolve().parents[2]
+    # A sibling test may have put a package dir on sys.path whose modules shadow the stdlib
+    # (orchestration/types.py); a fresh interpreter must only see the backend root and outside paths.
+    paths = [p for p in sys.path if backend not in Path(p or ".").resolve().parents]
+    subprocess.run([sys.executable, "-c", code], check=True, env={**os.environ, "PYTHONPATH": os.pathsep.join(paths)})
 
 
 def test_probe_is_registered_once_the_module_is_imported():

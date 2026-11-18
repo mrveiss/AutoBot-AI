@@ -36,6 +36,8 @@
 #             (DIR must match ^[A-Za-z0-9_./-]+$, anything else is refused)
 #   venv_matches ROOT DIR   0 when DIR/bin/python exists and is the floor X.Y;
 #             callers rebuild the venv (rm -rf DIR, then create) on non-zero.
+#   build_venv ROOT DIR [USER]   ensure, rebuild a venv on another interpreter, create DIR
+#             (as USER via sudo when given); for a local installer
 #   provision_cmd BINARY   the apt commands, single-quote-free so a caller can
 #             run them through `ssh host "sudo bash -c '...'"`.
 #
@@ -157,6 +159,18 @@ python_floor_ensure() {
     fi
     echo "python_floor: $bin is required (the .python-version floor) and is not installed; install it (deadsnakes: $(python_floor_provision_cmd "$bin")) and re-run" >&2
     return 1
+}
+
+# Build DIR as a venv on the floor interpreter for a local install: ensure (provision
+# or refuse), rebuild a venv left on another interpreter, then create it as USER
+# (default: the caller). Prints nothing on success.
+python_floor_build_venv() {
+    local root="${1:-}" dir="${2:?venv dir}" owner="${3:-}" bin
+    bin="$(python_floor_ensure "$root")" || return 1
+    if [ -e "$dir" ] && ! python_floor_venv_matches "$root" "$dir"; then
+        rm -rf "$dir"
+    fi
+    if [ -n "$owner" ]; then sudo -u "$owner" "$bin" -m venv "$dir"; else "$bin" -m venv "$dir"; fi
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

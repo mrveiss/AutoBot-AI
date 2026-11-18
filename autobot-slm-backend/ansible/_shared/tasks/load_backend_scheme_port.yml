@@ -1,0 +1,15 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# #21400: load the scheme-matched backend port (_shared/vars/backend_scheme_port.yml) for a role task file.
+#
+# Every task file that renders nginx-frontend.conf.j2, or reads frontend_upstream_backend_port, includes this
+# first: the file is entered on its own too (`include_role: frontend, tasks_from: code_only`), where main.yml's
+# tasks never ran. `tags: [always]` on both this include and the load, so a `--tags` run still defines it.
+# A test walks the role's task files and every playbook that reads the variable (#21400).
+- name: "Load the scheme-matched backend port"
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../../_shared/vars/backend_scheme_port.yml"
+  tags: ['always']

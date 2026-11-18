@@ -34,14 +34,14 @@
         class="node-icon-btn"
         @click.stop="$emit('select', node)"
         type="button"
-        :aria-label="node.name"
-        :title="node.name"
+        :aria-label="displayName"
+        :title="displayName"
       >
         <i :class="['node-icon', nodeIcon]"></i>
       </button>
 
       <!-- Node name -->
-      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ node.name }}</button>
+      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ displayName }}</button>
 
       <!-- Folder count or file size -->
       <span v-if="node.type === 'folder' && node.children" class="folder-count">
@@ -108,7 +108,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatFileSize } from '@/utils/formatHelpers'
+import { formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
@@ -209,6 +209,11 @@ const unvectorizedCount = computed(() => {
 })
 
 const { t } = useI18n()
+
+// #21037: display-only man-page label; node.name stays raw for search/icons.
+const displayName = computed(() =>
+  formatManPageTitle(props.node.name, knowledgeNodeFactType(props.node.metadata), t),
+)
 
 const sizeOptions = computed(() => ({
   decimals: [0, 0, 1],

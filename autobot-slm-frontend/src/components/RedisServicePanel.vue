@@ -16,6 +16,7 @@
  * Related to Issue #3381
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { ref, computed, watch } from 'vue'
 import i18n from '@/i18n'
 import { useSlmApi } from '@/composables/useSlmApi'
@@ -374,7 +375,7 @@ watch(
       </button>
 
       <!-- Last checked -->
-      <span v-if="service?.last_checked" class="ml-auto text-xs text-gray-400">{{ $t('redisServicePanel.checkedValue0', { value0: new Date(service.last_checked).toLocaleTimeString() }) }}</span>
+      <span v-if="service?.last_checked" class="ml-auto text-xs text-gray-400">{{ $t('redisServicePanel.checkedValue0', { value0: formatFleetTime(service.last_checked) }) }}</span>
     </div>
 
     <!-- Journal for the unit on its node -->

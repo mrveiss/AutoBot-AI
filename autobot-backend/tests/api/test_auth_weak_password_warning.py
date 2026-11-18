@@ -87,6 +87,17 @@ class TestCheckPasswordWeakness:
         assert reason is not None
         assert "default" in reason.lower()
 
+    def test_seeded_compare_goes_through_secure_compare(self):
+        """#20761: the seeded-default compare is constant time, via the shared helper."""
+        with (
+            patch("autobot_shared.security.password_weakness._get_seeded_default", return_value="SeedP@ssw0rd2026"),
+            patch("autobot_shared.security.constant_time.secure_compare", return_value=True) as compare,
+        ):
+            reason = check_password_weakness("anything-else-entirely")
+        compare.assert_called_once_with("anything-else-entirely", "SeedP@ssw0rd2026")
+        assert reason is not None
+        assert "default" in reason.lower()
+
     def test_no_flag_when_seed_password_is_empty(self):
         """If AUTOBOT_ADMIN_PASSWORD is unset, seeded default is '' — no false positive."""
         with patch(

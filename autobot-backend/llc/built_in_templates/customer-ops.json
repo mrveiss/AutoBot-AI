@@ -18,7 +18,7 @@
       "description": "First-line support agent that categorizes and routes customer inquiries",
       "capabilities": ["ticket_categorization", "urgency_assessment", "routing"],
       "instructions": "You are the triage agent. Quickly assess customer inquiries, categorize them by type and urgency, and route to the appropriate support agent or escalation path.",
-      "model": "claude-haiku-4-5",
+      "model": "haiku",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write"]
@@ -30,7 +30,7 @@
       "description": "Handles customer inquiries, troubleshoots issues, and provides solutions",
       "capabilities": ["troubleshooting", "customer_communication", "issue_resolution"],
       "instructions": "You are a support specialist. Handle customer inquiries with empathy and professionalism. Troubleshoot issues, provide clear solutions, and escalate complex cases when needed.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "bash", "grep"]
@@ -42,7 +42,7 @@
       "description": "Handles complex customer issues requiring human intervention or executive decisions",
       "capabilities": ["complex_resolution", "human_handoff", "executive_communication"],
       "instructions": "You are the escalation manager. Handle complex issues that require human judgment, coordinate with human staff for critical decisions, and ensure high-priority customers receive appropriate attention.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "bash"]

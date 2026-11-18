@@ -11,6 +11,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { ref, computed } from 'vue'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
+import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue'
 import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue'
 
 const approvePlan = vi.fn().mockResolvedValue(true)
@@ -138,6 +139,22 @@ describe('WorkflowBuilderView plan approval', () => {
     expect(rejectPlan).toHaveBeenCalledWith('wf-1', 'User rejected')
   })
 
+  it('binds deciding from the first click until the request settles and sends no second decision', async () => {
+    let settle!: (ok: boolean) => void
+    approvePlan.mockImplementationOnce(() => new Promise<boolean>((r) => { settle = r }))
+    const wrapper = mountView()
+    const find = () => wrapper.findAll('button').filter((b) => /Approve & Run|Approve and Run|Reject/i.test(b.text()))
+    await find()[0].trigger('click')
+    expect(wrapper.findComponent(ApprovalEnvelope).props('deciding')).toBe(true)
+    await find()[0].trigger('click')
+    await find()[1].trigger('click')
+    expect(approvePlan).toHaveBeenCalledTimes(1)
+    expect(rejectPlan).not.toHaveBeenCalled()
+    settle(false)
+    await flushPromises()
+    expect(wrapper.findComponent(ApprovalEnvelope).props('deciding')).toBe(false)
+  })
+
   it('renders no approval when nothing is pending', () => {
     pendingApproval.value = null
     const wrapper = mountView()
@@ -209,7 +226,7 @@ describe('WorkflowBuilderView step approval card (#17677)', () => {
     const wrapper = mountView()
     await click(wrapper, 'Approve')
     await flushPromises()
-    expect(toast).toHaveBeenCalledWith('Could not approve the step; it is still waiting for you', 'error')
+    expect(toast).toHaveBeenCalledWith('Could not confirm the step was approved; check the workflow status before trying again', 'error')
     expect(card(wrapper)).toHaveLength(1)
     await click(wrapper, 'Approve')
     expect(controlWorkflow).toHaveBeenCalledTimes(2)
@@ -220,7 +237,7 @@ describe('WorkflowBuilderView step approval card (#17677)', () => {
     const wrapper = mountView()
     await click(wrapper, 'Skip step')
     await flushPromises()
-    expect(toast).toHaveBeenCalledWith('Could not skip the step; it is still waiting for you', 'error')
+    expect(toast).toHaveBeenCalledWith('Could not confirm the step was skipped; check the workflow status before trying again', 'error')
     expect(card(wrapper)).toHaveLength(1)
     const buttons = wrapper.findComponent(StepApprovalCard).findAll('button')
     expect(buttons.every((b) => b.attributes('disabled') === undefined)).toBe(true)

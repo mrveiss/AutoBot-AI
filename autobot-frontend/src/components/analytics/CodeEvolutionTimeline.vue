@@ -216,9 +216,9 @@ import { BaseButton, saveBlob } from '@autobot/ui'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useCodeEvolutionData } from '@/composables/analytics/useCodeEvolutionData'
 import type { TimelinePoint, TrendData, PatternPoint } from '@/composables/analytics/useCodeEvolutionData'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const { showToast } = useNotificationBus()
 const { fetchTimeline: apiFetchTimeline, fetchTrends: apiFetchTrends, fetchPatterns: apiFetchPatterns, fetchExport: apiFetchExport } = useCodeEvolutionData()
@@ -295,9 +295,8 @@ async function fetchTimeline() {
   error.value = null
 
   try {
-    const endDate = new Date().toISOString().split('T')[0]
-    const startDate = new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000)
-      .toISOString().split('T')[0]
+    const endDate = isoDateStamp()
+    const startDate = isoDateStamp(new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000))
 
     const [timelineResult, trendsResult, patternsResult] = await Promise.all([
       apiFetchTimeline(startDate, endDate, selectedGranularity.value, selectedMetrics.value),
@@ -326,9 +325,8 @@ async function fetchTimeline() {
 
 async function exportData() {
   try {
-    const startDate = new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000)
-      .toISOString().split('T')[0]
-    const endDate = new Date().toISOString().split('T')[0]
+    const startDate = isoDateStamp(new Date(Date.now() - parseInt(selectedDays.value) * 24 * 60 * 60 * 1000))
+    const endDate = isoDateStamp()
 
     const blob = await apiFetchExport(startDate, endDate)
     if (!blob) throw new Error('Export failed')
@@ -402,7 +400,7 @@ function formatPatternName(pattern: string): string {
     .join(' ')
 }
 
-const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: { month: 'short', day: 'numeric' } })
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: { month: 'short', day: 'numeric' } })
 
 // Trend helpers
 function getTrendClass(direction: string): string {
