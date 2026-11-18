@@ -35,8 +35,11 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
+from ..exceptions import PublicMessageMixin
+from ..models.activity import ActorType
 from ..models.enums import (
     ActivityEventType,
     AssigneeType,
@@ -46,11 +49,36 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.label import LLCWorkItemLabel
-from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
+from .commit_publish import run_after_commit
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 from .wake_events import wake_for_comment, wake_for_item_changes
+from .work_item_actor_role import (  # noqa: F401 -- resolve_actor_role is re-exported for the API and tests
+    _coworking_state,
+    coworking_denial,
+    resolve_actor_role,
+)
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
+from .work_item_completion_effects import index_artifacts_after_commit, release_workspace_for_task
+from .work_item_gated_done import DoneGate, default_gate, review_outcome
+from .work_item_hierarchy import reparent, validate_create
+from .work_item_own_task import (
+    CheckoutConflict,
+    InvalidTransition,
+    checkout_fence_value,
+    claim_conflict_holder,
+    drop_fence,
+    fence_agent,
+    is_own_task,
+    other_checkout_holder,
+    refuse_past_reviewer,
+    refuse_release,
+    release_checkout,
+    stamp_agent_checkout,
+    stamp_and_release,
+)
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -85,76 +113,8 @@ _ALLOWED_TRANSITIONS: Dict[WorkItemStatus, set] = {
 }
 
 
-class CheckoutConflict(Exception):
-    """Raised when a work item is already checked out by a different agent."""
-
-
-class InvalidTransition(Exception):
-    """Raised when a status transition is not permitted."""
-
-
-class CoWorkingPermissionError(Exception):
+class CoWorkingPermissionError(PublicMessageMixin, Exception):
     """Raised when the caller lacks board or lead permission for co-working ops."""
-
-
-_COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
-
-_AGENT_ORG_ROLE_TO_COWORKER_ROLE: Dict[str, str] = {
-    "manager": "admin",
-    "coordinator": "lead",
-    "specialist": "member",
-    "worker": "member",
-}
-
-
-async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], company_id: str) -> str:
-    """Resolve the effective coworker-permission role for actor_id (GH#8583).
-
-    Tries LLCCompanyMembership first (human user identified by UUID), then
-    AgentOrgNode (agent identified by string key).  Returns "member" when the
-    actor is unknown — this is the safest default and will be rejected by
-    enable_coworking / disable_coworking permission checks.
-    """
-    if not actor_id:
-        return "member"
-
-    # Human user path: actor_id must be a valid UUID.
-    try:
-        actor_uuid = uuid.UUID(actor_id)
-        company_uuid = uuid.UUID(company_id)
-        result = await session.execute(
-            select(LLCCompanyMembership).where(
-                LLCCompanyMembership.user_id == actor_uuid,
-                LLCCompanyMembership.company_id == company_uuid,
-            )
-        )
-        membership = result.scalar_one_or_none()
-        if membership is not None:
-            return membership.role.value if hasattr(membership.role, "value") else str(membership.role)
-    except (ValueError, AttributeError):
-        pass
-
-    # Agent path: look up AgentOrgNode by string agent_id.
-    try:
-        from models.agent_org import AgentOrgNode
-
-        company_uuid = uuid.UUID(company_id)
-        result = await session.execute(
-            select(AgentOrgNode).where(
-                AgentOrgNode.agent_id == actor_id,
-                AgentOrgNode.company_id == company_uuid,
-            )
-        )
-        node = result.scalar_one_or_none()
-        if node is not None:
-            org_role = node.org_role.value if hasattr(node.org_role, "value") else str(node.org_role)
-            return _AGENT_ORG_ROLE_TO_COWORKER_ROLE.get(org_role, "member")
-    except ImportError as exc:
-        logger.warning("AgentOrgNode model unavailable; defaulting actor_role to member: %s", exc)
-    except (ValueError, AttributeError):
-        pass
-
-    return "member"
 
 
 async def _run_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
@@ -260,19 +220,17 @@ class WorkItemService(LLCServiceBase):
         created_by_user_id: Optional[str] = None,
         labels: Optional[List[str]] = None,
         requires_approval_before: Optional[List[str]] = None,
+        wake_agents: bool = True,
     ) -> LLCWorkItem:
+        project_id, parent = await validate_create(session, self.get, company_id, type, parent_id, project_id)
         # GH#6469: inherit goal_id from parent when not explicitly provided
         resolved_goal_id: Optional[uuid.UUID] = uuid.UUID(goal_id) if goal_id else None
-        if resolved_goal_id is None and parent_id is not None:
-            parent = await self.get(session, parent_id)
-            if parent is not None and parent.goal_id is not None:
-                resolved_goal_id = parent.goal_id
+        if resolved_goal_id is None and parent is not None and parent.goal_id is not None:
+            resolved_goal_id = parent.goal_id
 
         identifier = await self._next_identifier(session, company_id)
-        # GH#13937: mirror update()'s single-assignee invariant — a creator
-        # that supplies an assignee id must not land with a NULL discriminator
-        # (that made _assignee_display() report the item as unassigned despite
-        # holding a valid assignee_agent_id/assignee_user_id).
+        # GH#13937: mirror update()'s single-assignee invariant -- an assignee id must not
+        # land with a NULL discriminator (_assignee_display() would report the item unassigned).
         resolved_assignee_type: Optional[str] = None
         if assignee_user_id:
             resolved_assignee_type = AssigneeType.USER.value
@@ -301,7 +259,8 @@ class WorkItemService(LLCServiceBase):
             requires_approval_before=_validated_approval_categories(requires_approval_before),
         )
         session.add(item)
-        await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
+        if wake_agents:  # an import passes False (#20472): it records work, it assigns none
+            await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()
         return item
 
@@ -356,6 +315,8 @@ class WorkItemService(LLCServiceBase):
             "scheduled_start",
             "scheduled_end",
         }
+        if "parent_id" in fields:  # #18978: validate before any mutation of `item`
+            fields["parent_id"] = await reparent(session, self.get, item, fields["parent_id"])
         # GH#13937: validate before any mutation of `item` below — keeps update()
         # atomic. An invalid value must raise before the single-assignee
         # invariant below has a chance to clear the sibling id on the live,
@@ -377,7 +338,8 @@ class WorkItemService(LLCServiceBase):
             )
         for key, val in fields.items():
             if key not in allowed:
-                raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
+                raise CompanyOsError(f"Field '{key}' is not updatable via WorkItemService.update()")
+        for key, val in fields.items():
             setattr(item, key, val)
         await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()
@@ -469,13 +431,16 @@ class WorkItemService(LLCServiceBase):
         The work_intent parameter is optional; omitting it preserves existing behaviour exactly.
         """
         redis_key = f"llc:checkout:{work_item_id}"
+        run_id = run_id or str(uuid.uuid4())
+        fence_value = checkout_fence_value(agent_id, run_id)
         redis = await get_async_redis_client()
 
+        acquired = False
         if redis is not None:
-            acquired = await redis.set(redis_key, agent_id, nx=True, ex=_CHECKOUT_TTL)
+            acquired = await redis.set(redis_key, fence_value, nx=True, ex=_CHECKOUT_TTL)
             if not acquired:
                 existing = await redis.get(redis_key)
-                if existing and existing != agent_id:
+                if existing and fence_agent(existing) != agent_id:
                     raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {existing}")
 
         # DB-level lock
@@ -484,27 +449,16 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            if redis is not None:
-                await redis.delete(redis_key)
-            raise ValueError(f"Work item {work_item_id} not found")
+            await drop_fence(redis, redis_key, fence_value, acquired)
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
-        if item.checkout_run_id is not None and str(item.assignee_agent_id) != agent_id:
-            if redis is not None:
-                await redis.delete(redis_key)
-            raise CheckoutConflict(f"Work item {work_item_id} already checked out by agent {item.assignee_agent_id}")
+        if holder := other_checkout_holder(item, agent_id):
+            await drop_fence(redis, redis_key, fence_value, acquired)
+            raise CheckoutConflict(f"Work item {work_item_id} already checked out by {holder}")
 
-        item.checkout_run_id = run_id or str(uuid.uuid4())
-        item.checkout_locked_at = datetime.now(timezone.utc)
-        item.assignee_agent_id = uuid.UUID(agent_id)
-        # Single-assignee invariant (#10532): `update()` enforced it, `checkout` did not (#15964).
-        item.assignee_user_id = None
-        item.assignee_type = AssigneeType.AGENT.value
-        # GH#9532 — persist intent for audit; clearing it when work_intent is absent is deliberate.
-        item.checkout_intent = work_intent
-        item.version += 1
-        if item.status in (WorkItemStatus.BACKLOG, WorkItemStatus.READY):
-            item.status = WorkItemStatus.IN_PROGRESS
-            item.started_at = item.started_at or datetime.now(timezone.utc)
+        stamp_agent_checkout(item, agent_id, run_id, work_intent)
+        if redis is not None and not acquired:  # same agent again: the fence names THIS generation
+            await redis.set(redis_key, fence_value, ex=_CHECKOUT_TTL)
 
         await session.flush()
 
@@ -528,22 +482,20 @@ class WorkItemService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         agent_id: str,
+        run_id: Optional[str] = None,
     ) -> LLCWorkItem:
-        """Release the checkout lock held by agent_id.
+        """Release the checkout lock held by agent_id; a given run_id must be the row's checkout generation (#21499).
 
-        Raises ValueError if the caller does not hold the lock.
+        Raises ValueError if the caller does not hold the lock, CheckoutConflict if a person does or run_id is stale.
         """
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
-        if item.assignee_agent_id and str(item.assignee_agent_id) != agent_id:
-            raise ValueError(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
-        item.version += 1
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
+        refuse_release(item, agent_id, run_id)
+        release_checkout(session, item, agent_id)
         await session.flush()
         return item
 
@@ -560,9 +512,7 @@ class WorkItemService(LLCServiceBase):
     ) -> LLCWorkItem:
         """Atomically claim a work item for a human user.
 
-        Redis key stores ``user:{user_id}`` (not bare UUID) so the NX check
-        is mutually exclusive with agent checkout which stores a bare UUID.
-
+        The fence stores ``user:{user_id}``, so its NX check excludes agent checkouts (``<agent>#<run>``).
         Raises CheckoutConflict if the item is already held by anyone else.
         Raises ValueError if the item is not found.
         """
@@ -570,6 +520,7 @@ class WorkItemService(LLCServiceBase):
         redis_value = f"user:{user_id}"
         redis = await get_async_redis_client()
 
+        acquired = False
         if redis is not None:
             acquired = await redis.set(redis_key, redis_value, nx=True, ex=_CHECKOUT_TTL)
             if not acquired:
@@ -582,15 +533,13 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            if redis is not None:
-                await redis.delete(redis_key)
-            raise ValueError(f"Work item {work_item_id} not found")
+            await drop_fence(redis, redis_key, redis_value, acquired)
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
-        # DB-level conflict guard — reject if already held by a different user
-        if item.assignee_user_id is not None and str(item.assignee_user_id) != user_id:
-            if redis is not None:
-                await redis.delete(redis_key)
-            raise CheckoutConflict(f"Work item {work_item_id} is already claimed by user {item.assignee_user_id}")
+        # Row lock is the authority (the fence may have expired): a live agent checkout is never overwritten.
+        if holder := claim_conflict_holder(item, user_id):
+            await drop_fence(redis, redis_key, redis_value, acquired)  # only a fence THIS call took
+            raise CheckoutConflict(f"Work item {work_item_id} is already claimed by {holder}")
 
         item.assignee_user_id = uuid.UUID(user_id)
         item.assignee_agent_id = None
@@ -604,19 +553,21 @@ class WorkItemService(LLCServiceBase):
 
         await session.flush()
 
-        if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=user_id,
-                    event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
-                )
-            except Exception:
-                logger.warning("Activity log failed for claim_human %s", work_item_id)
+        try:
+            await audit(
+                self.activity_log,
+                session,
+                company_id=company_id,
+                actor_type=ActorType.USER,
+                actor_id=user_id,
+                event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
+            )
+        except ActivityRecordError:
+            await drop_fence(redis, redis_key, redis_value, acquired)  # the DB claim rolls back (#20102)
+            raise
 
         return item
 
@@ -637,9 +588,9 @@ class WorkItemService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         if item.assignee_user_id is None or str(item.assignee_user_id) != user_id:
-            raise ValueError(f"User {user_id} does not hold claim for work item {work_item_id}")
+            raise CompanyOsError(f"User {user_id} does not hold claim for work item {work_item_id}")
 
         item.assignee_user_id = None
         item.assignee_type = None
@@ -649,24 +600,22 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"llc:checkout:{work_item_id}")
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=user_id,
+            event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before={"assignee_user_id": user_id},
+            after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
+        )
 
-        if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=user_id,
-                    event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before={"assignee_user_id": user_id},
-                    after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
-                )
-            except Exception:
-                logger.warning("Activity log failed for unclaim_human %s", work_item_id)
+        # Only once the release is audited: a failed audit rolls the DB back and the lock must survive it.
+        if (redis := await get_async_redis_client()) is not None:
+            await delete_if_value(redis, f"llc:checkout:{work_item_id}", f"user:{user_id}")  # the claim's own
 
         return item
 
@@ -695,36 +644,26 @@ class WorkItemService(LLCServiceBase):
         Raises CoWorkingPermissionError if caller_role is insufficient.
         Raises ValueError if work_item_id not found or co-worker identity is missing.
         """
-        if caller_role not in _COWORKING_ALLOWED_ROLES:
-            raise CoWorkingPermissionError(
-                f"Role {caller_role!r} does not have permission to manage co-working. "
-                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
-            )
-        # #13970: one vocabulary for the actor axis. A legacy "human" from an
-        # older caller is still accepted and normalised to "user" rather than
-        # rejected — the stored rows are migrated by 20260815_075, but an
-        # in-flight client should not start failing mid-deploy.
+        if denied := coworking_denial(caller_role):
+            raise CoWorkingPermissionError(denied)
+        # #13970: one actor vocabulary. A legacy "human" is normalised to "user", not rejected: rows are
+        # migrated by 20260815_075, but an in-flight client should not fail mid-deploy.
         if co_worker_type == CoWorkerType.HUMAN.value:
             co_worker_type = AssigneeType.USER.value
         co_type = AssigneeType(co_worker_type)
         if co_type == AssigneeType.AGENT and not co_worker_agent_id:
-            raise ValueError("co_worker_agent_id required when co_worker_type is 'agent'")
+            raise CompanyOsError("co_worker_agent_id required when co_worker_type is 'agent'")
         if co_type == AssigneeType.USER and not co_worker_user_id:
-            raise ValueError("co_worker_user_id required when co_worker_type is 'user'")
+            raise CompanyOsError("co_worker_user_id required when co_worker_type is 'user'")
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
-        before = {
-            "co_worker_type": item.co_worker_type,
-            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-            "co_working_enabled": item.co_working_enabled,
-        }
+        before = _coworking_state(item)
 
         item.co_worker_type = co_type.value
         item.co_worker_agent_id = uuid.UUID(co_worker_agent_id) if co_worker_agent_id else None
@@ -733,26 +672,20 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before=before,
-                    after={
-                        "co_worker_type": item.co_worker_type,
-                        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-                        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-                        "co_working_enabled": True,
-                    },
-                )
-            except Exception:
-                logger.warning("Activity log failed for enable_coworking %s", work_item_id)
+        actor = resolve_actor_as(actor_type, actor_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before=before,
+            after=_coworking_state(item),
+        )
 
         return item
 
@@ -771,25 +704,17 @@ class WorkItemService(LLCServiceBase):
         Raises CoWorkingPermissionError if caller_role is insufficient.
         Raises ValueError if work_item_id not found.
         """
-        if caller_role not in _COWORKING_ALLOWED_ROLES:
-            raise CoWorkingPermissionError(
-                f"Role {caller_role!r} does not have permission to manage co-working. "
-                f"Required: {sorted(_COWORKING_ALLOWED_ROLES)}"
-            )
+        if denied := coworking_denial(caller_role):
+            raise CoWorkingPermissionError(denied)
 
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
-        before = {
-            "co_worker_type": item.co_worker_type,
-            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-            "co_working_enabled": item.co_working_enabled,
-        }
+        before = _coworking_state(item)
 
         item.co_worker_type = None
         item.co_worker_agent_id = None
@@ -798,27 +723,66 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before=before,
-                    after={"co_working_enabled": False},
-                )
-            except Exception:
-                logger.warning("Activity log failed for disable_coworking %s", work_item_id)
+        actor = resolve_actor_as(actor_type, actor_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before=before,
+            after={"co_working_enabled": False},
+        )
 
         return item
 
     # ------------------------------------------------------------------
     # Status transitions
     # ------------------------------------------------------------------
+
+    async def _load_locked(self, session: AsyncSession, work_item_id: str, company_id: Optional[str]) -> LLCWorkItem:
+        """The item under its row lock; one that is missing or another company's is the same ``ValueError`` (#15952)."""
+        result = await session.execute(
+            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
+        )
+        item = result.scalar_one_or_none()
+        if item is None or (company_id is not None and str(item.company_id) != str(company_id)):
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
+        return item
+
+    @staticmethod
+    def _check_move(
+        item: LLCWorkItem, acting_user: Optional[uuid.UUID], new_status: WorkItemStatus, gate: DoneGate = DoneGate()
+    ) -> tuple[WorkItemStatus, bool]:
+        """The allowed-transition rule, with the person-only parts: no finishing past a reviewer, own tasks (#20508)."""
+        current = WorkItemStatus(item.status)
+        allowed = _ALLOWED_TRANSITIONS.get(current, set())
+        gate.refuse_unheld(item)  # an agent moves only an item it holds (#21586)
+        refuse_past_reviewer(item, acting_user, new_status)
+        own = is_own_task(item, acting_user, new_status)
+        if not own and new_status not in allowed:
+            raise InvalidTransition(
+                f"Cannot transition from {current.value!r} to {new_status.value!r}. "
+                f"Allowed: {[s.value for s in allowed]}"
+            )
+        return current, own
+
+    async def _refuse_unresolved_blockers(
+        self, session: AsyncSession, work_item_id: str, item: LLCWorkItem, relation_svc: Optional[Any]
+    ) -> None:
+        """GH#8252: block BLOCKED→IN_PROGRESS while blockers remain.
+
+        #15931 ungated this (see test_blocked_by_rule_fires_15931.py). The blocked item is the source of its
+        `blocked_by` rows; the blockers are their targets (#20187).
+        """
+        svc = relation_svc if relation_svc is not None else WorkItemRelationService()
+        cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
+        if await svc.has_unresolved_blockers(session, work_item_id, cid):
+            raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
 
     async def transition_status(
         self,
@@ -827,168 +791,98 @@ class WorkItemService(LLCServiceBase):
         new_status: WorkItemStatus,
         company_id: Optional[str] = None,
         relation_svc: Optional[Any] = None,
+        acting_user: Optional[uuid.UUID] = None,
+        done_gate: Optional[DoneGate] = None,
     ) -> LLCWorkItem:
-        """Transition a work item to a new status, enforcing the state machine."""
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
-        item = result.scalar_one_or_none()
-        # #15952: loaded by id alone; same message as missing, to disclose nothing.
-        if item is None or (company_id is not None and str(item.company_id) != str(company_id)):
-            raise ValueError(f"Work item {work_item_id} not found")
+        """Transition a work item, enforcing the state machine unless it is *acting_user*'s own task.
 
-        current = WorkItemStatus(item.status)
-        allowed = _ALLOWED_TRANSITIONS.get(current, set())
-        if new_status not in allowed:
-            raise InvalidTransition(
-                f"Cannot transition from {current.value!r} to {new_status.value!r}. "
-                f"Allowed: {[s.value for s in allowed]}"
-            )
+        A move to done is ``transition_to_done``: the one path, with the review gate and the completion audit row.
+        """
+        if new_status == WorkItemStatus.DONE:
+            gate = done_gate or default_gate()  # a caller that brings no gate gets the real one, never none
+            return await self.transition_to_done(session, work_item_id, company_id, **gate.finish_args(acting_user))
+        item = await self._load_locked(session, work_item_id, company_id)
+        current, own = self._check_move(item, acting_user, new_status, done_gate or DoneGate())
+        if not own and current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
+            await self._refuse_unresolved_blockers(session, work_item_id, item, relation_svc)
 
-        # GH#8252: block BLOCKED→IN_PROGRESS while blockers remain. #15931 ungated
-        # this (nothing outside its own tests passed `relation_svc`; see test_blocked_by_rule_fires_15931.py).
-        # The blocked item is the source of its `blocked_by` rows; the blockers are their targets (#20187).
-        if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
-            svc = relation_svc if relation_svc is not None else WorkItemRelationService()
-            cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
-            if await svc.has_unresolved_blockers(session, work_item_id, cid):
-                raise InvalidTransition("Cannot move to in_progress: item has unresolved blocked_by relations")
-
-        item.status = new_status
-        now = datetime.now(timezone.utc)
-        if new_status == WorkItemStatus.IN_PROGRESS and item.started_at is None:
-            item.started_at = now
-        elif new_status == WorkItemStatus.DONE:
-            item.completed_at = now
-            item.checkout_run_id = None
-            item.checkout_locked_at = None
-        elif new_status == WorkItemStatus.CANCELLED:
-            item.cancelled_at = now
+        stamp_and_release(session, item, new_status, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
-
-        if new_status == WorkItemStatus.DONE:
-            await self._trigger_artifact_ingest(session, item)
-
-        # Release per-task workspace on terminal transitions (MVA-1152)
-        if new_status in {WorkItemStatus.DONE, WorkItemStatus.CANCELLED}:
-            try:
-                from services.task_workspace import release_for_task
-
-                await release_for_task(work_item_id, session)
-            except Exception:
-                logger.warning(
-                    "workspace release skipped for task=%s new_status=%s",
-                    work_item_id,
-                    new_status.value,
-                    exc_info=True,
-                )
-
+        if new_status == WorkItemStatus.CANCELLED:  # MVA-1152: the per-task workspace goes with a terminal status
+            await release_workspace_for_task(work_item_id, session)
         return item
 
     # ------------------------------------------------------------------
-    # Gated done transition (GH#8234)
+    # The done transition (GH#8234, #21503): every route to done ends here
     # ------------------------------------------------------------------
 
     async def transition_to_done(
         self,
         session: AsyncSession,
         work_item_id: str,
-        company_id: str,
+        company_id: Optional[str] = None,
         *,
         actor_agent_id: Optional[str] = None,
         actor_user_id: Optional[str] = None,
         is_board_override: bool = False,
         review_gate_svc: Optional[Any] = None,
         handoff_svc: Optional[Any] = None,
-        reviewer_user_id: Optional[str] = None,
+        is_agent: bool = False,
+        acting_user: Optional[uuid.UUID] = None,
     ) -> "LLCWorkItem":
-        """Transition a work item to DONE, enforcing human review gate policy.
+        """Move an item to DONE: company check, transition rules, review gate (a person is never gated), audit row.
 
-        If the gate requires human review and actor is an agent:
-        - Blocks the DONE transition.
-        - Calls HandoffService.agent_to_human to move item to IN_REVIEW.
-        - Returns the item in IN_REVIEW state (not DONE).
-
-        If actor is human (actor_user_id set) or is_board_override is True:
-        - Allows DONE transition directly.
-        - Board override is logged in the activity log.
-
-        Raises InvalidTransition if the current state does not permit DONE.
+        Raises ValueError for a missing or other company's item, InvalidTransition for a refused move.
         """
-        result = await session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
-        )
-        item = result.scalar_one_or_none()
-        if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+        item = await self._load_locked(session, work_item_id, company_id)
+        company_id = company_id or str(item.company_id)
+        gate = DoneGate(review_gate_svc, handoff_svc, actor_agent_id, is_agent)
+        current, own = self._check_move(item, acting_user, WorkItemStatus.DONE, gate)
+        who = (actor_agent_id, actor_user_id, is_board_override)
+        if (held := await review_outcome(session, item, company_id, gate, who, acting_user)) is not None:
+            return held
+        await self._complete(session, item, current, own, company_id, who)
+        return item
 
-        current = WorkItemStatus(item.status)
-        allowed = _ALLOWED_TRANSITIONS.get(current, set())
-        if WorkItemStatus.DONE not in allowed:
-            raise InvalidTransition(
-                f"Cannot transition from {current.value!r} to 'done'. " f"Allowed: {[s.value for s in allowed]}"
-            )
-
-        actor_is_agent = actor_agent_id is not None and actor_user_id is None
-
-        if not is_board_override and actor_is_agent and review_gate_svc is not None:
-            item_type = WorkItemType(item.type)
-            requires, reviewer_role = await review_gate_svc.requires_review(session, company_id, item_type)
-            if requires:
-                if handoff_svc is not None:
-                    return await handoff_svc.agent_to_human(
-                        session,
-                        work_item_id,
-                        company_id,
-                        reviewer_user_id=reviewer_user_id,
-                        agent_notes=None,
-                        actor_agent_id=actor_agent_id,
-                    )
-                raise InvalidTransition(
-                    f"Work item {work_item_id} requires human review before it can be marked done. "
-                    "No HandoffService available to initiate handoff."
-                )
-
-        now = datetime.now(timezone.utc)
-        item.status = WorkItemStatus.DONE
-        item.completed_at = now
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
+    async def _complete(
+        self,
+        session: AsyncSession,
+        item: LLCWorkItem,
+        current: WorkItemStatus,
+        own: bool,
+        company_id: str,
+        actor: tuple,
+    ) -> None:
+        """Stamp the item done, write the completion audit row, then run the effects that cannot be rolled back."""
+        stamp_and_release(session, item, WorkItemStatus.DONE, datetime.now(timezone.utc), own=own)
         item.version += 1
         await session.flush()
-
+        await self._record_completed(session, str(item.id), current, company_id, actor)
+        # External effects only once the audit has succeeded (#20102); the Chroma upsert waits for the commit (#21586)
         await self._trigger_artifact_ingest(session, item)
+        await release_workspace_for_task(str(item.id), session)
 
-        # Release per-task workspace (MVA-1152)
-        try:
-            from services.task_workspace import release_for_task
-
-            await release_for_task(work_item_id, session)
-        except Exception:
-            logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
-
-        if self.activity_log:
-            try:
-                meta: dict = {}
-                if is_board_override:
-                    meta["board_override"] = True
-                    meta["actor_user_id"] = actor_user_id
-
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=actor_user_id or actor_agent_id or work_item_id,
-                    event_type=ActivityEventType.WORK_ITEM_COMPLETED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before={"status": current.value},
-                    after={"status": WorkItemStatus.DONE.value, **meta},
-                )
-            except Exception:
-                logger.warning("Activity log failed for transition_to_done %s", work_item_id)
-
-        return item
+    async def _record_completed(
+        self, session: AsyncSession, work_item_id: str, before: WorkItemStatus, company_id: str, who: tuple
+    ) -> None:
+        """The "work item completed" audit row; *who* is (agent id, user id, board override), which it names."""
+        actor_agent_id, actor_user_id, is_board_override = who
+        actor = resolve_actor(actor_agent_id, actor_user_id)
+        meta = {"board_override": True, "actor_user_id": actor_user_id} if is_board_override else {}
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COMPLETED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before={"status": before.value},
+            after={"status": WorkItemStatus.DONE.value, **meta},
+        )
 
     # ------------------------------------------------------------------
     # Comment helpers
@@ -1060,27 +954,13 @@ class WorkItemService(LLCServiceBase):
                 )
         return f"WI-{uuid.uuid4().hex[:8].upper()}"
 
-    async def _trigger_artifact_ingest(
-        self,
-        session: AsyncSession,
-        item: LLCWorkItem,
-    ) -> None:
-        """Non-fatally call ArtifactIngestor for all pending products on this item."""
-        try:
-            from ..kb.artifact_ingestor import ArtifactIngestor
-
-            ingestor = ArtifactIngestor()
-            await ingestor.ingest_all_pending(
-                session,
-                work_item_id=str(item.id),
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_identifier=item.identifier,
-                company_id=str(item.company_id),
-                completed_at=item.completed_at,
-            )
-        except Exception:
-            logger.warning(
-                "ArtifactIngestor failed for work item %s — transition still succeeds",
-                item.id,
-                exc_info=True,
-            )
+    async def _trigger_artifact_ingest(self, session: AsyncSession, item: LLCWorkItem) -> None:
+        """Index the item's pending artifacts once *session* commits; a rollback indexes nothing (#21586)."""
+        job = dict(
+            work_item_id=str(item.id),
+            project_id=str(item.project_id) if item.project_id else None,
+            identifier=item.identifier,
+            company_id=str(item.company_id),
+            completed_at=item.completed_at,
+        )
+        await run_after_commit(session, lambda: index_artifacts_after_commit(**job), f"index artifacts of {item.id}")

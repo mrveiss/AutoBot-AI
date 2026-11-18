@@ -367,7 +367,7 @@ def _seeded_service_heartbeat_session(node, seeded_service: _ServiceRow) -> Fake
     """Drives `update_node_heartbeat` with ONE pre-seeded existing `Service` row.
 
     The FIRST `execute()` is `_find_node_by_id_or_hostname`'s node lookup.
-    The SECOND is `_upsert_service`'s existing-row lookup -- returns the
+    The SECOND is the batch's lookup of the node's rows -- returns the
     seeded `_ServiceRow`, taking the update path where the churn signal lives.
     Every later call (`_remove_stale_services`'s stale-service scan) resolves
     to "nothing found".
@@ -385,7 +385,7 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
     transition the node to DEGRADED because `_update_existing_service`
     detects the rise against that prior row, through the real
     `update_node_heartbeat` -> `_update_node_metrics` ->
-    `_sync_discovered_services` -> `_upsert_service` ->
+    `_sync_discovered_services` -> `_upsert_services` ->
     `_node_status_and_reason` chain, and persists the churn timestamp for the
     NEXT heartbeat to read.
     """
@@ -402,6 +402,7 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
         os_info=None,
     )
     seeded_service = _ServiceRow(extra_data={"n_restarts": 44})
+    seeded_service.service_name = "autobot-vnc"  # the batch lookup keys rows by name (#20250)
     session = _seeded_service_heartbeat_session(node, seeded_service)
     service = reconciler.ReconcilerService()
 

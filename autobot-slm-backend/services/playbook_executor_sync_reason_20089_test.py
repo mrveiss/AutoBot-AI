@@ -205,3 +205,8 @@ def test_a_long_first_line_cannot_hide_the_transient_marker() -> None:
 
 def test_a_long_failure_with_no_marker_stays_not_transient() -> None:
     assert not gf.is_transient(gf.failure_detail(f"fatal: {'x' * 1000}".encode()))
+
+
+def test_a_long_first_message_leaves_room_for_the_next() -> None:
+    detail = gf.failure_detail(f"fatal: {'x' * 1000}\nerror: the second reason\n".encode())
+    assert "error: the second" in detail and len(detail) <= gf.GIT_FAILURE_DETAIL_CHARS

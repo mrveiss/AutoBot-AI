@@ -3,40 +3,27 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * Coverage for #12386 — the #12376 repoint of useBatchProcessingApi.toggleSchedule.
+ * Coverage for #12386 — useBatchProcessingApi.toggleSchedule.
  *
- * PR #12376 corrected the prefix to /api/batch-jobs/schedules/{id} and issues a
- * PATCH with body `{ enabled }`. The backend route is still missing (tracked in
- * #12380), so these tests assert the *intended* request shape the method sends,
- * not a live round-trip.
+ * PATCH /api/batch-jobs/schedules/{id} with body `{ enabled }` (#12376, served since #12380).
+ * Since #21649 the call goes through the typed `apiClient.call` and rejects on failure
+ * instead of resolving null, so the caller can report it.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useBatchProcessingApi } from '../useBatchProcessing'
+const { mockCall } = vi.hoisted(() => ({ mockCall: vi.fn() }))
 
-const mockPatch = vi.fn()
-
-vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-    patch: mockPatch
-  })
-}))
-
-vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
-}))
-
+vi.mock('@/utils/ApiClient', () => ({ default: { call: mockCall, post: vi.fn() } }))
+vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/utils/debugUtils', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() })
+  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
+}))
+vi.mock('@/composables/useProbeBackedHealth', () => ({
+  useProbeBackedHealth: () => vi.fn(),
+  probeStatusToLegacy: vi.fn(),
 }))
 
-vi.mock('@/utils/cacheManagement', () => ({
-  showSubtleErrorNotification: vi.fn()
-}))
+import { useBatchProcessingApi } from '../useBatchProcessing'
 
 describe('useBatchProcessingApi.toggleSchedule (#12386)', () => {
   beforeEach(() => {
@@ -44,33 +31,34 @@ describe('useBatchProcessingApi.toggleSchedule (#12386)', () => {
   })
 
   it('PATCHes /api/batch-jobs/schedules/{id} with { enabled: true }', async () => {
-    mockPatch.mockResolvedValue({ id: 'sched-1', enabled: true })
+    mockCall.mockResolvedValue({ schedule_id: 'sched-1', enabled: true })
     const { toggleSchedule } = useBatchProcessingApi()
 
     await toggleSchedule('sched-1', true)
 
-    expect(mockPatch).toHaveBeenCalledWith('/api/batch-jobs/schedules/sched-1', {
-      enabled: true
+    expect(mockCall).toHaveBeenCalledWith('patch', '/api/batch-jobs/schedules/{schedule_id}', {
+      path: { schedule_id: 'sched-1' },
+      body: { enabled: true },
     })
   })
 
   it('forwards enabled=false in the PATCH body', async () => {
-    mockPatch.mockResolvedValue({ id: 'sched-2', enabled: false })
+    mockCall.mockResolvedValue({ schedule_id: 'sched-2', enabled: false })
     const { toggleSchedule } = useBatchProcessingApi()
 
     await toggleSchedule('sched-2', false)
 
-    expect(mockPatch).toHaveBeenCalledWith('/api/batch-jobs/schedules/sched-2', {
-      enabled: false
+    expect(mockCall).toHaveBeenCalledWith('patch', '/api/batch-jobs/schedules/{schedule_id}', {
+      path: { schedule_id: 'sched-2' },
+      body: { enabled: false },
     })
   })
 
-  it('returns null and does not throw when the PATCH rejects (route missing, #12380)', async () => {
-    mockPatch.mockRejectedValue(new Error('405 Method Not Allowed'))
+  it('rejects with the backend error when the PATCH fails (#21649)', async () => {
+    const failure = new Error('HTTP 404')
+    mockCall.mockRejectedValue(failure)
     const { toggleSchedule } = useBatchProcessingApi()
 
-    const result = await toggleSchedule('sched-3', true)
-
-    expect(result).toBeNull()
+    await expect(toggleSchedule('sched-3', true)).rejects.toBe(failure)
   })
 })

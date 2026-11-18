@@ -330,18 +330,18 @@ def _checked(path: Path, allowed_roots: Sequence[str]) -> Path:
 def iter_lines(path: Path, result: ReadResult, allowed_roots: Sequence[str]) -> Iterator[str]:
     """Lines of the validated ``path`` (gunzipped for ``.gz``), bounded; limit hits are recorded on ``result``."""
     safe = _checked(path, allowed_roots)
-    with _open_no_follow(safe) as handle:
+    with _open_no_follow(safe, allowed_roots) as handle:
         yield from _lines_of(handle, result)
 
 
 @contextmanager
-def _open_no_follow(safe: Path) -> Iterator[Any]:
+def _open_no_follow(safe: Path, allowed_roots: Sequence[str]) -> Iterator[Any]:
     """Binary handle on the validated ``safe`` (gunzipped for ``.gz``), refusing a symlink swapped in since validation.
 
-    ``O_NOFOLLOW`` makes the open fail (``OSError``, ELOOP) when the FINAL component is a symlink. It does not
-    cover parent components: a directory swapped for a symlink between validation and open is still followed.
+    ``O_NOFOLLOW`` alone covers only the FINAL component; :func:`_open_walked` applies it to every directory
+    on the way down from the allowed root, so a swapped parent is refused too (#20136).
     """
-    with os.fdopen(_open_regular_fd(safe), "rb") as raw:
+    with os.fdopen(_open_regular_fd(safe, allowed_roots), "rb") as raw:
         if safe.suffix != _GZIP_SUFFIX:
             yield raw
             return
@@ -349,13 +349,48 @@ def _open_no_follow(safe: Path) -> Iterator[Any]:
             yield unzipped
 
 
-def _open_regular_fd(safe: Path) -> int:
+def _root_and_parts(safe: Path, allowed_roots: Sequence[str]) -> Tuple[str, Tuple[str, ...]]:
+    """The first allowed root (realpath'd, as ``validate_path`` does) containing ``safe``, and ``safe`` below it."""
+    for root in allowed_roots:
+        real_root = Path(os.path.realpath(root))
+        try:
+            return str(real_root), safe.relative_to(real_root).parts
+        except ValueError:
+            continue
+    raise ValueError("Path is outside allowed directories")
+
+
+def _open_walked(safe: Path, allowed_roots: Sequence[str]) -> int:
+    """A read-only descriptor on ``safe``, reached by ``dir_fd`` opens from the allowed root, never by its full path.
+
+    Each directory below the root is opened ``O_NOFOLLOW | O_DIRECTORY`` relative to the descriptor already held,
+    so a component swapped for a symlink after validation fails (``OSError``, ELOOP/ENOTDIR) instead of being
+    followed out of the root. The root itself is opened by its realpath, so a symlinked root the validator
+    accepted still works; its own ancestors are trusted configuration. Every intermediate descriptor is closed.
+    """
+    root, parts = _root_and_parts(safe, allowed_roots)
+    if not parts:
+        raise ValueError("not a regular file")
+    dir_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    dir_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, dir_flags, dir_fd=dir_fd)
+            os.close(dir_fd)
+            dir_fd = child
+        # ``O_NONBLOCK`` keeps a FIFO swapped in after validation from hanging the open; no effect on regular files.
+        return os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+def _open_regular_fd(safe: Path, allowed_roots: Sequence[str]) -> int:
     """A read-only descriptor on ``safe``, which must be a regular file; closed again on every failure path.
 
-    ``O_NONBLOCK`` keeps a FIFO swapped in after validation from hanging the open; it has no effect on reads
-    of a regular file. ``ValueError`` (like a validation failure) when the target is not a regular file.
+    ``ValueError`` (like a validation failure) when the target is not a regular file.
+    Assumes Linux/POSIX ``openat`` semantics (``dir_fd``, ``O_DIRECTORY``, ``O_NOFOLLOW``).
     """
-    fd = os.open(safe, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    fd = _open_walked(safe, allowed_roots)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise ValueError("not a regular file")

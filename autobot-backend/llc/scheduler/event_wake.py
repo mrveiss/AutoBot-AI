@@ -28,17 +28,15 @@ The rules, each kept in exactly one place:
 """
 
 import uuid
-from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
-from sqlalchemy import event, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session, SessionTransaction
 
 from autobot_shared.logging_manager import get_logger
-from models.agent_org import AgentOrgNode
 
-from ..models.enums import HeartbeatInvocationSource, LLCAgentStatus
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, HeartbeatInvocationSource
+from ..services.after_commit import defer_until_commit
+from .dispatch_gate import as_uuid, resolve_agent
 from .run_status import active_run
 
 logger = get_logger(__name__)
@@ -53,52 +51,15 @@ EVENT_WAKE_SOURCES = frozenset(
     }
 )
 
-#: Agent statuses an event never wakes. ``paused`` is the dormant state.
-UNWAKEABLE_STATUSES = frozenset(
-    {LLCAgentStatus.PAUSED.value, LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value}
-)
-
-_PENDING_KEY = "llc_event_wake_pending"
-_HOOKED_KEY = "llc_event_wake_hooked"
-
-
-@dataclass
-class _PendingDispatch:
-    agent: Dict[str, Any]
-    run_id: uuid.UUID
-    context: Dict[str, Any]
-    transaction: Optional[SessionTransaction]
-
-
-def _as_uuid(value: Union[str, uuid.UUID, None]) -> Optional[uuid.UUID]:
-    if value is None or isinstance(value, uuid.UUID):
-        return value
-    try:
-        return uuid.UUID(str(value))
-    except ValueError:
-        return None
-
-
-async def _resolve_agent(session: AsyncSession, company_id: uuid.UUID, agent_ref: Any) -> Optional[Any]:
-    """The agent's ``(agent_id, status)`` by slug or node PK, inside *company_id* only."""
-    match = AgentOrgNode.agent_id == str(agent_ref)
-    node_pk = _as_uuid(agent_ref)
-    if node_pk is not None:
-        match = or_(match, AgentOrgNode.id == node_pk)
-    result = await session.execute(
-        select(AgentOrgNode.agent_id, AgentOrgNode.status).where(AgentOrgNode.company_id == company_id, match).limit(1)
-    )
-    return result.first()
-
 
 async def _wakeable_slug(session: AsyncSession, company_id: Any, agent_ref: Any) -> Optional[str]:
     """The slug to wake, or ``None`` when the agent is absent, not wakeable, or busy."""
-    cid = _as_uuid(company_id)
-    row = await _resolve_agent(session, cid, agent_ref) if cid is not None and agent_ref else None
+    cid = as_uuid(company_id)
+    row = await resolve_agent(session, cid, agent_ref) if cid is not None and agent_ref else None
     if row is None:
         logger.debug("Event wake: no agent %r in company %s", agent_ref, company_id)
         return None
-    if (row.status or "") in UNWAKEABLE_STATUSES:
+    if (row.status or "") in UNDISPATCHABLE_AGENT_STATUSES:
         logger.info("Event wake skipped: agent %s is %s", row.agent_id, row.status)
         return None
     active = await active_run(session, row.agent_id)  # a stale (crashed) run does not count
@@ -130,7 +91,7 @@ async def wake_agent(
 
     try:
         run, agent = await get_heartbeat_scheduler().trigger_manual(session, slug, source=reason)
-    except ValueError as exc:  # unconfigured agent: the user's write still stands
+    except ValueError as exc:  # unconfigured or refused by the gate: the user's write still stands
         logger.warning("Event wake skipped: agent %s (%s) could not be woken: %s", slug, reason.value, exc)
         return None
     wake_context = {**(context or {}), "wake_reason": reason.value}
@@ -142,46 +103,20 @@ async def wake_agent(
 
 
 def _dispatch_after_commit(session: AsyncSession, agent: Dict[str, Any], run_id: uuid.UUID, context: Dict) -> None:
-    """Queue the dispatch on *session*; it fires on commit and is dropped on rollback."""
-    sync = session.sync_session
-    if not sync.info.get(_HOOKED_KEY):
-        event.listen(sync, "after_commit", _on_commit)
-        event.listen(sync, "after_soft_rollback", _on_rollback)
-        sync.info[_HOOKED_KEY] = True
-    txn = sync.get_nested_transaction() or sync.get_transaction()
-    sync.info.setdefault(_PENDING_KEY, []).append(_PendingDispatch(agent, run_id, context, txn))
+    """Queue the dispatch on *session*; it fires on commit and is dropped on rollback.
 
-
-def _on_commit(sync: Session) -> None:
-    """Dispatch every queued wake; a dispatch that raises is logged, never raised.
-
-    This runs inside ``commit()`` after the data is durable, so an exception here
-    would make the caller's write look failed when it succeeded. ``dispatch_run``
-    cannot write a FAILED status from this synchronous hook; the run stays QUEUED,
-    stops counting as busy once it is stale, and the stalled-run sweep (#16817)
-    closes it out.
+    ``dispatch_run`` runs synchronously inside the ``after_commit`` hook. A failure is logged, never raised: it
+    would make the caller's write look failed after the data is durable. ``dispatch_run`` cannot write a FAILED
+    status from this synchronous hook; the run stays QUEUED, stops counting as busy once it is stale, and the
+    stalled-run sweep (#16817) closes it out.
     """
     from .heartbeat_scheduler import get_heartbeat_scheduler
 
-    for wake in sync.info.pop(_PENDING_KEY, []):
-        try:
-            get_heartbeat_scheduler().dispatch_run(wake.agent, wake.run_id, wake.context)
-        except Exception:
-            logger.exception("Event wake: dispatch of run %s failed after commit", wake.run_id)
+    defer_until_commit(
+        session,
+        lambda: get_heartbeat_scheduler().dispatch_run(agent, run_id, context),
+        f"event wake dispatch of run {run_id}",
+    )
 
 
-def _within(txn: Optional[SessionTransaction], ancestor: SessionTransaction) -> bool:
-    while txn is not None:
-        if txn is ancestor:
-            return True
-        txn = txn.parent
-    return False
-
-
-def _on_rollback(sync: Session, previous_transaction: SessionTransaction) -> None:
-    """Drop the dispatches whose run row this rollback (outer or savepoint) undid."""
-    pending = sync.info.get(_PENDING_KEY, [])
-    pending[:] = [wake for wake in pending if not _within(wake.transaction, previous_transaction)]
-
-
-__all__ = ["EVENT_WAKE_SOURCES", "UNWAKEABLE_STATUSES", "wake_agent"]
+__all__ = ["EVENT_WAKE_SOURCES", "wake_agent"]

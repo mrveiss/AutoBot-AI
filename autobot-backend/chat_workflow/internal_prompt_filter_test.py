@@ -120,7 +120,7 @@ class _FakeManager:
         # Model echoed the internal prompt then produced the real answer.
         yield ([f"{ECHO}\n\n{REAL_ANSWER}"], None, False)
 
-    async def _persist_conversation(self, session_id, session, message, llm_response):
+    async def _persist_conversation(self, session_id, session, message, llm_response, model=None):
         self.persisted["conversation"] = llm_response
 
     async def _persist_workflow_messages(self, session_id, workflow_messages, all_llm_responses, **_kwargs):

@@ -25,15 +25,15 @@ def parse_db_url(url: str) -> dict:
     The one parser -- ``runner._parse_db_url`` delegates here. Missing parts fall
     back to the SLM control-plane identity in ``autobot_shared.postgres_identity``.
     """
-    from urllib.parse import urlparse
+    from urllib.parse import unquote, urlparse
 
     parsed = urlparse(url.replace("postgresql+asyncpg://", "postgresql://"))
     return {
         "host": parsed.hostname or pg.SLM_DB_HOST,
         "port": parsed.port or pg.DB_PORT,
         "database": parsed.path.lstrip("/") if parsed.path else pg.SLM_DB_NAME,
-        "user": parsed.username or pg.SLM_DB_ROLE,
-        "password": parsed.password,
+        "user": unquote(parsed.username) if parsed.username else pg.SLM_DB_ROLE,
+        "password": unquote(parsed.password) if parsed.password else parsed.password,
     }
 
 

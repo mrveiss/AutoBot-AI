@@ -509,7 +509,7 @@ def test_update_code_source_returns_false_when_only_checkout_fails(tmp_path):
     assert asyncio.run(executor._update_code_source())
 
 
-def test_execute_playbook_refuses_detached_run_on_sync_failure():
+def test_execute_playbook_refuses_detached_run_on_sync_failure(tmp_path):
     """The second real defect from review round 2: a failed/timed-out code_source
     sync used to be silently discarded, so `execute_playbook` deployed
     whatever revision code_source held and could return `success: True` --
@@ -523,7 +523,7 @@ def test_execute_playbook_refuses_detached_run_on_sync_failure():
     `_update_code_source`'s result was discarded and this early return did
     not exist at all.
     """
-    executor = playbook_executor.PlaybookExecutor()
+    executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
 
     async def _sync_failed():
         return "git fetch exited 1: x"
@@ -537,7 +537,7 @@ def test_execute_playbook_refuses_detached_run_on_sync_failure():
     assert "sync failed" in result["output"]
 
 
-def test_execute_playbook_continues_non_detached_despite_sync_failure():
+def test_execute_playbook_continues_non_detached_despite_sync_failure(tmp_path):
     """The ordinary per-role/per-node restart path must keep its original
     best-effort behaviour -- `manage-service.yml` barely depends on
     code_source being current, and refusing every restart because of a
@@ -547,7 +547,7 @@ def test_execute_playbook_continues_non_detached_despite_sync_failure():
     the FileNotFoundError the very next line raises, rather than the
     sync-failure dict the detached branch returns instead.
     """
-    executor = playbook_executor.PlaybookExecutor()
+    executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
 
     async def _sync_failed():
         return "git fetch exited 1: x"

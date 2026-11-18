@@ -166,7 +166,7 @@ SLM scheduled check (daily, 02:00)
   │
   └─ for policy=full nodes: auto-apply + reboot (non-peak hours only)
 
-Operator: POST /api/updates/apply → Ansible system-update.yml
+Operator: POST /api/updates/apply → Ansible apply-system-updates.yml
 ```
 
 ### Playbook

@@ -288,7 +288,7 @@ async function applyTemplate() {
 .picker-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .picker-dropdown {
@@ -525,7 +525,7 @@ async function applyTemplate() {
 
 .btn-apply {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
 }
 

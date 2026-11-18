@@ -39,10 +39,10 @@ function "cache_to" {
 }
 
 group "smoke" {
-  targets = ["backend", "slm", "frontend"]
+  targets = ["backend", "slm", "frontend", "slm-gui"]
 }
 
-# The hardened run also starts the SLM-only GUI under the slm profile (#18585).
+# The hardened run also starts the SLM GUI on its own (#18585).
 group "hardened" {
   targets = ["backend", "slm", "frontend", "slm-gui"]
 }

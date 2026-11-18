@@ -21,6 +21,7 @@ from knowledge.facts import FactsMixin
 from knowledge.index import IndexMixin
 from knowledge.metadata import MetadataMixin
 from knowledge.relations import RelationsMixin
+from knowledge.retrieval_invalidation import invalidating_writes
 from knowledge.search import SearchMixin
 from knowledge.stats import StatsMixin
 from knowledge.suggestions import SuggestionsMixin
@@ -30,6 +31,7 @@ from knowledge.versioning import VersioningMixin
 logger = get_logger(__name__)
 
 
+@invalidating_writes
 class KnowledgeBase(
     KnowledgeBaseCore,
     StatsMixin,

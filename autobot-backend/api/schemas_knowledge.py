@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from api.schemas_knowledge_graph import GraphRequest, GraphStats  # noqa: F401  (GraphRequest re-export)
 from api.schemas_knowledge_share import ShareKnowledgeRequest  # noqa: F401 -- re-export (#18795)
 from autobot_memory_graph.core import (
     ENTITY_TYPES,
@@ -21,7 +22,11 @@ from autobot_memory_graph.core import (
     canonical_relation_type,
 )
 from autobot_shared.env_utils import env_float
-from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_RELATION_DEPTH
+from constants.rag_graph_constants import (
+    RAG_GRAPH_PATH_DEPTH,
+    RAG_GRAPH_TRAVERSAL_DEPTH,
+    RAG_RELATION_DEPTH,
+)
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -424,7 +429,7 @@ class KnowledgeMultiSourceGraphResponse(BaseModel):
 
     success: bool
     data: Dict[str, Any]
-    stats: Dict[str, Any]
+    stats: GraphStats
 
 
 # ---------------------------------------------------------------------------
@@ -2927,7 +2932,7 @@ class RestoreRequest(BaseModel):
         ...,
         min_length=1,
         max_length=500,
-        description="Path to backup file to restore",
+        description="Filename of the backup to restore, from the backups list",
     )
     overwrite_existing: bool = Field(
         default=False,
@@ -2971,21 +2976,15 @@ class DeleteBackupRequest(BaseModel):
         ...,
         min_length=1,
         max_length=500,
-        description="Path to backup file to delete",
+        description="Filename of the backup to delete, from the backups list",
     )
 
     @field_validator("backup_file")
     @classmethod
     def validate_backup_file(cls, v):
-        """Validate backup file path (Issue #419).
-
-        Uses contains_dotdot_traversal (not contains_path_traversal) because
-        backup_file is a full filesystem path — absolute paths legitimately
-        contain forward-slashes.  Only dotdot sequences and null bytes are
-        genuine traversal attacks here.  (#9670)
-        """
-        if contains_dotdot_traversal(v):
-            raise ValueError("Path traversal not allowed in backup_file")
+        """A filename only (#19721). ``.partial`` is a backup still being written, so it is refused too."""
+        if contains_path_traversal(v) or "\x00" in v or v.endswith(".partial"):
+            raise ValueError("backup_file must be a backup's filename")
         return v
 
 
@@ -4507,16 +4506,6 @@ class ContextRequest(BaseModel):
     max_context_length: int = Field(4000, ge=500, le=16000, description="Maximum context length in characters")
     include_documentation: bool = Field(True, description="Include documentation in context")
     include_relations: bool = Field(True, description="Include related facts in context")
-
-
-class GraphRequest(BaseModel):
-    """Request model for multi-source knowledge graph."""
-
-    max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=3, description="Maximum relation depth")
-    include_categories: bool = Field(True, description="Include category nodes")
-    include_relations: bool = Field(True, description="Include fact relations")
-    category_filter: str | None = Field(None, description="Filter by category path")
 
 
 # ---------------------------------------------------------------------------

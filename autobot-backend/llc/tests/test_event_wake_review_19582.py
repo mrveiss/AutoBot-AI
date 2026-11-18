@@ -120,7 +120,9 @@ async def test_an_unconfigured_agent_does_not_fail_the_assignment(factory, dispa
     assert "not found or not configured" in caplog.text
 
 
-async def test_a_dispatch_that_raises_after_commit_does_not_fail_the_commit(factory, caplog) -> None:  # noqa: ANN001
+async def test_a_dispatch_that_raises_after_commit_does_not_fail_the_commit(
+    factory, dispatched, caplog
+) -> None:  # noqa: ANN001
     node = await _agent(factory)
     item_id = await _item(factory)
     with patch.object(LLCHeartbeatScheduler, "dispatch_run", side_effect=RuntimeError("no running event loop")):

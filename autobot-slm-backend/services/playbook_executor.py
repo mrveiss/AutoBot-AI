@@ -33,9 +33,12 @@ from services.inventory_builder import (
     write_temp_extra_vars,
     write_temp_inventory,
 )
+from services.playbook_code_source_gate import refusal_without_code_source
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.process_group import KILL_GRACE_S, kill_process_group
 from services.provision_progress import TaskProgressTracker
+from services.rollback_target import deploy_ref_vars
+from services.sync_restart import reject_negated_tags
 from services.unit_names import validate_unit_extra_vars
 
 logger = logging.getLogger(__name__)
@@ -428,6 +431,7 @@ class PlaybookExecutor:
         extra_vars_file: Path | None,
         check_mode: bool,
         inventory_path: Path | None = None,
+        skip_tags: List[str] | None = None,
     ) -> List[str]:
         """
         Build Ansible command with parameters.
@@ -446,8 +450,10 @@ class PlaybookExecutor:
 
         if limit:
             cmd.extend(["--limit", ",".join(limit)])
-        if tags:
-            cmd.extend(["--tags", ",".join(tags)])
+        reject_negated_tags(tags)  # #20743: --tags has no negation; a skip goes in skip_tags
+        for flag, values in (("--tags", tags), ("--skip-tags", skip_tags)):
+            if values:
+                cmd.extend([flag, ",".join(values)])
         if extra_vars_file:
             cmd.extend(["-e", f"@{extra_vars_file}"])
         if check_mode:
@@ -1177,6 +1183,8 @@ class PlaybookExecutor:
         inventory_path: Path | None = None,
         detach: bool = False,
         timeout_s: float | None = None,
+        must_run: List[str] | None = None,
+        skip_tags: List[str] | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -1189,7 +1197,7 @@ class PlaybookExecutor:
         Args:
             playbook_name: Name of playbook file (e.g., "update-all-nodes.yml")
             limit: List of hosts to limit execution to
-            tags: List of tags to run
+            tags / skip_tags: Tags to run / not to run (#20743: `tags` cannot negate, so a skip goes here)
             extra_vars: Extra variables to pass to playbook
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
@@ -1198,13 +1206,10 @@ class PlaybookExecutor:
                 True for the SLM self-update path (the run that restarts
                 autobot-slm-backend); ordinary per-role/per-node deploys leave
                 this False, since they don't kill their own process.
-            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``
-                (the default) is unbounded, matching the previous behaviour --
-                required for long deployment/provisioning runs. Pass a concrete
-                value only where a caller can safely bound the run (e.g. the
-                reconciler's remediation restart); mutually exclusive with
-                ``detach`` in practice, since a detached run is designed to
-                outlive this coroutine entirely.
+            timeout_s: Wall-clock ceiling on the subprocess run (#14524). ``None``, the default, is
+                unbounded, as long deployment runs require. Pass a value only where a caller can bound
+                the run (the reconciler's remediation restart); not with ``detach``, whose run
+                outlives this coroutine.
 
         Returns:
             Dict with keys: success (bool), output (str), returncode (int),
@@ -1213,7 +1218,9 @@ class PlaybookExecutor:
         validate_unit_extra_vars(extra_vars)  # #19005: ValueError before anything is spawned
         # #17150: re-detect before syncing, as _update_code_source derives its sync target from self.ansible_dir.
         self._refresh_ansible_dir()
-        refusal = self._code_source_sync_failure_result(playbook_name, detach, await self._update_code_source())
+        refusal = refusal_without_code_source(self, FALLBACK_ANSIBLE_DIR, playbook_name) or (
+            self._code_source_sync_failure_result(playbook_name, detach, await self._update_code_source())
+        )
         if refusal is not None:
             return refusal
 
@@ -1226,28 +1233,21 @@ class PlaybookExecutor:
         stage_dir = self._stage_dir_for_run(detach)
         effective_inventory, dynamic_inv_path = await self._select_inventory(inventory_path, stage_dir)
 
-        # Merge stored SLM secrets so standalone re-deploys get the wizard's secrets (#3519); the caller's
-        # keys are written !unsafe, the secrets are not (#19005).
-        merged_extra_vars: Dict[str, str] = {**await fetch_deploy_secrets(), **(extra_vars or {})}
-        extra_vars_file = self._stage_extra_vars(merged_extra_vars, stage_dir, tuple(extra_vars or ()))
+        # Stored SLM secrets (#3519) + a rollback's deploy ref (#20214); only the caller's keys are !unsafe (#19005).
+        merged = {**await fetch_deploy_secrets(), **await deploy_ref_vars(playbook_name), **(extra_vars or {})}
+        extra_vars_file = self._stage_extra_vars(merged, stage_dir, tuple(extra_vars or ()))
 
         cmd = self._build_ansible_command(
-            playbook_path,
-            limit,
-            tags,
-            extra_vars_file,
-            check_mode,
-            inventory_path=effective_inventory,
+            playbook_path, limit, tags, extra_vars_file, check_mode, effective_inventory, skip_tags
         )
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 
         try:
             env = self._build_ansible_env()
-            # Override ansible.cfg default inventory to prevent merging
-            # with production.yml when wizard passes a temp inventory (#2836)
+            # Override ansible.cfg's inventory: never merge production.yml with a wizard's temp one (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
             proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
-            proc_result = with_limit_proof(proc_result, limit)  # #19762: only-localhost-ran is no proof
+            proc_result = with_limit_proof(proc_result, limit, must_run)  # #19762: only-localhost-ran is no proof
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
@@ -1265,12 +1265,7 @@ class PlaybookExecutor:
 
         except Exception as e:
             logger.exception(f"Failed to execute playbook {playbook_name}: {e}")
-            return {
-                "success": False,
-                "output": f"Error: {str(e)}",
-                "returncode": -1,
-                "timed_out": False,
-            }
+            return {"success": False, "output": f"Error: {str(e)}", "returncode": -1, "timed_out": False}
         finally:
             # Clean up the per-run temp inventory and extra-vars files.
             #

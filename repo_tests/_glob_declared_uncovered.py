@@ -48,23 +48,8 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
     ),
-    "*.conf.j2": (
-        {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
-        "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.j2": (
-        {
-            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
-            "repo_tests/browser_port_single_home_19324_test.py",
-            "repo_tests/nginx_internal_api_key_auth_gate_test.py",
-            "repo_tests/slm_admin_password_one_home_19318_test.py",
-            "repo_tests/slm_frontend_publish_contract_test.py",
-            "repo_tests/user_mode_values_19437_test.py",
-        },
-        "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
-    ),
     "*.json": (
-        {"repo_tests/user_mode_values_19437_test.py"},
+        {"repo_tests/i18n_untranslated_ratchet_test.py", "repo_tests/user_mode_values_19437_test.py"},
         "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
     ),
     "*.md": (
@@ -82,6 +67,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.ps1": (
+        {"repo_tests/windows_install_constraints_resolve_19681_test.py"},
+        "the Windows installer scripts; they live outside the python filter's paths",
+    ),
     "*.promtool-test.yml": (
         {"repo_tests/promtool_rules_test.py"},
         "root-relative `*.promtool-test.yml` sweep; the matching files live outside the python filter's trees",
@@ -92,10 +81,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
         },
         "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.service.j2": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
-        "root-relative `*.service.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.sh": (
         {
@@ -131,8 +116,13 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         },
         "root-relative `*.ts` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.css": (
+        {"repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py"},
+        "root-relative `*.css` sweep; the matching files live outside the python filter's trees (#20425).",
+    ),
     "*.vue": (
         {
+            "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py",
             "repo_tests/_hardcoded_colour_detect.py",
             "repo_tests/_hardcoded_ui_literal_detect.py",
             "repo_tests/_raw_palette_detect.py",
@@ -163,6 +153,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.yml": (
         {
+            "repo_tests/workflow_jobs_use_python_floor_20903_test.py",
             "repo_tests/access_control_enforcement_provisioning_test.py",
             "repo_tests/ansible_code_source_delegation_17243_test.py",
             "repo_tests/ansible_generated_manifest_paths_17331_test.py",
@@ -173,11 +164,13 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/ansible_python_interpreter_binary_scope_16750_test.py",
             "repo_tests/ansible_regex_backslash_scalar_17897_test.py",
             "repo_tests/ansible_shared_tasks_code_source_dir_default_16750_test.py",
+            "repo_tests/backend_env_leaves_no_secret_copies_20517_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/draft_gate_reaches_aggregators_17957_test.py",
             "repo_tests/frontend_duplicate_typecheck_compile_guard_test.py",
             "repo_tests/git_merge_rejects_pull_only_flags_15938_test.py",
+            "repo_tests/infra_residue_one_home_18558_test.py",
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
@@ -244,16 +237,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ".github/actions/*/action.yml": (
         {"repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
-    ),
-    ".github/actions/build-smoke-images/**": (
-        {"repo_tests/changes_job_equivalence_15360_test.py"},
-        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
-        "no file under the tree, so no change there can alter its verdict",
-    ),
-    ".github/actions/free-disk-space/**": (
-        {"repo_tests/changes_job_equivalence_15360_test.py"},
-        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
-        "no file under the tree, so no change there can alter its verdict",
     ),
     ".github/workflows/*.yaml": (
         {

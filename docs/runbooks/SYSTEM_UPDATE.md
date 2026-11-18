@@ -45,7 +45,7 @@ Select packages and apply them, or use **Upgrade All**. Each run appears under
 
 ### 3. Handle reboots
 
-Applying updates through this tab does not reboot a node. Reboot from **Fleet Overview**, one node
+Applying updates through this tab does not reboot a node, and nothing in the tab shows which nodes need a reboot. Reboot from **Fleet Overview**, one node
 at a time, and wait for each to come back before the next. The reboot action does not check
 maintenance windows (#17661), so choosing the time is up to you.
 

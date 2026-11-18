@@ -11,7 +11,7 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatRelativeTime } from '@autobot/ui'
+import { createRecencyFormatter } from '@autobot/ui'
 import { useSessionCollaboration, type CollaboratorActivity } from '@/composables/useSessionCollaboration'
 
 const { t, locale } = useI18n()
@@ -19,12 +19,12 @@ const { t, locale } = useI18n()
 const { recentCollaboratorActivities, sessionPresence, isConnected } = useSessionCollaboration()
 
 // Format timestamp relative to now
-const formatTime = (date: Date): string => {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 60) return t('collaboration.activityFeed.justNow')
-  if (seconds < 86400) return formatRelativeTime(date, { locale: locale.value, style: 'narrow' })
-  return date.toLocaleDateString()
-}
+const formatTime = createRecencyFormatter({
+  justNow: () => t('collaboration.activityFeed.justNow'),
+  locale: () => locale.value,
+  style: 'narrow',
+  olderThanMs: 86_400_000,
+})
 
 // Get icon for activity type
 const getActivityIcon = (type: string): string => {

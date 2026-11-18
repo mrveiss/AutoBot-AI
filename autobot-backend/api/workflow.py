@@ -26,9 +26,10 @@ from api.schemas_workflows import (
     WorkflowPendingApprovalsResponse,
     WorkflowStatusResponse,
 )
+from api.workflow_complex import _execute_complex_workflow
 from api.workflow_librarian_step import _handle_librarian_step
 from api.workflow_state import get_workflow_state_machine
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
@@ -38,6 +39,7 @@ from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
 from monitoring.prometheus_metrics import get_metrics_manager
 from patterns.conversation_patterns import conversation_patterns
+from services.workflow_automation.workflow_ownership import caller_id
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -258,42 +260,6 @@ def _try_simple_response(user_message: str) -> Dict | None:
         "type": "lightweight_response",
         "result": _conversation_patterns.get_response_template(conv_type),
         "routing_method": "conversation_pattern_match",
-    }
-
-
-async def _execute_complex_workflow(
-    workflow_request: "WorkflowExecutionRequest",
-    background_tasks: BackgroundTasks,
-    session_id: str,
-) -> Dict:
-    """Delegate a complex workflow request to WorkflowAutomationManager (#1770).
-
-    Creates the workflow via the automation service and starts execution as a
-    background task so the endpoint returns immediately.
-    """
-    from services.workflow_automation.routes import get_workflow_manager
-
-    manager = get_workflow_manager()
-    workflow_id = await manager.create_workflow_from_chat_request(workflow_request.user_message, session_id)
-
-    if not workflow_id:
-        logger.error(
-            "workflow_automation could not create workflow for message: %s",
-            workflow_request.user_message,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Could not create workflow from request",
-        )
-
-    background_tasks.add_task(manager.start_workflow_execution, workflow_id)
-
-    return {
-        "success": True,
-        "type": "workflow_orchestration",
-        "workflow_id": workflow_id,
-        "execution_started": True,
-        "status_endpoint": f"/api/workflow_automation/workflow_status/{workflow_id}",
     }
 
 
@@ -570,6 +536,7 @@ async def execute_workflow(
     background_tasks: BackgroundTasks,
     request: Request,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Execute a workflow with coordination of multiple agents.
@@ -594,7 +561,9 @@ async def execute_workflow(
     # Complex workflow — delegate to the workflow_automation service (#1770)
     try:
         session_id = str(uuid.uuid4())
-        return await _execute_complex_workflow(workflow_request, background_tasks, session_id)
+        return await _execute_complex_workflow(
+            workflow_request, background_tasks, session_id, owner_id=caller_id(current_user)
+        )
     except Exception as e:
         logger.error("Workflow execution error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Workflow execution failed")

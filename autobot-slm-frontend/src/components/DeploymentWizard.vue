@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -9,7 +9,6 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { slmApiClient } from '@/utils/ApiClient'
 import type { SLMNode, NodeRole, RoleInfo, RoleListResponse } from '@/types/slm'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DeploymentWizard')
 

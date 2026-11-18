@@ -33,5 +33,5 @@ async def admit_remote_read(current_user, surface: str) -> None:
     if not reader.is_admin:
         raise HTTPException(status_code=403, detail="Admin permission required for this operation")
     details = {"source": "ai_stack_remote", "surface": surface, "fact_ids": [], "count": 0}
-    if not await audit_admin_read(reader.user_id, details):
+    if not await audit_admin_read(reader.user_id, details, durable=False):  # names no facts (#19860)
         raise HTTPException(status_code=503, detail="Audit unavailable; the read is withheld")

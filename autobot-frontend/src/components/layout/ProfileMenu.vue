@@ -13,7 +13,7 @@
       <template #default="{ describedby }">
         <button
           type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-full bg-autobot-primary text-xs font-semibold text-autobot-text-inverse transition-opacity duration-150 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary focus-visible:ring-offset-2"
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-autobot-primary text-xs font-semibold text-autobot-text-on-primary transition-opacity duration-150 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-autobot-primary focus-visible:ring-offset-2"
           :aria-label="$t('nav.profileMenu')"
           :aria-describedby="describedby"
           :aria-expanded="open"

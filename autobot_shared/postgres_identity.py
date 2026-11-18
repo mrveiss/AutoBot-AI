@@ -56,3 +56,5 @@ COMPOSE_OWNER_ROLE = "autobot"
 COMPOSE_SLM_DB_NAME = "autobot_slm"
 #: Docker compose: the postgres service name.
 COMPOSE_DB_HOST = "autobot-postgres"
+#: The SLM's own container on a compose stack (#20639).
+COMPOSE_SLM_DB_HOST = "autobot-slm-postgres"

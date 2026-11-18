@@ -221,7 +221,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -254,7 +254,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -262,7 +262,7 @@ onUnmounted(() => {
 .filter input,
 .filter select {
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
@@ -291,7 +291,7 @@ onUnmounted(() => {
   gap: 0.75rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .actor-badge {
@@ -343,18 +343,18 @@ onUnmounted(() => {
 
 .event-entity-id {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-actor-name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-time {
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }

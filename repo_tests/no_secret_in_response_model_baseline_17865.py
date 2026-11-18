@@ -34,6 +34,14 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "row by that username. That is the precise contrast with #17865, which "
         "bound the identity to `_` and discarded it."
     ),
+    ("FirstAdminResponse", "password_hash", "GET", "/first-admin"): (
+        "Deliberate: the SLM's first admin keeps their password when the main app links them "
+        "(#10200, #20607). Owner ruling, "
+        "https://github.com/mrveiss/AutoBot-AI/pull/20607#issuecomment-6689286310. The route is "
+        "gated by the internal service key alone (verify_internal_api_key in the handler; never a "
+        "user token), the hash is read once at first start and never logged. See "
+        "ARCHITECTURE_EXCEPTIONS.md, 'SLM first admin password hash crosses to the main backend'."
+    ),
 }
 
 

@@ -347,7 +347,7 @@ function submitType() {
   border: none;
   border-radius: var(--radius-default);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   cursor: pointer;
   font-size: var(--text-xs);
 }
@@ -397,7 +397,7 @@ function submitType() {
 
 .region-popup-save,
 .region-popup-cancel {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   padding: 3px var(--spacing-2);
   border-radius: var(--radius-default);
   cursor: pointer;
