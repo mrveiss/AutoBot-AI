@@ -1002,6 +1002,8 @@ app.post('/state', async (req, res) => {
 });
 // --- End indexed interactive-element state (#11537) ---
 
+const NAVIGATE_TEXT_MAX_CHARS = parseInt(process.env.BROWSER_NAVIGATE_TEXT_MAX_CHARS || '5000', 10);
+
 app.post('/automation', async (req, res) => {
   const { action, params = {} } = req.body;
   const sessionId = sessionIdFromRequest(req);
@@ -1018,6 +1020,9 @@ app.post('/automation', async (req, res) => {
         const waitUntil = params.wait_until || 'domcontentloaded';
         await page.goto(params.url, { waitUntil, timeout });
         result = { title: await page.title(), url: page.url() };
+        // #21772: a bounded visible-text excerpt so the model can read the page it just opened.
+        const bodyText = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+        result.text = bodyText.slice(0, NAVIGATE_TEXT_MAX_CHARS);
         break;
       }
       case 'click': {

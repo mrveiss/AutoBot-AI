@@ -135,3 +135,16 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS",
+        type=int,
+        default=1500,
+        description=(
+            "Cap on the visible-text excerpt a navigate result carries after the URL and "
+            "title; whitespace runs are collapsed first (#21772)."
+        ),
+        component="backend",
+    )
+)

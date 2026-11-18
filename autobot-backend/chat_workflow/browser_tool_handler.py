@@ -42,6 +42,9 @@ logger = get_logger(__name__)
 # via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
 BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
 
+# Issue #21772: how much of the page's visible text a navigate result carries after URL and title.
+BROWSER_NAVIGATE_EXCERPT_MAX_CHARS = env_int("AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS", default=1500)
+
 # Issue #11537: text formatters for the four indexed-element tool results,
 # keyed by tool name so format_browser_action_text stays a flat dispatch.
 _INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
@@ -264,6 +267,19 @@ def format_browser_result(
     return summary + state_block if state_block else summary
 
 
+def navigate_excerpt(text: Any, url: str) -> str:
+    """Whitespace-collapsed, capped, trust-wrapped visible-text excerpt for a navigate result. Issue #21772."""
+    if not isinstance(text, str):
+        return ""
+    excerpt = " ".join(text.split())[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS]
+    if not excerpt:
+        return ""
+    # Page text is untrusted third-party content (#12757): same boundary as get_text.
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return "\nPage text: " + sanitize_and_wrap_web_content(excerpt, url)
+
+
 def format_browser_action_text(
     tool_name: str,
     params: dict[str, Any],
@@ -274,7 +290,7 @@ def format_browser_action_text(
     if tool_name == "navigate":
         url = inner.get("url", params.get("url", ""))
         title = inner.get("title", "")
-        return f"Navigated to: {url}\nPage title: {title}"
+        return f"Navigated to: {url}\nPage title: {title}" + navigate_excerpt(inner.get("text"), url)
 
     if tool_name == "screenshot":
         has_image = bool(inner.get("image") or inner.get("screenshot"))
