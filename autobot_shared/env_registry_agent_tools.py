@@ -161,3 +161,16 @@ register_env_var(
         component="chat_workflow",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_THREAT_AGENT_ACTION_RATE_LIMIT_PER_MINUTE",
+        type=int,
+        default=120,
+        description=(
+            "Agent tool calls per minute for one verified user before threat detection flags a volume anomaly "
+            "(#18844); overridden by thresholds.agent_action_rate_limit_per_minute in the threat-detection config."
+        ),
+        component="security",
+    )
+)

@@ -83,6 +83,10 @@ class SecurityEvent:
         """Check if event is an API request."""
         return self.action == "api_request"
 
+    def is_agent_action(self) -> bool:
+        """Check if event is the platform's own agent acting inside a user's turn (#18844)."""
+        return self.action == "agent_action"
+
     def get_timestamp_hour(self) -> int:
         """Get the hour component of the event timestamp."""
         return self.timestamp.hour
@@ -183,6 +187,16 @@ class EventHistory:
             ):
                 count += 1
 
+        return count
+
+    def count_recent_actions(self, user_id: str, action: str, window_minutes: int) -> int:
+        """Count a user's events of *action* inside the last *window_minutes* (#18844)."""
+        cutoff_time = now_utc() - timedelta(minutes=window_minutes)
+        count = 0
+        for event in reversed(self.events):
+            if parse_utc_iso(event.get("timestamp", utc_timestamp())) < cutoff_time:
+                break
+            count += event.get("user_id") == user_id and event.get("action") == action
         return count
 
     def get_recent_action_frequency(self, user_id: str, action: str, hours: int = 1) -> int:
@@ -526,6 +540,10 @@ class AnalysisContext:
     def count_recent_api_requests(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent API requests"""
         return self.event_history.count_recent_api_requests(user_id, source_ip, window_minutes)
+
+    def count_recent_actions(self, user_id: str, action: str, window_minutes: int) -> int:
+        """Count a user's recent events of *action* (#18844)"""
+        return self.event_history.count_recent_actions(user_id, action, window_minutes)
 
     def get_recent_endpoint_usage(self, user_id: str, endpoint: str, hours: int = 24) -> int:
         """Get recent endpoint usage count"""
