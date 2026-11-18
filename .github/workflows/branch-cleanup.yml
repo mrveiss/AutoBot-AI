@@ -183,7 +183,12 @@ jobs:
                 # Verify a merged PR actually closes this issue (#10114)
                 merged_pr=$(merged_pr_for_issue "$issue_number")
 
-                if [ -n "$merged_pr" ]; then
+                # A merged PR does not prove THIS branch's own changes landed
+                # (#21798): require zero changes against main before deleting.
+                if [ -n "$merged_pr" ] \
+                    && ! branch_has_no_unlanded_changes origin/main "origin/$branch"; then
+                  skipped_count=$((skipped_count + 1))
+                elif [ -n "$merged_pr" ]; then
                   if [ "$DRY_RUN" = "true" ]; then
                     echo "  WOULD DELETE: origin/$branch (issue closed, PR merged)"
                   else
