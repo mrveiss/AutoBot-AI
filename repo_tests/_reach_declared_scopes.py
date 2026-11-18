@@ -66,10 +66,11 @@ DECLARED_SCOPES = {
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
     "primary-fill-white-label-files": ("autobot-frontend/src",),
     "primary-fill-class-label-files": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src", "libs/slm-contract"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
+        "libs/slm-contract",
         "libs/autobot-ui",
     ),
     "duplicate-util-filenames-scanned-14908": ("autobot-frontend/src/utils", "autobot-slm-frontend/src/utils"),
