@@ -42,7 +42,7 @@ export class PartialListError<T> extends Error {
   }
 }
 
-/** A runaway guard: 50 pages of 100 (5000 nodes) is beyond any fleet, and ends a server that never stops answering. */
+/** A runaway guard: 50 pages of 100 (5000 nodes) is beyond any fleet, and ends a server that never stops answering (as a `PartialListError`, since the read is then not known to be complete). */
 export const MAX_PAGES = 50
 
 /**
@@ -62,7 +62,8 @@ export async function fetchAllPages<T>(
   const items: T[] = []
   let total: number | null = null
   let previousFirst: unknown
-  for (let page = 1; page <= MAX_PAGES && (total === null || items.length < total); page++) {
+  let ended = false // the server said it is done: a finite total reached, or an empty/short/repeated page
+  for (let page = 1; page <= MAX_PAGES; page++) {
     let result: Page<T>
     try {
       result = await getPage({ page, per_page: size })
@@ -71,12 +72,15 @@ export async function fetchAllPages<T>(
       throw new PartialListError(items, total, err)
     }
     total = Number.isFinite(result.total) ? result.total : null
-    if (result.items.length === 0) break // rows were removed while paging: nothing more to read
+    if (result.items.length === 0) { ended = true; break } // rows were removed while paging: nothing more to read
     const first = idOf && idOf(result.items[0])
-    if (total === null && page > 1 && idOf && first === previousFirst) break // `page` is ignored: the same page again
+    if (total === null && page > 1 && idOf && first === previousFirst) { ended = true; break } // `page` is ignored: the same page again
     previousFirst = first
     items.push(...result.items)
-    if (total === null && result.items.length < size) break // unknown total: a short page is the last
+    if (total === null && result.items.length < size) { ended = true; break } // unknown total: a short page is the last
+    if (total !== null && items.length >= total) { ended = true; break }
   }
+  // The page guard stopped a read the server had not finished: that is a partial list, never a whole one.
+  if (!ended) throw new PartialListError(items, total, new Error(`stopped after ${MAX_PAGES} pages`))
   return items
 }

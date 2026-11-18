@@ -53,4 +53,45 @@ describe('fleet store incomplete node list (#21584)', () => {
     await expect(store.fetchNodes()).rejects.toThrow('network down')
     expect(store.incomplete).toBeNull()
   })
+
+  it('an outright failure after a partial read keeps the shortfall record with the nodes it kept', async () => {
+    const store = useFleetStore()
+    getNodes.mockRejectedValueOnce(new PartialListError([node(1)], 3, new Error('504')))
+    await store.fetchNodes()
+    getNodes.mockRejectedValueOnce(new Error('network down'))
+    await expect(store.fetchNodes()).rejects.toThrow('network down')
+
+    expect(store.incomplete).toEqual({ read: 1, total: 3, reason: '504' })
+    expect(store.nodeList).toHaveLength(1)
+  })
+
+  it('a non-Error rejection reports the translated fallback, not a literal', async () => {
+    getNodes.mockRejectedValue('boom')
+    const store = useFleetStore()
+    await expect(store.fetchNodes()).rejects.toBe('boom')
+    expect(store.nodesError).toBe('Could not load the node list')
+  })
+
+  it('overlapping reads: the newest decides, an older failure leaves no stale error', async () => {
+    const store = useFleetStore()
+    let rejectFirst!: (e: Error) => void
+    getNodes.mockReturnValueOnce(new Promise((_, rej) => { rejectFirst = rej }))
+    getNodes.mockResolvedValueOnce([])
+    const first = store.fetchNodes()
+    await store.fetchNodes()
+    rejectFirst(new Error('late failure'))
+    await expect(first).resolves.toBeUndefined()
+
+    expect(store.nodesError).toBeNull()
+    expect(store.error).toBeNull()
+    expect(store.isLoading).toBe(false)
+  })
+
+  it('$reset clears nodesError', async () => {
+    getNodes.mockRejectedValue(new Error('down'))
+    const store = useFleetStore()
+    await expect(store.fetchNodes()).rejects.toThrow()
+    store.$reset()
+    expect(store.nodesError).toBeNull()
+  })
 })

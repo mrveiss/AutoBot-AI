@@ -1055,6 +1055,7 @@
     "incompleteList": "Showing {loaded} of {total} nodes. The rest could not be loaded: {message}",
     "incompleteTotalUnknown": "an unknown number of",
     "loadFailed": "Could not load the node list: {message}",
+    "loadFailedUnknown": "Could not load the node list",
     "infrastructure": "Infrastructure",
     "infrastructureSetupAria": "Infrastructure setup",
     "lastSeen": "Last seen:",

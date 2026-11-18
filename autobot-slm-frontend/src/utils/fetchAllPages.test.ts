@@ -103,8 +103,9 @@ describe('fetchAllPages with no usable total (#21584)', () => {
 
   it('a server that never stops answering is cut off by the page guard', async () => {
     const getPage = vi.fn(async () => ({ items: [1], total: undefined as unknown as number }))
-    const all = await fetchAllPages(getPage, 1)
-    expect(all).toHaveLength(MAX_PAGES)
+    const err = (await fetchAllPages(getPage, 1).catch((e: unknown) => e)) as PartialListError<number>
+    expect(err).toBeInstanceOf(PartialListError)
+    expect(err.items).toHaveLength(MAX_PAGES)
     expect(getPage).toHaveBeenCalledTimes(MAX_PAGES)
   })
 
@@ -129,7 +130,21 @@ describe('fetchAllPages with no usable total (#21584)', () => {
 
   it('without an id reader the runaway guard still ends it, at 50 pages', async () => {
     const getPage = vi.fn(async () => ({ items: [1], total: undefined as unknown as number }))
-    expect(await fetchAllPages(getPage, 1)).toHaveLength(MAX_PAGES)
+    const err = (await fetchAllPages(getPage, 1).catch((e: unknown) => e)) as PartialListError<number>
+    expect(err).toBeInstanceOf(PartialListError)
+    expect(err.items).toHaveLength(MAX_PAGES)
     expect(MAX_PAGES).toBe(50)
+  })
+
+  it('a finite total beyond the guard is partial; one that exactly fills it is whole', async () => {
+    const serve = (total: number) => async ({ page }: { page: number }) => ({
+      items: Array.from({ length: Math.max(0, Math.min(1, total - (page - 1))) }, () => page),
+      total,
+    })
+    const err = (await fetchAllPages(serve(MAX_PAGES + 10), 1).catch((e: unknown) => e)) as PartialListError<number>
+    expect(err).toBeInstanceOf(PartialListError)
+    expect(err.items).toHaveLength(MAX_PAGES)
+    expect(err.total).toBe(MAX_PAGES + 10)
+    expect(await fetchAllPages(serve(MAX_PAGES), 1)).toHaveLength(MAX_PAGES)
   })
 })

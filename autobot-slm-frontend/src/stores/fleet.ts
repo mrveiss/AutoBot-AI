@@ -37,6 +37,7 @@ import type {
   NPUWorkerConfig,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
+import i18n from '@/i18n'
 import { PartialListError } from '@/utils/fetchAllPages'
 import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
 import type { NodeListIncomplete } from './fleetHelpers'
@@ -56,6 +57,7 @@ export const useFleetStore = defineStore('fleet', () => {
   const incomplete = ref<NodeListIncomplete | null>(null)
   /** Why the last node-list read failed outright; null after a read that succeeded, empty or not. */
   const nodesError = ref<string | null>(null)
+  let nodesRequest = 0 // newest fetchNodes call
 
   /** Currently selected node for detail view */
   const selectedNode = ref<SLMNode | null>(null)
@@ -222,25 +224,28 @@ export const useFleetStore = defineStore('fleet', () => {
    * Fetch all nodes from API
    */
   async function fetchNodes(): Promise<void> {
+    const request = ++nodesRequest // the newest call owns every mutation; an overlapped one is stale
     isLoading.value = true
     error.value = nodesError.value = null
 
     try {
-      nodes.value = toNodeMap(await api.getNodes())
+      const loaded = toNodeMap(await api.getNodes())
+      if (request !== nodesRequest) return
+      nodes.value = loaded
       incomplete.value = null
       lastRefresh.value = new Date()
     } catch (err) {
-      // A later page failed (#21584): keep what was read and record that the list is not the fleet.
-      // That is a result with a flag (the shell tells the operator), not a failure the 9 callers handle.
-      incomplete.value = incompleteOf(err)
+      if (request !== nodesRequest) return // superseded
+      // #21584: a partial read is a flagged result, not a failure; an outright failure keeps `incomplete` as it was.
       if (err instanceof PartialListError) {
+        incomplete.value = incompleteOf(err)
         nodes.value = toNodeMap(err.items as SLMNode[]) // usable data: `incomplete` is the signal, not `error`
         return
       }
-      error.value = nodesError.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
+      error.value = nodesError.value = err instanceof Error ? err.message : i18n.global.t('fleetOverview.loadFailedUnknown')
       throw err
     } finally {
-      isLoading.value = false
+      if (request === nodesRequest) isLoading.value = false
     }
   }
 
@@ -883,7 +888,8 @@ export const useFleetStore = defineStore('fleet', () => {
   function $reset(): void {
     nodes.value.clear()
     isLoading.value = false
-    error.value = null
+    error.value = nodesError.value = null
+    nodesRequest++ // an in-flight read must not repopulate
     lastRefresh.value = null
     incomplete.value = null
     selectedNode.value = null
