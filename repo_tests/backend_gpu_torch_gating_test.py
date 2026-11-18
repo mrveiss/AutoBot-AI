@@ -34,13 +34,9 @@ from repo_tests._paths import repo_root
 yaml = pytest.importorskip("yaml")
 
 REPO_ROOT = repo_root()
-ANSIBLE_TASKS = (
-    REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "tasks" / "main.yml"
-)
+ANSIBLE_TASKS = REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "tasks" / "main.yml"
 REQUIREMENTS_GPU_TORCH = REPO_ROOT / "requirements-gpu-torch.txt"
-BACKEND_DEFAULTS = (
-    REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "defaults" / "main.yml"
-)
+BACKEND_DEFAULTS = REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "backend" / "defaults" / "main.yml"
 REQUIREMENTS_GPU_VLLM = REPO_ROOT / "requirements-gpu.txt"
 
 
@@ -129,9 +125,9 @@ def test_cuda_torch_install_is_gated_on_gpu_only() -> None:
     task = _task_named("Install CUDA torch requirements")
     pip = task.get("ansible.builtin.pip")
     assert isinstance(pip, dict)
-    assert "requirements-gpu-torch.txt" in str(pip.get("requirements", "")), (
-        "the CUDA-torch install task does not point at requirements-gpu-torch.txt"
-    )
+    assert "requirements-gpu-torch.txt" in str(
+        pip.get("requirements", "")
+    ), "the CUDA-torch install task does not point at requirements-gpu-torch.txt"
     when_text = _when_text(task)
     assert "backend_gpu_available" in when_text
     assert "backend_vllm_enabled" not in when_text, (
@@ -147,12 +143,12 @@ def test_vllm_install_still_requires_both_flags() -> None:
     assert isinstance(pip, dict)
     assert "requirements-gpu.txt" in str(pip.get("requirements", ""))
     when_text = _when_text(task)
-    assert "backend_vllm_enabled" in when_text, (
-        "vllm install lost its vLLM-opt-in gate — it would now install on every GPU host"
-    )
-    assert "backend_gpu_available" in when_text, (
-        "vllm install lost its GPU gate — it would attempt to install on CPU-only hosts"
-    )
+    assert (
+        "backend_vllm_enabled" in when_text
+    ), "vllm install lost its vLLM-opt-in gate — it would now install on every GPU host"
+    assert (
+        "backend_gpu_available" in when_text
+    ), "vllm install lost its GPU gate — it would attempt to install on CPU-only hosts"
 
 
 def test_deploy_reports_the_gpu_torch_decision() -> None:
@@ -168,8 +164,10 @@ def test_deploy_reports_the_gpu_torch_decision() -> None:
 def test_requirements_gpu_torch_file_carries_cuda_torch() -> None:
     assert REQUIREMENTS_GPU_TORCH.is_file(), f"{REQUIREMENTS_GPU_TORCH} missing"
     pins = _requirement_pins(REQUIREMENTS_GPU_TORCH.read_text(encoding="utf-8"))
-    assert any(pin.startswith("torch==") for pin in pins), pins
-    assert any(pin.startswith("torchvision==") for pin in pins), pins
+    # #19330: the pair's version lives in constraints/shared.txt; this file lists the names
+    # and applies the constraint, so the CUDA build resolves to the same pair as every role.
+    assert "torch" in pins and "torchvision" in pins, pins
+    assert "-c constraints/shared.txt" in pins, pins
     assert not any(pin.lower().startswith("vllm") for pin in pins), (
         f"requirements-gpu-torch.txt has an actual vllm requirement line ({pins!r}); "
         "it must stay vLLM-free -- it installs on every GPU host, with or without the "
@@ -200,9 +198,7 @@ def test_requirements_gpu_torch_file_carries_cuda_torch() -> None:
         ),
     ],
 )
-def test_requirement_pin_parse_distinguishes_prose_from_a_real_pin(
-    contents: str, expect_vllm_pin: bool
-) -> None:
+def test_requirement_pin_parse_distinguishes_prose_from_a_real_pin(contents: str, expect_vllm_pin: bool) -> None:
     """#15162 review: pins the exact regression a whole-text substring check invited.
 
     A comment naming ``vllm`` (documenting the decoupling this file exists for)
@@ -213,9 +209,9 @@ def test_requirement_pin_parse_distinguishes_prose_from_a_real_pin(
     """
     pins = _requirement_pins(contents)
     has_vllm_pin = any(pin.lower().startswith("vllm") for pin in pins)
-    assert has_vllm_pin is expect_vllm_pin, (
-        f"parsed pins {pins!r} from {contents!r}; expected a vllm pin={expect_vllm_pin}"
-    )
+    assert (
+        has_vllm_pin is expect_vllm_pin
+    ), f"parsed pins {pins!r} from {contents!r}; expected a vllm pin={expect_vllm_pin}"
     # The trailing-comment shape used throughout this repo's requirements files
     # (`torch==2.13.0  # CUDA build`) must still parse to a bare pin.
     assert not any("#" in pin for pin in pins), f"a comment leaked into a parsed pin: {pins!r}"
@@ -266,6 +262,6 @@ def test_code_source_dir_is_a_role_default_not_a_repeated_inline_literal() -> No
         f"code_source_dir restates the install root instead of deriving it from "
         f"autobot.base_dir (#15632); got {declared!r}"
     )
-    assert "autobot.base_dir" in declared, (
-        f"code_source_dir must derive from the inventory SSOT (#15632); got {declared!r}"
-    )
+    assert (
+        "autobot.base_dir" in declared
+    ), f"code_source_dir must derive from the inventory SSOT (#15632); got {declared!r}"

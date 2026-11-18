@@ -22,20 +22,10 @@ import os
 
 from autobot_shared.env_utils import env_flag
 from autobot_shared.tool_args import PATH_KEYS
+from autobot_shared.tool_catalogue import ToolEffect, tools_with_all
 
 # Write-side tools whose target path is guarded. Read/list tools are ignored.
-WRITE_TOOLS: frozenset[str] = frozenset(
-    {
-        "write_file",
-        "edit_file",
-        "multi_edit",
-        "apply_patch",
-        "create_file",
-        "delete_file",
-        "move_file",
-        "copy_file",
-    }
-)
+WRITE_TOOLS: frozenset[str] = tools_with_all(ToolEffect.WRITE | ToolEffect.FILE_TARGET)
 
 # Dedicated linter/formatter config basenames (exact, case-insensitive).
 _PROTECTED_BASENAMES: frozenset[str] = frozenset(

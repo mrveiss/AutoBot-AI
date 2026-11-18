@@ -30,7 +30,7 @@ from .models import (
     WorkflowControlRequest,
     WorkflowStep,
 )
-from .templates import WorkflowTemplateManager
+from .templates import AutomationStepTemplateManager
 
 logger = get_logger(__name__)
 
@@ -76,7 +76,7 @@ class WorkflowAutomationManager:
         # Issue #1367: Archive finished workflows to completed history
         self.executor.on_workflow_finished = self.archive_completed_workflow
         self.controller = WorkflowController(self.messenger, self.executor)
-        self.template_manager = WorkflowTemplateManager()
+        self.template_manager = AutomationStepTemplateManager()
 
         # Orchestrators for chat request processing
         self.orchestrator = Orchestrator()
@@ -195,6 +195,9 @@ class WorkflowAutomationManager:
         owner_id: str | None = None,
     ) -> str:
         """Create new automated workflow.
+
+        Issue #19807: command steps run as owner_id in the role that account holds
+        when the step runs; with no owner_id no command runs.
 
         Issue #2304: owner_id should be passed by callers that have authenticated
         user context (e.g. API endpoints using Depends(get_current_user)).

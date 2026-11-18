@@ -5,6 +5,7 @@
 import { computed } from 'vue'
 import type { Experiment } from '@/composables/useAutoResearch'
 import ApprovalCard from './ApprovalCard.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   experiments: Experiment[]
@@ -33,9 +34,7 @@ const sortedExperiments = computed(() =>
   [...props.experiments].sort((a, b) => b.created_at - a.created_at),
 )
 
-function formatTime(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString()
-}
+const formatTime = createDateFormatter({ unit: 'seconds' })
 
 function getApproval(experimentId: string) {
   return props.pendingApprovals.find((a) => a.experiment_id === experimentId)

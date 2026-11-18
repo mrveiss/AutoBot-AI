@@ -3,7 +3,7 @@
 The criterion, verbatim from #17527:
 
 > a document added by each of the four paths is retrievable via chat **and** via the
-> LLC module, with its source identifiable. If any path cannot demonstrate that, it
+> Company OS module, with its source identifiable. If any path cannot demonstrate that, it
 > is not done.
 
 **This procedure has not been run.** It needs a live instance, and running against
@@ -14,7 +14,7 @@ so the result is unambiguous either way.
 ## Why a test suite cannot close this criterion
 
 `knowledge/provenance_test.py` and `llc/tests/test_context_builder_document_sources.py`
-pin the *contract*: each intake leg's metadata resolves to an origin, and the LLC
+pin the *contract*: each intake leg's metadata resolves to an origin, and the Company OS
 surface exposes it. Neither ingests a document, and neither retrieves one. Counting
 wiring has misled on this subsystem repeatedly — an endpoint can exist and be
 unreachable, a producer can run with a broken consumer (#17022), and an import count
@@ -63,9 +63,9 @@ names where it came from.
 - the nonce is found and nothing says where it came from → retrieval reached it and
   dropped the provenance. Note which of the two, per leg.
 
-## Retrieval B — the LLC module
+## Retrieval B — the Company OS module
 
-Exercise the LLC context path that builds agent context from the KB
+Exercise the Company OS context path that builds agent context from the KB
 (`llc/kb/context_builder.py`). Inspect the returned context for both keys:
 
 - `sources` — company ids, the tenancy answer. Present before this work and unchanged.
@@ -133,7 +133,7 @@ Per leg, per surface, one of: **pass**, **content missing**, or **provenance
 missing** — the last two are different failures with different owners, and
 collapsing them into "failed" is what has made this subsystem hard to finish.
 
-A leg that passes chat and fails LLC is not a passing leg. The criterion is `and`.
+A leg that passes chat and fails Company OS is not a passing leg. The criterion is `and`.
 
 ## What a pass licenses
 

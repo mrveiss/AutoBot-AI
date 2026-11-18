@@ -208,8 +208,18 @@ class Config:
         self.redis_db = DATABASE_MAPPING["memory"]  # DB 0 — required for RediSearch FT.* (#9943)
         self.index_prefix = "autobot:entities"
         self.relations_prefix = "autobot:relations"
-        self.embedding_model = "nomic-embed-text"
         self.embedding_dimensions = 768
+
+    @property
+    def embedding_model(self) -> str:
+        """The active embedding model, read from the ssot each time this property is accessed (#18143).
+
+        ``AutoBotMemoryGraphCore.embedding_model_name`` copies it once, at construction, so a core built before a
+        model change keeps the earlier name. No stored vectors are written here, so nothing is left in another space.
+        """
+        from autobot_shared.embedding_model import active_embedding_model
+
+        return active_embedding_model()
 
 
 config = Config()
@@ -392,6 +402,10 @@ class AutoBotMemoryGraphCore:
         # ensure_indexes performs its own per-index existence check and swallows
         # creation errors with a warning, so initialization is never blocked.
         await ensure_indexes(self.redis_client)
+        # #18825: the owner TAG fields; FT.CREATE above is skipped on an existing index.
+        from .owner_index import ensure_owner_fields
+
+        await ensure_owner_fields(self.redis_client)
 
     async def _check_index_exists(self, index_name: str) -> bool:
         """

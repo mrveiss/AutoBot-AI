@@ -390,7 +390,7 @@ function onNavClick(e: Event) {
     border-bottom: 1px solid var(--border-default);
     overflow: hidden;
     position: relative;
-    z-index: 200;
+    z-index: var(--z-sticky);
   }
 
   /* Hide nav in collapsed state */
@@ -406,7 +406,7 @@ function onNavClick(e: Event) {
     width: 80vw;
     max-width: 320px;
     height: 100dvh;
-    z-index: 300;
+    z-index: var(--z-fixed);
     border-right: 1px solid var(--border-default);
     border-bottom: none;
     overflow-y: auto;
@@ -418,7 +418,7 @@ function onNavClick(e: Event) {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 299;
+    z-index: var(--z-drawer-backdrop);
   }
 
   /* Toggle button visible on mobile */

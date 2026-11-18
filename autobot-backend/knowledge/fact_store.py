@@ -19,13 +19,13 @@ rather than discovering it missing days later.
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Sequence
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, tuple_, update
 
+from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.store_authority import Store, system_of_record
 from models.knowledge_fact import KnowledgeFact
@@ -38,13 +38,10 @@ logger = get_logger(__name__)
 SYSTEM_OF_RECORD = system_of_record("knowledge_facts")
 assert SYSTEM_OF_RECORD.system_of_record is Store.POSTGRES  # nosec B101
 
-#: Matches the ``content_hash:<hash>`` Redis key width the dedup index uses.
-_CONTENT_HASH_WIDTH = 16
-
 
 def content_hash(content: str) -> str:
     """The deduplication fingerprint, identical to the Redis index's."""
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:_CONTENT_HASH_WIDTH]
+    return fact_dedup_key(content)
 
 
 def _row_values(content: str, metadata: Dict[str, Any], *, hash_content: str | None = None) -> Dict[str, Any]:
@@ -81,6 +78,7 @@ async def persist_fact(
             for column, value in row_values.items():
                 setattr(row, column, value)
         await session.commit()
+    await _note_for_embedding_switch(fact_id)
 
 
 #: The metadata key carrying a filesystem locator, as `knowledge/source_liveness`
@@ -124,7 +122,8 @@ async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any], *, h
             for column, value in _SOURCE_OBSERVATIONS.items():
                 setattr(row, column, value)
         await session.commit()
-        return True
+    await _note_for_embedding_switch(fact_id)
+    return True
 
 
 async def delete_fact(fact_id: str) -> bool:
@@ -133,7 +132,15 @@ async def delete_fact(fact_id: str) -> bool:
     async with factory() as session:
         result = await session.execute(sql_delete(KnowledgeFact).where(KnowledgeFact.id == fact_id))
         await session.commit()
-        return bool(result.rowcount)
+    await _note_for_embedding_switch(fact_id)
+    return bool(result.rowcount)
+
+
+async def _note_for_embedding_switch(fact_id: str) -> None:
+    """Every durable write, so a running embedding-model switch replays it before cutover (#19379)."""
+    from knowledge.embedding_switch import note_write
+
+    await note_write(fact_id)
 
 
 async def load_fact(fact_id: str) -> Dict[str, Any] | None:

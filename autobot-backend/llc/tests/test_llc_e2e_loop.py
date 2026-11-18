@@ -136,6 +136,7 @@ async def app(session_factory):  # noqa: ANN001, ANN201
         return {
             "id": str(_FIXED_USER_ID),
             "user_id": str(_FIXED_USER_ID),
+            "auth_method": "session",
             "username": "admin",
             "role": "admin",
             "is_platform_admin": True,
@@ -225,6 +226,14 @@ async def _seed_agent(session_factory, company_id: str) -> str:  # noqa: ANN001
     return agent_id
 
 
+async def _seed_project(session_factory, company_id: str) -> str:  # noqa: ANN001
+    """Seed the project a work item must belong to (#18978); there is no project POST in this loop."""
+    async with session_factory() as session:
+        project_id = await harness.seed_project(session, company_id)
+        await session.commit()
+    return project_id
+
+
 async def _seed_budget(session_factory, company_id: str, agent_id: str) -> None:  # noqa: ANN001
     """Seed a per-agent dollar budget row so cost-ingest has a row to update."""
     async with session_factory() as session:
@@ -291,10 +300,12 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     agent_id = await _seed_agent(session_factory, company_id)
 
     # ---- 3. create work item (PUBLIC: POST /api/llc/work-items) -----------
+    project_id = await _seed_project(session_factory, company_id)
     wi_resp = await client.post(
         "/api/llc/work-items",
         json={
             "company_id": company_id,
+            "project_id": project_id,
             "type": "task",
             "title": "Ship the LLC loop",
             "description": "Prove the core loop end to end.",
@@ -347,9 +358,7 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     handoff_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/handoff/to-human",
         json={
-            "agent_id": agent_id,
             "reviewer_user_id": str(_FIXED_USER_ID),
-            "company_id": company_id,
             "agent_notes": "Work complete, ready for review.",
         },
     )
@@ -361,7 +370,6 @@ async def test_llc_core_loop_end_to_end(app, client, session_factory):  # noqa: 
     # 5c. human reviewer approves (PUBLIC) → DONE.
     approve_resp = await client.post(
         f"/api/llc/work-items/{work_item_id}/review/approve",
-        json={"reviewer_user_id": str(_FIXED_USER_ID), "company_id": company_id},
     )
     assert approve_resp.status_code == 200, approve_resp.text
     approved = approve_resp.json()

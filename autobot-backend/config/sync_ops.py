@@ -21,12 +21,36 @@ class SyncOperationsMixin:
     """Mixin providing synchronous config operations"""
 
     def _get_sync_lock(self):
-        """Get or create synchronous lock"""
+        """Get or create the synchronous lock.
+
+        Reentrant: a reload reaches config readers on the same thread
+        (defaults -> network_constants -> registry -> redis -> service
+        registry -> ``get``), so a plain Lock deadlocks itself (#18661).
+        """
         if self._sync_lock is None:
             import threading
 
-            self._sync_lock = threading.Lock()
+            self._sync_lock = threading.RLock()
         return self._sync_lock
+
+    def _refresh_if_stale(self) -> None:
+        """Reload when the cache is stale, unless a reload is already running.
+
+        A reader re-entered from inside a reload sees the config being
+        replaced; reloading again there would recurse without end (#18661).
+        """
+        if self._sync_reloading:
+            return
+        if self._should_refresh_sync_cache():
+            self._reload_guarded()
+
+    def _reload_guarded(self) -> None:
+        """Reload with the re-entry flag set for the duration (#18661)."""
+        self._sync_reloading = True
+        try:
+            self._reload_config()
+        finally:
+            self._sync_reloading = False
 
     def _should_refresh_sync_cache(self) -> bool:
         """Check if synchronous cache should be refreshed"""
@@ -37,15 +61,13 @@ class SyncOperationsMixin:
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key (synchronous)"""
         with self._get_sync_lock():
-            if self._should_refresh_sync_cache():
-                self._reload_config()
+            self._refresh_if_stale()
             return self._config.get(key, default)
 
     def get_nested(self, path: str, default: Any = None) -> Any:
         """Get nested config value using dot notation (synchronous)"""
         with self._get_sync_lock():
-            if self._should_refresh_sync_cache():
-                self._reload_config()
+            self._refresh_if_stale()
 
             keys = path.split(".")
             current = self._config
@@ -128,11 +150,10 @@ class SyncOperationsMixin:
     def reload(self) -> None:
         """Reload configuration from files (synchronous)"""
         with self._get_sync_lock():
-            self._reload_config()
+            self._reload_guarded()
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the complete configuration as a dictionary (synchronous)"""
         with self._get_sync_lock():
-            if self._should_refresh_sync_cache():
-                self._reload_config()
+            self._refresh_if_stale()
             return self._config.copy()

@@ -34,55 +34,13 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
         "row by that username. That is the precise contrast with #17865, which "
         "bound the identity to `_` and discarded it."
     ),
-    ("LLMConfigResponse", "api_key", "GET", "/config"): (
-        "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
-        "in autobot-backend/api/schemas_agent.py:793 declares nothing and sets `extra: "
-        '"allow"`. It is attributed here because the index keys classes by BARE NAME across '
-        "all three trees and merges autobot-slm-backend/api/llm_config.py:76's same-named "
-        "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
-        "and not fixed here because it needs import resolution and would change the violation "
-        "path too. What the route serialises was traced rather than assumed: api/llm.py:64 -> "
-        'ConfigService.get_llm_config() -> config/model_config.py:147, returning `{"ollama": '
-        '..., "unified": get_nested("backend.llm")}`. Nothing writes a credential into that '
-        "nested subtree -- the only candidate, `_apply_embedding_config` at api/llm.py:333-337, "
-        "calls `ConfigSyncOps.set` (config/sync_ops.py:60), which stores a FLAT top-level key, "
-        "so `get_nested` never reaches it; the checked-in `backend.llm` section is "
-        '`{"ollama": {"endpoint": ...}}`. The model still PERMITS any field, so the route '
-        "is recorded in no_secret_passthrough_routes_17899.py as unverifiable rather than read "
-        "as clean."
-    ),
-    ("LLMConfigResponse", "anthropic_api_key", "GET", "/config"): (
-        "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
-        "in autobot-backend/api/schemas_agent.py:793 declares nothing and sets `extra: "
-        '"allow"`. It is attributed here because the index keys classes by BARE NAME across '
-        "all three trees and merges autobot-slm-backend/api/llm_config.py:76's same-named "
-        "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
-        "and not fixed here because it needs import resolution and would change the violation "
-        "path too. Same route and same traced payload as the `api_key` entry above. The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
-    ),
-    ("LLMConfigResponse", "brave_search_api_key", "GET", "/config"): (
-        "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
-        "in autobot-backend/api/schemas_agent.py:793 declares nothing and sets `extra: "
-        '"allow"`. It is attributed here because the index keys classes by BARE NAME across '
-        "all three trees and merges autobot-slm-backend/api/llm_config.py:76's same-named "
-        "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
-        "and not fixed here because it needs import resolution and would change the violation "
-        "path too. Same route and same traced payload as the `api_key` entry above. The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
-    ),
-    ("LLMConfigResponse", "openai_api_key", "GET", "/config"): (
-        "AUDITED (#17899). The field is NOT declared on this model at all: `LLMConfigResponse` "
-        "in autobot-backend/api/schemas_agent.py:793 declares nothing and sets `extra: "
-        '"allow"`. It is attributed here because the index keys classes by BARE NAME across '
-        "all three trees and merges autobot-slm-backend/api/llm_config.py:76's same-named "
-        "class, which does nest `LLMConfig` -- a real defect in the index, tracked at #17935 "
-        "and not fixed here because it needs import resolution and would change the violation "
-        "path too. Same route and same traced payload as the `api_key` entry above. The model "
-        "still PERMITS any field, so the route is recorded in "
-        "no_secret_passthrough_routes_17899.py as unverifiable rather than read as clean."
+    ("FirstAdminResponse", "password_hash", "GET", "/first-admin"): (
+        "Deliberate: the SLM's first admin keeps their password when the main app links them "
+        "(#10200, #20607). Owner ruling, "
+        "https://github.com/mrveiss/AutoBot-AI/pull/20607#issuecomment-6689286310. The route is "
+        "gated by the internal service key alone (verify_internal_api_key in the handler; never a "
+        "user token), the hash is read once at first start and never logged. See "
+        "ARCHITECTURE_EXCEPTIONS.md, 'SLM first admin password hash crosses to the main backend'."
     ),
 }
 
@@ -97,53 +55,26 @@ _WAIVED: dict[tuple[str, str, str, str], str] = {
 #: CodeRabbit's finding mattered. Draining this set is tracked separately; the
 #: ratchet below means it can only shrink.
 _UNAUDITED_BASELINE: dict[tuple[str, str, str, str], str] = {
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "api_key"): (
-        "Masked at llm_config.py:196 (`provider.api_key = _mask_api_key(...)`), and "
-        "being changed from masking to omission by PR #17846, which OWNS this file. "
-        "Not touched here: same file, one PR, one agent."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "api_key"): (
-        "Same model and same file as the GET above; #17846 territory."
-    ),
     ("autobot-backend/api/secrets.py", "POST /", "SecretCreatedData", "secret"): (
         "`secret: Dict[str, Any]` -- an UNTYPED dict, so this guard cannot tell "
-        "whether the value travels in it. That unauditability is itself the finding."
+        "whether the value travels in it. That unauditability is itself the finding. Tracked at #17899."
     ),
     ("autobot-backend/api/secrets.py", "GET /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
+        "Same untyped `Dict[str, Any]` as above. Tracked at #17899."
     ),
     ("autobot-backend/api/secrets.py", "PUT /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
+        "Same untyped `Dict[str, Any]` as above. Tracked at #17899."
     ),
     ("autobot-backend/api/secrets.py", "DELETE /{secret_id}", "SecretCreatedData", "secret"): (
-        "Same untyped `Dict[str, Any]` as above."
+        "Same untyped `Dict[str, Any]` as above. Tracked at #17899."
     ),
     ("autobot-backend/api/secrets.py", "GET /", "SecretsListData", "secrets"): (
-        "`secrets: List[Dict[str, Any]]` -- untyped elements; same limit as above."
+        "`secrets: List[Dict[str, Any]]` -- untyped elements; same limit as above. Tracked at #17899."
     ),
     ("autobot-backend/api/terminal.py", "POST /sessions", "TerminalSessionCreateResponse", "ssh_keys"): (
         "`ssh_keys: Dict[str, Any]` (schemas_terminal.py:27) -- untyped, so this guard "
         "cannot see whether private key material travels in it. Same unauditable shape "
-        "as the secrets.py routes."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "anthropic_api_key"): (
-        "Nests `LLMConfig`. `provider.api_key` is masked at llm_config.py:196, but these "
-        "are DIFFERENT fields and were not checked. PR #17846 owns this file."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "brave_search_api_key"): (
-        "Nests `LLMConfig`; see the anthropic entry above. #17846 territory."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "GET", "LLMConfigResponse", "openai_api_key"): (
-        "Nests `LLMConfig`; see the anthropic entry above. #17846 territory."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "anthropic_api_key"): (
-        "Same model and file as the GET above; #17846 territory."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "brave_search_api_key"): (
-        "Same model and file as the GET above; #17846 territory."
-    ),
-    ("autobot-slm-backend/api/llm_config.py", "PUT", "LLMConfigResponse", "openai_api_key"): (
-        "Same model and file as the GET above; #17846 territory."
+        "as the secrets.py routes. Tracked at #17899."
     ),
 }
 
@@ -155,4 +86,17 @@ _UNAUDITED_BASELINE: dict[tuple[str, str, str, str], str] = {
 #: 18 -> 14 (#17899): the four `autobot-backend/api/llm.py` entries were audited and
 #: moved to `_WAIVED`. The ratchet turning DOWN is the only direction this number
 #: may move, and draining the baseline is what it is for.
-_BASELINE_FROZEN_AT = 14
+#:
+#: 14 -> 12 (#17865): `response_model_exclude` for `api_key` on the two
+#: `llm_config.py` routes stopped them firing, so those entries were deleted rather
+#: than left standing. A fixed site leaves the baseline; the number only goes down.
+#:
+#: 12 -> 6 (#18638): the six `autobot-slm-backend/api/llm_config.py` entries, and the four
+#: `LLMConfigResponse` GET /config waivers above, were artifacts of the index keying classes
+#: by BARE NAME (#17935). The SLM's `LLMConfigResponse` nested an `LLMConfig` that the index
+#: merged with `autobot_shared/ssot_config.py`'s (which declares the three provider keys), and
+#: the main backend's `LLMConfigResponse` was merged with the SLM's. Renaming the SLM models
+#: (`SlmLLMConfig`, `SlmLLMConfigResponse`) ended both merges: `SlmLLMConfig` declares none of
+#: those fields, and the main model resolves to itself. Nothing was fixed or widened -- the
+#: findings were never about these routes, so the entries go.
+_BASELINE_FROZEN_AT = 6

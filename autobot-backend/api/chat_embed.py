@@ -36,7 +36,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.proxy_utils import get_client_ip
 from autobot_shared.rate_limiter import RateLimiter
+from security.chat_message_safety import scan_chat_message
 
 logger = get_logger(__name__)
 
@@ -80,17 +82,10 @@ def _get_client_ip(request: Request) -> str:
     Only trusts X-Forwarded-For when the immediate peer is in AUTOBOT_EMBED_TRUSTED_PROXIES
     to prevent rate-limit bypass via header spoofing (GH#9117).
     """
-    peer_ip = request.client.host if request.client else "unknown"
-
-    # Only honor X-Forwarded-For if the immediate connection is from a trusted proxy
-    if _TRUSTED_PROXIES and peer_ip in _TRUSTED_PROXIES:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            # X-Forwarded-For can be comma-separated; use the first (client) IP
-            return forwarded.split(",")[0].strip()
-
-    # Default: use the direct connection IP (untrusted proxies or no XFF)
-    return peer_ip
+    # #17848: the shared rule, with this router's own trusted set. The copy here
+    # took the LEFTMOST X-Forwarded-For element, which a client behind the
+    # trusted proxy writes itself; the shared helper reads the chain from the right.
+    return get_client_ip(request, trusted_proxies=_TRUSTED_PROXIES) or "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +141,10 @@ class EmbedMessageRequest(BaseModel):
 
 
 async def _get_llm_service(request: Request) -> Any:
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
     from utils.lazy_singleton import lazy_init_singleton
 
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     if llm_service is None:
         logger.error("LLMService initialization failed for embed endpoint")
         raise HTTPException(status_code=503, detail="LLM service unavailable")
@@ -213,6 +208,15 @@ async def embed_message(
     message = body.message.strip()
     if not message:
         return JSONResponse({"content": ""}, status_code=200)
+
+    # #19786: this unauthenticated route is a chat entry point like the ones in api/chat.py. The scan
+    # sits before the branch, so no path reaches the model with the raw message.
+    try:
+        message = scan_chat_message(message)
+    except HTTPException as exc:
+        return JSONResponse(
+            {"detail": exc.detail}, status_code=exc.status_code, headers={"Access-Control-Allow-Origin": acao}
+        )
 
     llm_service = await _get_llm_service(request)
 

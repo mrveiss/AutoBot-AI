@@ -76,6 +76,25 @@ def _text(metadata: Mapping[str, Any], key: str) -> str | None:
     return text or None
 
 
+def _connector_origin(metadata: Mapping[str, Any]) -> DocumentOrigin:
+    """The only leg that writes no `source`: connector plus the id it gave the item."""
+    connector = _text(metadata, "connector_type") or _text(metadata, "source_connector_id")
+    item = _text(metadata, "source_id")
+    parts = [p for p in (connector, item) if p]
+    return DocumentOrigin(leg=CONNECTOR, reference=f"connector:{':'.join(parts)}" if parts else None)
+
+
+def _watch_folder_origin(metadata: Mapping[str, Any]) -> DocumentOrigin:
+    """`source` is the category here, so the identity is the file it watched."""
+    path = _text(metadata, "file_path") or _text(metadata, "filename")
+    return DocumentOrigin(leg=WATCH_FOLDER, reference=f"file:{path}" if path else None)
+
+
+def _upload_origin(metadata: Mapping[str, Any]) -> DocumentOrigin:
+    name = _text(metadata, "filename") or _text(metadata, "source")
+    return DocumentOrigin(leg=UPLOAD, reference=f"file:{name}" if name else None)
+
+
 def document_origin(metadata: Mapping[str, Any] | None) -> DocumentOrigin:
     """The origin of the fact described by *metadata*.
 
@@ -84,37 +103,21 @@ def document_origin(metadata: Mapping[str, Any] | None) -> DocumentOrigin:
     """
     if not metadata:
         return _UNKNOWN
-
     source_type = _text(metadata, "source_type")
-
     if source_type == "connector":
-        # The only leg that writes no `source`. Its identity is the connector
-        # plus the id the connector gave the item.
-        connector = _text(metadata, "connector_type") or _text(metadata, "source_connector_id")
-        item = _text(metadata, "source_id")
-        parts = [p for p in (connector, item) if p]
-        return DocumentOrigin(leg=CONNECTOR, reference=f"connector:{':'.join(parts)}" if parts else None)
-
+        return _connector_origin(metadata)
     if source_type == "transcript":
         # Already a URN: `recording:<id>`.
         return DocumentOrigin(leg=TRANSCRIPT, reference=_text(metadata, "source"))
-
     if _text(metadata, "source") == "watch_folder":
-        # `source` is the category here, so the identity is the file it watched.
-        path = _text(metadata, "file_path") or _text(metadata, "filename")
-        return DocumentOrigin(leg=WATCH_FOLDER, reference=f"file:{path}" if path else None)
-
+        return _watch_folder_origin(metadata)
     if _text(metadata, "type") == "file":
-        name = _text(metadata, "filename") or _text(metadata, "source")
-        return DocumentOrigin(leg=UPLOAD, reference=f"file:{name}" if name else None)
-
+        return _upload_origin(metadata)
     source = _text(metadata, "source")
     if source:
         # Manual entry, and anything else that set only `source`. Passed through
-        # rather than prefixed: the caller chose this string and inventing a
-        # scheme for it would claim to know what it means.
+        # rather than prefixed: inventing a scheme would claim to know its meaning.
         return DocumentOrigin(leg=MANUAL, reference=source)
-
     return _UNKNOWN
 
 
