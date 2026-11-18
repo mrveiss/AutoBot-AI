@@ -50,9 +50,13 @@ describe('approval card identity (#19951)', () => {
     expect(stream([card, card])).toHaveLength(1)
   })
 
-  it('a resume stream that carries the answer and no card adds no second card', () => {
+  it('two turns emitting cards with different ids both render', () => {
+    const other = { ...card, id: 'approval-fedcba9876543210' }
     expect(stream([card])).toHaveLength(1)
-    const resumed = stream([{ type: 'response', content: 'done', metadata: {} }])
-    expect(resumed).toHaveLength(1)
+    expect(stream([other])).toHaveLength(2)
+  })
+
+  it('the same id re-sent in a later chunk of one stream does not add a card', () => {
+    expect(stream([card, { ...card, content: 'click #buy again' }])).toHaveLength(1)
   })
 })

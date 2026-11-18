@@ -12,6 +12,8 @@ Only the model, the stores behind the seam (``ai_line_world``) and the browser e
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
@@ -173,14 +175,72 @@ async def test_without_the_card_the_seam_files_exactly_one_hold(turn):
     assert message is not None and filed == 1
 
 
-async def test_the_card_id_is_stable_for_the_same_calls_and_differs_for_another_pass():
+async def test_the_card_id_follows_the_plan_and_what_was_shown():
     from chat_workflow.approval_binding import card_id
 
-    state = _input()
+    state = _input(plan_id="p1")
     shown = [dict(CLICK)]
     assert card_id(state, shown) == card_id(state, [dict(CLICK)])
-    assert card_id({**state, "iteration_count": 1}, shown) != card_id(state, shown)
+    assert card_id({**state, "plan_id": "p2"}, shown) != card_id(state, shown)
     assert card_id(state, [{"name": "click", "params": {"selector": "#other"}}]) != card_id(state, shown)
+
+
+async def test_the_same_calls_in_two_turns_get_two_cards_and_a_resume_keeps_its_card(monkeypatch):
+    ids: list = []
+    real = graph.approval_card
+
+    def recording(state, shown):
+        card = real(state, shown)
+        ids.append(card["id"])
+        return card
+
+    monkeypatch.setattr(graph, "approval_card", recording)
+    first, second = Turn(monkeypatch), Turn(monkeypatch)  # a second turn's iteration counter restarts at 0 too
+    with ai_line_world():
+        await first.start()
+        await first.decide({"approved": True})  # request_approval re-runs from the top on resume
+        await second.start()
+
+    assert ids[0] == ids[1], "the same hold re-entered on resume keeps its card id"
+    assert ids[2] != ids[0], "the same calls in another turn are a new card"
+
+
+async def test_through_the_turn_stream_exactly_one_card_reaches_the_client(turn, monkeypatch):
+    from chat_workflow import turn_control
+
+    @contextlib.asynccontextmanager
+    async def no_bus(*_a, **_k):  # the cross-worker cancel bus needs Redis; it never fails a turn, so it is out here
+        yield
+
+    monkeypatch.setattr(turn_control.turn_cancel_bus, "listening", no_bus)
+    manager = turn.cfg["configurable"]["manager"]
+
+    async def through_the_stream(graph_input) -> list:
+        items = [m async for m in turn_control.stream_graph_turn(manager, turn.compiled, "s1", graph_input)]
+        return [m.to_dict() if hasattr(m, "to_dict") else m for m in items]
+
+    with ai_line_world():
+        await turn.compiled.aupdate_state(turn.cfg, _input(), as_node="create_plan")
+        initial = await through_the_stream(None)
+        resumed = await through_the_stream(Command(resume={"approved": True}))
+
+    cards = [m for m in initial + resumed if m.get("type") == "command_approval_request"]
+    assert len(cards) == 1 and cards[0]["id"].startswith("approval-")
+    assert not [m for m in resumed if m.get("type") == "command_approval_request"]
+    assert turn.executed == ["click"]
+
+
+async def test_an_in_line_approved_command_still_gets_the_next_model_iteration():
+    """The terminal flow decides in-line and flags the approval; the loop must go on to the model with its output."""
+    manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+
+    async def collected(tool_calls, iteration, ctx):
+        yield ([{"tool": "execute_command", "status": "success", "stdout": "ok"}], True, False, False)
+
+    manager._collect_tool_execution_results = collected
+    items = [i async for i in manager._yield_tool_results_and_decide([{"name": "execute_command"}], 1, None)]
+
+    assert items == [True]
 
 
 async def test_with_the_gate_off_a_held_call_ends_the_loop_after_one_model_call_and_one_record(monkeypatch):

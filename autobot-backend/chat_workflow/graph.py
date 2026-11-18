@@ -23,6 +23,7 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
+import uuid
 from typing import Any, Dict, List
 
 import aiohttp
@@ -122,6 +123,7 @@ class ChatState(TypedDict, total=False):
     # Command approval (interrupt-based)
     pending_approval: Dict[str, Any] | None
     approval_decision: Dict[str, Any] | None
+    plan_id: str  # #19951: one per plan; names the hold's card and survives the resume
 
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
@@ -566,6 +568,7 @@ async def _generate_response_planned(
         # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
         "approval_decision": None,
         "pending_approval": None,
+        "plan_id": uuid.uuid4().hex,
     }
 
 

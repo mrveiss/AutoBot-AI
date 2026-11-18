@@ -2555,15 +2555,15 @@ before summarizing.
             )
             return False
 
-        # #19951: a call waiting on a person has no result; another model call could only guess at one.
+        # #19951: a terminal approval is decided in-line; a hold that cannot be already ended the loop (break_loop).
         logger.info(
-            "[Issue #651] Iteration %d: Completed with %d new result(s), pending_approval=%s - %s",
+            "[Issue #651] Iteration %d: Completed with %d new result(s), "
+            "pending_approval=%s (decided in-line) - continuing to next iteration",
             iteration,
             len(new_results),
             has_pending_approval,
-            "stopping until it is decided" if has_pending_approval else "continuing to next iteration",
         )
-        return not has_pending_approval
+        return True
 
     async def _yield_llm_response_and_check_stop(
         self,
