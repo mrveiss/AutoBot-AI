@@ -70,8 +70,14 @@ ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
             "or override exists. Reached through glob matching in build and dev tooling (vite, "
             "vitest, vue-tsc, stylelint via micromatch, storybook, npm-run-all2). The lockfile "
             "marks exactly four of the ten copies as non-dev (vite, vue-router, tinyglobby and "
-            "unplugin-utils); no autobot-frontend source file imports picomatch, and whether "
-            "those four reach the browser bundle is not established. Owner decision 2026-11-17 "
+            "unplugin-utils). None reaches the browser bundle: vite, tinyglobby and "
+            "unplugin-utils are build-time tools, and vue-router's picomatch dependency sits "
+            "behind its node-only file-routing entries (the browser entry dist/vue-router.js, "
+            "which autobot-frontend imports as 'vue-router', has no picomatch, unplugin or "
+            "tinyglobby reference, and no source file imports a vue-router subpath or "
+            "picomatch). Two picomatch error literals match 0 files across both built bundles "
+            "(autobot-frontend/dist, 225 JS files; autobot-slm-frontend/dist, 104), so the "
+            "exposure is build and dev tooling only. Owner decision 2026-11-17 "
             "on #21736, renewed or removed deliberately by the expiry."
         ),
     ),
