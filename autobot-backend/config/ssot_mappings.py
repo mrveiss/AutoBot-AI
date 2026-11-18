@@ -135,6 +135,7 @@ _PORT_REGISTRY = [
     ("vnc", "port.vnc", "VNC noVNC port", "medium"),
     ("aistack", "port.aistack", "AI Stack port", "medium"),
     ("npu", "port.npu", "NPU Worker port", "medium"),
+    ("npu_windows", "port.npu_windows", "Windows NPU Worker port", "medium"),  # #19325
     ("tts", "port.tts", "TTS Worker port", "medium"),
 ]
 

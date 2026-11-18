@@ -34,7 +34,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
+from services.agent_analytics import AnalyticsAgentType, TaskStatus, get_agent_analytics
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])
@@ -309,7 +309,7 @@ async def get_agent_recommendations(
                 }
             )
 
-    severity_order = {"high": 0, "medium": 1, "low": 2}
+    severity_order = {s.value: i for i, s in enumerate(reversed(Severity.triage_ladder()))}
     recommendations.sort(key=lambda x: min(severity_order.get(r["severity"], 3) for r in x["recommendations"]))
 
     return {
@@ -365,7 +365,7 @@ async def get_agent_types(
     Issue #744: Requires admin authentication.
     """
     return {
-        "types": [t.value for t in AgentType],
+        "types": [t.value for t in AnalyticsAgentType],
         "statuses": [s.value for s in TaskStatus],
     }
 

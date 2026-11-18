@@ -20,8 +20,8 @@ from knowledge.rag_benchmarks import (
     _GROUND_TRUTH,
     BenchmarkDataset,
     BenchmarkHarness,
-    BenchmarkResult,
     BenchmarkSplit,
+    RetrievalBenchmarkResult,
     _deterministic_dev_test_split,
     get_default_dataset,
     publish_feedback_events,
@@ -81,7 +81,7 @@ def test_tune_allows_dev_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.DEV):
             dataset.expected(qid)  # should not raise
-            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value))
+            out.append(RetrievalBenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.DEV.value))
         return out
 
     report = harness.tune(runner)
@@ -112,7 +112,7 @@ def test_score_allows_test_access():
         out = []
         for qid in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(qid)
-            out.append(BenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value))
+            out.append(RetrievalBenchmarkResult(qid, [], [], 1.0, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.score(runner)
@@ -151,7 +151,7 @@ def test_run_dev_is_not_held_out():
 
     def runner(dataset: BenchmarkDataset):
         return [
-            BenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.DEV.value)
+            RetrievalBenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.DEV.value)
             for q in dataset.iter_split(BenchmarkSplit.DEV)
         ]
 
@@ -168,7 +168,7 @@ def test_run_test_is_held_out():
         out = []
         for q in dataset.iter_split(BenchmarkSplit.TEST):
             dataset.expected(q)  # Issue #5160: must access to mark held_out
-            out.append(BenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value))
+            out.append(RetrievalBenchmarkResult(q, [], [], 0.5, split_used=BenchmarkSplit.TEST.value))
         return out
 
     report = harness.run(runner, split=BenchmarkSplit.TEST)
@@ -182,7 +182,7 @@ def test_run_all_is_never_held_out():
 
     def runner(dataset: BenchmarkDataset):
         return [
-            BenchmarkResult(q, [], [], 1.0, split_used=BenchmarkSplit.ALL.value)
+            RetrievalBenchmarkResult(q, [], [], 1.0, split_used=BenchmarkSplit.ALL.value)
             for q in dataset.iter_split(BenchmarkSplit.ALL)
         ]
 
@@ -205,7 +205,7 @@ async def test_publish_feedback_events_tags_split():
     redis.expire = AsyncMock()
 
     results = [
-        BenchmarkResult(
+        RetrievalBenchmarkResult(
             query="q1",
             retrieved_ids=["a"],
             ranked_ids=["a"],

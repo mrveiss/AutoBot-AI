@@ -111,7 +111,7 @@ check_item "Multi-agent documentation" "[ -f docs/agents/multi-agent-architectur
 # Network connectivity
 echo -e "\n${BLUE}🌐 Network Connectivity${NC}"
 check_item "Redis connectivity" "redis-cli -h localhost ping | grep PONG"
-check_item "Playwright service" "curl -sf http://localhost:3000/health"
+check_item "Playwright service" "curl -sf http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"
 
 # Agent configuration test
 echo -e "\n${BLUE}⚙️  Agent Configuration Test${NC}"

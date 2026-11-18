@@ -17,6 +17,7 @@ what made them separable. Pure move: no behaviour change.
 from __future__ import annotations
 
 from models.schemas import ConnectionTestRequest, ConnectionTestResponse
+from services.ssh_utils import ssh_destination_args
 
 
 def _build_password_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> list[str]:
@@ -38,7 +39,7 @@ def _build_password_ssh_command(request: ConnectionTestRequest, remote_cmd: str)
         "PubkeyAuthentication=no",
         "-p",
         str(request.ssh_port),
-        f"{request.ssh_user}@{request.ip_address}",
+        *ssh_destination_args(request.ssh_user, request.ip_address),
         remote_cmd,
     ]
 
@@ -59,7 +60,7 @@ def _build_key_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> l
         "BatchMode=yes",
         "-p",
         str(request.ssh_port),
-        f"{request.ssh_user}@{request.ip_address}",
+        *ssh_destination_args(request.ssh_user, request.ip_address),
         remote_cmd,
     ]
 

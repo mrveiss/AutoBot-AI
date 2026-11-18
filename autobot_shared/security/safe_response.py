@@ -73,7 +73,7 @@ def safe_error_reason(exc: BaseException) -> str:
     """A short, logical failure reason -- never a host, port or path an exception's own text may carry (#17065).
 
     For a field the caller embeds in its own response shape (an
-    ``error_message``, a ``ProviderStatus.error``), rather than the full
+    ``error_message``, a ``OrphanDetectorStatus.error``), rather than the full
     ``{"detail", "status_code"}`` boundary response ``safe_error_response``
     above returns.
 

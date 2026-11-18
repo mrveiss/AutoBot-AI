@@ -12,6 +12,8 @@
 
 import { ref, computed, readonly, onUnmounted } from 'vue'
 import { useAutobotApi, autobotApiErrorMessage } from '@/composables/useAutobotApi'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
+import i18n from '@/i18n'
 import { SKILL_APPROVAL_POLL_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 // =============================================================================
@@ -214,11 +216,16 @@ export function useSkills() {
 // Helpers
 // =============================================================================
 
+const t = i18n.global.t.bind(i18n.global)
+
+/** How often the approval poll runs (Issue #951). */
+const APPROVAL_POLL_INTERVAL_MS = 30_000
+
 function _extractError(err: unknown): string {
   // `autobotApiErrorMessage` is the one implementation of the FastAPI
   // `{ detail }` unwrap this used to hand-roll via `axios.isAxiosError`. Its
-  // fallback chain is identical: `response.data.detail`, then `err.message`.
-  return autobotApiErrorMessage(err, String(err))
+  // fallback chain is the `HttpError` detail, then `err.message`.
+  return autobotApiErrorMessage(err, t('skills.errors.generic'))
 }
 
 // =============================================================================
@@ -238,14 +245,13 @@ export function useSkillGovernance() {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const newDraftNotification = ref<string | null>(null)
-  let _pollTimer: ReturnType<typeof setInterval> | null = null
 
   async function fetchRepos(): Promise<void> {
     loading.value = true
     try {
       repos.value = await api.getSkillRepos()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch repos')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchReposFailed'))
     } finally {
       loading.value = false
     }
@@ -259,7 +265,7 @@ export function useSkillGovernance() {
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to add repo')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.addRepoFailed'))
       throw e
     }
   }
@@ -270,24 +276,17 @@ export function useSkillGovernance() {
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to sync repo')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.syncRepoFailed'))
       throw e
     }
   }
 
-  /**
-   * GET /skills/governance/approvals.
-   *
-   * `timeoutMs` is passed only by `startApprovalPolling`, which runs on a 30s
-   * interval — the same length as the client's default budget, so a tick that
-   * ran to its timeout would still be in flight when its successor fired.
-   * Interactive callers keep the default.
-   */
-  async function fetchApprovals(timeoutMs?: number): Promise<void> {
+  /** GET /skills/governance/approvals (interactive read, client default budget). */
+  async function fetchApprovals(): Promise<void> {
     try {
-      approvals.value = await api.getSkillApprovals(timeoutMs)
+      approvals.value = await api.getSkillApprovals()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch approvals')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchApprovalsFailed'))
     }
   }
 
@@ -305,7 +304,7 @@ export function useSkillGovernance() {
       })
       await fetchApprovals()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to process approval')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.processApprovalFailed'))
     }
   }
 
@@ -314,7 +313,7 @@ export function useSkillGovernance() {
       const data = await api.getSkillDrafts()
       drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch drafts')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchDraftsFailed'))
     }
   }
 
@@ -322,7 +321,7 @@ export function useSkillGovernance() {
     try {
       return await api.testSkillDraft(skillId)
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Test draft failed')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.testDraftFailed'))
       throw e
     }
   }
@@ -333,7 +332,7 @@ export function useSkillGovernance() {
       await fetchDrafts()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to promote draft')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.promoteDraftFailed'))
       throw e
     }
   }
@@ -342,7 +341,7 @@ export function useSkillGovernance() {
     try {
       governanceConfig.value = await api.getSkillGovernance()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch governance config')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchGovernanceFailed'))
     }
   }
 
@@ -351,30 +350,41 @@ export function useSkillGovernance() {
       await api.updateSkillGovernanceMode(mode)
       await fetchGovernance()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to update governance mode')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.updateGovernanceModeFailed'))
     }
   }
 
-  /** Issue #951: Poll for new autonomous-generated approvals every 30s. */
+  /**
+   * Issue #951: one approval read per tick. A failure is recorded in `error` and rethrown, so
+   * the shared dashboard poller (#19482) counts it and pauses after the consecutive-error limit.
+   */
+  async function pollApprovals(): Promise<void> {
+    const prev = approvals.value.length
+    try {
+      approvals.value = await api.getSkillApprovals(SKILL_APPROVAL_POLL_TIMEOUT_MS)
+    } catch (e: unknown) {
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchApprovalsFailed'))
+      throw e
+    }
+    const curr = approvals.value.length
+    if (curr > prev) {
+      const newest = approvals.value[approvals.value.length - 1]
+      newDraftNotification.value = t('skills.newDraftNotification', {
+        skillId: newest?.skill_id ?? t('skills.unknownSkill'),
+      })
+    }
+  }
+
+  /** Poll for new autonomous-generated approvals every 30s; pauses after repeated failures. */
+  const approvalPoller = useDashboardPoller(pollApprovals, APPROVAL_POLL_INTERVAL_MS)
+
   function startApprovalPolling(): void {
-    if (_pollTimer !== null) return
-    _pollTimer = setInterval(async () => {
-      const prev = approvals.value.length
-      await fetchApprovals(SKILL_APPROVAL_POLL_TIMEOUT_MS)
-      const curr = approvals.value.length
-      if (curr > prev) {
-        const newest = approvals.value[approvals.value.length - 1]
-        newDraftNotification.value =
-          `AutoBot generated a new skill: "${newest?.skill_id ?? 'unknown'}" — pending approval`
-      }
-    }, 30_000)
+    if (approvalPoller.isPolling.value) return
+    approvalPoller.start('')
   }
 
   function stopApprovalPolling(): void {
-    if (_pollTimer !== null) {
-      clearInterval(_pollTimer)
-      _pollTimer = null
-    }
+    approvalPoller.stop()
   }
 
   function dismissDraftNotification(): void {
@@ -401,6 +411,7 @@ export function useSkillGovernance() {
     promoteDraft,
     fetchGovernance,
     setGovernanceMode,
+    approvalPoller,
     startApprovalPolling,
     stopApprovalPolling,
     dismissDraftNotification,

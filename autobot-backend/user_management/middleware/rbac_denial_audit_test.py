@@ -56,9 +56,9 @@ class TestAuditVocabulary:
     """
 
     def test_permission_denied_action_exists(self):
-        from autobot_shared.user_management.models.audit import AuditAction
+        from autobot_shared.user_management.models.audit import IdentityAuditAction
 
-        assert AuditAction.PERMISSION_DENIED == "permission_denied"
+        assert IdentityAuditAction.PERMISSION_DENIED == "permission_denied"
 
     def test_endpoint_resource_type_exists(self):
         from autobot_shared.user_management.models.audit import AuditResourceType
@@ -87,9 +87,9 @@ class TestAuditVocabulary:
         sys.modules["slm_audit_shim"] = module
         spec.loader.exec_module(module)
 
-        assert module.AuditAction is shared_audit.AuditAction
+        assert module.IdentityAuditAction is shared_audit.IdentityAuditAction
         assert module.AuditResourceType is shared_audit.AuditResourceType
-        assert shared_audit.AuditAction.PERMISSION_DENIED == "permission_denied"
+        assert shared_audit.IdentityAuditAction.PERMISSION_DENIED == "permission_denied"
         assert shared_audit.AuditResourceType.ENDPOINT == "endpoint"
 
 

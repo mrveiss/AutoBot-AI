@@ -20,7 +20,14 @@ const get = vi.fn()
 const post = vi.fn()
 
 vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({ get, post }),
+  // #21001: the viewer's role comes from the members list; answer it as an owner, off the test's `get` script.
+  useApiClient: () => ({
+    get: (url: string, ...rest: unknown[]) =>
+      String(url).endsWith('/members')
+        ? Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true })
+        : get(url, ...rest),
+    post,
+  }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -130,6 +137,8 @@ function mockApi({
   rollupFail = false,
 }: Fixture = {}) {
   get.mockImplementation((url: string) => {
+    // #21242: the canvas lists the company's workflows on entry; answer it explicitly.
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url === '/api/llc/companies/c1/org-chart') {
       return Promise.resolve({ nodes: structuredClone(nodes) })
     }
@@ -172,7 +181,8 @@ const i18n = createI18n({
 
 async function mountChart(fixture?: Fixture) {
   if (fixture) mockApi(fixture)
-  const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true } } })
+  // The node drawer is the kit BaseDrawer, which teleports to body (#14780).
+  const wrapper = mount(OrgChart, { global: { plugins: [i18n], stubs: { HireAgentModal: true, Teleport: true } } })
   await flushPromises()
   return wrapper
 }

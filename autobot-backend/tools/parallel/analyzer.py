@@ -12,6 +12,7 @@ Based on Cursor's dependency detection patterns.
 from typing import Callable
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import ToolEffect, canonical_tool_name, has_effect
 from tools.parallel.types import DependencyType, ParallelToolCall
 
 logger = get_logger(__name__)
@@ -19,44 +20,6 @@ logger = get_logger(__name__)
 
 class DependencyAnalyzer:
     """Analyzes dependencies between tool calls for parallel execution"""
-
-    # Tools that read from resources
-    READ_TOOLS = {
-        "read_file",
-        "grep_search",
-        "file_search",
-        "list_dir",
-        "list_directory",
-        "web_search",
-        "query_database",
-        "get_redis_value",
-        "semantic_search",
-        "search_knowledge",
-    }
-
-    # Tools that write to resources
-    WRITE_TOOLS = {
-        "edit_file",
-        "write_file",
-        "delete_file",
-        "execute_command",
-        "set_redis_value",
-        "insert_database",
-        "create_file",
-        "move_file",
-        "rename_file",
-    }
-
-    # Tools that affect system state
-    STATE_TOOLS = {
-        "execute_command",
-        "manage_service",
-        "create_directory",
-        "delete_directory",
-        "run_shell",
-        "start_process",
-        "stop_process",
-    }
 
     # Resource extraction patterns for common tools
     RESOURCE_EXTRACTORS: dict[str, Callable[[dict], str | None]] = {
@@ -66,9 +29,9 @@ class DependencyAnalyzer:
         "delete_file": lambda args: args.get("file_path") or args.get("path"),
         "create_file": lambda args: args.get("file_path") or args.get("path"),
         "grep_search": lambda args: args.get("path") or args.get("directory"),
-        "list_dir": lambda args: args.get("path") or args.get("directory"),
         "list_directory": lambda args: args.get("path") or args.get("directory"),
         "create_directory": lambda args: args.get("path"),
+        "remove_directory": lambda args: args.get("path"),
         "move_file": lambda args: args.get("source") or args.get("destination"),
     }
 
@@ -116,7 +79,7 @@ class DependencyAnalyzer:
         """Check if call_b depends on call_a"""
 
         # Rule 1: Write → Read/Write on same resource
-        if call_a.tool_name in self.WRITE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.WRITE):
             resource_a = self._extract_resource(call_a)
             resource_b = self._extract_resource(call_b)
 
@@ -125,7 +88,7 @@ class DependencyAnalyzer:
                     return DependencyType.RESOURCE
 
         # Rule 2: Read → Write on same resource (read must complete first)
-        if call_a.tool_name in self.READ_TOOLS and call_b.tool_name in self.WRITE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.READ) and has_effect(call_b.tool_name, ToolEffect.WRITE):
             resource_a = self._extract_resource(call_a)
             resource_b = self._extract_resource(call_b)
 
@@ -134,7 +97,7 @@ class DependencyAnalyzer:
                     return DependencyType.RESOURCE
 
         # Rule 3: State-changing tools create order dependencies
-        if call_a.tool_name in self.STATE_TOOLS:
+        if has_effect(call_a.tool_name, ToolEffect.STATE):
             if self._might_depend_on_state(call_a, call_b):
                 return DependencyType.ORDER
 
@@ -151,7 +114,7 @@ class DependencyAnalyzer:
             return self._custom_extractors[call.tool_name](call.arguments)
 
         # Fall back to built-in extractors
-        extractor = self.RESOURCE_EXTRACTORS.get(call.tool_name)
+        extractor = self.RESOURCE_EXTRACTORS.get(canonical_tool_name(call.tool_name))
         if extractor:
             return extractor(call.arguments)
 

@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared import egress_allowlist
 from services import fleet_registry
 from services.fleet_registry import (
     SOURCE_FALLBACK,
@@ -28,6 +29,15 @@ from services.fleet_registry import (
 )
 
 _FETCH = "services.fleet_registry._fetch_registry_nodes"
+
+
+@pytest.fixture(autouse=True)
+def _slm_origin_is_internal(monkeypatch):
+    """#17576: the registry read is egress-guarded; the fake SLM origin stands in for ``config.slm_url``."""
+    monkeypatch.setattr(egress_allowlist, "_ssot_service_urls", lambda: ["http://slm.invalid"])
+    egress_allowlist.reset_internal_origin_state()
+    yield
+    egress_allowlist.reset_internal_origin_state()
 
 
 @pytest.fixture(autouse=True)
@@ -232,7 +242,7 @@ class _FakeSession:
         self._pages = list(pages)
         self.calls = []
 
-    def get(self, url, params=None):
+    def get(self, url, params=None, allow_redirects=True):
         self.calls.append((params["page"], params["per_page"]))
         return _FakeResponse(self._pages[int(params["page"]) - 1])
 

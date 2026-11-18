@@ -28,15 +28,16 @@ Design
 import time
 
 from auth_middleware import get_auth_middleware
-from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
+from autobot_shared.auth.jwt_core import (
+    RS256_DENYLIST_PREFIX,
+    JWTDecodeError,
+    _peek_alg,
+    decode_jwt_no_verify_exp,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = get_logger(__name__)
-
-#: Shared Redis key prefix — MUST match ``RS256_DENYLIST_PREFIX`` in
-#: ``autobot-slm-backend/services/rs256_denylist.py``.
-RS256_DENYLIST_PREFIX = "auth:rs256:jti:denylist:"
 
 
 async def revoke_authority_token_jti(token: str) -> bool:
