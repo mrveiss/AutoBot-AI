@@ -312,8 +312,8 @@ class SubprocessLifecycleAdapter:
     # Name of the CLI binary required by this adapter (e.g. "claude", "gh").
     # Subclasses declare this; None means no external CLI required (GH#9793).
     _required_cli: Optional[str] = None
-    # The role's credentials may be put in this adapter's child env (#20533).
-    injects_role_credentials = True
+    # Opt-in (#20533): True only on adapters whose child env may carry role credentials.
+    injects_role_credentials = False
 
     # CLI availability gate (GH#9793, robust resolution GH#12478) -----------
     def _configured_cli_path(self) -> Optional[str]:

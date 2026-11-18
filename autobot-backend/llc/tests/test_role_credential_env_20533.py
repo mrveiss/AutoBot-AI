@@ -140,6 +140,17 @@ async def _resolve(factory, company, agent):  # noqa: ANN001
         "GIT_SSH_COMMAND",
         "ANTHROPIC_API_KEY",
         "DYLD_INSERT_LIBRARIES",
+        *"HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY FTP_PROXY SSL_CERT_FILE SSL_CERT_DIR".split(),
+        *"REQUESTS_CA_BUNDLE CURL_CA_BUNDLE NODE_EXTRA_CA_CERTS SSLKEYLOGFILE OPENSSL_CONF OPENSSL_MODULES".split(),
+        *"PS1 PS2 PS3 PS4 PROMPT_COMMAND SHELLOPTS BASHOPTS CDPATH GLOBIGNORE HISTFILE INPUTRC BASH_FUNC_X".split(),
+        *"GLIBC_TUNABLES MALLOC_CHECK_ LOCALDOMAIN RES_OPTIONS HOSTALIASES NLSPATH TZDIR GCONV_PATH".split(),
+        *"JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS CLASSPATH GOFLAGS GOPATH CARGO_HOME".split(),
+        *"RUSTFLAGS NPM_CONFIG_REGISTRY PIP_INDEX_URL UV_INDEX_URL EDITOR VISUAL PAGER BROWSER".split(),
+        *"SSH_AUTH_SOCK GNUPGHOME XDG_CONFIG_HOME DBUS_SESSION_BUS_ADDRESS DISPLAY WAYLAND_DISPLAY".split(),
+        "ANTHROPIC_FOO",
+        "CLAUDE_FOO",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
     ],
 )
 def test_protected_names_are_refused(name):  # noqa: ANN001
@@ -201,7 +212,10 @@ def test_serialized_context_masks_values_but_keeps_names():
 
 
 def test_child_env_receives_values_and_context_blob_does_not():
-    ctx = {"agent_api_key": "run-key", ROLE_CREDENTIALS_KEY: {"STRIPE_API_KEY": _VALUE}}  # pragma: allowlist secret
+    ctx = {
+        "agent_api_key": "run-key",  # pragma: allowlist secret
+        ROLE_CREDENTIALS_KEY: {"STRIPE_API_KEY": _VALUE},
+    }
     env = _build_minimal_env({}, ctx)
     assert env["STRIPE_API_KEY"] == _VALUE
     assert env["AUTOBOT_LLC_API_KEY"] == "run-key"  # pragma: allowlist secret
@@ -209,7 +223,10 @@ def test_child_env_receives_values_and_context_blob_does_not():
 
 
 def test_injection_rechecks_names_and_cannot_override_protected_vars():
-    env = {"PATH": "/usr/bin", "AUTOBOT_LLC_API_KEY": "real"}  # pragma: allowlist secret
+    env = {
+        "PATH": "/usr/bin",
+        "AUTOBOT_LLC_API_KEY": "real",  # pragma: allowlist secret
+    }
     ctx = {
         "agent_api_key": "real",  # pragma: allowlist secret
         ROLE_CREDENTIALS_KEY: {  # pragma: allowlist secret
@@ -235,3 +252,38 @@ async def test_scheduler_hook_attaches_for_subprocess_adapters_only(factory):  #
         http_ctx = {"company_id": str(company)}
         await attach_role_credentials(SimpleNamespace(), agent_row, http_ctx)  # e.g. an HTTP adapter
         assert ROLE_CREDENTIALS_KEY not in http_ctx
+
+
+@pytest.mark.asyncio
+async def test_same_name_from_two_secrets_is_refused_for_both_and_audited(factory):  # noqa: ANN001
+    company, agent = await _world(factory, {"STRIPE_API_KEY": _VALUE})
+    ids = [uuid.uuid4(), uuid.uuid4()]
+    dup = [(ids[0], "DUP_KEY"), (ids[1], "DUP_KEY")]
+    with patch.object(RoleCredentialService, "active_secrets_for_role", return_value=dup):
+        out = await _resolve(factory, company, agent)
+    assert out == {}
+    async with factory() as s:
+        rows = (await s.execute(sa.select(LLCActivityLog).where(LLCActivityLog.action == REFUSED_EVENT))).scalars()
+        assert sorted(r.after_state["reason"] for r in rows) == [
+            "duplicate_name",
+            "duplicate_name",
+        ]
+
+
+@pytest.mark.asyncio
+async def test_non_uuid_ids_log_a_warning_without_secrets(caplog):  # noqa: ANN001
+    ctx = {"company_id": "not-a-uuid"}
+    with caplog.at_level(logging.WARNING):
+        await attach_role_credentials(LLCProcessAdapter(), {"agent_id": "agent-7"}, ctx)
+    assert ROLE_CREDENTIALS_KEY not in ctx
+    assert "agent-7" in caplog.text and "not-a-uuid" in caplog.text
+
+
+def test_subprocess_base_does_not_inject_by_default():
+    from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
+    from llc.adapters.copilot_local_adapter import CopilotLocalAdapter
+    from llc.adapters.subprocess_base import SubprocessLifecycleAdapter
+
+    assert SubprocessLifecycleAdapter.injects_role_credentials is False
+    assert ClaudeCodeAdapter.injects_role_credentials is True
+    assert CopilotLocalAdapter.injects_role_credentials is True

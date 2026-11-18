@@ -75,19 +75,112 @@ PROTECTED_ENV_KEYS = frozenset(
     }
 )
 
-# Any variable whose name starts with one of these prefixes is a dynamic-loader
-# hijack vector (there are many ``LD_*`` / ``DYLD_*`` variants beyond the common
-# three) and is always protected.
-_PROTECTED_ENV_PREFIXES = ("LD_", "DYLD_")
+# Names that redirect the network stack, trust store, shell, resolver or a
+# language toolchain, or that identify the host process. Added for role
+# credentials (#20533): their names are operator-chosen, so the guard must cover
+# the whole family, not only the loader / interpreter hijack set above.
+PROTECTED_ENV_KEYS = PROTECTED_ENV_KEYS | frozenset(
+    {
+        # Proxy / TLS trust overrides
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "FTP_PROXY",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "NODE_EXTRA_CA_CERTS",
+        "SSLKEYLOGFILE",
+        "OPENSSL_CONF",
+        # Shell behaviour
+        "PS1",
+        "PS2",
+        "PS3",
+        "PS4",
+        "SHELLOPTS",
+        "BASHOPTS",
+        "CDPATH",
+        "GLOBIGNORE",
+        "HISTFILE",
+        "INPUTRC",
+        # Loader / resolver / locale data
+        "GLIBC_TUNABLES",
+        "LOCALDOMAIN",
+        "RES_OPTIONS",
+        "HOSTALIASES",
+        "NLSPATH",
+        "TZDIR",
+        # Other runtimes / tools
+        "JAVA_TOOL_OPTIONS",
+        "_JAVA_OPTIONS",
+        "JDK_JAVA_OPTIONS",
+        "CLASSPATH",
+        "GOFLAGS",
+        "GOPATH",
+        "GOROOT",
+        "GOPROXY",
+        "GONOPROXY",
+        "GONOSUMDB",
+        "GOPRIVATE",
+        "GOENV",
+        "GOCACHE",
+        "GOBIN",
+        "GOMODCACHE",
+        "GOINSECURE",
+        "GOSUMDB",
+        "GOTOOLCHAIN",
+        "GOWORK",
+        "GOOS",
+        "GOARCH",
+        "EDITOR",
+        "VISUAL",
+        "PAGER",
+        "BROWSER",
+        "GNUPGHOME",
+        "DISPLAY",
+        # Identity and location of the host process
+        "HOME",
+        "SHELL",
+        "USER",
+        "LOGNAME",
+        "PWD",
+        "OLDPWD",
+        "TMPDIR",
+        "LANG",
+        "TERM",
+        "SHLVL",
+    }
+)
+
+# Any variable whose name starts with one of these prefixes is a protected
+# family (``LD_*`` / ``DYLD_*`` loader hijack, interpreter and toolchain
+# configuration, the provider-credential namespaces, ...).
+_PROTECTED_ENV_PREFIXES = (
+    "LD_", "DYLD_", "ANTHROPIC_", "CLAUDE_", "OPENAI_", "OPENSSL_",
+    "PYTHON", "NODE_", "PERL", "RUBY", "GIT_", "BASH_", "LC_", "MALLOC_",
+    "GLIBC_", "CARGO_", "CGO_", "RUST", "NPM_CONFIG_", "PIP_", "UV_",
+    "SSH_", "XDG_", "DBUS_", "WAYLAND_",
+)  # fmt: skip
+
+# AutoBot's own wiring: refused wherever a name is operator-chosen. Not part of
+# ``is_protected_env_key`` because tasks may legitimately contribute ``AUTOBOT_*``.
+_RESERVED_ENV_PREFIXES = ("AUTOBOT_", "LLC_")
 
 
 def is_protected_env_key(key: str) -> bool:
-    """Return True if ``key`` is a credential / loader / shell-startup hijack var.
+    """Return True if ``key`` is a credential / loader / shell / toolchain hijack var.
 
-    Covers the explicit :data:`PROTECTED_ENV_KEYS` denylist and the ``LD_*`` /
-    ``DYLD_*`` dynamic-loader prefix families.
+    Covers the explicit :data:`PROTECTED_ENV_KEYS` denylist and the prefix
+    families in :data:`_PROTECTED_ENV_PREFIXES`.
     """
     return key in PROTECTED_ENV_KEYS or key.startswith(_PROTECTED_ENV_PREFIXES)
+
+
+def is_reserved_env_name(key: str) -> bool:
+    """Protected, or in AutoBot's own ``AUTOBOT_*`` / ``LLC_*`` wiring namespace."""
+    return is_protected_env_key(key) or key.startswith(_RESERVED_ENV_PREFIXES)
 
 
 def safe_task_env(

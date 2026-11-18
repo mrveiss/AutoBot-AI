@@ -16,13 +16,14 @@ itself be a pasted value).
 from __future__ import annotations
 
 import uuid
-from typing import Dict
+from collections import Counter
+from typing import Dict, List, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
-from ..credential_env import env_name_refusal
+from ..credential_env import REFUSED_DUPLICATE, env_name_refusal
 from ..models.activity import ActorType
 from ..models.enums import RoleHolderType
 from .base import LLCServiceBase
@@ -71,28 +72,40 @@ class RoleCredentialEnvResolver(LLCServiceBase):
             logger.warning("role credential %s revoked while resolving; not injected", secret_id)
             return None
 
-    async def _resolve_role(
-        self,
-        session: AsyncSession,
-        company_id: uuid.UUID,
-        role_id: uuid.UUID,
-        out: Dict[str, str],
-    ) -> None:
-        for secret_id, name in await RoleCredentialService().active_secrets_for_role(session, company_id, role_id):
-            reason = env_name_refusal(name)
+    async def _candidates(
+        self, session: AsyncSession, company_id: uuid.UUID, agent_id: uuid.UUID
+    ) -> List[Tuple[uuid.UUID, uuid.UUID, str]]:
+        """``(role_id, secret_id, name)`` across the agent's roles; a secret shared by roles counts once."""
+        roles = await RoleAssignmentService().roles_held_by(session, company_id, RoleHolderType.AGENT, agent_id)
+        seen: set = set()
+        found: List[Tuple[uuid.UUID, uuid.UUID, str]] = []
+        for role in roles:
+            for (
+                secret_id,
+                name,
+            ) in await RoleCredentialService().active_secrets_for_role(session, company_id, role.id):
+                if secret_id not in seen:
+                    seen.add(secret_id)
+                    found.append((role.id, secret_id, name))
+        return found
+
+    async def resolve_for_agent(
+        self, session: AsyncSession, company_id: uuid.UUID, agent_id: uuid.UUID
+    ) -> Dict[str, str]:
+        """Active, acceptably-named credentials across every role *agent_id* currently holds.
+
+        A name carried by two different secrets is ambiguous: both are refused
+        (``duplicate_name``, audited), never resolved by last-write-wins.
+        """
+        found = await self._candidates(session, company_id, agent_id)
+        counts = Counter(name for _, _, name in found)
+        resolved: Dict[str, str] = {}
+        for role_id, secret_id, name in found:
+            reason = REFUSED_DUPLICATE if counts[name] > 1 else env_name_refusal(name)
             if reason is not None:
                 await self._audit_refusal(session, company_id, role_id, secret_id, reason)
                 continue
             value = await self._value(session, company_id, secret_id, name)
             if value is not None:
-                out[name] = value
-
-    async def resolve_for_agent(
-        self, session: AsyncSession, company_id: uuid.UUID, agent_id: uuid.UUID
-    ) -> Dict[str, str]:
-        """Active, acceptably-named credentials across every role *agent_id* currently holds."""
-        roles = await RoleAssignmentService().roles_held_by(session, company_id, RoleHolderType.AGENT, agent_id)
-        resolved: Dict[str, str] = {}
-        for role in roles:
-            await self._resolve_role(session, company_id, role.id, resolved)
+                resolved[name] = value
         return resolved

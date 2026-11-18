@@ -886,9 +886,8 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     }
     external_run_id: Optional[str] = None
     try:
-        await attach_role_credentials(
-            adapter, agent, enriched
-        )  # #20533; inside try so the run key is revoked on failure
+        # #20533; inside try so the run key is revoked on failure
+        await attach_role_credentials(adapter, agent, enriched)
         external_run_id = await adapter.invoke(agent_config, enriched)
         result = await _await_adapter_completion(adapter, agent_config, external_run_id)
         final_status = result.status
