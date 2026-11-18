@@ -13,10 +13,12 @@ The markers are dict literals in the syntax tree, so prose naming them is not a 
   * OpenAI function tool: keys `type` (value "function") and `function`;
   * a `dict(...)` call or dict literal pairing `name` with `input_schema` or `parameters`.
 
-The scan covers all of `autobot-backend/llm_shared` (providers and adapters). Provider request
-builders outside it (`api/llm.py`, `chat_workflow/manager.py`, `modern_ai_integration.py`) were
-checked by hand and hold no such dict; the same shapes in MCP tool registries are tool
-*definitions*, not provider requests, and are out of scope. See `_inlined_formatters` for the
+The scan covers every non-test python file under `autobot-backend/llm_shared` (providers and
+adapters) plus exactly three request builders outside it, listed in `_EXTRA_FILES`:
+`api/llm.py`, `chat_workflow/manager.py` and `modern_ai_integration.py`. Nothing else is scanned.
+Out of scope: MCP tool registries and tool-definition modules (they define tools, they do not build
+provider requests) including `api/browser_mcp.py`, and any other module not named above. See
+`_inlined_formatters` for the shapes the matcher cannot see.
 shapes this cannot see.
 """
 
@@ -33,6 +35,11 @@ from repo_tests._reach import declare
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT_DIR = "autobot-backend/llm_shared"
+_EXTRA_FILES = (
+    "autobot-backend/api/llm.py",
+    "autobot-backend/chat_workflow/manager.py",
+    "autobot-backend/modern_ai_integration.py",
+)
 _CANONICAL = f"{_ROOT_DIR}/providers/message_formatting.py"
 _ANTHROPIC_KEYS = {"name", "description", "input_schema"}
 _SCHEMA_KEYS = {"input_schema", "parameters"}
@@ -116,17 +123,18 @@ def _provider_population(root: Path) -> list[str]:
         tracked = tracked_paths(root, _ROOT_DIR)
     except EmptyEnumeration:
         return []
-    return [rel for rel in tracked if _is_source_python(rel)]
+    scanned = [rel for rel in tracked if _is_source_python(rel)]
+    return scanned + [rel for rel in _EXTRA_FILES if (root / rel).is_file()]
 
 
 REACH = declare(
     "provider-tool-schema-scan",
     discover=_provider_population,
-    # Mid-window, from REACH.window(): population 126, growth 5 -> [121, 126], pin 124. A new guard has no
+    # Mid-window, from REACH.window(): population 129 (126 under llm_shared + 3 named builders), growth 5 -> [124, 129], pin 127. A new guard has no
     # base declaration, so the computed floor (repo_tests/_reach_base.py) cannot apply until it lands.
-    floor=124,
+    floor=127,
     what="non-test provider python source",
-    roots=(_ROOT_DIR,),
+    roots=(_ROOT_DIR, *_EXTRA_FILES),
     growth=5,
 )
 
