@@ -99,6 +99,7 @@ class ThinkCategory(Enum):
     APPROACH_SELECTION = auto()  # Choosing between approaches
     ERROR_RECOVERY = auto()  # Deciding how to recover from errors
     ASSUMPTION_CHECK = auto()  # Validating assumptions
+    SELF_REFLECTION = auto()  # RLM: evaluating own response quality (#1373)
     GENERAL = auto()  # General reasoning
     CAUSAL_ANALYSIS = auto()  # Causal chain reasoning — WHY not just WHAT
 

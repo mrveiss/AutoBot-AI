@@ -27,6 +27,7 @@ from typing import Any
 from agent_loop.types import ThinkCategory, ThinkResult
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from llm_shared.quality_judgment import clamp_score, judge_validated
 
 logger = get_logger(__name__)
 
@@ -113,6 +114,17 @@ Validate my assumptions:
 
 Provide your reasoning and conclusion.
 """,
+    ThinkCategory.SELF_REFLECTION: """
+Evaluate the quality of this response against the original query (RLM pattern):
+
+1. Does the response directly answer the query?
+2. Is the response accurate and complete?
+3. Are there important aspects the response missed?
+4. Is the reasoning sound and well-structured?
+5. Would a follow-up pass with specific guidance produce a better answer?
+
+Provide your quality score (0.0-1.0) and specific critique.
+""",
     ThinkCategory.GENERAL: """
 Think through this situation:
 
@@ -138,6 +150,17 @@ Distinguish: X CAUSES Y (mechanistic) vs X CORRELATES WITH Y (observational).
 
 Provide your causal reasoning and conclusion.
 """,
+}
+
+
+#: JSON Schema the self-reflection reply must satisfy (#16133).
+_REFLECTION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "critique": {"type": "string"},
+    },
+    "required": ["score"],
 }
 
 
@@ -225,8 +248,11 @@ class ThinkTool:
 
         # Get reasoning from LLM
         try:
-            response = await self._get_llm_response(full_prompt)
-            result = self._parse_response(response, category, task_id)
+            if category is ThinkCategory.SELF_REFLECTION:
+                result = await self._reflect(full_prompt, task_id)
+            else:
+                response = await self._get_llm_response(full_prompt)
+                result = self._parse_response(response, category, task_id)
         except Exception as e:
             logger.error("Think Tool failed: %s", e)
             result = ThinkResult(
@@ -333,6 +359,30 @@ class ThinkTool:
         )
 
         return "\n".join(parts)
+
+    async def _reflect(self, prompt: str, task_id: str | None) -> ThinkResult:
+        """Judge response quality through the one quality seam (#16133)."""
+
+        async def _complete(system_prompt: str, user_prompt: str) -> str:
+            combined = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            return await self._get_llm_response(combined)
+
+        data = await judge_validated(
+            "",
+            prompt,
+            _REFLECTION_SCHEMA,
+            completer=_complete,
+            label="agent_loop.think.self_reflection",
+        )
+        critique = str(data.get("critique") or "").strip()
+        score = clamp_score(data["score"])
+        return ThinkResult(
+            category=ThinkCategory.SELF_REFLECTION,
+            reasoning=critique,
+            conclusion=f"Quality score {score:.2f}",
+            confidence=score,
+            task_id=task_id,
+        )
 
     async def _get_llm_response(self, prompt: str) -> str:
         """Get a response from the LLM."""
