@@ -56,12 +56,35 @@ class MaxLevelFilter(logging.Filter):
         return record.levelno < self.max_level
 
 
+class EmitOnceFilter(logging.Filter):
+    """Let one record through a given sink once, however many loggers on its path carry that sink (#21773).
+
+    Every managed logger owns its handlers and still propagates, so a package logger
+    (``get_logger("chat_workflow")``) and a module under it (``chat_workflow.manager``) both write each
+    record to the same file and to stdout/stderr. The first handler of a ``sink`` to see a record writes it;
+    later ones with the same ``sink`` drop it. Add it LAST on a handler, so a record another filter rejects
+    is not marked as written.
+    """
+
+    def __init__(self, sink: str) -> None:
+        super().__init__()
+        self.sink = sink
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        written = record.__dict__.setdefault("_autobot_sinks", set())
+        if self.sink in written:
+            return False
+        written.add(self.sink)
+        return True
+
+
 def build_stdout_handler(formatter: logging.Formatter | None = None) -> logging.StreamHandler:
     """Build a DEBUG/INFO handler writing to stdout (WARNING+ filtered out)."""
     handler = logging.StreamHandler(sys.stdout)
     if formatter is not None:
         handler.setFormatter(formatter)
     handler.addFilter(MaxLevelFilter(logging.WARNING))
+    handler.addFilter(EmitOnceFilter("stdout"))
     return handler
 
 
@@ -71,6 +94,7 @@ def build_stderr_handler(formatter: logging.Formatter | None = None) -> logging.
     if formatter is not None:
         handler.setFormatter(formatter)
     handler.setLevel(logging.WARNING)
+    handler.addFilter(EmitOnceFilter("stderr"))
     return handler
 
 
