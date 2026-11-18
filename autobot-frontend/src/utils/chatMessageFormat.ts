@@ -25,7 +25,7 @@ import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
 
-const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a>)/i
+const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a\s*>)/i
 const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
 const TRAILING_PUNCT_RE = /[.,;:!?'"]+$/
 

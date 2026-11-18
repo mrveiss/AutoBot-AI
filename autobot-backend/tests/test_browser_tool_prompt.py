@@ -77,3 +77,9 @@ def test_fallback_path_is_rendered_not_returned_raw():
 
 def test_section_keeps_one_fill_example():
     assert 'name="fill"' in browser_tool_prompt.render_browser_tools_section()
+
+
+def test_tool_call_examples_are_not_entity_encoded():
+    rendered = _render("system_prompt_simple")
+    assert '<TOOL_CALL name="navigate"' in rendered
+    assert "&lt;TOOL_CALL" not in rendered

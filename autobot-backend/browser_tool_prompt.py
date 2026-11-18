@@ -13,6 +13,8 @@ one-line wording. A catalogue tool without wording is still listed (name only), 
 adding a tool to the catalogue never needs a prompt edit.
 """
 
+from markupsafe import Markup
+
 from autobot_shared import tool_catalogue
 
 #: tool name -> (params hint, one-line description). Wording only; membership is the catalogue's.
@@ -39,8 +41,8 @@ _WORDING: "dict[str, tuple[str, str]]" = {
 
 READ_RULE = (
     "To READ information from a page, use `extract_content` (the page you are on) or `scrape_url` "
-    "(any URL). Never guess a CSS selector to read content; use selectors or menu numbers only to "
-    "INTERACT (click, fill, select)."
+    "(any URL). Never guess a CSS selector to read content; `get_text` / `get_attribute` are only for a "
+    "selector you were given or already saw. Use selectors or menu numbers to INTERACT (click, fill, select)."
 )
 
 
@@ -76,4 +78,5 @@ def render_tool_name_reminder_lines() -> str:
 
 def template_vars() -> "dict[str, str]":
     """Jinja variables every prompt template can use (merged by ``PromptManager.get``)."""
-    return {"browser_tools_section": render_browser_tools_section()}
+    # Markup: the Jinja env autoescapes plain strings, which would entity-encode the TOOL_CALL examples.
+    return {"browser_tools_section": Markup(render_browser_tools_section())}  # nosec B704 - repo-generated text
