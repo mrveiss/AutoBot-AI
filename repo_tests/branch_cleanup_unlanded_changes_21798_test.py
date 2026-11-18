@@ -11,6 +11,7 @@ base to equal base's tree before the cleanup step may delete it.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -31,9 +32,22 @@ def _git_version() -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
-needs_merge_tree = pytest.mark.skipif(
-    _git_version() < (2, 38), reason="git merge-tree --write-tree needs git >= 2.38 (the runner has it)"
-)
+_NO_MERGE_TREE = _git_version() < (2, 38)
+_IN_CI = os.environ.get("CI", "").strip().lower() not in ("", "0", "false", "no")
+_MERGE_TREE_REASON = "git merge-tree --write-tree needs git >= 2.38 (the runner has it)"
+
+
+def _require_merge_tree() -> None:
+    """Skip locally on old git; under CI a skip would hide a broken guard, so fail."""
+    if _NO_MERGE_TREE:
+        if _IN_CI:
+            pytest.fail(f"CI must not skip the merge-tree guard tests: {_MERGE_TREE_REASON}")
+        pytest.skip(_MERGE_TREE_REASON)
+
+
+@pytest.fixture
+def needs_merge_tree() -> None:
+    _require_merge_tree()
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -65,7 +79,7 @@ def _guard(repo: Path, ref: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["bash", "-c", script], cwd=repo, capture_output=True, text=True, env=isolated_git_env())
 
 
-@needs_merge_tree
+@pytest.mark.usefixtures("needs_merge_tree")
 def test_branch_with_unlanded_changes_is_kept(tmp_path) -> None:
     repo = _repo(tmp_path)
     _commit_on(repo, "issue-1", "new.txt", "never landed\n")
@@ -74,7 +88,7 @@ def test_branch_with_unlanded_changes_is_kept(tmp_path) -> None:
     assert "SKIP" in res.stdout
 
 
-@needs_merge_tree
+@pytest.mark.usefixtures("needs_merge_tree")
 def test_conflicting_branch_is_kept(tmp_path) -> None:
     repo = _repo(tmp_path)
     _commit_on(repo, "issue-2", "a.txt", "branch\n")
@@ -83,7 +97,7 @@ def test_conflicting_branch_is_kept(tmp_path) -> None:
     assert _guard(repo, "issue-2").returncode == 1
 
 
-@needs_merge_tree
+@pytest.mark.usefixtures("needs_merge_tree")
 def test_branch_whose_merge_equals_main_is_deletable(tmp_path) -> None:
     repo = _repo(tmp_path)
     _commit_on(repo, "issue-3", "new.txt", "landed\n")

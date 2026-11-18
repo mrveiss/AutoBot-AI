@@ -67,9 +67,12 @@ branch_recently_pushed() {
 branch_has_no_unlanded_changes() {
     local base="$1" ref="$2" merged base_tree
     base_tree=$(git rev-parse --verify --quiet "${base}^{tree}" 2>/dev/null) || base_tree=""
-    merged=$(git merge-tree --write-tree "$base" "$ref" 2>/dev/null | head -1) || merged=""
-    if [ -n "$base_tree" ] && [ "$merged" = "$base_tree" ]; then
-        return 0
+    # No pipe: a conflict exits nonzero and must be seen, not masked by `head`.
+    if merged=$(git merge-tree --write-tree "$base" "$ref" 2>/dev/null); then
+        merged="${merged%%$'\n'*}"
+        if [ -n "$base_tree" ] && [ "$merged" = "$base_tree" ]; then
+            return 0
+        fi
     fi
     echo "  SKIP (unlanded changes against ${base}, or merge not computable): ${ref}"
     return 1
