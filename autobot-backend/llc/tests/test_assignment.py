@@ -21,7 +21,7 @@ Verifies:
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -32,6 +32,8 @@ from llc.services.work_item_service import (
     WorkItemService,
 )
 
+PROJECT_ID = uuid.uuid4()  # the project every work item must belong to (#18978)
+
 
 def _make_item(**kwargs) -> MagicMock:
     defaults = {
@@ -39,6 +41,8 @@ def _make_item(**kwargs) -> MagicMock:
         "company_id": uuid.uuid4(),
         "identifier": "WI-200",
         "type": WorkItemType.TASK,
+        "parent_id": None,
+        "project_id": PROJECT_ID,
         "title": "Co-working task",
         "status": WorkItemStatus.IN_PROGRESS,
         "priority": WorkItemPriority.MEDIUM,
@@ -376,13 +380,15 @@ class TestCoworkerSubtaskInvariant:
 
         # create() should succeed without any checkout validation on parent
         co_worker_agent_id = str(uuid.uuid4())
-        subtask = await service.create(
-            mock_session,
-            company_id=company_id,
-            type=WorkItemType.SUBTASK,
-            title="Subtask by co-worker",
-            parent_id=parent_id,
-            created_by_agent_id=co_worker_agent_id,
-        )
+        with patch.object(service, "get", new=AsyncMock(return_value=parent_item)):  # #18978: parent is looked up
+            subtask = await service.create(
+                mock_session,
+                company_id=company_id,
+                type=WorkItemType.SUBTASK,
+                title="Subtask by co-worker",
+                project_id=str(PROJECT_ID),
+                parent_id=parent_id,
+                created_by_agent_id=co_worker_agent_id,
+            )
         # If we get here without exception, the invariant holds
         assert subtask is not None

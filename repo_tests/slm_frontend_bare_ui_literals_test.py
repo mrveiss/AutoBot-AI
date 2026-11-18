@@ -114,13 +114,10 @@ def _components(root: Path | None = None) -> list[Path]:
 #: value nobody checked against this tree, which is what the migration exists to
 #: stop.
 #:
-#: Pinned mid-window: 103 leaves room for 10 more components before a bump is
-#: due, where `population - growth` would put the slack exactly at the allowance
-#: and red on the next component anyone adds (#17142).
+#: The floor is computed from the base commit (#19676), not pinned here.
 REACH = declare(
     "slm-frontend-components",
     discover=_components,
-    floor=113,  # mid-window: population 123, window (103, 123)
     what="Vue components under autobot-slm-frontend/src",
     growth=20,
 )

@@ -6,7 +6,8 @@
 // Names are not unique within a company (the server stores whatever it is given and
 // existing rows are not rewritten), so every list and picker labels through here:
 // the name alone when it is unique, the name plus the role or adapter when two agents
-// share a name, and a short id suffix only when even that is shared. Whether an agent
+// share a name, and an id suffix only when even that is shared -- 4 characters, longer
+// when two clashing ids end alike (#20706), so no two labels are the same. Whether an agent
 // can run is never decided here -- `can_run` / `cannot_run_reason` come from the server.
 
 export interface LabelledAgent {
@@ -36,10 +37,23 @@ function countBy(agents: readonly LabelledAgent[], key: (a: LabelledAgent) => st
   return counts
 }
 
+function clashKey(agent: LabelledAgent): string {
+  return `${nameKey(agent)}\u0000${qualifier(agent).toLowerCase()}`
+}
+
+/** The shortest id suffix, at least SUFFIX_LENGTH long, that no two of `ids` share. */
+function suffixLength(ids: readonly string[]): number {
+  const longest = Math.max(...ids.map((id) => id.length))
+  let length = SUFFIX_LENGTH
+  while (length < longest && new Set(ids.map((id) => id.slice(-length))).size < ids.length) length += 1
+  return length
+}
+
 /** Display label for every agent in `agents`, keyed by `id`. */
 export function agentLabelMap(agents: readonly LabelledAgent[]): Map<string, string> {
   const byName = countBy(agents, nameKey)
-  const byNameAndQualifier = countBy(agents, (a) => `${nameKey(a)}\u0000${qualifier(a).toLowerCase()}`)
+  const clashing = new Map<string, string[]>()
+  for (const a of agents) clashing.set(clashKey(a), [...(clashing.get(clashKey(a)) ?? []), a.id])
   const labels = new Map<string, string>()
   for (const a of agents) {
     if ((byName.get(nameKey(a)) ?? 0) < 2) {
@@ -48,8 +62,8 @@ export function agentLabelMap(agents: readonly LabelledAgent[]): Map<string, str
     }
     const q = qualifier(a)
     const base = q ? `${a.name}${SEPARATOR}${q}` : a.name
-    const clash = (byNameAndQualifier.get(`${nameKey(a)}\u0000${q.toLowerCase()}`) ?? 0) > 1
-    labels.set(a.id, clash ? `${base} #${a.id.slice(-SUFFIX_LENGTH)}` : base)
+    const peers = clashing.get(clashKey(a)) ?? []
+    labels.set(a.id, peers.length > 1 ? `${base} #${a.id.slice(-suffixLength(peers))}` : base)
   }
   return labels
 }

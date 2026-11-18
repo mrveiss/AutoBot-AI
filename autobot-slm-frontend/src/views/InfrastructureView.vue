@@ -11,9 +11,8 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 import type { PlaybookInfo } from '@/types/slm'
 
 const logger = createLogger('InfrastructureView')

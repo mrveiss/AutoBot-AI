@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Optional
 from celery import shared_task
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
     CELERY_MAX_RETRIES,
@@ -86,15 +87,7 @@ def run_daily_check(self: object) -> dict:  # type: ignore[type-arg]
     synchronous at the Celery layer; async DB access is wrapped with
     asyncio.run_coroutine_threadsafe inside the session factory helper.
     """
-    import asyncio
-
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    queued_count = loop.run_until_complete(_async_check())
+    queued_count = run_in_worker_loop(_async_check())
     return {"queued": queued_count}
 
 

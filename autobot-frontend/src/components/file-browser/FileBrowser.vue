@@ -84,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveUrl } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -387,12 +388,7 @@ const closePreview = () => {
 }
 
 const downloadPreviewFile = (file: PreviewDownloadFile) => {
-  if (file.url) {
-    const a = document.createElement('a')
-    a.href = file.url
-    a.download = file.name
-    a.click()
-  }
+  if (file.url) saveUrl(file.url, file.name)
 }
 
 const toggleNode = (item: FileBrowserTreeNode) => {

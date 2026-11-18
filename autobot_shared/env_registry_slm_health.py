@@ -79,6 +79,24 @@ _register(
 )
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_URL",
+        type=str,
+        default=None,
+        description="Where the SLM reaches the limited Docker proxy on a compose stack (#20629).",
+        component="slm",
+    )
+)
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOCKER_PROXY_TOKEN",
+        type=str,
+        default=None,
+        description="What the SLM presents to the limited Docker proxy, from docker/generate-secrets.sh (#20629).",
+        component="slm",
+    )
+)
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DOCKER_SLM_HTTP_PORT",
         type=int,
         default=8080,
@@ -95,7 +113,6 @@ register_env_var(
         component="slm",
     )
 )
-
 register_env_var(
     EnvVarSpec(
         name="SLM_UPDATE_PROGRESS_STALL_SECONDS",
@@ -103,5 +120,46 @@ register_env_var(
         default=600,
         description="Seconds a live self-update's log may stay still before the page reports it as quiet (#20254).",
         component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_REFUSED_SESSION_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description="Seconds between audit records of one person's refused non-admin SLM sessions (#20664).",
+        component="slm",
+        range=(1, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_KEY_FINDING_CHECK_INTERVAL_S",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between database checks when the backend refuses the SLM's internal API key: a burst "
+            "of refused calls records the one key-mismatch finding without a query per call (#20750)."
+        ),
+        component="slm",
+        range=(1, 86400),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SERVICE_RESTART_SETTLE_S",
+        type=int,
+        default=600,
+        description=(
+            "Seconds of continuous uptime (running or completed on every heartbeat) before the reconciler "
+            "clears a service's restart count. A unit that fails, crash-loops or restarts within this period "
+            "keeps counting toward MAX_SERVICE_RESTART_ATTEMPTS, so a crash loop ends in the exhaustion event "
+            "instead of restarting forever. Clamped to 60-86400: one healthy heartbeat is never enough (#20796)."
+        ),
+        component="slm",
+        range=(60, 86400),
     )
 )

@@ -13,7 +13,18 @@ import type { useApiClient } from '@/plugins/api'
 type Client = ReturnType<typeof useApiClient>
 type Verb = 'get' | 'post' | 'put' | 'patch' | 'delete'
 
-export type PlanPath = Extract<keyof paths, `/api/llc/company-os/workflow-plans${string}`>
+/**
+ * The Workflow Planner routes, the path-scoped company workflow and role-workflow routes (#21240), and the
+ * two company-scoped org-chart people sources (`contacts/{company_id}/involved`, `companies/{company_id}/teams`).
+ */
+export type PlanPath = Extract<
+  keyof paths,
+  | `/api/llc/company-os/workflow-plans${string}`
+  | `/api/llc/workflows/${string}`
+  | `/api/llc/roles/${string}/workflows${string}`
+  | `/api/llc/contacts/${string}/involved`
+  | `/api/llc/companies/${string}/teams`
+>
 
 type JsonBody<O> = O extends { content: { 'application/json': infer J } } ? J : void
 type OkBody<R> = R extends { 200: infer O } ? JsonBody<O> : R extends { 201: infer O } ? JsonBody<O> : void
@@ -34,8 +45,10 @@ export async function planRequest<P extends PlanPath, V extends Verb & keyof pat
   path: P,
   params: Record<string, string> = {},
   body?: unknown,
+  query: Record<string, string> = {},
 ): Promise<PlanResponse<P, V & Verb>> {
-  const url = fillPath(path, params)
+  const qs = new URLSearchParams(query).toString()
+  const url = fillPath(path, params) + (qs ? `?${qs}` : '')
   const data: unknown = await (body === undefined ? client[verb](url) : client[verb as 'post'](url, body))
   return data as PlanResponse<P, V & Verb>
 }

@@ -28,6 +28,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -73,7 +74,6 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "store-fact-chokepoint",
     discover=_production_files,
-    floor=3019,  # re-pinned mid-window (train 77): population 2953, window [2753, 2953]
     growth=200,
     skips=0,
     # Scope as data (#17844); `declare` renders the longhand from `roots`.
@@ -97,13 +97,13 @@ def _called_names(node: ast.AST) -> list[tuple[str, int]]:
 
 def direct_write_calls(source: str) -> list[int]:
     """Line numbers of calls to a durable write primitive in *source*."""
-    return [line for name, line in _called_names(ast.parse(source)) if name in WRITE_PRIMITIVES]
+    return [line for name, line in _called_names(parse_cache.parse(source)) if name in WRITE_PRIMITIVES]
 
 
 def sanitizing_entry_points(source: str) -> set[str]:
     """Names of the functions in *source* that call the sanitizer."""
     found = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if any(name == SANITIZER for name, _ in _called_names(node)):
                 found.add(node.name)

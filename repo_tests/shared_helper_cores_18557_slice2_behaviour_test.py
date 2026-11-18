@@ -22,6 +22,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root  # noqa: E402
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 BACKEND = ROOT / "autobot-backend"
 AUTO_TOOLS = BACKEND / "code_analysis" / "auto-tools"
@@ -46,7 +48,7 @@ def _terminal_methods() -> dict:
     source = (BACKEND / "api/terminal_handlers.py").read_text(encoding="utf-8")
     namespace = {"CommandRisk": CommandRisk, "command_assessor": security.command_assessor}
     wanted = {"_assess_command_risk", "_should_block_command"}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ClassDef) and node.name == "TerminalWebSocket":
             for fn in node.body:
                 if getattr(fn, "name", None) in wanted:

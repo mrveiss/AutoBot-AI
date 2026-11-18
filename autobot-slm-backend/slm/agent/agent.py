@@ -264,9 +264,9 @@ class SLMAgent:
                 )
                 return False
         except (aiohttp.ClientError, asyncio.TimeoutError, TimeoutError) as e:
-            logger.warning("Failed to send heartbeat: %s", str(e) or type(e).__name__)
-            # Offloaded here, not inside `buffer_event`: its other caller is sync.
-            # Hot path -- every failed heartbeat writes a row (#17647 review).
+            limit = request_timeouts.HEARTBEAT_TIMEOUT_SECONDS  # #20250: name where and how long
+            logger.warning("Heartbeat to %s failed within %ss: %s", self.admin_url, limit, str(e) or type(e).__name__)
+            # Offloaded: `buffer_event`'s other caller is sync, and each failure writes a row (#17647).
             await asyncio.to_thread(self.buffer_event, "heartbeat", payload)
             return False
 

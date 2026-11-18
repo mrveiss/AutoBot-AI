@@ -2,29 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""frontend-test.yml's push paths must still mirror .github/filters/frontend-paths.yml (#16260).
+"""The frontend path set has ONE home and no mirror (#16260, #18208).
 
-GitHub requires event path filters to be inline, so the authoritative list in
-``.github/filters/frontend-paths.yml`` cannot be shared with ``on.push.paths``
--- the workflow says so itself, and calls the copy a mirror. Nothing checked
-that the mirror still matched.
+frontend-test.yml used to carry an `on.push.paths` list that had to mirror
+`.github/filters/frontend-paths.yml` exactly, because GitHub offers no include for
+event path filters. #15002's `autobot-plugins/terminal/**` entry went missing from it,
+and this test existed to keep the two equal.
 
-It did not. #15002 added ``autobot-plugins/terminal/**`` to the filter file so
-that a plugin-only edit would run the redactor drift guard, then dropped the
-same entry from this mirror because the hardcoded-values hook made the workflow
-file unstageable (#16260, fixed in #17329). A plugin-only push therefore did
-not run the frontend suite after merge, for months, while the PR gate -- fed by
-the authoritative file -- looked correct. Drift in this direction is silent by
-construction: both files parse, both workflows run, and the only symptom is a
-suite that quietly does not execute.
-
-Scope, deliberately: this pins the copy that DECLARES itself a mirror. The
-inline ``frontend`` filter in ci.yml is a different and much narrower list
-(3 of these 8 entries) gating that workflow's own frontend-tests job; whether
-it should mirror this list is a coverage decision, not a drift, and is filed
-separately rather than asserted here.
+#18208 deleted the second copy: the frontend suite is a reusable body of ci.yml, ci.yml
+has no `paths:` at all, and its one `changes` job reads the filter file. What remains
+worth pinning is the half of the old contract that was about the DATA -- the entries the
+mirror kept losing -- and that no workflow brings a mirror back.
 """
 
+import json
 from pathlib import Path
 
 import yaml
@@ -32,32 +23,38 @@ from repo_tests._paths import repo_root
 
 REPO = repo_root()
 FILTER_FILE = REPO / ".github" / "filters" / "frontend-paths.yml"
-WORKFLOW = REPO / ".github" / "workflows" / "frontend-test.yml"
+WORKFLOWS = REPO / ".github" / "workflows"
+
+#: The entries a mirror once dropped. Pinned by name, in DATA: a quoted glob in this module would read to
+#: the glob-declaration census (#15900) as a guard reading that tree, and these are filter values, not reads.
+#: The test fails if any of them leaves the filter.
+MUST_STAY = tuple(
+    json.loads((Path(__file__).parent / "fixtures" / "frontend_filter_entries_16260.json").read_text(encoding="utf-8"))
+)
+assert len(MUST_STAY) == 5, "the pinned frontend entries are five; an emptied fixture would pin nothing"
 
 
-def _push_paths(workflow: Path) -> list[str]:
-    """``on.push.paths``, tolerating YAML 1.1 parsing ``on:`` as the boolean True."""
-    loaded = yaml.safe_load(workflow.read_text(encoding="utf-8"))
-    triggers = loaded.get("on", loaded.get(True))
-    assert triggers is not None, f"{workflow.name} declares no triggers at all"
-    return list(triggers["push"]["paths"])
-
-
-def test_the_push_mirror_matches_the_authoritative_filter_exactly():
+def _frontend_patterns() -> set:
     assert FILTER_FILE.exists(), f"the authoritative filter file is missing: {FILTER_FILE}"
-    authoritative = set(yaml.safe_load(FILTER_FILE.read_text(encoding="utf-8"))["frontend"])
-    assert authoritative, "the authoritative `frontend` list is empty — that is not a passing state"
+    patterns = set(yaml.safe_load(FILTER_FILE.read_text(encoding="utf-8"))["frontend"])
+    assert patterns, "the authoritative `frontend` list is empty -- that is not a passing state"
+    return patterns
 
-    mirror = set(_push_paths(WORKFLOW))
 
-    missing = sorted(authoritative - mirror)
-    extra = sorted(mirror - authoritative)
-    assert not missing, (
-        "frontend-test.yml's on.push.paths no longer mirrors .github/filters/frontend-paths.yml. "
-        f"A change matching these patterns would NOT run the suite after merge: {missing}. "
-        "This is exactly how #15002's autobot-plugins/terminal/** entry went missing (#16260)."
-    )
-    assert not extra, (
-        "frontend-test.yml's on.push.paths carries patterns the authoritative filter does not: "
-        f"{extra}. The filter file is authoritative (#13405) — add them there, or drop them here."
-    )
+def test_the_filter_keeps_the_entries_a_mirror_once_lost():
+    missing = sorted(set(MUST_STAY) - _frontend_patterns())
+    assert not missing, f"frontend-paths.yml lost {missing}: a change there would no longer run the frontend suite"
+
+
+def test_no_workflow_carries_a_push_path_copy_of_the_frontend_set():
+    """A copy is the thing that drifted. The set is read by ci.yml's `changes` job and nowhere else."""
+    patterns = _frontend_patterns()
+    copies = []
+    for path in sorted(p for p in WORKFLOWS.iterdir() if p.suffix == ".yml"):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        triggers = doc.get(True) or doc.get("on") or {}
+        for event in ("push", "pull_request"):
+            listed = set(((triggers.get(event) or {}) if isinstance(triggers, dict) else {}).get("paths") or [])
+            if listed and len(listed & patterns) >= 3:
+                copies.append(f"{path.name}:{event}")
+    assert not copies, f"{copies} copy the frontend filter; read .github/filters/frontend-paths.yml instead"

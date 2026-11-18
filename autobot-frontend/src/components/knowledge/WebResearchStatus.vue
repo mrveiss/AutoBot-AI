@@ -12,10 +12,12 @@
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWebResearchStore } from '@/stores/useWebResearchStore'
+import { useUserStore } from '@/stores/useUserStore'
 import { getSLMAdminUrl } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const store = useWebResearchStore()
+const userStore = useUserStore()
 
 const slmWebResearchUrl = computed(() => `${getSLMAdminUrl()}/settings/admin/web-research`)
 
@@ -63,12 +65,14 @@ onMounted(() => {
     </dl>
 
     <a
+      v-if="userStore.isAdmin"
       :href="slmWebResearchUrl"
       target="_blank"
       rel="noopener noreferrer"
       class="status-link"
       data-testid="web-research-slm-link"
     >{{ t('knowledge.webResearch.status.configureLink') }}</a>
+    <p v-else class="status-desc" data-testid="web-research-admin-note">{{ t('knowledge.webResearch.status.adminManaged') }}</p>
   </section>
 </template>
 
@@ -83,12 +87,12 @@ onMounted(() => {
 
 .status-title {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
 }
 
 .status-desc {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -106,13 +110,13 @@ onMounted(() => {
 }
 
 .status-item dt {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .status-item dd {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 

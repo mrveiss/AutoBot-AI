@@ -1,0 +1,24 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Daily full security scan (#18208). The scans are the reusable body `_gate-security.yml`;
+# ci.yml calls it on pull requests and pushes, this thin caller runs the SAME body daily with
+# its defaults (`deps` and `static_analysis` both 'true'), so a scheduled run covers everything
+# unconditionally: it has no diff to filter on.
+
+name: Scheduled Security Scan
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # daily at 2 AM UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security:
+    uses: ./.github/workflows/_gate-security.yml
+    permissions:
+      contents: read
+      security-events: write

@@ -25,10 +25,9 @@ from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
-from llc.models.budget import LLCAgentBudget
+from llc.models.budget import LLCAgentBudget, token_limit_blocks
 from llc.models.company_os_cost import CompanyOsCostEvent
 from llc.models.work_item import LLCWorkItem
-from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
@@ -120,6 +119,13 @@ def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Deci
         # cache is consulted at all, so a cold or unpopulated snapshot can
         # never affect a local model's cost.
         return Decimal("0")
+    # Deferred (#21596): llm_shared's package init probes PyTorch/CUDA, and this
+    # module is reached at llc.scheduler package import (Celery registration).
+    from llm_shared.pricing.sync_cache import (  # noqa: PLC0415 -- keeps llm_shared out of scheduler import
+        PricingCacheCold,
+        get_cached_price,
+    )
+
     try:
         pricing = get_cached_price(model)
     except PricingCacheCold:
@@ -141,6 +147,16 @@ def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Deci
         # silently inapplicable rather than visibly broken.
         raise UnpricedModel(model=model, agent_id=agent_id)
     return Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
+
+
+async def _persist_then_stop(session: AsyncSession, stop: BudgetExhausted) -> None:
+    """Commit the spend just recorded, then raise the hard stop (#20202).
+
+    The overrun already happened; every caller rolls back on an exception, which
+    would erase the cost event and counter update for it.
+    """
+    await session.commit()
+    raise stop
 
 
 class BudgetService(LLCServiceBase):
@@ -201,8 +217,13 @@ class BudgetService(LLCServiceBase):
         tokens_out: int,
         model: str,
         work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
     ) -> Decimal:
         """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
+
+        ``bill_dollars=False`` is a run on a subscription login (#20266): it spent tokens, not
+        dollars. Its event row and ``tokens_spent`` are recorded, but the event's cost is 0, so
+        ``budget_spent`` is untouched and no dollar limit can be crossed; a token limit still holds.
 
         Also writes one ``company_os_cost_events`` row (#16016), tied to ``work_item_id``
         when given. Raises ``WorkItemNotInCompany`` if that item is not in ``company_id``.
@@ -216,10 +237,12 @@ class BudgetService(LLCServiceBase):
         Uses atomic UPDATE to avoid read-modify-write races across 4 uvicorn workers.
 
         Returns the dollar cost added this call (always calculated for analytics).
-        Raises BudgetExhausted if spending exceeds the active budget mode limit,
-        and UnpricedModel if the model is neither local nor in the live catalogue.
+        Raises BudgetExhausted if spending exceeds the active budget mode limit;
+        the recorded event and counter update are committed first, so a caller
+        that rolls back on the exception does not lose spend that really happened
+        (#20202). Raises UnpricedModel if the model is neither local nor in the live catalogue.
         """
-        cost = _cost_of(model, agent_id, tokens_in, tokens_out)
+        cost = _cost_of(model, agent_id, tokens_in, tokens_out) if bill_dollars else Decimal("0")
 
         total_tokens = tokens_in + tokens_out
         await _record_event(session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost))
@@ -295,14 +318,18 @@ class BudgetService(LLCServiceBase):
 
         # Enforce budget based on mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
-            if tokens_spent > token_limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+            if token_limit_blocks(tokens_spent, token_limit):
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=tokens_spent, limit=token_limit)
+                )
             if token_limit > 0 and tokens_spent / token_limit >= threshold:
                 await self._emit_alert(agent_id, tokens_spent, token_limit)
-        else:
+        elif bill_dollars:
             # Default DOLLARS mode
             if spent > limit:
-                raise BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                await _persist_then_stop(
+                    session, BudgetExhausted(agent_id=agent_id, spent=float(spent), limit=float(limit))
+                )
             if limit > Decimal("0") and spent / limit >= threshold:
                 await self._emit_alert(agent_id, float(spent), float(limit))
 
@@ -339,7 +366,7 @@ class BudgetService(LLCServiceBase):
         # Calculate based on budget mode (GH#8997)
         if budget_mode == "tokens" and token_limit is not None:
             remaining = Decimal(str(token_limit - tokens_spent))
-            is_over_limit = tokens_spent > token_limit
+            is_over_limit = token_limit_blocks(tokens_spent, token_limit)
             alert_triggered = token_limit > 0 and tokens_spent / token_limit >= threshold
         else:
             remaining = limit - spent

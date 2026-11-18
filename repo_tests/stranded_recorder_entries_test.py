@@ -80,6 +80,7 @@ from typing import Callable, Dict, Iterable, List, Sequence, Set, Tuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
@@ -271,7 +272,7 @@ def ledgers_in(source: str, tree: Tree) -> Dict[str, Tuple[str, ...]]:
     dormant list this whole check exists to prevent.
     """
     found: Dict[str, Tuple[str, ...]] = {}
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         for name, value in _module_level_bindings(node):
             entries = _string_entries(value)
             rooted = [e for e in entries if tree.is_rooted(e)]
@@ -360,7 +361,7 @@ def _pinned_records(tree: Tree) -> Dict[str, Tuple[str, ...]]:
     out: Dict[str, Tuple[str, ...]] = {}
     for relative, symbol in PINNED_LEDGERS:
         source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-        for node in ast.parse(source).body:
+        for node in parse_cache.parse(source).body:
             for name, value in _module_level_bindings(node):
                 if name != symbol:
                     continue

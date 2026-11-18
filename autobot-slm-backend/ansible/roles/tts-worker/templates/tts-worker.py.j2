@@ -217,7 +217,7 @@ def _load_model():
         # (#11718) — this is the real "loaded model != configured model" signal.
         _voice_cloning_loaded = getattr(_model, "has_voice_cloning", True)
         logger.info(
-            "Pocket TTS model loaded: %s (sample_rate=%d, voice_cloning=%s)",
+            "Pocket TTS model loaded (configured TTS_MODEL_ID=%s; sample_rate=%d, voice_cloning=%s)",
             TTS_MODEL_ID,
             _model.sample_rate,
             _voice_cloning_loaded,

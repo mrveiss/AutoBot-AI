@@ -17,7 +17,7 @@ import {
   UPDATE_ALL_UNAUTHENTICATED,
   type UpdateAllJob,
 } from '@/composables/useCodeSync'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('UpdateAllPoll')
 
