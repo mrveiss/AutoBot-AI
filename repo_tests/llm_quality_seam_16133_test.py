@@ -25,8 +25,12 @@ from repo_tests._reach import declare
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-_ROOTS = ("autobot-backend/judges", "autobot-backend/rlm")
-_SEAM_CALLERS = ("autobot-backend/judges/__init__.py", "autobot-backend/rlm/evaluator.py")
+_ROOTS = ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop")
+_SEAM_CALLERS = (
+    "autobot-backend/judges/__init__.py",
+    "autobot-backend/rlm/evaluator.py",
+    "autobot-backend/agent_loop/think_tool.py",
+)
 
 
 def _calls(source: str, name: str) -> bool:
@@ -56,7 +60,7 @@ REACH = declare(
     "llm-quality-seam-scan",
     discover=_population,
     # Mid-window, from REACH.window(); arithmetic on the commit.
-    floor=9,
+    floor=34,
     what="non-test judging python",
     roots=_ROOTS,
     growth=4,
