@@ -25,17 +25,20 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import redact_provider_error
+from autobot_shared.ssot_constants import ANTHROPIC_CLAUDE3_HAIKU, ANTHROPIC_CLAUDE3_OPUS, ANTHROPIC_CLAUDE3_SONNET
+from autobot_shared.ssot_hosted_models import BEDROCK_CLAUDE_SONNET4, BEDROCK_CLAUDE_SONNET4_ID, hosted_default_model
 from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .anthropic_format import split_system_and_chat
 from .bedrock_credentials import (
     build_boto3_client,
     load_credentials_from_vault,
     scrub_credentials,
     validate_credential_pair,
 )
-from .message_formatting import anthropic_tool_schemas, split_system_messages
+from .message_formatting import anthropic_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -43,11 +46,12 @@ logger = get_logger(__name__)
 # Model families supported by Bedrock
 BEDROCK_MODELS = {
     # Claude models (Anthropic via Bedrock)
+    BEDROCK_CLAUDE_SONNET4: BEDROCK_CLAUDE_SONNET4_ID,  # #15501: the default
     "claude-3-5-sonnet": "anthropic.claude-3-5-sonnet-20241022-v2:0",
     "claude-3-5-haiku": "anthropic.claude-3-5-haiku-20241022-v1:0",
-    "claude-3-opus": "anthropic.claude-3-opus-20240229-v1:0",
-    "claude-3-sonnet": "anthropic.claude-3-sonnet-20240229-v1:0",
-    "claude-3-haiku": "anthropic.claude-3-haiku-20240307-v1:0",
+    ANTHROPIC_CLAUDE3_OPUS: "anthropic.claude-3-opus-20240229-v1:0",
+    ANTHROPIC_CLAUDE3_SONNET: "anthropic.claude-3-sonnet-20240229-v1:0",
+    ANTHROPIC_CLAUDE3_HAIKU: "anthropic.claude-3-haiku-20240307-v1:0",
     # Llama models (Meta via Bedrock)
     "llama-3-3-70b": "meta.llama3-3-70b-instruct-v1:0",
     "llama-3-2-90b": "meta.llama3-2-90b-instruct-v1:0",
@@ -189,7 +193,7 @@ class BedrockProvider(BaseProvider):
 
     def _build_claude_request(self, request: LLMRequest) -> Dict[str, Any]:
         """Build request body for Claude models on Bedrock."""
-        system_content, chat_messages = split_system_messages(request.messages)
+        system_content, chat_messages = split_system_and_chat(request.messages)
 
         body: Dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",
@@ -461,7 +465,7 @@ class BedrockProvider(BaseProvider):
         """Execute a non-streaming chat completion via Bedrock."""
         self._total_requests += 1
         start = time.time()
-        model_name = request.model_name or self._get_setting("default_model", "claude-3-5-sonnet")
+        model_name = request.model_name or self._get_setting("default_model", hosted_default_model("bedrock"))
         model_id = self._resolve_model_id(model_name)
 
         try:
@@ -504,7 +508,7 @@ class BedrockProvider(BaseProvider):
         Only Claude and Nova models support streaming on Bedrock.
         """
         self._total_requests += 1
-        model_name = request.model_name or self._get_setting("default_model", "claude-3-5-sonnet")
+        model_name = request.model_name or self._get_setting("default_model", hosted_default_model("bedrock"))
         model_id = self._resolve_model_id(model_name)
 
         try:

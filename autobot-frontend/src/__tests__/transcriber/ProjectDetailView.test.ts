@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { h } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
@@ -91,12 +91,12 @@ describe('ProjectDetailView.vue', () => {
     expect(wrapper.findAll('.recording-card')).toHaveLength(2)
   })
 
-  it('renders ProcessingProgress only for in-progress recordings', async () => {
+  it('does not render ProcessingProgress while its route is unserved (#18746)', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    // recording 11 is "processing" → one progress bar.
-    expect(wrapper.findAllComponents(ProcessingProgressStub)).toHaveLength(1)
+    // recording 11 is "processing", but the SSE progress route does not exist.
+    expect(wrapper.findAllComponents(ProcessingProgressStub)).toHaveLength(0)
   })
 
   it('formats duration as m:ss', async () => {
@@ -140,13 +140,37 @@ describe('ProjectDetailView.vue', () => {
     expect(cards[0].text()).toContain('rec-99.mp3')
   })
 
-  it('refreshes a recording when processing completes', async () => {
-    const wrapper = mountView()
-    await flushPromises()
+  describe('polling while live progress is off', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
 
-    await wrapper.findComponent(ProcessingProgressStub).vm.$emit('complete')
-    await flushPromises()
+    it('polls a processing recording, then stops once it settles', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      expect(getRecording).not.toHaveBeenCalled()
 
-    expect(getRecording).toHaveBeenCalledWith(11)
+      await vi.advanceTimersByTimeAsync(4000)
+      await flushPromises()
+      expect(getRecording).toHaveBeenCalledTimes(1)
+      expect(getRecording).toHaveBeenCalledWith(11)
+
+      // The refreshed row is "complete", so nothing is in progress: no further polls.
+      await vi.advanceTimersByTimeAsync(12000)
+      expect(getRecording).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('stops polling on unmount', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      wrapper.unmount()
+
+      await vi.advanceTimersByTimeAsync(12000)
+      expect(getRecording).not.toHaveBeenCalled()
+    })
   })
 })

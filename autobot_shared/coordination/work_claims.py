@@ -35,19 +35,11 @@ overlap rule to know that ``dir`` and ``file`` are the same namespace while
 nobody applies correctly at the next call site. One ``path`` kind whose claims
 are subtrees says the same thing with no exception.
 
-RELATIONSHIP TO ``services/task_claim.py`` (GH#6468), which must be understood
-before anything here is extended. That module already claims **task ids** --
-flat, exclusive-only, ``SET NX EX`` with owner-checked Lua release and renew --
-and `distributed_management.py` uses it to stop two agents picking up one task.
-It is the special case of this primitive: one scope kind, no hierarchy, no
-shared mode. The two are deliberately *not* merged here, because collapsing them
-means changing a live double-pickup guard, and that belongs in its own issue with
-its own tests rather than riding a new primitive's first commit -- filed as #15957.
-
-What matters is that nobody adds a third: **task identity stays
-``task_claim``'s**, which is why ``task`` is not one of :data:`VALID_KINDS`. A
-claim on the work a task will touch is this module's; a claim on the task itself
-is that module's.
+RELATIONSHIP TO ``services/task_claim.py`` (GH#6468): that module claims **task ids**
+-- flat, exclusive-only, ``SET NX EX`` -- and guards double pickup in
+`distributed_management.py`. It is the special case of this primitive; merging
+them is #15957's job, not this module's. Nobody adds a third: **task identity
+stays ``task_claim``'s**, which is why ``task`` is not one of :data:`VALID_KINDS`.
 
 WHAT THIS IS NOT: not a distributed transaction manager, not a substitute for
 database constraints, and not an enforcement mechanism on its own. Layer 1 is
@@ -69,6 +61,9 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from autobot_shared.coordination.claim_company import resolve_company
+from autobot_shared.coordination.ledger_events import cap_text, note_refused_release, record_expired_members
+from autobot_shared.coordination.work_claims_lua import _ACQUIRE_LUA, _RELEASE_LUA, _RENEW_LUA
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -140,7 +135,7 @@ def _require_kind(kind: str) -> None:
     One function for every entry point that names a kind, so no two of them can
     drift into giving ``task`` different answers. It deliberately does not list
     its callers: such a list goes stale the moment one is added, which is how
-    ``branch_stewardship.prune`` came to be missing from it (#15957). Reserved
+    ``branch_stewardship.prune_closed_branches`` came to be missing from it (#15957). Reserved
     is checked first: reaching that arm means the caller had a real concept in
     mind, and "unknown kind" would answer a question they did not ask.
     """
@@ -245,6 +240,10 @@ class WorkClaim:
     intent: str
     acquired_at: str
     expires_at: str
+    #: How many times the holder extended this claim with :func:`renew` (#18391).
+    renewals: int = 0
+    #: The authenticated writer's company; None = install-wide or legacy (#18391).
+    company_id: str | None = None
 
     @property
     def parsed_scope(self) -> Scope:
@@ -288,6 +287,8 @@ def claim_payload(claim: WorkClaim) -> dict[str, Any]:
         "intent": claim.intent,
         "acquired_at": claim.acquired_at,
         "expires_at": claim.expires_at,
+        "renewals": claim.renewals,
+        "company_id": claim.company_id,
     }
 
 
@@ -307,74 +308,6 @@ class ClaimConflictError(RuntimeError):
     def __init__(self, conflict: ClaimConflict) -> None:
         super().__init__(str(conflict))
         self.conflict = conflict
-
-
-# ``cjson`` is available in Redis Lua. Each script is one round trip and runs
-# atomically, which is what makes "no two overlapping exclusive claims" true
-# across uvicorn workers -- a read-then-write in Python cannot promise it.
-_ACQUIRE_LUA = """
-local idx, prefix, path = KEYS[1], ARGV[1], ARGV[2]
-local mode, payload, ttl = ARGV[3], ARGV[4], tonumber(ARGV[5])
-local agent, task = ARGV[6], ARGV[7]
-local mine = path .. '|' .. agent .. '|' .. task
-local members = redis.call('SMEMBERS', idx)
-local renewing = false
-for i = 1, #members do
-  local member = members[i]
-  local raw = redis.call('GET', prefix .. member)
-  if not raw then
-    redis.call('SREM', idx, member)
-  else
-    local sep = string.find(member, '|', 1, true)
-    local held_path = string.sub(member, 1, sep - 1)
-    local overlaps = held_path == path
-      or string.sub(path, 1, #held_path + 1) == held_path .. '/'
-      or string.sub(held_path, 1, #path + 1) == path .. '/'
-    if overlaps then
-      if member == mine then
-        renewing = true
-      else
-        local held = cjson.decode(raw)
-        local same_holder = held.agent_id == agent and held.task_id == task
-        local both_shared = mode == 'shared' and held.mode == 'shared'
-        if not same_holder and not both_shared then
-          return {'conflict', raw}
-        end
-      end
-    end
-  end
-end
-redis.call('SET', prefix .. mine, payload, 'EX', ttl)
-redis.call('SADD', idx, mine)
-if renewing then return {'renewed', payload} end
-return {'acquired', payload}
-"""
-
-# Ownership is now STRUCTURAL, not checked: a holder's key contains its own
-# identity, so there is no key another holder could delete by mistake. The
-# owner-check these scripts used to carry is gone because it became a
-# tautology, not because the property was dropped.
-_RELEASE_LUA = """
-local idx, prefix = KEYS[1], ARGV[1]
-local mine = ARGV[2] .. '|' .. ARGV[3] .. '|' .. ARGV[4]
-redis.call('SREM', idx, mine)
-return redis.call('DEL', prefix .. mine)
-"""
-
-# Renew rewrites the payload rather than only calling EXPIRE: `expires_at` is
-# read by `list_claims` and by every `ClaimConflict`, so a TTL extended without
-# it leaves a live claim advertising a time in the past, and a refused agent
-# retries immediately against a holder it was told had expired.
-_RENEW_LUA = """
-local prefix, ttl, expires = ARGV[1], tonumber(ARGV[2]), ARGV[3]
-local key = prefix .. ARGV[4] .. '|' .. ARGV[5] .. '|' .. ARGV[6]
-local raw = redis.call('GET', key)
-if not raw then return 0 end
-local held = cjson.decode(raw)
-held.expires_at = expires
-redis.call('SET', key, cjson.encode(held), 'EX', ttl)
-return 1
-"""
 
 
 def _require_holder(agent_id: str, task_id: str) -> None:
@@ -405,22 +338,29 @@ async def _redis() -> Any:
     return client
 
 
+def _text(raw: bytes | str) -> str:
+    return raw.decode() if isinstance(raw, bytes) else raw
+
+
 def _decode(raw: bytes | str) -> WorkClaim:
     if isinstance(raw, bytes):
         raw = raw.decode()
     return WorkClaim(**json.loads(raw))
 
 
-def _build(scope: Scope, agent_id: str, task_id: str, mode: ClaimMode, intent: str, ttl_s: int) -> WorkClaim:
+def _build(
+    scope: Scope, agent_id: str, task_id: str, mode: ClaimMode, intent: str, ttl_s: int, company_id: str | None = None
+) -> WorkClaim:
     acquired = now_utc()
     return WorkClaim(
         scope=str(scope),
         agent_id=agent_id,
         task_id=task_id,
         mode=mode.value,
-        intent=intent,
+        intent=cap_text(intent),
         acquired_at=acquired.isoformat(),
         expires_at=(acquired + timedelta(seconds=ttl_s)).isoformat(),
+        company_id=resolve_company(company_id),
     )
 
 
@@ -432,18 +372,18 @@ async def _acquire(
     mode: ClaimMode,
     intent: str,
     ttl_s: int | None,
+    company_id: str | None = None,
 ) -> tuple[str, WorkClaim | ClaimConflict]:
     """Acquire, returning the verdict alongside the result.
 
-    The verdict distinguishes a fresh ``acquired`` from a ``renewed`` -- a
-    re-acquisition by a holder that already had this exact scope. Only the
-    caller that acquired it fresh may release it, which is what stops a nested
-    :func:`work_claim` from releasing the scope its outer block is still using.
+    The verdict separates a fresh ``acquired`` from a ``renewed`` re-acquisition;
+    only a fresh acquirer may release, so a nested :func:`work_claim` cannot free
+    the scope its outer block still uses.
     """
     parsed = Scope.parse(scope)
     _require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
-    claim = _build(parsed, agent_id, task_id, mode, intent, ttl)
+    claim = _build(parsed, agent_id, task_id, mode, intent, ttl, company_id)
     client = await _redis()
     outcome = await client.eval(
         _ACQUIRE_LUA,
@@ -458,6 +398,8 @@ async def _acquire(
         task_id,
     )
     verdict = outcome[0].decode() if isinstance(outcome[0], bytes) else outcome[0]
+    if len(outcome) > 2 and outcome[2]:  # index members whose TTL ran out unreleased (#18391)
+        await record_expired_members(client, parsed.kind, [_text(m) for m in outcome[2]])
     if verdict == "conflict":
         return verdict, ClaimConflict(requested=str(parsed), holder=_decode(outcome[1]))
     return verdict, claim
@@ -471,26 +413,25 @@ async def try_acquire(
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
     ttl_s: int | None = None,
+    company_id: str | None = None,
 ) -> WorkClaim | ClaimConflict:
     """WorkClaim *scope*, or return the conflict naming who holds it.
 
-    Never raises on contention -- a refusal is an ordinary answer here, and the
-    caller decides whether to wait, queue, ask, or pick different work (#15948).
-
-    Re-acquiring a scope this ``(agent_id, task_id)`` already holds is a renew,
-    not a conflict: an agent that deadlocks against itself is a bug in the
-    primitive, not in the caller.
+    Never raises on contention: the caller decides whether to wait, queue, ask or
+    pick other work (#15948). Re-acquiring a scope this ``(agent_id, task_id)``
+    already holds is a renew, not a conflict.
     """
-    _, result = await _acquire(scope, agent_id=agent_id, task_id=task_id, mode=mode, intent=intent, ttl_s=ttl_s)
+    _, result = await _acquire(
+        scope, agent_id=agent_id, task_id=task_id, mode=mode, intent=intent, ttl_s=ttl_s, company_id=company_id
+    )
     return result
 
 
 async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Release this holder's claim on *scope*. True when one went.
 
-    A holder can only ever address its own key, so releasing another agent's
-    claim is not refused -- it is unaddressable. Passing someone else's scope
-    deletes nothing and returns False.
+    Another holder's claim is unaddressable: nothing is deleted, False returns,
+    and the attempt is recorded in the ledger (#18391).
     """
     parsed = Scope.parse(scope)
     _require_holder(agent_id, task_id)
@@ -506,6 +447,8 @@ async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> b
             task_id,
         )
     )
+    if removed == 0:
+        await note_refused_release(client, str(parsed), agent_id, task_id, lambda: list_claims(parsed.kind))
     return removed == 1
 
 
@@ -532,11 +475,9 @@ async def renew(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int |
 
 
 async def list_claims(kind: str | None = None) -> list[WorkClaim]:
-    """Every live claim, expired entries pruned from the index as they are found.
+    """Every live claim; expired entries are pruned from the index (and recorded) as found.
 
-    One ``MGET`` and at most one ``SREM`` per kind rather than a round trip per
-    member: #15949 reads this path to render the projection, so it is read far
-    more often than it is written.
+    One ``MGET`` and at most one ``SREM`` per kind: #15949 reads this path far more than it is written.
     """
     client = await _redis()
     kinds = sorted(VALID_KINDS) if kind is None else [kind]
@@ -551,6 +492,7 @@ async def list_claims(kind: str | None = None) -> list[WorkClaim]:
         vanished = [m for m, raw in zip(members, payloads) if raw is None]
         if vanished:
             await client.srem(index, *vanished)
+            await record_expired_members(client, k, [_text(m) for m in vanished])
         claims.extend(_decode(raw) for raw in payloads if raw is not None)
     return claims
 
@@ -564,6 +506,7 @@ async def work_claim(
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
     ttl_s: int | None = None,
+    company_id: str | None = None,
 ) -> AsyncIterator[WorkClaim]:
     """Hold *scope* for the block, releasing it however the block exits.
 
@@ -576,17 +519,15 @@ async def work_claim(
             the exception as ``.conflict``.
     """
     tid = task_id or f"adhoc-{uuid.uuid4()}"
-    verdict, outcome = await _acquire(scope, agent_id=agent_id, task_id=tid, mode=mode, intent=intent, ttl_s=ttl_s)
+    verdict, outcome = await _acquire(
+        scope, agent_id=agent_id, task_id=tid, mode=mode, intent=intent, ttl_s=ttl_s, company_id=company_id
+    )
     if isinstance(outcome, ClaimConflict):
         raise ClaimConflictError(outcome)
     try:
         yield outcome
     finally:
-        # Only the block that acquired the scope fresh releases it. Reentrancy
-        # makes a nested `work_claim` over the same scope succeed as a renew, so
-        # an unconditional release here would delete the claim on the inner
-        # block's exit while the outer block was still writing -- and the scope
-        # would be free for another agent mid-write, which is the exact
-        # collision this module exists to prevent.
+        # Only the block that acquired fresh releases: a nested block's renew must
+        # not free the scope while the outer block is still writing.
         if verdict == "acquired":
             await release_scope(scope, agent_id=agent_id, task_id=tid)

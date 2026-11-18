@@ -12,13 +12,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_config import (
-    get_agent_endpoint_explicit,
-    get_agent_model_explicit,
-    get_agent_provider_explicit,
-)
 from constants.threshold_constants import LLMDefaults
-from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
 from .base_modality_agent import BaseModalityAgent
@@ -39,27 +33,13 @@ class CodeGenerationAgent(BaseModalityAgent):
     QUERY_MAX_TOKENS = LLMDefaults.EXTENDED_MAX_TOKENS
     QUERY_ERROR_MESSAGE = "Error generating code. Please try rephrasing your request."
     _LOGGER = logger
-
-    def __init__(self):
-        """Initialize the Code Generation Agent with LLM configuration."""
-        super().__init__("code_generation")
-        self.llm_interface = get_llm_service()
-        self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
-        self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
-        self.model_name = get_agent_model_explicit(self.AGENT_ID)
-        self.capabilities = [
-            "code_generation",
-            "code_explanation",
-            "code_review",
-            "multi_language_support",
-            "algorithm_design",
-        ]
-        self._register_action_handlers()
-        logger.info(
-            "Code Generation Agent initialized: provider=%s, model=%s",
-            self.llm_provider,
-            self.model_name,
-        )
+    CAPABILITIES = (
+        "code_generation",
+        "code_explanation",
+        "code_review",
+        "multi_language_support",
+        "algorithm_design",
+    )
 
     def _register_action_handlers(self):
         """Register action handlers for code generation operations."""

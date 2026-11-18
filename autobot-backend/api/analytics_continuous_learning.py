@@ -907,7 +907,7 @@ _engine: ContinuousLearningEngine | None = None
 _engine_lock = asyncio.Lock()
 
 
-async def get_engine() -> ContinuousLearningEngine:
+async def get_continuous_learning_engine() -> ContinuousLearningEngine:
     """Get or create the global learning engine."""
     global _engine
 
@@ -940,7 +940,7 @@ async def start_learning(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return await engine.start()
 
 
@@ -958,7 +958,7 @@ async def stop_learning(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return await engine.stop()
 
 
@@ -976,7 +976,7 @@ async def get_status(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return engine.get_status()
 
 
@@ -994,7 +994,7 @@ async def get_metrics(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return engine.get_metrics()
 
 
@@ -1015,7 +1015,7 @@ async def submit_feedback(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return await engine.submit_feedback(pattern_id, is_correct, details)
 
 
@@ -1034,7 +1034,7 @@ async def trigger_retrain(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return await engine.trigger_retrain(request)
 
 
@@ -1054,7 +1054,7 @@ async def get_insights(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     insights = await engine.get_insights(active_only, limit)
     return {
         "insights": [i.model_dump() for i in insights],
@@ -1078,7 +1078,7 @@ async def generate_insights_now(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     new_insights = await engine.pipeline.generate_insights()
     return {
         "generated": len(new_insights),
@@ -1100,7 +1100,7 @@ async def get_monitoring_status(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return engine.monitor.get_status()
 
 
@@ -1119,7 +1119,7 @@ async def update_config(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     engine.config = config
     return {"updated": True, "config": config.model_dump()}
 
@@ -1138,7 +1138,7 @@ async def get_learning_config(
 
     Issue #744: Requires admin authentication.
     """
-    engine = await get_engine()
+    engine = await get_continuous_learning_engine()
     return engine.config
 
 
@@ -1152,7 +1152,7 @@ async def probe_analytics_continuous_learning(
     existing /health route.
     """
     try:
-        engine = await get_engine()
+        engine = await get_continuous_learning_engine()
         running = bool(getattr(engine, "_running", False))
         initialized = bool(getattr(engine, "_initialized", False))
         status = "ok" if initialized else "degraded"

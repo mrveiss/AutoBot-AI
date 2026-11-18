@@ -994,7 +994,7 @@ List available language models.
 
 ### GET /llm/current
 
-Get the currently active model configuration.
+Get the active model name and provider. Any authenticated user. The full LLM configuration is not returned here; it is available only through the admin-only `GET /llm/config` (#18193).
 
 **Headers:** `Authorization: Bearer <token>`
 
@@ -1002,17 +1002,14 @@ Get the currently active model configuration.
 
 ```json
 {
-  "success": true,
-  "model": "gpt-4-turbo",
-  "provider": "openai",
-  "temperature": 0.7,
-  "max_tokens": 4096
+  "model": "qwen3.5:9b",
+  "provider": "ollama"
 }
 ```
 
 ### GET /llm/config
 
-Get LLM configuration.
+Get the LLM configuration, with credentials and URL passwords redacted. **Admin only** (#18193): non-admin callers receive `403`.
 
 **Headers:** `Authorization: Bearer <token>`
 
@@ -1055,9 +1052,32 @@ Get LLM provider connection status.
 
 Get health status of all configured LLM providers.
 
+### GET /embeddings/models
+
+The embedding models the user can switch to right now: the configured providers' models that are
+embedding models (chat models are never listed), with the active one marked. The active model is
+listed even when no provider reports it, as `available: false`.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response** (`data`):
+
+```json
+{
+  "active": "nomic-embed-text:latest",
+  "models": [
+    {"name": "nomic-embed-text:latest", "provider": "ollama", "available": true, "active": true, "dimension": null}
+  ],
+  "total_count": 1,
+  "providers_errored": []
+}
+```
+
+`dimension` is `null` until the model has embedded once.
+
 ### GET /llm/embedding/models
 
-List available embedding models.
+Moved: answers `308` to [`GET /embeddings/models`](#get-embeddingsmodels) (#19378).
 
 ---
 

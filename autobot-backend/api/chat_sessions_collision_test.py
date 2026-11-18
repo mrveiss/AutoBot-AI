@@ -129,6 +129,7 @@ class TestTheOwnershipRecordRefusesAReassignment:
         validator.redis = MagicMock()
         validator.redis.set = AsyncMock()
         validator.redis.sadd = AsyncMock()
+        validator.redis.srem = AsyncMock()
         validator.redis.expire = AsyncMock()
         validator.ownership_ttl = 3600
         validator.get_session_owner = AsyncMock(return_value=existing_owner)

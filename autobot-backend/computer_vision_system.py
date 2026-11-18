@@ -11,7 +11,7 @@ This module is a thin wrapper that re-exports from the new src/computer_vision/
 package for backward compatibility. All functionality has been extracted to:
 - src/computer_vision/types.py: Core data classes (ElementType, UIElement, ScreenState)
 - src/computer_vision/collections.py: UIElementCollection, ProcessingResultExtractor
-- src/computer_vision/classifiers.py: ElementClassifier, TemplateMatchingEngine, ContextAnalyzer
+- src/computer_vision/classifiers.py: ElementClassifier, TemplateMatchingEngine, ScreenContextAnalyzer
 - src/computer_vision/screen_analyzer.py: ScreenAnalyzer multimodal analysis
 - src/computer_vision/system.py: ComputerVisionSystem coordinator
 
@@ -36,12 +36,12 @@ DEPRECATED: Import directly from computer_vision instead.
 from computer_vision import (  # Types; Collections; Classifiers; Screen Analyzer; System
     FORM_SUBMISSION_KEYWORDS,
     ComputerVisionSystem,
-    ContextAnalyzer,
     ElementClassifier,
     ElementType,
     InteractionType,
     ProcessingResultExtractor,
     ScreenAnalyzer,
+    ScreenContextAnalyzer,
     ScreenState,
     TemplateMatchingEngine,
     UIElement,
@@ -62,7 +62,7 @@ __all__ = [
     # Classifiers
     "ElementClassifier",
     "TemplateMatchingEngine",
-    "ContextAnalyzer",
+    "ScreenContextAnalyzer",
     # Screen Analyzer
     "ScreenAnalyzer",
     # System

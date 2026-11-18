@@ -46,7 +46,7 @@ def _model_supports_tools(model: str) -> bool:
     return any(capable in model_lower for capable in _OLLAMA_TOOL_CAPABLE_MODELS)
 
 
-class OllamaProvider:
+class OllamaRequestExecutor:
     """
     Ollama LLM Provider with streaming support and circuit breaker protection.
 
@@ -525,5 +525,5 @@ class OllamaProvider:
 
 
 __all__ = [
-    "OllamaProvider",
+    "OllamaRequestExecutor",
 ]

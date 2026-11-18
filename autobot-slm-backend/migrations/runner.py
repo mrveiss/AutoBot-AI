@@ -26,9 +26,18 @@ from typing import List, Tuple
 
 import psycopg2
 
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.secret_redaction import redact_url_credentials
 from migrations import utils as _migration_utils
 
 logger = logging.getLogger(__name__)
+
+#: libpq rounds any connect_timeout below 2 s up to 2 s, so a smaller value would be reported wrongly.
+_LIBPQ_MIN_CONNECT_TIMEOUT_S = 2
+#: Connect timeout for the migration runner; the failure log reports the value actually used (#18056).
+_CONNECT_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_MIGRATION_CONNECT_TIMEOUT_SECONDS", 10, min_v=_LIBPQ_MIN_CONNECT_TIMEOUT_S
+)
 
 # Migration files in order of execution
 # Add new migrations to this list
@@ -80,6 +89,14 @@ MIGRATIONS = [
     "widen_systemd_service_to_sequence",
     # Issue #15495: per-node LLM hardware capability profile (RAM/VRAM/GPU/NPU).
     "add_node_capability_profiles_table",
+    # Issue #17225: audit_logs is the audit trail's system of record; the shared
+    # AuditLog model gained category/actor/session_id/resource_ref.
+    "add_audit_logs_canonical_columns",
+    # Issue #17455: one row per post-sync command/restart a code sync executed.
+    "add_post_sync_action_runs_table",
+    # Issue #18663: the jti denylist and password epoch move from Redis to PostgreSQL,
+    # so the SLM works without the Redis it deploys.
+    "add_auth_revocation_tables",
 ]
 
 
@@ -167,27 +184,16 @@ def _resolve_migration_db_url(module, default_db_url: str) -> str:
 
 
 def _parse_db_url(url: str) -> dict:
-    """Parse PostgreSQL URL into connection parameters (#786)."""
-    # postgresql://user:pass@host:port/database
-    # postgresql://user@host:port/database (no password)
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    return {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 5432,
-        "database": parsed.path.lstrip("/") if parsed.path else "slm",
-        "user": parsed.username or "slm_app",
-        "password": parsed.password,
-    }
+    """Parse PostgreSQL URL into connection parameters (#786; one parser, #19320)."""
+    return _migration_utils.parse_db_url(url)
 
 
-def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:
+def get_connection(db_url: str = None, timeout: int = _CONNECT_TIMEOUT_S) -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection (#786).
 
     Args:
         db_url: Database URL (defaults to get_db_url())
-        timeout: Connection timeout in seconds (default 10s)
+        timeout: Connection timeout in seconds (default _CONNECT_TIMEOUT_S)
     """
     if db_url is None:
         db_url = get_db_url()
@@ -236,17 +242,22 @@ def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
         # migrate() this issue added. Guarded on the 'agents' table and a
         # known roster member so it never re-fires once seeding has run,
         # and never errors on a fresh DB where 'agents' doesn't exist yet.
+        # The 'agents' read sits in its own nested IF: PL/pgSQL plans an IF
+        # condition as one expression, so an AND-ed `SELECT ... FROM agents`
+        # fails with 'relation "agents" does not exist' on a fresh DB even
+        # behind the to_regclass guard (#19238 made that failure fatal).
         cur.execute("""
             DO $$
             BEGIN
                 IF EXISTS (
                     SELECT 1 FROM migrations_applied WHERE name = 'seed_agents'
                 )
-                AND to_regclass('public.agents') IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM agents WHERE agent_id = 'chat'
-                ) THEN
-                    DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                AND to_regclass('public.agents') IS NOT NULL THEN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM agents WHERE agent_id = 'chat'
+                    ) THEN
+                        DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                    END IF;
                 END IF;
             END
             $$;
@@ -324,7 +335,7 @@ def run_migration(db_url: str, name: str) -> Tuple[bool, str]:
         return False, f"Failed to apply {name}: {e}"
 
 
-def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
+def run_all_migrations(db_url: str = None, connect_timeout: int | None = None) -> List[Tuple[str, bool, str]]:
     """
     Run all pending migrations (#786).
 
@@ -333,16 +344,19 @@ def run_all_migrations(db_url: str = None) -> List[Tuple[str, bool, str]]:
     """
     if db_url is None:
         db_url = get_db_url()
+    connect_timeout = max(
+        _CONNECT_TIMEOUT_S if connect_timeout is None else connect_timeout, _LIBPQ_MIN_CONNECT_TIMEOUT_S
+    )
 
     results = []
     conn = None
 
     try:
         logger.debug("Connecting to PostgreSQL for migrations")
-        conn = get_connection(db_url)
+        conn = get_connection(db_url, timeout=connect_timeout)
         logger.info("Database connection established")
     except Exception as e:
-        logger.error("Failed to connect to database after 10s timeout: %s", e)
+        logger.error("Failed to connect to database (connect timeout: %ss): %s", connect_timeout, e)
         logger.error("Check that PostgreSQL is running and accepting connections on the configured host/port")
         return [("database_connection", False, f"Connection failed: {e}")]
 
@@ -442,7 +456,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    logger.info(f"Running migrations on PostgreSQL: {db_url}")
+    # #18664: never the password -- the URL is logged with its userinfo credentials masked.
+    logger.info("Running migrations on PostgreSQL: %s", redact_url_credentials(db_url))
 
     results = run_all_migrations(db_url)
 

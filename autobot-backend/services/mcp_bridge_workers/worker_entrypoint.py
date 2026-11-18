@@ -36,7 +36,7 @@ from typing import Any, Dict
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.ssot_config import config
 
 logger = get_logger("mcp_worker")
@@ -222,6 +222,7 @@ def main() -> None:
         format="%(asctime)s mcp_worker[%(process)d] %(levelname)s %(message)s",
         stream=sys.stderr,
     )
+    setup_logging()  # service startup: file logging on (#20894)
     if len(sys.argv) != 2:
         logger.error("usage: worker_entrypoint.py <bridge_module>")
         sys.exit(2)

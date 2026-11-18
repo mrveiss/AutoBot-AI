@@ -25,43 +25,34 @@ Usage:
 
 import asyncio
 import json
-import os
 import time
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Dict, List
 
 import aiohttp
 import yaml
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.service_registry_core import (
+    SERVICE_DEFINITIONS,
+    DeploymentMode,
+    ServiceHealth,
+    build_base_url,
+    join_service_path,
+    resolve_deployment_mode,
+)
 
 # Import unified configuration system - NO HARDCODED VALUES
 from config.manager import get_config_manager
 
 config = get_config_manager()
 from autobot_shared.logging_manager import get_logger
-from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
+from autobot_shared.status_enums import HealthStatus
+from constants.api_constants import PATH_HEALTH
 
-
-class RegistryServiceStatus(Enum):
-    """Service health status"""
-
-    HEALTHY = "healthy"
-    UNHEALTHY = "unhealthy"
-    UNKNOWN = "unknown"
-    CIRCUIT_OPEN = "circuit_open"
-
-
-class DeploymentMode(Enum):
-    """Deployment mode detection"""
-
-    LOCAL = "local"  # Single machine, no containers
-    DOCKER_LOCAL = "docker_local"  # Docker Compose on single machine
-    DISTRIBUTED = "distributed"  # Services across multiple machines
-    KUBERNETES = "kubernetes"  # Kubernetes deployment
-    CLOUD = "cloud"  # Cloud-managed services
+# Alias of the canonical enum (#12771): same members, same identity.
+RegistryServiceStatus = HealthStatus
 
 
 @dataclass
@@ -78,17 +69,6 @@ class ServiceConfig:
     retries: int = None  # Will use config
     circuit_breaker_threshold: int = None  # Will use config
     circuit_breaker_timeout: int = None  # Will use config
-
-
-@dataclass
-class ServiceHealth:
-    """Service health state"""
-
-    status: RegistryServiceStatus
-    last_check: float
-    failure_count: int = 0
-    circuit_open_until: float = 0
-    response_time: float = 0
 
 
 class ServiceRegistry:
@@ -113,45 +93,12 @@ class ServiceRegistry:
         if cls._cached_default_services is not None:
             return cls._cached_default_services
         cls._cached_default_services = {
-            "redis": {
-                "port": ssot_config.port.redis,
-                "health_endpoint": "/",
-                "schemes": {
-                    "local": "redis",
-                    "docker": "redis",
-                    "distributed": "redis",
-                },
-            },
-            "ai-stack": {
-                "port": ssot_config.port.aistack,
-                "health_endpoint": PATH_HEALTH,
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
-            "npu-worker": {
-                "port": ssot_config.port.npu,
-                "health_endpoint": PATH_HEALTH,
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
-            "backend": {
-                "port": ssot_config.port.backend,
-                "health_endpoint": PATH_API_HEALTH,
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
-            "frontend": {
-                "port": ssot_config.port.frontend,
-                "health_endpoint": "/",
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
-            "playwright-vnc": {
-                "port": ssot_config.port.browser,
-                "health_endpoint": PATH_HEALTH,
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
-            "ollama": {
-                "port": ssot_config.port.ollama,
-                "health_endpoint": PATH_OLLAMA_TAGS,
-                "schemes": {"local": "http", "docker": "http", "distributed": "http"},
-            },
+            name: {
+                "port": d.port,
+                "health_endpoint": d.health_path,
+                "schemes": {"local": d.scheme, "docker": d.scheme, "distributed": d.scheme},
+            }
+            for name, d in SERVICE_DEFINITIONS.items()
         }
         return cls._cached_default_services
 
@@ -165,13 +112,7 @@ class ServiceRegistry:
             DeploymentMode.LOCAL: {
                 # DEFAULT HYBRID: Backend/frontend on localhost, Docker services on localhost ports
                 "default": config.get("infrastructure.defaults.localhost"),
-                "redis": ssot_config.vm.redis,
-                "backend": ssot_config.vm.main,
-                "frontend": ssot_config.vm.frontend,
-                "ai-stack": ssot_config.vm.aistack,
-                "npu-worker": ssot_config.vm.npu,
-                "playwright-vnc": ssot_config.vm.browser,
-                "ollama": ssot_config.vm.ollama,
+                **{name: d.host for name, d in SERVICE_DEFINITIONS.items()},
                 "lmstudio": "localhost",
             },
             DeploymentMode.DOCKER_LOCAL: {
@@ -202,36 +143,17 @@ class ServiceRegistry:
         if config_file:
             self._load_config_file(config_file)
         self._load_environment_config()
+        self._pin_redis_to_endpoint()
 
         self.logger.info(f"Service registry initialized in {self.deployment_mode.value} mode")
 
     def _detect_deployment_mode(self) -> DeploymentMode:
-        """Detect current deployment mode"""
-        # Check for explicit mode setting
-        mode = config.get("deployment.mode", "").lower()
-        if mode:
-            try:
-                return DeploymentMode(mode)
-            except ValueError:
-                self.logger.warning("Invalid deployment mode: %s", mode)
-
-        # Auto-detect based on environment
-        # DEFAULT BEHAVIOR: Local + Docker hybrid (backend on host, services in containers)
-        if os.path.exists("/.dockerenv"):
-            # Running inside container
-            if config.get("deployment.kubernetes.service_host", False):
-                return DeploymentMode.KUBERNETES
-            elif config.get("deployment.distributed", False):
-                return DeploymentMode.DISTRIBUTED
-            else:
-                return DeploymentMode.DOCKER_LOCAL
-        else:
-            # Running on host - DEFAULT: Local with Docker services
-            if config.get("deployment.mode") == "distributed":
-                return DeploymentMode.DISTRIBUTED
-            else:
-                # Default hybrid mode: backend/frontend on localhost, services in Docker
-                return DeploymentMode.LOCAL
+        """The shared resolver (#19372): the flat ``config.get("deployment.mode")`` never found the key."""
+        return resolve_deployment_mode(
+            self.logger,
+            kubernetes=bool(config.get_nested("deployment.kubernetes.service_host", False)),
+            distributed=bool(config.get_nested("deployment.distributed", False)),
+        )
 
     def _load_default_services(self):
         """Load default service configurations from unified config"""
@@ -281,11 +203,8 @@ class ServiceRegistry:
     def _load_config_file(self, config_file: str):
         """Load services from configuration file"""
         try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                if config_file.endswith(".yaml") or config_file.endswith(".yml"):
-                    config = yaml.safe_load(f)
-                else:
-                    config = json.load(f)
+            parser = yaml.safe_load if config_file.endswith((".yaml", ".yml")) else json.load
+            config = load_config_file(config_file, dict, "Service registry", parser=parser).values
 
             services_config = config.get("services", {})
             for service_name, service_data in services_config.items():
@@ -336,6 +255,21 @@ class ServiceRegistry:
             service.path = config.get(f"services.{service_key}.path", service.path)
             service.health_endpoint = config.get(f"services.{service_key}.health_endpoint", service.health_endpoint)
 
+    def _pin_redis_to_endpoint(self) -> None:
+        """Report Redis where the canonical client dials it (#19232).
+
+        Redis has ONE resolution path, ``endpoint.resolve_redis_endpoint``; the
+        deployment-mode patterns and config overrides above would be a second.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        redis_service = self.services.get("redis")
+        if redis_service is None:
+            return
+        resolved = resolve_redis_endpoint()
+        redis_service.host, redis_service.port = resolved.host, resolved.port
+        redis_service.scheme = "rediss" if resolved.tls else "redis"
+
     def get_service_url(self, service_name: str, path: str = "") -> str:
         """
         Get full URL for a service
@@ -347,6 +281,12 @@ class ServiceRegistry:
         Returns:
             Full service URL
 
+        Raises:
+            ValueError: the service is not registered. A miss never falls back
+                to a default host (#18639); the SSOT lookup
+                ``autobot_shared.ssot_config`` ``get_service_url`` returns None
+                instead. Neither guesses an endpoint.
+
         Example:
             registry.get_service_url("redis")
             registry.get_service_url("ai-stack", "/api/process")
@@ -357,15 +297,8 @@ class ServiceRegistry:
 
         service = self.services[service_name]
 
-        # Construct URL
-        base_url = f"{service.scheme}://{service.host}:{service.port}"
-
-        # Add service path and requested path
-        full_path = f"{service.path.rstrip('/')}{path}" if path else service.path
-        if full_path and not full_path.startswith("/"):
-            full_path = f"/{full_path}"
-
-        return f"{base_url}{full_path}"
+        base_url = build_base_url(service.scheme, service.host, service.port)
+        return join_service_path(base_url, service.path, path)
 
     def get_service_config(self, service_name: str) -> ServiceConfig | None:
         """Get service configuration"""
@@ -503,11 +436,6 @@ def get_service_url(service_name: str, path: str = "") -> str:
 
 
 # Legacy compatibility functions
-def get_redis_url() -> str:
-    """Get Redis connection URL"""
-    return get_service_url("redis")
-
-
 def get_ai_stack_url(path: str = "") -> str:
     """Get AI stack URL"""
     return get_service_url("ai-stack", path)

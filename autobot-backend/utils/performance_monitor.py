@@ -64,7 +64,7 @@ from utils.performance_monitoring.collectors import (
     ServiceCollector,
     SystemCollector,
 )
-from utils.performance_monitoring.decorator import monitor_performance, set_redis_client
+from utils.performance_monitoring.decorator import monitor_performance
 from utils.performance_monitoring.hardware import HardwareDetector
 from utils.performance_monitoring.metrics import (
     GPUMetrics,
@@ -109,7 +109,6 @@ __all__ = [
     "HardwareDetector",
     # Decorator
     "monitor_performance",
-    "set_redis_client",
     # Constants
     "CRITICAL_SERVICE_STATUSES",
     "DEFAULT_PERFORMANCE_BASELINES",

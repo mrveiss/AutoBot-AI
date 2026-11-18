@@ -11,6 +11,7 @@ import json
 import os
 from typing import Dict, Tuple
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -21,7 +22,7 @@ _COMMAND_REQUEST_KEYWORDS = frozenset({"run", "execute", "command"})
 _DANGEROUS_CHARS = frozenset({"&", ";", "|", ">", "<", "`", "$"})
 
 
-class CommandValidator:
+class QueryCommandSafelist:
     """Validates and sanitizes system commands using a predefined safelist."""
 
     def __init__(self, config_path: str = None):
@@ -33,23 +34,22 @@ class CommandValidator:
         self.blocked_patterns = self.allowed_commands.get("blocked_patterns", [])
 
     def _load_config(self, config_path: str) -> Dict:
-        """Load the allowed commands configuration."""
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error("Failed to load command config: %s", e)
-            # Return minimal safe defaults
-            return {
-                "commands": {
-                    "system_info": {
-                        "commands": ["uname -a"],
-                        "description": "Get system information",
-                        "risk_level": "LOW",
-                    }
-                },
-                "blocked_patterns": ["rm ", "sudo ", "> ", "| "],
-            }
+        """Load the allowed commands configuration (shared loader, strict JSON, #17855)."""
+        return load_config_file(config_path, self._minimal_safe_defaults, "Allowed commands", parser=json.load).values
+
+    @staticmethod
+    def _minimal_safe_defaults() -> Dict:
+        """Fail-closed policy used when the allowlist cannot be read."""
+        return {
+            "commands": {
+                "system_info": {
+                    "commands": ["uname -a"],
+                    "description": "Get system information",
+                    "risk_level": "LOW",
+                }
+            },
+            "blocked_patterns": ["rm ", "sudo ", "> ", "| "],
+        }
 
     def is_command_blocked(self, command: str) -> Tuple[bool, str]:
         """Check if a command contains blocked patterns."""
@@ -179,4 +179,4 @@ class CommandValidator:
         }
 
 
-get_command_validator = lazy_singleton(CommandValidator)
+get_command_validator = lazy_singleton(QueryCommandSafelist)

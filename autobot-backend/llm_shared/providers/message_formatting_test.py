@@ -21,13 +21,10 @@ import pytest
 
 from llm_shared.models import LLMRequest, LLMSettings, ToolDefinition
 from llm_shared.providers.anthropic import AnthropicProvider
+from llm_shared.providers.anthropic_format import split_system_and_chat
 from llm_shared.providers.bedrock import BedrockProvider
 from llm_shared.providers.cache_utils import sorted_for_cache
-from llm_shared.providers.message_formatting import (
-    anthropic_tool_schemas,
-    openai_function_tool_schemas,
-    split_system_messages,
-)
+from llm_shared.providers.message_formatting import anthropic_tool_schemas, openai_function_tool_schemas
 from llm_shared.providers.mistral import MistralProvider
 from llm_shared.providers.ollama import OllamaProvider
 from llm_shared.providers.openai import OpenAIProvider
@@ -109,7 +106,7 @@ def _request(messages, tools, tool_choice) -> LLMRequest:
 @pytest.mark.parametrize(("messages", "tools"), _PARAMS)
 def test_shared_helpers_equal_the_frozen_inlined_code(messages, tools) -> None:
     tools, _choice = tools
-    assert _j(split_system_messages(messages)) == _j(_legacy_split(messages))
+    assert _j(split_system_and_chat(messages)) == _j(_legacy_split(messages))
     if tools:
         assert _j(anthropic_tool_schemas(tools)) == _j(_legacy_anthropic_tools(tools))
         assert _j(openai_function_tool_schemas(tools)) == _j(_legacy_openai_tools(tools))

@@ -9,8 +9,8 @@ The canonical shape is ``LLMRequest.messages`` (role/content dicts) and
 format has ONE converter here and every provider that speaks that format
 calls it:
 
-* Anthropic Messages format (``anthropic``, Claude-on-Vertex, Claude-on-Bedrock):
-  ``split_system_messages`` + ``anthropic_tool_schemas``.
+* Anthropic Messages format (``anthropic``, Claude-on-Bedrock): ``anthropic_tool_schemas``
+  (the system/chat split lives once in ``anthropic_format.split_system_and_chat``).
 * OpenAI function-tool format (``openai_compatible`` and its subclasses,
   ``mistral``, ``ollama``): ``openai_function_tool_schemas``.
 
@@ -21,27 +21,6 @@ to what the inlined copies produced (see ``message_formatting_test.py``).
 from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence
-
-from autobot_shared.ssot_constants import CategoryDefaults
-
-
-def split_system_messages(messages: Sequence[Dict[str, Any]]) -> tuple[str, List[Dict[str, Any]]]:
-    """Separate the system message from conversational messages (Anthropic format).
-
-    The LAST system message wins (earlier ones are dropped); every other
-    message keeps only ``role`` (default ``"user"``) and ``content``
-    (default ``""``).
-    """
-    system_content = ""
-    chat_messages: List[Dict[str, Any]] = []
-    for msg in messages:
-        if msg.get("role") == CategoryDefaults.ROLE_SYSTEM:
-            system_content = msg.get("content", "")
-        else:
-            chat_messages.append(
-                {"role": msg.get("role", CategoryDefaults.ROLE_USER), "content": msg.get("content", "")}
-            )
-    return system_content, chat_messages
 
 
 def anthropic_tool_schemas(tools: Sequence[Any]) -> List[Dict[str, Any]]:
@@ -60,4 +39,4 @@ def openai_function_tool_schemas(tools: Sequence[Any]) -> List[Dict[str, Any]]:
     ]
 
 
-__all__ = ["anthropic_tool_schemas", "openai_function_tool_schemas", "split_system_messages"]
+__all__ = ["anthropic_tool_schemas", "openai_function_tool_schemas"]
