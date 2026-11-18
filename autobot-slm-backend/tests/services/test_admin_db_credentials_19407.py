@@ -99,3 +99,12 @@ def test_a_non_utf8_store_exits_with_a_message_not_a_traceback(admin, tmp_path) 
     with pytest.raises(SystemExit) as exit_info:
         admin.load_env_file(store)
     assert "not UTF-8" in str(exit_info.value) and "\xff" not in str(exit_info.value)
+
+
+def test_a_password_with_url_characters_parses_back_from_the_dsn(admin, monkeypatch) -> None:
+    """#19812: raw, these end the credentials early and the CLI connects to the wrong host."""
+    from urllib.parse import unquote, urlsplit
+
+    monkeypatch.setattr(admin, "_secrets_env", lambda: {"SLM_DB_HOST": "db.local", "SLM_DB_PASSWORD": "@:/%"})
+    parts = urlsplit(admin.get_db_url("slm"))
+    assert unquote(parts.password) == "@:/%" and parts.hostname == "db.local"

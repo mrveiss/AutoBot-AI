@@ -194,3 +194,35 @@ describe('ProcessMonitorTab transport (#13079)', () => {
     expect(socket.protocols).toEqual(['bearer', 'test-token'])
   })
 })
+
+describe('ProcessMonitorTab duration labels (#19929)', () => {
+  const done = { ...PROCESS, completed_at: '2026-01-01T00:01:15Z' }
+  const labelled = createI18n({
+    legacy: true,
+    locale: 'xx',
+    fallbackLocale: 'en',
+    messages: { en, xx: { agents: { processMonitorTab: { durationSeconds: 'sek', durationMinutes: 'min' } } } },
+  })
+
+  it('renders the duration with the labels of the active locale', async () => {
+    backendClient.get.mockReset()
+    backendClient.get.mockResolvedValue({ processes: [done] })
+    const wrapper = mount(ProcessMonitorTab, { global: { plugins: [labelled] } })
+    const vm = wrapper.vm as unknown as Vm
+    vm.agentId = 'orchestrator'
+    await vm.fetchProcesses()
+    await flushPromises()
+    expect(wrapper.text()).toContain('1min 15sek')
+  })
+
+  it('keeps the English suffixes when the locale has no override', async () => {
+    backendClient.get.mockReset()
+    backendClient.get.mockResolvedValue({ processes: [done] })
+    const wrapper = mount(ProcessMonitorTab, { global: { plugins: [i18n] } })
+    const vm = wrapper.vm as unknown as Vm
+    vm.agentId = 'orchestrator'
+    await vm.fetchProcesses()
+    await flushPromises()
+    expect(wrapper.text()).toContain('1m 15s')
+  })
+})

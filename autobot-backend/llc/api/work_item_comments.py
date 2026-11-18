@@ -19,21 +19,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItemComment
 from ..services.work_item_service import WorkItemService
+from ._common import require_work_item_id
 
 logger = get_logger(__name__)
 
-# Page-size bounds, env-backed so an operator can tune them without a deploy.
-COMMENTS_PAGE_DEFAULT = env_int("LLC_COMMENTS_PAGE_DEFAULT", 100)
-COMMENTS_PAGE_MAX = env_int("LLC_COMMENTS_PAGE_MAX", 500)
+# Page-size bounds, env-backed so an operator can tune them without a deploy. A floor of 1 keeps a
+# zero or negative setting from making every limit a 422.
+COMMENTS_PAGE_DEFAULT = env_int_clamped("LLC_COMMENTS_PAGE_DEFAULT", 100, min_v=1)
+COMMENTS_PAGE_MAX = env_int_clamped("LLC_COMMENTS_PAGE_MAX", 500, min_v=1)
 
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _service = service_dep(WorkItemService)
 
 
@@ -70,8 +72,13 @@ async def list_comments(
             LLCWorkItemComment.company_id == uuid.UUID(str(ctx.org_id)),
         )
         .order_by(LLCWorkItemComment.created_at.asc(), LLCWorkItemComment.id.asc())
-        .limit(limit)
+        .limit(limit + 1)  # one extra row says whether another page exists
         .offset(offset)
     )
     rows = (await session.execute(stmt)).scalars().all()
-    return {"comments": [serialize_comment(c) for c in rows], "limit": limit, "offset": offset}
+    return {
+        "comments": [serialize_comment(c) for c in rows[:limit]],
+        "limit": limit,
+        "offset": offset,
+        "has_more": len(rows) > limit,
+    }

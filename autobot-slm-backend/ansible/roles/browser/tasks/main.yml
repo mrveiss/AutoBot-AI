@@ -326,6 +326,7 @@
     chmod 0600 /home/autobot/.vnc/passwd
     chown autobot:autobot /home/autobot/.vnc/passwd
   become: true
+  no_log: true  # #19846
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles

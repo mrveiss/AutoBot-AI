@@ -496,7 +496,7 @@ onMounted(() => {
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 
@@ -641,7 +641,7 @@ onMounted(() => {
 }
 
 .no-results .icon {
-  font-size: 2rem;
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-md);
   color: var(--text-tertiary);
 }

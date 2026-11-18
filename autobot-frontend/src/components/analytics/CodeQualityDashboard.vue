@@ -12,15 +12,15 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshData" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
           {{ loading ? $t('analytics.codeQuality.loading') : $t('analytics.codeQuality.refresh') }}
-        </button>
+        </BaseButton>
         <div class="export-dropdown" v-click-outside="closeExportMenu">
-          <button class="btn-export" @click="exportMenuOpen = !exportMenuOpen">
+          <BaseButton variant="info" size="sm" @click="exportMenuOpen = !exportMenuOpen">
             <span class="icon">↓</span>
             {{ $t('analytics.codeQuality.export') }}
-          </button>
+          </BaseButton>
           <div v-if="exportMenuOpen" class="dropdown-menu">
             <button @click="exportReport('json')">{{ $t('analytics.codeQuality.exportJson') }}</button>
             <button @click="exportReport('csv')">{{ $t('analytics.codeQuality.exportCsv') }}</button>
@@ -425,7 +425,7 @@
           </div>
       </template>
       <template #actions>
-        <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -433,8 +433,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 import TruncationNotice from './TruncationNotice.vue';
-import { useShowMore } from '@autobot/ui'
+import { useShowMore, BaseButton, saveTextFile } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
@@ -602,8 +603,8 @@ const {
     wsConnected.value = true;
     logger.debug('WebSocket connected');
   },
-  onClose: () => {
-    wsConnected.value = false;
+  onClose: (_event, info) => {
+    if (info.current) wsConnected.value = false;
     logger.debug('WebSocket disconnected');
   },
   onError: (error) => {
@@ -758,7 +759,7 @@ const trendStats = computed(() => {
 
 // Removed lastUpdated computed - always recalculating is inefficient
 // Use reactive lastUpdated ref instead, updated only on data refresh
-const lastUpdated = ref(new Date().toLocaleTimeString());
+const lastUpdated = ref(formatLocalTime(new Date()));
 
 // Methods
 async function refreshData(): Promise<void> {
@@ -774,7 +775,7 @@ async function refreshData(): Promise<void> {
       fetchUnwiredTrackers(),  // Issue #6871: load unwired-tracker count
     ]);
     // Update timestamp only on successful data refresh
-    lastUpdated.value = new Date().toLocaleTimeString();
+    lastUpdated.value = formatLocalTime(new Date());
   } catch (error) {
     logger.error('Failed to refresh data:', error);
   } finally {
@@ -834,13 +835,7 @@ async function exportReport(format: string): Promise<void> {
 }
 
 function downloadFile(content: string, filename: string, type: string): void {
-  const blob = new Blob([content], { type });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  window.URL.revokeObjectURL(url);
+  saveTextFile(content, filename, type);
 }
 
 function closeExportMenu(): void {
@@ -981,15 +976,9 @@ function truncatePath(path: string): string {
   return `.../${parts.slice(-2).join('/')}`;
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } });
 
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
+const formatShortDate = createDateFormatter({ kind: 'date', intl: { month: 'numeric', day: 'numeric' } });
 
 // Directive for click outside
 const vClickOutside = {
@@ -1099,39 +1088,6 @@ watch(selectedPeriod, () => {
 .header-actions {
   display: flex;
   gap: var(--spacing-3);
-}
-
-.btn-refresh,
-.btn-export {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: var(--transition-all);
-}
-
-.btn-refresh {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
-}
-
-.btn-export {
-  background: var(--color-info-solid);
-  border: none;
-  color: var(--text-on-primary);
-}
-
-.btn-export:hover {
-  background: var(--color-info-hover);
 }
 
 .export-dropdown {
@@ -1821,17 +1777,4 @@ watch(selectedPeriod, () => {
   color: var(--text-muted);
 }
 
-.btn-secondary {
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
-}
 </style>

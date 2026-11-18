@@ -109,6 +109,11 @@ SENSITIVE_TOOLS = frozenset(
     + DELEGATION_TOOLS
 )
 
+#: Owner ruling 2026-11-17 (#17237, approval only): navigate is always available. It stays in "browser actions", a
+#: sensitive tool and a mutating effect, so a work item can still ask for approval and roles and the verifier still
+#: cover it; only the AI lines leave it unmanaged -- no baseline floor, no unset-line hold. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset({"navigate"})
+
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and
 #: "pushing commits" excludes git_reset — preserved from the prior literals; making

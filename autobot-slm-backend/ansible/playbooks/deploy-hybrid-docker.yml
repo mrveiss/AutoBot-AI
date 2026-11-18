@@ -179,7 +179,12 @@
 
     - name: Test Redis connectivity
       shell: |
-        docker exec {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
+        docker exec -e REDISCLI_AUTH {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} ping
+      # #19846: REDISCLI_AUTH, not -a: the password stays out of the task log and of ps
+      vars:
+        _redis_password: "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+      environment: "{{ {'REDISCLI_AUTH': _redis_password} if _redis_password else {} }}"
+      no_log: true
       register: redis_test
 
     - name: Display Redis status
@@ -214,7 +219,7 @@
               environment:
                 - NODE_ENV=production
                 - VITE_BACKEND_HOST={{ backend_host }}
-                - VITE_BACKEND_PORT=8001
+                - VITE_BACKEND_PORT={{ backend_port }}
                 - VITE_REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
                 - VITE_AI_STACK_HOST={{ hostvars['autobot-aiml']['ansible_host'] }}
                 - VITE_BROWSER_HOST={{ hostvars['autobot-browser']['ansible_host'] }}

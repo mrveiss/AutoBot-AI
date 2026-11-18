@@ -90,14 +90,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
-import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
+import { usePlugins, type PluginAuditEntry } from '@/composables/usePlugins'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { getAuditLog } = usePlugins()
 const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const entries = ref<AuditLogEntry[]>([])
+const entries = ref<PluginAuditEntry[]>([])
 const filterPluginName = ref('')
 
 // #17562: the audit log is the kit table; the status cell is a kit badge.
@@ -137,14 +138,7 @@ async function fetchAuditLog() {
   }
 }
 
-function formatTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 onMounted(() => {
   fetchAuditLog()
@@ -168,7 +162,7 @@ onMounted(() => {
 
 .audit-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -185,7 +179,7 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 200px;
 }
 

@@ -154,10 +154,11 @@ done
 ### Migration Path
 
 **If SLM server was manually configured:**
-```bash
-# Re-apply the configuration through the builtin updater (SLM Maintenance -> Updates -> Code Sync),
-# never a hand-run playbook against the SLM host
+**No builtin action applies this to the SLM host today.** The Roles page's **Redeploy** for `slm-monitoring` does not reach
+it (#20484), and Code Sync re-renders Prometheus configuration but has no Grafana step. Do not hand-run a playbook against
+the SLM host to get around that; follow #20484.
 
+```bash
 # Verify settings
 ssh autobot@<slm-manager-ip> "grep -E 'serve_from_sub_path|allow_embedding' /etc/grafana/grafana.ini"
 ```

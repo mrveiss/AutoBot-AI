@@ -41,7 +41,7 @@ export const DEFAULT_CONFIG = {
     // Frontend VM - Vue.js development server
     frontend: {
       host: config.vm.frontend,
-      port: String(config.port.frontend),
+      port: String(config.port.frontendServed),
       protocol: config.httpProtocol
     },
 

@@ -31,6 +31,8 @@ import importlib.util
 from collections import Counter
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 _REPO = Path(__file__).resolve().parents[2]
 _PROVIDER_METHODS = frozenset({"stream_completion", "chat_completion", "stream_chat"})
 _NOT_SCANNED = ("docs",)
@@ -47,35 +49,44 @@ _RECORDED = {
     "autobot-backend/api/openai_compat.py::_complete_chat": (1, "inspect.isasyncgenfunction check; no call"),
     "autobot-backend/api/anthropic_compat.py::_stream_generator_anthropic": (1, "record_token_usage at stream end"),
     "autobot-backend/api/anthropic_compat.py::_handle_messages": (1, "inspect.isasyncgenfunction check; no call"),
+    "autobot-backend/llm_shared/tiered_routing/complexity_router.py::ComplexityRouter.route_with_escalation": (
+        1,
+        "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
+    ),
+    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once": (
+        1,
+        "report_spend hook, registered at startup (#19650); asserted by _USES_SPEND_HOOK",
+    ),
     "autobot-backend/llm_shared/model_fallback_coordinator.py::ModelFallbackCoordinator._dispatch": (
         1,
         "only the compat gateways' non-stream paths call it; both record_response_usage the result (#16845)",
+    ),
+    "autobot-backend/chat_workflow/planner_client.py::PlannerLLMClient.generate": (
+        1,
+        "record_response_usage on the response, session-attributed (#21023)",
     ),
 }
 
 # Known unrecorded, tracked rather than fixed here: path::function -> (count, issue).
 _KNOWN_UNRECORDED = {
-    # In llm_shared / autobot_shared, below services/, so they cannot import the recorder: #19650.
-    "autobot-backend/llm_shared/tiered_routing/complexity_router.py::ComplexityRouter.route_with_escalation": (
-        1,
-        "#19650",
-    ),
-    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once": (1, "#19650"),
+    # In llm_shared, below services/, so they cannot import the recorder: #19650.
     "autobot-backend/llm_shared/adapters/anthropic_adapter.py::AnthropicAdapter.execute": (1, "#19650"),
     "autobot-backend/llm_shared/adapters/groq_adapter.py::GroqAdapter.execute": (1, "#19650"),
     "autobot-backend/llm_shared/adapters/ollama_adapter.py::OllamaAdapter.execute": (1, "#19650"),
     "autobot-backend/llm_shared/adapters/openai_adapter.py::OpenAIAdapter.execute": (1, "#19650"),
-    # chat_completion on an LLMService, which has no such method since #3185: #19649.
-    "autobot-backend/agents/agent_orchestration/routing.py::AgentRouter._determine_routing_base": (1, "#19649"),
-    "autobot-backend/async_chat_workflow.py::AsyncChatWorkflow._generate_llm_response": (1, "#19649"),
-    "autobot-backend/modern_ai_integration.py::LocalModelProvider.generate_text": (1, "#19649"),
-    "autobot-backend/task_handlers/llm_handlers.py::LLMChatCompletionHandler.execute": (1, "#19649"),
 }
 
 # Ratchet (see docs/developer/RATCHET_BASELINES.md): the known-unrecorded population
 # measured when this guard landed. It ONLY goes down -- lower it in the same change
 # that fixes an entry. Never raise it to admit a new site; record that site instead.
-_KNOWN_UNRECORDED_CEILING = 10
+_KNOWN_UNRECORDED_CEILING = 4
+
+# Hook sites: path::function. A "recorded" declaration above is text; this is checked against the
+# source, so a site that stops calling ``report_spend`` fails (#19650).
+_USES_SPEND_HOOK = (
+    "autobot-backend/llm_shared/tiered_routing/complexity_router.py::ComplexityRouter.route_with_escalation",
+    "autobot_shared/pre_action_verifier_guard.py::_call_verifier_once",
+)
 
 # Raw-HTTP inference no method-name scan can see, exempt by a stated condition.
 _OLLAMA_DIRECT = _REPO / "autobot-backend" / "chat_workflow" / "manager.py"
@@ -136,8 +147,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py" or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False) or "/tests/" in f"/{rel}"
 
 
 @functools.lru_cache(maxsize=1)
@@ -201,3 +211,37 @@ def test_known_unrecorded_only_shrinks() -> None:
 
 def test_the_ollama_direct_workflow_states_its_spend_exemption() -> None:
     assert _OLLAMA_EXEMPTION in _OLLAMA_DIRECT.read_text(encoding="utf-8")
+
+
+def _calls_report_spend(rel: str, qualified: str) -> bool:
+    """Whether the named function's body contains a call to ``report_spend``."""
+    scope = qualified.split(".")
+    node: ast.AST = ast.parse((_REPO / rel).read_text(encoding="utf-8"))
+    for name in scope:
+        node = next(
+            n
+            for n in ast.walk(node)
+            if isinstance(n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name
+        )
+    return any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "report_spend" for n in ast.walk(node)
+    )
+
+
+def test_the_hook_sites_still_report_spend_through_the_hook() -> None:
+    """A site declared as recording through the hook fails here the day it stops calling it (#19650)."""
+    stopped = [s for s in _USES_SPEND_HOOK if not _calls_report_spend(*s.split("::"))]
+    assert not stopped, f"These sites no longer call report_spend: {stopped}"
+    assert set(_USES_SPEND_HOOK) <= set(_RECORDED), "every hook site must be declared in _RECORDED"
+
+
+def test_the_hook_module_does_not_import_services() -> None:
+    """The design: autobot_shared cannot import the backend's ``services`` layer (#19650)."""
+    tree = ast.parse((_REPO / "autobot_shared" / "spend_recording.py").read_text(encoding="utf-8"))
+    imported = [
+        a.name if isinstance(n, ast.Import) else n.module or ""
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.Import, ast.ImportFrom))
+        for a in (n.names if isinstance(n, ast.Import) else [n])
+    ]
+    assert not [m for m in imported if m.split(".")[0] in {"services", "llm_shared"}], imported

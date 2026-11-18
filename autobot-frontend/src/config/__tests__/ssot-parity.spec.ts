@@ -190,7 +190,8 @@ const PYTHON_ONLY_PORTS = [
   // addresses it, and reads only the Linux worker's port ('npu' above).
   'npu_windows',
 ] as const
-const TS_ONLY_PORTS = ['slmAdmin'] as const
+// frontendServed: the port the browser reaches on a nginx host; it has no Python reader (#20058)
+const TS_ONLY_PORTS = ['slmAdmin', 'frontendServed'] as const
 
 describe('Python source parser (self-check)', () => {
   it('reads the canonical Python config off disk', () => {

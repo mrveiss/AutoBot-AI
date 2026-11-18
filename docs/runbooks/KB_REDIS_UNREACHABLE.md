@@ -158,11 +158,9 @@ sudo iptables -D INPUT -d 127.0.0.7 -p tcp --dport 6379 -j DROP
 
 If the Redis service config has drifted (wrong bind address, wrong port, missing password):
 
-Redeploy the Redis role through the builtin updater -- never a hand-run playbook against the host:
-
-```bash
-# SLM: Maintenance -> Updates -> Code Sync on the Redis node (runs playbooks/deploy_role.yml, role_name=redis)
-```
+Redeploy the Redis role from the SLM **Roles** page (**Redeploy**), never with a hand-run playbook
+against the host. Code Sync does not repair this: its Redis step, `roles/redis/tasks/code_only.yml`,
+leaves `/etc/redis-stack.conf` alone on purpose.
 
 This re-renders the Redis config from Ansible templates and restarts the service.
 
@@ -292,10 +290,5 @@ After service is restored:
    systemic issue (e.g., Redis memory limit too low, loopback alias not persistent, AOF growing
    unbounded). File a GitHub issue with the `tech-debt` label if configuration changes are needed.
 
-4. **Consider Ansible remediation** — if config drift caused the outage, a dry run shows what the
-   role would change, and the change itself goes through the builtin updater:
-   ```bash
-   # Dry run only (changes nothing):
-   ansible-playbook playbooks/deploy_role.yml -i inventory/production.yml -e role_name=redis --check
-   # SLM: Maintenance -> Updates -> Code Sync on the Redis node (runs playbooks/deploy_role.yml, role_name=redis)
-   ```
+4. **Consider redeploying the role** — if config drift caused the outage, redeploy the Redis role
+   from the SLM **Roles** page (**Redeploy**), as in Step 5.

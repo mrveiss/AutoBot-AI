@@ -143,7 +143,8 @@ function handleThemeChange(): void {
 }
 
 .theme-toggle__label .icon {
-  font-size: var(--text-base);
+  width: var(--text-base);
+  height: var(--text-base);
 }
 
 /* Dropdown styles */

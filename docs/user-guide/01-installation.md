@@ -8,7 +8,7 @@ Complete installation instructions for AutoBot. Two deployment methods: bare-met
 
 Requirements (OS, systemd, RAM, disk) live in one place: [INSTALL.md - Requirements](../../INSTALL.md#requirements).
 
-The installer sets up the runtime itself: Python 3.14 and Node.js 20.
+The installer sets up the runtime itself: Python 3.14 and Node.js 22.
 
 A GPU is optional and only speeds up local model inference; see [GPU Acceleration](#gpu-acceleration-optional).
 
@@ -59,7 +59,7 @@ sudo ./install.sh --unattended # Unattended (CI/automation)
 
 **The installer will:**
 1. Verify root access, systemd, disk space and memory (minimums in INSTALL.md), and internet
-2. Install system packages (Python 3.14, Node.js 20, nginx, Ansible, build tools, libpq)
+2. Install system packages (Python 3.14, Node.js 22, nginx, Ansible, build tools, libpq)
 3. Create the `autobot` system user with passwordless sudo
 4. Clone the repository and distribute code to service directories
 5. Run Ansible deployment for the SLM stack (PostgreSQL, backend, nginx)
@@ -91,7 +91,7 @@ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -
 | Service | URL |
 |---------|-----|
 | Frontend (user UI) | http://localhost |
-| SLM Admin | http://localhost/slm/ |
+| SLM Admin | http://localhost:8080/slm/ |
 | Backend API (via the frontend proxy) | http://localhost/api |
 | RedisInsight | http://localhost:8001 (host-local only) |
 | Ollama | http://localhost:11434 (only with `--profile ollama`) |
@@ -153,7 +153,7 @@ curl -s http://localhost/api/system/health | jq   # backend, via the frontend pr
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets logs -f --tail=50
 ```
 
-If you started only the SLM GUI (`--profile slm`), use `curl -s http://localhost/slm/api/health` instead.
+If you started only the SLM GUI (`up -d autobot-slm-gui`), use `curl -s http://localhost:8080/slm/api/health` instead.
 
 ## Troubleshooting Installation
 
@@ -186,8 +186,8 @@ sudo apt-get install -y python3.14 python3.14-venv python3.14-dev
 
 **Issue: Node.js/npm not found**
 ```bash
-# Install Node.js 20.x LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 22.x LTS
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 

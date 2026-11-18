@@ -283,3 +283,25 @@ describe('systemd_service sequence <-> comma-separated text field (#16025)', () 
     })
   })
 })
+
+describe('useRoles — loaders report genuine success (#19887)', () => {
+  beforeEach(() => {
+    mockRaw.mockReset()
+  })
+
+  it('fetchRoles resolves true on success and false on a failed read', async () => {
+    mockRaw.mockResolvedValueOnce(jsonResponse([]))
+    expect(await useRoles().fetchRoles()).toBe(true)
+
+    mockRaw.mockResolvedValueOnce(errorResponse(500, { detail: 'down' }))
+    expect(await useRoles().fetchRoles()).toBe(false)
+  })
+
+  it('fetchFleetHealth resolves true on success and false on a failed read', async () => {
+    mockRaw.mockResolvedValueOnce(jsonResponse({}))
+    expect(await useRoles().fetchFleetHealth()).toBe(true)
+
+    mockRaw.mockResolvedValueOnce(errorResponse(500, { detail: 'down' }))
+    expect(await useRoles().fetchFleetHealth()).toBe(false)
+  })
+})

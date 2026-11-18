@@ -14,10 +14,10 @@
             <Icon :name="isPolling ? 'pause' : 'play'" />
             {{ isPolling ? $t('views.auditLogs.pauseUpdates') : $t('views.auditLogs.autoRefresh') }}
           </button>
-          <button class="btn-action-danger" @click="showCleanupModal = true">
+          <BaseButton variant="error" size="sm" @click="showCleanupModal = true">
             <Icon name="trash" />
             {{ $t('views.auditLogs.cleanup') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -175,14 +175,13 @@
           <button class="btn-action-secondary" @click="showCleanupModal = false">
             {{ $t('views.auditLogs.cancel') }}
           </button>
-          <button
-            class="btn-action-danger"
+          <BaseButton variant="error" size="sm"
             :disabled="!cleanupConfirmed"
             @click="performCleanup"
           >
             <Icon name="trash" />
             {{ $t('views.auditLogs.deleteOldLogs') }}
-          </button>
+          </BaseButton>
         </template>
       </BaseModal>
   </div>
@@ -194,7 +193,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuditState } from '@/composables/useAuditApi'
 import AuditStatistics from '@/components/audit/AuditStatistics.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
 import AuditLogTable from '@/components/audit/AuditLogTable.vue'
 import AuditTimeline from '@/components/audit/AuditTimeline.vue'
@@ -360,31 +359,6 @@ async function performCleanup() {
   background: var(--color-primary);
   color: var(--text-on-primary);
   border-color: var(--color-primary);
-}
-
-/* Danger button */
-.btn-action-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-on-error);
-  background: var(--color-error-solid);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background var(--duration-150) var(--ease-in-out);
-}
-
-.btn-action-danger:hover:not(:disabled) {
-  background: var(--color-error-hover);
-}
-
-.btn-action-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Error banner */

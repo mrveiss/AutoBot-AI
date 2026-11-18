@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
 }
 
 .voice-overlay__lang-badge .icon {
-  font-size: 0.625rem;
+  width: var(--text-xs); height: var(--text-xs);
   opacity: 0.7;
 }
 

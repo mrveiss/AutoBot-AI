@@ -303,9 +303,6 @@ EXEMPT: dict[str, str] = {
 #: path -> occurrences permitted today. **This may only SHRINK.**
 #: No address appears here by design -- see the module docstring.
 BASELINE: dict[str, int] = {
-    ".claude/agents/frontend-engineer-agent.md": 4,
-    ".claude/skills/bugfix/SKILL.md": 3,
-    ".claude/skills/deploy/SKILL.md": 6,
     "CHANGELOG.md": 11,
     "autobot-backend/README.md": 1,
     "autobot-backend/resources/prompts/chat/installation_help.md": 1,
@@ -351,7 +348,6 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/validate-fixes.cjs": 7,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/README.md": 2,
     "autobot-infrastructure/shared/scripts/hooks/slm-post-commit": 1,
-    "autobot-infrastructure/shared/scripts/systemd/autobot-frontend.service": 2,
     "autobot-infrastructure/shared/scripts/systemd/slm-admin-ui.service": 1,
     "autobot-infrastructure/shared/scripts/utilities/README-SECURITY.md": 4,
     "autobot-infrastructure/shared/tests/KNOWLEDGE_MANAGER_TESTS_README.md": 1,

@@ -16,6 +16,10 @@
 // pills across both apps map onto. Domain-status enums keep their own types.
 export type { SemanticVariant, SemanticColor } from './src/types/semantic'
 
+// Which module owns each design-system concept (#17571); the canonical-check rules read it.
+export { AUTHORITY, designSystemOwner } from './src/authority/designSystemAuthority.mjs'
+export type { AuthorityEntry } from './src/authority/designSystemAuthority.mjs'
+
 // Contract-typed GET (#16292): read a GET endpoint's response type from each
 // app's own generated `paths`, instead of asserting the shape inline.
 export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
@@ -58,7 +62,7 @@ export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
 export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
-export type { ModalSize } from './src/components/BaseModal.vue'
+export type { ModalSize, ModalRole } from './src/components/BaseModal.vue'
 
 export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 
@@ -151,11 +155,32 @@ export type {
 // Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
 export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
-export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export type { DurationUnitLabels, FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  formatRelativeTime,
+  createRecencyFormatter,
+  createDateFormatter,
+  formatLocalTime,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue,
+  DEFAULT_DATE_TIME_INTL
+} from './src/utils/format'
+export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions, RecencyFormatterOptions } from './src/utils/format'
+// The installed-theme descriptor both apps read from /api/themes (#14908).
+export type { InstalledTheme } from './src/types/theme'
+// Saving a file from the browser, the one implementation (#20770).
+export { saveBlob, saveTextFile, saveUrl } from './src/utils/saveFile'
 
-// Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
-// apps' utils/debugUtils.ts re-export these rather than re-declaring them.
+// Scoped console logger (#14908) — canonical LogLevel/log/createLogger. The SLM
+// imports them from the kit; the user app's utils/debugUtils.ts re-exports them.
 export { log, createLogger } from './src/utils/logger'
+// Credential-shaped URL/error redaction for log lines -- the one copy (#18550).
+export { redactUrlForLogging, redactErrorForLogging } from './src/utils/redactUrlForLogging'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'
 export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
@@ -172,7 +197,7 @@ export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
 
 // What a canonical API client throws for a non-2xx response: status and details kept (#12363).
-export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
+export { HttpError, isHttpError, isHttpClientError, httpErrorText, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
@@ -191,11 +216,57 @@ export { default as LedgerSectionState } from './src/components/LedgerSectionSta
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
 
 // The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
-export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
-export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+export { ApiClientBase, AbsoluteEndpointError, RequestTimeoutError, fillPathParams, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger, HttpMethod, MethodsOf, JsonMethodsOf, CallInit, CallResponse } from './src/utils/ApiClientBase'
 
 // The one spinner and the one skeleton for every loading state (#19906).
 export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
 export type { SpinnerSize } from './src/components/BaseSpinner.vue'
 export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
 export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
+
+// The agent-ledger row shapes both consoles read, declared once (#19910).
+export type {
+  ActivityRow,
+  ClaimRow,
+  ConflictRow,
+  IdleSubscriberRow,
+  PeerMessageRow,
+  PresenceRow,
+  PresenceTaskRow,
+} from './src/types/ledger'
+
+// A tool permission rule as the backend serves it, declared once (#19910).
+export type { PermissionRule } from './src/types/permission'
+
+// The one numeric env reader both apps use (#20135).
+export { getEnvPositiveInt } from './src/utils/env'
+export type { EnvSource } from './src/utils/env'
+
+// Headless-library interaction primitives (#14779) -- behaviour from Reka UI, styling from the kit
+// tokens, copy supplied by the app. `BaseTooltip` above stays hand-written.
+export { default as BaseTabs } from './src/components/BaseTabs.vue'
+export type { TabsVariant, TabsSize, TabItem } from './src/components/BaseTabs.vue'
+export type { KitDirection } from './src/utils/direction'
+
+export { default as BaseDropdownMenu } from './src/components/BaseDropdownMenu.vue'
+export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseDropdownMenu.vue'
+
+export { default as BasePopover } from './src/components/BasePopover.vue'
+export type { PopoverSize } from './src/components/BasePopover.vue'
+
+export { default as BaseAccordion } from './src/components/BaseAccordion.vue'
+export type {
+  AccordionVariant,
+  AccordionSize,
+  AccordionValue,
+  AccordionItemSpec,
+} from './src/components/BaseAccordion.vue'
+
+export { default as BaseSelectMenu } from './src/components/BaseSelectMenu.vue'
+export type {
+  SelectMenuSize,
+  SelectMenuVariant,
+  SelectMenuOption,
+} from './src/components/BaseSelectMenu.vue'
+export type { AuditQueryResponse } from './src/types/audit'

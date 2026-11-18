@@ -6,6 +6,8 @@
 
 import gzip
 import json
+import os
+import threading
 
 import pytest
 
@@ -289,6 +291,94 @@ class TestHostileInputAndPaths:
         batch = tn.read_transcripts([root], [str(root)])
         assert [k.rsplit("/", 1)[1] for k in batch.results] == ["ok.jsonl"]
         assert [k.rsplit("/", 1)[1] for k in batch.failed] == ["link.jsonl"]
+
+    @pytest.mark.parametrize("name", ["a.jsonl", "a.jsonl.gz"])
+    def test_symlink_swapped_in_after_validation_is_refused(self, tmp_path, monkeypatch, name):
+        root, outside = tmp_path / "root", tmp_path / "outside"
+        root.mkdir()
+        outside.mkdir()
+        target = root / name
+        target.write_bytes(gzip.compress(b"{}\n") if name.endswith(".gz") else b"{}\n")
+        secret = outside / "secret"
+        payload = b'{"display": "stolen"}\n'
+        secret.write_bytes(gzip.compress(payload) if name.endswith(".gz") else payload)
+        real_validate = tn.validate_path
+
+        def validate_then_swap(*args, **kwargs):
+            checked = real_validate(*args, **kwargs)
+            checked.unlink()
+            checked.symlink_to(secret)  # the swap lands between validation and open
+            return checked
+
+        monkeypatch.setattr(tn, "validate_path", validate_then_swap)
+        with pytest.raises(OSError):
+            list(tn.iter_lines(target, tn.ReadResult(), [str(root)]))
+
+    @pytest.mark.parametrize("name", ["a.jsonl", "a.jsonl.gz"])
+    def test_parent_swapped_for_a_symlink_after_validation_is_refused(self, tmp_path, monkeypatch, name):
+        root, outside = tmp_path / "root", tmp_path / "outside"
+        (root / "sub").mkdir(parents=True)
+        outside.mkdir()
+        payload = b'{"display": "stolen"}\n'
+        body = gzip.compress(payload) if name.endswith(".gz") else payload
+        (root / "sub" / name).write_bytes(body)
+        (outside / name).write_bytes(body)  # the same file name, so only the parent decides where the read lands
+        real_validate = tn.validate_path
+
+        def validate_then_swap_parent(*args, **kwargs):
+            checked = real_validate(*args, **kwargs)
+            (root / "sub" / name).unlink()
+            (root / "sub").rmdir()
+            (root / "sub").symlink_to(outside, target_is_directory=True)  # swap lands between validation and open
+            return checked
+
+        monkeypatch.setattr(tn, "validate_path", validate_then_swap_parent)
+        before = len(os.listdir("/proc/self/fd"))
+        with pytest.raises(OSError):
+            list(tn.iter_lines(root / "sub" / name, tn.ReadResult(), [str(root)]))
+        assert len(os.listdir("/proc/self/fd")) == before
+
+    def test_symlinked_root_and_nested_parents_still_read(self, tmp_path):
+        real = tmp_path / "real"
+        (real / "a" / "b").mkdir(parents=True)
+        (real / "a" / "b" / "t.jsonl").write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        (real / "a" / "b" / "t.jsonl.gz").write_bytes(gzip.compress(b"{}\n"))
+        link = tmp_path / "link"
+        link.symlink_to(real, target_is_directory=True)
+        before = len(os.listdir("/proc/self/fd"))
+        for _ in range(5):
+            for name in ("t.jsonl", "t.jsonl.gz"):
+                result = tn.read_transcript(link / "a" / "b" / name, [str(link)])
+                assert result.skipped == 0
+        assert len(tn.read_transcript(link / "a" / "b" / "t.jsonl", [str(link)]).items) >= 1
+        assert len(os.listdir("/proc/self/fd")) == before
+
+    def test_a_directory_named_like_a_transcript_fails_without_leaking_a_descriptor(self, tmp_path):
+        root = tmp_path / "root"
+        (root / "x.jsonl").mkdir(parents=True)
+        before = len(os.listdir("/proc/self/fd"))
+        for _ in range(5):
+            batch = tn.read_transcripts([root], [str(root)])
+        assert batch.results == {} and list(batch.failed.values()) == ["ValueError"]
+        assert len(os.listdir("/proc/self/fd")) == before
+
+    def test_a_fifo_swapped_in_after_validation_does_not_block_the_read(self, tmp_path):
+        root = tmp_path / "root"
+        root.mkdir()
+        fifo = root / "pipe.jsonl"
+        os.mkfifo(fifo)
+        outcome = []
+
+        def read():
+            try:
+                list(tn.iter_lines(fifo, tn.ReadResult(), [str(root)]))
+            except ValueError as exc:
+                outcome.append(type(exc).__name__)
+
+        worker = threading.Thread(target=read, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive() and outcome == ["ValueError"]
 
     def test_path_outside_root_and_missing_path_are_refused_in_a_batch(self, tmp_path):
         root = tmp_path / "root"

@@ -27,6 +27,7 @@ from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from autobot_shared.async_compat import fire_and_forget_threadsafe
+from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
@@ -77,6 +78,10 @@ class DocumentationChangeHandler(FileSystemEventHandler):
 
         # Skip archive directories
         if "archive" in str(path).lower():
+            return
+
+        # The batch index reads the canonical set; this path holds to it too (#20063)
+        if not path.is_relative_to(PROJECT_ROOT) or not in_doc_set(path.relative_to(PROJECT_ROOT).as_posix()):
             return
 
         # Debounce rapid changes

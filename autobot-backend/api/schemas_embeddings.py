@@ -37,7 +37,8 @@ class EmbeddingSwitchData(BaseModel):
     """The current or last switch.
 
     ``state``: idle, building, settling, completed, completed_with_warnings, failed, cancelled, or
-    stale (an active build whose heartbeat stopped). ``previous_vectors`` is the active collection's
+    stale (an active build whose heartbeat stopped). ``lock_unknown``: the claim registry could not
+    be read, so an active state may be a build that has stopped. ``previous_vectors`` is the active collection's
     count when the build started; the rebuild writes one vector per fact.
     """
 
@@ -53,3 +54,4 @@ class EmbeddingSwitchData(BaseModel):
     started: str | None = None
     heartbeat: str | None = None
     finished: str | None = None
+    lock_unknown: bool = False

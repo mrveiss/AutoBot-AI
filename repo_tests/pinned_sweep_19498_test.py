@@ -38,7 +38,7 @@ def test_masked_has_one_definition() -> None:
     found = [
         path.relative_to(root).as_posix()
         for path in sorted((root / "repo_tests").glob("*.py"))
-        if re.search(r"^def\s+masked\(", path.read_text(encoding="utf-8"), re.MULTILINE)
+        if re.search(r"^def[ \t]+masked\(", path.read_text(encoding="utf-8"), re.MULTILINE)
     ]
     assert found == ["repo_tests/_pinned_sweep.py"]
 

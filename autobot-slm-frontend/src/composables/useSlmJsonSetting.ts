@@ -27,7 +27,7 @@ import { getSetting, upsertSetting } from '@/utils/slmSettingsApi'
 export interface SlmJsonSetting<T> {
   saving: Ref<boolean>
   saved: Ref<boolean>
-  /** GET the setting; returns the parsed JSON value, or null on a non-ok response. */
+  /** GET the setting; returns the parsed JSON value, or null when the key is absent (404); other failures throw. */
   load: () => Promise<T | null>
   /** PUT the setting (falling back to POST on 404); returns whether it succeeded. */
   save: (payload: T, description: string) => Promise<boolean>

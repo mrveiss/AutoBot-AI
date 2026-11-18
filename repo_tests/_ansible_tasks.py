@@ -30,6 +30,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 
 def load_tasks(path: Path) -> list[dict]:
     """The task list at `path`, or a failure naming what moved."""
@@ -101,3 +103,77 @@ def eval_when(expr: str, **state: object) -> bool:
     env.filters["bool"] = lambda v: (str(v).strip().lower() in {"true", "yes", "1", "on"} or v is True)
     env.tests["match"] = lambda v, pattern: re.match(pattern, str(v)) is not None
     return bool(env.compile_expression(expr, undefined_to_none=True)(**state))
+
+
+_APT_MODULES = frozenset({"apt", "package", "ansible.builtin.apt", "ansible.builtin.package"})
+_ITEM = re.compile(r"^\{\{\s*item(?:\.name)?\s*\}\}$")
+#: ``key=value``, where a value may hold a Jinja span or quotes with spaces in them.
+_FREE_FORM_ARG = re.compile(r"""(\w+)=((?:\{\{.*?\}\}|"[^"]*"|'[^']*'|\S)+)""")
+#: The keys under which a play or a block holds tasks; anything else (``vars``) is data.
+_TASK_LISTS = ("tasks", "pre_tasks", "post_tasks", "handlers", "block", "rescue", "always")
+_INCLUDES = tuple(
+    f"{prefix}{verb}"
+    for prefix in ("", "ansible.builtin.")
+    for verb in ("include_tasks", "import_tasks", "include_role", "import_role")
+)
+
+
+def ansible_yaml_files(root: Path) -> list[Path]:
+    """Every YAML file under *root*; Ansible reads both suffixes."""
+    return sorted(p for p in root.rglob("*") if p.suffix in (".yml", ".yaml") and p.is_file())
+
+
+def without_comment_lines(text: str) -> str:
+    """*text* with its full-line YAML comments removed, so a comment never reads as a task."""
+    return code_text(text, name="tasks.yml")
+
+
+def _module_args(value: object) -> dict:
+    """The arguments of a module call, in either the mapping or the ``name=x state=y`` form."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return {key: raw.strip("\"'") for key, raw in _FREE_FORM_ARG.findall(value)}
+    return {}
+
+
+def _names(args: dict, task: dict) -> list[str]:
+    """The package names a task asks for, reading ``{{ item }}`` through its ``loop``."""
+    names = args.get("name", args.get("pkg"))
+    names = names if isinstance(names, list) else [names]
+    loop = task.get("loop", task.get("with_items"))
+    loop = loop if isinstance(loop, list) else []
+    found: list[str] = []
+    for name in names:
+        if isinstance(name, str) and _ITEM.match(name.strip()):
+            found += [str(i.get("name") if isinstance(i, dict) else i) for i in loop]
+        else:
+            found.append(str(name))
+    return found
+
+
+def installs_package(node: object, package: str) -> bool:
+    """True when a task anywhere in *node* installs *package*, pinned or not; removal is allowed."""
+    if isinstance(node, list):
+        return any(installs_package(item, package) for item in node)
+    if not isinstance(node, dict):
+        return False
+    for key in _APT_MODULES & node.keys():
+        args = _module_args(node[key])
+        if args.get("state") != "absent" and any(n.split("=")[0] == package for n in _names(args, node)):
+            return True
+    return any(installs_package(node.get(key), package) for key in _TASK_LISTS)
+
+
+def includes_tasks_file(node: object, filename: str) -> bool:
+    """True when a task anywhere in *node* includes *filename*; a mention in a ``debug`` message is not one."""
+    if isinstance(node, list):
+        return any(includes_tasks_file(item, filename) for item in node)
+    if not isinstance(node, dict):
+        return False
+    for key in _INCLUDES:
+        value = node.get(key)
+        args = value if isinstance(value, dict) else {"file": value}
+        if filename in str(args.get("tasks_from", args.get("file", ""))):
+            return True
+    return any(includes_tasks_file(node.get(key), filename) for key in _TASK_LISTS)

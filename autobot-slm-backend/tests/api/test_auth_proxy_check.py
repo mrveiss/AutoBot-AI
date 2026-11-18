@@ -179,15 +179,14 @@ class TestProxyCheckGate:
     async def test_non_admin_user_role_token_gets_403(self):
         """An authenticated but non-admin session is rejected with 403, not 401."""
         token = _mint_token(admin=False, role="user", username="u1")
-        current_user = await get_current_user(_credentials(token))
-        with pytest.raises(HTTPException) as exc:
-            await _admin_system_gate(request=_REQUEST, caller=current_user)
+        with pytest.raises(HTTPException) as exc:  # #20628: refused before any route's own gate
+            await get_current_user(_credentials(token))
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_a_denial_is_audited_and_an_allow_is_not(self, deny_audit):
         """#18263/#18264: the SLM writes a deny record through the shared gate."""
-        user = await get_current_user(_credentials(_mint_token(admin=False, role="user", username="u2")))
+        user = {"sub": "u1", "admin": False, "role": "user"}  # #20628: only an API key or a stub reaches the gate so
         with pytest.raises(HTTPException):
             await _admin_system_gate(request=_REQUEST, caller=user)
         deny_audit.assert_awaited_once()
@@ -199,9 +198,8 @@ class TestProxyCheckGate:
     async def test_readonly_token_gets_403(self):
         """A read-only session -- the case the old /me gate let through -- is rejected with 403."""
         token = _mint_token(admin=False, role="readonly", username="ro1")
-        current_user = await get_current_user(_credentials(token))
-        with pytest.raises(HTTPException) as exc:
-            await _admin_system_gate(request=_REQUEST, caller=current_user)
+        with pytest.raises(HTTPException) as exc:  # #20628: refused before any route's own gate
+            await get_current_user(_credentials(token))
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio

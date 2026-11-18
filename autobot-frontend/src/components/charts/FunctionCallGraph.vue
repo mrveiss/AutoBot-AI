@@ -2111,7 +2111,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .orphaned-empty .icon {
-  font-size: 2rem;
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-3);
   color: var(--color-success);
 }

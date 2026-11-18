@@ -26,10 +26,12 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
-from knowledge.long_fact_embedding import embed_in_windows, window_metadata
+from knowledge.fact_stream import collect_facts, stream_facts
+from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
+from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
+from knowledge.write_scope import guard_caller_metadata
 
 if TYPE_CHECKING:
     import aioredis
@@ -384,7 +386,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """Schedule a background BM25 corpus-stats recompute (#2033).
 
         Called after fact mutations so IDF values stay current.
-        Uses ``asyncio.create_task`` to avoid blocking the caller.
+        Doesn't block the caller, and writes in quick succession share one (#19726).
         Callers performing bulk mutations should skip per-item calls
         and invoke this once after the batch completes (#2079).
         """
@@ -392,8 +394,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         if not hasattr(self, "_get_keyword_searcher"):
             return
         try:
-            searcher = self._get_keyword_searcher()
-            asyncio.create_task(searcher.recompute_corpus_stats())
+            self._get_keyword_searcher().request_refresh()
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
 
@@ -760,10 +761,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # to identical text and would otherwise collide, silently dropping the second,
         # genuinely different fact as a "duplicate" of the first (#17005's own risk,
         # reintroduced from the write side once redaction moved ahead of this check).
-        # Storage and embedding still use the redacted `content` below -- only the
-        # dedup hash keys off the raw original, kept just long enough to pass through.
+        # Storage and embedding use the redacted `content` below; only the dedup hash keys off the raw original.
         raw_content = content
-        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
+        content, metadata = sanitize_fact_content(content, guard_caller_metadata(metadata))  # #16770
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
@@ -993,26 +993,8 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         self.ensure_initialized()
 
         try:
-            fact_keys = await self._scan_redis_keys_async("fact:*")
-
-            if not fact_keys:
-                return []
-
-            if offset > 0:
-                fact_keys = fact_keys[offset:]
-            if limit is not None:
-                fact_keys = fact_keys[:limit]
-
-            facts = []
-            pipeline = self.redis().pipeline()
-            for key in fact_keys:
-                pipeline.hgetall(key)
-            facts_data = await pipeline.execute()
-
-            for key, fact_data in zip(fact_keys, facts_data):
-                fact = self._process_fact_data(key, fact_data, collection)
-                if fact:
-                    facts.append(fact)
+            stream = stream_facts(self.redis(), self._process_fact_data, collection, include_quarantined)
+            facts = await collect_facts(stream, offset, limit)
 
             return await apply_quarantine(facts, include_quarantined, audit_actor)
 
@@ -1039,11 +1021,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
-        sanitized_metadata = _sanitize(current_metadata)
+        sanitized_metadata = _sanitize(with_window_metadata(current_metadata, content))  # #20076
         sanitized_metadata["fact_id"] = fact_id
         space = await current_space(self)  # #19379: one model and its store for the re-vectorize
         await asyncio.to_thread(space.vector_store.delete, fact_id)
-        embedding = await _generate_embedding_with_npu_fallback(content, model_name=space.model)  # Issue #165
+        embedding = await embed_in_windows(_generate_embedding_with_npu_fallback, content, model_name=space.model)
 
         # Issue #12312: The stale vector was already deleted above; if embedding
         # generation failed the fact is now unvectorized. Record a queryable,
@@ -1109,7 +1091,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
-            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
+            previous = await guard_update(self, fact_id, current_metadata)  # #16663 filed-under now; #19517
 
             # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
             # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)
@@ -1132,7 +1114,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 # (deliberately, to keep the fact's own route -- see that call's comment),
                 # never against this caller's OWN metadata, so a URL-shaped field in it
                 # (e.g. a re-fetch updating "source") would merge in unredacted otherwise.
-                redact_url_metadata_fields(metadata)
+                metadata = sanitize_update_metadata(metadata)  # #19517: also drops caller-set ownership
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 

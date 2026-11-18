@@ -31,6 +31,8 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, base_tree_texts
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _HOME = "autobot_shared/secret_redaction.py"
 _THIS = "repo_tests/redaction_placeholder_one_home_19337_test.py"
@@ -40,13 +42,7 @@ _SPELLINGS = frozenset(
 )
 
 #: Placeholder literals still outside the home, per file (measured at #19337, per-file since #19698). Down-only.
-PIN: dict[str, int] = {
-    "autobot-backend/api/terminal.py": 1,
-    "autobot-backend/api/user_provider_credentials.py": 1,
-    "autobot-backend/integrations/whatsapp_integration.py": 2,
-    "autobot-backend/services/workflow_automation/executor.py": 1,
-    "autobot-backend/slash_command_handler.py": 1,
-}
+PIN: dict[str, int] = {}
 
 
 def _modules(root: Path) -> list[Path]:
@@ -61,7 +57,6 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "redaction-placeholder-literals",
     discover=_modules,
-    floor=3143,  # mid-window: population 3293, window (2993, 3293)
     growth=300,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test Python modules",
     roots=_ROOTS,
@@ -73,7 +68,7 @@ def placeholder_literals(source: str, rel: str) -> list[str]:
     if rel == _HOME:
         return []
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return []
     docstrings = {

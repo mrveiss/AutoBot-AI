@@ -88,6 +88,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # fetch-depth: 2, not the default of 1. The guard declares its reach
+          # through repo_tests/_reach, which reads the ratchet base at HEAD^1
+          # and refuses to run without it (#19283).
+          fetch-depth: 2
 
       # #13517: the shared composite action, so interpreter version and pip
       # cache live in one place. pyyaml: the guard reads `docs/_config.yml`'s

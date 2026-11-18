@@ -80,7 +80,9 @@ _GUARDED_CHECKERS = (
     "tools/lint/check_ci_plane_unenforced_pins.py",
 )
 
-_FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*$")
+#: A bullet may carry a trailing ``# #NNNN`` comment, as YAML (and dorny/paths-filter) allows and the
+#: every-addition-cites-an-issue rule (#21205) uses; a bullet only matched bare ended the list there (#21471).
+_FILTER_BULLET_RE = re.compile(r"^\s*-\s*'([^']+)'\s*(?:#.*)?$")
 _FILTER_COMMENT_RE = re.compile(r"^\s*#")
 #: The canonical key, anchored at column zero. A nested ``backend:`` -- a
 #: composed filter, or one inside a workflow's ``filters: |`` literal -- is a

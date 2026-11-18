@@ -3,8 +3,8 @@
 /**
  * Format Helper Utilities
  *
- * Centralized formatting functions for dates, times, file sizes, and other common display formats.
- * This module eliminates duplicate implementations across 33+ components.
+ * Display formatters for both apps. The date, time, duration, uptime and file-size formatters are
+ * the kit's (`@autobot/ui`); this module keeps the import path callers already use.
  *
  * Migration Status: Phase 1 - Created shared utility
  * Replaces: 23 formatDate/Time + 10 formatFileSize duplicate implementations
@@ -17,183 +17,32 @@ export type { DurationStyle } from '@autobot/ui'
 
 // ==================== DATE & TIME FORMATTING ====================
 
-/**
- * Format date to localized date string
- *
- * Handles multiple input types and provides safe fallback behavior.
- * Consolidates 23 different implementations across the codebase.
- *
- * @param dateInput - Date, ISO string, or undefined
- * @param options - Optional Intl.DateTimeFormat options
- * @returns Formatted date string or empty string if invalid
- *
- * @example
- * ```typescript
- * formatDate('2025-10-30T18:05:00Z') // "10/30/2025"
- * formatDate(new Date()) // "10/30/2025"
- * formatDate(undefined) // ""
- * ```
- */
-export function formatDate(
-  dateInput: string | Date | undefined | null,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  if (!dateInput) return ''
-
-  try {
-    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
-
-    // Validate date
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return ''
-    }
-
-    return date.toLocaleDateString(undefined, options)
-  } catch {
-    return ''
-  }
+// The date and time formatters live once in the kit (#19905).
+import {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  createDateFormatter,
+  formatLocalTime,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue,
+  DEFAULT_DATE_TIME_INTL
+} from '@autobot/ui'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  createDateFormatter,
+  formatLocalTime,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue,
+  DEFAULT_DATE_TIME_INTL
 }
-
-/**
- * Format time to localized time string (HH:MM format)
- *
- * @param timestamp - Date, ISO string, or undefined
- * @param use24Hour - Use 24-hour format (default: false)
- * @returns Formatted time string (e.g., "2:30 PM" or "14:30")
- *
- * @example
- * ```typescript
- * formatTime('2025-10-30T14:30:00Z') // "2:30 PM"
- * formatTime(new Date(), true) // "14:30"
- * ```
- */
-export function formatTime(
-  timestamp: Date | string | undefined | null,
-  use24Hour: boolean = false
-): string {
-  if (!timestamp) return ''
-
-  try {
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
-
-    // Validate date
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      // Fallback to current time
-      return new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: !use24Hour
-      })
-    }
-
-    return date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: !use24Hour
-    })
-  } catch {
-    return ''
-  }
-}
-
-/**
- * Format date and time together
- *
- * @param timestamp - Date or ISO string
- * @param options - Optional Intl.DateTimeFormat options
- * @returns Formatted date and time string
- *
- * @example
- * ```typescript
- * formatDateTime('2025-10-30T14:30:00Z') // "10/30/2025, 2:30 PM"
- * ```
- */
-export function formatDateTime(
-  timestamp: Date | string | undefined | null,
-  options?: Intl.DateTimeFormatOptions
-): string {
-  if (!timestamp) return ''
-
-  try {
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
-
-    // Validate date
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return ''
-    }
-
-    const defaultOptions: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      ...options
-    }
-
-    return date.toLocaleString(undefined, defaultOptions)
-  } catch {
-    return ''
-  }
-}
-
-/**
- * Format ISO string to locale string (backward compatibility helper)
- *
- * @param isoString - ISO 8601 date string
- * @returns Formatted locale string
- *
- * @example
- * ```typescript
- * formatISOString('2025-10-30T14:30:00Z') // "10/30/2025, 2:30:00 PM"
- * ```
- */
-export function formatISOString(isoString: string | undefined | null): string {
-  if (!isoString) return ''
-
-  try {
-    const date = new Date(isoString)
-    if (isNaN(date.getTime())) return isoString
-    return date.toLocaleString()
-  } catch {
-    return isoString || ''
-  }
-}
-
-/**
- * Format relative time (e.g., "2 hours ago")
- *
- * @param timestamp - Date or ISO string
- * @returns Relative time string
- *
- * @example
- * ```typescript
- * formatTimeAgo(Date.now() - 3600000) // "1 hour ago"
- * formatTimeAgo(Date.now() - 86400000) // "1 day ago"
- * ```
- */
-export function formatTimeAgo(timestamp: Date | string | number): string {
-  try {
-    const date = typeof timestamp === 'string' ? new Date(timestamp) :
-                 typeof timestamp === 'number' ? new Date(timestamp) : timestamp
-
-    if (!(date instanceof Date) || isNaN(date.getTime())) {
-      return 'unknown'
-    }
-
-    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-
-    if (seconds < 60) return 'just now'
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`
-    if (seconds < 2592000) return `${Math.floor(seconds / 604800)} weeks ago`
-    if (seconds < 31536000) return `${Math.floor(seconds / 2592000)} months ago`
-    return `${Math.floor(seconds / 31536000)} years ago`
-  } catch {
-    return 'unknown'
-  }
-}
+export type { DateInput, DateFormatterOptions } from '@autobot/ui'
 
 // ==================== DURATION, UPTIME AND FILE SIZE FORMATTING ====================
 
@@ -201,12 +50,17 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
 import { formatDuration, formatUptime, formatFileSize, formatBytes } from '@autobot/ui'
 export { formatDuration, formatUptime, formatFileSize, formatBytes }
 
-/** File-browser size text: `1.5 KB` up to GB, `0 B` for a missing size. */
-export const FILE_BROWSER_SIZE_OPTIONS = {
-  decimals: 1,
-  units: ['B', 'KB', 'MB', 'GB'],
-  nullText: '0 B',
-} as const
+/**
+ * File-browser size options: `1.5 KB` up to GB. `zeroText` is the text for a missing size; the
+ * caller passes it from an i18n key (#19885), so the formatter holds no display literal.
+ */
+export function fileBrowserSizeOptions(zeroText: string) {
+  return {
+    decimals: 1,
+    units: ['B', 'KB', 'MB', 'GB'],
+    nullText: zeroText,
+  } as const
+}
 export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from '@autobot/ui'
 
 // ==================== NUMBER FORMATTING ====================
@@ -315,7 +169,6 @@ export default {
   formatTime,
   formatDateTime,
   formatISOString,
-  formatTimeAgo,
   formatDuration,
   formatUptime,
 
@@ -330,4 +183,59 @@ export default {
   // Strings
   formatCategoryName,
   truncateString
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge-base fact titles (#21037). DISPLAY ONLY: the stored title and the
+// idempotency key never change; sorting and searching keep using the raw title.
+// A man-page fact is stored as `gettext(1)` / `man gettext(1)`; users read the
+// `(1)` as a duplicate counter, so it is shown as "gettext, section 1: user commands".
+// ---------------------------------------------------------------------------
+
+type TranslateFn = (key: string, params?: Record<string, unknown>) => string
+
+/** Fact `type` values the backend writes for man-page facts (`man_page_parser` / `knowledge_population`). */
+const MAN_PAGE_TYPES = new Set(['man_page', 'manual_page'])
+
+/** `name(N)` with an optional leading `man `; N may carry a letter suffix (3p). */
+const MAN_TITLE_PATTERN = /^(?:man\s+)?(\S+?)\((\d+[a-z]*)\)$/i
+
+/** Standard man sections that have an i18n name (`knowledge.manSection.<N>`). */
+const KNOWN_SECTIONS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+
+/**
+ * Return the display title for a fact. `kind` is the fact's `type`
+ * (`metadata.type` / `document.type`); a title is only reinterpreted when the
+ * fact is identified as a man page, never from the `name(N)` shape alone.
+ */
+export function formatManPageTitle(
+  title: string | null | undefined,
+  kind: unknown,
+  t: TranslateFn,
+): string {
+  const raw = title ?? ''
+  if (typeof kind !== 'string' || !MAN_PAGE_TYPES.has(kind)) return raw
+  const match = MAN_TITLE_PATTERN.exec(raw.trim())
+  if (!match) return raw
+  const [, name, section] = match
+  if (!KNOWN_SECTIONS.has(section)) {
+    return t('knowledge.manSection.formatUnnamed', { name, section })
+  }
+  return t('knowledge.manSection.format', {
+    name,
+    section,
+    sectionName: t(`knowledge.manSection.${section}`),
+  })
+}
+
+/**
+ * The fact `type` of a knowledge-browser tree node. A node built from
+ * `GET /facts/by_category` carries the fact's metadata flat (`metadata.type`);
+ * a node lazy-loaded from `POST /search` carries the whole search hit, whose
+ * metadata is nested (`metadata.metadata.type`).
+ */
+export function knowledgeNodeFactType(metadata: { type?: unknown; metadata?: unknown } | undefined): unknown {
+  const hit = metadata?.metadata
+  if (hit && typeof hit === 'object') return (hit as { type?: unknown }).type
+  return metadata?.type
 }

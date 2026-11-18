@@ -2597,10 +2597,10 @@ class CodeSearchResponse(BaseModel):
 
 
 class CodeAnalyticsRequest(BaseModel):
+    # The analysis reads the shared index, so a filter can't apply: refuse one, never ignore it (#20014).
+    model_config = {"extra": "forbid"}
+
     root_path: str
-    include_patterns: List[str] | None = None
-    exclude_patterns: List[str] | None = ["*.pyc", "*.git*", "*__pycache__*"]
-    languages: List[str] | None = None
 
 
 class CodeDeclaration(BaseModel):
