@@ -44,18 +44,19 @@ def test_build_message_dict_defaults_are_unchanged():
 
 
 def test_marker_only_for_first_streamed_response_chunk():
-    seen: set[str] = set()
+    seen: list = []
     first = stream_identity_marker(_chunk(), 1, seen)
     assert first is not None and first.metadata["message_id"] == "seg-1" and first.timestamp == EARLY
+    seen.append(first)
     assert stream_identity_marker(_chunk(), 1, seen) is None
-    assert stream_identity_marker(_chunk(display_type="thought"), 1, set()) is None
+    assert stream_identity_marker(_chunk(display_type="thought"), 1, []) is None
 
 
 def test_final_reply_entry_carries_streamed_identity():
-    marker = stream_identity_marker(_chunk("seg-9"), 1, set())
+    marker = stream_identity_marker(_chunk("seg-9"), 1, [])
     streamed_id, streamed_at = streamed_prose_identity([marker])
     entry = ChatWorkflowManager._build_final_response_entry(
-        None, _chat_mgr(), "hello", [], iteration=1, streamed_id=streamed_id, streamed_at=streamed_at
+        None, _chat_mgr(), "hello", [], iteration=1, streamed=(streamed_id, streamed_at)
     )
     assert entry["id"] == "seg-9"
     assert entry["timestamp"] == time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(EARLY))

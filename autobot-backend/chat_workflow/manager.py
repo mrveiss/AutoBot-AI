@@ -15,6 +15,7 @@ Composes all functionality through mixins:
 import asyncio
 import functools
 import json
+import os
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
@@ -25,8 +26,9 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from chat_workflow import limits
+from chat_workflow.image_budget import image_fits_budget
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
-from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step
+from chat_workflow.tool_call_args import clean_reply_text, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
@@ -34,7 +36,6 @@ from chat_workflow.tool_call_grammar import (
     normalize_tool_call_text,
 )
 from chat_workflow.tool_call_loop import framed_tool_output
-from chat_workflow.vision_capability import image_fits_budget, model_supports_vision, refresh_vision_capability
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
@@ -105,7 +106,27 @@ VISION_TOOL_LOOKBACK_MESSAGES = env_int("CHAT_VISION_TOOL_LOOKBACK_MESSAGES", de
 # representative default, env-overridable — never hardcode a tunable).
 VISION_IMAGE_TOKEN_ESTIMATE = env_int("CHAT_VISION_IMAGE_TOKEN_ESTIMATE", default=1100)
 
-_model_supports_vision = model_supports_vision  # capability-first gate (#21770), see vision_capability.py
+# Case-insensitive substrings of a model name that indicate vision support.
+# Ollama exposes no per-tag capability registry (unlike the fixed AIProvider
+# registry in modern_ai_integration.py), so this is the pragmatic gate.
+_DEFAULT_VISION_MODEL_PATTERNS = (
+    "llava,vision,gpt-4o,gpt-4-vision,claude-3,claude-4,gemini,qwen-vl,qwen2-vl,qwen2.5-vl,pixtral,bakllava"
+)
+VISION_MODEL_NAME_PATTERNS = tuple(
+    p.strip().lower()
+    for p in os.getenv("CHAT_VISION_MODEL_PATTERNS", _DEFAULT_VISION_MODEL_PATTERNS).split(",")
+    if p.strip()
+)
+
+
+def _model_supports_vision(model_name: str) -> bool:
+    """Heuristic vision-capability gate for the chat continuation loop (#11538).
+
+    Ollama exposes no per-tag capability registry, so this matches known
+    vision-model name substrings (env-overridable via CHAT_VISION_MODEL_PATTERNS).
+    """
+    name = (model_name or "").lower()
+    return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
 
 
 def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
@@ -1876,10 +1897,6 @@ before summarizing.
 ---
 {instructions}"""
 
-    def _image_fits_budget(self, prompt: str, model_name: str) -> bool:
-        """Gate image attachment on the context budget (#11538); see vision_capability."""
-        return image_fits_budget(prompt, model_name, VISION_IMAGE_TOKEN_ESTIMATE)
-
     def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict]:
         """Build the OpenAI-style image content block for an OpenAI-compatible
         /chat/completions payload. Issue #11538.
@@ -1943,10 +1960,8 @@ before summarizing.
         if api_kwargs:
             payload.update(api_kwargs)
         vision_ready = image_b64 and _model_supports_vision(selected_model)
-        if vision_ready and self._image_fits_budget(current_prompt, selected_model):
+        if vision_ready and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
-        elif vision_ready:
-            logger.info("Screenshot not attached: over the history token budget for %s (#21770)", selected_model)
         return payload
 
     async def _log_and_parse_tool_calls(
@@ -2042,8 +2057,6 @@ before summarizing.
             yield refusal
             yield (None, None)
             return
-        if image_b64:
-            await refresh_vision_capability(http_client, ollama_endpoint, selected_model)  # #21770
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -2369,7 +2382,6 @@ before summarizing.
             api_kwargs=api_kwargs,
             image_b64=latest_screenshot,
         )
-        streamed_ids: set[str] = set()
         # #19753: a provider failure before any output fails over (not-acted guard); see llm_failover.
         async for item in stream_with_failover(IterationCall(self, ctx, iteration, current_prompt), open_stream):
             if isinstance(item, tuple):
@@ -2378,7 +2390,7 @@ before summarizing.
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
                 is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get("streaming", False)
-                if marker := stream_identity_marker(item, iteration, streamed_ids):  # #21846
+                if marker := stream_identity_marker(item, iteration, ctx.workflow_messages):  # #21846
                     ctx.workflow_messages.append(marker)
                 if not is_streaming_chunk:
                     # Issue #13295: stamp the iteration that produced this
@@ -2420,14 +2432,8 @@ before summarizing.
             yield (None, None, True)
             return
 
-        if (
-            not tool_calls
-            and iteration < self.MAX_CONTINUATION_ITERATIONS
-            and (failed_step := parse_failure_step(llm_response, iteration))
-        ):
-            logger.warning("[Issue #21843] Iteration %d: TOOL_CALL did not parse - feeding error back", iteration)
-            ctx.execution_history.append(failed_step)
-            yield (llm_response, tool_calls, False)
+        if not tool_calls and record_parse_failure(ctx, llm_response, iteration, self.MAX_CONTINUATION_ITERATIONS):
+            yield (llm_response, tool_calls, False)  # #21843: the parse error is fed back, the turn continues
             return
 
         if not tool_calls:
@@ -2928,8 +2934,7 @@ before summarizing.
         llm_response: str,
         batch: List[Dict[str, Any]],
         iteration: int | None = None,
-        streamed_id: str | None = None,
-        streamed_at: float | None = None,
+        streamed: tuple = (None, None),
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for one iteration's completed prose (#13214).
 
@@ -2974,8 +2979,8 @@ before summarizing.
             },
             None,
             sources=[],
-            message_id=streamed_id,
-            created_at=streamed_at,
+            message_id=streamed[0],
+            created_at=streamed[1],
         )
 
     def _attach_model_and_citations(
@@ -3066,14 +3071,12 @@ before summarizing.
         # though it is placed AFTER the prose entry in the final order.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
 
-        streamed_id, streamed_at = streamed_prose_identity(iter_messages)  # #21846
         final_entry = self._build_final_response_entry(
             chat_mgr,
             response_text,
             batch + tool_entries,
             iteration=iteration,
-            streamed_id=streamed_id,
-            streamed_at=streamed_at,
+            streamed=streamed_prose_identity(iter_messages),  # #21846
         )
         entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)

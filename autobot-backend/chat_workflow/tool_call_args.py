@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.tool_call_grammar import TOOL_CALL_OPENING_RE, TOOL_CALL_PATTERN, strip_unparsed_tool_tags
@@ -108,6 +109,19 @@ def parse_failure_step(text: str, iteration: int) -> dict | None:
         "status": "error",
         "error": f"Your TOOL_CALL was not executed: {error}. {advice}",
     }
+
+
+def record_parse_failure(ctx: Any, text: str, iteration: int, max_iterations: int) -> bool:
+    """Append the parse-error step to ``ctx.execution_history``; True when the turn should continue. (#21843)
+
+    Bounded by *max_iterations*: the last iteration ends the turn (the reply is still cleaned).
+    """
+    step = parse_failure_step(text, iteration) if iteration < max_iterations else None
+    if step is None:
+        return False
+    logger.warning("[Issue #21843] Iteration %d: TOOL_CALL did not parse - feeding error back", iteration)
+    ctx.execution_history.append(step)
+    return True
 
 
 def clean_reply_text(text: str) -> str:

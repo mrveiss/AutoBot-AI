@@ -20,13 +20,14 @@ from async_chat_workflow import WorkflowMessage
 _MARKER_TYPE = "segment_complete"
 
 
-def stream_identity_marker(chunk: Any, iteration: int, seen: set[str]) -> WorkflowMessage | None:
-    """Marker for the first streamed ``response`` chunk of a message id, else None."""
+def stream_identity_marker(chunk: Any, iteration: int, existing: list) -> WorkflowMessage | None:
+    """Marker for the first streamed ``response`` chunk of a message id (not already in *existing*), else None."""
     meta = getattr(chunk, "metadata", None) or {}
     message_id = meta.get("message_id")
-    if not meta.get("streaming") or meta.get("display_type") != "response" or not message_id or message_id in seen:
+    if not meta.get("streaming") or meta.get("display_type") != "response" or not message_id:
         return None
-    seen.add(message_id)
+    if any(m.type == _MARKER_TYPE and (m.metadata or {}).get("message_id") == message_id for m in existing):
+        return None
     return WorkflowMessage(
         type=_MARKER_TYPE,
         content="",
