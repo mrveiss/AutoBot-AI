@@ -33,9 +33,14 @@ except ImportError:
 
 #: The one name -> number table (#19232), read with plain PyYAML: this script runs under
 #: Ansible's interpreter without autobot_shared (#1086), so it cannot use database_number().
-_DATABASES_YAML = (
-    Path(__file__).resolve().parents[4] / "autobot-infrastructure" / "shared" / "config" / "redis-databases.yaml"
+#: The tree beside this one is code_source's checkout or the install; the install's copy is never
+#: updated (#20578), so code_source's wins when present. Pinned equal to infrastructure_dir() by a test.
+_ROOT = Path(__file__).resolve().parents[4]
+_INFRA = next(
+    (c for c in (_ROOT / "code_source" / "autobot-infrastructure", _ROOT / "autobot-infrastructure") if c.is_dir()),
+    _ROOT / "code_source" / "autobot-infrastructure",
 )
+_DATABASES_YAML = _INFRA / "shared" / "config" / "redis-databases.yaml"
 #: The override contract, mirrored from database_overrides.py (pinned equal to the Python and
 #: shell readers by redis_single_source_19232_test.py): AUTOBOT_REDIS_DB_<NAME>, trimmed ASCII
 #: digits within 0..15, refused (YAML number kept) when invalid or when two databases collide.
@@ -55,6 +60,21 @@ def _backend_port() -> int:
 
 
 BACKEND_PORT = _backend_port()
+# The nginx TLS port is a different listener from BACKEND_PORT (the plain uvicorn port); a probe that
+# builds an https URL reads this one, under the name the static inventory already uses (#21400).
+_DEFAULT_BACKEND_NGINX_PORT = 8443
+
+
+def _backend_nginx_port() -> int:
+    """AUTOBOT_BACKEND_TLS_PORT when it is a valid port, else the default, with the refusal on stderr."""
+    raw = os.environ.get("AUTOBOT_BACKEND_TLS_PORT", str(_DEFAULT_BACKEND_NGINX_PORT)).strip()
+    if raw.isascii() and raw.isdigit() and 0 < int(raw) < 65536:
+        return int(raw)
+    print(f"AUTOBOT_BACKEND_TLS_PORT={raw!r} is not a port; using {_DEFAULT_BACKEND_NGINX_PORT}", file=sys.stderr)
+    return _DEFAULT_BACKEND_NGINX_PORT
+
+
+BACKEND_NGINX_PORT = _backend_nginx_port()
 _LEGACY_ENV_NAMES = {"AUTOBOT_REDIS_DB_TASKS": "workflows"}
 
 
@@ -227,7 +247,7 @@ class AutoBotInventory:
             "aiml": {"hosts": ["autobot-aiml"], "vars": {}},
             "browser": {"hosts": ["autobot-browser"], "vars": {}},
             "backend": {"hosts": ["autobot-host"], "vars": {}},
-            "all": {"vars": {"backend_port": BACKEND_PORT}},
+            "all": {"vars": {"backend_port": BACKEND_PORT, "backend_nginx_port": BACKEND_NGINX_PORT}},
         }
 
     def list_inventory(self) -> str:
@@ -241,6 +261,7 @@ class AutoBotInventory:
 
         # The GUI's backend port, as the static inventory states it (#19821).
         self.inventory.setdefault("all", {}).setdefault("vars", {})["backend_port"] = BACKEND_PORT
+        self.inventory["all"]["vars"]["backend_nginx_port"] = BACKEND_NGINX_PORT
         return json.dumps(self.inventory, indent=2)
 
     def host_vars(self, hostname: str) -> str:

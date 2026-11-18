@@ -16,7 +16,7 @@ import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { slmApiClient } from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('SSOCallbackView')
 const router = useRouter()

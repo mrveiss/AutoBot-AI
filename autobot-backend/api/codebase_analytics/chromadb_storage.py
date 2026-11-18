@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Dict, List
 
-from api.codebase_analytics.source_scope import require_source_id
+from api.source_scope import require_source_id
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import chromadb_data_dir
@@ -35,13 +35,8 @@ logger = get_logger(__name__)
 
 # Batch size for ChromaDB storage operations
 # Higher values = fewer batches but more memory usage
-# Default: 5000 (current behavior), Range: 100-50000
-try:
-    _batch_size = int(config.codebase_index_batch_size)
-    CHROMADB_BATCH_SIZE = max(100, min(_batch_size, 50000))
-except ValueError:
-    logger.warning("Invalid CODEBASE_INDEX_BATCH_SIZE, using default 5000")
-    CHROMADB_BATCH_SIZE = 5000
+# Default: DEFAULT_CODEBASE_INDEX_BATCH_SIZE (ssot_codebase_index), Range: 100-50000
+CHROMADB_BATCH_SIZE = max(100, min(config.codebase_index_batch_size, 50000))
 
 # Number of parallel batches to process concurrently
 # Higher values = faster indexing but more CPU/memory usage
@@ -63,13 +58,8 @@ if CHROMADB_EMBEDDING_MODE not in ("precompute", "auto", "skip"):
 
 # Batch size for embedding pre-computation (Issue #660)
 # Larger batches = more efficient GPU/NPU utilization, more memory
-# Default: 100, Range: 10-500
-try:
-    _embed_batch = int(config.codebase_index_embed_batch_size)
-    EMBEDDING_BATCH_SIZE = max(10, min(_embed_batch, 500))
-except ValueError:
-    logger.warning("Invalid CODEBASE_INDEX_EMBED_BATCH_SIZE, using default 100")
-    EMBEDDING_BATCH_SIZE = 100
+# Default: DEFAULT_CODEBASE_INDEX_EMBED_BATCH_SIZE (ssot_codebase_index), Range: 10-500
+EMBEDDING_BATCH_SIZE = max(10, min(config.codebase_index_embed_batch_size, 500))
 
 # Enable incremental indexing (only re-index changed files)
 # Default: False (full re-index - current behavior)

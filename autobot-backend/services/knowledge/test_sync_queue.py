@@ -20,6 +20,7 @@ import pytest
 
 from services.knowledge.sync_queue import (
     MAX_ATTEMPTS,
+    DocumentGone,
     DocumentSyncQueue,
     SyncQueueEntry,
     SyncQueueWorker,
@@ -428,3 +429,85 @@ class TestAdminEndpoint:
         assert failed_entry.id in failed_ids
         assert response["counts"]["pending"] == 1
         assert response["counts"]["failed"] == 1
+
+
+class TestVanishedFile20968:
+    """A file that no longer exists is dropped once as gone; a real error still retries (#20968)."""
+
+    @pytest.mark.asyncio
+    async def test_a_vanished_file_is_gone_after_one_attempt_not_failed(self, queue: DocumentSyncQueue, caplog) -> None:
+        await queue.enqueue_sync("docs/adr/.~tmp~/template.md", SyncReason.CONTENT_CHANGED)
+
+        async def processor(entry: SyncQueueEntry) -> None:
+            raise DocumentGone("file vanished")  # message deliberately omits the path
+
+        with caplog.at_level("INFO"):
+            result = await queue.process_one(processor)
+
+        assert result is not None and result.status == SyncStatus.GONE and result.attempts == 0
+        stats = await queue.stats()
+        assert stats["failed"] == 0 and stats["pending"] == 0
+        assert "dropped" in caplog.text
+        assert "docs/adr/.~tmp~/template.md" in caplog.text  # the path itself, so stale chunks can be found
+        gone = await queue.list_entries(SyncStatus.GONE)
+        assert [e.id for e in gone] == [result.id] and gone[0].status == SyncStatus.GONE
+        again = await queue.enqueue_sync(result.document_path, SyncReason.CONTENT_CHANGED)
+        assert again.id != result.id, "the dedup key was cleared"
+        assert (await queue.stats())["pending"] == 1
+
+    @pytest.mark.asyncio
+    async def test_done_and_gone_are_paged_by_their_own_status(self, queue: DocumentSyncQueue) -> None:
+        async def done(_: SyncQueueEntry) -> None:
+            return None
+
+        async def vanished(_: SyncQueueEntry) -> None:
+            raise DocumentGone("gone")
+
+        for i, processor in enumerate([done, vanished, done, vanished, done]):
+            await queue.enqueue_sync(f"p{i}.md", SyncReason.CONTENT_CHANGED)
+            await queue.process_one(processor)
+        gone = await queue.list_entries(SyncStatus.GONE, limit=10)
+        finished = await queue.list_entries(SyncStatus.DONE, limit=10)
+        assert sorted(e.document_path for e in gone) == ["p1.md", "p3.md"]
+        assert sorted(e.document_path for e in finished) == ["p0.md", "p2.md", "p4.md"]
+        page = await queue.list_entries(SyncStatus.DONE, limit=2, offset=1)
+        assert len(page) == 2 and all(e.status == SyncStatus.DONE for e in page)
+        tail = await queue.list_entries(SyncStatus.DONE, limit=2, offset=2)
+        assert len(tail) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_inaccessible_path_is_retried_not_gone(self, tmp_path, monkeypatch) -> None:
+        from pathlib import Path
+
+        from services.knowledge.sync_queue import _raise_if_gone
+
+        present = tmp_path / "here.md"
+        await asyncio.to_thread(present.write_text, "x", encoding="utf-8")
+        await _raise_if_gone(present)  # exists: no error
+
+        def denied(_self):
+            raise PermissionError("mount unavailable")
+
+        monkeypatch.setattr(Path, "stat", denied)
+        with pytest.raises(PermissionError):
+            await _raise_if_gone(present)
+
+    @pytest.mark.asyncio
+    async def test_the_reindex_processor_reports_a_missing_path_as_gone(self, tmp_path) -> None:
+        from services.knowledge.sync_queue import _reindex_processor
+
+        entry = SyncQueueEntry(id="e1", document_path=str(tmp_path / "missing.md"), reason=SyncReason.MANUAL)
+        with pytest.raises(DocumentGone):
+            await _reindex_processor(entry)
+
+    @pytest.mark.asyncio
+    async def test_a_genuine_error_still_retries_to_max_attempts(self, queue: DocumentSyncQueue) -> None:
+        await queue.enqueue_sync("a.md", SyncReason.CONTENT_CHANGED)
+
+        async def processor(_: SyncQueueEntry) -> None:
+            raise RuntimeError("File not found: transient mount")
+
+        last = None
+        for _ in range(MAX_ATTEMPTS):
+            last = await queue.process_one(processor)
+        assert last is not None and last.status == SyncStatus.FAILED and last.attempts == MAX_ATTEMPTS

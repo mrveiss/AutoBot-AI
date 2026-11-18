@@ -236,12 +236,12 @@ def test_no_new_hand_rolled_floor_remains_unmigrated() -> None:
     found = {rel: names for rel, names in _hand_rolled_floors().items() if rel not in _EXCLUDED_META_FLOORS}
     new = sorted(set(found) - GRANDFATHERED)
     assert not new, (
-        "hand-rolled reach-sized floor(s) not migrated to repo_tests._reach.declare and not "
-        "recorded in GRANDFATHERED:\n  "
+        "hand-rolled reach-sized floor(s) not migrated to repo_tests._reach.declare:\n  "
         + "\n  ".join(f"{rel}: {found[rel]}" for rel in new)
         + "\n\nMigrate with declare(...), re-measuring the population with a throwaway script "
-        "-- never carry the old constant across (#15928). If an open PR touches the file, add "
-        "it to GRANDFATHERED instead, naming the collision."
+        "-- never carry the old constant across (#15928). GRANDFATHERED only shrinks (the "
+        "growth check below keeps CI red), so an open PR on the file is a reason to wait, "
+        "not to add an entry."
     )
 
 

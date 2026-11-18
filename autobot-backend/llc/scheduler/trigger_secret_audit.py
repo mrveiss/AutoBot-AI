@@ -9,12 +9,11 @@ naming their ids. It never rewrites, re-encrypts or deletes a secret: a person d
 and acting on an approved proposal is a separate piece of work.
 """
 
-import asyncio
-
 from celery import shared_task
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.worker_loop import run_in_worker_loop
 from services.trigger_secrets import propose_plaintext_secret_rewrite
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
@@ -39,7 +38,7 @@ logger = get_logger(__name__)
 )
 def run_trigger_secret_audit(self: object) -> dict:  # type: ignore[type-arg]
     """Celery entry point. Returns whether a proposal was raised."""
-    return asyncio.run(_async_audit())
+    return run_in_worker_loop(_async_audit())
 
 
 async def _async_audit() -> dict:

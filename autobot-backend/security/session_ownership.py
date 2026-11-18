@@ -615,18 +615,12 @@ class SessionOwnershipValidator:
             username: Owner username
 
         Returns:
-            List of session IDs
+            List of session IDs. A Redis error propagates (#21664): "could not
+            read" must never look like "owns nothing" to a caller.
         """
-        try:
-            user_sessions_key = self._get_user_sessions_key(username)
-            sessions = await self.redis.smembers(user_sessions_key)
-            if not sessions:
-                return []
-            # Handle both bytes and str responses from Redis
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
-        except Exception as e:
-            logger.error("Failed to get user sessions: %s", e)
-            return []
+        sessions = await self.redis.smembers(self._get_user_sessions_key(username))
+        # Handle both bytes and str responses from Redis
+        return [s.decode() if isinstance(s, bytes) else s for s in sessions or ()]
 
     async def get_org_sessions(self, org_id: str) -> list[str]:
         """Get all sessions for an organization (#684)."""

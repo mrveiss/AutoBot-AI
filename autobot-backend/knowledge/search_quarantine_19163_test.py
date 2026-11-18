@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.ssot_config import config
+from knowledge.fact_stream_test import fake_fact_redis
 from knowledge.facts import FactsMixin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine, without_quarantine
 from knowledge.search import SearchMixin
@@ -158,11 +159,7 @@ class _Facts(FactsMixin):
         return list(self._rows)
 
     def redis(self):
-        pipe = MagicMock()
-        pipe.execute = AsyncMock(return_value=list(self._rows.values()))
-        client = MagicMock()
-        client.pipeline.return_value = pipe
-        return client
+        return fake_fact_redis(self._rows)
 
 
 @pytest.mark.asyncio

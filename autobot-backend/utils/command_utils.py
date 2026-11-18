@@ -35,13 +35,24 @@ from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import TimingConstants
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
+from command_run_policy import CommandRunPolicy
+from utils.bounded_subprocess import BoundedResult, run_bounded, run_shell_bounded
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
 
 logger = get_logger(__name__)
+
+#: The deadline for a command run without a policy (#20740). It used to be none at all:
+#: a command that never exited held its caller forever. A caller that needs longer passes a
+#: CommandRunPolicy naming its own limit, never an unbounded escape hatch.
+DEFAULT_SHELL_TIMEOUT_S = env_int_clamped(
+    "AUTOBOT_SECURE_COMMAND_TIMEOUT_S", TimingConstants.VERY_LONG_TIMEOUT, min_v=1, max_v=3600
+)
 
 # Re-export for backward compatibility
 __all__ = [
@@ -84,50 +95,53 @@ class CmdOutputChunk:
     is_final: bool = False
 
 
-async def execute_shell_command(command: str) -> Dict[str, Any]:
+def _bounded_to_dict(run: BoundedResult, timeout_s: float) -> Dict[str, Any]:
+    """Shape a bounded run like the unbounded result; a timeout is exit 124 (#19807)."""
+    stdout = strip_ansi_codes(run.stdout.decode("utf-8", errors="replace")).strip()
+    stderr = strip_ansi_codes(run.stderr.decode("utf-8", errors="replace")).strip()
+    if run.timed_out:
+        stderr = f"Command timed out after {timeout_s:g}s and was killed"
+    return_code = 124 if run.timed_out else run.return_code
+    return {
+        "stdout": stdout,
+        "stderr": stderr,
+        "return_code": return_code,
+        "status": "success" if return_code == 0 else "error",
+        "truncated": run.truncated,
+        "timed_out": run.timed_out,  # explicit: a command may exit 124 by itself (#20740)
+    }
+
+
+async def execute_shell_command(command: str, policy: CommandRunPolicy | None = None) -> Dict[str, Any]:
     """
     Executes a shell command asynchronously and cleans the output.
 
     Args:
         command: The shell command to execute.
+        policy: Optional timeout, output cap and working directory (#19807). Without one
+            the command still runs under DEFAULT_SHELL_TIMEOUT_S, with its process group
+            killed on expiry (#20740).
 
     Returns:
         A dictionary containing cleaned stdout, stderr, return code, and status.
     """
-    try:
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    if policy is not None:
+        run = await run_bounded(
+            command, cwd=policy.cwd, timeout_s=policy.timeout_s, max_output_bytes=policy.max_output_bytes
         )
-
-        stdout, stderr = await process.communicate()
-
-        # Issue #765: Use explicit UTF-8 encoding with error handling
-        stdout_str = strip_ansi_codes(stdout.decode("utf-8", errors="replace")).strip()
-        stderr_str = strip_ansi_codes(stderr.decode("utf-8", errors="replace")).strip()
-        return_code = process.returncode
-
-        status = "success" if return_code == 0 else "error"
-
-        return {
-            "stdout": stdout_str,
-            "stderr": stderr_str,
-            "return_code": return_code,
-            "status": status,
-        }
-    except FileNotFoundError:
-        return {
-            "stdout": "",
-            "stderr": f"Command not found: {command}",
-            "return_code": 127,  # Common return code for command not found
-            "status": "error",
-        }
+        return _bounded_to_dict(run, policy.timeout_s)
+    try:
+        run = await run_shell_bounded(command, timeout_s=DEFAULT_SHELL_TIMEOUT_S)
     except Exception as e:
         return {
             "stdout": "",
             "stderr": f"Error executing command: {e}",
             "return_code": 1,  # Generic error code
             "status": "error",
+            "truncated": False,
+            "timed_out": False,
         }
+    return _bounded_to_dict(run, DEFAULT_SHELL_TIMEOUT_S)
 
 
 def _prepare_process_env(env: Dict[str, str] | None) -> Dict[str, str] | None:

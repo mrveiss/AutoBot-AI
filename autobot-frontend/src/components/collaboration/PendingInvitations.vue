@@ -39,7 +39,7 @@ const formatInvitedAt = createRecencyFormatter({
   locale: () => locale.value,
   style: 'narrow',
   olderThanMs: 3_600_000,
-  older: createDateFormatter(),
+  older: createDateFormatter({ locale: () => locale.value }),
 })
 
 const respond = async (sessionId: string, accept: boolean): Promise<void> => {
