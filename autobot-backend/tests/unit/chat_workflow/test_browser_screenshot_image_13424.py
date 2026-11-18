@@ -58,3 +58,17 @@ def test_the_image_payload_survives_the_persisted_history_entry() -> None:
 
     assert batch[0]["metadata"]["image_payload"]["images"][0]["url"].endswith(_PNG)
     assert batch[0]["metadata"]["display_type"] == "image"
+
+
+def test_the_persisted_execution_summary_drops_raw_screenshots_but_the_live_one_keeps_them() -> None:
+    from async_chat_workflow import WorkflowMessage
+
+    results = [{"tool": "screenshot", "status": "success", "base64_image": _PNG}, {"tool": "navigate"}]
+    summary = WorkflowMessage(type="execution_summary", content="", metadata={"execution_results": results})
+    manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+
+    batch = manager._build_workflow_message_batch(MessagesMixin(), [summary])
+
+    assert "base64_image" not in batch[0]["metadata"]["execution_results"][0]
+    assert batch[0]["metadata"]["execution_results"][0]["tool"] == "screenshot"
+    assert summary.metadata["execution_results"][0]["base64_image"] == _PNG  # the vision loop still reads it

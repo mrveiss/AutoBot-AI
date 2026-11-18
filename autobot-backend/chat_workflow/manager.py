@@ -26,6 +26,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
+from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
 from chat_workflow.tool_call_args import clean_reply_text, record_parse_failure
 from chat_workflow.tool_call_grammar import (
@@ -2987,8 +2988,7 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers — internal stream control
-            # messages with empty content (Issue #1141).
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141).
             if wf_msg.type == "segment_complete":
                 continue
 
@@ -3008,7 +3008,7 @@ before summarizing.
                     sender,
                     content,
                     wf_msg.type,
-                    wf_msg.metadata,
+                    persisted_metadata(wf_msg),
                     None,
                     sources=_kb_sources_from_citations(kb_citations),
                     message_id=wf_msg.id,
