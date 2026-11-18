@@ -19,11 +19,11 @@ import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Iterable
 
 from aiohttp import ClientTimeout
-from sqlalchemy import event, inspect, select
+from sqlalchemy import event, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.user_management.last_platform_admin import LAST_PLATFORM_ADMIN_CODE
 from autobot_shared.user_management.login_eligibility import login_refusal
 from user_management.models import User
 from user_management.models.person_link import PersonLink
@@ -41,6 +42,12 @@ from user_management.services.person_link_service import require_internal_key
 logger = get_logger(__name__)
 
 PERSON_COPY_COMPARE_INTERVAL_S = env_int_clamped("AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S", 300, min_v=30)
+
+#: A link the SLM refused (last platform admin) is tried again only after this long since its last attempt: the
+#: SLM may have gained another admin meanwhile, but a refusal is not worth a push every compare pass.
+PERSON_COPY_REFUSED_RETRY_INTERVAL_S = env_int_clamped(
+    "AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S", 3600, min_v=60, max_v=7 * 24 * 3600
+)
 
 _COPY_PATH = "/api/internal/person-copy"
 _LOCK_TTL_S = env_int_clamped("AUTOBOT_PERSON_COPY_LOCK_TTL_S", 60, min_v=10, max_v=600)
@@ -52,6 +59,28 @@ _WATCHED_FIELDS = ("password_hash", "is_active", "deleted_at")
 _CHANGED_KEY = "person_copy_changed_user_ids"
 _background: set[asyncio.Task] = set()
 _loop_task: asyncio.Task | None = None
+
+
+class PersonCopyRefused(Exception):
+    """The SLM refused the push: it would leave the SLM with no active platform admin (#21018).
+
+    Not a transport failure, so the periodic pass repeats it only on the slow cadence of
+    :data:`PERSON_COPY_REFUSED_RETRY_INTERVAL_S` (:func:`_due_link_ids`); the type name is the error shown on the
+    link, which is how an admin sees why the SLM copy is still active. A transient lock failure on the SLM is a 503,
+    not this: it is a transport failure and is retried every pass.
+    """
+
+
+async def _raise_if_refused(response) -> None:
+    """Turn the SLM's last-platform-admin 409 into :class:`PersonCopyRefused`; other statuses are left alone."""
+    if response.status != 409:
+        return
+    try:
+        detail = (await response.json()).get("detail")
+    except (ValueError, AttributeError):
+        return
+    if isinstance(detail, dict) and detail.get("code") == LAST_PLATFORM_ADMIN_CODE:
+        raise PersonCopyRefused(LAST_PLATFORM_ADMIN_CODE)
 
 
 async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
@@ -73,6 +102,7 @@ async def _post_copy(slm_user_id: uuid.UUID, user: User) -> None:
     async with session.post(
         url, json=payload, headers=headers, allow_redirects=False, timeout=ClientTimeout(total=_POST_TIMEOUT_S)
     ) as response:
+        await _raise_if_refused(response)
         response.raise_for_status()
 
 
@@ -109,7 +139,10 @@ async def _read_pair(session: AsyncSession, user_id: uuid.UUID) -> tuple[PersonL
 
 def _record(link: PersonLink, error: str | None) -> None:
     link.push_error = error
-    link.push_failed_at = (link.push_failed_at or datetime.now(timezone.utc)) if error else None
+    now = datetime.now(timezone.utc)
+    link.push_failed_at = (link.push_failed_at or now) if error else None
+    if error == PersonCopyRefused.__name__:
+        link.updated_at = now  # the time of this attempt: the refused-retry cadence counts from it
 
 
 async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
@@ -139,10 +172,26 @@ async def _push_person(session: AsyncSession, user_id: uuid.UUID) -> None:
         await session.commit()
 
 
+def _due_link_ids():
+    """Linked people due a push: every link except one the SLM refused as last-platform-admin within the retry
+    interval. A refused link is tried again once its last attempt is older than the interval, and a success clears
+    the error (an explicit push after the person's own change always goes)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=PERSON_COPY_REFUSED_RETRY_INTERVAL_S)
+    return select(PersonLink.user_id).where(
+        PersonLink.user_id.is_not(None),  # an orphaned link (its person deleted) has nothing to push
+        or_(
+            PersonLink.push_error.is_(None),
+            PersonLink.push_error != PersonCopyRefused.__name__,
+            PersonLink.updated_at.is_(None),
+            PersonLink.updated_at <= cutoff,
+        ),
+    )
+
+
 async def push_people(session: AsyncSession, user_ids: Iterable[uuid.UUID] | None = None) -> None:
-    """Push the given linked people, or everyone linked."""
+    """Push the given linked people, or everyone linked (a refused link only after the retry interval)."""
     if user_ids is None:
-        user_ids = (await session.execute(select(PersonLink.user_id))).scalars().all()
+        user_ids = (await session.execute(_due_link_ids())).scalars().all()
     for user_id in list(user_ids):
         await _push_person(session, user_id)
 

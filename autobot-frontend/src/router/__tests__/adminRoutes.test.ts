@@ -154,3 +154,26 @@ describe('AdminLayout nested render (#19833)', () => {
     expect(wrapper.find('.admin-layout .child-page').exists()).toBe(true)
   })
 })
+
+describe('admin route titles are i18n keys (#20567)', () => {
+  const titled = [...adminChildren, ...adminRoutes].filter((r) => r.meta && !r.redirect)
+
+  it('every admin route title resolves from en.json, none is a literal', async () => {
+    const { default: appI18n } = await import('@/i18n')
+    appI18n.global.setLocaleMessage('en', en as never)
+    appI18n.global.locale.value = 'en'
+    const lookup = (key: string) =>
+      key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], en)
+    expect(titled.length).toBeGreaterThanOrEqual(11)
+    for (const route of titled) {
+      const key = (route.meta as { titleKey?: string }).titleKey ?? 'admin.routes.section'
+      expect(typeof lookup(key), `${String(route.name)} -> ${key}`).toBe('string')
+      expect(route.meta!.title).toBe(lookup(key))
+    }
+  })
+
+  it('the cleanup-proposals route is titled through its key', () => {
+    const route = adminChildren.find((r) => r.name === 'admin-cleanup-proposals')
+    expect((route!.meta as { titleKey: string }).titleKey).toBe('admin.routes.cleanupProposals')
+  })
+})

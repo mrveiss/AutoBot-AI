@@ -47,8 +47,10 @@ from knowledge.schemas.mcp import (
 from knowledge.search_filters import caller_principal, filter_for_caller
 from knowledge.write_scope import add_document_as
 from knowledge_base import KnowledgeBase
+from services.kb_wipe_request import request_vector_flush
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+from user_management.database import get_async_session_factory
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
@@ -388,7 +390,7 @@ def _get_knowledge_management_tools() -> List[McpToolsResponse]:
                     "operation": {
                         "type": "string",
                         "enum": ["info", "flush", "reindex", "backup"],
-                        "description": "Redis vector operation to perform",
+                        "description": "Redis vector operation to perform; flush requests a wipe for approval",
                     },
                     "params": {
                         "type": "object",
@@ -889,20 +891,6 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
     }
 
 
-async def _vector_op_flush(kb, vectors_client, params: dict) -> dict:
-    """Handle vector flush operation. (Issue #315 - extracted)"""
-    if not params.get("confirm", False):
-        return {
-            "success": False,
-            "operation": "flush",
-            "error": "Confirmation required (set params.confirm = true)",
-        }
-    if not vectors_client:
-        return {"success": False, "operation": "flush", "error": "Redis not available"}
-    await asyncio.to_thread(vectors_client.flushdb)
-    return {"success": True, "operation": "flush", "message": "Vector database flushed"}
-
-
 async def _vector_op_reindex(kb, vectors_client, params: dict) -> dict:
     """Handle vector reindex operation. (Issue #315 - extracted)"""
     if kb and hasattr(kb, "index"):
@@ -930,7 +918,6 @@ async def _vector_op_backup(kb, vectors_client, params: dict) -> dict:
 # Issue #315: Dispatch table for vector operations
 _VECTOR_OPERATIONS = {
     "info": _vector_op_info,
-    "flush": _vector_op_flush,
     "reindex": _vector_op_reindex,
     "backup": _vector_op_backup,
 }
@@ -948,12 +935,15 @@ async def mcp_redis_vector_operations(
 ):
     """MCP tool: Direct Redis vector store operations.
 
-    Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-    should be further restricted at the application level.
+    Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+    wipe, for an admin user only, and the wipe runs after a human approves it.
     """
     try:
         operation = request.get("operation")
         params = request.get("params", {})
+        if operation == "flush":
+            async with get_async_session_factory()() as session:  # only this branch needs the database
+                return await request_vector_flush(current_user, session)
 
         kb = get_knowledge_base()
         vectors_client = get_vectors_redis_client()
