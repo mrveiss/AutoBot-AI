@@ -16,6 +16,7 @@ of 32000 lines (7-13%) with ``FileNotFoundError`` on the rename; the same run wi
 The backend runs ``--workers 1``; the repo has no multi-process rotating handler to reuse.
 """
 
+import errno
 import logging
 import logging.handlers
 import threading
@@ -28,6 +29,7 @@ import pytest
 
 from autobot_shared import logging_manager
 from autobot_shared.logging_manager import LoggingManager
+from autobot_shared.logging_once import reset_log_once
 
 _ROTATING = logging.handlers.RotatingFileHandler  # captured: a test patches the module attribute
 _CAP = 2000
@@ -45,9 +47,12 @@ class _Config:
 @pytest.fixture(autouse=True)
 def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
-    monkeypatch.setattr(logging_manager, "_warned_config_keys", set())
+    reset_log_once()
     monkeypatch.setattr(LoggingManager, "_file_handlers", {})
     monkeypatch.setattr(LoggingManager, "_loggers", {})
+    # Sharing is about a service after startup: file logging on (#20894, setup_logging()).
+    monkeypatch.setattr(LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(LoggingManager, "_managed", {})
     config = _Config({"logging.rotation.max_bytes": _CAP, "logging.rotation.backup_count": 200})
     with patch.object(logging_manager, "_get_config_manager", return_value=config):
         yield
@@ -92,11 +97,16 @@ def test_handler_level_and_formatter_are_unchanged_for_callers() -> None:
     assert handler.maxBytes == _CAP
 
 
-def test_failed_handler_build_is_not_cached(tmp_path: Path) -> None:
-    with patch.object(logging.handlers, "RotatingFileHandler", side_effect=OSError("read-only")):
-        assert _file_handlers(_logger()) == []
-    assert LoggingManager._file_handlers == {}
-    assert len(_file_handlers(_logger())) == 1
+def test_a_handler_whose_first_write_failed_stays_the_paths_disabled_marker(tmp_path: Path) -> None:
+    """The file is opened at the first record since #20894; a failure there is kept, not rebuilt (#20894)."""
+    failed = _logger()
+    with patch.object(Path, "mkdir", side_effect=OSError(errno.EROFS, "read-only")):
+        failed.info("dropped")
+    later = _logger()
+    assert _file_handlers(later)[0] is _file_handlers(failed)[0]
+    assert _file_handlers(later)[0].unwritable
+    later.info("also dropped")
+    assert not _lines(tmp_path)
 
 
 def test_one_rotation_shifts_the_backups_once(tmp_path: Path) -> None:

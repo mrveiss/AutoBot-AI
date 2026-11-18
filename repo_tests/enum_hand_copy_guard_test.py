@@ -64,6 +64,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -135,8 +136,7 @@ def _tracked_python(root: Path = REPO_ROOT) -> List[str]:
 
 
 def is_test_path(rel: str) -> bool:
-    base = rel.rsplit("/", 1)[-1]
-    return base.startswith("test_") or base.endswith("_test.py") or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}"
 
 
 def enum_members(source: str) -> Dict[str, FrozenSet[str]]:

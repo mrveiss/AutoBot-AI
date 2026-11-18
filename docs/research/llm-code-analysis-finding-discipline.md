@@ -136,7 +136,7 @@ and how findings are structured, deduplicated and exported. The runtime tooling 
 ## AutoBot Comparison: the reference work → AutoBot (code-analysis suite angle)
 
 Audit method: I grepped and read `.claude/skills/{secreview,bugfix}`, the `review-fleet`
-plugin skill (in the `AutoBot-AI-Claude-dev-skills` repo), `.claude/agents/security-auditor.md`,
+plugin skill (in the `AutoBot-AI-Claude-dev-skills` repo), plugin `autobot-dev-skills` `skills/review/references/security-auditor.md`,
 `docs/developer/{MEASUREMENT_DISCIPLINE,CLAUDE_REVIEW,CLAUDE_RULES,CODE_REVIEW_HARDENING,CODEQL_SUPPRESSION}.md`,
 `.github/workflows/{security,codeql,ai-security-review}.yml` and `pipeline-scripts/security_scan_gate.py`.
 I then searched open and closed issues for each pattern.
@@ -188,7 +188,7 @@ grep for `sarif|partialFingerprints`, which found nothing. Also unread: `.semgre
 | `review-fleet/SKILL.md` (skills repo) | Phase 2: replace "drop" with the closure-state enum; add a Coverage section; extend the finding JSON (A1–A3) |
 | `.claude/skills/secreview/SKILL.md` | Closure states, coverage rows, the four diff-scope rules, per-family sweep checklists (A1, A2, A4, A5) |
 | `gap-audit/SKILL.md` (skills repo) | Repo-wide family sweep in place of the same-directory glob; one issue listing every instance (A5) |
-| `.claude/skills/bugfix/SKILL.md`, `implement` plugin skill | Ordered security-fix gates with withhold (A6) |
+| `autobot-backend/skills/builtin/bugfix/SKILL.md`, `implement` plugin skill | Ordered security-fix gates with withhold (A6) |
 | `docs/developer/CLAUDE_REVIEW.md` | Point to the closure states and the schema; no duplicate rule text (A1, A3) |
 | `.github/workflows/security.yml`, `ai-security-review.yml` | Bandit SARIF upload; fingerprinted LLM findings (A7) |
 

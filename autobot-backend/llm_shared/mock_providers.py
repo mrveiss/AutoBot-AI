@@ -13,8 +13,10 @@ Updated in Issue #453 to use real Ollama integration.
 """
 
 import asyncio
+import logging
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
@@ -35,17 +37,9 @@ class LocalLLM:
         self._ollama_available = bool(self._ollama_url)
         self._default_model = config.default_llm_model
 
-        if self._ollama_available:
-            logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
-        else:
-            # #10726: Raised to WARNING — a missing AUTOBOT_OLLAMA_ENDPOINT means the
-            # 'local' provider silently serves mock text, masking a prod misconfiguration.
-            logger.warning(
-                "LocalLLM (Ollama) not configured — AUTOBOT_OLLAMA_ENDPOINT is unset or empty. "
-                "The 'local' provider will return MOCK responses until Ollama is configured. "
-                "Other providers (OpenAI, Anthropic, Google) work independently. "
-                "Set AUTOBOT_OLLAMA_ENDPOINT in .env to enable real local inference."
-            )
+        # No log record here (#20894): ``local_llm`` below is built at import, and a record written then is
+        # an import-time file write. A missing endpoint is reported where it matters, at every MOCK reply
+        # in generate() (#10726).
 
     def _create_mock_response(self, prompt: str) -> dict:
         """Issue #665: Extracted from generate to reduce function length.
@@ -174,21 +168,19 @@ class MockPalm:
     # ``palm`` global below), so a warning in __init__ would fire on every import and be
     # pure noise. The actionable signal is when the mock is actually *used* on a request
     # path — so the warning lives in the methods (get_quota_status / generate_text) instead.
-    _mock_use_warned = False
-
     def __init__(self):
         """Initialize MockPalm (a no-op mock stub; see class note and _warn_mock_use)."""
 
     @classmethod
     def _warn_mock_use(cls) -> None:
         """Warn once per process when MockPalm is actually exercised on a request path."""
-        if cls._mock_use_warned:
-            return
-        cls._mock_use_warned = True
-        logger.warning(
+        log_once(
+            logger,
+            logging.WARNING,
+            "mock_palm_use",
             "MockPalm is being USED to serve a request — this is a MOCK stub with no real "
             "Google AI calls and exists for backward compatibility only. "
-            "Configure GOOGLE_API_KEY and use a real Vertex/Gemini provider for production."
+            "Configure GOOGLE_API_KEY and use a real Vertex/Gemini provider for production.",
         )
 
     async def get_quota_status(self):

@@ -232,6 +232,8 @@ INHERITED_ENV_MESSAGE = (
 
 from _git_scrub_allowlist import ALLOWLIST  # noqa: E402
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 
 def subprocess_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
     """``(module aliases, directly imported entry points)`` bound in *tree*.
@@ -292,8 +294,7 @@ def is_production_path(rel: str) -> bool:
     code has no reason to inherit a git environment it never set. Production is
     also where all four recurrences landed with nothing watching.
     """
-    name = rel.rsplit("/", 1)[-1]
-    if name.endswith("_test.py") or name.startswith("test_"):
+    if is_test_filename(rel, include_js=False, include_conftest=False):
         return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
 

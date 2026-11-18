@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket
 from fastapi.responses import JSONResponse
 
 from api.analytics_shared import no_data_response
@@ -38,6 +38,7 @@ from api.schemas_analytics import (
 from api.schemas_common import DataResponse
 from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -1671,7 +1672,6 @@ async def websocket_quality_updates(websocket: WebSocket):
         return
     await manager.connect(websocket)
 
-    # Send initial snapshot
     try:
         snapshot = await get_quality_snapshot()
         await websocket.send_json({"type": "snapshot", "data": snapshot})
@@ -1691,7 +1691,7 @@ async def websocket_quality_updates(websocket: WebSocket):
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         manager.disconnect(websocket)
     except Exception as e:
         logger.error("WebSocket error: %s", e)

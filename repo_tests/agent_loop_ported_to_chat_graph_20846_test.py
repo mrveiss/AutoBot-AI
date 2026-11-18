@@ -70,3 +70,13 @@ def test_control_catches_removed_marker_and_literals():
     assert types_defines_own_literals('X: int = env_int("AUTOBOT_ASK_HUMAN_TIMEOUT_SECONDS", 300)')
     assert types_defines_own_literals('ask_human_escalation_policy: str = "abandon"')
     assert types_defines_own_literals("ASK_HUMAN_TIMEOUT_SECONDS: int = 300")
+
+
+def test_planner_is_a_chat_graph_node_behind_the_ssot_switch():
+    """#21023: the planner is wired into the canonical loop, and only the SSOT switch turns it on."""
+    graph = _read("autobot-backend/chat_workflow/graph.py")
+    assert 'builder.add_node("create_plan", create_plan)' in graph
+    assert "advance_after_tools(" in graph
+    assert "config.llm.chat_planner_enabled" in _read("autobot-backend/chat_workflow/plan_runner.py")
+    assert "_run_llm_iterations" in _read("autobot-backend/chat_workflow/manager.py")
+    assert "open_for_ctx(" in _read("autobot-backend/chat_workflow/manager.py")

@@ -34,7 +34,7 @@ def _slot_paths() -> list[Path]:
     runtime = os.getenv("XDG_RUNTIME_DIR") or os.getenv("TMPDIR") or tempfile.gettempdir()
     root = Path(os.getenv("AUTOBOT_MACHINE_SLOT_DIR") or Path(runtime) / f"autobot-machine-slots-{os.getuid()}")
     root.mkdir(parents=True, exist_ok=True)
-    return [root / f"slot-{i}" for i in range(1, env_int("AUTOBOT_MACHINE_SLOTS", 4) + 1)]
+    return [root / f"slot-{i}" for i in range(1, env_int("AUTOBOT_MACHINE_SLOTS", 2) + 1)]
 
 
 def _try_take(path: Path) -> Optional[int]:

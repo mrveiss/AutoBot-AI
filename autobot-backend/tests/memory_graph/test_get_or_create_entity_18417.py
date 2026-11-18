@@ -12,6 +12,7 @@ import pytest
 
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 
 
 class FakeRedis:
@@ -24,7 +25,7 @@ class FakeRedis:
         self._first_eval = True
 
     async def _release(self, _numkeys, index_key, owner_id):
-        """Python mirror of RELEASE_IF_OWNER_LUA: compare and delete in one step."""
+        """Python mirror of COMPARE_AND_DELETE_LUA: compare and delete in one step."""
         self._check()
         if self.strings.get(index_key) == owner_id:
             del self.strings[index_key]
@@ -35,7 +36,7 @@ class FakeRedis:
         """Python mirror of CLAIM_AND_WRITE_LUA. No await between read and write = atomic, like the script."""
         from autobot_memory_graph import entity_upsert
 
-        if script == entity_upsert.RELEASE_IF_OWNER_LUA:
+        if script == COMPARE_AND_DELETE_LUA:
             return await self._release(numkeys, index_key, doc_key)
         assert script == entity_upsert.CLAIM_AND_WRITE_LUA
         if self._first_eval and self.eval_gate is not None:

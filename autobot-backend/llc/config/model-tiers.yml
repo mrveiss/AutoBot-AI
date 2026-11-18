@@ -18,9 +18,8 @@
 #   2. company model_tier_overrides (per-company override)
 #   3. this file (platform defaults)
 
-anthropic:
-  senior: claude-sonnet-4-6
-  assistant: claude-haiku-4-5-20251001
+# anthropic: not listed here. Its pinned IDs come from autobot_shared/ssot_claude_models.py
+# (senior = sonnet, assistant = haiku); llc/services/model_tiers.py overlays them (#20884).
 
 openai:
   senior: gpt-4o
