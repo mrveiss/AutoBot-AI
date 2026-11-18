@@ -201,7 +201,7 @@ class TestConfigServiceFileLocking:
         from services.config_service import ConfigService
 
         assert hasattr(ConfigService, "_config_write_lock")
-        assert isinstance(ConfigService._config_write_lock, type(threading.Lock()))
+        assert isinstance(ConfigService._config_write_lock, type(threading.RLock()))
 
     def test_save_config_uses_lock(self):
         """Test that _save_config_to_file uses lock"""
