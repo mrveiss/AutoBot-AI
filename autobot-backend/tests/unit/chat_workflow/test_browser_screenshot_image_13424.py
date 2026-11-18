@@ -1,0 +1,60 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""A successful browser screenshot reaches chat as an ImageCell payload and survives persistence (#13424)."""
+
+from __future__ import annotations
+
+from chat_history.messages import MessagesMixin
+from chat_workflow import browser_tool_handler as handler
+from chat_workflow.manager import ChatWorkflowManager
+
+_PNG = "iVBORw0KGgoAAAANSUhEUg"
+_SCREENSHOT = {"success": True, "action": "screenshot", "result": {"image": _PNG}}
+
+
+def test_screenshot_message_carries_the_image_payload_imagecell_reads() -> None:
+    msg = handler.record_browser_success("screenshot", {}, _SCREENSHOT, [])
+
+    assert msg.metadata["display_type"] == "image"
+    assert msg.metadata["image_payload"]["images"] == [{"url": f"data:image/png;base64,{_PNG}"}]
+
+
+def test_the_raw_bytes_are_not_stored_a_second_time_in_the_result() -> None:
+    msg = handler.record_browser_success("screenshot", {}, _SCREENSHOT, [])
+
+    assert "image" not in msg.metadata["result"]["result"]
+    assert _SCREENSHOT["result"]["image"] == _PNG  # the caller's dict is untouched
+
+
+def test_the_vision_loop_still_gets_the_raw_image() -> None:
+    results: list = []
+    handler.record_browser_success("screenshot", {}, _SCREENSHOT, results)
+
+    assert results[0]["base64_image"] == _PNG
+
+
+def test_a_data_url_image_is_not_double_prefixed() -> None:
+    url = f"data:image/jpeg;base64,{_PNG}"
+    msg = handler.record_browser_success("screenshot", {}, {"result": {"image": url}}, [])
+
+    assert msg.metadata["image_payload"]["images"][0]["url"] == url
+
+
+def test_non_image_results_get_no_image_metadata() -> None:
+    result = {"result": {"url": "https://x.test"}}
+    msg = handler.record_browser_success("navigate", {"url": "https://x.test"}, result, [])
+
+    assert "image_payload" not in msg.metadata
+    assert "display_type" not in msg.metadata
+
+
+def test_the_image_payload_survives_the_persisted_history_entry() -> None:
+    msg = handler.record_browser_success("screenshot", {}, _SCREENSHOT, [])
+    manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+
+    batch = manager._build_workflow_message_batch(MessagesMixin(), [msg])
+
+    assert batch[0]["metadata"]["image_payload"]["images"][0]["url"].endswith(_PNG)
+    assert batch[0]["metadata"]["display_type"] == "image"

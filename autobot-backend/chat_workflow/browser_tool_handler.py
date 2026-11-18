@@ -203,16 +203,28 @@ def record_browser_success(
     if base64_image:
         entry["base64_image"] = base64_image
     execution_results.append(entry)
-    return WorkflowMessage(
-        type="command_output",
-        content=summary,
-        metadata={
-            "tool": tool_name,
-            "params": params,
-            "result": result,
-            "status": "success",
-        },
-    )
+    metadata: dict[str, Any] = {"tool": tool_name, "params": params, "result": result, "status": "success"}
+    if base64_image:
+        metadata.update(browser_image_metadata(result, base64_image))
+    return WorkflowMessage(type="command_output", content=summary, metadata=metadata)
+
+
+def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[str, Any]:
+    """Metadata that makes a screenshot render in chat through ImageCell (#13424).
+
+    ``image_payload`` is the shape ImageCell already consumes; the message is
+    persisted verbatim, so it survives reload. The raw bytes are dropped from
+    the ``result`` copy so the history does not store the screenshot twice.
+    """
+    url = base64_image if base64_image.startswith("data:") else f"data:image/png;base64,{base64_image}"
+    inner = result.get("result", result)
+    stripped_inner = {k: v for k, v in inner.items() if k not in ("image", "screenshot")}
+    stripped = {**result, "result": stripped_inner} if "result" in result else stripped_inner
+    return {
+        "display_type": "image",
+        "image_payload": {"images": [{"url": url}], "provider": "browser"},
+        "result": stripped,
+    }
 
 
 def extract_browser_image(result: dict[str, Any]) -> str | None:
