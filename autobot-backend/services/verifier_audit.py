@@ -20,8 +20,11 @@ from services.audit.taxonomy import AuditAction
 logger = get_logger(__name__)
 
 
-async def audit_verifier_degraded(result: Any, session_id: str | None = None) -> bool:
-    """Record ``verifier.degraded`` when *result* carries a degradation; True when an event was written."""
+async def audit_verifier_degraded(result: Any, session_id: str | None = None, user_id: Any = None) -> bool:
+    """Record ``verifier.degraded`` when *result* carries a degradation; True when an event was written.
+
+    *user_id* is the server-verified user when the caller has one in scope; the session id is kept either way.
+    """
     if getattr(result, "degradation", VerifierDegradation.NONE) is VerifierDegradation.NONE:
         return False
     from services.audit_logger import audit_log
@@ -37,6 +40,7 @@ async def audit_verifier_degraded(result: Any, session_id: str | None = None) ->
         return await audit_log(
             AuditAction.VERIFIER_DEGRADED.value,
             "attempted",
+            user_id=str(user_id) if user_id else None,
             session_id=session_id,
             resource=result.tool_name,
             details=details,

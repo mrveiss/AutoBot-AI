@@ -78,8 +78,9 @@ async def test_a_degraded_pass_writes_a_verifier_degraded_audit_event():
         model_used="m",
     )
     with patch("services.audit_logger.audit_log", AsyncMock(return_value=True)) as log:
-        assert await audit_verifier_degraded(result, "task-1")
+        assert await audit_verifier_degraded(result, "task-1", user_id="alice")
     op = log.await_args.args[0]
+    assert log.await_args.kwargs["user_id"] == "alice" and log.await_args.kwargs["session_id"] == "task-1"
     details = log.await_args.kwargs["details"]
     assert op == "verifier.degraded" and details["degradation"] == "timeout" and details["tool"] == "bash"
     assert details["model"] == "m"

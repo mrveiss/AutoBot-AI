@@ -204,7 +204,8 @@ async def enforce_pre_action_verifier(
     task_id = getattr(ctx, "session_id", None) if ctx is not None else None
 
     result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
-    await audit_verifier_degraded(result, task_id)  # #21844: a pass with no reading is an audit event
+    verified_user = (getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY)
+    await audit_verifier_degraded(result, task_id, user_id=verified_user)  # #21844: no reading is an audit event
     if result.verdict != VerifierVerdict.BLOCK:
         return None
 
