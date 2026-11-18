@@ -30,8 +30,8 @@ class ReflectionVerdict(Enum):
     FAIL = auto()  # Hard failure (unused; retained for backwards-compat).
     # #6697: evaluator infrastructure error (LLM down, parse error, etc.).
     # Callers can distinguish "evaluator broke" from "response was bad"; the graph
-    # does NOT accept it -- a result with ``evaluator_failed`` is re-asked within
-    # the reflection budget (#21845, ``chat_workflow/reflection_gate.py``).
+    # does NOT score it -- a result with ``evaluator_failed`` is evaluated once more, then the reply
+    # is kept unverified (#21845, ``chat_workflow/reflection_gate.py``).
     INDETERMINATE = auto()
 
 

@@ -50,7 +50,12 @@ from chat_workflow.graph_tool_dispatch import (
     send_denied_message,
     split_refused,
 )
-from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK, reflection_update, wants_another_pass
+from chat_workflow.reflection_gate import (
+    NO_ANSWER_FALLBACK,
+    evaluate_with_one_retry,
+    reflection_update,
+    wants_another_pass,
+)
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
@@ -134,6 +139,7 @@ class ChatState(TypedDict, total=False):
 
     # RLM self-reflection (#1373)
     reflection_count: int
+    reflection_max: int  # the configured max_reflections the reflect node ran under
     reflection_history: List[Dict[str, Any]]
     rlm_refinement_hint: str
 
@@ -718,10 +724,8 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
     history = list(state.get("reflection_history", []))
 
     evaluator = ResponseQualityEvaluator(config=rlm_cfg)
-    result = await evaluator.evaluate(
-        query=state["user_message"],
-        response=llm_response,
-        iteration=reflection_count + 1,
+    result = await evaluate_with_one_retry(
+        evaluator, query=state["user_message"], response=llm_response, iteration=reflection_count + 1
     )
 
     history.append(result.to_dict())
@@ -734,9 +738,7 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
         rlm_cfg.max_reflections,
     )
 
-    return reflection_update(
-        state, result, history, rlm_cfg.max_reflections, config["configurable"].get("stream_callback")
-    )
+    return reflection_update(state, result, history, rlm_cfg.max_reflections)
 
 
 async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -1223,7 +1225,8 @@ def route_after_reflection(state: ChatState) -> str:
         return "inline_judge_response"
 
     # Use default config ceiling — the actual config is in the node
-    if wants_another_pass(history[-1], state.get("reflection_count", 0), RLMConfig().max_reflections):  # #21845
+    budget = state.get("reflection_max") or RLMConfig().max_reflections  # the limit the node ran under (#21845)
+    if wants_another_pass(history[-1], state.get("reflection_count", 0), budget):
         return "generate_response"
     return "inline_judge_response"
 

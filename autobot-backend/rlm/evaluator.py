@@ -147,7 +147,7 @@ class ResponseQualityEvaluator:
             # empty (e.g. ConnectionError()). Now log type+repr+traceback and
             # use INDETERMINATE so callers can tell evaluator-broke from a
             # genuine FAIL. The graph does not accept it (#21845): `evaluator_failed`
-            # re-asks within the reflection budget, then falls back (reflection_gate).
+            # asks the evaluator once more, then keeps a plain-text reply unverified (reflection_gate).
             logger.warning(
                 "RLM evaluator failed (%s: %r) — no reading, response is not accepted",
                 type(exc).__name__,

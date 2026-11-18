@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""A failed evaluator is re-asked within the budget, then the reply falls back; it is never accepted (#21845)."""
+"""A failed evaluator is asked once more, then a plain reply is kept unverified; the model is not regenerated (#21845)."""
 
 from __future__ import annotations
 
@@ -11,11 +11,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chat_workflow.graph import route_after_reflection
-from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK, reflection_update, wants_another_pass
+from chat_workflow.reflection_gate import evaluate_with_one_retry, reflection_update, wants_another_pass
 from rlm.evaluator import EVALUATOR_FAILED_HINT, ResponseQualityEvaluator
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
-MARKUP = "<TOOL_CALL name=\"browser_evaluate\" params='{bad json'>x</TOOL_CALL>"
 MAX = RLMConfig().max_reflections
 
 
@@ -34,10 +33,9 @@ async def test_an_evaluator_failure_is_flagged_and_carries_a_hint():
     assert result.to_dict()["evaluator_failed"] is True
 
 
-def test_a_failed_evaluator_goes_back_to_generation_until_the_budget_is_spent():
+def test_a_failed_evaluator_does_not_send_the_turn_back_to_generation():
     history = [_failed().to_dict()]
-    assert route_after_reflection({"reflection_history": history, "reflection_count": 1}) == "generate_response"
-    assert route_after_reflection({"reflection_history": history, "reflection_count": MAX}) == "inline_judge_response"
+    assert route_after_reflection({"reflection_history": history, "reflection_count": 1}) == "inline_judge_response"
 
 
 def test_a_real_indeterminate_judgement_is_still_accepted():
@@ -50,23 +48,26 @@ def test_a_scored_pass_is_accepted_and_a_scored_refine_still_loops():
     assert wants_another_pass({"verdict": "REFINE"}, 1, MAX)
 
 
-def _update(response: str, count: int, stream=None):
-    state = {"reflection_count": count - 1, "llm_response": response, "all_llm_responses": ["earlier", response]}
-    result = _failed()
-    return reflection_update(state, result, [result.to_dict()], MAX, stream)
+def test_the_router_reads_the_limit_the_reflect_node_ran_under():
+    history = [{"verdict": "REFINE"}]
+    state = {"reflection_history": history, "reflection_count": 2, "reflection_max": 2}
+    assert route_after_reflection(state) == "inline_judge_response"
+    assert route_after_reflection({**state, "reflection_max": 5}) == "generate_response"
+    update = reflection_update({"reflection_count": 0}, _failed(), history, 7)
+    assert update["reflection_max"] == 7 and update["reflection_count"] == 1
 
 
-def test_out_of_passes_a_raw_tool_call_is_replaced_by_the_fallback():
-    seen: list = []
-    update = _update(MARKUP, MAX, seen.append)
-    assert update["workflow_messages"][-1]["content"] == NO_ANSWER_FALLBACK
-    assert seen == [update["workflow_messages"][-1]]
-    assert update["all_llm_responses"] == ["earlier", ""]
+@pytest.mark.asyncio
+async def test_a_broken_evaluator_is_asked_once_more_and_never_a_third_time():
+    evaluator = AsyncMock()
+    evaluator.evaluate.side_effect = [_failed(), _failed()]
+    assert (await evaluate_with_one_retry(evaluator, query="q", response="r")).evaluator_failed
+    assert evaluator.evaluate.await_count == 2
 
 
-def test_budget_left_no_fallback_yet():
-    assert "workflow_messages" not in _update(MARKUP, 1)
-
-
-def test_out_of_passes_a_readable_unscored_answer_is_kept():
-    assert "workflow_messages" not in _update("Paris is the capital of France.", MAX)
+@pytest.mark.asyncio
+async def test_a_recovered_evaluator_reading_is_used():
+    good = ReflectionResult(ReflectionVerdict.ACCEPT, 0.9)
+    evaluator = AsyncMock()
+    evaluator.evaluate.side_effect = [_failed(), good]
+    assert await evaluate_with_one_retry(evaluator, query="q", response="r") is good
