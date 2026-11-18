@@ -160,3 +160,48 @@ class TestCeleryTaskStatusHelper:
         status = celery_result_to_status(self._mock_result("FAILURE", exc))
         assert status["status"] == "failed"
         assert "bad things" in status["error"]
+
+
+class TestTaskIdAndDrainScope:
+    """#20887: progress goes to the running task's id; a drain waits only for its own run's tasks."""
+
+    def test_back_to_back_tasks_on_one_thread_address_their_own_ids(self):
+        from tasks import analytics_tasks
+
+        seen = []
+
+        def fake_update_state(self_, task_id=None, state=None, meta=None):
+            seen.append(task_id)
+
+        run = analytics_tasks.run_dashboard_analysis
+        with (
+            patch("celery.app.task.Task.update_state", fake_update_state),
+            patch("tasks.analytics_tasks._run_async", side_effect=lambda coro: (coro.close(), {})[1]),
+            patch("tasks.analytics_tasks._wrap", return_value={}),
+        ):
+            run.apply(task_id="task-one")
+            run.apply(task_id="task-two")
+        assert seen[:1] == ["task-one"] and "task-two" in seen
+        assert all(i == "task-one" for i in seen[: seen.index("task-two")])
+        assert analytics_tasks._TASK_ID.get() is None
+
+    @pytest.mark.asyncio
+    async def test_drain_waits_only_for_tasks_spawned_by_its_own_run(self):
+        import asyncio
+
+        from tasks.analytics_tasks import _drain_after
+
+        release = asyncio.Event()
+        foreign = asyncio.ensure_future(release.wait())  # spawned outside any run, never finishes on its own
+        spawned = []
+
+        async def work():
+            spawned.append(asyncio.ensure_future(asyncio.sleep(0)))
+            return "ok"
+
+        try:
+            assert await asyncio.wait_for(_drain_after(work()), timeout=5) == "ok"
+            assert spawned[0].done() and not foreign.done()
+        finally:
+            release.set()
+            await foreign

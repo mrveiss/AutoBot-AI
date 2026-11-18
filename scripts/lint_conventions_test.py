@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,8 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts" / "lib").mkdir(parents=True)
     for name in _required_libs():
         (r / "scripts" / "lib" / name).write_bytes((LIB_DIR / name).read_bytes())
+    # #21163: the hook interpreter resolver reads the required version from the checkout.
+    (r / ".python-version").write_bytes((LIB_DIR.parent.parent / ".python-version").read_bytes())
     make_repo(r, default_branch="main")
     _git(r, "add", "-A")
     _git(r, "commit", "-q", "-m", "chore(init): base (#1)")
@@ -70,7 +73,8 @@ def repo(tmp_path: Path) -> Path:
 
 
 def run(repo: Path, *args: str, denylist: str | None = None) -> subprocess.CompletedProcess:
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(repo)}
+    # The running interpreter dir leads PATH: the resolver needs a conforming python (#21163).
+    env = {"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "HOME": str(repo)}
     if denylist is not None:
         p = repo / "denylist.txt"
         p.write_text(denylist, encoding="utf-8")

@@ -49,7 +49,11 @@ class CompanyOsWorkflowService(LLCServiceBase):
         owner_role_id: Optional[uuid.UUID] = None,
         trigger_type: Optional[str] = None,
         trigger_config: Optional[dict] = None,
+        status: str = WorkflowStatus.PLANNED.value,
+        definition: Optional[dict] = None,
     ) -> Workflow:
+        """The one create path; *company_id* is explicit (the Company OS route passes the session tenant,
+        the path-scoped legacy route passes the path company after its access check, #21239)."""
         await require_company_admin(session, company_id, actor)
         kind = self._kind(kind)
         trigger_type, trigger_config = validate_trigger(kind, trigger_type, trigger_config)
@@ -61,6 +65,8 @@ class CompanyOsWorkflowService(LLCServiceBase):
                 company_id,
                 workflow_id,
                 name=name,
+                status=status,
+                definition=definition,
                 actor=actor,
                 kind=kind,
                 owner_role_id=owner_role_id,

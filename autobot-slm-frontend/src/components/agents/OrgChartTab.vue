@@ -13,6 +13,7 @@
  * cleanup, no timeout).
  */
 
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import {
@@ -224,9 +225,7 @@ onMounted(fetchTree)
               <span class="delegation-assignee">&rarr; {{ d.assignee_id }}</span>
             </div>
             <p class="delegation-desc">{{ d.task_description }}</p>
-            <span v-if="d.created_at" class="delegation-time">{{
-              new Date(d.created_at).toLocaleString()
-            }}</span>
+            <span v-if="d.created_at" class="delegation-time">{{ formatFleetDateTime(d.created_at) }}</span>
           </div>
         </div>
       </div>

@@ -56,9 +56,21 @@ _ASYNC_MARKERS = (
 )
 _SQLALCHEMY = re.compile(r"^sqlalchemy\b", re.IGNORECASE | re.MULTILINE)
 _GREENLET_SPEC = re.compile(r"^greenlet\s*(==|>=)\s*\d", re.IGNORECASE)
+_GREENLET_BARE = re.compile(r"^greenlet\s*$", re.IGNORECASE)
+_CONSTRAINT_INCLUDE = re.compile(r"^-c\s+\S*constraints/shared\.txt\b", re.MULTILINE)
 
 
-def _declares_greenlet_unconditionally(text: str) -> bool:
+def _floor_from_shared_constraints(root: pathlib.Path, text: str) -> bool:
+    """The file includes ``-c constraints/shared.txt`` and that file gives greenlet a floor (#18060)."""
+    shared = root / "constraints" / "shared.txt"
+    if not _CONSTRAINT_INCLUDE.search(text) or not shared.exists():
+        return False
+    return any(
+        _GREENLET_SPEC.match(ln.split("#", 1)[0].strip()) for ln in shared.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def _declares_greenlet_unconditionally(text: str, constraint_floor: bool = False) -> bool:
     """A greenlet line with a floor and **no environment marker** (#17433 review).
 
     The old check was a regex over the whole file and accepted
@@ -76,7 +88,7 @@ def _declares_greenlet_unconditionally(text: str) -> bool:
     """
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
-        if not _GREENLET_SPEC.match(line):
+        if not (_GREENLET_SPEC.match(line) or (constraint_floor and _GREENLET_BARE.match(line))):
             continue
         if ";" in line:
             continue  # carries an environment marker: conditional again
@@ -206,7 +218,8 @@ def _violates(root: pathlib.Path, relative: str) -> bool:
         return False
     if not _uses_async_engine(root, (root / relative).parent):
         return False
-    return not _declares_greenlet_unconditionally((root / relative).read_text(encoding="utf-8"))
+    text = (root / relative).read_text(encoding="utf-8")
+    return not _declares_greenlet_unconditionally(text, _floor_from_shared_constraints(root, text))
 
 
 def _violations(root: pathlib.Path) -> List[str]:

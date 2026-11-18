@@ -94,11 +94,18 @@ const columns = computed(() => [
 const rows = computed(() => themes.value.map((theme) => ({ ...theme, supports: theme.supports.join(', ') })))
 const pendingName = computed(() => themes.value.find((theme) => theme.id === pendingId.value)?.name ?? pendingId.value)
 
+// Counts reads: of overlapping reads only the newest may land, an older answer arriving late is dropped.
+let loadSeq = 0
+
 async function load(): Promise<void> {
+  const req = ++loadSeq
   state.value = 'loading'
   try {
-    themes.value = await api.list()
+    const list = await api.list()
+    if (req !== loadSeq) return
+    themes.value = list
   } catch (e) {
+    if (req !== loadSeq) return
     const unavailable = isMainAppUnavailable(e)
     errorText.value = autobotApiErrorMessage(e, t(`${NS}.errorBody`))
     state.value = unavailable ? 'unavailable' : 'error'

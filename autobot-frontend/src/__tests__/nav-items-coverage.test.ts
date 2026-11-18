@@ -209,9 +209,14 @@ describe('header icon cluster (#18240)', () => {
     }
   })
 
-  it('Secrets and Platform admin are advanced; Preferences is not', () => {
+  it('Secrets and Platform admin are advanced; Approvals and Preferences are not', () => {
     const adv = Object.fromEntries(navIconItems.map((i) => [i.labelKey, !!i.adv]))
-    expect(adv).toEqual({ 'nav.secrets': true, 'nav.preferences': false, 'nav.platformAdmin': true })
+    expect(adv).toEqual({
+      'nav.approvals.aria': false,
+      'nav.secrets': true,
+      'nav.preferences': false,
+      'nav.platformAdmin': true,
+    })
   })
 
   it('Platform admin is external and for admins only, with no router target', () => {

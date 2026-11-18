@@ -64,11 +64,12 @@ describe('StepApprovalCard', () => {
   it('blocks a second click while the first decision is in flight', async () => {
     let release!: () => void
     const approve = vi.fn(() => new Promise<void>((r) => { release = r }))
-    const { wrapper } = mountCard(approve)
+    const { wrapper, skip } = mountCard(approve)
     await button(wrapper, 'Approve').trigger('click')
     await button(wrapper, 'Approve').trigger('click')
     await button(wrapper, 'Skip step').trigger('click')
     expect(approve).toHaveBeenCalledTimes(1)
+    expect(skip).not.toHaveBeenCalled()
     expect(button(wrapper, 'Approve').attributes('disabled')).toBeDefined()
     release()
     await new Promise((r) => setTimeout(r, 0))
