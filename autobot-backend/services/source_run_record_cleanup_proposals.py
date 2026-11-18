@@ -14,6 +14,7 @@ person's decision and stays one.
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalStatus
@@ -60,13 +61,18 @@ async def propose_run_record_removal(source_id: str, source_name: str) -> str | 
     async with get_async_session_factory()() as db:
         if await _already_proposed(db, source_id):
             return None
-        approval = await ApprovalGateService(db).create_approval(
-            title=f"Remove run record of deleted code source: {source_name}",
-            approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-            description=f"The code source was deleted; its run record {record_id} (status, timestamps) remains.",
-            requested_by_agent=REQUESTED_BY,
-            context={"action": ACTION, "source_id": source_id, "source_name": source_name, "record_id": record_id},
-        )
+        try:
+            approval = await ApprovalGateService(db).create_approval(
+                title=f"Remove run record of deleted code source: {source_name}",
+                approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
+                description=f"The code source was deleted; its run record {record_id} (status, timestamps) remains.",
+                requested_by_agent=REQUESTED_BY,
+                context={"action": ACTION, "source_id": source_id, "source_name": source_name, "record_id": record_id},
+            )
+        except IntegrityError:
+            await db.rollback()  # uq_approvals_pending_source_run_record_cleanup: another delete's proposal won
+            logger.info("Run record cleanup proposal for source %s already pending (raised concurrently)", source_id)
+            return None
     return str(approval.id)
 
 

@@ -47,8 +47,8 @@ async def execute_source_run_record_cleanup(approval: "Approval", session: "Asyn
         # #17141: raise, so the dispatcher records the failure durably.
         raise ValueError(f"approval {approval.id} is missing source_id in its action context")
 
-    removed = await delete_run_record(source_id)
     record_id = run_record_id(source_id)
+    removed = await delete_run_record(source_id)
     outcome = "removed" if removed else "found nothing to remove for"
     body = f"Source run record cleanup {outcome} {record_id}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))

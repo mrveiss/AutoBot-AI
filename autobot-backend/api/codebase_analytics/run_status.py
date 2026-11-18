@@ -284,6 +284,10 @@ def ordered_at(meta: dict) -> str:
 
     Run ids are uuid4s with no order, and a run whose start write was lost has an empty ``started_at``;
     readers that must tell which of two runs is newer compare this instead.
+
+    Known limit: a run whose start was lost is ordered by its END, while a run with a start is ordered by
+    its START, so across two runs the two kinds of time are mixed. A run that began before another's
+    start but ended after it can then compare as newer.
     """
     for key in _ORDERING_KEYS:
         try:

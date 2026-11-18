@@ -101,10 +101,10 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
       })),
   )
 
-  /** The export's data: the cards' list and the cards' counts, nothing else. */
   /** True while the rows on hand belong to another category than the selected one (a load is in flight). */
   const smellsStale = computed(() => loadedCategory.value !== smellCategory.value)
 
+  /** The export's data: the cards' list and the cards' counts, nothing else. */
   const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value, loadedCategory.value))
 
   return {

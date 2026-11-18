@@ -140,3 +140,14 @@ class TestEveryRunStateOrders:
 
     def test_a_naive_timestamp_is_ordered_as_utc(self):
         assert ordered_at({"latest_started_at": "2020-01-01T00:00:00"}) == "2020-01-01T00:00:00+00:00"
+
+
+class TestHandlersExistAtStartup:
+    def test_the_approvals_router_registers_both_cleanup_actions_without_the_proposers_loaded(self):
+        """After a restart nothing has imported a proposer yet; importing the router must be enough."""
+        from api import approval_gates  # noqa: F401
+        from services.approval_execution import is_registered_action
+        from services.conversation_file_cleanup_action import ACTION as FILE_ACTION
+
+        assert is_registered_action(action_mod.ACTION)
+        assert is_registered_action(FILE_ACTION)
