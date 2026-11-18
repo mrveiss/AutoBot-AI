@@ -143,7 +143,10 @@
   /* Border */
   --border-color: var(--a11y-border);
   /* Brand / accent */
-  --color-primary: var(--color-primary-500);
+  /* #21567: the fill utilities paint the active scheme's --primary (slm-scheme.css
+   * redefines --primary / --primary-h / --on-primary per scheme); the sky below is
+   * only the base state when no scheme applies. */
+  --color-primary: var(--primary);
   --primary-color: var(--color-primary-500);
   --primary: var(--color-primary-500);
   --color-accent: var(--color-primary-500);
@@ -299,6 +302,10 @@
   --a11y-sidebar-bg: #000000;
   --a11y-sidebar-text: #ffffff;
   --a11y-sidebar-active: #facc15;
+  /* #21567: high-contrast primary fill is the yellow .btn-primary paints, with black ink (13:1). */
+  --primary: #facc15;
+  --primary-h: #eab308;
+  --on-primary: #000000;
 }
 
 :root[data-theme='high-contrast'] body {
