@@ -22,6 +22,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _NAME = "validate_session_ownership"
@@ -31,7 +32,8 @@ _CANONICAL = "autobot-backend/security/session_ownership.py"
 def _defines_name(source: str) -> bool:
     """True when `source` defines a function (or method) called `validate_session_ownership`."""
     return any(
-        isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == _NAME for n in ast.walk(ast.parse(source))
+        isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == _NAME
+        for n in ast.walk(parse_cache.parse(source))
     )
 
 
@@ -125,7 +127,7 @@ def _is_strict_call(node: ast.AST, names: frozenset[str] = frozenset({_NAME})) -
 def _refs_not_strict(source: str) -> list[int]:
     """Lines of EVERY reference to the validator that is not a STRICT call: a plain, aliased or attribute call,
     a `Depends(validate_session_ownership)`, or any bare mention. Imports are not references."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names = _local_names(tree)
     allowed = {id(n.func) for n in ast.walk(tree) if _is_strict_call(n, names)}
     return sorted(n.lineno for n in ast.walk(tree) if _is_ref(n, names) and id(n) not in allowed)
@@ -151,14 +153,14 @@ def _awaits_check(fn: ast.AST, names: frozenset[str]) -> bool:
 
 def _routes_without_check(source: str) -> list[str]:
     """@router handlers that await neither `_authorize_file_operation` nor a STRICT validator call."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names = _local_names(tree)
     return [fn.name for fn in ast.walk(tree) if _is_route(fn) and not _awaits_check(fn, names)]
 
 
 def _helper_has_strict_call(source: str) -> bool:
     """The helper's OWN body contains a STRICT validator call (a call elsewhere in the file does not count)."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     names = _local_names(tree)
     return any(
         isinstance(fn, ast.AsyncFunctionDef)

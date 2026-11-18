@@ -29,6 +29,8 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.redis_keys_baseline_18999 import BASELINE
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 #: Skipped at any depth: test trees, tooling output, vendored or generated directories.
 SKIP_ANYWHERE = {
@@ -91,7 +93,7 @@ def keys_call_lines(source: str) -> list[int]:
     """Lines of Redis KEYS calls: `.keys(<arg>)` and `execute_command("KEYS ...")`."""
     return sorted(
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and (_is_keys_method(n) or _is_raw_keys_command(n))
     )
 

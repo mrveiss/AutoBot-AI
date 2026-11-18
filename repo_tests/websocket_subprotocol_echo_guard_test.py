@@ -43,6 +43,8 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 #: Backend directory name -> the names that authenticate a WebSocket in it.
 #: ``autobot-backend`` funnels through ``auth_middleware.authenticate_websocket``
 #: (directly, or via one of ``api/ws_security.py``'s wrappers -- gap 1 above).
@@ -106,7 +108,7 @@ def _authenticating_modules(root: Path) -> list[Path]:
             if path.name.endswith("_test.py") or path.name.startswith("test_"):
                 continue
             try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
+                tree = parse_cache.parse(path.read_text(encoding="utf-8"))
             except SyntaxError:
                 continue
             if _authenticates(tree, authenticators):
@@ -144,7 +146,7 @@ def test_no_authenticating_module_accepts_without_the_echo() -> None:
     modules = REACH.examined(root)
     offenders: list[str] = []
     for path in modules:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         offenders += [f"{path.relative_to(root)}:{line}" for line in _direct_accepts(tree)]
     assert not offenders, (
         "these await `.accept(` directly in a module that authenticates a WebSocket; "
@@ -155,7 +157,7 @@ def test_no_authenticating_module_accepts_without_the_echo() -> None:
 
 def test_the_guard_catches_a_direct_accept() -> None:
     """Negative control: the detector fires on exactly the pattern it forbids."""
-    offending = ast.parse(
+    offending = parse_cache.parse(
         "async def ep(websocket):\n    await authenticate_websocket(websocket)\n    await websocket.accept()\n"
     )
     assert _authenticates(offending, BACKEND_AUTHENTICATORS["autobot-backend"])
@@ -165,7 +167,7 @@ def test_the_guard_catches_a_direct_accept() -> None:
 def test_the_guard_catches_a_direct_accept_after_the_open_helper() -> None:
     """#17009: a module that authenticates through ``open_authenticated_ws`` is in the
     population, so a stray bare ``accept()`` in it is caught like any other."""
-    offending = ast.parse(
+    offending = parse_cache.parse(
         "async def ep(websocket):\n    await open_authenticated_ws(websocket)\n    await websocket.accept()\n"
     )
     assert _authenticates(offending, BACKEND_AUTHENTICATORS["autobot-backend"])
@@ -173,7 +175,7 @@ def test_the_guard_catches_a_direct_accept_after_the_open_helper() -> None:
 
 
 def test_the_guard_passes_the_helper_form() -> None:
-    fixed = ast.parse(
+    fixed = parse_cache.parse(
         "async def ep(websocket):\n    await authenticate_websocket(websocket)\n    await accept_websocket(websocket)\n"
     )
     assert _authenticates(fixed, BACKEND_AUTHENTICATORS["autobot-backend"])
@@ -190,7 +192,7 @@ def test_the_guard_catches_a_wrapper_authenticated_endpoint() -> None:
     recognised so a *new* wrapper-authenticated endpoint that skips the echo
     cannot pass CI the same way.
     """
-    offending = ast.parse(
+    offending = parse_cache.parse(
         "async def ep(websocket):\n"
         "    user = await enforce_ws_terminal_auth(websocket)\n"
         "    if user is None:\n"
@@ -203,7 +205,7 @@ def test_the_guard_catches_a_wrapper_authenticated_endpoint() -> None:
 
 def test_the_guard_catches_the_slm_backend_authenticator() -> None:
     """Negative control for gap 2: the second backend's own authenticator name."""
-    offending = ast.parse(
+    offending = parse_cache.parse(
         "async def ep(websocket):\n"
         "    if not await _authenticate_websocket_token(websocket):\n"
         "        return\n"

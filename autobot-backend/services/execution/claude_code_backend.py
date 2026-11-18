@@ -56,6 +56,7 @@ from typing import Any, AsyncIterator, Dict, Optional
 from autobot_shared.cli_tool_flags import sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
+from autobot_shared.ssot_claude_models import CLAUDE_SONNET
 from autobot_shared.ssot_config import config
 from services.execution.base_backend import (
     BackendType,
@@ -515,7 +516,7 @@ class ClaudeCodeBackend(ExecutionBackend):
         # `run(prompt, mcp_servers=[...])` shape documented in the SDK README.
         # Exact kwarg names may differ; callers mock this in tests.
         api_key = self._resolve_api_key() or ""
-        model = task.metadata.get("model", "claude-sonnet-4-6")
+        model = task.metadata.get("model", CLAUDE_SONNET)
         max_turns = task.metadata.get("max_turns", 10)
         mcp_servers = [mcp_cfg["mcpServers"]["autobot"]]
 

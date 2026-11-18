@@ -41,6 +41,8 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.store_authority import STORE_AUTHORITY, Store, system_of_record
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
@@ -118,7 +120,7 @@ def _attribute_writes(node: ast.AST) -> tuple[str, str] | None:
 def stores_written(source: str) -> set[Store]:
     """Every store *source* durably writes to."""
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return set()
     found: set[Store] = set()
@@ -150,14 +152,7 @@ def _is_test(relative: str) -> bool:
     file exists to catch.
     """
     path = Path(relative)
-    name = path.name
-    return (
-        name.startswith("test_")
-        or name.endswith("_test.py")
-        or name == "conftest.py"
-        or "tests" in path.parts
-        or path.parts[0] == "repo_tests"
-    )
+    return is_test_filename(path.name, include_js=False) or "tests" in path.parts or path.parts[0] == "repo_tests"
 
 
 def dual_store_modules() -> dict[str, set[Store]]:
@@ -203,7 +198,7 @@ def test_the_walk_reaches_the_tree():
     parsed = 0
     for path in _tracked_python_files():
         try:
-            ast.parse(path.read_text(encoding="utf-8"))
+            parse_cache.parse(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
             continue
         parsed += 1
@@ -341,7 +336,7 @@ def test_vectorized_status_is_derived_not_stored():
     reconciler = (REPO_ROOT / "autobot-backend/background_vectorization.py").read_text(encoding="utf-8")
     deciders = {
         node.name: node
-        for node in ast.walk(ast.parse(reconciler))
+        for node in ast.walk(parse_cache.parse(reconciler))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name in {"_get_vectorization_status", "_filter_pending_facts"}
     }

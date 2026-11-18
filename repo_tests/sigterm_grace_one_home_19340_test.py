@@ -22,6 +22,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _LLC = "autobot-backend/llc"
 _HOME = "autobot-backend/llc/adapters/subprocess_base.py"
 _SUPPORT = "autobot-backend/llc/adapters/subprocess_support.py"
@@ -47,7 +49,7 @@ def _is_number(node: ast.AST | None) -> bool:
 
 def _grace_param() -> str:
     """The real name of ``terminate_pid``'s grace parameter, read from its definition, not assumed."""
-    tree = ast.parse((repo_root() / _SUPPORT).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((repo_root() / _SUPPORT).read_text(encoding="utf-8"))
     func = next(
         n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef | ast.FunctionDef) and n.name == "terminate_pid"
     )
@@ -103,7 +105,9 @@ def _call_hits(node: ast.AST, rel: str, param: str) -> list[str]:
 def copies(source: str, rel: str, param: str = "grace_seconds") -> list[str]:
     """Each literal grace in *source*."""
     return [
-        hit for node in ast.walk(ast.parse(source)) for hit in _binding_hits(node, rel) + _call_hits(node, rel, param)
+        hit
+        for node in ast.walk(parse_cache.parse(source))
+        for hit in _binding_hits(node, rel) + _call_hits(node, rel, param)
     ]
 
 
@@ -121,7 +125,9 @@ def test_the_grace_has_one_home_on_the_live_tree() -> None:
 
 def test_process_adapter_passes_the_home_constant_to_terminate_pid() -> None:
     """Imported AND used: the grace argument of its ``terminate_pid`` call is the name it imported from the home."""
-    tree = ast.parse((repo_root() / "autobot-backend/llc/adapters/process_adapter.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse(
+        (repo_root() / "autobot-backend/llc/adapters/process_adapter.py").read_text(encoding="utf-8")
+    )
     imported = {
         alias.asname or alias.name
         for node in ast.walk(tree)

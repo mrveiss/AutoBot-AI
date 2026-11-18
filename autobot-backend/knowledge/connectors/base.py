@@ -26,6 +26,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Set, TypeVar
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
+from knowledge.connectors.job_state import job_key
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -45,7 +46,6 @@ _DEFAULT_RETRYABLE_STATUS: tuple = (429, 500, 502, 503, 504)
 # Issue #8146: Checkpoint TTL — 24h prevents stale state on repeated crash loops.
 _CHECKPOINT_TTL_SECONDS = 86400
 
-_JOB_KEY_SUFFIX = ":job:current"
 _JOB_TTL_S = 86400  # 24 h
 
 # Issue #12659: TTL for per-source last-modified timestamps written by
@@ -608,7 +608,7 @@ class AbstractConnector(ABC):
     # ------------------------------------------------------------------
 
     def _job_redis_key(self) -> str:
-        return "connector:%s%s" % (self.config.connector_id, _JOB_KEY_SUFFIX)
+        return job_key(self.config.connector_id)
 
     async def _write_job_state(
         self,
@@ -620,8 +620,7 @@ class AbstractConnector(ABC):
         sources_failed: int,
     ) -> None:
         """Write current job state to Redis with a 24h TTL."""
-        import os
-
+        from autobot_shared.leader_lease import worker_identity
         from autobot_shared.redis_client import get_async_redis_client
 
         redis = await get_async_redis_client(database="knowledge")
@@ -636,7 +635,7 @@ class AbstractConnector(ABC):
                     "sources_total": sources_total,
                     "sources_done": sources_done,
                     "sources_failed": sources_failed,
-                    "worker_id": "%s-%d" % (os.uname().nodename, os.getpid()),
+                    "worker_id": worker_identity(),
                     "last_updated": datetime_now().isoformat(),
                 },
                 ensure_ascii=False,

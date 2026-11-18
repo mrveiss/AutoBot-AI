@@ -114,7 +114,7 @@ def generate_pattern_id(pattern_data: Dict[str, Any]) -> str:
     # identical relative file_path/line/code_hash (e.g. both have
     # "app/main.py" with the same duplicate snippet) never collide on the
     # same ChromaDB id and silently overwrite each other's pattern.
-    hash_input += f":{pattern_data.get('source_id', 'default')}"
+    hash_input += f":{_write_source_id(pattern_data.get('source_id'))}"
 
     return hashlib.sha256(hash_input.encode()).hexdigest()[:32]
 
@@ -152,6 +152,19 @@ def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def _write_source_id(source_id: "str | None") -> str:
+    """The source a pattern is written under; a write with no source is refused (#20513).
+
+    This was ``metadata.get("source_id", "default")``, filing a source-less write in a
+    ``"default"`` partition no read can ask for.
+    """
+    # Lazy: the `api.codebase_analytics` package imports the routers, which
+    # import this module, so a top-level import here would be a cycle.
+    from api.source_scope import require_source_id  # noqa: PLC0415
+
+    return require_source_id(source_id, "pattern-store write")
+
+
 def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Build pattern data dict for single pattern ID generation. Issue #620.
 
@@ -168,7 +181,7 @@ def _build_single_pattern_data(pattern_type: str, code_content: str, metadata: D
         "file_path": metadata.get("file_path", ""),
         "start_line": metadata.get("start_line", 0),
         "code_hash": content_digest(code_content, width=16),
-        "source_id": metadata.get("source_id", "default"),
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
 
 
@@ -183,17 +196,13 @@ def _build_single_pattern_metadata(pattern_type: str, code_content: str, metadat
     Returns:
         Sanitized metadata dictionary
     """
-    # Issue #12408: default source_id to "default" here too, matching
-    # _build_single_pattern_data's id-hash default -- otherwise a caller
-    # that omits source_id gets a record whose id was hashed with "default"
-    # but whose metadata lacks source_id, so build_source_scoped_where's
-    # equality filter (which matches on the "default" sentinel) never finds
-    # it: fail-closed invisible + id/metadata mismatch.
+    # #20513: the id hash and the stored metadata take the SAME required source_id,
+    # so a record is never hashed under one scope and filed under another.
     full_metadata = {
         "pattern_type": pattern_type,
         "code_length": len(code_content),
-        "source_id": metadata.get("source_id", "default"),
         **metadata,
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
     return sanitize_metadata(full_metadata)
 
@@ -257,7 +266,7 @@ def _prepare_pattern_data(pattern: Dict[str, Any]) -> Dict[str, Any]:
         "file_path": pattern.get("metadata", {}).get("file_path", ""),
         "start_line": pattern.get("metadata", {}).get("start_line", 0),
         "code_hash": content_digest(pattern["code_content"], width=16),
-        "source_id": pattern.get("metadata", {}).get("source_id", "default"),
+        "source_id": _write_source_id(pattern.get("metadata", {}).get("source_id")),
     }
 
 
@@ -270,16 +279,14 @@ def _prepare_pattern_metadata(pattern: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Sanitized metadata dictionary ready for ChromaDB storage
     """
-    # Issue #12408: default source_id to "default" here too, matching
-    # _prepare_pattern_data's id-hash default -- see _build_single_pattern_metadata
-    # above for why the asymmetry is a fail-closed-invisible + id/metadata
-    # mismatch bug (flagged in the #12405 review).
+    # #20513: same required source_id as _prepare_pattern_data; see
+    # _build_single_pattern_metadata.
     metadata = pattern.get("metadata", {})
     full_metadata = {
         "pattern_type": pattern["pattern_type"],
         "code_length": len(pattern["code_content"]),
-        "source_id": metadata.get("source_id", "default"),
         **metadata,
+        "source_id": _write_source_id(metadata.get("source_id")),
     }
     return sanitize_metadata(full_metadata)
 
@@ -361,7 +368,7 @@ def _process_search_results(results: Dict[str, Any], min_similarity: float) -> L
 
 
 def build_source_scoped_where(
-    source_id: str | None,
+    source_id: str,
     extra: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Build a ChromaDB ``where`` filter scoped to a source, with optional
@@ -370,8 +377,9 @@ def build_source_scoped_where(
     Issue #12384: The ``source_id`` condition is ALWAYS included -- callers
     must never query the shared ``code_patterns`` collection without it, or a
     request for one source could surface another source's (or AutoBot's own)
-    stored patterns. Uses the ``source_id or "default"`` sentinel so it
-    matches exactly what ``CodePatternAnalyzer`` writes at storage time.
+    stored patterns. #20513: the ``source_id or "default"`` read-side sentinel
+    is gone -- a missing or malformed ``source_id`` raises, because a read that
+    quietly asked for the ``"default"`` partition answered for no source at all.
 
     Note: ChromaDB equality on an ABSENT field matches nothing, so patterns
     stored before this fix (no ``source_id`` key at all) become invisible to
@@ -385,7 +393,11 @@ def build_source_scoped_where(
     Returns:
         ChromaDB-compatible where filter dict.
     """
-    conditions = [{"source_id": source_id or "default"}]
+    # Lazy: the `api.codebase_analytics` package imports the routers, which
+    # import this module, so a top-level import here would be a cycle.
+    from api.source_scope import require_source_id  # noqa: PLC0415
+
+    conditions = [{"source_id": require_source_id(source_id, "pattern-store query")}]
     if extra:
         conditions.extend({k: v} for k, v in extra.items())
     if len(conditions) == 1:
@@ -399,12 +411,13 @@ async def search_similar_patterns(
     n_results: int = 10,
     min_similarity: float = 0.7,
     collection=None,
-    source_id: str | None = None,
+    *,
+    source_id: str,
 ) -> List[Dict[str, Any]]:
     """Search for similar patterns using vector similarity.
 
-    Issue #12384: Always scopes the query to ``source_id`` (default sentinel
-    when None) so one project can never read another's stored patterns.
+    Issue #12384: Always scopes the query to ``source_id`` (required, #20513)
+    so one project can never read another's stored patterns.
 
     Args:
         query_embedding: Embedding vector to search for
@@ -417,17 +430,17 @@ async def search_similar_patterns(
     Returns:
         List of similar patterns with similarity scores
     """
+    # Before the `try`: a missing source is a caller bug, not a store failure to swallow.
+    where_filter = build_source_scoped_where(
+        source_id,
+        {"pattern_type": pattern_type} if pattern_type else None,
+    )
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 logger.error("Could not get pattern collection")
                 return []
-
-        where_filter = build_source_scoped_where(
-            source_id,
-            {"pattern_type": pattern_type} if pattern_type else None,
-        )
 
         results = await collection.query(
             query_embeddings=[query_embedding],
@@ -468,7 +481,7 @@ async def delete_pattern(pattern_id: str, collection=None) -> bool:
         return False
 
 
-async def get_pattern_stats(collection=None, source_id: str | None = None) -> Dict[str, Any]:
+async def get_pattern_stats(collection=None, *, source_id: str) -> Dict[str, Any]:
     """Get statistics about stored patterns.
 
     Issue #12384: Scopes the sample/count to ``source_id`` so aggregate stats
@@ -482,13 +495,13 @@ async def get_pattern_stats(collection=None, source_id: str | None = None) -> Di
     Returns:
         Dictionary with pattern statistics
     """
+    where_filter = build_source_scoped_where(source_id)
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 return {"error": "Collection not available"}
 
-        where_filter = build_source_scoped_where(source_id)
         # #1361: bound the fetch (no scoped count() exists in the ChromaDB API)
         # to stay under the SQLite backend's ~999 SQL-variable limit -- mirrors
         # the sampling already done by get_pattern_stats() pre-#12384.
@@ -523,11 +536,11 @@ async def get_pattern_stats(collection=None, source_id: str | None = None) -> Di
         return {"error": "Failed to retrieve pattern stats"}
 
 
-async def clear_patterns(collection=None, source_id: str | None = None) -> bool:
+async def clear_patterns(collection=None, *, source_id: str) -> bool:
     """Clear all patterns for a single source from the collection.
 
-    Issue #12408: Scoped to ``source_id`` (default sentinel when None,
-    mirroring ``build_source_scoped_where``) so a clear for one source can
+    Issue #12408: Scoped to ``source_id`` (required, #20513,
+    through ``build_source_scoped_where``) so a clear for one source can
     never delete another source's (or AutoBot's own) stored patterns.
     Previously this had NO source filter at all -- ``collection.get()``/
     ``collection.delete()`` operated over every id in the shared
@@ -550,16 +563,16 @@ async def clear_patterns(collection=None, source_id: str | None = None) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    where_filter = build_source_scoped_where(source_id)
     try:
         if collection is None:
             collection = await get_pattern_collection_async()
             if collection is None:
                 return False
 
-        where_filter = build_source_scoped_where(source_id)
         await collection.delete(where=where_filter)
 
-        logger.info("Cleared patterns for source_id=%s", source_id or "default")
+        logger.info("Cleared patterns for source_id=%s", source_id)
         return True
 
     except Exception as e:

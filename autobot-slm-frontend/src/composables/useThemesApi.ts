@@ -13,23 +13,17 @@
  * admin only on the backend, and the SLM proxy lets only an admin session through at all.
  */
 
-import { isHttpError } from '@autobot/ui'
+import { isHttpError, RequestTimeoutError, type InstalledTheme } from '@autobot/ui'
+import i18n from '@/i18n'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 
 /** The proxy refused the body before the main backend saw it: its own size cap (413). */
 export const UPLOAD_TOO_LARGE_STATUS = 413
-/** The client's own message for a request that timed out (ApiClientBase `armAbort`). */
-const TIMEOUT_MESSAGE = /^Request timeout/
 /** What the proxy answers when the main backend does not. */
 const MAIN_APP_DOWN_STATUSES = [502, 503, 504]
 
-export interface InstalledTheme {
-  id: string
-  name: string
-  author: string
-  version: string
-  supports: string[]
-}
+// The one declaration lives in the kit (#14908); re-exported so this module's importers keep working.
+export type { InstalledTheme }
 
 /**
  * True when the main app could not be reached: the proxy's 502/503/504, or a request that never
@@ -38,7 +32,7 @@ export interface InstalledTheme {
  */
 export function isMainAppUnavailable(err: unknown): boolean {
   if (isHttpError(err)) return MAIN_APP_DOWN_STATUSES.includes(err.status)
-  return err instanceof TypeError || (err instanceof Error && TIMEOUT_MESSAGE.test(err.message))
+  return err instanceof TypeError || err instanceof RequestTimeoutError
 }
 
 export function useThemesApi() {
@@ -46,7 +40,7 @@ export function useThemesApi() {
 
   async function list(): Promise<InstalledTheme[]> {
     const response = await client.get<InstalledTheme[]>('/themes', { maxRetries: 1 })
-    if (!Array.isArray(response)) throw new Error('The theme list is not a list')
+    if (!Array.isArray(response)) throw new Error(i18n.global.t('settings.admin.themeManager.malformedList'))
     return response
   }
 

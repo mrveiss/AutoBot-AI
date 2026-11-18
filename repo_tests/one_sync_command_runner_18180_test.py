@@ -32,6 +32,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/utils/command_utils.py"
@@ -97,7 +98,7 @@ def _decodes_with_errors(node: ast.AST) -> bool:
 def _mapping_functions(source: str) -> set[str]:
     """Names of functions that call `subprocess.run` and map the outcome into their own result."""
     found: set[str] = set()
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         own = list(_own_nodes(fn))

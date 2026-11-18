@@ -22,6 +22,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot-backend/llc/api/_common.py"
@@ -74,7 +75,7 @@ def _inlines_translator(tree: ast.AST) -> bool:
 
 def _copies_actor_id(source: str) -> bool:
     """True when `source` defines a shared helper, inlines a translator, or inlines the session-id pick."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     if _inlines_translator(tree):
         return True
     if any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in _NAMES for n in ast.walk(tree)):

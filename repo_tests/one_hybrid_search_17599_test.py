@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = ("autobot-backend/knowledge/search_components/hybrid_search.py", "HybridSearcher")
@@ -46,7 +47,11 @@ def _is_hybrid_search_class(node: ast.ClassDef) -> bool:
 
 
 def _hybrid_classes(source: str) -> list[str]:
-    return [n.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ClassDef) and _is_hybrid_search_class(n)]
+    return [
+        n.name
+        for n in ast.walk(parse_cache.parse(source))
+        if isinstance(n, ast.ClassDef) and _is_hybrid_search_class(n)
+    ]
 
 
 def _is_source_python(rel: str) -> bool:

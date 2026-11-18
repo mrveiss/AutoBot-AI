@@ -9,7 +9,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en.json'
 import UpdateNodesOfflineAlert from './UpdateNodesOfflineAlert.vue'
-import { formatDateTime } from '@/utils/formatHelpers'
+import { formatDateTime } from '@autobot/ui'
 
 const get = vi.fn()
 vi.mock('@/utils/ApiClient', () => ({ slmApiClient: { get: (...args: unknown[]) => get(...args) } }))

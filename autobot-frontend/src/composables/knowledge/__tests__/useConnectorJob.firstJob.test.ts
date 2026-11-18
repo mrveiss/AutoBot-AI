@@ -1,6 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-// #19714: a just-started sync reports its job late, so an early "no job" doesn't end the watch.
+// #19714, #20755: a just-started sync reads as 'starting' (the backend answers from its lease) until
+// its job state is written, so the watch lasts as long as the sync does and "no job" ends it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useConnectorJob } from '../useConnectorJob'
 
@@ -17,18 +18,18 @@ describe('useConnectorJob first job', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('keeps watching after an early 404 until the job finishes', async () => {
-    get
-      .mockRejectedValueOnce(notFound)
-      .mockResolvedValueOnce({ status: 'running' })
-      .mockResolvedValueOnce({ status: 'completed' })
+  it('keeps watching through a long starting phase until the job finishes', async () => {
+    const starting = Array.from({ length: 30 }, () => ({ status: 'starting' }))
+    starting.forEach((s) => get.mockResolvedValueOnce(s))
+    get.mockResolvedValueOnce({ status: 'running' }).mockResolvedValueOnce({ status: 'success' })
     const { isPolling, jobState, start } = useConnectorJob()
-    start('c')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(isPolling.value).toBe(true)
+    start('c') // polls at once, so 30 answers cover t=0 .. 29 intervals
+    await vi.advanceTimersByTimeAsync(POLL_MS * 29)
+    expect(isPolling.value, 'a detection longer than any fixed wait still watches').toBe(true)
+    expect(jobState.value?.status).toBe('starting')
     await vi.advanceTimersByTimeAsync(POLL_MS * 2)
     expect(isPolling.value).toBe(false)
-    expect(jobState.value?.status).toBe('completed')
+    expect(jobState.value?.status).toBe('success')
   })
 
   it('stops when a seen job is gone', async () => {
@@ -62,12 +63,23 @@ describe('useConnectorJob first job', () => {
     expect(pollFailed.value).toBe(true)
   })
 
-  it('gives up if no job ever appears', async () => {
+  it('stops at once when no sync is in flight', async () => {
     get.mockRejectedValue(notFound)
     const { isPolling, start } = useConnectorJob()
     start('c')
-    await vi.advanceTimersByTimeAsync(POLL_MS * 13)
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3)
     expect(isPolling.value).toBe(false)
-    expect(get).toHaveBeenCalledTimes(13)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops on a finished state, and a fresh start polls again (the Retry path)', async () => {
+    get.mockResolvedValueOnce({ status: 'failed' }).mockResolvedValueOnce({ status: 'running' })
+    const { isPolling, start } = useConnectorJob()
+    start('c')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isPolling.value).toBe(false)
+    start('c')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(isPolling.value).toBe(true)
   })
 })

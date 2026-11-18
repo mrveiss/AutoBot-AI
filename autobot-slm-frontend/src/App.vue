@@ -22,6 +22,7 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useHighContrast, useDarkMode } from '@/composables/useAccessibility'
 import { ensureTimezone } from '@/composables/useTimezone'
 import { provideToast } from '@/composables/useToast'
+import FleetIncompleteNotice from '@/components/FleetIncompleteNotice.vue'
 
 provideToast()
 
@@ -82,6 +83,7 @@ onMounted(async () => {
 <template>
   <!-- Issue #754: Skip link for keyboard navigation -->
   <SkipLink />
+  <FleetIncompleteNotice />
   <!-- Canonical toast notification container (GH#7449) -->
   <ToastContainer
     :label="$t('common.toastContainer.notifications')"

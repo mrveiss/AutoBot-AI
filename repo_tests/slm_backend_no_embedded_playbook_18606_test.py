@@ -26,6 +26,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = "autobot-slm-backend"
@@ -40,7 +41,7 @@ _KNOWN = {"autobot-slm-backend/services/purge_playbook.py": ("playbook",)}
 def _embedded(source: str) -> list[str]:
     """What a module embeds in string literals: `playbook` and/or `agent`."""
     found: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
             continue
         text = node.value

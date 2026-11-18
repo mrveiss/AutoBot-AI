@@ -28,6 +28,18 @@ so the scaling is readable rather than inferred -- re-measure rather than trusti
     before, whole file            57 declarations   295 tests   62.07s
     after,  whole file (CI)       58 declarations   357 tests   30.87s
     after,  -m "not reach_floor"  58 declarations   183 tests   10.11s
+
+That 10s did not hold: #19676 made every floor a value measured by walking the BASE tree, and the
+first test to read a floor walked all registered declarations there. Measured on main at
+loadavg ~4, 210 declarations, one machine:
+
+    before, -m "not reach_floor"  210 declarations   639 tests  115.03s  (one test: 79s of base walk)
+    after,  -m "not reach_floor"  210 declarations   429 tests   33.80s
+    before, whole file (CI)       210 declarations  1269 tests  257.12s
+    after,  whole file (CI)       210 declarations  1269 tests  234.18s
+
+The base walk now covers the module that declares the floor being read, and the CI tests that read
+nearly every floor prefetch them in one process. `reach_base_walk_cost_17810_test` holds the count.
 """
 
 from __future__ import annotations
@@ -39,6 +51,7 @@ from pathlib import Path
 import pytest
 from repo_tests._guard_import import declaring_modules_outside_repo_tests, import_every_guard
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
+from repo_tests._reach_base import prefetch_base
 from repo_tests._reach_policy import ALLOWANCE_VERDICTS
 from repo_tests._reach_unscoped import UNSCOPED
 
@@ -210,17 +223,28 @@ def test_discovery_honours_the_root_it_is_given(reach: Reach, empty_repo: Path) 
     )
 
 
+@pytest.fixture(scope="module")
+def base_measured() -> None:
+    """Every computed floor measured at the base in ONE process, for the CI half of this file (#17810).
+
+    Requested only by the `reach_floor` tests, which read nearly every floor: one base process pays
+    the shared imports once. Anything else asks for the one floor it needs and measures one module.
+    """
+    prefetch_base()
+
+
 @pytest.mark.reach_floor
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_each_declared_floor_is_cleared_by_the_live_tree(reach: Reach) -> None:
+def test_each_declared_floor_is_cleared_by_the_live_tree(reach: Reach, base_measured: None) -> None:
     """The other direction: a floor set above the tree fails every honest run."""
     found = reach.examined(_REPO_TESTS.parent)
 
     assert len(found) >= reach.floor
 
 
+@pytest.mark.reach_floor
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_no_declaration_can_be_satisfied_by_discovering_nothing(reach: Reach) -> None:
+def test_no_declaration_can_be_satisfied_by_discovering_nothing(reach: Reach, base_measured: None) -> None:
     """Every declaration must bound its sweep from below, by a floor or by a fraction.
 
     A floor of zero is satisfied by discovering nothing, which is the state it exists to reject.
@@ -281,7 +305,7 @@ def test_no_guard_failed_to_import() -> None:
 
 @pytest.mark.reach_floor
 @pytest.mark.parametrize("reach", _declarations(), ids=lambda r: r.name)
-def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
+def test_every_declared_floor_is_pinned_to_its_population(reach: Reach, base_measured: None) -> None:
     """A floor far below its population catches only total collapse (#15928).
 
     `test_no_guard_can_succeed_against_an_empty_tree` proves a floor *fires*.

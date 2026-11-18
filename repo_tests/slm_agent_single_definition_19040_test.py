@@ -26,6 +26,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -81,7 +82,7 @@ def defines_slm_agent(rel: str, text: str) -> bool:
     """True when *text*, the content of repo-relative *rel*, defines `class SLMAgent`."""
     if rel.endswith(".py"):
         try:
-            tree = ast.parse(text)
+            tree = parse_cache.parse(text)
         except (SyntaxError, ValueError):
             return bool(_TEXT_DEFINITION.search(text))
         return any(isinstance(n, ast.ClassDef) and n.name == _CLASS for n in ast.walk(tree))

@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _LOCK_NAMES = frozenset({"Lock", "RLock"})
@@ -55,7 +56,7 @@ def _call_names(tree: ast.AST) -> set[str]:
 def _locks_built_in_with(source: str) -> list[int]:
     """Line numbers of `with threading.Lock():` -- a lock constructed per entry."""
     hits = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, (ast.With, ast.AsyncWith)):
             for item in node.items:
                 call = item.context_expr
@@ -67,7 +68,7 @@ def _locks_built_in_with(source: str) -> list[int]:
 def _local_env_parsers(source: str) -> list[str]:
     """Functions that read the environment AND parse it themselves (int/float/flag set)."""
     found = []
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         calls = _call_names(fn)
@@ -179,7 +180,7 @@ _CONSUMERS: tuple[tuple[str, str | None, frozenset[str], frozenset[str]], ...] =
 
 
 def _scope(source: str, function: str | None) -> ast.AST | None:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     if function is None:
         return tree
     return next(
@@ -224,11 +225,13 @@ def test_no_env_parser_is_redefined_beside_env_utils(rel: str) -> None:
 # row 10: error_handler.retry was removed after its useful part (the on_retry hook) moved into
 # the shared RetryPolicy; it retried ValueError/TypeError, which the shared policy never does.
 def _defined_functions(source: str) -> set[str]:
-    return {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return {
+        n.name for n in ast.walk(parse_cache.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def _class_fields(source: str, cls: str) -> set[str]:
-    node = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ClassDef) and n.name == cls)
+    node = next(n for n in ast.walk(parse_cache.parse(source)) if isinstance(n, ast.ClassDef) and n.name == cls)
     return {n.target.id for n in node.body if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)}
 
 
@@ -253,7 +256,7 @@ def test_the_shared_retry_policy_owns_the_on_retry_hook() -> None:
 def _env_flag_modes(source: str) -> dict[str, str]:
     """`{flag name: on_invalid keyword or "default"}` for every `env_flag("NAME", ...)` call."""
     modes: dict[str, str] = {}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call) and _dotted(node.func).endswith("env_flag") and node.args:
             first = node.args[0]
             if isinstance(first, ast.Constant) and isinstance(first.value, str):

@@ -4,7 +4,8 @@
  * @autobot/ui — byte, uptime, duration and date/time formatting for both apps (#14908, #19905).
  *
  * Each app had its own copy; the SLM one was an exact subset of the user app's, so the
- * shared part lives here once and each app's `utils/formatHelpers.ts` re-exports it.
+ * shared part lives here once. The SLM imports it from the kit; the user app's
+ * `utils/formatHelpers.ts` re-exports it.
  * A timezone is passed per call (`intl: { timeZone }`), so an app that stores one keeps that
  * state itself and the formatting still lives here.
  *
@@ -314,6 +315,32 @@ export function formatISOString(value: DateInput): string {
   return toValidDate(value)?.toLocaleString() ?? ''
 }
 
+/**
+ * The UTC calendar day of a moment as `YYYY-MM-DD` (default: now), for file names, API date
+ * parameters and day buckets (#19905). A missing or unparseable value is `''`.
+ */
+export function isoDateStamp(input: DateInput = new Date()): string {
+  return toValidDate(input)?.toISOString().slice(0, 10) ?? ''
+}
+
+/**
+ * The UTC second of a moment as the filename-safe `YYYY-MM-DDTHH-MM-SS` (default: now), for export
+ * file names (#19905). A missing or unparseable value is `''`.
+ */
+export function isoTimestampStamp(input: DateInput = new Date()): string {
+  return toValidDate(input)?.toISOString().replace(/[:.]/g, '-').slice(0, 19) ?? ''
+}
+
+/**
+ * A moment as the `YYYY-MM-DDTHH:mm` value of an `<input type="datetime-local">`, in the browser's
+ * own timezone (the input reads and writes local time, #19905). A missing or unparseable value is `''`.
+ */
+export function toDateTimeLocalValue(input: DateInput): string {
+  const date = toValidDate(input)
+  if (!date) return ''
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
 /** Units of {@link formatRelativeTime}, largest first, with their size in seconds. */
 const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
   ['year', 31536000],
@@ -354,16 +381,6 @@ export function formatRelativeTime(timestamp: DateInput, options: FormatRelative
   return formatter.format(value === 0 && seconds <= 0 ? -0 : value, unit) // -0 reads as past: 0 seconds ago
 }
 
-/**
- * English `2 hours ago`, `'just now'` under a minute (or in the future), `'unknown'` when invalid.
- * It is {@link formatRelativeTime} fixed to English; a caller that shows it to a user passes a locale there.
- */
-export function formatTimeAgo(timestamp: Date | string | number): string {
-  const date = toValidDate(timestamp)
-  if (!date) return 'unknown'
-  return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
-}
-
 /** Options for {@link createRecencyFormatter}; a function is read on every call (a locale can change). */
 export interface RecencyFormatterOptions {
   /** BCP 47 locale for the relative text (default: the browser's). */
@@ -372,8 +389,18 @@ export interface RecencyFormatterOptions {
   style?: 'long' | 'short' | 'narrow'
   /** The largest unit used (default `'year'`). */
   maxUnit?: Intl.RelativeTimeFormatUnit
-  /** Text for a moment under a minute old, or in the future; when absent, `Intl` words it. */
+  /**
+   * Text for a moment under a minute old, and for ANY future moment unless `soon` is set (a server
+   * clock ahead of the browser must not read as "in 5m" on a list of past events). When absent,
+   * `Intl` words it.
+   */
   justNow?: string | (() => string)
+  /**
+   * Opt-in for lists that hold future moments (an expiry): a moment under a minute ahead reads as
+   * this ("in a moment") and a later one as `Intl`'s "in 3d". It never applies to a past moment;
+   * one under a minute old is still `justNow`.
+   */
+  soon?: string | (() => string)
   /** At or past this age in milliseconds, `older(date)` is shown instead of relative text. */
   olderThanMs?: number
   /** The text for a moment past `olderThanMs` (default: {@link formatDate}). */
@@ -396,7 +423,11 @@ export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (
     const date = toValidDate(input)
     if (!date) return options.invalidText ?? ''
     const age = (options.now?.() ?? Date.now()) - date.getTime()
-    if (options.justNow !== undefined && age < 60000) return read(options.justNow)
+    if (age < 0 && options.soon !== undefined) {
+      if (age > -60000) return read(options.soon)
+    } else if (age < 60000 && options.justNow !== undefined) {
+      return read(options.justNow)
+    }
     if (options.olderThanMs !== undefined && age >= options.olderThanMs) return (options.older ?? formatDate)(date)
     const locale = options.locale === undefined ? undefined : read(options.locale)
     return formatRelativeTime(date, { locale, style: options.style, maxUnit: options.maxUnit, now: options.now?.() })
@@ -407,8 +438,8 @@ export function createRecencyFormatter(options: RecencyFormatterOptions = {}): (
 export interface DateFormatterOptions {
   /** Which part to show (default `'dateTime'`). */
   kind?: 'date' | 'time' | 'dateTime'
-  /** BCP 47 locale; default is the browser's. */
-  locale?: string
+  /** BCP 47 locale, or a function read on every call (for the app locale); default is the browser's. */
+  locale?: string | (() => string)
   /** `Intl` fields, or a function returning them (for a timezone that can change). */
   intl?: Intl.DateTimeFormatOptions | (() => Intl.DateTimeFormatOptions)
   /** Unit of a numeric input (default `'ms'`). */
@@ -421,9 +452,10 @@ export interface DateFormatterOptions {
 
 function toLocaleText(date: Date, options: DateFormatterOptions): string {
   const intl = typeof options.intl === 'function' ? options.intl() : options.intl
-  if (options.kind === 'date') return date.toLocaleDateString(options.locale, intl)
-  if (options.kind === 'time') return date.toLocaleTimeString(options.locale, intl)
-  return date.toLocaleString(options.locale, intl)
+  const locale = typeof options.locale === 'function' ? options.locale() : options.locale
+  if (options.kind === 'date') return date.toLocaleDateString(locale, intl)
+  if (options.kind === 'time') return date.toLocaleTimeString(locale, intl)
+  return date.toLocaleString(locale, intl)
 }
 
 /**

@@ -30,6 +30,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend", "autobot_shared", "plugins")
@@ -77,7 +78,7 @@ def _routed(tree: ast.AST) -> set[int]:
 
 def bypassing_reads(source: str, registered: frozenset[str]) -> set[str]:
     """Credential names *source* reads from the environment without going through the resolver."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     routed = _routed(tree)
     found = set()
     for node in ast.walk(tree):
@@ -108,7 +109,7 @@ def test_the_matcher_tells_a_bypass_from_a_routed_read(label: str, source: str, 
 
 def _registered_names(root: Path) -> frozenset[str]:
     """Every string constant in a ``*_KEY_NAMES`` assignment of the resolver module."""
-    tree = ast.parse((root / _VAULT_MODULE).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((root / _VAULT_MODULE).read_text(encoding="utf-8"))
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Assign, ast.AnnAssign)):

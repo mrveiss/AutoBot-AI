@@ -270,8 +270,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useBatchSelection } from '@/composables/useBatchSelection';
-import { apiService } from '@/services/api';
-import { getApiBase } from '@/config/ssot-config';
+import apiClient from '@/utils/ApiClient';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import { BaseAlert, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -365,7 +364,7 @@ const loadPendingItems = async (): Promise<void> => {
     loading.value = true;
     loadError.value = null;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`) as { success: boolean; pending_items: PendingKnowledgeItem[] };
+    const response = (await apiClient.call('get', '/api/chat-knowledge/knowledge/pending/{chat_id}', { path: { chat_id: props.chatId as string } })) as { success: boolean; pending_items?: PendingKnowledgeItem[] };
 
     if (response.success) {
       pendingItems.value = response.pending_items ?? [];
@@ -432,7 +431,7 @@ const applyAllDecisions = async (): Promise<void> => {
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     await Promise.all(
       decisions.map(decision =>
-        apiService.post(`${getApiBase()}/chat-knowledge/knowledge/decide`, decision)
+        apiClient.call('post', '/api/chat-knowledge/knowledge/decide', { body: decision })
       )
     );
 
@@ -453,11 +452,9 @@ const compileChat = async (): Promise<void> => {
     loading.value = true;
 
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.post(`${getApiBase()}/chat-knowledge/compile`, {
-      chat_id: props.chatId,
-      title: compileOptions.value.title || null,
-      include_system_messages: compileOptions.value.includeSystemMessages,
-    }) as { success: boolean; compiled: unknown };
+    const response = (await apiClient.call('post', '/api/chat-knowledge/compile', {
+      body: { chat_id: props.chatId as string, title: compileOptions.value.title || null, include_system_messages: compileOptions.value.includeSystemMessages },
+    })) as { success: boolean; compiled?: unknown };
 
     if (response.success) {
       showToast(t('knowledge.persistence.compiledSuccess'), 'success');

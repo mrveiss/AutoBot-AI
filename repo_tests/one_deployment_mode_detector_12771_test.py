@@ -22,6 +22,7 @@ from repo_tests._reach import declare
 
 from autobot_shared.service_registry_core import DeploymentMode as M
 from autobot_shared.service_registry_core import detect_deployment_mode
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _SCAN = ("autobot-backend", "autobot-infrastructure")
@@ -78,7 +79,7 @@ _DELEGATES = {"detect_deployment_mode", "resolve_deployment_mode"}
 def _forking_detectors(source: str) -> list[str]:
     """`_detect_deployment_mode` defs that do not delegate, or that return a mode themselves."""
     bad = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.FunctionDef) and node.name == "_detect_deployment_mode"):
             continue
         calls = {c.func.id for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
