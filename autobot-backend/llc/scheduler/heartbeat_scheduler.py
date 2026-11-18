@@ -67,6 +67,7 @@ from .auth_failure import adapter_run_failure, pause_after_auth_failure
 # guard, and refactoring it is not this change.
 from .dispatch_gate import adapter_block_reason, dispatch_block_reason, note_refused_wake, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
+from .role_credentials import attach_role_credentials
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
 from .run_key import issue_run_key as _issue_run_key
@@ -885,6 +886,9 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     }
     external_run_id: Optional[str] = None
     try:
+        await attach_role_credentials(
+            adapter, agent, enriched
+        )  # #20533; inside try so the run key is revoked on failure
         external_run_id = await adapter.invoke(agent_config, enriched)
         result = await _await_adapter_completion(adapter, agent_config, external_run_id)
         final_status = result.status
