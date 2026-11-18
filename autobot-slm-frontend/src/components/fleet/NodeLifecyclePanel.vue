@@ -15,7 +15,8 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseButton, PollingPausedAlert, formatDuration, createLogger } from '@autobot/ui'
+import { BaseButton, PollingPausedAlert, formatDuration, createLogger, createDateFormatter } from '@autobot/ui'
+import { getTimezoneOption } from '@/composables/useTimezone'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
@@ -270,18 +271,17 @@ function formatEventType(eventType: string): string {
 
 
 
-function formatFullTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  return (
-    date.toLocaleDateString() +
-    ' ' +
-    date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  )
-}
+const formatFullTime = createDateFormatter({
+  intl: () => ({
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    ...getTimezoneOption(),
+  }),
+})
 
 const DURATION_OPTIONS = { style: 'msSecondsMinutes' } as const
 

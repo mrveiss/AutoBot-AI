@@ -122,6 +122,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
       # Answers "may this workflow's GITHUB_TOKEN approve a parked run?" and
       # nothing else. It POSTs approve against a run that already succeeded,
       # which GitHub rejects on state grounds, so it has no side effect and is

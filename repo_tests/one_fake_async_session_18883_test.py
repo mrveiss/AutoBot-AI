@@ -47,6 +47,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.hand_rolled_async_session_baseline_18883 import ALLOWLIST, FROZEN_TOTAL
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -61,8 +62,7 @@ HELPER_DIRS = frozenset({"tests", "testkit"})
 
 
 def _is_test_file(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return is_test_filename(rel, include_js=False)
 
 
 def _is_scanned(rel: str) -> bool:

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { describeFailedResponse, extractErrorMessage } from '@/utils/errorExtract'
+import { describeFailedResponse, extractErrorMessage, isRequestTimeout } from '@/utils/errorExtract'
 import { getApiBase, getBackendUrl } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
@@ -91,10 +91,10 @@ export class ApiRepository {
     this.cache.set(cacheKey, { data, expires, endpoint })
   }
 
-  private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error): void {
+  private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error, timedOut = false): void {
     // Fix TypeScript error with proper window.rum type checking
     if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).rum && typeof ((window as unknown as Record<string, unknown>).rum as Record<string, unknown>)?.trackApiCall === 'function') {
-      ((window as unknown as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error)
+      ((window as unknown as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error, timedOut)
     }
   }
 
@@ -207,7 +207,8 @@ export class ApiRepository {
 
       if (error instanceof Error && error.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout: ${method} ${endpoint} took longer than ${this.timeout}ms`)
-        this.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError)
+        // The only abort source is this request's own timer, so an abort here is a timeout (#21583).
+        this.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError, true)
         throw timeoutError
       }
 
@@ -219,7 +220,7 @@ export class ApiRepository {
       }
 
       const errorObj = error instanceof Error ? error : new Error(errMsg)
-      this.trackApiCall(method, endpoint, startTime, endTime, 'error', errorObj)
+      this.trackApiCall(method, endpoint, startTime, endTime, 'error', errorObj, isRequestTimeout(error))
       throw error
     }
   }
