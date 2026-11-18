@@ -96,8 +96,10 @@ const direction = computed(() => resolveDirection(props.dir))
 
 <style>
 .aui-menu {
-  z-index: var(--aui-z-dropdown);
+  z-index: var(--aui-z-popover);
   min-width: 10rem;
+  max-height: var(--reka-dropdown-menu-content-available-height);
+  overflow-y: auto;
   padding: var(--aui-space-1);
   border: 1px solid var(--aui-color-border);
   border-radius: var(--aui-radius-md);

@@ -34,6 +34,10 @@
 #   in the returned content (default: stripped before returning).
 
 anthropic_thinking_enabled:
+  - claude-fable-5-1
+  - claude-opus-5-5
+  - claude-sonnet-5-5
+  - claude-haiku-5-5
   - claude-sonnet-4-6         # latest stable claude-sonnet-4 pointer
   - claude-opus-4-6           # latest stable claude-opus-4 pointer
   - claude-sonnet-4-20250514  # claude-sonnet-4 (first thinking-capable release)
@@ -47,6 +51,46 @@ anthropic_default_thinking_budget: 16000
 # Per-model parameter registry (#3257)
 # =============================================================================
 models:
+  - display_name: claude-fable-5-1
+    architecture_family: transformer
+    api_name:
+      anthropic: claude-fable-5-1
+    aliases:
+      - fable
+    api_kwargs:
+      default:
+        temperature: 1
+
+  - display_name: claude-opus-5-5
+    architecture_family: transformer
+    api_name:
+      anthropic: claude-opus-5-5
+    aliases:
+      - opus
+    api_kwargs:
+      default:
+        temperature: 1
+
+  - display_name: claude-sonnet-5-5
+    architecture_family: transformer
+    api_name:
+      anthropic: claude-sonnet-5-5
+    aliases:
+      - sonnet
+    api_kwargs:
+      default:
+        temperature: 1
+
+  - display_name: claude-haiku-5-5
+    architecture_family: transformer
+    api_name:
+      anthropic: claude-haiku-5-5
+    aliases:
+      - haiku
+    api_kwargs:
+      default:
+        temperature: 1
+
   - display_name: claude-sonnet-4-6
     architecture_family: transformer
     api_name:

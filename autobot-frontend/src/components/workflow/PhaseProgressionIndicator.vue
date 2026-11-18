@@ -165,7 +165,7 @@ import {
   getStatusClass,
 } from './phaseScoring'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const logger = createLogger('PhaseProgressionIndicator')
 const api = new ApiClient()
 
@@ -213,9 +213,9 @@ function completionLabel(phase: PhaseEntry): string {
 }
 
 function phaseStatusLabel(phase: PhaseEntry): string {
-  return phase.status === 'not_scored'
-    ? t('workflow.phaseProgression.notScored')
-    : formatStatus(phase.status)
+  if (phase.status === 'not_scored') return t('workflow.phaseProgression.notScored')
+  const key = `workflow.phaseProgression.status.${phase.status}`
+  return te(key) ? t(key) : formatStatus(phase.status)
 }
 
 // ── API ────────────────────────────────────────────────────────────────────

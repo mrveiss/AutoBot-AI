@@ -135,6 +135,7 @@ import { useModal } from '@/composables/useModal'
 import { useFocusTrap, useFocusRestore, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandPermissions } from '@/composables/useCommandPermissions'
+import { approvalErrorMessage } from '@/utils/approvalResult'
 
 const logger = createLogger('CommandPermissionDialog')
 const { t } = useI18n()
@@ -191,7 +192,7 @@ const handleAllow = async () => {
       emit('approved', { command: props.command ?? '', result: data, rememberChoice: rememberForSession.value })
       closeDialog()
     } else {
-      errorApprove.value = new Error(data.error ?? t('ui.commandPermission.executionFailed'))
+      errorApprove.value = new Error(approvalErrorMessage(data, t) ?? t('ui.commandPermission.executionFailed'))
       logger.error('Command approval error:', data.error)
     }
   } catch (err) {
@@ -209,6 +210,13 @@ const handleDeny = async () => {
         closeDialog()
         return
       }
+      // Any other refusal means the approval is still pending: keep the dialog open, do not emit `denied`.
+      const refusal = approvalErrorMessage(data, t)
+      if (refusal) {
+        errorApprove.value = new Error(refusal)
+        logger.error('Command denial refused:', data.error)
+        return
+      }
     } else {
       logger.warn('handleDeny: terminal_session_id is missing')
     }
@@ -216,8 +224,9 @@ const handleDeny = async () => {
     closeDialog()
   } catch (err) {
     logger.error('Command denial error:', err)
-    emit('denied', { command: props.command ?? '', reason: 'User denied permission' })
-    closeDialog()
+    // The request failed, not necessarily the denial: the server may have recorded it before the reply was lost.
+    const detail = err instanceof Error ? err.message : String(err)
+    errorApprove.value = new Error(t('ui.commandPermission.denyFailed', { error: detail }))
   }
 }
 
@@ -320,19 +329,19 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 }
 
 .command-icon {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   opacity: 0.9;
 }
 
 .command-title h3 {
   margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
 }
 
 .command-subtitle {
   margin: var(--spacing-0);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   opacity: 0.9;
 }
 
@@ -347,7 +356,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 .command-details h4 {
   margin: 0 0 var(--spacing-3) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -374,7 +383,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-weight: var(--font-weight-semibold);
   color: var(--text-tertiary);
   min-width: 80px;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
@@ -384,7 +393,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .purpose {
@@ -405,7 +414,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -433,7 +442,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   top: -2px;
   left: 3px;
   color: var(--text-on-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-bold);
 }
 
@@ -446,12 +455,12 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   gap: var(--spacing-2);
   color: var(--color-error-dark);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .warning-message .icon {
-  width: var(--font-size-base);
-  height: var(--font-size-base);
+  width: var(--text-base);
+  height: var(--text-base);
 }
 
 .command-footer {
@@ -471,12 +480,12 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   align-items: center;
   gap: var(--spacing-2);
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .security-note .icon {
-  width: var(--font-size-sm);
-  height: var(--font-size-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 /* Comment Section Styles */
@@ -489,14 +498,14 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 .comment-header h4 {
   margin: 0 0 var(--spacing-2) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
 }
 
 .comment-header p {
   margin: 0 0 var(--spacing-4) 0;
   color: var(--text-tertiary);
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .comment-input-group {
@@ -508,7 +517,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   padding: var(--spacing-3);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-family: inherit;
   resize: vertical;
   min-height: 80px;

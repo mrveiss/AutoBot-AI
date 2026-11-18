@@ -382,6 +382,26 @@ def test_an_unbound_caller_still_gets_the_last_verdict(tmp_path):
     assert "run started 2026-08-29T11:36:00+00:00" in (v.reason or "")
 
 
+def _finished_log(tmp_path, *extra):
+    log = tmp_path / "self-update.log"
+    lines = ["PLAY [one] ****", *extra, "PLAY RECAP ****", "host : ok=1 changed=0 unreachable=0 failed=0"]
+    log.write_text("\n".join(lines), encoding="utf-8")
+    return log
+
+
+def test_nodes_left_offline_dont_read_as_a_plain_success_20250(tmp_path) -> None:
+    log = _finished_log(tmp_path, 'ok: [h] => {"msg": "NODES OFFLINE AFTER UPDATE: 1 of 2"}')
+    verdict = read_self_update_verdict(log)
+    assert verdict.degraded is False, "a warning: failing the stage would stop Update All reaching those nodes"
+    assert verdict.nodes_offline == 1 and verdict.nodes_total == 2
+    assert "1 of 2 nodes are still offline" in verdict.reason
+
+
+def test_all_nodes_back_is_a_plain_success_20250(tmp_path) -> None:
+    verdict = read_self_update_verdict(_finished_log(tmp_path))
+    assert verdict.degraded is False and verdict.nodes_offline == 0
+
+
 # --- #19770: no recap is three different things, told apart by liveness --------
 
 

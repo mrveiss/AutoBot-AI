@@ -12,7 +12,7 @@
 #      looking authoritative.
 #
 # THIS LIST ONLY SHRINKS. Seeded from the actual drift measured 2026-08-18,
-# then re-audited against a code-reviewer finding the same day: 9 entries in
+# then re-audited against a review finding the same day: 9 entries in
 # the first version of this file claimed "no CI-scoped test exercising the
 # real library" while a real skipif/importorskip gate existed and was
 # silently skipping. Per the same policy that mirrors pytesseract instead of

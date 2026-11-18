@@ -102,7 +102,7 @@
             </thead>
             <tbody>
               <tr v-for="(r, i) in personalRecent" :key="i">
-                <td>{{ r.timestamp ? new Date(r.timestamp).toLocaleString() : '—' }}</td>
+                <td>{{ fmtDate(r.timestamp) }}</td>
                 <td>{{ r.provider ?? '—' }}</td>
                 <td>{{ r.model ?? '—' }}</td>
                 <td>{{ (r.input_tokens ?? 0).toLocaleString() }}</td>
@@ -239,7 +239,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveBlob } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
 import { useApiClient } from '@/plugins/api'
@@ -350,13 +350,7 @@ async function downloadCsv() {
   try {
     const res = await fetchWithAuth(`${getApiBase()}/usage/export/csv?days=${days.value}`)
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `usage_${days.value}d.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveBlob(await res.blob(), `usage_${days.value}d.csv`)
   } catch (e) {
     logger.error('CSV export failed:', e)
     error.value = 'CSV export failed. Check that you have admin access.'
@@ -386,7 +380,7 @@ function fmtSeconds(s: number): string {
   return `${m}m ${sec}s`
 }
 
-const fmtDate = createDateFormatter()
+const fmtDate = createDateFormatter({ emptyText: '—' })
 
 onMounted(load)
 </script>

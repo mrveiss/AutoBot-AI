@@ -13,7 +13,10 @@ Issue #2153 — Secret management for workflow credentials.
 """
 
 import re
-from typing import Dict, FrozenSet, List
+import sqlite3
+from typing import Dict, FrozenSet, List, Mapping, NoReturn
+
+from cryptography.fernet import InvalidToken
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import LOG_MASK
@@ -32,6 +35,46 @@ WORKFLOW_SCOPE = "workflow"
 REDACTED = LOG_MASK  # the one in-text mask (#19337)
 
 
+#: What reading a secret can raise: opening or querying the secrets database (``sqlite3.Error``), its data
+#: directory or key file (``OSError``), a stored row that does not parse (``ValueError``, which covers
+#: ``json.JSONDecodeError`` and ``UnicodeDecodeError``) and a value its key cannot decrypt (``InvalidToken``).
+#: Anything else is a defect, not an unreadable store, and propagates.
+SECRET_STORE_ERRORS = (sqlite3.Error, OSError, ValueError, InvalidToken)
+
+
+class StepSecrets:
+    """The secret values injected into one workflow step: in memory, scoped to the step.
+
+    Never logged, serialised or persisted -- ``repr`` and ``str`` show the names only, and
+    pickling is refused. Only :meth:`WorkflowSecretService.redact_secrets` reads the values.
+    """
+
+    __slots__ = ("_injected",)
+
+    def __init__(self, injected: Mapping[str, str] | None = None) -> None:
+        self._injected: Dict[str, str] = {name: value for name, value in (injected or {}).items() if value}
+
+    @property
+    def names(self) -> FrozenSet[str]:
+        """The names injected, which are not sensitive."""
+        return frozenset(self._injected)
+
+    def __bool__(self) -> bool:
+        return bool(self._injected)
+
+    def __repr__(self) -> str:
+        return f"StepSecrets(names={sorted(self._injected)})"
+
+    __str__ = __repr__
+
+    def __reduce__(self) -> NoReturn:
+        raise TypeError("StepSecrets holds live credential values and must not be serialised")
+
+    def values_longest_first(self) -> List[str]:
+        """Values to mask; the longest first, so one containing another is masked whole."""
+        return sorted(self._injected.values(), key=len, reverse=True)
+
+
 class WorkflowSecretService:
     """
     Workflow-scoped secret CRUD and ${secrets.NAME} resolution.
@@ -39,7 +82,7 @@ class WorkflowSecretService:
     All encryption is delegated to SecretsService (Fernet). This service adds:
     - Workflow-scoped create / list / delete / update
     - resolve_secrets(): substitutes ${secrets.NAME} patterns in command strings
-    - redact_secrets(): replaces resolved values with *** in output text
+    - redact_secrets(): masks exactly the values resolve_secrets() injected into the step
 
     Issue #2153.
     """
@@ -236,14 +279,14 @@ class WorkflowSecretService:
         """Return all unique secret names referenced in text. Issue #2153."""
         return list(dict.fromkeys(_SECRET_REF_RE.findall(text)))
 
-    def resolve_secrets(self, text: str, owner_id: str) -> tuple[str, FrozenSet[str]]:
+    def resolve_secrets(self, text: str, owner_id: str) -> tuple[str, StepSecrets]:
         """
         Replace every ${secrets.NAME} token in *text* with its plaintext value.
 
         Tokens that reference an unknown or expired secret are left unchanged
         so that downstream execution fails visibly rather than silently.
 
-        SECURITY: the resolved string contains live credential values — it must
+        SECURITY: the resolved string contains live credential values -- it must
         NEVER be logged or stored.
 
         Args:
@@ -251,82 +294,40 @@ class WorkflowSecretService:
             owner_id: User on whose behalf resolution is performed.
 
         Returns:
-            Tuple of (resolved_text, resolved_names) where resolved_names is
-            the frozenset of secret names that were successfully substituted.
-            Pass resolved_names to redact_secrets() to avoid a full-table scan.
+            Tuple of (resolved_text, step_secrets). ``step_secrets`` holds the values
+            that were injected, in memory and scoped to this step; pass it to
+            :meth:`redact_secrets`, which masks exactly those values. A secret rotated
+            or deleted after this call is still masked, because nothing is re-read.
 
-        Issue #2153, #2321.
+        Issue #2153, #2321, #20868.
         """
-        names = self._collect_referenced_names(text)
-        if not names:
-            return text, frozenset()
-
+        injected: Dict[str, str] = {}
         resolved = text
-        resolved_names = set()
-        for name in names:
+        for name in self._collect_referenced_names(text):
             value = self.get_secret_value(name, owner_id)
             if value is None:
                 logger.warning(
-                    "resolve_secrets: no secret found for name=%s owner=%s — " "token left unresolved",
-                    name,
-                    owner_id,
+                    "resolve_secrets: no secret found for name=%s owner=%s -- token left unresolved", name, owner_id
                 )
                 continue
             resolved = resolved.replace(f"${{secrets.{name}}}", value)
-            resolved_names.add(name)
+            injected[name] = value
+        return resolved, StepSecrets(injected)
 
-        return resolved, frozenset(resolved_names)
-
-    def redact_secrets(
-        self,
-        text: str,
-        owner_id: str,
-        resolved_names: FrozenSet[str] | None = None,
-    ) -> str:
+    def redact_secrets(self, text: str, secrets: StepSecrets) -> str:
         """
-        Replace resolved secret values in *text* with ***.
+        Replace the values injected into one step with ***.
 
-        Use this to sanitise command output or log lines that may contain
-        credentials that were injected via resolve_secrets().
+        The one redaction path for every caller (the step result, the executor result,
+        the command policy): it masks exactly the values ``resolve_secrets`` returned
+        for the step and never reads the secret store, so a secret rotated or deleted
+        mid-step cannot leak its old value and another owner's secrets are never loaded.
 
-        Only secrets that belong to *owner_id* are ever decrypted and compared.
-        When *resolved_names* is supplied (the set of names that were actually
-        substituted by resolve_secrets()), only those secrets are checked —
-        avoiding an O(n) full-table scan and cross-owner secret exposure.
-        If *resolved_names* is empty or None and the text contains no
-        ${secrets.NAME} tokens, the scan is skipped entirely.
-
-        Args:
-            text: Text that may contain live secret values.
-            owner_id: User context — only secrets owned by this user are loaded.
-            resolved_names: Names resolved by resolve_secrets() for this step.
-                Passing this avoids loading all owner secrets on every call.
-
-        Returns:
-            Text with all known secret values replaced by ***.
-
-        Issue #2153, #2321.
+        Issue #2153, #2321, #20868.
         """
-        # Determine which names to scan.
-        if resolved_names is not None:
-            # Caller provided the exact set — use it; skip any full-table load.
-            names_to_check: List[str] = list(resolved_names)
-        else:
-            # Fall back: look for any tokens still present in the text, then
-            # load only this owner's secrets as a backstop.  The list_secrets
-            # call is now owner-scoped (Issue #2321).
-            names_to_check = self._collect_referenced_names(text)
-            if not names_to_check:
-                names_to_check = [row["name"] for row in self.list_secrets(owner_id)]
-
-        if not names_to_check:
-            return text
-
         redacted = text
-        for name in names_to_check:
-            value = self.get_secret_value(name, owner_id)
-            if value and value in redacted:
-                redacted = redacted.replace(value, REDACTED)
+        for value in secrets.values_longest_first():
+            redacted = redacted.replace(value, REDACTED)
         return redacted
 
 

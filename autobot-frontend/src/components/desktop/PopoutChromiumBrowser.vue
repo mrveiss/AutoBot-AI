@@ -429,7 +429,7 @@ import ScrapeTemplatePanel from '@/components/browser/ScrapeTemplatePanel.vue'
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, formatLocalTime } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
@@ -566,7 +566,7 @@ export default {
     // Helper function to add console logs
     const addConsoleLog = (level: string, message: string) => {
       consoleLogs.value.push({
-        timestamp: new Date().toLocaleTimeString(),
+        timestamp: formatLocalTime(new Date()),
         level,
         message
       })

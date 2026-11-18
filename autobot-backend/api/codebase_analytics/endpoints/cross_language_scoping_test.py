@@ -27,6 +27,8 @@ import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Endpoint-level isolation
@@ -37,7 +39,8 @@ class TestCrossLanguageCacheScoping:
     def test_cache_key_is_per_source(self):
         from api.codebase_analytics.endpoints.cross_language_patterns import _cache_key
 
-        assert _cache_key(None) == "default"
+        with pytest.raises(ValueError):
+            _cache_key(None)
         assert _cache_key("A") == "A"
         assert _cache_key("A") != _cache_key("B")
 
@@ -48,7 +51,7 @@ class TestCrossLanguageCacheScoping:
         root_a = tmp_path / "proj_a"
         root_a.mkdir()
 
-        async def fake_scan_root(source_id, use_default=True):
+        async def fake_scan_root(source_id, strict=False):
             return {"A": root_a}.get(source_id, clp.Path("/tmp"))
 
         captured: dict = {}

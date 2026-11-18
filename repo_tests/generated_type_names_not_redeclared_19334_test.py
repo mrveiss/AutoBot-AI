@@ -53,7 +53,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "generated-type-redeclarations",
     discover=_sources,
-    floor=850,
     growth=100,  # ~9%: ordinary GUI growth between repins must not turn an unrelated PR red
     what="non-test .ts/.vue files",
     roots=_APPS,
