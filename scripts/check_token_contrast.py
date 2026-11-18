@@ -294,7 +294,7 @@ _BASE = FRONTEND_CSS / "design-tokens.css"
 _EMBER = FRONTEND_CSS / "themes" / "ember.css"
 _TEMPLATE = FRONTEND_CSS / "themes" / "_template.css"
 _EMBER_SEL = '[data-theme-variant="ember"]'
-_NOT_CONTRAST_MONO = ':where(:not([data-theme="contrast"], [data-theme="mono"]))'
+_NOT_CONTRAST_MONO = ':where(:not([data-theme="contrast"], [data-theme="contrast-dark"], [data-theme="mono"]))'
 _EMBER_LIGHT_SELECTOR = f'{_EMBER_SEL}:root{_NOT_CONTRAST_MONO}, {_EMBER_SEL}[data-theme="light"]'
 _BASE_LAYERS = [_layer(_BASE, ":root")]
 _EMBER_COMMON = [_layer(_EMBER, ":root"), _layer(_EMBER, _EMBER_SEL + _NOT_CONTRAST_MONO)]

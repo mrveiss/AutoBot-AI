@@ -33,6 +33,9 @@ from pathlib import Path
 import pytest
 
 _ANSIBLE_ROOT = Path(__file__).resolve().parents[1] / "ansible"
+# #20620: the static unit files the bootstrap and installer scripts copy into place. The
+# guard read only the Ansible templates, so all 13 of these restarted with no start limit.
+_INFRA_ROOT = Path(__file__).resolve().parents[2] / "autobot-infrastructure"
 
 # `on-failure` is in scope alongside `always`, and leaving it out was the first
 # version's mistake: an ExecStart that can never succeed never exits cleanly, so
@@ -54,7 +57,8 @@ _SYSTEMD_DEFAULT_BURST = 5
 
 
 def _unit_templates() -> list[Path]:
-    return sorted(_ANSIBLE_ROOT.rglob("*.service.j2"))
+    """Every unit the fleet installs: the Ansible templates and the static files (#20620)."""
+    return sorted([*_ANSIBLE_ROOT.rglob("*.service.j2"), *_INFRA_ROOT.rglob("*.service")])
 
 
 def _restart_always_units() -> list[Path]:
@@ -191,7 +195,8 @@ def _section_of(text: str, directive: str) -> str | None:
 def _templates_declaring_start_limits() -> list[Path]:
     """Only templates that declare the directives — the rest have nothing to
     place, and asserting over them would fail for the wrong reason."""
-    return sorted(p for p in _ANSIBLE_ROOT.rglob("*.j2") if "StartLimitIntervalSec" in p.read_text(encoding="utf-8"))
+    candidates = [*_ANSIBLE_ROOT.rglob("*.j2"), *_INFRA_ROOT.rglob("*.service")]  # #20620
+    return sorted(p for p in candidates if "StartLimitIntervalSec" in p.read_text(encoding="utf-8"))
 
 
 def test_there_are_unit_templates_to_check():
@@ -231,3 +236,22 @@ def test_the_window_still_exceeds_restartsec_times_burst():
             f"RestartSec({delay.group(1)}) * StartLimitBurst({burst.group(1)}) = {needed}s, "
             "so the restart rate can never reach the limit"
         )
+
+
+def test_the_slm_bootstrap_unit_and_the_role_unit_share_one_start_limit():
+    """#20620: the watchdog's reset-failed design needs `failed` reachable whichever unit installed the SLM."""
+    bootstrap = (_INFRA_ROOT / "autobot-slm-backend" / "templates" / "autobot-slm-backend.service").read_text(
+        encoding="utf-8"
+    )
+    role = (_ANSIBLE_ROOT / "roles" / "slm_manager" / "templates" / "autobot-slm-backend.service.j2").read_text(
+        encoding="utf-8"
+    )
+    for directive in _UNIT_ONLY_DIRECTIVES:
+        assert _directive(bootstrap, directive) == _directive(role, directive) is not None, directive
+        assert _section_of(bootstrap, directive) == "[Unit]"
+
+
+def test_the_static_units_are_read():
+    """Control: the widened glob reaches the static files, so the checks above are not vacuous for them."""
+    static = [p for p in _restart_always_units() if p.suffix == ".service"]
+    assert len(static) >= 13, f"expected the 13 static restarting units (#20620), found {len(static)}"

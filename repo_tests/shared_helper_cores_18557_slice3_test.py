@@ -21,6 +21,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 ROOT = repo_root()
 CONNECTORS = "autobot-backend/knowledge/connectors/"
 ATLASSIAN_CORE = {"_request", "_get"}
@@ -35,14 +37,16 @@ def _read(rel: str) -> str:
 
 def defined_functions(source: str) -> set[str]:
     """Names of every function/method defined anywhere in *source*."""
-    return {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return {
+        n.name for n in ast.walk(parse_cache.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def called_attributes(source: str) -> set[str]:
     """Names of every ``x.name(...)`` method called in *source*."""
     return {
         n.func.attr
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
     }
 
@@ -51,7 +55,7 @@ def assigned_self_attributes(source: str) -> set[str]:
     """Names of every ``self.name = ...`` target in *source*."""
     return {
         t.attr
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, (ast.Assign, ast.AnnAssign))
         for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
         if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self"
@@ -60,7 +64,7 @@ def assigned_self_attributes(source: str) -> set[str]:
 
 def base_names(source: str, cls: str) -> set[str]:
     """Simple names of the bases of class *cls* in *source*."""
-    for n in ast.walk(ast.parse(source)):
+    for n in ast.walk(parse_cache.parse(source)):
         if isinstance(n, ast.ClassDef) and n.name == cls:
             return {b.id for b in n.bases if isinstance(b, ast.Name)}
     return set()

@@ -131,7 +131,7 @@ async def test_process_recording_blocks_path_outside_upload_dir(
     orchestrator, transcriber_db, project_id, tmp_path, monkeypatch
 ):
     """Issue #9214: files outside the upload base dir must be rejected."""
-    monkeypatch.setenv("AUTOBOT_UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr("transcriber.upload_security._configured_upload_dir", lambda: str(tmp_path / "uploads"))
     recording_id = await transcriber_db.create_recording(
         project_id, "invalid.wav", "/nonexistent/path.wav", user_id="u1"
     )

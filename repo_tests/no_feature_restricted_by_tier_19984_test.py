@@ -13,6 +13,7 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -37,7 +38,7 @@ def _names_in(node: ast.AST) -> set[str]:
 def _tier_branches(source: str) -> list[int]:
     """Lines of branches whose condition reads a tier or licence name."""
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, (ast.If, ast.IfExp, ast.While, ast.Assert)) and _names_in(node.test) & _TIER_NAMES:
             lines.append(node.lineno)
     return lines

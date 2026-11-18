@@ -33,6 +33,7 @@ import functools
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 REPO = repo_root()
@@ -64,7 +65,11 @@ WRITE_PATHS: dict[str, tuple[str, str]] = {
     _B + "knowledge/document_ingest.py": (DELEGATED, "ingest_document -> _add_document_internal"),
     _B + "knowledge/kb_ingest_result.py": (DELEGATED, "ingest_in_kb -> add_document"),
     _B + "conversation_file_route_api.py": (DELEGATED, "transfer_files -> conversation_file_transfer"),
-    _B + "conversation_file_transfer.py": (SYSTEM, "admin-only transfer route: metadata built here; owner is #20233"),
+    _B
+    + "conversation_file_transfer.py": (
+        SYSTEM,
+        "admin-only transfer route: metadata built here with owner_id and private visibility (#20233)",
+    ),
     _B + "knowledge/bulk.py": (SYSTEM, "backup restore / bulk import: admin routes, stored facts"),
     _B + "api/knowledge.py": (ROUTE_ADMIN, "upload / add_text routes: admin or owner checks at the route"),
     _B + "api/knowledge_extract.py": (ROUTE_BUILT, "extraction route"),
@@ -148,7 +153,7 @@ def _tracked_sources() -> dict[str, str]:
 @functools.lru_cache(maxsize=None)
 def _tree(source: str) -> ast.AST:
     """One parse per distinct source text, shared by every detector."""
-    return ast.parse(source)
+    return parse_cache.parse(source)
 
 
 def _spelled(source: str, names: frozenset[str]) -> set[str]:

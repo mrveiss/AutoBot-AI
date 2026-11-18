@@ -122,7 +122,7 @@
             v-model.number="settingsForm.token_limit"
             type="number"
             step="100000"
-            min="0"
+            :min="TOKEN_LIMIT_MIN"
             class="field-input"
             :placeholder="$t('llc.cost.tokenLimitPlaceholder')"
           />
@@ -141,11 +141,12 @@
           />
         </div>
 
-        <div v-if="settingsModal.error" class="modal-error">{{ settingsModal.error }}</div>
+        <div v-if="settingsModal.error" class="modal-error" role="alert">{{ settingsModal.error }}</div>
+        <p v-if="settingsModal.notice" class="field-hint" role="status" data-testid="budget-raise-pending">{{ settingsModal.notice }}</p>
 
         <template #actions>
           <button class="btn-secondary" @click="closeSettings">{{ $t('llc.cost.cancel') }}</button>
-          <button class="btn-primary" :disabled="settingsModal.saving" @click="saveBudgetSettings">
+          <button class="btn-primary" :disabled="settingsModal.saving || !!settingsModal.notice" @click="saveBudgetSettings">
             {{ settingsModal.saving ? $t('llc.cost.saving') : $t('llc.cost.save') }}
           </button>
         </template>
@@ -294,10 +295,12 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { createDateFormatter } from '@/utils/formatHelpers'
+import { createDateFormatter, isoDateStamp } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
+import { isPendingApproval } from '@/utils/pendingApproval'
+import { limitPatchBody, tokenLimitInvalid, TOKEN_LIMIT_MIN } from './budgetLimitRequest'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
@@ -375,19 +378,18 @@ const settingsModal = reactive({
   budget: null as BudgetEntry | null,
   saving: false,
   error: '',
+  notice: '',
 })
 
 const settingsForm = reactive({
   budget_mode: 'dollars' as 'dollars' | 'tokens',
   budget_limit: 0,
-  token_limit: 0,
+  token_limit: null as number | null | '',
   alert_threshold_pct: 80,
 })
 
 function budgetPct(b: BudgetEntry): number {
-  if (b.budget_mode === 'tokens' && b.token_limit) {
-    return (b.tokens_spent / b.token_limit) * 100
-  }
+  if (b.budget_mode === 'tokens' && b.token_limit) return (b.tokens_spent / b.token_limit) * 100
   const limit = parseFloat(b.budget_limit)
   const spent = parseFloat(b.budget_spent)
   return limit > 0 ? (spent / limit) * 100 : 0
@@ -478,7 +480,7 @@ const dailyBars = computed(() => {
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now)
     d.setDate(d.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
+    const key = isoDateStamp(d)
     map[key] = 0
   }
   for (const ev of costEvents.value) {
@@ -522,17 +524,17 @@ function exportCsv() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `cost-events-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `cost-events-${isoDateStamp()}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
 
 function openSettings(b: BudgetEntry) {
   settingsModal.budget = b
-  settingsModal.error = ''
+  settingsModal.error = settingsModal.notice = ''
   settingsForm.budget_mode = b.budget_mode
   settingsForm.budget_limit = parseFloat(b.budget_limit)
-  settingsForm.token_limit = b.token_limit ?? 0
+  settingsForm.token_limit = b.token_limit ? b.token_limit : null
   settingsForm.alert_threshold_pct = Math.round(b.alert_threshold * 100)
   settingsModal.visible = true
 }
@@ -545,19 +547,16 @@ function closeSettings() {
 
 async function saveBudgetSettings() {
   if (!settingsModal.budget) return
+  settingsModal.error = settingsModal.notice = ''
+  if (tokenLimitInvalid(settingsForm)) return void (settingsModal.error = t('llc.cost.tokenLimitMin', { min: TOKEN_LIMIT_MIN }))
   settingsModal.saving = true
-  settingsModal.error = ''
   try {
-    const body: Record<string, unknown> = {
-      budget_mode: settingsForm.budget_mode,
-      alert_threshold: settingsForm.alert_threshold_pct / 100,
+    const result = await api.patch(`/api/llc/budget/${settingsModal.budget.agent_id}/limit`, limitPatchBody(settingsForm))
+    if (isPendingApproval(result)) {
+      // A company that gates budget raises answers 202: the request is filed, the limit has not moved (#8214).
+      settingsModal.notice = t('llc.cost.raisePendingApproval')
+      return
     }
-    if (settingsForm.budget_mode === 'dollars') {
-      body.budget_limit = settingsForm.budget_limit.toFixed(2)
-    } else {
-      body.token_limit = settingsForm.token_limit
-    }
-    await api.patch(`/api/llc/budget/${settingsModal.budget.agent_id}/limit`, body)
     closeSettings()
     await fetchBudgets()
   } catch (err: unknown) {
@@ -642,7 +641,7 @@ onMounted(async () => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -653,7 +652,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -687,13 +686,13 @@ onMounted(async () => {
 }
 
 .card-sub {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   word-break: break-all;
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   margin: 0 0 0.75rem;
 }
@@ -716,7 +715,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .budget-agent {
@@ -779,7 +778,7 @@ onMounted(async () => {
 
 .shadow-cost {
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   margin-left: 0.25rem;
 }
 
@@ -829,7 +828,7 @@ onMounted(async () => {
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   transition: background 0.15s, color 0.15s;
 }
@@ -851,7 +850,7 @@ onMounted(async () => {
   padding: 0.45rem 0.6rem;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -861,7 +860,7 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   width: 100%;
 }
 
@@ -871,7 +870,7 @@ onMounted(async () => {
 }
 
 .field-hint {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -895,7 +894,7 @@ onMounted(async () => {
   color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   font-weight: 500;
 }
@@ -911,7 +910,7 @@ onMounted(async () => {
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -965,11 +964,11 @@ onMounted(async () => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .date-sep {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -982,7 +981,7 @@ onMounted(async () => {
 .cost-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .cost-table th {

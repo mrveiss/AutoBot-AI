@@ -521,7 +521,7 @@ async function createCompany() {
 
 .step-item.active .step-circle {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   transform: scale(1.1);
 }
 
@@ -863,7 +863,7 @@ async function createCompany() {
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -879,7 +879,7 @@ async function createCompany() {
 /* Template Icon Categories */
 .category-software-team {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .category-marketing-agency {

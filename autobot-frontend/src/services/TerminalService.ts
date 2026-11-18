@@ -12,7 +12,7 @@ import { backoffDelay } from '@autobot/ui'
 import { reactive, ref, type Ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import apiClient from '@/utils/ApiClient'
-import { NetworkConstants } from '@/constants/network'
+import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { redactUrlForLogging, redactErrorForLogging } from '@/utils/redactUrlForLogging'
@@ -228,9 +228,9 @@ class TerminalService {
     return url
   }
 
-  /** Build a deterministic fallback WebSocket URL from NetworkConstants. */
+  /** The fallback terminal socket: same origin as every other backend socket (#19821). */
   private _buildFallbackWsUrl(): string {
-    return `ws://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}/api/terminal/ws`
+    return `${getBackendWsUrl()}/api/terminal/ws`
   }
 
   // -----------------------------------------------------------------------

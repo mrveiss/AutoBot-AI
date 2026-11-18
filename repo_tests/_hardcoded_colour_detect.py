@@ -35,6 +35,8 @@ from repo_tests._hardcoded_colour_baseline import (
 )
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_text
+
 _FRONTEND = Path("autobot-frontend/src")
 #: #17567: the `!important` sweep covers the control plane too. Its keys carry this
 #: prefix so a path in one app cannot collide with the same path in the other.
@@ -85,12 +87,11 @@ def _is_colour(token: str, line: str = "", start: int = -1) -> bool:
     return bool(_VALUE_POSITION.search(before))
 
 
-def _colour_scanned_files(root: Path) -> list[str]:
-    """Every file the colour scanner opens. Its reach population."""
-    frontend = root / _FRONTEND
+def _colour_candidates(frontend: Path) -> list[Path]:
+    """Every file under *frontend* the colour scanner opens. One filter for both apps."""
     if not frontend.is_dir():
         return []
-    out: list[str] = []
+    out: list[Path] = []
     for path in sorted(frontend.rglob("*")):
         if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
             continue
@@ -101,7 +102,18 @@ def _colour_scanned_files(root: Path) -> list[str]:
             continue
         if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
             continue
-        out.append(rel)
+        out.append(path)
+    return out
+
+
+def _colour_scanned_files(root: Path) -> list[str]:
+    """Every file the colour scanner opens, in both apps. Its reach population.
+
+    The control plane's keys carry ``SLM_KEY_PREFIX`` (#17567), as the `!important` sweep's do.
+    """
+    out: list[str] = []
+    for tree, prefix in ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX)):
+        out += [prefix + p.relative_to(root / tree).as_posix() for p in _colour_candidates(root / tree)]
     return out
 
 
@@ -122,15 +134,13 @@ def _important_scanned_files(root: Path) -> list[str]:
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=914,  # mid-window: population 944, window (884, 944)
     growth=60,
     skips=0,
-    what="frontend source files scanned for colour literals",
+    what="frontend source files scanned for colour literals, in both frontends (the SLM joined in #17567)",
 )
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
     discover=_important_scanned_files,
-    floor=567,  # train 22b: re-pinned mid-window [547, 587] on a population of 587 (#18633 SLM views)
     growth=40,
     skips=0,
     what="component files scanned for !important, in both frontends (570 read; the SLM joined in #17567)",
@@ -145,16 +155,7 @@ def _scan(root: Path) -> dict[str, int]:
     changes what CI runs on a frontend edit. See the baseline's docstring.
     """
     counts: dict[str, int] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in _SUFFIXES or "node_modules" in path.parts:
-            continue
-        relative = path.relative_to(root).as_posix()
-        if any(fragment in relative for fragment in _SKIP_FRAGMENTS):
-            continue
-        if path.name in EXEMPT_BASENAMES:
-            continue
-        if "__tests__" in path.parts or path.name.endswith((".spec.ts", ".test.ts", ".stories.ts")):
-            continue
+    for path in _colour_candidates(root):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -186,13 +187,56 @@ def _scan(root: Path) -> dict[str, int]:
     return counts
 
 
+def _scan_slm(repo: Path) -> dict[str, int]:
+    """The same colour scan over the control plane (#17567): own tree, own baseline, same detector."""
+    return _scan(repo / _SLM_FRONTEND)
+
+
 _STYLE_CONTENT = re.compile(r"<style\b[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
 _IMPORTANT = re.compile(r"!\s*important", re.IGNORECASE)
+#: Selectors that style markup a third-party library injects at runtime. There
+#: `!important` is the only way to beat the library's own inline styles, so it is
+#: not a design-system override and is not counted (#17567). Each entry carries
+#: its reason; a selector with no stated reason is indistinguishable from an
+#: oversight. A lookalike (`.apexcharts` without the dash, `.my-xtermish`) is NOT
+#: exempt: the patterns need the vendor's own class prefix.
+VENDOR_SELECTORS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\.apexcharts-"), "ApexCharts injects its canvas/tooltip/legend DOM with inline styles"),
+    (re.compile(r"\.xterm(?:-[\w-]+)?(?![\w-])"), "xterm.js sets inline styles on its viewport and rows"),
+)
+_RULE_BLOCK = re.compile(r"([^{}]*)\{([^{}]*)\}")
 _THEME_SOURCES = (
     "assets/css/design-tokens.css",
     "assets/css/themes/light.css",
     "assets/css/themes/dark.css",
 )
+
+
+def _selector_list(selector: str) -> list[str]:
+    """The comma-separated selectors of a rule; a comma inside ``:is(...)`` does not split."""
+    parts, depth, current = [], 0, ""
+    for ch in selector:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    return [*parts, current]
+
+
+def _is_vendor_rule(selector: str) -> bool:
+    """Every selector in the list targets a vendor class: ``.apexcharts-tooltip, .card`` styles app CSS too."""
+    return all(any(p.search(part) for p, _reason in VENDOR_SELECTORS) for part in _selector_list(selector))
+
+
+def _without_vendor_rules(css: str) -> str:
+    """``css`` with the rule blocks that target only vendor-injected classes removed."""
+
+    def keep(m: re.Match[str]) -> str:
+        return "" if _is_vendor_rule(m.group(1)) else m.group(0)
+
+    return _RULE_BLOCK.sub(keep, css)
 
 
 def _scan_important(root: Path) -> dict[str, int]:
@@ -211,7 +255,7 @@ def _scan_important(root: Path) -> dict[str, int]:
         except (OSError, UnicodeDecodeError):
             continue
         css = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
-        found = len(_IMPORTANT.findall(css))
+        found = len(_IMPORTANT.findall(_without_vendor_rules(css)))
         if found:
             counts[path.relative_to(root).as_posix()] = found
     return counts
@@ -258,7 +302,6 @@ def _component_style_blocks(root: Path) -> list[tuple[str, int]]:
 REACH_STYLE_BLOCKS = declare(
     "component-style-block-sweep",
     discover=_component_style_blocks,
-    floor=380,
     growth=40,
     skips=0,
     what="component <style> blocks searched for design-token redefinitions",
@@ -297,3 +340,147 @@ def _token_redefinitions(root: Path, owned: set[str]) -> tuple[dict[str, list[st
         if clashes:
             offenders[path.relative_to(root).as_posix()] = clashes
     return offenders, blocks
+
+
+# --- #20425: a label on a primary fill reads --text-on-primary -------------------------------
+#: --color-primary is white in High Contrast Dark and pale in Dark, so a literal white label on
+#: it vanishes there. --text-on-primary is the token that follows the fill.
+_PRIMARY_FILL = re.compile(
+    r"background(?:-color)?\s*:[^;{}]*var\(\s*--(?:color-)?primary\s*[,)]",
+    re.IGNORECASE,
+)
+_WHITE_LABEL = re.compile(
+    r"(?<![\w-])color\s*:\s*(?:white|#fff(?:fff)?|rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)|var\(\s*--color-white\s*\))"
+    r"\s*(?:!\s*important\s*)?(?=[;}])",
+    re.IGNORECASE,
+)
+_WHITE_ON_PRIMARY_TREES = ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX))
+
+
+def white_on_primary_in(css: str) -> int:
+    """Rules in *css* that fill with the primary token and write a literal white label."""
+    css = _CSS_COMMENT.sub("", css)
+    return sum(
+        1 for m in _RULE_BLOCK.finditer(css) if _PRIMARY_FILL.search(m.group(2)) and _WHITE_LABEL.search(m.group(2))
+    )
+
+
+def _white_on_primary_files(repo: Path) -> list[Path]:
+    out: list[Path] = []
+    for tree, _prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        if base.is_dir():
+            out += [
+                p for p in sorted(base.rglob("*")) if p.suffix in {".vue", ".css"} and "node_modules" not in p.parts
+            ]
+    return out
+
+
+def _scan_white_on_primary(repo: Path) -> dict[str, int]:
+    """``path -> rules painting a primary fill with a literal white label`` in both apps.
+
+    .vue files contribute their <style> blocks only; .css files are read whole. Keys carry
+    SLM_KEY_PREFIX for the control plane, as the !important sweep does.
+    """
+    counts: dict[str, int] = {}
+    for tree, prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        for path in _white_on_primary_files(repo):
+            if base not in path.parents:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if path.suffix == ".vue":
+                text = "\n".join(m.group(1) for m in _STYLE_CONTENT.finditer(text))
+            found = white_on_primary_in(text)
+            if found:
+                counts[prefix + path.relative_to(base).as_posix()] = found
+    return counts
+
+
+# --- #21543: the same defect written as Tailwind classes ----------------------------------------
+#: What this scan cannot see (#21566), so a clean result is read at its reach:
+#:  * a fill and its label on different elements (``bg-autobot-primary`` on a parent, ``text-white`` on a
+#:    child): the pair is read inside one class string only. The parent/child sweep of 2026-11 found one
+#:    (``AboutView.vue``), converted by hand;
+#:  * the fill written as CSS (``background: var(--color-primary)``) with the label in another rule: that is
+#:    the #20425 guard's reach (``primary_fill_label_reads_text_on_primary_20425_test.py``), same-rule only;
+#:  * the component kit (``libs/autobot-ui``): its sources are not in ``_WHITE_ON_PRIMARY_TREES``; a grep
+#:    finds no primary fill with a white label there today, and a pair added there is not reported;
+#:  * a label whose colour comes from a variable or a prop rather than a ``text-`` utility.
+#: ``bg-autobot-primary`` is ``--color-primary``, so ``text-white`` on it is the #20425 defect in class
+#: form. One element is one string of class tokens; a run of class tokens ends at any quote, ``;``,
+#: ``<`` or ``>``, so the pair is read inside one class attribute, ternary branch, object key or
+#: ``@apply`` statement, across line breaks, and never across two elements.
+_CLASS_TOKEN = r"[\w:\[\]#/.%!-]+"
+_CLASS_RUN = re.compile(rf"{_CLASS_TOKEN}(?:\s+{_CLASS_TOKEN})*")
+_VARIANTS = r"(?:[\w\[\]-]+:)*!?"
+_OPACITY = r"(?:/[\w.\[\]%]+)?"
+_PRIMARY_FILL_CLASS = re.compile(rf"^{_VARIANTS}bg-autobot-primary(?:-(?:hover|active|light|dark|bg))?{_OPACITY}$")
+#: A white label, or the second token (#21566): ``text-inverse`` is ``--on-primary`` only under the five
+#: explicit themes, so it is not the token that labels a primary fill.
+_WHITE_LABEL_CLASS = re.compile(
+    rf"^{_VARIANTS}text-(?:white|autobot-text-inverse|\[(?:white|#fff(?:fff)?)\]){_OPACITY}$", re.IGNORECASE
+)
+_CLASS_FORM_SUFFIXES = {".vue", ".ts", ".tsx", ".js", ".css"}
+_TEST_PATH_PARTS = ("node_modules", "__tests__")
+
+
+def _is_white_on_primary_run(run: str) -> bool:
+    tokens = run.split()
+    return any(_PRIMARY_FILL_CLASS.match(t) for t in tokens) and any(_WHITE_LABEL_CLASS.match(t) for t in tokens)
+
+
+def white_class_on_primary_in(text: str, name: str = "x.vue") -> int:
+    """Class-token runs in *text* that fill with ``bg-autobot-primary*`` and write a white ``text-`` utility.
+
+    Comments are whatever ``tools.lint._comment_syntax.code_text`` strips for the file type of *name*;
+    this scan has no comment handling of its own.
+    """
+    code = code_text(text, name=name)
+    return sum(1 for m in _CLASS_RUN.finditer(code) if _is_white_on_primary_run(m.group(0)))
+
+
+def _class_form_files(repo: Path) -> list[tuple[Path, str, Path]]:
+    """``(file, key prefix, tree)`` for every file the class-form scan opens, in both apps."""
+    out: list[tuple[Path, str, Path]] = []
+    for tree, prefix in _WHITE_ON_PRIMARY_TREES:
+        base = repo / tree
+        if not base.is_dir():
+            continue
+        for p in sorted(base.rglob("*")):
+            skip = any(part in p.parts for part in _TEST_PATH_PARTS) or p.name.endswith((".spec.ts", ".test.ts"))
+            if p.is_file() and p.suffix in _CLASS_FORM_SUFFIXES and not skip:
+                out.append((p, prefix, base))
+    return out
+
+
+def _class_form_scanned_files(repo: Path) -> list[str]:
+    """Repository-relative paths, so the reach declaration can state its roots."""
+    return [p.relative_to(repo).as_posix() for p, _prefix, _base in _class_form_files(repo)]
+
+
+def _scan_white_class_on_primary(repo: Path) -> dict[str, int]:
+    """``path -> class strings painting a primary fill with a white label`` in both apps (SLM keys prefixed)."""
+    counts: dict[str, int] = {}
+    for path, prefix, base in _class_form_files(repo):
+        try:
+            found = white_class_on_primary_in(path.read_text(encoding="utf-8"), path.name)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if found:
+            counts[prefix + path.relative_to(base).as_posix()] = found
+    return counts
+
+
+REACH_CLASS_FORM_FILES = declare(
+    "primary-fill-class-label-files",
+    discover=_class_form_scanned_files,
+    roots=(_FRONTEND.as_posix(), _SLM_FRONTEND.as_posix()),
+    floor=1495,  # measured 1525, growth 60, mid-window; a new guard pins until it lands on the base (#19676)
+    growth=60,
+    skips=0,
+    what="frontend .vue, .ts, .js and .css files scanned for a white text utility on bg-autobot-primary, both apps",
+)

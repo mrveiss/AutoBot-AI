@@ -82,6 +82,18 @@ REGISTRY: list[ScheduledJob] = [
         startup_marker="start_pricing_cache_scheduler",
     ),
     ScheduledJob(
+        name="ApprovalExpiryScheduler",
+        interval_seconds="env:AUTOBOT_APPROVAL_EXPIRY_SWEEP_INTERVAL_S",
+        owner_file="services/approval_expiry_scheduler.py",
+        runtime="asyncio_per_worker",
+        description=(
+            "Moves pending approvals past expires_at to EXPIRED and resumes their source as "
+            "expired, once (ApprovalGateService.expire_stale, #18412). A status change only; "
+            "deletes nothing. Default 60 s."
+        ),
+        startup_marker="start_background_workers",
+    ),
+    ScheduledJob(
         name="WorkflowScheduler",
         interval_seconds=10,
         owner_file="workflow_scheduler.py",
@@ -130,6 +142,17 @@ REGISTRY: list[ScheduledJob] = [
             "is closed, the retention call is not."
         ),
         default_enabled=False,
+    ),
+    ScheduledJob(
+        name="MeshReembedConsumer",
+        interval_seconds=30,
+        owner_file="services/mesh_brain/reembed_consumer.py",
+        runtime="leader_elected",
+        description=(
+            "Drains mesh:reembed_queue into the document re-index queue under a LeaderLease; "
+            "retries, then dead-letters to mesh:reembed_dead. Interval: AUTOBOT_MESH_REEMBED_INTERVAL_S."
+        ),
+        startup_marker="initialization/lifespan.py::start_mesh_reembed_consumer",
     ),
     ScheduledJob(
         name="SkillHealthScheduler",

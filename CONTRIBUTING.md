@@ -181,8 +181,7 @@ No code needed: each language is one JSON file, and every language issue is a [g
    ```
 
 2. **Translate** those keys in `autobot-frontend/src/i18n/locales/<lang>.json`. If a key is missing there, copy it from `en.json`. Keep every key name and every `{placeholder}` exactly as written, and don't edit `en.json`.
-3. **Lower your language's number** in `BASELINE` in `repo_tests/i18n_untranslated_ratchet_test.py` by the strings you translated. If the number is off, CI prints the exact one.
-4. **Open a PR** titled `i18n(<lang>): translate <section>`, with `Refs #<your language's issue>`. If another PR for the same language merged first, rebase; only the `BASELINE` line will conflict.
+3. **Open a PR** titled `i18n(<lang>): translate <section>`, with `Refs #<your language's issue>`. There is no count to update: CI compares your locale file with the base, and only fails if a string that had a translation lost it.
 
 The SLM console reuses these translations automatically (`scripts/lift_locale_translations.py`). Never edit its locale files by hand.
 

@@ -41,6 +41,7 @@ if _INSTALL_ROOT not in sys.path:
 try:
     from autobot_shared import postgres_identity as pg  # noqa: E402 -- needs the path entry above
     from autobot_shared.env_file import parse_env_text  # noqa: E402 -- needs the path entry above
+    from autobot_shared.postgres_dsn import build_postgres_dsn  # noqa: E402 -- needs the path entry above
 except ImportError as missing:
     # Not a traceback: name where it looked and the two sanctioned ways to put autobot_shared there.
     sys.exit(
@@ -85,7 +86,7 @@ def get_db_url(database: str) -> str:
     port = env.get("SLM_DB_PORT", str(pg.DB_PORT))
     user = env.get("SLM_DB_USER", pg.SLM_DB_ROLE)
     password = env.get("SLM_DB_PASSWORD", "")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    return build_postgres_dsn("postgresql", user, password, host, port, database)
 
 
 #: A reset records the subject's password epoch in the SLM's own store (#18663), so every token

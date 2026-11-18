@@ -30,7 +30,6 @@ import type { operations } from '@/types/generated/api';
 // Request/response shape of POST /api/batch-jobs/load, derived from the generated OpenAPI types.
 type BatchLoadOp = operations['batch_load_api_batch_jobs_load_post'];
 type BatchLoadRequest = BatchLoadOp['requestBody']['content']['application/json'];
-type BatchLoadResponse = BatchLoadOp['responses'][200]['content']['application/json'];
 // One result slot, in request order (api/batch_dispatch.py). The generated type carries the list
 // as `unknown`, so the slot is named here.
 interface BatchLoadItem {
@@ -219,8 +218,8 @@ export class BatchApiService {
       requests: requests.map(r => ({ endpoint: this.toServerPath(r.endpoint), method: 'GET' }))
     };
     try {
-      // Typed from the generated contract (BatchLoadOp), not an inline call-site generic.
-      const response = (await this.apiClient.post(`${getApiBase()}/batch-jobs/load`, payload)) as BatchLoadResponse;
+      // The typed call: the path is the contract key, the body and reply come from BatchLoadOp.
+      const response = await this.apiClient.call('post', '/api/batch-jobs/load', { body: payload });
       const items = (response.results ?? []) as BatchLoadItem[];
       return requests.map((r, n) => (items[n]?.refused ? null : this.toBatchResult(r, items[n])));
     } catch (error: unknown) {

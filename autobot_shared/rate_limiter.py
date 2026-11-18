@@ -171,6 +171,10 @@ class RateLimiter:
         self._token_buckets: dict[str, dict[str, float]] = {}
         self._token_locks: dict[str, asyncio.Lock] = {}
         self._last_fail_open_warn: float | None = None
+        #: Requests this limiter allowed because Redis was unavailable or errored.
+        #: Unlike the throttled warning, every occurrence is counted, so a caller that
+        #: must react to fail-open (a login path) can compare before/after (#20600).
+        self.fail_open_count: int = 0
 
     def _warn_fail_open(self, reason: str) -> None:
         """Warn that a request was allowed because Redis is unavailable (#18617).
@@ -178,6 +182,7 @@ class RateLimiter:
         Names the limiter scope only, never a key or key-derived value, and is
         rate-limited per instance to one line per ``FAIL_OPEN_WARN_INTERVAL_SECONDS``.
         """
+        self.fail_open_count += 1
         mono = time.monotonic()
         last = self._last_fail_open_warn
         if last is not None and mono - last < FAIL_OPEN_WARN_INTERVAL_SECONDS:

@@ -24,6 +24,9 @@ import logging  # stdlib: this module stays dependency-free (imported by ssot_co
 import os
 from typing import Any, Mapping, Optional
 
+from autobot_shared.logging_once import log_once
+from autobot_shared.ssot_role_mirrors import FEATURE_ROUTERS_STRICT_DEFAULT, FEATURE_ROUTERS_STRICT_PRODUCTION
+
 logger = logging.getLogger(__name__)
 
 #: Canonical name of the deployment environment (production / development / test / ...).
@@ -80,14 +83,6 @@ NON_PRODUCTION_ENVIRONMENTS = frozenset({"development", "dev", "test", "ci"})
 #: Every recognised name; anything else is warned about once (and is production for safety).
 KNOWN_ENVIRONMENTS = NON_PRODUCTION_ENVIRONMENTS | {"production", "staging"}
 
-_warned: set[str] = set()
-
-
-def _warn_once(key: str, message: str, *args: object) -> None:
-    if key not in _warned:
-        _warned.add(key)
-        logger.warning(message, *args)
-
 
 def _env(environ: Optional[Mapping[str, str]]) -> Mapping[str, str]:
     return os.environ if environ is None else environ
@@ -101,7 +96,9 @@ def resolve_environment(canonical: Optional[str], alias: Optional[str]) -> str:
     """
     primary, legacy = (canonical or "").strip().lower(), (alias or "").strip().lower()
     if primary and legacy and primary != legacy:
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             "conflict",
             "%s=%r and %s=%r differ; %s wins",
             ENVIRONMENT_VAR,
@@ -112,7 +109,9 @@ def resolve_environment(canonical: Optional[str], alias: Optional[str]) -> str:
         )
     name = primary or legacy or ENVIRONMENT_DEFAULT
     if name not in KNOWN_ENVIRONMENTS:
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             f"unknown:{name}",
             "Unknown environment %r (known: %s); treated as production",
             name,
@@ -147,6 +146,21 @@ def environment_name(environ: Optional[Mapping[str, str]] = None) -> str:
 def is_non_production(name: Optional[str]) -> bool:
     """True only for an allow-listed non-production name; every other value is production."""
     return resolve_environment(name, None) in NON_PRODUCTION_ENVIRONMENTS
+
+
+def feature_routers_strict_default(environ: Optional[Mapping[str, str]] = None) -> str:
+    """The boot mode an environment implies (#19395); an unnamed one stays strict.
+
+    Only a NAMED environment counts: :data:`DEFAULT_PROFILE` is production, so resolving an unset
+    name would quietly turn dev checkouts and CI lenient, and a broken router would stop failing them.
+    """
+    env = _env(environ)
+    canonical, alias = env.get(ENVIRONMENT_VAR), env.get(ENVIRONMENT_ALIAS_VAR)
+    if not (canonical or "").strip() and not (alias or "").strip():
+        return FEATURE_ROUTERS_STRICT_DEFAULT
+    if resolve_environment(canonical, alias) in NON_PRODUCTION_ENVIRONMENTS:
+        return FEATURE_ROUTERS_STRICT_DEFAULT
+    return FEATURE_ROUTERS_STRICT_PRODUCTION
 
 
 def deployment_mode(environ: Optional[Mapping[str, str]] = None) -> str:

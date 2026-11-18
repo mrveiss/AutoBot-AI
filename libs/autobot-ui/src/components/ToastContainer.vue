@@ -93,7 +93,7 @@ const CLOSE_PATH = 'M6 18L18 6M6 6l12 12'
   position: fixed;
   top: calc(5rem + env(safe-area-inset-top, 0px));
   right: calc(var(--aui-space-5) + env(safe-area-inset-right, 0px));
-  z-index: var(--aui-z-toast, calc(var(--aui-z-tooltip) + 100));
+  z-index: var(--aui-z-toast);
   display: flex;
   flex-direction: column;
   gap: var(--aui-space-2);

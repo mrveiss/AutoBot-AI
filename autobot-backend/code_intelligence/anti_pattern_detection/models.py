@@ -54,17 +54,45 @@ class AnalysisReport:
     anti_patterns: List[AntiPatternResult]
     summary: Dict[str, int]
     severity_distribution: Dict[str, int]
+    files_failed: int = 0
+    cap_applied: bool = False  # discovery has no file cap; set by the discovery code if one is added
+
+    @property
+    def derived_summary(self) -> Dict[str, int]:
+        """Findings per pattern type, counted from ``anti_patterns`` (#20493)."""
+        out: Dict[str, int] = {}
+        for p in self.anti_patterns:
+            out[p.pattern_type.value] = out.get(p.pattern_type.value, 0) + 1
+        return out
+
+    @property
+    def derived_severity_distribution(self) -> Dict[str, int]:
+        """Findings per severity, counted from ``anti_patterns`` (#20493)."""
+        out: Dict[str, int] = {}
+        for p in self.anti_patterns:
+            out[p.severity.value] = out.get(p.severity.value, 0) + 1
+        return out
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
+        """Convert to dictionary for JSON serialization.
+
+        The summary, severity distribution and total are counted from the same
+        ``anti_patterns`` list that is returned, so a caller that filters the
+        list can never leave the counts describing a different set (#20493).
+        ``files_examined`` states how many discovered files were analysed; no
+        cap is applied to discovery (``cap_applied`` is False).
+        """
         return {
             "scan_path": self.scan_path,
             "total_files": self.total_files,
             "total_classes": self.total_classes,
             "total_functions": self.total_functions,
             "anti_patterns": [p.to_dict() for p in self.anti_patterns],
-            "summary": self.summary,
-            "severity_distribution": self.severity_distribution,
+            "files_examined": self.total_files - self.files_failed,
+            "files_failed": self.files_failed,
+            "cap_applied": self.cap_applied,
+            "summary": self.derived_summary,
+            "severity_distribution": self.derived_severity_distribution,
             "total_issues": len(self.anti_patterns),
         }
 

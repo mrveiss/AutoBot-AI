@@ -14,9 +14,11 @@ trailers. `tools/git-hooks/commit-msg` is now tracked, installed by
 Every test runs the real hook and the real lint script in a throwaway repository.
 """
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -57,15 +59,21 @@ def repo(tmp_path: Path) -> Path:
     for rel in _lint_files():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_ROOT / rel, repo / rel)
+    shutil.copy2(_ROOT / ".python-version", repo / ".python-version")  # #21163: the resolver floor
     return make_repo(repo)
+
+
+def _hook_env() -> dict[str, str]:
+    """The isolated git env with the running interpreter dir on PATH (#21163 resolver)."""
+    env = isolated_git_env()
+    env["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}{env.get('PATH', '')}"
+    return env
 
 
 def _run_hook(repo: Path, message: str) -> tuple[subprocess.CompletedProcess, str]:
     msg = repo / "MSG"
     msg.write_text(message, encoding="utf-8")
-    result = subprocess.run(
-        ["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
-    )
+    result = subprocess.run(["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=_hook_env())
     return result, msg.read_text(encoding="utf-8")
 
 

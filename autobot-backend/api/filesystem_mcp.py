@@ -217,9 +217,9 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 #
 # Since #14050, an unset AUTOBOT_BASE_DIR (every dev checkout and CI runner)
 # resolves ALLOWED_DIRECTORIES to the whole git checkout, and the only gate on
-# this bridge is admin role or the shared X-Internal-API-Key header. Without
-# an exclusion, either credential grants read *and write* access to VCS
-# history and any local secrets.
+# this bridge is admin role (the internal service key is not an admin since
+# #16333). Without an exclusion, that credential grants read *and write* access
+# to VCS history and any local secrets.
 #
 # Enforced in _resolve_allowed_path (the single seam every path goes through,
 # shared by is_path_allowed and _validated_path) rather than by curating

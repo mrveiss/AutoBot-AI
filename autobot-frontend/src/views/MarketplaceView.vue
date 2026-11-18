@@ -482,7 +482,7 @@ onMounted(async () => {
 
 .btn-filter-toggle.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -502,8 +502,8 @@ onMounted(async () => {
 }
 
 .btn-filter-toggle.active .count-badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
+  background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-on-primary) 50%, transparent);
+  color: var(--text-on-primary);
 }
 
 /* ---- Stats ---- */

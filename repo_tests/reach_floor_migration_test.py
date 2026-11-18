@@ -53,7 +53,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import added_entries, base_table
 
 from tools.lint._scan_helpers import tracked_paths
 
@@ -236,12 +236,12 @@ def test_no_new_hand_rolled_floor_remains_unmigrated() -> None:
     found = {rel: names for rel, names in _hand_rolled_floors().items() if rel not in _EXCLUDED_META_FLOORS}
     new = sorted(set(found) - GRANDFATHERED)
     assert not new, (
-        "hand-rolled reach-sized floor(s) not migrated to repo_tests._reach.declare and not "
-        "recorded in GRANDFATHERED:\n  "
+        "hand-rolled reach-sized floor(s) not migrated to repo_tests._reach.declare:\n  "
         + "\n  ".join(f"{rel}: {found[rel]}" for rel in new)
         + "\n\nMigrate with declare(...), re-measuring the population with a throwaway script "
-        "-- never carry the old constant across (#15928). If an open PR touches the file, add "
-        "it to GRANDFATHERED instead, naming the collision."
+        "-- never carry the old constant across (#15928). GRANDFATHERED only shrinks (the "
+        "growth check below keeps CI red), so an open PR on the file is a reason to wait, "
+        "not to add an entry."
     )
 
 
@@ -259,13 +259,9 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     )
 
 
-def _grown(current: frozenset[str], base: frozenset[str]) -> list[str]:
-    return sorted(current - base)
-
-
 def test_the_grandfathered_list_never_grows_silently() -> None:
     """Same #16147 AC4 shape as `guard_reach_meta_test.py`: a SET against the base commit (#19704)."""
-    grown = _grown(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
+    grown = added_entries(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
     assert not grown, (
         "GRANDFATHERED gained entries against the base commit -- a newly un-migrated floor "
         "needs migrating, not exempting silently:\n  " + "\n  ".join(grown)
@@ -274,6 +270,6 @@ def test_the_grandfathered_list_never_grows_silently() -> None:
 
 def test_the_growth_check_finds_an_added_entry() -> None:
     """Known positive: the check must see an addition before its silence means anything."""
-    assert _grown(GRANDFATHERED | {"repo_tests/planted_unmigrated_floor_test.py"}, GRANDFATHERED) == [
+    assert added_entries(GRANDFATHERED | {"repo_tests/planted_unmigrated_floor_test.py"}, GRANDFATHERED) == [
         "repo_tests/planted_unmigrated_floor_test.py"
     ]

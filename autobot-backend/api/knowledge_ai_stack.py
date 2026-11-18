@@ -32,8 +32,8 @@ from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.remote_read import admit_remote_read, remote_read_is_admin
 from knowledge.search_filters import (
-    extract_user_context_from_request,
-    filter_search_results_by_permission,
+    filter_for_user_id,
+    scoped_reader,
 )
 from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
@@ -117,15 +117,10 @@ async def rag_search(
                     filters=RESEARCH_QUARANTINE_FILTER,
                 )
                 kb_results = kb_results if isinstance(kb_results, list) else []
-                user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-                documents = await filter_search_results_by_permission(
-                    kb_results,
-                    user_id,
-                    user_org_id,
-                    user_group_ids,
-                    ownership_manager=getattr(knowledge_base, "ownership_manager", None),
-                )
+                documents = await filter_for_user_id(kb_results, knowledge_base, scoped_reader(current_user))  # #19860
                 logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")
+            except HTTPException:  # 401 / 503 (audit unavailable) are answers, not a failed search (#19860)
+                raise
             except Exception as e:
                 logger.warning("Local KB document retrieval failed: %s", e)
                 documents = []

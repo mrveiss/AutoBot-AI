@@ -73,7 +73,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "monitoring-version-literals",
     discover=_sources,
-    floor=523,  # mid-window: population 548, window (498, 548)
     growth=50,  # ~9%: ordinary growth between repins must not turn an unrelated PR red
     what="compose, infrastructure and Ansible yml/yaml/ini/sh files",
     roots=_ROOTS,
@@ -95,7 +94,10 @@ def home() -> dict[str, str]:
 
 
 def test_the_home_holds_the_decided_versions() -> None:
-    assert home() == {"prometheus": "2.53.0", "grafana": "11.1.0"}, "maintainer decision 2026-10-26 (#19329)"
+    assert home() == {
+        "prometheus": "2.53.0",
+        "grafana": "11.6.16",
+    }, "maintainer decisions 2026-10-26, #19804; was (#19329)"
 
 
 def test_every_statement_is_a_pinned_copy_equal_to_the_home() -> None:

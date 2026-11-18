@@ -251,6 +251,12 @@
   register: slm_requirements_stat
   tags: ['slm', 'backend']
 
+- name: "SLM | Resolve the floor interpreter (.python-version, #20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: resolve
+  tags: ['always']
+
 - name: "SLM | Check venv Python version matches target"
   ansible.builtin.shell:
     cmd: >-
@@ -265,13 +271,13 @@
   tags: ['slm', 'backend']
   check_mode: false
 
-- name: "SLM | Remove stale venv if not Python 3.14"
+- name: "SLM | Remove stale venv if not the floor Python"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.14'
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != python_interpreter_version
   tags: ['slm', 'backend']
 
 # #7052: also detect partially-corrupted venv (correct python version but
@@ -285,7 +291,7 @@
   when:
     - slm_requirements_stat.stat.exists
     - _venv_py_version.rc == 0
-    - _venv_py_version.stdout == '3.14'
+    - _venv_py_version.stdout == python_interpreter_version
   tags: ['slm', 'backend']
 
 - name: "SLM | Remove broken venv when health check failed (#7052)"
@@ -297,9 +303,9 @@
     - (_slm_venv_health.rc | default(0)) != 0
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python 3.14 virtual environment"
+- name: "SLM | Create floor-Python virtual environment"
   ansible.builtin.command:
-    cmd: python3.14 -m venv {{ slm_backend_dir }}/venv
+    cmd: "{{ python_interpreter_binary }} -m venv {{ slm_backend_dir }}/venv"
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
@@ -316,7 +322,7 @@
 # Issue #937: Sync and install autobot_shared before requirements (prometheus metrics)
 - name: "SLM | Sync autobot_shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot_shared/"
+    src: "{{ role_path }}/../../../../autobot_shared/"
     dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
       - "--chmod=o-w"  # #19503
@@ -402,13 +408,13 @@
 
 # #16641: without this, pip falls back to shelling out to the standalone
 # `virtualenv` executable, absent from these hosts -- matches the
-# interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`
+# interpreter the earlier `python_interpreter_binary -m venv {{ slm_backend_dir }}/venv`
 # task in this file already targets.
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"
     virtualenv: "{{ slm_backend_dir }}/venv"
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
   become_user: "{{ slm_user }}"
   environment:
@@ -424,6 +430,21 @@
   ansible.builtin.stat:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
   register: slm_secrets_stat
+  tags: ['slm', 'secrets']
+
+# #16299: a password given to a fresh install must not be guessable. Generated ones pass by length.
+# Only with no secrets file yet: a live install's password is its owner's to change.
+- name: "SLM | Refuse a guessable admin password on a fresh install"
+  ansible.builtin.command:
+    cmd: "python3 {{ role_path }}/../../../../autobot_shared/security/password_weakness.py"
+    stdin: "{{ slm_admin_password }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+  when:
+    - not slm_secrets_stat.stat.exists
+    - slm_admin_password | default('') | length > 0
   tags: ['slm', 'secrets']
 
 - name: "SLM | Generate security secrets"
@@ -525,6 +546,7 @@
     owner: "{{ slm_user }}"
     group: "{{ slm_group }}"
     mode: "0600"
+  diff: false  # the file carries secrets (#20941)
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']

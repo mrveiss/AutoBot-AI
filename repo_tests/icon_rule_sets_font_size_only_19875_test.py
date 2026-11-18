@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._ratchet_base import base_file_present, base_table, raised_entries
 from repo_tests._reach import declare
 
 _FRONTEND_SRC = "autobot-frontend/src"
@@ -43,17 +43,13 @@ _ICON_CLASS = re.compile(r"(?<![\w-])\.icon(?![\w-])")
 _FONT_SIZE = re.compile(r"(?<![\w-])font-size\s*:")
 _BOX_SIZE = re.compile(r"(?<![\w-])(?:width|height)\s*:")
 
-# Rules in files still held by an open PR (WorkflowRunner.vue: #20166). Delete an entry when fixed.
-PINS = {
-    "components/workflow/WorkflowRunner.vue :: .empty-list .icon": 1,
-    "components/workflow/WorkflowRunner.vue :: .no-selection .icon": 1,
-}
+# Rules that cannot be edited yet, as "<file> :: <selector>": occurrences. Down-only; all fixed (#19875).
+PINS: dict[str, int] = {}
 
 REACH_VUE_FILES = declare(
     "icon-font-size-rule-vue-files",
     discover=lambda root: [p.relative_to(root).as_posix() for p in vue_files(root / _FRONTEND_SRC)],
     roots=(_FRONTEND_SRC,),
-    floor=444,  # population 464 when measured
     growth=40,
     skips=0,
     what=".vue files scanned for .icon rules that set font-size only",
@@ -151,8 +147,9 @@ def test_no_icon_rule_sizes_by_font_size_beyond_the_pinned_ones() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(repo_root(), ("repo_tests/icon_rule_sets_font_size_only_19875_test.py",), "PINS")
-    if not base:
+    this = ("repo_tests/icon_rule_sets_font_size_only_19875_test.py",)
+    if not base_file_present(repo_root(), this):
         return  # new at this base
+    base = base_table(repo_root(), this, "PINS")
     raised = raised_entries(PINS, base)
     assert not raised, f"PINS entries rose or were added against the base (#19875): {raised}; the pin only goes down."
