@@ -61,6 +61,8 @@ python:
   - 'docker/nginx/nginx-locations.conf'
   - 'docker/nginx/nginx-slm-locations.conf'
   - '.github/workflows/co-located-smoke.yml'
+  # #21798: branch_cleanup_unlanded_changes_21798_test.py reads the cleanup workflow it guards.
+  - '.github/workflows/branch-cleanup.yml'
   # #21325: apt_retry_one_mechanism_21325_test.py reads the apt policy and wrapper, and the three workflows it guards.
   - 'docker/apt/*'
   - '.github/workflows/clean-install.yml'

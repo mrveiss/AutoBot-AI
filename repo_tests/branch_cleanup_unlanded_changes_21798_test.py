@@ -62,9 +62,7 @@ def _commit_on(repo: Path, branch: str, name: str, text: str) -> None:
 
 def _guard(repo: Path, ref: str) -> subprocess.CompletedProcess[str]:
     script = f'source "{_GUARD_LIB}"\nbranch_has_no_unlanded_changes main "{ref}"\n'
-    return subprocess.run(
-        ["bash", "-c", script], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
-    )
+    return subprocess.run(["bash", "-c", script], cwd=repo, capture_output=True, text=True, env=isolated_git_env())
 
 
 @needs_merge_tree
