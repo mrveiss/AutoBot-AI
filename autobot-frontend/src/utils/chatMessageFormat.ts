@@ -30,16 +30,45 @@ const PRE_RE = /(<pre\b[\s\S]*?<\/pre>)/
 const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
 const TRAILING_PUNCT_CHARS = '.,;:!?\'"'
 
+// Control characters are built at runtime, never written as regex escapes (ESLint no-control-regex): a literal
+// control byte in a pattern is a lint error and unreadable besides.
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+const CSI_RE = /\[[?0-9;]*[a-zA-Z]/y
+const SHORT_RE = /(?:[=>]|[()][AB012])/y
+const OSC_HEAD_RE = /\][0-9;]*/y
+
+function matchLength(re: RegExp, s: string, at: number): number {
+  re.lastIndex = at
+  const m = re.exec(s)
+  return m ? m[0].length : 0
+}
+
+/** Index just past the escape sequence whose body starts at `at` (the char after ESC), or -1 when there is none. */
+function ansiSequenceEnd(s: string, at: number): number {
+  const csi = matchLength(CSI_RE, s, at) || matchLength(SHORT_RE, s, at)
+  if (csi) return at + csi
+  const head = matchLength(OSC_HEAD_RE, s, at)
+  if (!head) return -1
+  const bel = s.indexOf(BEL, at + head)
+  if (bel >= 0) return bel + 1 // OSC ... BEL
+  const next = s.indexOf(ESC, at + head)
+  if (next < 0) return s.length // unterminated: to the end
+  return s[next + 1] === '\\' ? next + 2 : next // OSC ... ST (ESC \)
+}
+
 function stripAnsi(content: string): string {
-  return content
-    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '')
-    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '')
-    .replace(/\u001b[=>]/g, '')
-    .replace(/\u001b[()][AB012]/g, '')
-    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '')
-    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '')
-    .trim()
+  let out = ''
+  let i = 0
+  while (i < content.length) {
+    const esc = content.indexOf(ESC, i)
+    if (esc < 0) return (out + content.slice(i)).trim()
+    out += content.slice(i, esc)
+    const end = ansiSequenceEnd(content, esc + 1)
+    if (end < 0) out += ESC
+    i = end < 0 ? esc + 1 : end
+  }
+  return out.trim()
 }
 
 /** Split a matched URL into [href, trailing text that is not part of it]. */
@@ -77,7 +106,8 @@ export function linkifyBareUrls(html: string): string {
     .join('')
 }
 
-const LINK_STASH = '\u0000'
+// A private-use code point: it cannot occur in rendered text, and it is not a control character.
+const LINK_STASH = '\uE000'
 
 /** Swap every match of `re` (one capture group) for a placeholder, appending the originals to `store`. */
 function stash(html: string, re: RegExp, store: string[]): string {
@@ -92,12 +122,12 @@ function stash(html: string, re: RegExp, store: string[]): string {
 }
 
 function restoreAnchors(text: string, anchors: string[]): string {
-  return text.replace(/\u0000(\d+)\u0000/g, (_m, n) => anchors[Number(n)])
+  return text.replace(/\uE000(\d+)\uE000/g, (_m, n) => anchors[Number(n)])
 }
 
 /** Render raw chat message text to sanitised HTML (sanitising is always the LAST step). */
 export function formatChatMessageHtml(raw: string): string {
-  let content = stripProtocolTagsForDisplay(stripAnsi(raw)).replace(/\u0000/g, '')
+  let content = stripProtocolTagsForDisplay(stripAnsi(raw)).split(LINK_STASH).join('')
 
   content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_m, lang, code) => {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
