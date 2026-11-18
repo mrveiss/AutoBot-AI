@@ -48,7 +48,7 @@ security_config:
 ```
 
 **How It Works**:
-1. `UnifiedConfigManager` loads `config.yaml` at startup
+1. `ConfigManager` loads `config.yaml` at startup
 2. `SecurityLayer.__init__()` reads `security_config.enable_auth` flag (line 16 of security_layer.py)
 3. When `enable_auth = False`: `SecurityLayer.check_permission()` returns `True` for all requests (bypass mode)
 4. When `enable_auth = True`: Full RBAC enforcement with granular permissions

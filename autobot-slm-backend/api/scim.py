@@ -20,7 +20,6 @@ the identical reconcile logic runs for both SSO logins and SCIM pushes.
 """
 
 import logging
-import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -29,6 +28,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.security.constant_time import secure_compare
+from autobot_shared.user_management import last_platform_admin as last_admin
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError
 from autobot_shared.user_management.revocation_outcome import (
     REVOCATION_INCOMPLETE_MESSAGE,
     RevocationIncompleteError,
@@ -92,7 +94,7 @@ async def _require_scim_bearer(request: Request) -> None:
         )
     provided = auth_header[len("bearer ") :].strip()
     expected = await _load_scim_token()
-    if not expected or not secrets.compare_digest(provided, expected):
+    if not expected or not secure_compare(provided, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_scim_error("Invalid bearer token", "invalidCredentials"),
@@ -124,6 +126,22 @@ async def _commit_scim(db: AsyncSession) -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_scim_error(REVOCATION_INCOMPLETE_MESSAGE, None, 503),
         ) from exc
+
+
+async def _scim_last_admin_refusal(db: AsyncSession, exc: LastPlatformAdminError, *, late=False) -> HTTPException:
+    """SCIM 409 for a deprovisioning that would remove the last active platform admin (#21018).
+
+    The IdP's push is refused and the audit row of the refusal is committed, nothing else: the callers run the
+    guard before any other change of the request. RFC 7644 section 3.12 defines no ``scimType`` for this 409
+    (``uniqueness`` and ``invalidVers`` are about other conflicts), so none is sent; the stable ``code`` rides
+    in ``detail`` so an operator can find it. A *late* refusal (it arose while the request's changes were being
+    applied) rolls everything back, the denial row too, instead of committing that row alone.
+    """
+    if late:
+        await db.rollback()
+    refused = last_admin.last_admin_http_error(exc) if late else await last_admin.refuse_last_platform_admin(db, exc)
+    body = _scim_error(f"{exc.code}: {exc}", None, refused.status_code)
+    return HTTPException(status_code=refused.status_code, detail=body, headers=refused.headers)
 
 
 async def _commit_new_user(db: AsyncSession) -> None:
@@ -299,11 +317,25 @@ async def scim_replace_user(user_id: str, request: Request, db: AsyncSession = D
     fields = _extract_scim_user_fields(body)
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
-    await user_svc.update_user(user.id, email=fields["email"], display_name=fields["display_name"])
-    await _apply_active_flag(user, fields["active"], user_svc)
+    await _refuse_before_changes(user_svc, user, not fields["active"])
+    try:
+        await user_svc.update_user(user.id, email=fields["email"], display_name=fields["display_name"])
+        await _apply_active_flag(user, fields["active"], user_svc)
+    except LastPlatformAdminError as exc:  # a refusal that arose after the early check
+        raise await _scim_last_admin_refusal(db, exc, late=True) from exc
     await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
+
+
+async def _refuse_before_changes(user_svc: UserService, user: User, deactivating: bool) -> None:
+    """Answer 409 BEFORE any change of the request is applied: a refused push changes nothing (#21018)."""
+    if not deactivating:
+        return
+    try:
+        await user_svc.guard_deactivation(user.id)
+    except LastPlatformAdminError as exc:
+        raise await _scim_last_admin_refusal(user_svc.session, exc) from exc
 
 
 @router.patch("/Users/{user_id}", dependencies=[Depends(_require_scim_bearer)])
@@ -313,10 +345,24 @@ async def scim_patch_user(user_id: str, request: Request, db: AsyncSession = Dep
     user = await _get_user_or_404(user_id, db)
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
-    await _apply_patch_ops(body.get("Operations", []), user, user_svc)
+    ops = body.get("Operations", [])
+    await _refuse_before_changes(user_svc, user, any(_op_active(op) is False for op in ops))
+    try:
+        await _apply_patch_ops(ops, user, user_svc)
+    except LastPlatformAdminError as exc:  # e.g. one operation reactivates the admin, a later one deactivates it
+        raise await _scim_last_admin_refusal(db, exc, late=True) from exc
     await _commit_scim(db)
     updated = await user_svc.get_user(user.id)
     return JSONResponse(content=_user_to_scim(updated, _base_url(request)))
+
+
+def _op_active(op: dict) -> bool | None:
+    """The ``active`` value a PATCH operation sets, or None when it does not touch ``active``."""
+    path = (op.get("path") or "").lower()
+    value = op.get("value")
+    if path == "active" or (not path and isinstance(value, dict) and "active" in value):
+        return bool(value if isinstance(value, bool) else (value or {}).get("active", True))
+    return None
 
 
 async def _apply_patch_ops(ops: list[dict], user: User, user_svc: UserService) -> None:
@@ -324,9 +370,9 @@ async def _apply_patch_ops(ops: list[dict], user: User, user_svc: UserService) -
     for op in ops:
         path = (op.get("path") or "").lower()
         value = op.get("value")
-        if path == "active" or (not path and isinstance(value, dict) and "active" in value):
-            active_val = value if isinstance(value, bool) else (value or {}).get("active", True)
-            await _apply_active_flag(user, bool(active_val), user_svc)
+        active_val = _op_active(op)
+        if active_val is not None:
+            await _apply_active_flag(user, active_val, user_svc)
         elif path in ("displayname", "name.formatted"):
             await user_svc.update_user(user.id, display_name=str(value))
         elif path == "emails" and isinstance(value, list) and value:
@@ -341,7 +387,7 @@ async def _apply_patch_ops(ops: list[dict], user: User, user_svc: UserService) -
 async def _apply_active_flag(user: User, active: bool, user_svc: UserService) -> None:
     if not active:
         # Also for an inactive user: a repeat of a request whose marker write failed must queue it again (#20443).
-        await user_svc.deactivate_user(user.id)
+        await user_svc.deactivate_user(user.id)  # the last-admin guard already ran, see _refuse_before_changes
     elif active and not user.is_active:
         await user_svc.activate_user(user.id)
 
@@ -355,7 +401,10 @@ async def scim_delete_user(user_id: str, db: AsyncSession = Depends(_get_slm_db)
     user = await _get_user_or_404(user_id, db, include_deleted=True)
     context = TenantContext(is_platform_admin=True)
     user_svc = UserService(db, context)
-    await user_svc.delete_user(user.id, hard_delete=False)
+    try:
+        await user_svc.delete_user(user.id, hard_delete=False)  # the guard is its first step: nothing else pending
+    except LastPlatformAdminError as exc:  # #21018
+        raise await _scim_last_admin_refusal(db, exc) from exc
     await _commit_scim(db)
 
 

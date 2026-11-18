@@ -68,7 +68,11 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     async (fn, action) => {
       http.post.mockResolvedValue({ success: true });
       const composable = useWorkflowBuilder();
+      const waiting = (id: string) => ({ step_id: id, status: 'waiting_approval' });
+      composable.currentWorkflow.value = { workflow_id: 'wf-1', steps: [waiting('s1')] } as never;
+      http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-1', steps: [waiting('s2')] } }); // the server's next waiting step
       await expect(composable[fn]('wf-1', 's1')).resolves.toBe(true);
+      expect(composable.stepsAwaitingApproval.value.map((s) => s.step_id)).toEqual(['s2']); // replaces the answered one
       expect(http.post).toHaveBeenCalledTimes(1);
       expect(http.post.mock.calls[0][0]).toContain('control_workflow');
       expect(http.post.mock.calls[0][1]).toMatchObject({ workflow_id: 'wf-1', action, step_id: 's1' });
@@ -137,6 +141,91 @@ describe('useWorkflowBuilder workflow socket notices (#17677)', () => {
     release({ workflow: { workflow_id: 'wf-1', stale: true } });
     await flush();
     expect(currentWorkflow.value?.workflow_id).toBe('wf-2');
+  });
+
+  it('a slow answer refresh for workflow A cannot replace the displayed workflow B (#21033)', async () => {
+    let release!: (v: unknown) => void;
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockImplementation(() => new Promise((r) => { release = r; }));
+    const { currentWorkflow, approveStep } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-A', steps: [] } as never;
+    const answered = approveStep('wf-A', 's1');
+    await flush();
+    currentWorkflow.value = { workflow_id: 'wf-B', steps: [] } as never;
+    release({ workflow: { workflow_id: 'wf-A', steps: [{ step_id: 's9', status: 'waiting_approval' }] } });
+    await expect(answered).resolves.toBe(true);
+    expect(currentWorkflow.value?.workflow_id).toBe('wf-B');
+  });
+
+  it('an answer for a workflow that is not displayed still reads its status but does not display it (#21033)', async () => {
+    http.post.mockResolvedValue({ success: true });
+    http.get.mockResolvedValue({ workflow: { workflow_id: 'wf-C', steps: [] } });
+    const { currentWorkflow, approveStep } = useWorkflowBuilder();
+    currentWorkflow.value = { workflow_id: 'wf-B', steps: [] } as never;
+    await approveStep('wf-C', 's1');
+    expect(getUrls()).toContain('workflow_status/wf-C');
+    expect(currentWorkflow.value?.workflow_id).toBe('wf-B');
+  });
+
+  describe('restoring approval cards after a reload with nothing selected (#21033)', () => {
+    const list = [
+      { workflow_id: 'wf-run', steps: [{ step_id: 'a', status: 'executing' }] },
+      { workflow_id: 'wf-wait', steps: [{ step_id: 'b', status: 'waiting_approval' }] },
+    ];
+    const mockServer = () =>
+      http.get.mockImplementation((url: string) =>
+        Promise.resolve(String(url).includes('workflow_status/')
+          ? { workflow: { ...list[1], full: true } }
+          : { workflows: list }),
+      );
+
+    it('displays the first active workflow that has a waiting step, so its card renders', async () => {
+      mockServer();
+      const { loadActiveWorkflows, currentWorkflow, stepsAwaitingApproval } = useWorkflowBuilder();
+      await loadActiveWorkflows();
+      expect(currentWorkflow.value?.workflow_id).toBe('wf-wait');
+      expect(stepsAwaitingApproval.value.map((s) => s.step_id)).toEqual(['b']);
+    });
+
+    it('restores only on the initial load: a later load after the user cleared the display neither re-displays nor reads a status', async () => {
+      mockServer();
+      const { loadActiveWorkflows, currentWorkflow } = useWorkflowBuilder();
+      await loadActiveWorkflows();
+      expect(currentWorkflow.value?.workflow_id).toBe('wf-wait');
+      currentWorkflow.value = null; // the user clears the display
+      http.get.mockClear();
+      await loadActiveWorkflows(); // e.g. a socket notice or a post-start reload
+      expect(currentWorkflow.value).toBeNull();
+      expect(getUrls()).not.toContain('workflow_status');
+    });
+
+    it('never replaces a workflow that is already displayed', async () => {
+      mockServer();
+      const { loadActiveWorkflows, currentWorkflow } = useWorkflowBuilder();
+      currentWorkflow.value = { workflow_id: 'wf-run', steps: [] } as never;
+      await loadActiveWorkflows();
+      expect(currentWorkflow.value?.workflow_id).toBe('wf-run');
+      expect(getUrls()).not.toContain('workflow_status');
+    });
+
+    it('selects nothing when no active workflow waits, or when one is chosen while the status is in flight', async () => {
+      http.get.mockResolvedValue({ workflows: [list[0]] });
+      const first = useWorkflowBuilder();
+      await first.loadActiveWorkflows();
+      expect(first.currentWorkflow.value).toBeNull();
+
+      let release!: (v: unknown) => void;
+      http.get.mockImplementation((url: string) =>
+        String(url).includes('workflow_status/') ? new Promise((r) => { release = r; }) : Promise.resolve({ workflows: list }),
+      );
+      const second = useWorkflowBuilder();
+      const loading = second.loadActiveWorkflows();
+      await flush();
+      second.currentWorkflow.value = { workflow_id: 'wf-chosen', steps: [] } as never;
+      release({ workflow: { ...list[1] } });
+      await loading;
+      expect(second.currentWorkflow.value?.workflow_id).toBe('wf-chosen');
+    });
   });
 
   it('step_rejected_by_judge toasts the reason', () => {

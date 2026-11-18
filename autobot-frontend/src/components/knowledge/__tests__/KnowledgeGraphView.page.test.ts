@@ -29,7 +29,11 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ path: '/knowledge/graph' }),
   useRouter: () => ({ push: vi.fn() }),
 }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+// Partial mock: errorExtract imports the app i18n singleton, which needs the real createI18n.
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-i18n')>()),
+  useI18n: () => ({ t: (key: string) => key }),
+}))
 vi.mock('@/composables/useKnowledgeGraph', () => ({
   useKnowledgeGraph: () => ({ stats: { entityCount: 0, eventCount: 0, summaryCount: 0 } }),
 }))

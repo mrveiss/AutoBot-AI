@@ -33,6 +33,7 @@ from api.schemas_system import WhatsAppConfigRequest, WhatsAppConfigResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.webhook_signature import verify_webhook_signature
 from services.gateway.gateway_manager import GatewayManager
 from services.gateway.ingest_governor import ingest_governor
@@ -180,7 +181,7 @@ async def whatsapp_webhook_verify(request: Request) -> PlainTextResponse:
         logger.error("WhatsApp verify token not configured — failing closed")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Webhook not configured")
 
-    if mode == "subscribe" and token == stored_token:
+    if mode == "subscribe" and secure_compare(token, stored_token):
         return PlainTextResponse(content=challenge)
 
     logger.warning("WhatsApp webhook verification failed — token mismatch")

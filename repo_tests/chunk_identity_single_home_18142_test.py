@@ -25,6 +25,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.chunk_identity_baseline_18142 import BASELINE
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -34,8 +35,7 @@ _SKIP_PARTS = frozenset({"__pycache__", "node_modules", ".worktrees", "venv", ".
 
 
 def _is_test(rel: str) -> bool:
-    name = Path(rel).name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py"
+    return is_test_filename(rel, include_js=False)
 
 
 def _candidates(root: Path) -> list[str]:
