@@ -46,9 +46,9 @@ import repo_tests.egress_default_guard_17576_test as _egress_default_guard  # no
 import repo_tests.embedding_model_preserved_15502_test as _embedding_render_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_file_family_18555_test as _env_family_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_fork_guard_18094_test as _env_fork_guard  # noqa: F401 -- registers its scope
+import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
 import repo_tests.github_api_single_module_15411_test as _github_api_guard  # noqa: F401 -- registers its scope
 import repo_tests.infra_scripts_no_backend_imports_18288_test as _infra_backend_guard  # noqa: F401 -- registers its scope
-import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
 import repo_tests.knowledge_metadata_parse_canonical_18220_test as _metadata_parse_guard  # noqa: F401 -- registers its scope
 import repo_tests.migration_gate_filter_covers_what_its_tests_import_test as _migration_gate_guard  # noqa: F401 -- registers its scope
