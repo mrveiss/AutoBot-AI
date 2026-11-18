@@ -56,7 +56,6 @@ async def insert_event(event: AuditEvent) -> None:
 def _column_filters(flt: AuditFilter) -> list:
     pairs = (
         (AuditLog.actor, flt.actor_id),
-        (AuditLog.action, flt.action),
         (AuditLog.session_id, flt.session_id),
         (AuditLog.outcome, flt.outcome),
         (AuditLog.resource_type, flt.resource_type),
@@ -69,8 +68,9 @@ def _column_filters(flt: AuditFilter) -> list:
 def where_clauses(flt: AuditFilter) -> list:
     """*flt* as SQL predicates on ``audit_logs`` (ANDed)."""
     clauses = _column_filters(flt)
-    if flt.actions is not None:
-        clauses.append(AuditLog.action.in_(sorted(flt.actions)))
+    accepted = flt.action_set()  # aliases of stored rows included (#18716)
+    if accepted is not None:
+        clauses.append(AuditLog.action.in_(sorted(accepted)))
     clauses.extend(AuditLog.details[key].astext == value for key, value in flt.metadata)
     if flt.from_ts is not None:
         clauses.append(AuditLog.created_at >= datetime.fromtimestamp(flt.from_ts, tz=timezone.utc))

@@ -13,7 +13,7 @@ from typing import List
 import pytest
 
 from agents.base_agent import LocalAgent
-from agents.base_agent_types import AgentRequest, AgentResponse
+from agents.base_agent_types import AgentRequest, StandardizedAgentResponse
 from agents.declared_scope_check import INVALID_DECLARED_SCOPE, malformed_scope_response
 
 #: Every rejection the scope grammar makes, as in tests/coordination/test_work_claims.py.
@@ -32,9 +32,11 @@ class _ScopedAgent(LocalAgent):
         self._scopes = scopes
         self.ran = False
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         self.ran = True
-        return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result={})
+        return StandardizedAgentResponse(
+            request_id=request.request_id, agent_type=self.agent_type, status="success", result={}
+        )
 
     def get_capabilities(self) -> List[str]:
         return ["write"]

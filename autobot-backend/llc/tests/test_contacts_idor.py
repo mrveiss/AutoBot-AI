@@ -22,6 +22,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from testkit.canonical_gate import unauthenticated_canonical_gate
 from user_management.services import TenantContext
 
 _FIXED_USER_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
@@ -100,15 +101,13 @@ class TestContactsNoAuth:
         return TestClient(app)
 
     def test_list_contacts_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.get(f"/api/llc/contacts/{_OTHER_COMPANY}")
         assert resp.status_code == 401
 
     def test_create_contact_no_token_returns_401(self):
-        with patch("api.user_management.dependencies.get_auth_middleware") as mock_mw:
-            mock_mw.return_value.get_user_from_request.return_value = None
+        with unauthenticated_canonical_gate():
             client = self._make_unauthenticated_client()
             resp = client.post(f"/api/llc/contacts/{_OTHER_COMPANY}", json={"full_name": "Ada"})
         assert resp.status_code == 401

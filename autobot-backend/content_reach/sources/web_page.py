@@ -21,7 +21,7 @@ from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserContentBackend
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceKind, SourceReliability
 
@@ -71,7 +71,7 @@ class TrafilaturaBackend(ContentBackend):
             logger.warning("TrafilaturaBackend: trafilatura is not installed; backend unavailable")
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """GET request.url, extract text via trafilatura; raise BackendError on failure."""
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
@@ -99,7 +99,7 @@ class TrafilaturaBackend(ContentBackend):
             )
             raise BackendError(f"TrafilaturaBackend: no text extracted from {request.url!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -130,7 +130,7 @@ class JinaReaderBackend(ContentBackend):
         """Return True — Jina reader is a plain HTTP endpoint, always available."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """GET https://r.jina.ai/<url>; raise BackendError on non-200 or empty body."""
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
@@ -158,7 +158,7 @@ class JinaReaderBackend(ContentBackend):
             logger.debug("JinaReaderBackend: empty response for %r", request.url)
             raise BackendError(f"JinaReaderBackend: empty response for {request.url!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,

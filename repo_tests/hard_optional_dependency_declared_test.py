@@ -43,6 +43,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests.declared_distributions import SKIP_PARTS, declared_distributions
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _REPO_ROOT = repo_root()
@@ -191,7 +192,7 @@ def _hard_dependencies_in_source(source: str, own_dir: Path) -> set[str]:
     sample: with every real offender either declared or allowlisted, "the sweep
     found one" no longer proves the detector works.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     found: set[str] = set()
     for modules, flags in _guarded_import_blocks(tree):
         if not _flags_that_raise(tree, flags):

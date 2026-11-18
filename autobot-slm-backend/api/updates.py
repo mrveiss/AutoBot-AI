@@ -26,8 +26,8 @@ from autobot_shared import async_compat, time_utils
 from models.database import (
     CodeStatus,
     EventSeverity,
-    EventType,
     Node,
+    NodeEventType,
     UpdateInfo,
     UpdateJob,
     UpdateJobStatus,
@@ -176,7 +176,7 @@ async def _handle_successful_update(
     await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_COMPLETED,
+        NodeEventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Update job {job.job_id} completed: {len(updates)} applied",
         {"job_id": job.job_id, "applied": len(updates)},
@@ -199,7 +199,7 @@ async def _handle_failed_update(db: AsyncSession, job: UpdateJob, node_id: str, 
     await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_FAILED,
+        NodeEventType.DEPLOYMENT_FAILED,
         EventSeverity.WARNING,
         f"Update job {job.job_id} failed",
         {"job_id": job.job_id, "error": job.error},
@@ -868,7 +868,7 @@ async def _create_and_dispatch_update_job(
     await create_node_event(
         db,
         request.node_id,
-        EventType.DEPLOYMENT_STARTED,
+        NodeEventType.DEPLOYMENT_STARTED,
         EventSeverity.INFO,
         f"Update job started: {len(updates)} package(s)",
         {"job_id": job_id, "update_ids": request.update_ids},

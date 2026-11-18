@@ -49,7 +49,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Set
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from utils.validators import validate_uuid
 
 logger = get_logger(__name__)
@@ -271,4 +271,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

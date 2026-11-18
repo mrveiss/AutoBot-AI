@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 SCRIPT = Path(__file__).resolve().parent / "verify-done.sh"
 GIT = shutil.which("git") or "/usr/bin/git"
@@ -42,18 +42,11 @@ CANDIDATE = "    => CANDIDATE for removal"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would run every call this
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would run every call this
     suite makes, including `worktree add`, against the real repository
     instead of the throwaway one at ``cwd``.
     """
-    return subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=scrubbed_git_env(),
-    )
+    return git(cwd, *args)
 
 
 def _commit(repo: Path, name: str, body: str, subject: str) -> None:
@@ -67,9 +60,7 @@ def repo(tmp_path: Path) -> Path:
     """A repo with a `base` branch and one commit, plus a worktrees dir."""
     r = tmp_path / "repo"
     r.mkdir()
-    _git(r, "init", "-q", "-b", "base")
-    _git(r, "config", "user.email", "t@t")
-    _git(r, "config", "user.name", "t")
+    make_repo(r, default_branch="base")
     _commit(r, "seed.txt", "seed\n", "chore(seed): base (#1)")
     return r
 

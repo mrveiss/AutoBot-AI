@@ -25,7 +25,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_5_MINUTES
 from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.grant_scope import grants_in_scope
-from autobot_shared.user_management.models.audit import AuditAction, AuditResourceType
+from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 
 logger = get_logger(__name__)
 
@@ -395,7 +395,7 @@ async def _emit_permission_denied_audit(
             entry = audit_row(
                 user_id=user_id,
                 org_id=org_id,
-                action=AuditAction.PERMISSION_DENIED,
+                action=IdentityAuditAction.PERMISSION_DENIED,
                 resource_type=AuditResourceType.ENDPOINT,
                 resource=path,
                 outcome="denied",
@@ -411,7 +411,7 @@ async def _emit_permission_denied_audit(
         # dropped records and the other silent. Keep swallowing, since a failing
         # audit must never turn a clean 403 into a 500, but stop letting the loss
         # be invisible.
-        record_audit_write_failure_safely(AuditAction.PERMISSION_DENIED, type(exc).__name__)
+        record_audit_write_failure_safely(IdentityAuditAction.PERMISSION_DENIED, type(exc).__name__)
 
 
 def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:

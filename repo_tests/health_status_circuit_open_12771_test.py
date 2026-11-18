@@ -14,6 +14,7 @@ import ast
 from repo_tests._paths import repo_root
 
 from autobot_shared.status_enums import HealthStatus
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _REGISTRY = _ROOT / "autobot-backend/utils/service_registry.py"
@@ -38,7 +39,7 @@ def test_four_registry_members_keep_name_and_value() -> None:
 
 
 def test_registry_status_is_an_alias_not_a_class() -> None:
-    tree = ast.parse(_REGISTRY.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_REGISTRY.read_text(encoding="utf-8"))
     classes = [n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "RegistryServiceStatus"]
     aliases = [
         n.value.id

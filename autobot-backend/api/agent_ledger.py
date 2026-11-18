@@ -37,12 +37,9 @@ from autobot_shared.coordination.ledger_schemas import (
     ActivityResponse,
     ClaimsResponse,
     ConflictsResponse,
-    IdleSubscriberRow,
     IdleSubscribersResponse,
-    PeerMessageRow,
     PeerMessagesResponse,
     PresenceResponse,
-    PresenceRow,
     WaitlistsResponse,
     YieldRequestBody,
     YieldRequestResponse,
@@ -50,6 +47,7 @@ from autobot_shared.coordination.ledger_schemas import (
 from autobot_shared.coordination.yield_ask import ask_holder_to_release
 from protocols.agent_presence import get_presence_registry
 from protocols.idle_notice import active_subscriptions
+from protocols.ledger_projection_feed import idle_subscriber_row, peer_message_row, presence_row
 from protocols.peer_inbox import get_peer_inbox_directory
 from services.claim_yield import request_yield
 from user_management.services import TenantContext
@@ -71,14 +69,8 @@ async def company_scope(ctx: TenantContext = Depends(require_org_context)) -> Co
 @router.get("/ledger/presence", response_model=PresenceResponse)
 @serve_ledger
 async def ledger_presence(scope: CompanyScope = Depends(company_scope)) -> PresenceResponse:
-    """The company's live agents plus shared infrastructure, busy or idle."""
-    entries = get_presence_registry().list_live(scope.org_id)
-    rows = [
-        PresenceRow(
-            kind=e.kind.value, tenant_id=e.tenant_id, name=e.name, busy=e.busy, detail=e.detail, last_seen=e.last_seen
-        )
-        for e in entries
-    ]
+    """The company's live agents plus shared infrastructure, busy or idle, with what each is working on."""
+    rows = [presence_row(e) for e in get_presence_registry().list_live(scope.org_id)]
     return PresenceResponse(agents=rows, count=len(rows))
 
 
@@ -123,13 +115,7 @@ async def ledger_peer_messages(scope: CompanyScope = Depends(company_scope)) -> 
     infrastructure agent's inbox is not the company's to inspect.
     """
     rows = [
-        PeerMessageRow(
-            recipient_kind=kind.value,
-            recipient_name=name,
-            pending=len(queued),
-            senders=sorted({m.sender.name for m in queued}),
-            oldest_at=min(m.timestamp for m in queued),
-        )
+        peer_message_row(kind, name, queued)
         for kind, name, queued in get_peer_inbox_directory().pending_for(scope.org_id)
     ]
     return PeerMessagesResponse(recipients=rows, count=len(rows))
@@ -138,17 +124,7 @@ async def ledger_peer_messages(scope: CompanyScope = Depends(company_scope)) -> 
 @router.get("/ledger/idle-subscribers", response_model=IdleSubscribersResponse)
 async def ledger_idle_subscribers(scope: CompanyScope = Depends(company_scope)) -> IdleSubscribersResponse:
     """Agents currently waiting to be told a company peer next goes idle."""
-    rows = [
-        IdleSubscriberRow(
-            subscriber=s.subscriber,
-            target_kind=s.kind.value,
-            target_name=s.name,
-            since=s.since,
-            expires_at=s.expires_at,
-        )
-        for s in active_subscriptions()
-        if s.tenant_id == scope.org_id
-    ]
+    rows = [idle_subscriber_row(s) for s in active_subscriptions() if s.tenant_id == scope.org_id]
     return IdleSubscribersResponse(subscribers=rows, count=len(rows))
 
 
@@ -163,7 +139,14 @@ async def ledger_yield_request(
     scope: CompanyScope = Depends(company_scope),
     user_id: uuid.UUID = Depends(get_current_user_id),
 ) -> YieldRequestResponse:
-    """Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing."""
+    """Ask the holder of one of the company's claims to release it. Publishes a request; releases nothing.
+
+    The per-person rate limit (``RateLimiter.acquire_window``) fails OPEN if ITS store is
+    unreachable -- the limiter's class policy (#18607). With Redis down the ask never gets that
+    far: the claim lookup before the limiter answers the typed 503. Only a limiter store failing
+    on its own lets an ask through unlimited; it is still published once per request, never as
+    a release.
+    """
     token = await ask_holder_to_release(
         scope.org_id,
         user_id=str(user_id),

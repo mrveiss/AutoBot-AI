@@ -293,9 +293,10 @@ onMounted(focusFirst)
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.detail-section h5 i {
+.detail-section h5 .icon {
   color: var(--color-primary);
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 .section-loading {

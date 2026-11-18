@@ -33,10 +33,10 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
-import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 _SKIP_PARTS = {"node_modules", ".worktrees", "__pycache__", "venv", ".venv"}
@@ -74,7 +74,7 @@ def _blocked_prefixes(path: Path) -> Set[str]:
     with a different class name is still covered.
     """
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):  # pragma: no cover
         return set()
     prefixes: Set[str] = set()
@@ -124,15 +124,11 @@ def _neutralised() -> List[Tuple[Path, str, Path]]:
 _GUARDS = _meta_path_guards()
 _NEUTRALISED = _neutralised()
 
-#: Known instances, with the issue tracking each. Shrink-only: an entry goes when
-#: its issue closes, and a NEW pairing fails below. These are not fixed here
-#: because the fix lives in files whose suites cannot run on a sub-floor
-#: interpreter (`llc/scheduler/base.py` raises at import below Python 3.11 by
-#: deliberate design, #13369), so the change cannot be verified where it is made.
-KNOWN_NEUTRALISED: Dict[str, str] = {
-    "autobot-backend/llc/scheduler/lazy_import_test.py": "#14913",
-    "autobot-backend/llc/services/lazy_import_test.py": "#14913",
-}
+#: Known instances, with the issue tracking each. Shrink-only: an entry goes in the
+#: commit that fixes it, and a NEW pairing fails below. Empty since the two
+#: instances (the llc scheduler and llc services guards) were converted to
+#: fresh-interpreter checks (#21596), which no conftest can pre-cache.
+KNOWN_NEUTRALISED: Dict[str, str] = {}
 
 
 def test_the_sweep_found_the_guards() -> None:
@@ -143,22 +139,21 @@ def test_the_sweep_found_the_guards() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "guard,prefix,conftest",
-    _NEUTRALISED,
-    ids=lambda v: str(v.name) if isinstance(v, Path) else str(v),
-)
-def test_no_new_guard_blocks_a_prefix_its_conftest_precaches(guard: Path, prefix: str, conftest: Path) -> None:
-    rel = str(guard.relative_to(REPO_ROOT))
-    if rel in KNOWN_NEUTRALISED:
-        pytest.skip(f"{rel}: known, tracked by {KNOWN_NEUTRALISED[rel]}")
+def test_no_new_guard_blocks_a_prefix_its_conftest_precaches() -> None:
+    """Every pairing must be a known, tracked one; with none known, any pairing fails.
 
-    pytest.fail(
-        f"{rel} blocks {prefix!r} with a sys.meta_path finder, but "
-        f"{conftest.relative_to(REPO_ROOT)} puts it in sys.modules before any test runs. "
+    Asserted over the list in the body, not parametrized: an empty
+    `KNOWN_NEUTRALISED` then passes as "nothing to check" instead of reporting a
+    skip ("got empty parameter set") that the pre-board lane would have to allow.
+    """
+    new = [(g, p, c) for g, p, c in _NEUTRALISED if str(g.relative_to(REPO_ROOT)) not in KNOWN_NEUTRALISED]
+    assert not new, "\n".join(
+        f"{g.relative_to(REPO_ROOT)} blocks {p!r} with a sys.meta_path finder, but "
+        f"{c.relative_to(REPO_ROOT)} puts it in sys.modules before any test runs. "
         "Python short-circuits on the cache, so the finder is never consulted and the "
         "guard passes whatever the code does. Assert presence/absence in sys.modules "
         "for a module nothing pre-caches instead."
+        for g, p, c in new
     )
 
 

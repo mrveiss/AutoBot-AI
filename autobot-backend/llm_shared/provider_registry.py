@@ -262,7 +262,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         """
         if self._npu_pipeline_dispatcher is None:
             return 0.0
-        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+        from services.npu_pipeline.pipeline_dispatcher import PipelineWorkerState as WS
 
         online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
         if len(online) < 2:
@@ -298,7 +298,7 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         if model_bytes <= 0:
             return False
 
-        from services.npu_pipeline.pipeline_dispatcher import WorkerState as WS
+        from services.npu_pipeline.pipeline_dispatcher import PipelineWorkerState as WS
 
         online = [w for w in self._npu_pipeline_dispatcher.workers if w.state == WS.ONLINE]
         if not online:

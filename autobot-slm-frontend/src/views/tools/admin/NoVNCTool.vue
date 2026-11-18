@@ -2,6 +2,7 @@
 // Copyright (c) 2025 mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, createLogger } from '@autobot/ui'
 /**
  * NoVNCTool - noVNC Remote Desktop Viewer
  *
@@ -14,7 +15,6 @@ import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
 import { getVNCHosts, getSlmApiBase } from '@/config/ssot-config'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NoVNCTool')
 const api = useSlmApi()
@@ -126,9 +126,7 @@ onMounted(() => fetchDynamicEndpoints())
         </div>
       </div>
 
-      <div v-if="error" class="m-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
       <div class="flex-1 overflow-hidden">
         <VncViewer v-model="isConnected" :host="currentHost" :loading="loading" class="h-full" />

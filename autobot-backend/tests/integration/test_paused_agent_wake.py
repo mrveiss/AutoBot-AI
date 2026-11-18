@@ -123,7 +123,7 @@ _hb_mod, _sched_mod, _Base = _load_models_and_scheduler()
 # Undo the sys.modules stubs so later test modules import the real code
 # (GH#11604 — the stubs shadowed services.task_claim for the whole session).
 _stubs.restore()
-AgentStatus = _hb_mod.AgentStatus
+HeartbeatStatus = _hb_mod.HeartbeatStatus
 AgentRuntimeState = _hb_mod.AgentRuntimeState
 AgentWakeupRequest = _hb_mod.AgentWakeupRequest
 HeartbeatRun = _hb_mod.HeartbeatRun
@@ -159,8 +159,8 @@ async def _seed_agent(factory: async_sessionmaker, agent_id: str, status: str) -
             id=uuid.uuid4(),
             agent_id=agent_id,
             status=status,
-            paused_reason="budget hard-stop" if status == AgentStatus.PAUSED.value else None,
-            paused_by="system:budget" if status == AgentStatus.PAUSED.value else None,
+            paused_reason="budget hard-stop" if status == HeartbeatStatus.PAUSED.value else None,
+            paused_by="system:budget" if status == HeartbeatStatus.PAUSED.value else None,
         )
         session.add(state)
         await session.commit()
@@ -172,7 +172,7 @@ async def _set_agent_active(factory: async_sessionmaker, agent_id: str) -> None:
     async with factory() as session:
         result = await session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         state = result.scalar_one()
-        state.status = AgentStatus.ACTIVE.value
+        state.status = HeartbeatStatus.ACTIVE.value
         state.paused_reason = None
         state.paused_at = None
         state.paused_by = None
@@ -230,7 +230,7 @@ class TestPausedAgentWakeEndToEnd:
     async def test_resume_fires_run_after_pause(self, db_factory):
         """After resuming a paused agent, _run_once creates a HeartbeatRun."""
         agent_id = str(uuid.uuid4())
-        state = await _seed_agent(db_factory, agent_id, AgentStatus.PAUSED.value)
+        state = await _seed_agent(db_factory, agent_id, HeartbeatStatus.PAUSED.value)
         await _queue_wakeup(db_factory, agent_id, state.id, priority=0, context={"task_id": "t1"})
 
         scheduler = HeartbeatScheduler(db_factory)
@@ -257,7 +257,7 @@ class TestPausedAgentWakeEndToEnd:
     async def test_wakeup_context_carried_into_run(self, db_factory):
         """The HeartbeatRun row carries the wakeup request's context payload."""
         agent_id = str(uuid.uuid4())
-        state = await _seed_agent(db_factory, agent_id, AgentStatus.PAUSED.value)
+        state = await _seed_agent(db_factory, agent_id, HeartbeatStatus.PAUSED.value)
         ctx = {"task_id": "task-abc", "reason": "blocker-resolved"}
         await _queue_wakeup(db_factory, agent_id, state.id, priority=5, context=ctx)
 
@@ -288,7 +288,7 @@ class TestPausedAgentWakeEndToEnd:
     async def test_wakeup_request_consumed_after_resume(self, db_factory):
         """The queued wakeup request is marked consumed once the run fires post-resume."""
         agent_id = str(uuid.uuid4())
-        state = await _seed_agent(db_factory, agent_id, AgentStatus.PAUSED.value)
+        state = await _seed_agent(db_factory, agent_id, HeartbeatStatus.PAUSED.value)
         await _queue_wakeup(db_factory, agent_id, state.id, priority=0, context={"task_id": "t2"})
 
         await _set_agent_active(db_factory, agent_id)
@@ -308,7 +308,7 @@ class TestPausedAgentWakeEndToEnd:
     async def test_highest_priority_wakeup_consumed_first(self, db_factory):
         """With multiple queued wakeups, the highest-priority request is consumed first."""
         agent_id = str(uuid.uuid4())
-        state = await _seed_agent(db_factory, agent_id, AgentStatus.PAUSED.value)
+        state = await _seed_agent(db_factory, agent_id, HeartbeatStatus.PAUSED.value)
         await _queue_wakeup(db_factory, agent_id, state.id, priority=1, context={"task_id": "low"})
         await _queue_wakeup(db_factory, agent_id, state.id, priority=10, context={"task_id": "high"})
         await _queue_wakeup(db_factory, agent_id, state.id, priority=5, context={"task_id": "mid"})
@@ -341,7 +341,7 @@ class TestPausedAgentWakeEndToEnd:
     async def test_paused_agent_still_blocks_run_between_queue_and_resume(self, db_factory):
         """A wakeup queued while paused does not bypass the pause guard."""
         agent_id = str(uuid.uuid4())
-        state = await _seed_agent(db_factory, agent_id, AgentStatus.PAUSED.value)
+        state = await _seed_agent(db_factory, agent_id, HeartbeatStatus.PAUSED.value)
         await _queue_wakeup(db_factory, agent_id, state.id, priority=99, context={"task_id": "urgent"})
 
         scheduler = HeartbeatScheduler(db_factory)
