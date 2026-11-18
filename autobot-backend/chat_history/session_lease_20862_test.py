@@ -112,14 +112,16 @@ async def test_two_concurrent_snapshot_saves_keep_both(manager, tmp_path):
     assert sorted(_texts(tmp_path, "s2")) == ["first", "from-a", "from-b"]
 
 
+@pytest.mark.parametrize("order", ["save_first", "owner_first"])
 @pytest.mark.parametrize("round_", range(5))
-async def test_owner_change_during_a_save_is_preserved(manager, tmp_path, round_):
-    sid = f"s3-{round_}"
+async def test_owner_change_during_a_save_is_preserved(manager, tmp_path, round_, order):
+    sid = f"s3-{order}-{round_}"
     await manager.save_session(sid, messages=[_msg("first", "t0")], metadata={"owner": "alice"})
-    await asyncio.gather(
-        manager.save_session(sid, messages=[_msg("first", "t0"), _msg("second", "t1")]),
-        manager.update_session_metadata(sid, {"owner": "bob"}),
-    )
+    save = manager.save_session(sid, messages=[_msg("first", "t0"), _msg("second", "t1")])
+    owner_write = manager.update_session_metadata(sid, {"owner": "bob"})
+    # gather schedules its awaitables in argument order, so this fixes which one reaches the lease first
+    pair = (save, owner_write) if order == "save_first" else (owner_write, save)
+    await asyncio.gather(*pair)
     data = _on_disk(tmp_path, sid)
     assert data["metadata"]["owner"] == "bob"
     assert [m["text"] for m in data["messages"]] == ["first", "second"]

@@ -34,13 +34,26 @@
 # skipped as "already up to date": no merge, no push.
 #
 # WHAT A `[skip ci]` HEAD MEANS FOR A PR. Its required checks are not run, so they
-# stay "expected" (pending), never green or red, until a new head commit runs them.
+# stay "expected" (pending), never green or red, until a run is started for the head.
 # - A merge train runs full CI on its OWN merge commit, so a synced PR that lands
 #   through a train needs nothing more. The train branch itself (`train-*`) is never
 #   synced: a `[skip ci]` head would supersede the train's own run and leave it with
 #   no suite, so the train's builder merges main into it with CI (#19724).
-# - Every PR lands through a train. Pending checks on a `[skip ci]` head do not block
-#   hand-off to the trainmaster; red checks still do.
+# - Pending checks on a `[skip ci]` head do not block hand-off to the trainmaster; red
+#   checks still do.
+# - A PR that lands on its own, not in a train, needs its suite on the synced head. The
+#   sync starts it ON REQUEST (#21577): dispatch this workflow with the PR number,
+#     gh workflow run sync-branches-with-main.yml -f start_ci_for_pr=<PR number>
+#   and the run (that request only, no other sync) pushes ONE empty commit WITHOUT the
+#   marker onto that PR's branch with the same push token, so the ordinary `pull_request`
+#   pipeline runs on it, unchanged. It refuses (exit 1, `::error::`) anything but an open,
+#   non-draft, same-repo PR into main on a branch the sync writes to, that is 0 behind main
+#   (a branch behind is merged by the ordinary sync first; ask again) and whose head is the
+#   commit this run fetched; it is a notice and no commit when the head already has a
+#   non-cancelled `pull_request` run of ci.yml. The commit's parent is that head and the push
+#   is plain, so a branch that moved meanwhile is rejected, never overwritten. If main moves
+#   before the PR lands, the next sync merge puts a `[skip ci]` head back on top and the request
+#   has to be repeated (a no-op if the suite already ran on that head).
 # #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
 # stay gone: there is no run to reset mid-flight and none to approve.
 #
@@ -73,13 +86,23 @@ on:
         description: 'Report what would change without pushing, labelling or commenting'
         type: boolean
         default: false
+      start_ci_for_pr:
+        description: 'A pull request number: push ONE empty commit (no skip marker) onto its synced head so its suite runs. Does only that.'
+        type: string
+        default: ''
 
 # One at a time: two runs would race on the same branches. `cancel-in-progress:
 # false` because a run that is mid-push must finish; cancelling it would leave
 # some branches merged and others not, with no record of which (#15306). A pushed
 # main queues behind the running sync, and the queued run syncs to the newer main.
+#
+# A start_ci_for_pr request (#21577) has its own group per PR number, so a queued request is not
+# cancelled unrun by the single pending slot of the sync's group when a push to main or the cron
+# arrives. For every other run the input is empty and the group is exactly `sync-branches-with-main`.
+# A request and a sync can then run at the same time on one branch: both push plainly with the head
+# they verified as parent, so whichever pushes second is rejected (head-moved) and nothing is overwritten.
 concurrency:
-  group: sync-branches-with-main
+  group: sync-branches-with-main${{ inputs.start_ci_for_pr && format('-start-ci-{0}', inputs.start_ci_for_pr) || '' }}
   cancel-in-progress: false
 
 permissions: {}
@@ -101,6 +124,8 @@ jobs:
       pull-requests: write
       # Creating the two sync labels the first time goes through the issues API.
       issues: write
+      # Listing the workflow runs of a head (the "suite already started" check of start_ci_for_pr) needs it.
+      actions: read
 
     steps:
       - name: Require AUTOBOT_PUSH_TOKEN
@@ -139,6 +164,8 @@ jobs:
           AUTOBOT_PUSH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           DRY_RUN: ${{ inputs.dry_run }}
+          # Untrusted text: only ever read from this variable, validated as digits by the script.
+          START_CI_FOR_PR: ${{ inputs.start_ci_for_pr }}
           # The shared git runner's per-call timeout (default 30s, sized for probes).
           # A merge or push on a full clone of this repository needs more.
           AUTOBOT_GIT_PROBE_TIMEOUT_SECONDS: '600'
@@ -153,4 +180,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           args=(--base main)
           if [ "${DRY_RUN:-false}" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "${START_CI_FOR_PR:-}" ]; then args+=(--start-ci-for-pr "${START_CI_FOR_PR}"); fi
           python3 pipeline-scripts/branch_sync.py "${args[@]}"

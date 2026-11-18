@@ -44,11 +44,12 @@ const PROCESSES = [{ role_id: 'r1', role_name: 'Head of Sales', workflow_id: 'wf
 const TOOLS = [{ role_id: 'r1', role_name: 'Head of Sales', tool_name: 'web_search' }]
 
 function member(viewerRole: string | null, canManage = viewerRole === 'owner' || viewerRole === 'admin') {
-  return [{ user_id: 'u1', display_name: 'Ada', role: viewerRole ?? 'member', viewer_role: viewerRole, viewer_can_manage: canManage }]
+  return { members: [{ user_id: 'u1', display_name: 'Ada', role: viewerRole ?? 'member' }], viewer_role: viewerRole, viewer_can_manage: canManage }
 }
 
 function respond(members: unknown): void {
   get.mockImplementation((url: string) => {
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
     if (url.includes('/members')) return typeof members === 'function' ? (members as () => unknown)() : Promise.resolve(members)
     if (url.includes('/tool-nodes')) return Promise.resolve({ nodes: TOOLS })
     if (url.includes('/process-nodes')) return Promise.resolve({ nodes: PROCESSES })

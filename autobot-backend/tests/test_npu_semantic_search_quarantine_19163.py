@@ -5,6 +5,7 @@
 """#19163: the NPU engine's retrieval paths that bypass KB.search withhold research-quarantined facts."""
 
 import asyncio
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -43,8 +44,8 @@ def test_basic_fallbacks_pass_filters_by_keyword_not_into_the_wrong_slot():
     obj = _engine()
     obj.knowledge_base = SimpleNamespace(vector_store=None, vector_index=None, search=AsyncMock(return_value=[]))
     asyncio.run(obj._perform_vector_search("q", 7, {"a": 1}))
-    call = obj.knowledge_base.search.await_args
-    assert call.args == ("q",) and call.kwargs == {"top_k": 7, "filters": {"a": 1}, "mode": "text"}
+    call = obj.knowledge_base.search.await_args  # KB.search's gate, pinned to the CPU leg (#20940)
+    assert call.args == ("q",) and call.kwargs == {"top_k": 7, "filters": {"a": 1}, "hardware_backend": "cpu"}
 
 
 def test_hybrid_index_path_withholds_quarantined(monkeypatch):
@@ -70,3 +71,35 @@ def test_single_modality_chroma_conversion_withholds_quarantined(monkeypatch):
     obj.collections["text"] = SimpleNamespace(query=MagicMock(return_value=found))
     results = obj._search_single_modality("text", mod.np.zeros(3), 5, 0.0)
     assert [r.doc_id for r in results] == ["good"]
+
+
+def _fallback_engine() -> NPUSemanticSearch:
+    obj = _engine()
+    obj.knowledge_base = SimpleNamespace(vector_store=None, vector_index=None, search=AsyncMock(return_value=[]))
+    return obj
+
+
+def test_error_fallback_goes_through_kb_search_on_the_cpu_leg():
+    """The withholding itself is KB.search's: knowledge/quarantine_callers_19144_test.py drives it for real."""
+    obj = _fallback_engine()
+    asyncio.run(obj._handle_search_error(RuntimeError("x"), "q", 5, None, 0.0))
+    assert obj.knowledge_base.search.await_args.kwargs == {"top_k": 5, "filters": None, "hardware_backend": "cpu"}
+
+
+_KB_SEARCH_CALL = re.compile(r"knowledge_base\.search\(([^\n]*)\)")
+
+
+def _unpinned_kb_search_calls(src: str) -> list:
+    return [args for args in _KB_SEARCH_CALL.findall(src) if 'hardware_backend="cpu"' not in args]
+
+
+def test_npu_module_calls_kb_search_only_on_the_cpu_leg():
+    """#20940: an unpinned ``KB.search`` dispatches back into this NPU engine and recurses."""
+    import inspect
+
+    import npu_semantic_search as mod
+
+    src = inspect.getsource(mod)
+    assert len(_KB_SEARCH_CALL.findall(src)) == 2  # both fallbacks: a zero would mean the matcher is blind
+    assert _unpinned_kb_search_calls(src) == []
+    assert _unpinned_kb_search_calls("self.knowledge_base.search(q, top_k=5)") == ["q, top_k=5"]  # control

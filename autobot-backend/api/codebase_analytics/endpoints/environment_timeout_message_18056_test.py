@@ -23,6 +23,8 @@ from api.codebase_analytics.endpoints import environment
 )
 async def test_the_message_states_the_deadline_of_the_path_taken(use_llm_filter, deadline):
     with patch.object(environment, "_execute_env_analysis", AsyncMock(return_value=None)):
-        response = await environment._analyze_and_return_env_result(None, "/x", ["p"], use_llm_filter, "model", "all")
+        response = await environment._analyze_and_return_env_result(
+            None, "/x", ["p"], use_llm_filter, "model", "all", "src1"
+        )
     body = json.loads(response.body)
     assert f"timed out after {deadline}s" in json.dumps(body)

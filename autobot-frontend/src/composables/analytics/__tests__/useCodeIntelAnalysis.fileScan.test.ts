@@ -33,7 +33,7 @@ function setup() {
     rootPath: ref('/src'),
     sourceIdParam: computed(() => ''),
     sourceIdQuery: computed(() => ({})),
-    withSourceId: (url: string) => url,
+    withSourceId: (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=s1`,
     analyzing: ref(false),
     t: (key: string) => key,
     showToast: vi.fn(),

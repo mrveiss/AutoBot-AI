@@ -42,6 +42,7 @@ async def _refused(coro):
     return info.value
 
 
+_PERSON = "00000000-0000-4000-8000-000000000001"  # the session user the work-item routes record (#20521)
 BAD = ["payload.exe", "a/b.txt", "..\\x.txt", "noextension", "tool.msi", ""]
 BAD_AUDIO = BAD + ["notes.txt", "evil.sh"]
 BAD_IMAGE = BAD + ["x.wav", "page.html"]
@@ -98,6 +99,30 @@ async def test_agent_attachment_refuses_a_bad_name(name, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_work_item_attachment_refuses_a_non_person_before_reading_the_body(monkeypatch):
+    async def get(session, work_item_id):
+        return SimpleNamespace(company_id="org")
+
+    monkeypatch.setattr(work_items, "_service", lambda: SimpleNamespace(get=get))
+    upload = FakeUpload("notes.txt")
+
+    async def read(size=-1):
+        raise AssertionError("the body was read for a caller that is refused")
+
+    upload.read = read
+    with pytest.raises(HTTPException) as refused:
+        await work_items.upload_attachment(
+            "w1",
+            "org",
+            upload,
+            session=None,
+            _current_user={"auth_method": "run_jwt"},
+            ctx=SimpleNamespace(org_id="org"),
+        )
+    assert refused.value.status_code == 401
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("name", BAD)
 async def test_work_item_attachment_refuses_a_bad_name(name, monkeypatch):
     async def get(session, work_item_id):
@@ -106,7 +131,9 @@ async def test_work_item_attachment_refuses_a_bad_name(name, monkeypatch):
     monkeypatch.setattr(work_items, "_service", lambda: SimpleNamespace(get=get))
     ctx = SimpleNamespace(org_id="org")
     await _refused(
-        work_items.upload_attachment("w1", "org", FakeUpload(name), None, None, session=None, _current_user={}, ctx=ctx)
+        work_items.upload_attachment(
+            "w1", "org", FakeUpload(name), session=None, _current_user={"id": _PERSON}, ctx=ctx
+        )
     )
 
 
