@@ -31,7 +31,7 @@
         <NavItemIcon :item="item" class="h-5 w-5" />
         <span
           v-if="badge > 0"
-          class="absolute -right-0.5 -top-0.5 min-w-[1rem] rounded-full bg-autobot-primary px-1 text-center text-[10px] font-semibold leading-4 text-white"
+          class="absolute -right-0.5 -top-0.5 min-w-[1rem] rounded-full bg-autobot-primary px-1 text-center text-[10px] font-semibold leading-4 text-autobot-text-on-primary"
           data-testid="nav-badge"
         >{{ badge }}</span>
       </router-link>

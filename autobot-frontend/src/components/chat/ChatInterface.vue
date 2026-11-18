@@ -404,7 +404,7 @@ const contextWindowProps = computed(() => ({
   usagePercent: _ctxWindow.usagePercent.value,
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
-  hasData: _ctxWindow.hasData.value,
+  hasData: _ctxWindow.hasData.value, loadError: _ctxWindow.loadError.value,
   isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
 

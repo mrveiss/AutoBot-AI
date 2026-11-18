@@ -14,7 +14,6 @@ from typing import Dict, List, Tuple
 
 import aiofiles
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.source_scope import (
@@ -30,6 +29,7 @@ from tasks.analytics_tasks import run_import_tree_analysis
 from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
 from .shared import (
     INTERNAL_MODULE_PREFIXES,
@@ -239,6 +239,7 @@ async def _scan_import_tree_live(source_id: str) -> Tuple[Dict[str, List[Dict]],
     operation="get_import_tree",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_import_tree(
     source_id: SourceIdQuery,
 ):
@@ -273,15 +274,13 @@ async def get_import_tree(
     # Build result with bidirectional relationships
     import_tree = _build_import_tree(file_imports, file_imported_by)
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "source_id": source_id,
-            "import_tree": import_tree,
-            "summary": _build_summary(import_tree),
-            "storage_type": storage_type,
-        }
-    )
+    return {
+        "status": "success",
+        "source_id": source_id,
+        "import_tree": import_tree,
+        "summary": _build_summary(import_tree),
+        "storage_type": storage_type,
+    }
 
 
 async def _analyze_file_imports(

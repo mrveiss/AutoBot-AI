@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autobot_shared.async_compat import run_or_schedule
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from conversation_file_quota_owner_schema import ensure_quota_owner_schema
+from conversation_file_schema_upgrades import apply_schema_upgrades
 
 logger = get_logger(__name__)
 
@@ -145,7 +145,7 @@ class ConversationFilesMigration:
         try:
             # Execute schema as a script (handles multiple statements)
             cursor.executescript(schema_sql)
-            ensure_quota_owner_schema(self.connection)  # a table made before #20678 gains the column
+            apply_schema_upgrades(self.connection)  # a table made by an older release gains what it lacks
             logger.info("Schema executed successfully")
 
         except sqlite3.Error as e:
@@ -533,6 +533,7 @@ async def rollback_migration():
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
