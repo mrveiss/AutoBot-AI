@@ -25,6 +25,7 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from chat_workflow import limits
+from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
@@ -33,7 +34,7 @@ from chat_workflow.tool_call_grammar import (
     normalize_tool_call_text,
 )
 from chat_workflow.tool_call_loop import framed_tool_output
-from chat_workflow.vision_capability import model_supports_vision, refresh_vision_capability
+from chat_workflow.vision_capability import image_fits_budget, model_supports_vision, refresh_vision_capability
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
@@ -1876,18 +1877,8 @@ before summarizing.
 {instructions}"""
 
     def _image_fits_budget(self, prompt: str, model_name: str) -> bool:
-        """Gate image attachment on the context budget (#11538).
-
-        Uses ContextWindowManager's token estimate plus the fixed per-image
-        token cost (VISION_IMAGE_TOKEN_ESTIMATE) so a screenshot never
-        silently blows the model's max-history-token budget.
-        """
-        from context_window_manager import ContextWindowManager
-
-        mgr = ContextWindowManager()
-        prompt_tokens = mgr.estimate_tokens(prompt)
-        max_tokens = mgr.get_max_history_tokens(model_name)
-        return (prompt_tokens + VISION_IMAGE_TOKEN_ESTIMATE) <= max_tokens
+        """Gate image attachment on the context budget (#11538); see vision_capability."""
+        return image_fits_budget(prompt, model_name, VISION_IMAGE_TOKEN_ESTIMATE)
 
     def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict]:
         """Build the OpenAI-style image content block for an OpenAI-compatible
@@ -2378,6 +2369,7 @@ before summarizing.
             api_kwargs=api_kwargs,
             image_b64=latest_screenshot,
         )
+        streamed_ids: set[str] = set()
         # #19753: a provider failure before any output fails over (not-acted guard); see llm_failover.
         async for item in stream_with_failover(IterationCall(self, ctx, iteration, current_prompt), open_stream):
             if isinstance(item, tuple):
@@ -2386,6 +2378,8 @@ before summarizing.
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
                 is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get("streaming", False)
+                if marker := stream_identity_marker(item, iteration, streamed_ids):  # #21846
+                    ctx.workflow_messages.append(marker)
                 if not is_streaming_chunk:
                     # Issue #13295: stamp the iteration that produced this
                     # message so _build_persist_batch can interleave it with
@@ -2934,6 +2928,8 @@ before summarizing.
         llm_response: str,
         batch: List[Dict[str, Any]],
         iteration: int | None = None,
+        streamed_id: str | None = None,
+        streamed_at: float | None = None,
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for one iteration's completed prose (#13214).
 
@@ -2978,6 +2974,8 @@ before summarizing.
             },
             None,
             sources=[],
+            message_id=streamed_id,
+            created_at=streamed_at,
         )
 
     def _attach_model_and_citations(
@@ -3036,6 +3034,8 @@ before summarizing.
                     wf_msg.metadata,
                     None,
                     sources=_kb_sources_from_citations(kb_citations),
+                    message_id=wf_msg.id,
+                    created_at=wf_msg.timestamp,
                 )
             )
         return batch
@@ -3066,11 +3066,14 @@ before summarizing.
         # though it is placed AFTER the prose entry in the final order.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
 
+        streamed_id, streamed_at = streamed_prose_identity(iter_messages)  # #21846
         final_entry = self._build_final_response_entry(
             chat_mgr,
             response_text,
             batch + tool_entries,
             iteration=iteration,
+            streamed_id=streamed_id,
+            streamed_at=streamed_at,
         )
         entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)

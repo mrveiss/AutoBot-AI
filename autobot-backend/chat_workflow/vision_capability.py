@@ -86,3 +86,16 @@ async def refresh_vision_capability(http_client, ollama_endpoint: str, model_nam
         return
     if isinstance(caps, list):
         _capability_cache[key] = (time.monotonic() + VISION_CAPABILITY_CACHE_TTL_S, "vision" in caps)
+
+
+def image_fits_budget(prompt: str, model_name: str, image_token_estimate: int) -> bool:
+    """Gate image attachment on the context budget (#11538).
+
+    Uses ContextWindowManager's token estimate plus the fixed per-image token
+    cost so a screenshot never silently blows the model's max-history-token budget.
+    """
+    from context_window_manager import ContextWindowManager
+
+    mgr = ContextWindowManager()
+    prompt_tokens = mgr.estimate_tokens(prompt)
+    return (prompt_tokens + image_token_estimate) <= mgr.get_max_history_tokens(model_name)
