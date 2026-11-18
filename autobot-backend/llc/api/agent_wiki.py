@@ -27,11 +27,9 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..services.agent_wiki_service import AgentWikiService
+from ..services.accessors import get_agent_wiki_service
 
 router = APIRouter(prefix="/agents", tags=["llc-agent-wiki"])
-
-_svc = AgentWikiService()
 
 
 class WikiEntryCreate(BaseModel):
@@ -84,7 +82,7 @@ async def list_wiki_entries(
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[WikiEntryRead]:
-    entries = await _svc.list_entries(session, agent_id, ctx.org_id, namespace)
+    entries = await get_agent_wiki_service().list_entries(session, agent_id, ctx.org_id, namespace)
     return [WikiEntryRead.from_orm_entry(e) for e in entries]
 
 
@@ -97,7 +95,7 @@ async def create_wiki_entry(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
     try:
-        entry = await _svc.create_entry(
+        entry = await get_agent_wiki_service().create_entry(
             session,
             agent_id=agent_id,
             company_id=ctx.org_id,
@@ -123,7 +121,7 @@ async def get_wiki_entry(
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
-    entry = await _svc.get_entry(session, entry_id, agent_id, ctx.org_id)
+    entry = await get_agent_wiki_service().get_entry(session, entry_id, agent_id, ctx.org_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Wiki entry not found")
     return WikiEntryRead.from_orm_entry(entry)
@@ -138,10 +136,10 @@ async def update_wiki_entry(
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
-    entry = await _svc.get_entry(session, entry_id, agent_id, ctx.org_id)
+    entry = await get_agent_wiki_service().get_entry(session, entry_id, agent_id, ctx.org_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Wiki entry not found")
-    updated = await _svc.update_entry(
+    updated = await get_agent_wiki_service().update_entry(
         session,
         entry,
         title=body.title,
@@ -161,8 +159,8 @@ async def delete_wiki_entry(
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    entry = await _svc.get_entry(session, entry_id, agent_id, ctx.org_id)
+    entry = await get_agent_wiki_service().get_entry(session, entry_id, agent_id, ctx.org_id)
     if entry is None:
         raise HTTPException(status_code=404, detail="Wiki entry not found")
-    await _svc.delete_entry(session, entry)
+    await get_agent_wiki_service().delete_entry(session, entry)
     await session.commit()

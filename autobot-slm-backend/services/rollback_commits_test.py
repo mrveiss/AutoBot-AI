@@ -1,0 +1,155 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""The commit list and the server-side validation of the chosen commit (#20214), against real git."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from autobot_shared.isolated_git import git, make_repo
+from services.rollback_commits import (
+    ROLLBACK_SUPPORT_PATH,
+    RollbackRefused,
+    list_candidates,
+    require_before_deployed,
+    resolve_target,
+)
+
+
+def _git(repo: Path, *args: str) -> str:
+    return git(repo, *args).stdout.strip()
+
+
+def _commit(repo: Path, name: str, subject: str, support: bool = True) -> str:
+    (repo / name).write_text(subject, encoding="utf-8")
+    _git(repo, "add", name)
+    if support:  # a commit that ships the module that reads the rollback ref out of the resume plan
+        target = repo / ROLLBACK_SUPPORT_PATH
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# reads deploy_ref\n", encoding="utf-8")
+        _git(repo, "add", ROLLBACK_SUPPORT_PATH)
+    _git(repo, "commit", "-q", "-m", subject)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> dict:
+    """main has three commits (origin/main points at the third); a side branch has one more that is not on main."""
+    root = make_repo(tmp_path / "code_source")
+    old = _commit(root, "o.txt", "before rollback support", support=False)
+    first = _commit(root, "a.txt", "first change")
+    second = _commit(root, "b.txt", "second change")
+    third = _commit(root, "c.txt", "third change")
+    _git(root, "update-ref", "refs/remotes/origin/main", third)
+    _git(root, "checkout", "-q", "-b", "side", first)
+    side = _commit(root, "d.txt", "never reviewed into main")
+    _git(root, "checkout", "-q", "main")
+    return {"path": str(root), "old": old, "first": first, "second": second, "third": third, "side": side, "root": root}
+
+
+async def test_candidates_are_the_ancestors_of_the_remote_head_with_dates_and_subjects(repo):
+    commits = await list_candidates(repo["path"], "origin", "main", repo["third"])
+    assert [c.commit for c in commits] == [repo["third"], repo["second"], repo["first"]]
+    assert [c.subject for c in commits] == ["third change", "second change", "first change"]
+    assert all(c.date.startswith("20") and "T" in c.date for c in commits)
+    assert repo["side"] not in [c.commit for c in commits]
+
+
+async def test_candidate_list_is_capped(repo):
+    assert len(await list_candidates(repo["path"], "origin", "main", repo["third"], limit=2)) == 2
+
+
+async def test_an_ancestor_is_accepted(repo):
+    info = await resolve_target(repo["path"], "origin", "main", repo["second"])
+    assert (info.commit, info.subject) == (repo["second"], "second change")
+
+
+async def test_a_commit_that_is_not_an_ancestor_of_the_remote_head_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not part of main"):
+        await resolve_target(repo["path"], "origin", "main", repo["side"])
+
+
+async def test_an_unknown_commit_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not in the code source"):
+        await resolve_target(repo["path"], "origin", "main", "0" * 40)
+
+
+@pytest.mark.parametrize(
+    "junk",
+    [
+        "",
+        "main",
+        "HEAD",
+        "abc123",
+        "--output=pwned",
+        "-O",
+        "--upload-pack=touch pwned",
+        "../../etc/passwd",
+        "A" * 40,
+        "g" * 40,
+        ("a" * 40) + "\n",
+        "x; touch pwned",
+        None,
+        12345,
+    ],
+)
+async def test_junk_and_option_like_input_is_refused_before_git_runs(repo, junk):
+    with pytest.raises(RollbackRefused, match="Choose a commit from the list"):
+        await resolve_target(repo["path"], "origin", "main", junk)
+    assert not (repo["root"] / "pwned").exists()
+    assert not Path("pwned").exists()
+
+
+async def test_a_branch_name_that_is_not_a_safe_ref_is_refused(repo):
+    with pytest.raises(RollbackRefused):
+        await resolve_target(repo["path"], "origin", "--main", repo["second"])
+
+
+async def test_a_commit_that_predates_rollback_support_is_not_offered(repo):
+    commits = await list_candidates(repo["path"], "origin", "main", repo["third"])
+    assert repo["old"] not in [c.commit for c in commits]
+    assert [c.subject for c in commits][-1] == "first change"
+
+
+async def test_a_commit_that_predates_rollback_support_is_refused_plainly(repo):
+    with pytest.raises(RollbackRefused, match="predates rollback support"):
+        await resolve_target(repo["path"], "origin", "main", repo["old"])
+
+
+async def test_commits_newer_than_the_deployed_one_are_not_offered(repo):
+    commits = await list_candidates(repo["path"], "origin", "main", repo["second"])
+    assert [c.commit for c in commits] == [repo["second"], repo["first"]]
+
+
+async def test_nothing_is_offered_when_the_deployed_commit_is_unknown(repo):
+    assert await list_candidates(repo["path"], "origin", "main", None) == []
+    assert await list_candidates(repo["path"], "origin", "main", "not a commit") == []
+
+
+async def test_a_strictly_earlier_commit_is_accepted(repo):
+    await require_before_deployed(repo["path"], repo["first"], repo["third"])
+
+
+async def test_a_commit_newer_than_the_deployed_one_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not earlier"):
+        await require_before_deployed(repo["path"], repo["third"], repo["second"])
+
+
+async def test_the_deployed_commit_itself_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="already runs"):
+        await require_before_deployed(repo["path"], repo["second"], repo["second"])
+
+
+async def test_a_commit_on_another_line_of_history_is_refused(repo):
+    with pytest.raises(RollbackRefused, match="not earlier"):
+        await require_before_deployed(repo["path"], repo["side"], repo["third"])
+
+
+@pytest.mark.parametrize("deployed", [None, "", "main", "0" * 40])
+async def test_an_unknown_deployed_commit_refuses(repo, deployed):
+    with pytest.raises(RollbackRefused):
+        await require_before_deployed(repo["path"], repo["first"], deployed)

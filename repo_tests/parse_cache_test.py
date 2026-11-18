@@ -50,14 +50,12 @@ def _population(root: Path) -> list[str]:
         return []
 
 
-#: 836 tracked modules under repo_tests/ with this guard and its allowed list.
-#: Window [796, 836]; 814 sits inside it. Re-measure with `git ls-files 'repo_tests/*.py'`.
+#: The tracked modules under repo_tests/. No `floor=`: it is derived from the base's population (#19676).
 REACH = declare(
     "parse-cache-direct-parse-scan",
     discover=_population,
     what="python modules",
     roots=("repo_tests",),
-    floor=814,
     growth=40,
 )
 

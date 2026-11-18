@@ -57,7 +57,7 @@ from repo_tests._ui_literal_rederive import (
     regex_literals,
     tracked_vue_files,
 )
-from repo_tests._ui_literal_scan import script_literals, template_hits
+from repo_tests._ui_literal_scan import script_literals, template_hits, ts_literals
 
 _PANEL = "autobot-frontend/src/components/knowledge/connectors/ConnectorHistoryPanel.vue"
 _PANEL_LITERALS = {
@@ -212,10 +212,34 @@ class TestLabelAndZeroTextFields:
         """The #19885 sites: a size or an acronym plural is visible text the prose rule cannot see."""
         assert self._script(body) == [found]
 
+    @pytest.mark.parametrize("value", ["1h", "6h", "24h", "7d", "30 min", "500ms"])
+    def test_a_time_unit_after_label_is_seen(self, value):
+        """The #20765 sites: `label: '24h'` is visible text; the shape is limited to `label:`."""
+        assert self._script(f"[{{ value: '1', label: '{value}' }}]") == [value]
+
+    @pytest.mark.parametrize("body", ["{ 'label': '24h' }", '{ "label": "24h" }', "{ label : '24h' }"])
+    def test_a_quoted_or_spaced_label_key_is_seen(self, body):
+        assert self._script(body) == ["24h"]
+
+    def test_a_fractional_time_value_is_seen(self):
+        assert self._script("[{ label: '1.5h' }, { label: '0.5 d' }]") == ["1.5h", "0.5 d"]
+
+    def test_a_longer_key_ending_in_label_is_not_the_label_key(self):
+        assert self._script("{ sublabel: '24h', 'ariaLabel': '7d' }") == []
+
+    def test_the_ts_formatter_scan_reaches_the_time_label(self):
+        """`ts_literals` shares the matcher (#20765): a label is seen, a time-like `value` is not."""
+        found = ts_literals("export const R = [{ label: '24h', value: '24h' }, { id: '7d' }]")
+        assert found == [("script", "24h")]
+
+    def test_a_time_unit_under_another_key_stays_unmatched(self):
+        """`'3d'` as a mode id (`m.value = '3d'`, `viewMode === '3d'`) is not text; neither is `{ value: '24h' }`."""
+        assert self._script("m.value = '3d'; if (viewMode === '3d') {}; const o = { value: '24h', id: '7d' }") == []
+
     def test_other_short_shapes_stay_unmatched(self):
-        """A mode id or a time unit (`3d`, `24h`), a bare acronym and a short word are not these shapes."""
+        """A bare acronym, a short word, a lone unit and a unit-less number after `label:` are not these shapes."""
         assert (
-            self._script("m.value = '3d'; [{ label: '24h' }, { label: 'PDF' }, { label: 'Chat' }, { label: 's' }]")
+            self._script("[{ label: 'PDF' }, { label: 'Chat' }, { label: 's' }, { label: '24' }, { label: '2x' }]")
             == []
         )
 

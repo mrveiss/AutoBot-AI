@@ -9,7 +9,9 @@
  * A temporary anchor with `download` set is attached to the document, clicked and removed.
  * Attaching it is what some browsers need before a synthetic click starts a download. An
  * object URL this module created is revoked once the click has been dispatched, so no
- * caller leaks one.
+ * caller leaks one. The revoke runs in a later task, not right after the click: some
+ * browsers still read the URL after the click task returns, and an early revoke can
+ * fail the download (#20872).
  */
 
 function clickAnchor(href: string, filename: string): void {
@@ -37,7 +39,7 @@ export function saveBlob(blob: Blob, filename: string): void {
   try {
     clickAnchor(url, filename)
   } finally {
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 }
 

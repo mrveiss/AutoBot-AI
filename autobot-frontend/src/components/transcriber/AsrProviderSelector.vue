@@ -12,7 +12,9 @@
   opt-in — the local pipeline remains the default when nothing is selected.
 -->
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseButton } from '@autobot/ui'
 import {
   useTranscriberApi,
   type AsrProvider,
@@ -21,7 +23,15 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AsrProviderSelector')
 
+const { t } = useI18n()
 const api = useTranscriberApi()
+
+// #20671: a request settled after the panel unmounted must not write to (or
+// log against) a component that is gone.
+let unmounted = false
+onBeforeUnmount(() => {
+  unmounted = true
+})
 
 const providers = ref<AsrProvider[]>([])
 const selected = ref<string | null>(null)
@@ -37,13 +47,15 @@ async function load(): Promise<void> {
   loadError.value = ''
   try {
     const res = await api.listAsrProviders()
+    if (unmounted) return
     providers.value = res.providers
     selected.value = res.selected
   } catch (err) {
+    if (unmounted) return
     loadError.value = err instanceof Error ? err.message : String(err)
     logger.error('Failed to load ASR providers', err)
   } finally {
-    loading.value = false
+    if (!unmounted) loading.value = false
   }
 }
 
@@ -59,11 +71,12 @@ async function onSelect(event: Event): Promise<void> {
   try {
     await api.setAsrProvider(next)
   } catch (err) {
+    if (unmounted) return
     selected.value = previous
     saveError.value = err instanceof Error ? err.message : String(err)
     logger.error('Failed to set ASR provider', err)
   } finally {
-    saving.value = false
+    if (!unmounted) saving.value = false
   }
 }
 
@@ -72,27 +85,22 @@ onMounted(load)
 
 <template>
   <section class="asr-selector" aria-labelledby="asr-selector-heading">
-    <h3 id="asr-selector-heading" class="asr-selector-heading">Speech-to-text provider</h3>
-    <p class="asr-selector-help">
-      Choose which cloud provider transcribes recordings. Only providers with a
-      server-side API key configured are selectable. Selecting a cloud provider
-      means audio is sent to that provider for processing.
-    </p>
+    <h3 id="asr-selector-heading" class="asr-selector-heading">{{ t('transcriber.asr.heading') }}</h3>
+    <p class="asr-selector-help">{{ t('transcriber.asr.help') }}</p>
 
-    <div v-if="loading" class="asr-selector-state">Loading providers…</div>
+    <div v-if="loading" class="asr-selector-state">{{ t('transcriber.asr.loading') }}</div>
 
     <div v-else-if="loadError" class="asr-selector-state asr-selector-error" role="alert">
       {{ loadError }}
-      <button type="button" class="btn btn-sm" @click="load">Retry</button>
+      <BaseButton size="sm" @click="load">{{ t('common.retry') }}</BaseButton>
     </div>
 
     <div v-else-if="providers.length === 0" class="asr-selector-state">
-      No speech-to-text providers are available. Configure a provider API key on
-      the server to enable cloud transcription.
+      {{ t('transcriber.asr.empty') }}
     </div>
 
     <div v-else class="asr-selector-control">
-      <label class="asr-selector-label" for="asr-provider-select">Active provider</label>
+      <label class="asr-selector-label" for="asr-provider-select">{{ t('transcriber.asr.activeProvider') }}</label>
       <select
         id="asr-provider-select"
         class="input asr-selector-dropdown"
@@ -100,28 +108,27 @@ onMounted(load)
         :disabled="saving"
         @change="onSelect"
       >
-        <option value="" disabled>Select a provider…</option>
+        <option value="" disabled>{{ t('transcriber.asr.selectPlaceholder') }}</option>
         <option
           v-for="p in providers"
           :key="p.id"
           :value="p.id"
           :disabled="!p.configured"
         >
-          {{ p.name }}{{ p.configured ? '' : ' — not configured' }}
+          {{ p.configured ? p.name : t('transcriber.asr.optionNotConfigured', { name: p.name }) }}
         </option>
       </select>
-      <span v-if="saving" class="asr-selector-saving">Saving…</span>
+      <span v-if="saving" class="asr-selector-saving">{{ t('transcriber.asr.saving') }}</span>
       <p v-if="saveError" class="asr-selector-error asr-selector-help" role="alert">{{ saveError }}</p>
 
       <ul class="asr-selector-list">
         <li v-for="p in providers" :key="p.id" class="asr-selector-list-item">
           <span class="asr-selector-name">{{ p.name }}</span>
-          <span v-if="!p.configured" class="asr-selector-badge">not configured</span>
+          <span v-if="!p.configured" class="asr-selector-badge">{{ t('transcriber.asr.notConfigured') }}</span>
         </li>
       </ul>
       <p v-if="providers.some((p) => !p.configured)" class="asr-selector-help asr-selector-help-muted">
-        Providers marked "not configured" require a server-side API key before
-        they can be selected.
+        {{ t('transcriber.asr.notConfiguredHelp') }}
       </p>
     </div>
   </section>

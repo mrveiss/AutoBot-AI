@@ -85,7 +85,7 @@ _REPO = repo_root()
 #: git already tracks, plus this fix's own testkit/auth_middleware_stub.py).
 #: RATCHET: raise it when a new conftest.py or testkit/ file genuinely lands;
 #: lower it only with a stated reason (a directory deletion, not a filter bug).
-_REACH_FLOOR = 37  # #18811: 38 conftest.py/testkit files after tests/coordination/conftest.py and its harnesses
+_REACH_FLOOR = 55  # 56 conftest.py/testkit files measured on the T92 train tree (was 37 at #18811)
 
 #: How far the population may outgrow the floor before the floor is stale.
 #: Same 1.5x discipline as with_error_handling_single_definition_test.py.
