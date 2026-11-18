@@ -2396,6 +2396,8 @@
     "codeSmells": {
       "title": "Code Smells",
       "found": "found",
+      "exportMd": "MD",
+      "exportJson": "JSON",
       "total": "Total",
       "critical": "Critical",
       "high": "High",

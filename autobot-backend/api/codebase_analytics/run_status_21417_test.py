@@ -151,3 +151,31 @@ class TestHandlersExistAtStartup:
 
         assert is_registered_action(action_mod.ACTION)
         assert is_registered_action(FILE_ACTION)
+
+
+class TestProposalHardening:
+    def test_a_long_source_name_still_fits_the_title_column(self):
+        from models.approval import Approval
+
+        title = proposals_mod._title("x" * 1000)
+        assert len(title) <= Approval.title.type.length and title.endswith("…")
+        assert proposals_mod._title("atlas").endswith("atlas")
+
+    @pytest.mark.asyncio
+    async def test_an_unavailable_store_is_logged_and_nothing_is_raised(self, caplog):
+        with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=None)):
+            assert await proposals_mod.propose_run_record_removal("src", "atlas") is None
+        assert "src" in caplog.text and "codebase_run_src" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_the_removal_is_audited_durably_and_a_failed_audit_is_noted_not_repeated(self, collection):
+        await record_run_started("src", "run-1")
+        session = MagicMock(add=MagicMock(), commit=AsyncMock())
+        approval = SimpleNamespace(
+            id="a3", context={"action": action_mod.ACTION, "source_id": "src"}, decided_by_user="u"
+        )
+        with patch.object(action_mod, "audit_log", AsyncMock(return_value=False)) as audit:
+            await action_mod.execute_source_run_record_cleanup(approval, session)
+        assert audit.await_args.kwargs["durable"] is True
+        assert session.add.call_count == 2, "the outcome comment and the audit-failure note"
+        assert "codebase_run_src" not in collection.docs

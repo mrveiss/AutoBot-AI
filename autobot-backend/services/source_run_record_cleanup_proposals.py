@@ -32,6 +32,16 @@ register_source_run_record_cleanup_action()
 _BLOCKING = (ApprovalStatus.PENDING.value, ApprovalStatus.REJECTED.value, ApprovalStatus.REVISION_REQUESTED.value)
 
 
+def _title(source_name: str) -> str:
+    """The proposal title, shortened with an ellipsis to fit ``Approval.title``; the full name is in the context."""
+    from models.approval import Approval
+
+    head = "Remove run record of deleted code source: "
+    room = Approval.title.type.length - len(head)
+    shown = source_name if len(source_name) <= room else source_name[: room - 1] + "\u2026"
+    return head + shown
+
+
 async def _already_proposed(db, source_id: str) -> bool:
     """Whether this source has a proposal that must not be repeated. Plain columns only, any SQL dialect."""
     from models.approval import Approval, ApprovalType
@@ -55,15 +65,23 @@ async def propose_run_record_removal(source_id: str, source_name: str) -> str | 
     from services.approval_gate_service import ApprovalGateService
     from user_management.database import get_async_session_factory
 
-    if await describe_run_state(source_id) is None:
-        return None
     record_id = run_record_id(source_id)
+    try:
+        run = await describe_run_state(source_id, strict=True)
+    except RuntimeError:
+        # The store could not be opened: "no record" cannot be told from "unknown", so say the record is kept.
+        logger.error(
+            "Code collection unavailable: no cleanup proposed for %s of deleted source %s", record_id, source_id
+        )
+        return None
+    if run is None:
+        return None
     async with get_async_session_factory()() as db:
         if await _already_proposed(db, source_id):
             return None
         try:
             approval = await ApprovalGateService(db).create_approval(
-                title=f"Remove run record of deleted code source: {source_name}",
+                title=_title(source_name),
                 approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
                 description=f"The code source was deleted; its run record {record_id} (status, timestamps) remains.",
                 requested_by_agent=REQUESTED_BY,

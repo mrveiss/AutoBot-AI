@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalComment
 from services.approval_execution import register_post_approval_action
 from services.audit.taxonomy import AuditAction
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from models.approval import Approval
+
+logger = get_logger(__name__)
 
 #: The ``context["action"]`` value a proposal names to route here.
 ACTION = "source_run_record_cleanup"
@@ -53,13 +56,24 @@ async def execute_source_run_record_cleanup(approval: "Approval", session: "Asyn
     body = f"Source run record cleanup {outcome} {record_id}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
     await session.commit()
-    await audit_log(
+    written = await audit_log(
         AuditAction.CODE_SOURCE_RUN_RECORD_CLEANUP.value,
         result="success" if removed else "failed",
         user_id=approval.decided_by_user,
         resource=f"run_record:{record_id}",
         details={"approval_id": str(approval.id), "source_id": source_id},
+        durable=True,
     )
+    if not written:
+        await _note_audit_failure(approval, session, record_id)
+
+
+async def _note_audit_failure(approval: "Approval", session: "AsyncSession", record_id: str) -> None:
+    """The audit row did not commit: say so on the approval. The removal already happened and is not repeated."""
+    logger.error("Audit entry for the removal of %s (approval %s) was NOT committed", record_id, approval.id)
+    body = f"The audit entry for this removal of {record_id} could not be committed; the removal is not repeated."
+    session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))
+    await session.commit()
 
 
 def register_source_run_record_cleanup_action() -> None:

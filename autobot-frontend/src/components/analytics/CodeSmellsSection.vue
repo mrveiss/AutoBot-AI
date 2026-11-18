@@ -21,10 +21,10 @@
       <BaseSpinner v-if="loading" size="sm" :label="$t('analytics.codeSmells.loading')" />
       <div v-if="hasRows" class="section-export-buttons">
         <button :disabled="loading" @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
-          <Icon name="file-alt" /> MD
+          <Icon name="file-alt" /> {{ $t('analytics.codeSmells.exportMd') }}
         </button>
         <button :disabled="loading" @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
-          <Icon name="file-code" /> JSON
+          <Icon name="file-code" /> {{ $t('analytics.codeSmells.exportJson') }}
         </button>
       </div>
     </div>

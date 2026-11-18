@@ -132,7 +132,7 @@ describe('useCodeSmellProblems request handling (#21784)', () => {
     const s = useCodeSmellProblems((u) => u)
     await s.loadSmellProblems() // request 0: code
     await s.selectSmellCategory('test') // request 1: test, supersedes it
-    succeed([{ ...ROW, type: 'stale_row' }], 0) // the code response arrives late
+    succeed([{ ...ROW, file_path: 'stale.py' }], 0) // the code response arrives late
     expect(s.smellsForPanel.value).toHaveLength(0)
     expect(s.smellsStale.value).toBe(true)
     succeed([ROW], 1)
