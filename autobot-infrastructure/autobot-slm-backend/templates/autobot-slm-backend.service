@@ -13,6 +13,8 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot/autobot-slm-backend
+# #20894: the log directory, as before the resolver (the working directory's logs/)
+Environment=AUTOBOT_LOGS_DIR=/opt/autobot/autobot-slm-backend/logs
 Environment="PATH=/opt/autobot/autobot-slm-backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/opt/autobot/autobot-slm-backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 ExecReload=/bin/kill -HUP $MAINPID

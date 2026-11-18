@@ -6,6 +6,7 @@
 // language-neutral values (Weekday codes, "HH:MM", ISO date) that
 // resolveSummaryParams turns into locale text via Intl.
 
+import { createDateFormatter } from '../utils/format'
 import { sortDays } from './time'
 import type { PickerRule, ScheduleTranslate, Weekday } from './types'
 
@@ -73,14 +74,15 @@ export const CUSTOM_SUMMARY_KEY = `${K}custom`
 export function weekdayName(day: Weekday, locale: string, style: 'long' | 'short'): string {
   // 2024-01-01 was a Monday; MO..SU map to Jan 1..7.
   const index = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'].indexOf(day)
-  return new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' }).format(
-    new Date(Date.UTC(2024, 0, 1 + index)),
+  return createDateFormatter({ kind: 'date', locale, intl: { weekday: style, timeZone: 'UTC' } })(
+    Date.UTC(2024, 0, 1 + index),
   )
 }
 
-function formatDate(iso: string, locale: string): string {
+/** Epoch ms of the UTC midnight of a `YYYY-MM-DD` date. */
+function utcDayMs(iso: string): number {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d)))
+  return Date.UTC(y, m - 1, d)
 }
 
 /** Turn language-neutral summary params into locale text via Intl. */
@@ -91,7 +93,7 @@ export function resolveSummaryParams(params: SummaryParams, locale: string): Rec
       const names = value.map((d) => weekdayName(d, locale, 'long'))
       out[name] = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(names)
     } else if (name === 'weekday') out[name] = weekdayName(value as Weekday, locale, 'long')
-    else if (name === 'date') out[name] = formatDate(String(value), locale)
+    else if (name === 'date') out[name] = createDateFormatter({ kind: 'date', locale, intl: { dateStyle: 'long', timeZone: 'UTC' } })(utcDayMs(String(value)))
     else out[name] = value as string | number
   }
   return out

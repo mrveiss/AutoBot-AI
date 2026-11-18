@@ -26,11 +26,14 @@ from __future__ import annotations
 import ast
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import or_
 
+from llc.models.enums import AssigneeType, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.work_item_queue import claimable_by
+from llc.services.work_item_service import WorkItemService
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
@@ -141,3 +144,33 @@ def test_checkout_clears_the_user_assignee_when_an_agent_claims() -> None:
         "clears assignee_user_id, so an agent-claimed row keeps naming a user "
         "assignee too (#15964)."
     )
+
+
+async def test_checking_out_an_unlocked_user_assigned_item_leaves_only_the_agent_assignee() -> None:
+    """Behavioural (#21032): drive ``WorkItemService.checkout`` on a real row object, not the source text.
+
+    The row is user-assigned and unlocked. After the checkout it must name the agent alone: user id null,
+    the agent id, and assignee type agent.
+    """
+    agent_id = str(uuid.uuid4())
+    item = LLCWorkItem(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        type=WorkItemType.TASK,
+        title="user owned",
+        status=WorkItemStatus.BACKLOG,
+        assignee_user_id=uuid.uuid4(),
+        assignee_type=AssigneeType.USER.value,
+        checkout_run_id=None,
+        checkout_locked_at=None,
+        version=1,
+    )
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=item))
+
+    with patch("llc.services.work_item_service.get_async_redis_client", new=AsyncMock(return_value=None)):
+        claimed = await WorkItemService().checkout(session, str(item.id), agent_id)
+
+    assert claimed.assignee_user_id is None
+    assert claimed.assignee_agent_id == uuid.UUID(agent_id)
+    assert claimed.assignee_type == AssigneeType.AGENT.value

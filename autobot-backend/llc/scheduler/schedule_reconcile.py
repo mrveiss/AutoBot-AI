@@ -27,6 +27,7 @@ from sqlalchemy import bindparam, select, text
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import first_time
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 
@@ -48,8 +49,6 @@ _ROUTINE_PAGE = 1000
 #: code stops the poller waking such an agent, and a reconcile stricter than the poller would
 #: leave a member absent that the poller still fires once it is present.
 _OFF_STATUSES = tuple(sorted(NEVER_SCHEDULED_STATUSES | {LLCAgentStatus.PAUSED.value}))
-_BAD_CRON_CAP = 1000
-_reported_bad_crons: Set[Tuple[str, str]] = set()
 
 
 class _Wanted(NamedTuple):
@@ -136,13 +135,9 @@ def _next_or_report(item: _Wanted) -> float | None:
     try:
         return _next_fire(item.cron, datetime.now(tz=timezone.utc).timestamp())
     except Exception as exc:  # croniter raises several unrelated types for a bad cron
-        seen = (item.member, item.cron)
-        if seen in _reported_bad_crons:
+        if not first_time(__name__, f"bad_cron:{item.member}:{item.cron}"):
             logger.debug("Schedule reconcile: %s %s still has an unusable cron", item.kind, item.member)
         else:
-            if len(_reported_bad_crons) >= _BAD_CRON_CAP:
-                _reported_bad_crons.clear()
-            _reported_bad_crons.add(seen)
             logger.error("Schedule reconcile could not restore %s %s: %s", item.kind, item.member, exc)
         return None
 

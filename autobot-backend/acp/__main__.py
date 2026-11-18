@@ -18,7 +18,7 @@ import sys
 
 from acp.runner import autobot_turn_runner
 from acp.server import AcpServer
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
@@ -35,4 +35,5 @@ async def _main() -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(asyncio.run(_main()))

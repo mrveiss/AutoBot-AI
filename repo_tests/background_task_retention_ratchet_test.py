@@ -160,7 +160,6 @@ KNOWN_DISCARDED_LAUNCHES: dict[str, int] = {
     "autobot-backend/orchestrator.py": 1,
     "autobot-backend/secure_sandbox_executor.py": 1,
     "autobot-backend/security/enterprise/threat_detection/engine.py": 3,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1,
     "autobot-backend/services/tool_output_filter.py": 1,
     "autobot-backend/workflow_scheduler.py": 2,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 4,

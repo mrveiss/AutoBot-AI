@@ -476,13 +476,15 @@ const router = createRouter({
         {
           path: 'vision',
           name: 'tools-vision',
-          component: () => import('@/views/tools/admin/VisionTool.vue'),
+          component: () => import('@/views/tools/MovedToUserApp.vue'), // #20644: moved to the user app
+          props: { screen: 'vision' },
           meta: { title: 'Vision', parent: 'tools', admin: true }
         },
         {
           path: 'batch',
           name: 'tools-batch',
-          component: () => import('@/views/tools/admin/BatchTool.vue'),
+          component: () => import('@/views/tools/MovedToUserApp.vue'), // #20644: moved to the user app
+          props: { screen: 'batch' },
           meta: { title: 'Batch Processing', parent: 'tools', admin: true }
         },
       ]
