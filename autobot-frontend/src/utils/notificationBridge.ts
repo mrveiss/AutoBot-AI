@@ -30,12 +30,12 @@ const logger = createLogger('NotificationBridge')
 // Types & Configuration
 // ========================================
 
-export type NotificationType = 'error' | 'warning' | 'info' | 'success'
+// A notification's type is the kit's ToastType; the bridge declares no copy of it (#14908).
 export type { ToastType }
 
 interface NotificationConfig {
   /** Default duration for each notification type (ms) */
-  durations: Record<NotificationType, number>
+  durations: Record<ToastType, number>
   /** Rate limit: max notifications per time window */
   rateLimit: {
     maxNotifications: number
@@ -49,7 +49,7 @@ interface NotificationConfig {
 
 interface QueuedNotification {
   message: string
-  type: NotificationType
+  type: ToastType
   timestamp: number
   isCritical: boolean
 }
@@ -122,7 +122,7 @@ class NotificationBridge {
    * @param isCritical - If true, notification won't auto-dismiss (for errors)
    * @returns Toast ID if shown, -1 if rate limited or deduplicated
    */
-  notify(message: string, type: NotificationType = 'info', isCritical = false): number {
+  notify(message: string, type: ToastType = 'info', isCritical = false): number {
     if (!this.isReady()) {
       // Fallback to console if not initialized
       logger.warn('NotificationBridge not ready, falling back to console:', message)
@@ -150,11 +150,8 @@ class NotificationBridge {
       ? 0  // 0 = persistent (no auto-dismiss)
       : this.config.durations[type]
 
-    // Map notification type to toast type
-    const toastType = this.mapToToastType(type)
-
     // Show the toast
-    const toastId = this.showToast!(message, toastType, duration)
+    const toastId = this.showToast!(message, type, duration)
 
     logger.debug(`Notification shown [${type}]: ${message.substring(0, 50)}...`)
 
@@ -248,17 +245,9 @@ class NotificationBridge {
   }
 
   /**
-   * Map our notification types to toast types
-   */
-  private mapToToastType(type: NotificationType): ToastType {
-    // Direct mapping since our types match
-    return type as ToastType
-  }
-
-  /**
    * Fallback logging when toast system not available
    */
-  private logFallback(message: string, type: NotificationType): void {
+  private logFallback(message: string, type: ToastType): void {
     switch (type) {
       case 'error':
         logger.error(`[NOTIFICATION] ${message}`)
@@ -297,7 +286,7 @@ export async function initializeNotificationBridge(): Promise<void> {
  */
 export function showNotification(
   message: string,
-  type: NotificationType = 'info',
+  type: ToastType = 'info',
   isCritical = false
 ): number {
   return notificationBridge.notify(message, type, isCritical)

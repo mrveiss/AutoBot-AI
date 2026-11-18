@@ -13,7 +13,7 @@
       >
         <Icon :name="getAttachmentIcon(attachment.type)" />
         <span class="attachment-name">{{ attachment.name }}</span>
-        <span class="attachment-size">{{ formatSize(attachment.size) }}</span>
+        <span class="attachment-size">{{ formatFileSize(attachment.size || 0, SIZE_FORMAT) }}</span>
         <button
           class="attachment-download"
           @click.stop="$emit('download', attachment)"
@@ -40,6 +40,7 @@
  */
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Attachment {
   id: string
@@ -94,15 +95,8 @@ const getAttachmentIcon = (type: string): IconName => {
   return 'file'
 }
 
-const formatSize = (bytes: number): string => {
-  if (!bytes || bytes === 0) return '0 B'
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const k = 1024
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + units[i]
-}
+// Output contract of the former local formatter: 'B..TB' ladder, one trimmed decimal, '0 B' when empty.
+const SIZE_FORMAT = { decimals: 1, units: ['B', 'KB', 'MB', 'GB', 'TB'] } as const
 </script>
 
 <style scoped>
@@ -144,7 +138,7 @@ const formatSize = (bytes: number): string => {
   background: var(--bg-hover);
 }
 
-.attachment-item i:first-child {
+.attachment-item .icon:first-child {
   width: 20px;
   text-align: center;
   color: var(--text-secondary);

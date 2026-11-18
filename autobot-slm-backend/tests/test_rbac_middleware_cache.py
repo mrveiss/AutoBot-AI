@@ -74,6 +74,8 @@ _MOCK_NAMES = [
     # audit model imported at module level by rbac_middleware (#11794)
     "user_management.models",
     "autobot_shared.user_management.models.audit",
+    # #17225 D1: the one audit_logs row constructor, imported at module level.
+    "autobot_shared.user_management.audit_rows",
     # The shared audit counter rbac_middleware imports at module level (#14750).
     # Same reason as autobot_shared.logging_manager above (#13312): the parent
     # `autobot_shared` here is a path-less MagicMock, so the import machinery
@@ -112,6 +114,15 @@ sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
 _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300
 sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
+
+# #18338: the middleware scopes DB grants with the import-free grant_scope module. Load it
+# for real under its full name (a path-less MagicMock parent cannot be walked); the
+# restore block below removes it again with every other bootstrap key.
+_GRANT_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "autobot_shared.user_management.grant_scope", _SHARED_ROOT / "user_management" / "grant_scope.py"
+)
+sys.modules[_GRANT_SCOPE_SPEC.name] = importlib.util.module_from_spec(_GRANT_SCOPE_SPEC)
+_GRANT_SCOPE_SPEC.loader.exec_module(sys.modules[_GRANT_SCOPE_SPEC.name])
 
 # Load the module under test directly (bypasses __init__ import chain).
 # The restore block MUST run even if exec_module() raises, or a bad stub here
@@ -303,7 +314,7 @@ class TestDatabaseFallback:
             def __init__(self, *a, **kw):
                 pass
 
-            async def get_user_permissions(self, uid):
+            async def get_user_permission_grants(self, uid):
                 return db_perms
 
         ctx_mock = MagicMock()

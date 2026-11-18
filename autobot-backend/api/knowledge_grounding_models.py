@@ -27,6 +27,7 @@ from enum import Enum
 from typing import List
 from uuid import uuid4
 
+from autobot_shared.status_enums import Priority
 from services.knowledge_grounding_models import Claim
 
 
@@ -64,12 +65,11 @@ class ReviewTicketStatus(str, Enum):
     DISMISSED = "dismissed"  # Rejected as false conflict
 
 
-class ReviewTicketPriority(str, Enum):
-    """Priority level for human review."""
-
-    LOW = "low"  # Confidence difference 0.05-0.1
-    MEDIUM = "medium"  # Confidence difference 0.0-0.05
-    HIGH = "high"  # Critical facts with low confidence
+#: Human-review urgency. The three members the resolver assigns are in the canonical urgency
+#: vocabulary, so this is an alias rather than a class (#18098): LOW (confidence difference
+#: 0.05-0.1), MEDIUM (0.0-0.05) and HIGH (critical facts with low confidence). Every consumer
+#: reads `.value` (the JSON ticket and the `review_queue:<value>` key) or compares members.
+ReviewTicketPriority = Priority
 
 
 # ===== DATA MODELS =====
@@ -243,6 +243,11 @@ class Conflict:
     resolution: ConflictResolution = ConflictResolution.PENDING_REVIEW
     chosen_fact: str | None = None
     reasoning: str = ""
+
+    def __post_init__(self):
+        """Require one producer's identity: claim_1_id, or both kb_says and agent_says."""
+        if not self.claim_1_id and (self.kb_says is None or self.agent_says is None):
+            raise ValueError("Conflict needs claim_1_id (claim-vs-KB) or both kb_says and agent_says (resolver)")
 
     def max_confidence(self) -> float:
         """Get highest confidence across all sources.

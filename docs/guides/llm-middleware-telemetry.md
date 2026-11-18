@@ -274,7 +274,7 @@ class LLMHandlerMixin:
 | Key | Type | Description |
 |-----|------|-------------|
 | `endpoint` | `str` | Ollama URL with `/api/generate` suffix |
-| `model` | `str` | Model name (e.g., `llama3.2:latest`) |
+| `model` | `str` | Model name (e.g., `qwen3.5:9b`) |
 | `prompt` | `str` | Fully assembled prompt string |
 | `system_prompt` | `str` | System prompt alone |
 | `citations` | `list[dict]` | RAG knowledge base citations |
@@ -1067,7 +1067,7 @@ infrastructure:
 | Variable | Default | Purpose |
 |----------|---------|--------|
 | `AUTOBOT_OLLAMA_HOST` | `127.0.0.1` | Ollama host (highest priority) |
-| `AUTOBOT_DEFAULT_LLM_MODEL` | `llama3.2:latest` | Default model name |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Default model name |
 | `AUTOBOT_BACKEND_TLS_ENABLED` | `false` | Enable HTTPS on port 8443 |
 | `AUTOBOT_DEV_MODE` | `false` | Enable hot-reload |
 | `AUTOBOT_LOG_LEVEL` | `INFO` | Logging level |
@@ -1238,7 +1238,7 @@ async def test_telemetry_injection_into_prompt(mock_session):
         new_callable=AsyncMock,
         return_value={
             "endpoint": "http://127.0.0.1:11434/api/generate",
-            "model": "llama3.2:latest",
+            "model": "qwen3.5:9b",
             "prompt": "System prompt\n\nUser message",
             "system_prompt": "System prompt",
             "citations": [],
@@ -1277,7 +1277,7 @@ async def test_telemetry_disabled_skips_injection(mock_session):
             "prompt": original_prompt,
             "system_prompt": "System prompt",
             "endpoint": "http://127.0.0.1:11434/api/generate",
-            "model": "llama3.2:latest",
+            "model": "qwen3.5:9b",
             "citations": [],
             "used_knowledge": False,
         },
@@ -1313,7 +1313,7 @@ async def test_telemetry_failure_is_non_fatal(mock_session):
             "prompt": "Original prompt",
             "system_prompt": "System prompt",
             "endpoint": "http://127.0.0.1:11434/api/generate",
-            "model": "llama3.2:latest",
+            "model": "qwen3.5:9b",
             "citations": [],
             "used_knowledge": False,
         },

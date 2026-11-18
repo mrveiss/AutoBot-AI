@@ -21,7 +21,7 @@ import importlib.util
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, NonCallableMock, patch
 
 import pytest
 
@@ -149,6 +149,21 @@ _get_user_sso_link = _router_ns["_get_user_sso_link"]
 # values), so none of the forced stubs may outlive this module's import —
 # but real modules pulled in as a transitive side effect are left exactly as
 # a normal import would have left them.
+# ...EXCEPT a real module first imported during this bootstrap that bound a stub at import time
+# (`from fastapi import HTTPException` under the MagicMock `fastapi`): that is not how a normal
+# import leaves it. Cached, it served autobot_shared.auth.permission_gate and
+# revocation_unavailable with a MagicMock HTTPException to every later file in the process, so
+# test_auth_proxy_check's 403 path raised "exceptions must derive from BaseException".
+_STUB_POISONED = [
+    _k
+    for _k, _m in list(sys.modules.items())
+    if _k not in _PRE_BOOTSTRAP_MODULES
+    and _k not in _BOOTSTRAP_MANAGED_MODULES
+    and not isinstance(_m, NonCallableMock)
+    and any(isinstance(_v, NonCallableMock) for _v in list(getattr(_m, "__dict__", {}).values()))
+]
+for _k in _STUB_POISONED:
+    del sys.modules[_k]
 for _k in list(sys.modules):
     if _k not in _BOOTSTRAP_MANAGED_MODULES:
         continue
@@ -156,7 +171,7 @@ for _k in list(sys.modules):
         del sys.modules[_k]
     elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
         sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
-del _PRE_BOOTSTRAP_MODULES
+del _PRE_BOOTSTRAP_MODULES, _STUB_POISONED
 
 
 # ---------------------------------------------------------------------------
@@ -286,21 +301,12 @@ class TestRevokeTtlFromToken:
         exp = int(claims["exp"])
         expected_ttl = max(1, exp - int(time.time()))
 
-        redis_mock = AsyncMock()
-        redis_mock.set = AsyncMock(return_value=True)
-        get_client = AsyncMock(return_value=redis_mock)
-
-        # #12807/#12827 migrated token_denylist.py off the sync-returning
-        # get_redis_client(async_client=True) footgun onto get_async_redis_client()
-        # (autobot_shared/redis_client.py) but this test's patch target was never
-        # updated (#13312): patch.object(_dl_mod, "get_redis_client", ...) raised
-        # AttributeError because that name no longer exists on the module, so this
-        # test collected as a failure with zero real-defect signal in the control
-        # it claims to verify — revoke_jti was already using the safe helper.
-        with patch.object(_dl_mod, "get_async_redis_client", get_client):
+        # #18663: the denylist is the SLM's own PostgreSQL now; spy on the store
+        # write (its SQL is tested in tests/services/test_auth_revocation_store_18663.py).
+        store_write = AsyncMock(return_value=None)
+        with patch.object(_dl_mod, "_revoke", store_write):
             await _dl_mod.revoke_jti(jti, ttl_seconds=expected_ttl)
 
-        get_client.assert_called_once_with()
-        redis_mock.set.assert_awaited_once()
-        _, kwargs = redis_mock.set.call_args
-        assert kwargs["ex"] >= 1
+        store_write.assert_awaited_once()
+        written_jti, written_ttl = store_write.call_args.args
+        assert written_jti == jti and written_ttl >= 1

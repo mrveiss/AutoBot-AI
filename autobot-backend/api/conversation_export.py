@@ -16,14 +16,16 @@ Endpoints:
     POST /api/conversations/import
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from api.schemas_agent import ConversationImportRequest, ConversationImportResponse
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from exceptions import get_exceptions_lazy
+from services.audit.audit import AuditAction, audit_record
 from services.conversation_export import (
     export_all_conversations_json,
     export_conversation_json,
@@ -152,6 +154,19 @@ async def export_conversation(
     return _build_export_response(content, session_id, format)
 
 
+def _audit_instance_export(request: Request, current_user: dict, outcome: str) -> None:
+    """Audit one attempt at the instance-wide export (#21666)."""
+    audit_record(
+        user_id=str(current_user.get("user_id") or current_user.get("username") or "unknown"),
+        action=AuditAction.SESSION_EXPORT,
+        resource_type="chat_session",
+        resource_id="*",
+        ip_address=request.client.host if request.client else "unknown",
+        metadata={"scope": "instance"},
+        outcome=outcome,
+    )
+
+
 @router.get("/conversations/export-all", response_class=Response)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -160,19 +175,31 @@ async def export_conversation(
 )
 async def export_all_conversations(
     request: Request,
+    all_users: bool = Query(
+        default=False, description="Instance-wide export of every user's conversations; admin only"
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Export all conversations as a bulk JSON archive (#1808).
+    Export the caller's conversations as a bulk JSON archive (#1808, #21666).
 
-    Returns a JSON file containing every conversation stored on this instance.
+    Returns only the sessions the caller owns. ``all_users=true`` exports every conversation on this
+    instance: administrators only, and audited as a ``SESSION_EXPORT`` of scope ``instance``.
     """
+    if all_users and not is_admin_role(current_user.get("role")):
+        # The instance-wide export is admin-only: 403, audited as denied, before anything is read (#21666).
+        _audit_instance_export(request, current_user, "denied")
+        raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
     chat_history_manager = get_chat_history_manager(request)
-    archive = await export_all_conversations_json(chat_history_manager)
+    archive = await export_all_conversations_json(
+        chat_history_manager, current_user.get("username"), all_users=all_users
+    )
 
     if archive is None:
         _, InternalError, _, _, _ = get_exceptions_lazy()
         raise InternalError("Failed to build conversation archive")
+    if all_users:
+        _audit_instance_export(request, current_user, "success")  # only once the archive exists
 
     logger.info(
         "Bulk conversation export requested by user %s",

@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from llc.api import contacts as contact_api
 from llc.models import contact as contact_model
+from llc.models.activity import LLCActivityLog
 from llc.models.contact import LLCContact
 from llc.services import contact as contact_service
 from llc.services.contact import ContactService
@@ -63,8 +64,8 @@ _SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator:
-    eng = create_async_engine(_SQLITE_MEMORY_URL)
-    tables = [LLCContact.__table__]
+    eng = create_async_engine(_SQLITE_MEMORY_URL)  # canonical: ignore py-adhoc-db-engine (test-local)
+    tables = [LLCActivityLog.__table__, LLCContact.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)
@@ -76,8 +77,9 @@ async def engine() -> AsyncIterator:
 
 @pytest_asyncio.fixture
 async def session_factory(engine):  # noqa: ANN001, ANN201
-    # canonical: ignore py-adhoc-db-engine (test-local session factory)
-    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    return async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        engine, expire_on_commit=False, class_=AsyncSession
+    )
 
 
 @pytest.mark.asyncio

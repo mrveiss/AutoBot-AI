@@ -398,7 +398,7 @@ class ConflictResolver(AsyncRedisClientMixin):
 
         # Create ticket
         ticket = ReviewTicket.create_from_conflict(conflict, priority)
-        logger.debug(f"Created review ticket: {ticket.ticket_id} (priority={priority})")
+        logger.debug(f"Created review ticket: {ticket.ticket_id} (priority={priority.value})")
 
         try:
             redis = await self._get_redis()

@@ -26,6 +26,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 _ACTION = repo_root() / ".github/actions/setup-python-suite/action.yml"
+_NETWORK_CONFIG = repo_root() / "scripts/ci/apt_network_config.sh"
 _STEP = "Install CI system packages (#14550, #13896)"
 _BASH = shutil.which("bash")
 
@@ -82,7 +83,13 @@ def _run(tmp_path: Path, kill: str, update_exit: str = "0") -> Tuple[subprocess.
         (state / name).write_text(value, encoding="utf-8")
     result = subprocess.run(  # nosec B603  # fixed argv: bash and the action's own step script
         [_BASH, "-c", _step_script()],
-        env={"PATH": str(bin_dir), "STATE": str(state), "KILL": kill, "UPDATE_EXIT": update_exit},
+        env={
+            "PATH": str(bin_dir),
+            "STATE": str(state),
+            "KILL": kill,
+            "UPDATE_EXIT": update_exit,
+            "APT_NETWORK_CONFIG_SCRIPT": str(_NETWORK_CONFIG),
+        },
         capture_output=True,
         text=True,
         timeout=60,

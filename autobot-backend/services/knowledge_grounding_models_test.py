@@ -20,6 +20,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 from pathlib import Path
 
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.status_enums import Severity
 from services.knowledge_grounding_models import VerificationMethod
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -216,9 +217,17 @@ class TestTheMergedVerifiedClaimAndConflictKeepTheirWireShapes:
         vc = VerifiedClaim(claim=Claim(claim_text="x"), kb_status=ClaimStatus.IN_KB, kb_source="f1", evidence=["e"])
         assert VerifiedClaim.from_dict(vc.to_dict()) == vc
 
+    def test_conflict_without_either_producers_identity_raises(self):
+        import pytest
+
+        from api.knowledge_grounding_models import Conflict
+
+        with pytest.raises(ValueError):
+            Conflict()
+
     def test_both_conflict_producers_build_the_same_class(self):
         from api.knowledge_grounding_models import Conflict, ConflictResolution
 
-        by_id = Conflict(claim_1_id="c1", description="d", severity="high")
+        by_id = Conflict(claim_1_id="c1", description="d", severity=Severity.HIGH.value)
         assert by_id.resolution is ConflictResolution.PENDING_REVIEW.__class__("pending_review")
         assert by_id.max_confidence() == 0.0 and by_id.kb_says is None
