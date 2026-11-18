@@ -58,7 +58,7 @@
       <!-- Dashboard Tab -->
       <div v-if="activeTab === 'dashboard'" class="tab-content">
         <AuditStatistics
-          :statistics="statistics"
+          :statistics="resolvedStatistics"
           :vm-info="vmInfo"
           :loading="loadingStats"
           @user-click="openUserTrail"
@@ -207,7 +207,7 @@ const logger = createLogger('AuditLogsView')
 // Use the audit state composable
 const {
   entries,
-  statistics,
+  resolvedStatistics,
   vmInfo,
   operationCategories,
   loading,

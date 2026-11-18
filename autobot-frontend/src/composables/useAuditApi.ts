@@ -33,6 +33,7 @@ import {
   calculateSuccessRate,
   getDateRangeForFilter,
   isTerminalAuditResult,
+  resolveAuditStatistics,
 } from '@/types/audit'
 import { getApiBase } from '@/config/ssot-config'
 
@@ -166,6 +167,9 @@ export function useAuditState() {
     if (typeof served === 'number' && Number.isFinite(served)) return served
     return calculateSuccessRate(successEntries.value.length, terminalEntries.value.length)
   })
+
+  // What the statistics panel shows: the server's figures where it sent them, else derived from the rows (#21513).
+  const resolvedStatistics = computed(() => resolveAuditStatistics(statistics.value, entries.value))
 
   const uniqueOperations = computed(() => {
     const ops = new Set(entries.value.map((e) => e.operation))
@@ -413,7 +417,7 @@ export function useAuditState() {
     loading, loadingStats, error, hasMore, totalReturned,
     filter, currentPage, pageSize, isPolling, pollingIntervalMs,
     selectedEntry, selectedSessionId, selectedUserId, sessionTrail, userTrail, loadingTrail,
-    successEntries, failedEntries, deniedEntries, successRate, uniqueOperations, uniqueUsers,
+    successEntries, failedEntries, deniedEntries, successRate, resolvedStatistics, uniqueOperations, uniqueUsers,
     loadLogs, loadStatistics, loadOperationCategories, loadSessionTrail, loadUserTrail,
     loadFailedOperations, cleanupLogs, setFilter, resetFilter, nextPage, prevPage,
     selectEntry, startPolling, stopPolling, initialize, exportToJson, exportToCsv, downloadExport

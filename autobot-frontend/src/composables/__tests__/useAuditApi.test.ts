@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useAuditApi, useAuditState } from '../useAuditApi'
-import { calculateSuccessRate } from '@/types/audit'
+import { calculateSuccessRate, resolveAuditStatistics } from '@/types/audit'
 
 const mockGet = vi.fn()
 
@@ -196,5 +196,75 @@ describe('calculateSuccessRate (#20665)', () => {
   it('rounds half up and reaches 100', () => {
     expect(calculateSuccessRate(2, 3)).toBe(67)
     expect(calculateSuccessRate(4, 4)).toBe(100)
+  })
+})
+
+describe('resolveAuditStatistics (#21513)', () => {
+  const rows = (...results: string[]) => results.map((result) => ({ result }))
+
+  it('is null with neither a statistics object nor a row', () => {
+    expect(resolveAuditStatistics(null, [])).toBeNull()
+  })
+
+  it('uses the server counts and rate as sent, whatever the loaded rows hold', () => {
+    const out = resolveAuditStatistics(
+      { total_entries: 500, success_count: 400, denied_count: 50, failed_count: 30, error_count: 20, success_rate: 80 },
+      rows('failed')
+    )
+    expect(out).toMatchObject({
+      total_entries: 500, success_count: 400, denied_count: 50, failed_count: 30, error_count: 20, success_rate: 80,
+    })
+  })
+
+  it('derives every figure the server did not send from the rows', () => {
+    const out = resolveAuditStatistics({}, rows('success', 'success', 'denied', 'failed', 'error', 'attempted'))
+    expect(out).toMatchObject({
+      total_entries: 6, success_count: 2, denied_count: 1, failed_count: 1, error_count: 1,
+    })
+    // 2 of the 5 final rows: the attempted row is not in the denominator
+    expect(out?.success_rate).toBe(40)
+  })
+
+  it('counts an attempted row as neither a success nor a failure', () => {
+    const out = resolveAuditStatistics(null, rows('attempted', 'success'))
+    expect(out).toMatchObject({ success_count: 1, failed_count: 0, denied_count: 0, error_count: 0, success_rate: 100 })
+  })
+
+  it('mixes a served figure with derived ones and ignores a non-finite served figure', () => {
+    const out = resolveAuditStatistics({ success_count: 9, failed_count: NaN } as never, rows('failed', 'success'))
+    expect(out).toMatchObject({ success_count: 9, failed_count: 1 })
+  })
+})
+
+describe('useAuditState.resolvedStatistics (#21513)', () => {
+  function stub(results: string[], statistics?: Record<string, unknown>) {
+    mockGet.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.startsWith('/api/audit/statistics')
+          ? { success: true, statistics, vm_info: { vm_source: 'x', vm_name: 'y' } }
+          : {
+              success: true, total_returned: results.length, has_more: false, query: {},
+              entries: results.map((result, i) => ({ id: String(i), operation: 'op', result, timestamp: 1 })),
+            }
+      )
+    )
+  }
+
+  it('shows the server counts when the response carries them', async () => {
+    stub(['failed'], { total_entries: 90, success_count: 80, denied_count: 4, failed_count: 5, error_count: 1, success_rate: 89 })
+    const api = useAuditState()
+    await api.loadLogs()
+    await api.loadStatistics()
+    expect(api.resolvedStatistics.value).toMatchObject({ total_entries: 90, success_count: 80, failed_count: 5, success_rate: 89 })
+  })
+
+  it('derives the counts from the entries when the response carries none', async () => {
+    stub(['success', 'denied', 'attempted'], { total_entries: 3 })
+    const api = useAuditState()
+    await api.loadLogs()
+    await api.loadStatistics()
+    expect(api.resolvedStatistics.value).toMatchObject({
+      total_entries: 3, success_count: 1, denied_count: 1, failed_count: 0, error_count: 0, success_rate: 50,
+    })
   })
 })
