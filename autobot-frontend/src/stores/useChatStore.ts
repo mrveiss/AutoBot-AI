@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import { visibleMessages } from '@/utils/internalMessage'
 import type { ChatMessage } from '@/types/api'
 import apiClient from '@/utils/ApiClient'
 import type { SecretType } from '@/types/secretKind'
@@ -118,9 +119,8 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.find(session => session.id === currentSessionId.value)
   )
 
-  const currentMessages = computed(() =>
-    currentSession.value?.messages || []
-  )
+  // #21846: backend-internal bookkeeping is filtered here, so counts, previews and export never see it either
+  const currentMessages = computed(() => visibleMessages(currentSession.value?.messages ?? []))
 
   const sessionCount = computed(() => sessions.value.length)
 
