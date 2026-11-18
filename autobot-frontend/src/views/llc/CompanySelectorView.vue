@@ -396,7 +396,7 @@ onMounted(async () => {
 
 .company-delete-error {
   margin: 0.5rem 0 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 

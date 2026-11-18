@@ -399,6 +399,22 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_PREFETCH_MODELS",
+        type=bool,
+        default=True,
+        description=(
+            "Docker only: whether the backend container's entrypoint fetches the pinned speech-to-text and "
+            "code-embedding models into the model cache volume before starting (docker/backend/entrypoint.sh, "
+            "autobot_shared/model_prefetch.py, #19869, #19738). A model already in the volume costs no network. "
+            "Set false (or 0) for an air-gapped host that places the models itself; a fetch that fails while "
+            "this is on stops the container with a message naming the model and the room left."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_UPLOAD_CHUNK_MB",
         type=int,
         default=8,
@@ -525,5 +541,59 @@ register_env_var(
         description="Facts one keyword search reads at most; a warning says when it cut one short (#19726).",
         component="knowledge",
         range=(100, 1000000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_WIPE_CHROMA_BATCH",
+        type=int,
+        default=500,
+        description=(
+            "Vector ids deleted per call while an approved knowledge wipe empties a knowledge "
+            "collection (services/kb_wipe_chroma.py, #21048)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_WIPE_SCAN_BATCH",
+        type=int,
+        default=500,
+        description=(
+            "Keys scanned and unlinked per call while an approved knowledge wipe removes knowledge "
+            "key prefixes (services/kb_wipe_redis.py, #21048)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S",
+        type=float,
+        default=30.0,
+        description="Seconds between batch progress lines while the doc indexer embeds chunks (#20886).",
+        component="knowledge",
+        range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_INDEX_MAX_CALL_SITES_PER_EDGE",
+        type=int,
+        default=50,
+        description=(
+            "Most call-site lines one code-graph call edge records. Calls past the cap are counted in the "
+            "edge's dropped_call_sites rather than lost silently; raising it stores more lines per edge "
+            "in the vector store's metadata (services/knowledge/code_call_sites.py)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
     )
 )

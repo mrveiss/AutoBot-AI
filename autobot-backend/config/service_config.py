@@ -206,8 +206,7 @@ class ServiceConfigMixin:
         """Get Redis configuration from SSOT config (single source of truth).
 
         Issue #12748: CANONICAL core Redis connection config. Reached via
-        ConfigManager (unified_config_manager / global_config_manager /
-        config_manager) and config.get_redis_config() (config/__init__.py,
+        ConfigManager (config_manager) and config.get_redis_config() (config/__init__.py,
         pure delegate). config.__init__._ConfigStub.get_redis_config() mirrors
         this shape for the circular-import re-entry path only.
 

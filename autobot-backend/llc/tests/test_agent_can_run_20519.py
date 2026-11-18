@@ -46,7 +46,7 @@ def test_autobot_agent_without_agent_class_cannot_run():
 
 
 def test_configured_autobot_agent_can_run():
-    assert run_block_reason("available", "autobot_agent", {"agent_class": "X"}) is None
+    assert run_block_reason("available", "autobot_agent", {"agent_class": "X"}, org_role="worker") is None
 
 
 def test_unregistered_adapter_type_cannot_run():
@@ -54,7 +54,9 @@ def test_unregistered_adapter_type_cannot_run():
 
 
 def test_paused_agent_cannot_run_and_names_the_status():
-    assert run_block_reason("paused", "autobot_agent", {"agent_class": "X"}) == "agent status is paused"
+    assert (
+        run_block_reason("paused", "autobot_agent", {"agent_class": "X"}, org_role="worker") == "agent status is paused"
+    )
 
 
 def test_list_rows_for_same_named_agents_differ_in_identity_and_run_state():
@@ -88,3 +90,20 @@ async def test_in_process_dispatch_skips_with_the_shared_gate_answer():
             await _dispatch_autobot_agent(agent, {})
     gate.assert_called_once_with("autobot_agent", {})
     assert "shared answer" in str(shared.value)
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_list_says_an_agent_the_role_bound_refuses_cannot_run(enforced):
+    """#20706: with the bound enforced, the list gives dispatch's refusal; with it off, the agent runs."""
+    from llc.org_role_authority import _no_bound_reason
+
+    with patch("llc.org_role_authority.is_feature_enabled", return_value=enforced):
+        row = _agent_row(_node("Alex", org_role=None), None)
+        node = _compose_agent_node(_node("Alex", org_role=None), None, None, 0)
+    if enforced:
+        expected = f"{_no_bound_reason(None)} (#16950)"
+        assert (row["can_run"], row["cannot_run_reason"]) == (False, expected)
+        assert (node.can_run, node.cannot_run_reason) == (False, expected)
+    else:
+        assert (row["can_run"], row["cannot_run_reason"]) == (True, None)
+        assert (node.can_run, node.cannot_run_reason) == (True, None)

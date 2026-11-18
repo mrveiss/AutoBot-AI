@@ -107,8 +107,9 @@ port and credentials come from the shared endpoint resolver and the database num
 
 ### NPU Support (Optional)
 ```bash
-# Install OpenVINO for Intel NPU acceleration (#14476: floor matches the SSOT)
-pip install "openvino>=2026.4.1"
+# Install OpenVINO for Intel NPU acceleration. The floor comes from the SSOT,
+# constraints/shared.txt, so this line never needs a version (#18047).
+pip install -c ../../constraints/shared.txt openvino
 ```
 
 ## 📋 Detailed Usage

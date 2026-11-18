@@ -10,10 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-from config.manager import UnifiedConfigManager as ConfigManager
-from config.manager import get_unified_config_manager
+from config.manager import ConfigManager, get_config_manager
 
-config_manager = get_unified_config_manager()
+config_manager = get_config_manager()
 
 
 class TestConfigurationMigration:

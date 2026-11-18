@@ -16,6 +16,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _API = repo_root() / "autobot-slm-backend" / "api"
 _LEVELS = {"debug", "info", "warning", "error", "critical", "exception", "log"}
 _BODY_NAMES = {"request", "body", "payload", "data"}
@@ -35,7 +37,7 @@ def _is_body_name(name: str) -> bool:
 def offending_lines(source: str, value_bodies: frozenset[str] = frozenset()) -> list[int]:
     """Line numbers of logger calls that pass ``<request-body>.value``."""
     hits: list[int] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
             continue
         if node.func.attr not in _LEVELS:

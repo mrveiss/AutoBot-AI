@@ -15,6 +15,8 @@ import ast
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 CALLERS = ("autobot-backend/api/analytics.py", "autobot-backend/api/analytics_code.py")
 OLD_COPY = "await asyncio.to_thread(analytics_controller.code_index_path.exists)\n"
 REBUILT_RESULT = "x = {'code_analysis_suite': a, 'code_index_mcp': b}\n"
@@ -25,7 +27,7 @@ DELEGATE = "await analytics_controller.code_tools_available()\n"
 
 def probes_a_tool_path(source: str) -> bool:
     """True if *source* asks a tool path whether it exists, or builds the probe's result itself."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Attribute) and node.attr == "exists":
             if isinstance(node.value, ast.Attribute) and node.value.attr in TOOL_PATHS:
                 return True

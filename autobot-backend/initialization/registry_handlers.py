@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Answer an unreadable code-source registry with 503, not a generic 500 (#17982).
 
-``source_storage.get_source`` and ``get_default_source_id`` used to return None
+``source_storage.get_source`` used to return None
 when the registry could not be reached, which every caller read as "no such
 source". They raise ``RegistryUnavailable`` now. Handlers that wrap their own
 errors (``with_error_handling``) still produce their logged 500; this is the

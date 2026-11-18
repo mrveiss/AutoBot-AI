@@ -8,14 +8,14 @@
  * Issue #896 - SLM Metrics Dashboard
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, saveTextFile } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('MetricsDetailsView')
 
@@ -48,13 +48,7 @@ async function loadMetrics() {
 async function downloadPrometheusMetrics() {
   await fetchPrometheusExport()
   if (prometheusExport.value) {
-    const blob = new Blob([prometheusExport.value], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `prometheus-metrics-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    saveTextFile(prometheusExport.value, `prometheus-metrics-${Date.now()}.txt`, 'text/plain')
   }
 }
 
@@ -87,7 +81,7 @@ onMounted(() => metricsPoller.start(''))
         <h2 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.metricsDetailsView.metricsDetails') }}</h2>
         <p class="text-sm text-gray-500 mt-1">
           {{ $t('monitoring.metricsDetailsView.realTimeFleetAnd') }}
-          <span v-if="lastUpdate" class="ml-2">{{ $t('monitoring.metricsDetailsView.lastUpdatedValue0', { value0: lastUpdate.toLocaleTimeString() }) }}</span>
+          <span v-if="lastUpdate" class="ml-2">{{ $t('monitoring.metricsDetailsView.lastUpdatedValue0', { value0: formatFleetTime(lastUpdate) }) }}</span>
         </p>
       </div>
       <div class="flex gap-2">

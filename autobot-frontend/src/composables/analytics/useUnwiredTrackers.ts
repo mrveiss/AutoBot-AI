@@ -76,6 +76,7 @@ export function useUnwiredTrackers(withSourceId: (url: string) => string) {
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true,
+      requireSource: true,
       pickData: (raw) => {
         if (!raw || raw.status === 'no_data') {
           return { count: 0, problems: [], sparkline: buildSparkline(0) }

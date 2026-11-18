@@ -8,19 +8,22 @@
     daemon_reload: true
 
 - name: restart backend
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: restarted
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-backend
 
 - name: restart celery
-  ansible.builtin.systemd:
-    name: autobot-celery
-    state: restarted
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-celery
 
 - name: restart celery beat
-  ansible.builtin.systemd:
-    name: autobot-celery-beat
-    state: restarted
+  when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-celery-beat
 
 - name: reload nginx backend
   ansible.builtin.systemd:

@@ -48,6 +48,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _CODE_SYNC = Path("autobot-slm-backend/api/code_sync.py")
 
@@ -148,7 +150,7 @@ def _branch_names(root: Path | None = None) -> list[str]:
     if not path.is_file():
         return []
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return []
     return sorted(
@@ -196,7 +198,7 @@ def _branch_steps(root: Path | None = None) -> dict[str, tuple[str, ...]]:
     if not path.is_file():
         return {}
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return {}
     return {
@@ -464,7 +466,7 @@ async def _run_post_sync_backend_branch(component, snapshot, steps, restart):
 
 
 def _steps_of(src: str, name: str) -> tuple[str, ...]:
-    tree = ast.parse(src)
+    tree = parse_cache.parse(src)
     fn = next(n for n in ast.walk(tree) if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef)) and n.name == name)
     return tuple(awaited_calls_in_source_order(fn))
 
@@ -514,7 +516,7 @@ def test_source_order_differs_from_walk_order_on_the_real_file():
     assert the difference exists rather than trusting the recollection.
     """
     path = _ROOT / _CODE_SYNC
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
     fn = next(
         n
         for n in ast.walk(tree)
