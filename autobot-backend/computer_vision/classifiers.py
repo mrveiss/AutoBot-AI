@@ -262,7 +262,7 @@ class TemplateMatchingEngine:
         return intersection / union if union > 0 else 0.0
 
 
-class ContextAnalyzer:
+class ScreenContextAnalyzer:
     """Analyzes screen context and application state"""
 
     def __init__(self):

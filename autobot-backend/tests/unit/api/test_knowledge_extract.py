@@ -23,25 +23,25 @@ def _make_extract_result(url: str = "https://example.com", data: dict = None, sc
 
 
 # ---------------------------------------------------------------------------
-# ExtractRequest validation
+# ExtractPageRequest validation
 # ---------------------------------------------------------------------------
 
 
 def test_extract_request_defaults() -> None:
-    """ExtractRequest defaults are correct."""
-    from api.knowledge_extract import ExtractRequest
+    """ExtractPageRequest defaults are correct."""
+    from api.knowledge_extract import ExtractPageRequest
 
-    req = ExtractRequest(url="https://example.com", schema={"type": "object"})
+    req = ExtractPageRequest(url="https://example.com", schema={"type": "object"})
     assert req.render == "auto"
     assert req.ingest is False
 
 
 def test_extract_request_all_render_modes() -> None:
     """All render modes are accepted."""
-    from api.knowledge_extract import ExtractRequest
+    from api.knowledge_extract import ExtractPageRequest
 
     for mode in ("auto", "fast", "playwright"):
-        req = ExtractRequest(url="https://example.com", schema={}, render=mode)
+        req = ExtractPageRequest(url="https://example.com", schema={}, render=mode)
         assert req.render == mode
 
 
@@ -49,30 +49,30 @@ def test_extract_request_rejects_bad_render() -> None:
     """Invalid render mode raises ValidationError."""
     from pydantic import ValidationError
 
-    from api.knowledge_extract import ExtractRequest
+    from api.knowledge_extract import ExtractPageRequest
 
     with pytest.raises(ValidationError):
-        ExtractRequest(url="https://example.com", schema={}, render="turbo")
+        ExtractPageRequest(url="https://example.com", schema={}, render="turbo")
 
 
 def test_extract_request_url_required() -> None:
     """Missing url raises ValidationError."""
     from pydantic import ValidationError
 
-    from api.knowledge_extract import ExtractRequest
+    from api.knowledge_extract import ExtractPageRequest
 
     with pytest.raises(ValidationError):
-        ExtractRequest(schema={"type": "object"})
+        ExtractPageRequest(schema={"type": "object"})
 
 
 def test_extract_request_schema_required() -> None:
     """Missing schema raises ValidationError."""
     from pydantic import ValidationError
 
-    from api.knowledge_extract import ExtractRequest
+    from api.knowledge_extract import ExtractPageRequest
 
     with pytest.raises(ValidationError):
-        ExtractRequest(url="https://example.com")
+        ExtractPageRequest(url="https://example.com")
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +83,9 @@ def test_extract_request_schema_required() -> None:
 @pytest.mark.asyncio
 async def test_extract_url_endpoint_success_no_ingest() -> None:
     """Returns ExtractResponse with schema_valid=True on happy path."""
-    from api.knowledge_extract import ExtractRequest, extract_url_endpoint
+    from api.knowledge_extract import ExtractPageRequest, extract_url_endpoint
 
-    req = ExtractRequest(url="https://example.com", schema={"type": "object"}, ingest=False)
+    req = ExtractPageRequest(url="https://example.com", schema={"type": "object"}, ingest=False)
     extract_result = _make_extract_result()
 
     with patch("api.knowledge_extract.extract_url", new_callable=AsyncMock, return_value=extract_result):
@@ -99,9 +99,9 @@ async def test_extract_url_endpoint_success_no_ingest() -> None:
 @pytest.mark.asyncio
 async def test_extract_url_endpoint_success_with_ingest() -> None:
     """ingest=True triggers _maybe_ingest (non-fatal on error)."""
-    from api.knowledge_extract import ExtractRequest, extract_url_endpoint
+    from api.knowledge_extract import ExtractPageRequest, extract_url_endpoint
 
-    req = ExtractRequest(url="https://example.com", schema={"type": "object"}, ingest=True)
+    req = ExtractPageRequest(url="https://example.com", schema={"type": "object"}, ingest=True)
     extract_result = _make_extract_result()
 
     with (
@@ -124,9 +124,9 @@ async def test_extract_url_endpoint_fetch_failure_returns_502() -> None:
     """RuntimeError from extract_url maps to 502 with fetch_failed error_code."""
     from fastapi import HTTPException
 
-    from api.knowledge_extract import ExtractRequest, extract_url_endpoint
+    from api.knowledge_extract import ExtractPageRequest, extract_url_endpoint
 
-    req = ExtractRequest(url="https://broken.example.com", schema={"type": "object"})
+    req = ExtractPageRequest(url="https://broken.example.com", schema={"type": "object"})
 
     with patch("api.knowledge_extract.extract_url", new_callable=AsyncMock, side_effect=RuntimeError("connection")):
         with pytest.raises(HTTPException) as exc_info:
@@ -144,9 +144,9 @@ async def test_extract_url_endpoint_schema_validation_failure_returns_422() -> N
     """ValueError from extract_url maps to 422 with schema_invalid error_code."""
     from fastapi import HTTPException
 
-    from api.knowledge_extract import ExtractRequest, extract_url_endpoint
+    from api.knowledge_extract import ExtractPageRequest, extract_url_endpoint
 
-    req = ExtractRequest(url="https://example.com", schema={"type": "object", "required": ["name"]})
+    req = ExtractPageRequest(url="https://example.com", schema={"type": "object", "required": ["name"]})
 
     with patch(
         "api.knowledge_extract.extract_url", new_callable=AsyncMock, side_effect=ValueError("'name' is required")
@@ -174,10 +174,10 @@ async def test_script_injection_not_in_extract_result() -> None:
     This test verifies the endpoint contract: if extract_url returns valid
     data, the endpoint passes it through unchanged regardless of the source.
     """
-    from api.knowledge_extract import ExtractRequest, extract_url_endpoint
+    from api.knowledge_extract import ExtractPageRequest, extract_url_endpoint
 
     malicious_data = {"name": "Widget"}  # sanitised output — no JS payload
-    req = ExtractRequest(url="https://example.com", schema={"type": "object"})
+    req = ExtractPageRequest(url="https://example.com", schema={"type": "object"})
 
     with patch(
         "api.knowledge_extract.extract_url",

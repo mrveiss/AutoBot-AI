@@ -171,7 +171,30 @@ if [ -r "${FLEET_RULE}" ]; then
         echo "  FAIL: fleet regex derivation -- got nothing from ${FLEET_RULE}"
     fi
 else
-    echo "  SKIP: ${FLEET_RULE} not readable"
+    fail=$((fail + 1))
+    echo "  FAIL: ${FLEET_RULE} not readable -- the rule this test reads from is missing"
+fi
+
+# #19233: an unreadable rule is a hard error, never "no fleet IP found".
+out=$(cd "${HERE}/lib" && PREFLIGHT_BASE=HEAD PREFLIGHT_FLEET_RULE="${TMP}/no-such-rule.py" bash "${SCRIPT}" \
+        --issue 9999 --only "${NO_REQUIRED_CHECKS}" --body "${GOOD_BODY}" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q "fleet IP rule unreadable"; then
+    pass=$((pass + 1))
+else
+    fail=$((fail + 1))
+    echo "  FAIL: an unreadable fleet rule must exit 2 -- got rc=${rc}"
+    printf '%s\n' "$out" | sed 's/^/         /'
+fi
+# And the default rule resolves when run from elsewhere in the repo. The script also cds to the
+# root, so this alone cannot tell a cwd-relative path from a script-relative one; the
+# script-relative path is the fix, and this pins only that the default is found.
+out=$(cd "${HERE}/lib" && PREFLIGHT_BASE=HEAD bash "${SCRIPT}" --issue 9999 --only "${NO_REQUIRED_CHECKS}" \
+        --body "${GOOD_BODY}" 2>&1); rc=$?
+if printf '%s' "$out" | grep -q "fleet IP rule unreadable"; then
+    fail=$((fail + 1))
+    echo "  FAIL: run from another directory, the default fleet rule was not found"
+else
+    pass=$((pass + 1))
 fi
 
 # ------------------------------------------- required status check coverage

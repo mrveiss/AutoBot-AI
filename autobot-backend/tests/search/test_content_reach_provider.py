@@ -15,7 +15,7 @@ from agent_loop.search.content_reach_provider import ContentReachSearchProvider
 
 
 def _make_success_result(structured: Dict[str, Any] | None = None, text: str = "", url: str = "") -> MagicMock:
-    """Build a mock ContentResult with success=True."""
+    """Build a mock ContentReachResult with success=True."""
     r = MagicMock()
     r.success = True
     r.structured = structured or {}

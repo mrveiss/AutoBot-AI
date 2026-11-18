@@ -16,6 +16,8 @@ import ast
 import io
 import tokenize
 
+from tools.lint import _parse_cache as parse_cache
+
 #: The bandit test id the guard is about. Built from parts so that this
 #: module's own source carries no occurrence of the marker outside a string.
 MARKER = "nosec " + "B615"
@@ -200,7 +202,7 @@ def unpinned_suppressed_calls(source: str) -> list[int]:
     resolver call, before the call.
     """
     marker_lines = set(comment_markers(source))
-    module = ast.parse(source)
+    module = parse_cache.parse(source)
     scopes = [n for n in ast.walk(module) if isinstance(n, _SCOPE_BOUNDARIES)] + [module]
     bad: set[int] = set()
     seen: set[int] = set()

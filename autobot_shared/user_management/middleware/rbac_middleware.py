@@ -23,7 +23,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_5_MINUTES
-from autobot_shared.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from autobot_shared.user_management.audit_rows import audit_row
+from autobot_shared.user_management.grant_scope import grants_in_scope
+from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
 
 logger = get_logger(__name__)
 
@@ -221,45 +223,38 @@ class RBACMiddleware:
         user_id: uuid.UUID | None,
         org_id: uuid.UUID | None = None,
     ) -> Set[str]:
-        """
-        Get all permissions for a user.
+        """Permission names *user_id* holds acting in *org_id* (#18338).
 
-        Args:
-            user_id: User UUID
-            org_id: Organization UUID for tenant context
-
-        Returns:
-            Set of permission names
+        Platform-wide grants (system roles) always count; a company role's grants
+        count only when *org_id* is that company. The cache holds the user's encoded
+        grants, so one entry serves every org and invalidation stays per user.
 
         Raises:
             RBACNotConfiguredError: on a cache MISS before configure_rbac(). An L1/L2 hit
-                returns the real cached permissions first, which is not fail-open.
+                returns the real cached grants first, which is not fail-open.
         """
         if not user_id:
             return set()
-
         await _ensure_listener_started()
+        grants = await self._cache_get(user_id)
+        if grants is None:
+            grants = await self._load_grants(user_id, org_id)
+        return grants_in_scope(grants, org_id)
 
-        cached = await self._cache_get(user_id)
-        if cached is not None:
-            return cached
-
+    async def _load_grants(self, user_id: uuid.UUID, org_id: uuid.UUID | None) -> Set[str]:
+        """Read and cache the user's grants; an unreachable database grants nothing."""
         deps = _require_dependencies()  # outside the try: a missing wiring must not read as "no permissions"
-        if self._deployment_config().postgres_enabled:
-            try:
-                async with deps.db_session_context() as session:
-                    context = deps.tenant_context_cls(org_id=org_id, user_id=user_id)
-                    user_service = deps.user_service_cls(session, context)
-                    permissions = await user_service.get_user_permissions(user_id)
-
-                    await self._cache_set(user_id, permissions)
-                    return permissions
-
-            except Exception as e:
-                logger.warning("Failed to fetch permissions from database: %s", e)
-                return set()
-
-        return set()
+        if not self._deployment_config().postgres_enabled:
+            return set()
+        try:
+            async with deps.db_session_context() as session:
+                context = deps.tenant_context_cls(org_id=org_id, user_id=user_id)
+                grants = await deps.user_service_cls(session, context).get_user_permission_grants(user_id)
+        except Exception as e:
+            logger.warning("Failed to fetch permissions from database: %s", e)
+            return set()
+        await self._cache_set(user_id, grants)
+        return grants
 
     async def check_permission(
         self,
@@ -377,8 +372,12 @@ async def _emit_permission_denied_audit(
     org_id: uuid.UUID | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    subject: str | None = None,
 ) -> None:
     """Persist a permission-denied event to the audit trail (#12925).
+
+    *subject* is the caller's name when it carries no user UUID (an SLM session or
+    key, #18263); it is recorded in the details so such a denial still names someone.
 
     Ported from autobot-slm-backend, which has recorded denials since GH #6511
     while this backend recorded nothing — a 403 left no user, permission, path
@@ -393,14 +392,14 @@ async def _emit_permission_denied_audit(
     deps = _require_dependencies()  # outside the try: an unwired audit must fail loudly
     try:
         async with deps.db_session_context() as session:
-            entry = AuditLog(
-                id=uuid.uuid4(),
+            entry = audit_row(
                 user_id=user_id,
                 org_id=org_id,
-                action=AuditAction.PERMISSION_DENIED,
+                action=IdentityAuditAction.PERMISSION_DENIED,
                 resource_type=AuditResourceType.ENDPOINT,
+                resource=path,
                 outcome="denied",
-                details={"permission": permission, "path": path},
+                details={"permission": permission, "path": path, **({"subject": subject} if subject else {})},
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
@@ -412,7 +411,7 @@ async def _emit_permission_denied_audit(
         # dropped records and the other silent. Keep swallowing, since a failing
         # audit must never turn a clean 403 into a 500, but stop letting the loss
         # be invisible.
-        record_audit_write_failure_safely(AuditAction.PERMISSION_DENIED, type(exc).__name__)
+        record_audit_write_failure_safely(IdentityAuditAction.PERMISSION_DENIED, type(exc).__name__)
 
 
 def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:

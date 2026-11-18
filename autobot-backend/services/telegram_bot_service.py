@@ -14,7 +14,7 @@ AES-256-GCM field encryption (see autobot_shared.field_encryption).
 
 from typing import Any, Dict, Optional
 
-from autobot_shared.field_encryption import decrypt_field, encrypt_field
+from autobot_shared.field_encryption import is_plaintext, open_tagged, seal_tagged, storage_context
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -31,8 +31,25 @@ TELEGRAM_WEBHOOK_SECRET_KEY = "autobot:settings:telegram_webhook_secret"  # nose
 # the Gateway ingest self-filter (#14028), see api/telegram_bot.py.
 TELEGRAM_BOT_ID_KEY = "autobot:settings:telegram_bot_id"
 
-# Sentinel prefix for encrypted values (backward compatibility)
-_ENCRYPTED_PREFIX = "enc:"
+
+def _context(redis_key: str) -> str:
+    """Where a sealed Telegram credential is stored; the seal is bound to it (#17981)."""
+    return storage_context("redis", redis_key)
+
+
+async def _read_sealed(redis: Any, redis_key: str) -> Optional[str]:
+    """Return the stored credential, ``None`` only when none is stored.
+
+    A value that cannot be decrypted raises ``FieldDecryptionError``. It never
+    reads as "not configured", which would invite a save over the credential (#17981).
+    """
+    raw = await redis.get(redis_key)
+    if not raw:
+        return None
+    value = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    if is_plaintext(value):
+        logger.warning("Telegram credential %s is stored in plaintext (not encrypted)", redis_key)
+    return open_tagged(value, context=_context(redis_key))
 
 
 class TelegramBotService:
@@ -55,26 +72,13 @@ class TelegramBotService:
 
         Security: Automatically decrypts encrypted tokens (prefixed with 'enc:').
         """
-        redis = await get_redis_client()
+        redis = await get_redis_client(async_client=True)
         if redis is None:
             logger.error("Redis client not available for Telegram bot service")
             return cls(bot_token=None)
 
-        bot_token = await redis.get(TELEGRAM_BOT_TOKEN_KEY)
-        if bot_token:
-            bot_token = bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
-            # Decrypt if encrypted (backward compatible with plaintext tokens)
-            if bot_token.startswith(_ENCRYPTED_PREFIX):
-                try:
-                    bot_token = decrypt_field(bot_token[len(_ENCRYPTED_PREFIX) :])
-                    logger.info("Loaded and decrypted Telegram bot token from Redis")
-                except Exception as exc:
-                    logger.error(f"Failed to decrypt Telegram bot token: {exc}")
-                    return cls(bot_token=None)
-            else:
-                logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
-                logger.info("Loaded Telegram bot token from Redis")
-        else:
+        bot_token = await _read_sealed(redis, TELEGRAM_BOT_TOKEN_KEY)
+        if bot_token is None:
             logger.warning("No Telegram bot token found in Redis")
 
         return cls(bot_token=bot_token)
@@ -461,13 +465,13 @@ async def save_telegram_bot_token(bot_token: str) -> None:
     Args:
         bot_token: Telegram Bot API token
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
 
     # Encrypt the token before storing
     try:
-        encrypted_token = _ENCRYPTED_PREFIX + encrypt_field(bot_token)
+        encrypted_token = seal_tagged(bot_token, context=_context(TELEGRAM_BOT_TOKEN_KEY))
         await redis.set(TELEGRAM_BOT_TOKEN_KEY, encrypted_token)
         logger.info("Saved encrypted Telegram bot token to Redis")
     except Exception as exc:
@@ -482,25 +486,12 @@ async def get_telegram_bot_token() -> Optional[str]:
     Returns:
         Decrypted bot token or None if not configured
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.error("Redis client not available")
         return None
 
-    bot_token = await redis.get(TELEGRAM_BOT_TOKEN_KEY)
-    if bot_token:
-        bot_token = bot_token.decode("utf-8") if isinstance(bot_token, bytes) else bot_token
-        # Decrypt if encrypted (backward compatible with plaintext tokens)
-        if bot_token.startswith(_ENCRYPTED_PREFIX):
-            try:
-                return decrypt_field(bot_token[len(_ENCRYPTED_PREFIX) :])
-            except Exception as exc:
-                logger.error(f"Failed to decrypt Telegram bot token: {exc}")
-                return None
-        else:
-            logger.warning("Telegram bot token is stored in plaintext (not encrypted)")
-            return bot_token
-    return None
+    return await _read_sealed(redis, TELEGRAM_BOT_TOKEN_KEY)
 
 
 async def save_telegram_bot_id(bot_id: str) -> None:
@@ -512,7 +503,7 @@ async def save_telegram_bot_id(bot_id: str) -> None:
     Args:
         bot_id: Numeric Telegram user id from getMe()
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
     await redis.set(TELEGRAM_BOT_ID_KEY, bot_id)
@@ -527,7 +518,7 @@ async def get_telegram_bot_id() -> Optional[str]:
     Returns:
         The bot's numeric Telegram user id as a string, or None if not yet resolved.
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         return None
 
@@ -546,12 +537,12 @@ async def save_telegram_webhook_secret(secret: str) -> None:
     Args:
         secret: Webhook secret token
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
 
     # Encrypt secret before storage (#9606)
-    encrypted_secret = _ENCRYPTED_PREFIX + encrypt_field(secret)
+    encrypted_secret = seal_tagged(secret, context=_context(TELEGRAM_WEBHOOK_SECRET_KEY))
     await redis.set(TELEGRAM_WEBHOOK_SECRET_KEY, encrypted_secret)
     logger.info("Saved encrypted Telegram webhook secret to Redis")
 
@@ -565,23 +556,9 @@ async def get_telegram_webhook_secret() -> Optional[str]:
     Returns:
         Decrypted webhook secret or None if not configured
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.error("Redis client not available")
         return None
 
-    secret = await redis.get(TELEGRAM_WEBHOOK_SECRET_KEY)
-    if secret:
-        secret = secret.decode("utf-8") if isinstance(secret, bytes) else secret
-
-        # Decrypt if encrypted (#9606)
-        if secret.startswith(_ENCRYPTED_PREFIX):
-            try:
-                return decrypt_field(secret[len(_ENCRYPTED_PREFIX) :])
-            except Exception as e:
-                logger.error(f"Failed to decrypt Telegram webhook secret: {e}")
-                return None
-
-        # Return plaintext for backward compatibility
-        return secret
-    return None
+    return await _read_sealed(redis, TELEGRAM_WEBHOOK_SECRET_KEY)

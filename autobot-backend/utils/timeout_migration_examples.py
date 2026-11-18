@@ -762,7 +762,7 @@ class ExistingOperationMigrator:
                 ["python", "-m", "pytest", str(test_file), "-v"],
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minute timeout per test
+                timeout=TimingConstants.VERY_LONG_TIMEOUT,
                 cwd=str(PATH.PROJECT_ROOT),
             )
 
@@ -783,7 +783,7 @@ class ExistingOperationMigrator:
                 "file": str(test_file),
                 "status": "TIMEOUT",
                 "duration": time.time() - start_time,
-                "error": "Test timed out after 5 minutes",
+                "error": f"Test timed out after {TimingConstants.VERY_LONG_TIMEOUT}s",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception:

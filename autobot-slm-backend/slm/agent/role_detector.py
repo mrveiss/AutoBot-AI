@@ -34,10 +34,12 @@ class RoleDefinition:
 
 
 @dataclass
-class RoleStatus:
+class RoleDetection:
     """Detection status for a role."""
 
     path_exists: bool = False
+    # #19076: False when the role names units and the node has none of them.
+    units_installed: bool = True
     path: str | None = None
     service_running: bool = False
     service_name: str | None = None
@@ -50,9 +52,9 @@ class RoleStatus:
 
         - active: path exists and service running (or no service required)
         - inactive: path exists but service is down
-        - not_installed: path absent
+        - not_installed: path absent, or none of the role's units exists
         """
-        if not self.path_exists:
+        if not self.path_exists or not self.units_installed:
             return "not_installed"
         # No service name means it's a library/passive role — path = active
         if not self.service_name:
@@ -91,7 +93,7 @@ class RoleDetector:
 
         logger.debug("Loaded %d role definitions", len(self.roles))
 
-    def detect_all(self) -> Dict[str, RoleStatus]:
+    def detect_all(self) -> Dict[str, RoleDetection]:
         """Detect all known roles on this system."""
         results = {}
         listening_ports = {p.port for p in get_listening_ports()}
@@ -101,9 +103,9 @@ class RoleDetector:
 
         return results
 
-    def _detect_role(self, role: RoleDefinition, listening_ports: set) -> RoleStatus:
+    def _detect_role(self, role: RoleDefinition, listening_ports: set) -> RoleDetection:
         """Detect a single role."""
-        status = RoleStatus()
+        status = RoleDetection()
 
         # Check path (service-only roles have no target_path — always pass)
         if role.target_path:
@@ -117,6 +119,9 @@ class RoleDetector:
         if role.systemd_service:
             status.service_name = ", ".join(role.systemd_service)
             status.service_running = all(self._check_service(unit) for unit in role.systemd_service)
+            # #19076: a service-only role has no path to disprove it, so a unit the
+            # node does not have would otherwise read as "inactive" -- present.
+            status.units_installed = any(self._unit_installed(unit) for unit in role.systemd_service)
 
         # Check port
         if role.health_check_port:
@@ -129,19 +134,34 @@ class RoleDetector:
 
         return status
 
-    def _check_service(self, service_name: str) -> bool:
-        """Check if a systemd service is running."""
+    def _systemctl(self, *args: str) -> str | None:
+        """stdout of one ``systemctl`` query, or None when it failed to run or exited non-zero."""
         try:
-            result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv; service_name is a configured role name
-                ["systemctl", "is-active", service_name],
+            result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv; unit names are configured role names
+                ["systemctl", *args],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            return result.stdout.strip() == "active"
         except Exception as e:
-            logger.debug("Service check failed for %s: %s", service_name, e)
-            return False
+            logger.debug("systemctl %s failed: %s", " ".join(args), e)
+            return None
+        return result.stdout.strip() if result.returncode == 0 else None
+
+    def _check_service(self, service_name: str) -> bool:
+        """Check if a systemd service is running."""
+        return self._systemctl("is-active", service_name) == "active"
+
+    def _unit_installed(self, service_name: str) -> bool:
+        """Whether systemd knows the unit at all (#19076).
+
+        ``LoadState=not-found`` means the node never had it; a stopped or masked
+        unit is still installed. A failed probe counts as not installed: detection
+        only ever ADDS groups to a node's declared roles, so "cannot tell" must
+        add nothing.
+        """
+        state = self._systemctl("show", "--property=LoadState", "--value", service_name)
+        return bool(state) and state != "not-found"
 
     def _read_version(self, target_path: Path) -> str | None:
         """Read version from version.json if present."""

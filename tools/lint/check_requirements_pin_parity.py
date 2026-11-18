@@ -52,6 +52,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
 # linters only — never the application's own dependencies — so
@@ -70,11 +72,6 @@ _BACKEND_REQUIREMENTS = "autobot-backend/requirements.txt"
 GUARD_INPUT_PATHS = (_ROOT_REQUIREMENTS, _BACKEND_REQUIREMENTS)
 
 _NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def _normalize(name: str) -> str:
@@ -156,16 +153,6 @@ def audit_parity(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     ]
 
 
-def run_audit() -> int:
-    compared, problems = audit_parity()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\nrequirements pin-parity audit FAILED over %d shared package(s) (#15070).", compared)
-        return 1
-    logger.info("requirements pin-parity audit clean over %d shared package(s) (#15070).", compared)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -177,7 +164,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    compared, problems = audit_parity()
+    return report_audit(
+        logger,
+        problems,
+        "\nrequirements pin-parity audit FAILED over %d shared package(s) (#15070).",
+        "requirements pin-parity audit clean over %d shared package(s) (#15070).",
+        compared,
+    )
 
 
 if __name__ == "__main__":

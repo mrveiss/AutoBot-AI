@@ -27,16 +27,13 @@ from api.user_management.dependencies import (
     user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.user_management.user_service_errors import InvalidCredentialsError, UserNotFoundError
 from user_management.middleware.rate_limit import (
     RateLimitExceeded,
     TargetedPasswordChangeRateLimiter,
 )
 from user_management.schemas import PasswordChange
 from user_management.services import TenantContext, UserService
-from user_management.services.user_service import (
-    InvalidCredentialsError,
-    UserNotFoundError,
-)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 logger = get_logger(__name__)

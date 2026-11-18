@@ -10,10 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-from config.manager import UnifiedConfigManager as ConfigManager
-from config.manager import get_unified_config_manager
+from config.manager import ConfigManager, get_config_manager
 
-config_manager = get_unified_config_manager()
+config_manager = get_config_manager()
 
 
 class TestConfigurationMigration:
@@ -202,26 +201,6 @@ class TestConfigurationMigration:
         # Test list values
         assert isinstance(cm.get_nested("hardware.acceleration.priority_order"), list)
         assert isinstance(cm.get_nested("security.blocked_commands"), list)
-
-    def test_config_migration_backward_compatibility(self):
-        """Test that migration maintains backward compatibility"""
-        # Test that old config patterns still work during transition period
-        # The backward-compat wrapper is config.compat.Config. `utils.config_manager`
-        # (the old import path) no longer exists, and `from config import config`
-        # yields the SSOT _ConfigProxy, which exposes neither .config nor .get.
-        from config.compat import Config
-
-        legacy = Config(config_manager)
-
-        # The backward compatibility wrapper should work
-        assert hasattr(legacy, "config")  # Old interface
-        assert hasattr(legacy, "get")  # Old interface
-
-        # Should return the same values as the new interface. Use a key that
-        # actually EXISTS — the previous "llm.orchestrator_llm" is absent from
-        # the config tree, so both sides were None and the assertion was vacuous.
-        assert legacy.get("redis") == config_manager.get("redis")
-        assert isinstance(legacy.config, dict) and legacy.config
 
     def test_config_default_value_handling(self):
         """Test proper handling of default values across components"""

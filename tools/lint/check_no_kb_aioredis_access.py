@@ -29,7 +29,8 @@ yet initialized, matching the contract the 159 migrated call sites rely on.
 Exit code:
   0 — clean (no banned patterns found in scanned files)
   1 — banned patterns found (PR/commit blocked)
-  2 — usage error
+  2 — vacuous scan: root not a git toplevel, git failed, nothing reached,
+      or a full-repo sweep landed under its floor (#14896)
 """
 
 from __future__ import annotations
@@ -43,7 +44,8 @@ from typing import List, Tuple
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _scan_helpers import PY_FLOOR, enforce_reach, scan_python_files  # noqa: E402
+from _check_harness import format_finding, run_anchored  # noqa: E402
+from _scan_helpers import PY_FLOOR, scan_python_files  # noqa: E402
 
 # Files allowed to reference the attribute directly.
 #
@@ -165,33 +167,39 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
     return hits
 
 
+_HOOK = "no-kb-aioredis-access"
+
+
+def _display(path: Path, repo_root: Path) -> Path:
+    """*path* relative to the repo when it is inside it, else as given."""
+    try:
+        return path.resolve().relative_to(repo_root)
+    except ValueError:
+        return path
+
+
+def _summary(n: int) -> str:
+    return (
+        f"\n[no-kb-aioredis-access] {n} banned pattern(s) found. "
+        "Use `kb.redis()` instead of reaching into KB internals (#5225)."
+    )
+
+
+def _collect(args: List[str], repo_root: Path) -> Tuple[int, List[str]]:
+    """``(files reached, finding lines)`` for *args* (empty = whole repo)."""
+    files, _ = scan_python_files(args, repo_root)
+    findings = [
+        f"[{_HOOK}] " + format_finding(_display(path, repo_root), line_no, f"{pattern_id} — {message}")
+        for path in files
+        for line_no, pattern_id, message in _scan(path, repo_root)
+    ]
+    return len(files), findings
+
+
 def main(argv: List[str]) -> int:
-    repo_root = Path(__file__).resolve().parents[2]
-    files, full_repo = scan_python_files(argv[1:], repo_root)
     # Vacuity floor (#14896): full-repo mode only -- pre-commit legitimately
-    # hands this hook an argv with no Python in it.
-    if enforce_reach(len(files), PY_FLOOR, hook="no-kb-aioredis-access", full_repo=full_repo):
-        return 1
-    total_hits = 0
-    for path in files:
-        for line_no, pattern_id, message in _scan(path, repo_root):
-            try:
-                rel = path.resolve().relative_to(repo_root)
-            except ValueError:
-                rel = path
-            print(
-                f"[no-kb-aioredis-access] {rel}:{line_no}: {pattern_id} — {message}",
-                file=sys.stderr,
-            )
-            total_hits += 1
-    if total_hits:
-        print(
-            f"\n[no-kb-aioredis-access] {total_hits} banned pattern(s) found. "
-            f"Use `kb.redis()` instead of reaching into KB internals (#5225).",
-            file=sys.stderr,
-        )
-        return 1
-    return 0
+    # hands this hook an argv with no Python in it. Exit 2 = the scan proved nothing.
+    return run_anchored(_HOOK, _collect, argv[1:], anchor=Path(__file__), floor=PY_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

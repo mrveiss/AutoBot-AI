@@ -102,9 +102,30 @@ def _population(root: Path = _REPO_ROOT) -> set[Path]:
     return {p for p in files if not any(part in _SKIP_PARTS for part in p.relative_to(root).parts)}
 
 
+def dependabot_directories(ecosystem: str, config: Path = _CONFIG) -> list[str]:
+    """Every ``directory`` (or ``directories`` entry) configured for *ecosystem*.
+
+    The one reader of ``dependabot.yml`` for the coverage guards: this pip guard and
+    its sibling for the other ecosystems (#19523) share it, so the two cannot parse
+    the config differently.
+    """
+    document = yaml.safe_load(config.read_text(encoding="utf-8"))
+    found: list[str] = []
+    for update in document["updates"]:
+        if update.get("package-ecosystem") != ecosystem:
+            continue
+        if "directory" in update:
+            # Dependabot globs only `directories`; a wildcard in the singular key matches nothing.
+            if any(ch in update["directory"] for ch in "*?["):
+                raise ValueError(f"dependabot `directory` {update['directory']!r} is a glob; only `directories` globs")
+            found.append(update["directory"])
+        else:
+            found.extend(update.get("directories", []))
+    return found
+
+
 def _pip_directories() -> list[str]:
-    config = yaml.safe_load(_CONFIG.read_text(encoding="utf-8"))
-    return [u["directory"] for u in config["updates"] if u.get("package-ecosystem") == "pip"]
+    return dependabot_directories("pip")
 
 
 def _reach(directories: list[str], root: Path = _REPO_ROOT) -> set[Path]:
@@ -251,3 +272,13 @@ def test_the_detector_clears_a_nested_manifest_once_an_include_reaches_it(tmp_pa
     )
 
     assert nested.resolve() in _reach(["/", "/worker"], tmp_path)
+
+
+def test_a_glob_in_the_singular_directory_key_is_refused_but_in_directories_is_read(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.yml"
+    bad.write_text('updates:\n  - package-ecosystem: npm\n    directory: "/packages/*"\n', encoding="utf-8")
+    good = tmp_path / "good.yml"
+    good.write_text('updates:\n  - package-ecosystem: npm\n    directories: ["/packages/*"]\n', encoding="utf-8")
+    with pytest.raises(ValueError):
+        dependabot_directories("npm", bad)
+    assert dependabot_directories("npm", good) == ["/packages/*"]

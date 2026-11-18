@@ -45,7 +45,7 @@ _MARKER = "imported_from_sqlite"
 
 
 @dataclass
-class ReconcileReport:
+class CredentialReconcileReport:
     """Counts for one reconciliation sweep (``aborted`` when SQLite was unsafe to trust)."""
 
     checked: int = 0
@@ -93,7 +93,7 @@ def _is_revoked(sqlite_state: dict, row) -> bool:
     return src is None or not src["active"]
 
 
-async def _reconcile_one(session, svc, row, src, report: ReconcileReport) -> None:
+async def _reconcile_one(session, svc, row, src, report: CredentialReconcileReport) -> None:
     """Reconcile one envelope row against its canonical counterpart *src*.
 
     **This sweep is a cross-owner system principal and holds no user's authority.**
@@ -139,7 +139,7 @@ async def _reconcile_one(session, svc, row, src, report: ReconcileReport) -> Non
 
 async def reconcile_connector_credentials(
     session, *, sqlite_path: str, fernet: "Fernet | MultiFernet", root_key: bytes
-) -> ReconcileReport:
+) -> CredentialReconcileReport:
     """Reconcile every marker'd envelope row against the canonical SQLite store. Caller commits."""
     from sqlalchemy import select
     from sqlalchemy.exc import SQLAlchemyError
@@ -148,7 +148,7 @@ async def reconcile_connector_credentials(
     from models.secret import Secret
     from services.envelope_secrets_service import EnvelopeSecretsService, SecretAccessError, SecretNotFoundError
 
-    report = ReconcileReport()
+    report = CredentialReconcileReport()
     try:
         sqlite_state, report.undecryptable = _read_sqlite_state(sqlite_path, fernet)
     except (FileNotFoundError, sqlite3.OperationalError) as exc:

@@ -210,8 +210,8 @@ async def test_the_websocket_path_refuses_a_purpose_bound_token_carrying_a_usern
       and a device JWT carries `user_id`. It authenticated. That is the defect.
     * WS -- builds its result with DIRECT subscripts, `token_data["username"]`,
       and **no purpose-bound minter emits `username`**
-      (`services/device_token_service.py` is the only one setting a
-      `token_type`; its payload is device_id/user_id/scope/platform/iat). So a
+      (the retired `services/device_token_service.py` was the only one
+      that set a `token_type`; its payload was device_id/user_id/scope/platform/iat). So a
       device JWT already died on a `KeyError` swallowed by `except Exception`.
 
     Rejecting by accident and rejecting on purpose are the same outcome and

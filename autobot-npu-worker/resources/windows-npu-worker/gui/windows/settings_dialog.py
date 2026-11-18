@@ -4,25 +4,26 @@
 Settings Dialog - Configuration Management
 """
 
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QTabWidget,
-    QPushButton,
-    QTextEdit,
-    QLabel,
-    QMessageBox,
-    QFileDialog,
-    QGroupBox,
-    QFormLayout,
-    QLineEdit,
-    QSpinBox,
-    QComboBox,
-    QCheckBox,
-)
+from gui.utils.app_config import DEFAULT_WORKER_PORT
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+)
 
 
 class SettingsDialog(QDialog):
@@ -125,7 +126,7 @@ class SettingsDialog(QDialog):
         # Port
         self.service_port = QSpinBox()
         self.service_port.setRange(1024, 65535)
-        self.service_port.setValue(8082)
+        self.service_port.setValue(DEFAULT_WORKER_PORT)
         layout.addRow("Port:", self.service_port)
 
         # Workers
@@ -245,7 +246,7 @@ class SettingsDialog(QDialog):
             # Load service settings
             service = config.get("service", {})
             self.service_host.setText(service.get("host", "0.0.0.0"))
-            self.service_port.setValue(service.get("port", 8082))
+            self.service_port.setValue(service.get("port", DEFAULT_WORKER_PORT))
             self.service_workers.setValue(service.get("workers", 1))
 
             backend = config.get("backend", {})

@@ -323,13 +323,6 @@ class ServiceConfigurator:
 # )
 """
 
-    def get_redis_tls_url(self) -> str:
-        """Get Redis URL with TLS. Issue #694: Use SSOT config."""
-        from autobot_shared.ssot_config import config
-
-        redis_ip = VM_DEFINITIONS.get("redis", config.vm.redis)
-        return f"rediss://{redis_ip}:6380"
-
     def get_tls_context_params(self) -> dict:
         """Get parameters for creating SSL context."""
         cert_dir = self.config.cert_dir_path / "main-host"

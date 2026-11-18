@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * FleetToolsTab - Fleet tools as a tab component
  *
@@ -270,9 +271,7 @@ async function getServiceLogs(): Promise<void> {
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {{ error }}
-        </div>
+        <BaseAlert v-if="error" variant="error" class="mt-4" :message="error" />
 
         <!-- Result Output -->
         <div v-if="result" class="mt-4">
