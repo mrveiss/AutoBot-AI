@@ -89,6 +89,21 @@ jobs:
         with:
           fetch-depth: 2  # #19283: down-only ratchets read the base commit (HEAD^1)
 
+      # #21713: a PR into `release` is ratcheted against the head's merge base with main (#19466,
+      # owner ruling 2026-10-24), from the rule's one home. Without it base_commit() reads HEAD^1 --
+      # the release tip -- and every guard declared after that tip raises BaseUnavailable. The same
+      # two steps as ci.yml's; repo_tests/release_promotion_base_wiring_21713_test.py holds it.
+      - uses: ./.github/actions/release-promotion-base  # #21713
+        id: release-base
+      - name: Ratchet base (#19283)  # #21713
+        env:
+          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+        run: |
+          if [ -n "${EVENT_BASE//0/}" ]; then
+            git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+            echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+          fi
+
       - uses: ./.github/actions/setup-python-suite
 
       # Both invocations mirror python-suite exactly EXCEPT for coverage, which

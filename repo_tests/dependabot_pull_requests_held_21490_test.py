@@ -79,7 +79,7 @@ _ALWAYS_RUNS = re.compile(r"always\(\)|cancelled\(\)|failure\(\)")
 #: Workflows with no expensive job, by name -> job count. A new job makes the count differ and
 #: forces a look at whether the workflow is still cheap.
 CHEAP: dict[str, int] = {
-    "actionlint.yml": 1,
+    "actionlint.yml": 2,  # #21713: + the 10-minute promotion-base wiring guard
     "ansible-file-references.yml": 1,
     "ansible-free-form-args.yml": 1,
     "ansible-role-facts-test.yml": 1,
