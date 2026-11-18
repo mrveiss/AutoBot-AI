@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('MCPTool')
 /**
@@ -18,6 +17,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const api = useAutobotApi()
 
@@ -82,11 +82,7 @@ let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
 // Computed
 const lastUpdatedTime = computed(() => {
   if (!lastUpdated.value) return 'Never'
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - lastUpdated.value.getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  return `${Math.floor(diff / 3600)}h ago`
+  return formatCompactRelativeTime(lastUpdated.value)
 })
 
 const bridgeHealthClass = computed(() => {

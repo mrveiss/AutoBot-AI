@@ -54,7 +54,6 @@ def _sources(root: Path) -> list[Path]:
 REACH = declare(
     "compose-nodes-restated-default",
     discover=_sources,
-    floor=1056,  # mid-window: population 1112, window (1000, 1112)
     growth=112,  # ~10%: ordinary growth between repins must not turn an unrelated PR red
     what="non-test SLM, infrastructure and docker files",
     roots=_ROOTS,

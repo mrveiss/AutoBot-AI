@@ -330,7 +330,8 @@ const selectMode = (mode: EnforcementMode) => {
 
 .mode-warning .icon,
 .mode-info .icon {
-  font-size: var(--text-lg);
+  width: var(--text-lg);
+  height: var(--text-lg);
   flex-shrink: 0;
   margin-top: var(--spacing-0-5);
 }

@@ -19,10 +19,11 @@ framework and existing AutoBot components, including:
 import asyncio
 from typing import Any, Callable, Dict, List
 
-from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, WebSocket
 from pydantic import BaseModel
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.threshold_constants import TimingConstants
@@ -237,9 +238,7 @@ class OperationIntegrationManager:
         """Handle WebSocket connection for progress updates."""
         await websocket.accept()
         async with self._ws_lock:
-            if operation_id not in self.websocket_connections:
-                self.websocket_connections[operation_id] = []
-            self.websocket_connections[operation_id].append(websocket)
+            self.websocket_connections.setdefault(operation_id, []).append(websocket)
         try:
             operation = self.operation_manager.get_operation(operation_id)
             if operation:
@@ -250,8 +249,8 @@ class OperationIntegrationManager:
                     await asyncio.wait_for(websocket.receive_text(), timeout=TimingConstants.SHORT_TIMEOUT)
                 except asyncio.TimeoutError:
                     await websocket.send_json({"type": "ping"})
-        except WebSocketDisconnect:
-            logger.debug("WebSocket client disconnected from operation %s", operation_id)
+        except PEER_CLOSED_ERRORS as disconnect:
+            log_client_disconnect(logger, disconnect, "_handle_websocket_connection")
         finally:
             async with self._ws_lock:
                 if operation_id in self.websocket_connections and websocket in self.websocket_connections[operation_id]:

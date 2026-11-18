@@ -81,6 +81,8 @@ def auth_client(monkeypatch, gate):
     api_auth = importlib.import_module("api.auth")
     monkeypatch.setattr(api_auth, "resolve_human_user", gate.real.resolve_human_user)
     monkeypatch.setattr(api_auth, "get_auth_middleware", lambda: gate.middleware)
+    # The account-state check on refresh (#20443) has its own tests; these are about the epoch.
+    monkeypatch.setattr(api_auth, "reject_if_account_not_live", AsyncMock())
     app = FastAPI()
     app.include_router(api_auth.router, prefix="/api/auth")
     app.dependency_overrides[api_auth.check_admin_permission] = gate.real.check_admin_permission

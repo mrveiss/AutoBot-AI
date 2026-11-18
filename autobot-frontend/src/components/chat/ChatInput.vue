@@ -21,6 +21,16 @@
           :show-details="true"
         />
         <BaseButton
+          v-if="isCancellable(upload)"
+          variant="secondary"
+          size="xs"
+          @click="cancelUpload(upload.id)"
+          class="cancel-upload-btn"
+          :aria-label="$t('chat.input.cancelUpload', { name: upload.filename })"
+        >
+          <Icon name="times" />
+        </BaseButton>
+        <BaseButton
           v-if="upload.error"
           variant="error"
           size="xs"
@@ -462,7 +472,8 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import { postConversationUpload, type ConversationUploadResponse, describeUploadError, ensureUploadSession, usesCanonicalRoute, uploadEtaSeconds } from '@/utils/conversationFileUpload'
+import { useUploadCancel, isUploadCancelled } from '@/composables/useUploadCancel'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -544,6 +555,13 @@ const emojiPicker = ref<HTMLElement>()
 
 // State
 const attachedFiles = ref<File[]>([])
+const dropCancelledUpload = (upload: UploadItem) => {
+  uploadProgress.value = uploadProgress.value.filter(u => u.id !== upload.id)
+  showToast(t('chat.input.uploadCancelled', { name: upload.filename }), 'info')
+}
+const { begin: beginUpload, settle: settleUpload, isCancellable, cancel: cancelUpload } = useUploadCancel<UploadItem>(dropCancelledUpload)
+const uploadedIds = new WeakMap<File, string>()  // File -> server file id (#20195)
+const serverFileIds = (files: File[]) => files.flatMap(f => uploadedIds.get(f) ?? [])
 const isInputFocused = ref(false)
 const isVoiceRecording = ref(false)
 const isSending = ref(false)
@@ -554,17 +572,7 @@ const showPresetsModal = ref(false)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
 const useKnowledge = ref(true) // Default enabled
-const uploadProgress = ref<Array<{
-  id: string
-  filename: string
-  progress: number
-  status: string
-  current: number
-  total: number
-  eta?: number
-  error?: string
-  file?: File  // Store original File object for retry functionality
-}>>([])
+const uploadProgress = ref<UploadItem[]>([])
 const messageQueueLength = ref(0)
 const isTypingStartTime = ref<number | null>(null)
 const typingDebounceTimer = ref<number | null>(null)
@@ -747,9 +755,22 @@ const sendMessage = async () => {
 
   isSending.value = true
 
+  // #20195: the server ids from the upload, never browser File objects
+  const attachmentIds = serverFileIds(files)
+  const sendOptions = {
+    attachments: attachmentIds,
+    use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
+    // GH#8993: extended thinking parameters
+    ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
+    // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
+    ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
+    // #11585: per-request model/provider override (empty when "auto")
+    ...overrideFields.value,
+  }
+
   try {
-    // Issue #690: Use Overseer Agent when enabled
-    if (overseerEnabled.value) {
+    // Issue #690: Use Overseer Agent when enabled, unless the turn carries files (#20195)
+    if (!usesCanonicalRoute(overseerEnabled.value, attachmentIds)) {
       logger.info('[ChatInput] Sending via Overseer Agent:', message.substring(0, 50))
 
       // Add user message to chat store directly (appears immediately)
@@ -766,30 +787,11 @@ const sendMessage = async () => {
       if (!success) {
         logger.warn('[ChatInput] Overseer submission failed, falling back to normal flow')
         // Fallback: send as normal message
-        await controller.sendMessage(message, {
-          use_knowledge: useKnowledge.value,
-          // #11585: per-request model/provider override (empty when "auto")
-          ...overrideFields.value,
-        })
+        await controller.sendMessage(message, sendOptions)
       }
     } else {
       // Normal message flow (Issue #249)
-      await controller.sendMessage(message, {
-        attachments: files.length > 0 ? files.map(f => ({
-          id: generateId(),
-          name: f.name,
-          type: f.type,
-          size: f.size,
-          data: f // In real implementation, would upload file first
-        })) : undefined,
-        use_knowledge: useKnowledge.value,  // Issue #249: RAG toggle
-        // GH#8993: extended thinking parameters
-        ...(thinkingEnabled.value ? { thinking_enabled: true, thinking_budget_tokens: thinkingBudget.value } : {}),
-        // #9460/#9471: per-conversation reasoning effort (omit 'auto' so request stays inert)
-        ...(reasoningEffort.value !== 'auto' ? { reasoning_effort: reasoningEffort.value } : {}),
-        // #11585: per-request model/provider override (empty when "auto")
-        ...overrideFields.value,
-      })
+      await controller.sendMessage(message, sendOptions)
     }
 
   } catch (error) {
@@ -822,19 +824,7 @@ const handleFileSelect = async (event: Event) => {
   // Create upload tracking objects for all files first
   const uploads = validFiles.map(file => {
     const uploadId = generateId()
-    const upload: {
-      id: string;
-      filename: string;
-      progress: number;
-      status: string;
-      current: number;
-      total: number;
-      file: File;
-      fileId?: string;
-      uploadId?: string;
-      error?: string;
-      eta?: number;
-    } = {
+    const upload: UploadItem = {
       id: uploadId,
       filename: file.name,
       progress: 0,
@@ -859,9 +849,9 @@ const handleFileSelect = async (event: Event) => {
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
       attachedFiles.value.push(result.value)
-    } else {
+    } else if (!isUploadCancelled(result.reason)) {
       const upload = uploads[index].upload
-      upload.error = result.reason instanceof Error ? result.reason.message : 'Upload failed'
+      upload.error = describeUploadError(result.reason, t)
       upload.status = 'Failed'
     }
   })
@@ -1063,81 +1053,37 @@ const generateId = (): string => {
   return crypto.randomUUID()
 }
 
-// Real file upload implementation
+// Real file upload implementation (transport and bearer: utils/conversationFileUpload.ts, #20133)
+const reportProgress = (upload: UploadItem, startTime: number) => (loaded: number, total: number): void => {
+  upload.current = loaded
+  upload.total = total
+  upload.progress = (loaded / total) * 100
+  upload.eta = uploadEtaSeconds(loaded, total, Date.now() - startTime)
+  upload.status = `Uploading... ${Math.round(upload.progress)}%`
+}
+
+const markUploadComplete = (upload: UploadItem, file: File, response: ConversationUploadResponse): void => {
+  settleUpload(upload)
+  Object.assign(upload, { status: 'Complete', progress: 100 })
+  upload.fileId = response.file_info?.file_id
+  if (upload.fileId) uploadedIds.set(file, upload.fileId)
+  upload.uploadId = response.upload_id
+  setTimeout(() => {
+    const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+    if (index !== -1) uploadProgress.value.splice(index, 1)
+  }, 2000)
+}
+
 const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  const startTime = Date.now()
   upload.status = 'Uploading...'
-
+  const signal = beginUpload(upload)
   try {
-    await new Promise<string>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          upload.current = event.loaded
-          upload.total = event.total
-          upload.progress = (event.loaded / event.total) * 100
-
-          // Calculate ETA
-          const elapsed = Date.now() - startTime
-          if (elapsed > 0) {
-            const rate = event.loaded / elapsed // bytes per millisecond
-            const remaining = (event.total - event.loaded) / rate / 1000 // seconds
-            upload.eta = remaining > 1 ? remaining : undefined
-          }
-
-          upload.status = `Uploading... ${Math.round(upload.progress)}%`
-        }
-      })
-
-      // Handle successful completion
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          upload.status = 'Complete'
-          upload.progress = 100
-
-          try {
-            const response = JSON.parse(xhr.responseText)
-            upload.fileId = response.file_info?.file_id
-            upload.uploadId = response.upload_id
-
-            // Remove from progress after delay
-            setTimeout(() => {
-              const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-              if (index !== -1) uploadProgress.value.splice(index, 1)
-            }, 2000)
-
-            resolve(response.file_info?.file_id || '')
-          } catch {
-            reject(new Error('Invalid response from server'))
-          }
-        } else {
-          reject(new Error(`Upload failed with status: ${xhr.status}`))
-        }
-      })
-
-      // Handle errors
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload'))
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload cancelled'))
-      })
-
-      // Send request
-      const sessionId = store.currentSessionId || 'default'
-      xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
-      xhr.send(formData)
-    })
+    const sessionId = await ensureUploadSession(store, controller)
+    markUploadComplete(upload, file, await postConversationUpload(sessionId, file, reportProgress(upload, Date.now()), signal))
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Upload failed'
-    upload.status = 'Failed'
-    upload.progress = 0
+    if (!settleUpload(upload, error)) {
+      Object.assign(upload, { error: describeUploadError(error, t), status: 'Failed', progress: 0 })
+    }
     throw error
   }
 }
@@ -1163,7 +1109,8 @@ const retryUpload = async (uploadId: string) => {
       attachedFiles.value.push(upload.file)
     }
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Retry failed'
+    if (isUploadCancelled(error)) return
+    upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
   }
 }
@@ -1652,7 +1599,7 @@ onUnmounted(() => {
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.5rem;
   font-size: 0.875rem;

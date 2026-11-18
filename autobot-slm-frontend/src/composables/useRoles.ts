@@ -163,16 +163,19 @@ export function useRoles() {
   const error = ref<string | null>(null)
   const fleetHealth = ref<FleetHealth | null>(null)
 
-  async function fetchRoles(): Promise<void> {
+  /** Resolves true only when the read succeeded; false means it failed (see `error`). */
+  async function fetchRoles(): Promise<boolean> {
     isLoading.value = true
     error.value = null
 
     try {
       const response = await client.get<Role[]>('/roles')
       roles.value = response.data
+      return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
       error.value = err.response?.data?.detail || err.message || 'Failed to fetch roles'
+      return false
     } finally {
       isLoading.value = false
     }
@@ -306,13 +309,16 @@ export function useRoles() {
     }
   }
 
-  async function fetchFleetHealth(): Promise<void> {
+  /** Resolves true only when the read succeeded; false means it failed (see `error`). */
+  async function fetchFleetHealth(): Promise<boolean> {
     try {
       const response = await client.get<FleetHealth>('/roles/fleet-health')
       fleetHealth.value = response.data
+      return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
       error.value = err.response?.data?.detail || err.message || 'Failed to fetch fleet health'
+      return false
     }
   }
 

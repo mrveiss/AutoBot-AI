@@ -86,3 +86,20 @@ describe('per-tier decimals and separator (#19680)', () => {
     expect(formatFileSize(1073741824, o)).toBe('1.00 GB')
   })
 })
+
+describe('msMinutesSeconds translated unit labels (#19929)', () => {
+  const units = { seconds: 'sek', minutes: 'min' }
+  it('uses the passed labels for seconds and for minutes plus seconds', () => {
+    expect(formatDuration(45_000, { style: 'msMinutesSeconds', units })).toBe('45sek')
+    expect(formatDuration(75_000, { style: 'msMinutesSeconds', units })).toBe('1min 15sek')
+  })
+  it('uses the passed labels in the range form too', () => {
+    const o = { style: 'msMinutesSeconds', units } as const
+    expect(formatDuration('2026-01-01T00:00:00Z', '2026-01-01T01:15:03Z', o)).toBe('75min 3sek')
+  })
+  it('falls back per label, and keeps English output with no labels', () => {
+    expect(formatDuration(75_000, { style: 'msMinutesSeconds', units: { minutes: 'min' } })).toBe('1min 15s')
+    expect(formatDuration(75_000, { style: 'msMinutesSeconds' })).toBe('1m 15s')
+    expect(formatDuration(45_000, { style: 'msMinutesSeconds' })).toBe('45s')
+  })
+})

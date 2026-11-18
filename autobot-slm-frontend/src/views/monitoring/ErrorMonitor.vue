@@ -11,7 +11,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal, usePagination, BasePagination, PollingPausedAlert } from '@autobot/ui'
+import { BaseModal, usePagination, BasePagination, PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
@@ -20,9 +20,9 @@ import type {
   ErrorCategoryShare,
   ComponentBreakdown,
 } from '@/types/api-responses'
-import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
+import { getTimezoneOption } from '@/composables/useTimezone'
+import i18n from '@/i18n'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
@@ -62,7 +62,6 @@ const {
   serverTotalItems: totalErrors,
   onPageChange: async () => { await fetchData() },
 })
-
 
 // Filtered errors (client-side search only, API handles severity/resolved)
 const filteredErrors = computed(() => {
@@ -120,17 +119,10 @@ function getTrendColor(trend: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({
+  locale: () => String(i18n.global.locale),
+  intl: () => ({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', ...getTimezoneOption() }),
+})
 
 
 
@@ -373,7 +365,7 @@ onMounted(() => dataPoller.start(''))
                   </p>
                   <p class="text-xs text-gray-500 mt-1">
                     {{ error.event_type }} ·
-                    {{ formatRelativeTime(error.timestamp) }}
+                    {{ formatCompactRelativeTime(error.timestamp) }}
                   </p>
                 </div>
               </div>

@@ -16,6 +16,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
@@ -28,6 +29,7 @@ _CONSTANT = "RSYNC_NEVER_WORLD_WRITABLE"
 _CONSTANTS = {_CONSTANT, "RSYNC_ARCHIVE_ARGS"}
 # Copying without the flag on purpose: data rather than code, or a target with no POSIX modes.
 _SHELL_EXEMPT = {
+    ".github/workflows/wiki.yml": "generated docs in CI, not code on a node",
     "autobot-infrastructure/shared/scripts/logging/collect-application-logs.sh": "pulls logs",
     "autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh": "Windows target",
     "autobot-slm-backend/ansible/utils/backup.sh": "pulls backups",
@@ -40,7 +42,7 @@ _NOT_CODE = {"data-migration.yml"}
 def _rsync_lists(source: str) -> list[list[ast.expr]]:
     """Argument lists of every rsync command, as list literals or subprocess calls."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         args = node.elts if isinstance(node, ast.List) else node.args if isinstance(node, ast.Call) else []
         if args and isinstance(args[0], ast.Constant) and args[0].value == "rsync":
             found.append(args)
@@ -123,8 +125,9 @@ def _loose_copies(text: str) -> list[str]:
 
 
 def test_every_shell_rsync_sets_the_mode_or_is_exempt() -> None:
-    listed = tracked_paths(_ROOT, "*.sh")
-    assert len(listed) > 50, f"git listed {len(listed)} shell files; this test reads nothing"
+    # YAML too: a shell task's rsync reads the same as a script's, and synchronize is checked separately.
+    listed = tracked_paths(_ROOT, "*.sh", "*.yml", "*.yaml")
+    assert len(listed) > 50, f"git listed {len(listed)} files; this test reads nothing"
     loose = {rel for rel in listed if _loose_copies((_ROOT / rel).read_text(encoding="utf-8", errors="replace"))}
     assert loose == set(_SHELL_EXEMPT), loose ^ set(_SHELL_EXEMPT)
 
@@ -176,7 +179,7 @@ def test_no_terminal_advice_survives_sudo() -> None:
 
 def test_rerun_hint_uses_the_run_skip_set() -> None:
     """#19867: the hint once skipped `provision`, which the run keeps for the backend role (#6600)."""
-    assert re.search(r'local skip_tags="seed"', _INSTALL)
+    assert re.search(r'local skip_tags="seed(,[\w-]+)*"', _INSTALL)
     assert '--skip-tags "${skip_tags}"' in _INSTALL and 'deploy-slm-manager.yml --skip-tags ${skip_tags}"' in _INSTALL
     assert "seed,provision" not in _INSTALL
 
@@ -200,6 +203,15 @@ def _ui_labels() -> list[str]:
     block = view[view.index("const stepLabels") :].split("}")[0]
     labels = dict(re.findall(r"^\s+(\w+): '([^']+)',$", block, re.M))
     return [labels[step] for step in steps]
+
+
+def test_readme_names_the_real_onboarding_steps() -> None:
+    """#19181: the main app's wizard was documented only as a redirect."""
+    view = (_ROOT / "autobot-frontend" / "src" / "views" / "OnboardingWizard.vue").read_text(encoding="utf-8")
+    labels = re.findall(r"\{ n: \d, label: '([^']+)' \}", view)
+    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+    assert len(labels) == 3, labels
+    assert all(f"**{label}**" in readme for label in labels), labels
 
 
 def test_wizard_table_uses_the_real_ui_labels() -> None:

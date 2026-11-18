@@ -342,7 +342,7 @@ function handleClickOutside(event: MouseEvent): void {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 50;
+  z-index: var(--z-50);
   overflow: hidden;
 }
 

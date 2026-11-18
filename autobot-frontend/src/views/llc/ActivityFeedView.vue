@@ -73,7 +73,7 @@
           <span class="event-entity">{{ entry.entity_type }}<span class="event-entity-id" :title="entry.entity_id">#{{ shortId(entry.entity_id) }}</span></span>
           <span v-if="actorName(entry)" class="event-actor-name">· {{ actorName(entry) }}</span>
         </div>
-        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ formatTimeAgo(entry.occurred_at) }}</time>
+        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ timeAgo(entry.occurred_at) }}</time>
       </li>
     </ul>
 
@@ -92,11 +92,11 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, formatRelativeTime } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDateTime } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import { useI18n } from 'vue-i18n'
 
@@ -104,7 +104,8 @@ const props = defineProps<{ companyId?: string }>()
 
 const logger = createLogger('ActivityFeedView')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const timeAgo = (at: string) => formatRelativeTime(at, { locale: locale.value })
 
 // No backend push stream exists; poll at a fixed cadence when auto-refresh is on.
 const POLL_INTERVAL_MS = 15000
@@ -220,7 +221,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -253,7 +254,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -261,7 +262,7 @@ onUnmounted(() => {
 .filter input,
 .filter select {
   padding: 0.375rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
@@ -290,7 +291,7 @@ onUnmounted(() => {
   gap: 0.75rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .actor-badge {
@@ -342,18 +343,18 @@ onUnmounted(() => {
 
 .event-entity-id {
   font-family: var(--font-mono, monospace);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-actor-name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .event-time {
   flex: none;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }

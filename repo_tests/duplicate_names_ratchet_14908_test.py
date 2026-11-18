@@ -14,8 +14,8 @@ stories and generated files are not scanned, as in the sibling guard.
 
 **(b) Util filenames.** The same relative path under both apps' ``src/utils`` where BOTH files
 are real implementations. A file that only imports and re-exports ``@autobot/ui`` is the fix,
-not the defect, so it is not counted: ``debugUtils.ts`` and ``formatHelpers.ts`` in the SLM
-are such files today.
+not the defect, so it is not counted. The SLM had two such files (``debugUtils.ts``,
+``formatHelpers.ts``); they are gone, every SLM caller imports the kit directly.
 
 **Two numbers, each exact and down-only against the base** (#19283). Each type pin counts
 names (a name declared in three places is one), so lowering it means a name stopped being
@@ -43,9 +43,14 @@ _SKIPPED_DIRS = {"node_modules", "dist"}
 # Measured on e71921c5fe: 28 type names declared in both apps, 2 declared in an app and the kit
 # (RiskTier, ServiceHealth, the two documented in the sibling guard), 1 util filename implemented
 # twice (ApiClient.ts). #19910 resolved 14 both-apps names by renaming the one that is a different
-# concept (14 left, 13 after #14908 moved the ApiClient options type into the kit: the ledger rows and the audit, permission and TLS shapes that are one concept
-# and wait for the kit export in the PRs holding libs/autobot-ui/index.ts).
-PINS = {"type_names_in_both_apps": 13, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+# concept, #14908 moved the ApiClient options type into the kit (13 left), and #19910 then moved the
+# agent-ledger rows and the permission rule into the kit (one declaration, both apps import it) and
+# renamed the different-concept names (Agent, CacheStats, WebResearchSettings, the plugin audit row,
+# the TLS upload body). #20173 then moved AuditQueryResponse into the kit: 0 left.
+PINS = {"type_names_in_both_apps": 0, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+
+# Stated exceptions: a type name declared in both apps. None left (#20173 moved AuditQueryResponse to the kit).
+TYPE_EXCEPTIONS: dict[str, str] = {}
 
 # Stated exceptions: a util filename implemented in both apps until its own PR lands.
 UTIL_EXCEPTIONS = {
@@ -54,9 +59,9 @@ UTIL_EXCEPTIONS = {
         "consolidation PR (maintainer decision 2026-10-28, waits for the PR holding the SLM copy)"
     ),
 }
-# formatHelpers.ts is the other expected duplicate. It is NOT counted today because the SLM's copy
-# is already a thin re-export of the kit; if it regrows an implementation this guard counts it,
-# and it must then be added above with its reason until the formatters PR removes the main copy.
+# formatHelpers.ts and debugUtils.ts are no longer duplicates: the SLM copies were removed (#14908)
+# and the SLM imports the kit directly. If an SLM copy regrows with an implementation this guard
+# counts it, and it must then be added above with its reason.
 
 
 def _ts_files(root: Path) -> list[Path]:
@@ -192,7 +197,6 @@ def _util_files(root: Path) -> list[str]:
 TYPE_FILES_REACH = declare(
     "duplicate-type-names-ts-files-scanned-14908",
     discover=_type_files,
-    floor=519,  # mid-window: population 544, window (494, 544)
     growth=50,
     what="non-test .ts files in both apps and the kit scanned for repeated type names",
     roots=(*_APPS, _KIT),
@@ -201,7 +205,6 @@ TYPE_FILES_REACH = declare(
 UTIL_FILES_REACH = declare(
     "duplicate-util-filenames-scanned-14908",
     discover=_util_files,
-    floor=56,  # mid-window: population 61, window (51, 61)
     growth=10,
     what="non-test util files in both apps compared by filename",
     roots=_UTILS,
@@ -241,6 +244,14 @@ def test_every_duplicated_util_filename_is_a_stated_exception() -> None:
         f"{sorted(UTIL_EXCEPTIONS)} (#14908)"
     )
     assert all(UTIL_EXCEPTIONS.values()), "an exception needs its reason"
+
+
+def test_every_duplicated_type_name_is_a_stated_exception() -> None:
+    both = _measure()[0]
+    assert sorted(both) == sorted(
+        TYPE_EXCEPTIONS
+    ), f"type names declared in both apps {both} differ from the stated exceptions {sorted(TYPE_EXCEPTIONS)} (#19910)"
+    assert all(TYPE_EXCEPTIONS.values()), "an exception needs its reason"
 
 
 def test_the_pins_were_not_raised_against_the_base() -> None:

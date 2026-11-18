@@ -269,7 +269,7 @@ onUnmounted(() => {
   cursor: ew-resize;
   background: transparent;
   transition: background var(--duration-150);
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .resize-handle:hover,
@@ -327,7 +327,8 @@ onUnmounted(() => {
 }
 
 .empty-state .icon {
-  font-size: 2.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
   opacity: 0.5;
 }
 

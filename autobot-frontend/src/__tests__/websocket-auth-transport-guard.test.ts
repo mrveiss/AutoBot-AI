@@ -49,6 +49,9 @@ interface Tree {
 const TREES: Tree[] = [
   { label: 'autobot-frontend', dir: resolve(REPO_ROOT, 'autobot-frontend/src') },
   { label: 'autobot-slm-frontend', dir: resolve(REPO_ROOT, 'autobot-slm-frontend/src') },
+  // #18550: the shared terminal package built its handshake URL with `?token=` and sat
+  // outside both app trees, so this guard never saw it.
+  { label: 'autobot-plugins/terminal', dir: resolve(REPO_ROOT, 'autobot-plugins/terminal/src') },
 ]
 
 const SOURCE_EXT = /\.(ts|tsx|js|jsx|vue)$/
@@ -74,11 +77,13 @@ interface ScannedFile {
  * `redactUrlForLogging.ts`'s doc comment describing the pattern it
  * redacts -- mention `buildAuthenticatedWsUrl(` or `?token=` only in prose,
  * never in code. Un-stripped, those already read as false offenders in this
- * guard's first draft. `//` is only stripped when not preceded by `:`, so
- * `https://` survives.
+ * guard's first draft. `//` is only stripped at a line start or after
+ * whitespace (#18550): the earlier "not preceded by `:`" rule also ate the rest of any
+ * line holding a `${host}//${path}`-shaped template literal, which hid a `&token=`
+ * on that very line from the scan.
  */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+export function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1')
 }
 
 function scanTree(tree: Tree): ScannedFile[] {
@@ -155,6 +160,11 @@ describe('no WebSocket client puts the auth token in the URL (#16457)', () => {
 
   it('flags a literal &token= query string after another param', () => {
     expect(leaksTokenInUrl('const url = `${base}?a=1&token=${token}`\nnew WebSocket(url)')).toBe(true)
+  })
+
+  it('flags a token on a line that also holds a `${host}//${path}` template (stripComments must not eat it)', () => {
+    const source = 'const u = `${protocol}//${host}${path}&token=${t}`\nnew WebSocket(u)'
+    expect(leaksTokenInUrl(stripComments(source))).toBe(true)
   })
 
   it('does not flag the subprotocol form', () => {

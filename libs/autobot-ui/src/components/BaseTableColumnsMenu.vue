@@ -59,7 +59,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
 .aui-columns__list {
   position: absolute;
   right: 0;
-  z-index: 1;
+  z-index: var(--aui-z-raised);
   margin: var(--aui-space-1) 0 0;
   padding: var(--aui-space-2) var(--aui-space-3);
   list-style: none;

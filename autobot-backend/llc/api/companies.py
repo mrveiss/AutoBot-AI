@@ -40,18 +40,14 @@ from api.user_management.dependencies import (
     get_current_user,
     require_org_context,
 )
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.api.company_member_schemas import CompanyMembersResponse
+from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
-from llc.models.company import (
-    CompanyAncestor,
-    CompanyCreate,
-    CompanyRead,
-    CompanyTreeNode,
-    CompanyUpdate,
-)
+from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
     AssigneeType,
     ExternalPMType,
@@ -61,6 +57,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.scheduler.dispatch_gate import run_block_reason
 from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
@@ -72,9 +69,8 @@ from llc.services.company import (
     CompanyService,
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
-from llc.services.membership_service import (
-    MembershipService,
-)
+from llc.services.member_standing import member_people, person_is_active, viewer_standing
+from llc.services.membership_service import MembershipService
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
@@ -121,24 +117,8 @@ def _get_membership_service() -> MembershipService:
 
 
 def _to_read(org: Organization) -> CompanyRead:
-    return CompanyRead(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        description=org.description,
-        issue_prefix=org.issue_prefix,
-        issue_counter=org.issue_counter,
-        budget_monthly_cents=org.budget_monthly_cents,
-        spent_monthly_cents=org.spent_monthly_cents,
-        brand_color=org.brand_color,
-        require_approval_for_hires=org.require_approval_for_hires,
-        parent_org_id=org.parent_org_id,
-        llc_status=LLCCompanyStatus(org.llc_status),
-        pause_reason=org.pause_reason,
-        paused_at=org.paused_at,
-        created_at=org.created_at,
-        updated_at=org.updated_at,
-    )
+    """The wire shape of a company: every ``CompanyRead`` field, read off the row (``from_attributes``)."""
+    return CompanyRead.model_validate(org)
 
 
 def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
@@ -209,16 +189,14 @@ async def _assert_may_create_under(
 async def _create_and_commit(
     svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
 ) -> CompanyRead:
-    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+    """Insert, record the creator as OWNER, THEN commit (GH#12323).
 
-    A failure in any step is rolled back by the route, so no committed-but-unreported row;
-    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    A failure in any step is rolled back by the route, so no committed-but-unreported row.
+    KB collections appear on their first write, so creating a company makes none (#19725).
     """
     org = await svc.create(body)
     await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
     read = _to_read(org)
-    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
     await svc.session.commit()
     return read
 
@@ -315,8 +293,8 @@ async def delete_company(
     try:
         await svc.delete(company_id)
         await svc.session.commit()
-        # #13920: drop the three collections create_company's ensure_collection
-        # loop makes (base, agents, decisions). Derived from the same constants
+        # #13920: drop the three collections a company's writes can make
+        # (base, agents, decisions). Derived from the same constants
         # rather than restated, so a fourth suffix cannot be created and then
         # silently never cleaned up.
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
@@ -365,7 +343,7 @@ async def activate_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.activate_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -395,7 +373,7 @@ async def suspend_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.suspend_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -426,7 +404,7 @@ async def offboard_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.offboard_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -455,7 +433,7 @@ async def archive_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.archive_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -554,52 +532,33 @@ async def get_kb_ancestry_collections(
 # ------------------------------------------------------------------
 
 
-@router.get("/{company_id}/members")
+@router.get("/{company_id}/members", response_model=CompanyMembersResponse)
 async def list_members(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    from sqlalchemy import select  # noqa: PLC0415
-
-    from user_management.models.user import User  # noqa: PLC0415
-
     members = await svc.list_members(session, str(company_id))
-    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs.
-    user_ids = [m.user_id for m in members]
-    names: Dict[uuid.UUID, str] = {}
-    # #13956: whether each member may still be given work. Carried, not
-    # filtered -- see `_person_is_active`. The picker needs both facts: who is
-    # a member, and which of them can take an assignment.
-    active: Dict[uuid.UUID, bool] = {}
-    if user_ids:
-        # #13957: ``User.full_name`` is a hybrid property, so the canonical
-        # "display_name, else username" rule is selected in SQL here rather than
-        # re-spelled in the comprehension below. This is an inner select on
-        # ``users``, so a returned row always has the NOT NULL ``username`` to
-        # fall back to and the two-rung rule is complete.
-        rows = (
-            await session.execute(
-                select(User.id, User.full_name, User.is_active, User.deleted_at).where(User.id.in_(user_ids))
-            )
-        ).all()
-        names = {uid: name for uid, name, _ia, _da in rows}
-        active = {uid: _person_is_active(ia, da) for uid, _name, ia, da in rows}
-    return [
-        {
-            **_to_member_read(m),
-            "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
-            # A membership whose user row is missing entirely resolves to
-            # False: nothing is known about them, and unknown must not read as
-            # available.
-            "is_active": active.get(m.user_id, False),
-        }
-        for m in members
-    ]
+    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs. `active` is #13956:
+    # whether each member may still be given work. Carried, not filtered -- see `person_is_active`.
+    names, active = await member_people(session, [m.user_id for m in members])
+    standing = await viewer_standing(session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin)
+    return {
+        "members": [
+            {
+                **_to_member_read(m),
+                "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
+                # A membership whose user row is gone resolves to False: unknown must not read as available.
+                "is_active": active.get(m.user_id, False),
+            }
+            for m in members
+        ],
+        **standing,
+    }
 
 
 # ------------------------------------------------------------------
@@ -627,16 +586,14 @@ async def set_pm_config(
     # Issue #12233: tenant authz — writing another tenant's PM credentials is a
     # cross-tenant compromise; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select, update
 
-    from autobot_shared.field_encryption import encrypt_field
+    from llc.sync.outbound_sync import seal_pm_config
 
     row = await session.execute(select(Organization.id).where(Organization.id == company_id))
     if row.one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    encrypted = encrypt_field(json.dumps(body.credentials, ensure_ascii=False))
+    encrypted = seal_pm_config(company_id, body.credentials)
     await session.execute(
         update(Organization)
         .where(Organization.id == company_id)
@@ -656,11 +613,9 @@ async def test_pm_config(
     """Test connectivity to the configured external PM system (GH#8257)."""
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    import json
-
     from sqlalchemy import select
 
-    from autobot_shared.field_encryption import decrypt_field
+    from llc.sync.outbound_sync import open_pm_config
 
     row = await session.execute(
         select(Organization.external_pm_type, Organization.external_pm_config).where(Organization.id == company_id)
@@ -675,14 +630,14 @@ async def test_pm_config(
             detail="No PM integration configured for this company",
         )
     try:
-        pm_config = json.loads(decrypt_field(encrypted_config))
-    except Exception:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt PM config")
+        pm_config = open_pm_config(encrypted_config, company_id)  # unreadable: one 503 (credential_handlers, #17981)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Stored PM config is not JSON")
     try:
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
-        logger.warning("PM connectivity test failed for %s: %s", pm_type, exc, exc_info=True)
+        log_unexpected(logger, f"companies.test_pm_config {pm_type}", exc)
         return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 
@@ -833,6 +788,9 @@ class OrgChartNode(BaseModel):
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
     heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
+    # #20519: run-start per the agent's own row (status, adapter), not pause/budget; None for a person.
+    can_run: Optional[bool] = None
+    cannot_run_reason: Optional[str] = None
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -843,33 +801,6 @@ class OrgChartNode(BaseModel):
 
 class OrgChartResponse(BaseModel):
     nodes: List[OrgChartNode]
-
-
-def _person_is_active(is_active: Optional[bool], deleted_at: Optional[Any]) -> bool:
-    """Whether a person may still be given work (#13956).
-
-    Both the members picker and the org chart ask this, and the issue is
-    explicit that they must not diverge -- so neither computes it inline.
-
-    Deliberately *not* a filter. The org chart is where a company reads its own
-    structure, and dropping someone who has left rewrites that structure
-    silently: their work items stay behind (they are only reassigned
-    explicitly), the role they held stays behind, and a chart that omits them
-    cannot explain who those items belong to. Precedent in this module already
-    chose the same way -- ``_compose_human_nodes`` uses an outer join
-    specifically so "a membership whose user row is gone still yields a node
-    instead of vanishing silently".
-
-    So the answer is rendered, not applied: the surfaces show the person and
-    mark them, and the picker refuses them as an assignee.
-
-    A user row that is missing entirely (outer join miss) is inactive: nothing
-    is known about them, and "unknown" must never read as "available".
-    """
-    if deleted_at is not None:
-        return False
-    # `None` reaches here from an outer-join miss, not from a real column value.
-    return bool(is_active)
 
 
 def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
@@ -1003,7 +934,7 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 status="idle",
                 adapter_type=_HUMAN_ADAPTER_TYPE,
                 is_human=True,
-                is_active=_person_is_active(is_active, deleted_at),
+                is_active=person_is_active(is_active, deleted_at),
                 last_heartbeat=None,
                 budget_spent=0.0,
                 budget_total=0.0,
@@ -1044,16 +975,10 @@ def _compose_agent_node(
     """Compose one agent's ``OrgChartNode`` from its hierarchy row, its budget
     row (if any), and its latest heartbeat run (if any) (#14184).
 
-    Extracted verbatim out of ``get_org_chart``'s per-row loop — a pure move,
-    the precedent being the already-extracted human branch,
-    ``_compose_human_nodes``. No field's source expression changed: every
-    right-hand side below is byte-for-byte the same expression that used to
-    sit inline in the loop (budget resolution now lives in
-    ``_resolve_agent_budget``), and the existing org-chart test suite
-    (``test_llc_org_chart.py``, ``test_org_chart_enrichment.py``) exercises
-    every one of them unchanged as the behaviour-preservation evidence.
+    Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config, org_role=row.org_role)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
@@ -1069,6 +994,8 @@ def _compose_agent_node(
         adapter_type=row.adapter_type or "",
         is_human=False,
         heartbeat_enabled=row.heartbeat_enabled,
+        can_run=block_reason is None,
+        cannot_run_reason=block_reason,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(
@@ -1612,11 +1539,7 @@ async def search_agents(
 
         return {"agents": agents, "count": len(agents), "query": q}
     except Exception as e:
-        logger.exception("Agent search failed for company %s: %s", company_id, str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent search failed: {str(e)}",
-        )
+        raise logged_server_error(logger, "Agent search failed", f"company {company_id}", e) from e
 
 
 # Export endpoints (GH#8245)
@@ -1640,7 +1563,7 @@ async def export_template(
     # Issue #12233: tenant authz — exporting another tenant's structure is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_template(company_id)
+    payload = await svc.export_template(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
         content=payload,
@@ -1663,7 +1586,7 @@ async def export_snapshot(
     # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_snapshot(company_id)
+    payload = await svc.export_snapshot(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(
         content=payload,

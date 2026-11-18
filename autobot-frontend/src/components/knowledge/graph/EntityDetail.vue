@@ -295,7 +295,8 @@ onMounted(focusFirst)
 
 .detail-section h5 .icon {
   color: var(--color-primary);
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 .section-loading {

@@ -54,7 +54,7 @@
     role_configs:
       frontend:
         services: ['nginx', 'node']
-        packages: ['nodejs', 'npm', 'nginx']
+        packages: ['nginx']  # Node.js comes from the nodejs role below (#19661)
         ports: [5173, 80, 443]
       npu-worker:
         services: ['npu-service']
@@ -236,18 +236,11 @@
         - name: "Setup Node.js for frontend"
           when: node_role == 'frontend'
           block:
-            - name: "Add NodeSource repository"
-              shell: |
-                curl -fsSL {{ nodesource_base_url }}/setup_{{ node_major }}.x | bash -
-              args:
-                creates: /etc/apt/sources.list.d/nodesource.list
-
-            - name: "Install Node.js"
-              apt:
+            - name: Install Node.js
+              ansible.builtin.include_role:
                 name: nodejs
-                state: present
-                update_cache: true
-                cache_valid_time: 3600
+                apply:
+                  tags: ['role-setup']
 
         # Redis-specific setup
         - name: "Setup Redis Stack"
@@ -270,9 +263,22 @@
         - name: "Setup NPU Worker"
           when: node_role == 'npu-worker'
           block:
+            - name: "Install target Python interpreter (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                public: true
+
+            - name: "Enforce venv target Python version (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                tasks_from: ensure_venv_version
+              vars:
+                venv_path: "{{ autobot_home }}/venv"
+                venv_python: "{{ python_interpreter_binary }}"
+
             - name: "Create Python virtual environment"
               become_user: "{{ autobot_user }}"
-              command: python3 -m venv {{ autobot_home }}/venv
+              command: "{{ python_interpreter_binary }} -m venv {{ autobot_home }}/venv"
               args:
                 creates: "{{ autobot_home }}/venv/bin/activate"
 
@@ -287,9 +293,22 @@
         - name: "Setup AI Stack"
           when: node_role == 'ai-stack'
           block:
+            - name: "Install target Python interpreter for AI (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                public: true
+
+            - name: "Enforce venv target Python version (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                tasks_from: ensure_venv_version
+              vars:
+                venv_path: "{{ autobot_home }}/venv"
+                venv_python: "{{ python_interpreter_binary }}"
+
             - name: "Create Python virtual environment for AI"
               become_user: "{{ autobot_user }}"
-              command: python3 -m venv {{ autobot_home }}/venv
+              command: "{{ python_interpreter_binary }} -m venv {{ autobot_home }}/venv"
               args:
                 creates: "{{ autobot_home }}/venv/bin/activate"
 
@@ -348,7 +367,7 @@
                 content: |
                   SLM_CODE_SOURCE=true
                   SLM_NOTIFY_PORT=8000
-                  SLM_ADMIN_URL={{ slm_admin_url | default('http://' + slm_host + ':' + (slm_port | string)) }}
+                  SLM_ADMIN_URL={{ slm_admin_url | default('http://' + slm_host + ':' + (slm_backend_port | string)) }}
                 dest: /etc/slm-agent/environment
                 mode: '0644'
               notify: restart slm-agent

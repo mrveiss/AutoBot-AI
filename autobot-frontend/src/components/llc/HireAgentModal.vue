@@ -22,8 +22,8 @@
       <label class="field">
         <span class="field-label">{{ t('hireAgent.model') }}</span>
         <select v-model="model" class="field-input">
-          <option value="claude-sonnet-4-6">{{ t('hireAgent.modelSonnet') }}</option>
-          <option value="claude-haiku-4-5-20251001">{{ t('hireAgent.modelHaiku') }}</option>
+          <option value="sonnet">{{ t('hireAgent.modelSonnet') }}</option>
+          <option value="haiku">{{ t('hireAgent.modelHaiku') }}</option>
         </select>
       </label>
 
@@ -50,12 +50,13 @@
         <BaseSwitch v-model="heartbeatEnabled" :label="t('hireAgent.runOnHeartbeat')" data-testid="hire-heartbeat" />
       </div>
 
+      <BaseAlert v-if="pending" variant="info" :message="t('hireAgent.pendingApproval')" data-testid="hire-pending" />
       <p v-if="error" class="form-error">{{ error }}</p>
     </form>
 
     <template #actions>
       <BaseButton variant="ghost" type="button" @click="emit('close')">{{ t('common.cancel') }}</BaseButton>
-      <BaseButton type="submit" :disabled="submitting || !agentName" @click="submit">
+      <BaseButton type="submit" :disabled="submitting || pending || !agentName" @click="submit">
         {{ submitting ? t('hireAgent.hiring') : t('hireAgent.hire') }}
       </BaseButton>
     </template>
@@ -66,7 +67,8 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
+import { isPendingApproval } from '@/utils/pendingApproval'
+import { BaseAlert, BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 const { t } = useI18n()
@@ -78,7 +80,8 @@ const logger = createLogger('HireAgentModal')
 const api = useApiClient()
 
 const agentName = ref('')
-const model = ref('claude-sonnet-4-6')
+// A tier alias; the backend resolves it to the pinned model ID (autobot_shared/ssot_claude_models.py, #20884).
+const model = ref('sonnet')
 const orgRole = ref('worker')
 const adapterType = ref('')
 // #15907: off by default -- the 2026-09-28 ruling keeps a hire off the heartbeat
@@ -86,19 +89,26 @@ const adapterType = ref('')
 const heartbeatEnabled = ref(false)
 const submitting = ref(false)
 const error = ref('')
+// A company that requires approval for hires answers 202 `pending_approval`: a request exists, no agent does (#8214).
+const pending = ref(false)
 
 async function submit(): Promise<void> {
-  if (!agentName.value) return
+  // Enter in the name field submits the form even while the button is disabled (#8214).
+  if (!agentName.value || submitting.value || pending.value) return
   submitting.value = true
   error.value = ''
   try {
-    await api.post(`/api/llc/companies/${props.companyId}/agent-hires`, {
+    const result = await api.post(`/api/llc/companies/${props.companyId}/agent-hires`, {
       agent_name: agentName.value,
       org_role: orgRole.value,
       model: model.value,
       adapter_type: adapterType.value,
       heartbeat_enabled: heartbeatEnabled.value,
     })
+    if (isPendingApproval(result)) {
+      pending.value = true
+      return
+    }
     emit('hired')
     emit('close')
   } catch (err: unknown) {

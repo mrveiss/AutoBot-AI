@@ -15,9 +15,8 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
 import type { SLMNode, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 
@@ -120,10 +119,7 @@ function connectionColor(node: SLMNode): string {
   return 'text-red-600'
 }
 
-function formatTimestamp(ts: string | null | undefined): string {
-  if (!ts) return 'Never'
-  return new Date(ts).toLocaleTimeString()
-}
+const formatTimestamp = createDateFormatter({ kind: 'time', emptyText: 'Never' })
 
 // -- Data fetching --
 

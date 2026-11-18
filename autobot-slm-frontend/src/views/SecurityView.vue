@@ -14,13 +14,13 @@
  * aria-hidden on decorative icons, accessible button labels.
  */
 
+import { formatFleetDate } from '@/composables/useTimezone'
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { BaseAlert, BaseModal, usePagination, BasePagination, useToast } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePagination, BasePagination, useToast, createLogger } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
-import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -664,7 +664,7 @@ const scoreColor = computed(() => {
                   </div>
                 </div>
               </div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </div>
           </div>
         </div>
@@ -842,9 +842,7 @@ const scoreColor = computed(() => {
             <tr v-for="cert in fleetCerts" :key="cert.cert_id">
               <td class="px-4 py-2 font-mono text-xs">{{ cert.node_id }}</td>
               <td class="px-4 py-2 text-gray-700 truncate max-w-xs">{{ cert.subject || '—' }}</td>
-              <td class="px-4 py-2 text-gray-600">
-                {{ cert.not_after ? new Date(cert.not_after).toLocaleDateString() : '—' }}
-              </td>
+              <td class="px-4 py-2 text-gray-600">{{ cert.not_after ? formatFleetDate(cert.not_after) : '—' }}</td>
               <td class="px-4 py-2">
                 <span
                   :class="['px-2 py-0.5 rounded-sm text-xs font-medium', certExpiryBadge(cert.days_until_expiry).cls]"
@@ -1033,7 +1031,7 @@ const scoreColor = computed(() => {
           <tbody class="bg-white divide-y divide-gray-200">
             <tr v-for="log in auditLogs" :key="log.log_id">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatRelativeTime(log.timestamp) }}
+                {{ formatCompactRelativeTime(log.timestamp) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {{ log.username || '-' }}
@@ -1148,7 +1146,7 @@ const scoreColor = computed(() => {
                   <div class="text-xs text-gray-400 mt-2">
                     {{ event.source_ip ? `IP: ${event.source_ip}` : '' }}
                     {{ event.source_user ? ` | User: ${event.source_user}` : '' }}
-                    | {{ formatRelativeTime(event.timestamp) }}
+                    | {{ formatCompactRelativeTime(event.timestamp) }}
                   </div>
                 </div>
               </div>

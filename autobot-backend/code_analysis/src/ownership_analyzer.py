@@ -26,6 +26,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.status_enums import Severity
 from utils.file_categorization import SKIP_DIRS
 
 # Issue #542: Handle imports for both standalone execution and backend import
@@ -735,8 +736,7 @@ class OwnershipAnalyzer:
                 )
 
         # Sort by risk level and affected lines
-        risk_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        gaps.sort(key=lambda x: (risk_order.get(x.risk_level, 4), -x.affected_lines))
+        gaps.sort(key=lambda x: (-Severity.rank_of(x.risk_level), -x.affected_lines))
 
         return gaps
 

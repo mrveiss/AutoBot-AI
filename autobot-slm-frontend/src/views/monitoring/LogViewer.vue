@@ -11,16 +11,15 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, createLogger, createDateFormatter } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { getTimezoneOption } from '@/composables/useTimezone'
 import type { AppLogEntry } from '@/types/api-responses'
 
 const logger = createLogger('LogViewer')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 /**
  * Row rendered by this viewer — a client-side VIEW-MODEL, not a wire shape.
@@ -98,27 +97,9 @@ function getLevelClass(level: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'time', locale: () => locale.value, intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
 
-function formatDate(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
 
 const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
@@ -127,6 +108,9 @@ const severityToLevel: Record<string, LogRow['level']> = {
   error: 'error',
   critical: 'critical',
 }
+
+// Set while the latest fleet-log read failed; cleared by the next success
+const logLoadError = ref<string | null>(null)
 
 async function fetchLogs(): Promise<boolean> {
   isLoading.value = true
@@ -140,10 +124,12 @@ async function fetchLogs(): Promise<boolean> {
       event_id: entry.event_id,
       node_id: entry.node_id,
     }))
+    logLoadError.value = null
     return true
   } catch (err) {
+    // #19887: keep the last good rows; a failed read is not an empty result
     logger.error('Failed to fetch logs:', err)
-    logs.value = []
+    logLoadError.value = err instanceof Error ? err.message : String(err)
     return false
   } finally {
     isLoading.value = false
@@ -372,6 +358,14 @@ onMounted(() => {
     </div>
 
     <!-- Log Count -->
+    <div
+      v-if="logLoadError"
+      role="alert"
+      class="bg-error-50 text-error-700 border border-error-200 rounded-lg px-4 py-2 mb-4 text-sm"
+    >
+      {{ $t('monitoring.logViewer.loadError', { error: logLoadError }) }}
+    </div>
+
     <div class="text-sm text-gray-500 mb-2">{{ $t('monitoring.logViewer.showingCountOfCount2Entries', { count: filteredLogs.length, count2: logs.length }) }}</div>
 
     <!-- Log Table -->
@@ -418,7 +412,7 @@ onMounted(() => {
             </tr>
             <tr v-if="filteredLogs.length === 0">
               <td colspan="4" class="px-4 py-8 text-center text-gray-500">
-                {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : $t('monitoring.logViewer.noLogsFound') }}
+                {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : logLoadError ? $t('monitoring.logViewer.loadError', { error: logLoadError }) : $t('monitoring.logViewer.noLogsFound') }}
               </td>
             </tr>
           </tbody>

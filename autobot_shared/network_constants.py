@@ -317,8 +317,8 @@ class NetworkConstants(metaclass=_LazyConfigMeta):
 _LAZY_SERVICE_URLS: dict = {
     "BACKEND_API": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}",
     "BACKEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}",
-    "FRONTEND_VM": lambda: f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}",
-    "FRONTEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
+    "FRONTEND_VM": _profile.served_frontend_url,
+    "FRONTEND_LOCAL": lambda: _profile.served_frontend_url(NetworkConstants.LOCALHOST_NAME),
     "OLLAMA_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
     "VNC_DESKTOP": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html",
     "CHROME_DEBUGGER_LOCAL": lambda: (

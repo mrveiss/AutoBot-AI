@@ -69,6 +69,7 @@ async def _search_as(user_id: uuid.UUID) -> list:
             service=service,
             tenant=TenantContext(org_id=ORG, user_id=user_id),
             session=MagicMock(),
+            current_user={"role": "user"},
         )
     assert response.status_code == 200 and json.loads(response.body)["success"] is True
     return [fact["id"] for fact in service.visible]

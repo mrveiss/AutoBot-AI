@@ -13,6 +13,12 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 N_TO_Z: dict[str, tuple[str, str, str]] = {
+    "no_partial_key_mask_18221.sources": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under three of the source trees (#18221); no tracked count moves with that "
+        "subset, because the test share and the other trees grow at their own rate.",
+    ),
     "node-major-literals": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -50,7 +56,17 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "parse-cache-direct-parse-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Guard modules under repo_tests are a subset of tracked .py; the guard share of the tree drifts.",
+    ),
     "one-internal-api-key-reader-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
+    "single-constant-time-compare": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
@@ -327,5 +343,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
         "own rate, so a share of all Python would sink with nothing wrong.",
+    ),
+    "one-after-commit-queue-21107": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under the backend and shared roots, against all tracked .py there; the test-file share "
+        "drifts on its own.",
     ),
 }

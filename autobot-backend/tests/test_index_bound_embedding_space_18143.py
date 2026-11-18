@@ -12,6 +12,7 @@ import pytest
 
 import services.npu_client as npu_client_module
 from autobot_shared.embedding_model import EmbeddingUnavailableError
+from autobot_shared.logging_once import reset_log_once
 from knowledge.index_embedding_space import PATTERN_INDEXES, index_embedding_space
 
 ACTIVE = "some-other-model:latest"
@@ -93,14 +94,12 @@ def _unrecorded(stored_dim: int | None, probe_dim: int):
     import sys
     import types
 
-    from services.knowledge import doc_searcher
-
     searcher = _searcher({"hnsw:space": "cosine"})
     embs = None if stored_dim is None else [[0.0] * stored_dim]
     searcher._collection.peek.return_value = {"embeddings": embs}
     fake = types.ModuleType("llama_index.embeddings.ollama")
     fake.OllamaEmbedding = lambda **kw: MagicMock(get_text_embedding=lambda t: [0.0] * probe_dim)
-    doc_searcher._WARNED.clear()
+    reset_log_once()
     return searcher, patch.dict(sys.modules, {"llama_index.embeddings.ollama": fake})
 
 

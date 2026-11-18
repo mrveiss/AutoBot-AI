@@ -96,10 +96,15 @@ def _normalize(name: str) -> str:
 
 
 def parse_requirements(path: pathlib.Path, _seen: set[pathlib.Path] | None = None) -> dict[str, str]:
-    """Parse a requirements file, following ``-r`` includes; skip ``-e``/``-c``/options.
+    """Parse a requirements file, following ``-r`` includes; skip ``-e`` and options.
 
     Returns ``{normalized_name: raw_line}``. A later declaration of the same
     package overwrites an earlier one, matching pip's own last-wins behaviour.
+
+    A ``-c`` constraints file is applied (#18060): a package the file lists with no
+    specifier of its own is installed under the constraint's, so its effective line
+    is the constraint's. Reading the bare name instead reports "no pin" for every
+    package whose version moved into ``constraints/shared.txt``.
     """
     seen = _seen if _seen is not None else set()
     resolved = path.resolve()
@@ -108,6 +113,7 @@ def parse_requirements(path: pathlib.Path, _seen: set[pathlib.Path] | None = Non
     seen.add(resolved)
 
     out: dict[str, str] = {}
+    constraints: dict[str, str] = {}
     for raw in resolved.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line:
@@ -115,12 +121,22 @@ def parse_requirements(path: pathlib.Path, _seen: set[pathlib.Path] | None = Non
         if line.startswith("-r "):
             out.update(parse_requirements((resolved.parent / line[3:].strip()), seen))
             continue
-        if line.startswith("-e ") or line.startswith("-c ") or line.startswith("--"):
+        if line.startswith("-c "):
+            constraints.update(parse_requirements(resolved.parent / line[3:].strip(), set()))
+            continue
+        if line.startswith("-e ") or line.startswith("--"):
             continue
         match = _NAME_RE.match(line)
         if match:
             out[_normalize(match.group(1))] = line
-    return out
+    return {name: _constrained_line(name, raw, constraints) for name, raw in out.items()}
+
+
+def _constrained_line(name: str, raw: str, constraints: dict[str, str]) -> str:
+    """*raw*, or the ``-c`` constraint's line when *raw* carries no specifier of its own."""
+    if name in constraints and not constraint_of(raw):
+        return constraints[name]
+    return raw
 
 
 def production_requirement_names(root: pathlib.Path | None = None) -> dict[str, str]:

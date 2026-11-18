@@ -111,11 +111,13 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .vectorization-badge .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .vectorization-badge.compact .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 /* Vectorized status - green */

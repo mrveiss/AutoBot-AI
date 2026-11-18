@@ -41,7 +41,7 @@ def _run(tmp_path: Path, monkeypatch, output: str) -> dict:
     (tmp_path / "update-all-nodes.yml").write_text("- hosts: all\n", encoding="utf-8")
     executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
     monkeypatch.setattr(executor, "_refresh_ansible_dir", lambda: None)
-    monkeypatch.setattr(executor, "_update_code_source", AsyncMock(return_value=True))
+    monkeypatch.setattr(executor, "_update_code_source", AsyncMock(return_value=None))
     monkeypatch.setattr(executor, "_code_source_sync_failure_result", lambda *_a: None)
     monkeypatch.setattr(executor, "_select_inventory", AsyncMock(return_value=(tmp_path / "inventory", None)))
     monkeypatch.setattr(executor, "_stage_extra_vars", lambda *_a: None)
@@ -55,7 +55,7 @@ def test_a_run_where_only_localhost_ran_fails_with_the_reason_first(tmp_path, mo
     result = _run(tmp_path, monkeypatch, _SKIPS + "PLAY RECAP ****\n" + _LOCAL)
     assert result["success"] is False
     assert result["returncode"] == 1
-    assert result["output"].splitlines()[0].startswith("ERROR! no host named by the limit")
+    assert result["output"].splitlines()[0].startswith("ERROR! hosts named by the limit ran no task")
 
 
 def test_the_same_run_with_the_node_in_the_recap_succeeds(tmp_path, monkeypatch) -> None:

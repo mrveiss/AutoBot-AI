@@ -166,6 +166,14 @@
                     | select('match', '.+')
                     | list) }}
 
+        # #20620: first, or it starts the SLM again as the next task stops it.
+        - name: Stop and disable the SLM watchdog
+          ansible.builtin.systemd:
+            name: autobot-slm-watchdog.timer
+            state: stopped
+            enabled: false
+          failed_when: false
+
         - name: Stop and disable all services
           ansible.builtin.systemd:
             name: "{{ item }}"

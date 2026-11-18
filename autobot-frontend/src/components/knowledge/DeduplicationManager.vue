@@ -325,7 +325,8 @@ const cleanupOrphans = async () => {
 .scanning-state .icon,
 .error-state .icon,
 .initial-state .icon {
-  font-size: var(--text-5xl);
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   display: block;
   margin-inline: auto;

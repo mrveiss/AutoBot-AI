@@ -20,6 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { getEnvPositiveInt } from '@autobot/ui';
 import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig, getServiceUrl } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
@@ -167,50 +168,22 @@ describe('SSOT Config Helper Functions', () => {
     });
   });
 
-  describe('getEnvNumber helper', () => {
+  describe('numeric env reading (#20135)', () => {
     it('should return default value when env is undefined', () => {
-      const getEnvNumber = (_key: string, defaultValue: number): number => {
-        const value = undefined;
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
-
-      expect(getEnvNumber('VITE_MISSING_PORT', 8001)).toBe(8001);
+      expect(getEnvPositiveInt({}, 'VITE_MISSING_PORT', 8001)).toBe(8001);
     });
 
     it('should parse numeric string correctly', () => {
-      const getEnvNumber = (key: string, defaultValue: number): number => {
-        const mockEnv: Record<string, string> = {
-          VITE_BACKEND_PORT: '9000',
-        };
-        const value = mockEnv[key];
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
-
-      expect(getEnvNumber('VITE_BACKEND_PORT', 8001)).toBe(9000);
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '9000' }, 'VITE_BACKEND_PORT', 8001)).toBe(9000);
     });
 
     it('should return default for invalid number', () => {
-      const getEnvNumber = (key: string, defaultValue: number): number => {
-        const mockEnv: Record<string, string> = {
-          VITE_INVALID_PORT: 'not-a-number',
-        };
-        const value = mockEnv[key];
-        if (value === undefined || value === null || value === '') {
-          return defaultValue;
-        }
-        const parsed = parseInt(String(value), 10);
-        return isNaN(parsed) ? defaultValue : parsed;
-      };
+      expect(getEnvPositiveInt({ VITE_INVALID_PORT: 'not-a-number' }, 'VITE_INVALID_PORT', 8001)).toBe(8001);
+    });
 
-      expect(getEnvNumber('VITE_INVALID_PORT', 8001)).toBe(8001);
+    it('should return default for a zero or negative port', () => {
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '0' }, 'VITE_BACKEND_PORT', 8001)).toBe(8001);
+      expect(getEnvPositiveInt({ VITE_BACKEND_PORT: '-1' }, 'VITE_BACKEND_PORT', 8001)).toBe(8001);
     });
   });
 
@@ -350,10 +323,10 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
   };
 
   describe('when window.location.protocol === "https:"', () => {
-    it('backendUrl starts with https://', () => {
+    it('backendUrl is same-origin (proxy mode), never an absolute host:port (#19821)', () => {
       setProtocol('https:');
       const cfg = reloadConfig();
-      expect(cfg.backendUrl).toMatch(/^https:\/\//);
+      expect(cfg.backendUrl).toBe(''); // no VITE_API_BASE_URL here: same-origin, nothing absolute
     });
 
     it('frontendUrl starts with https://', () => {
@@ -426,10 +399,10 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
   });
 
   describe('when window.location.protocol === "http:"', () => {
-    it('backendUrl starts with http://', () => {
+    it('websocketUrl follows the page protocol and host (#19821)', () => {
       setProtocol('http:');
       const cfg = reloadConfig();
-      expect(cfg.backendUrl).toMatch(/^http:\/\//);
+      expect(cfg.websocketUrl).toBe('ws://test-host.example.com/api/ws');
     });
 
     it('frontendUrl starts with http://', () => {

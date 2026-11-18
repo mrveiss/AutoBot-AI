@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
 .voice-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
 }
 
 .voice-overlay__lang-badge .icon {
-  font-size: 0.625rem;
+  width: var(--text-xs); height: var(--text-xs);
   opacity: 0.7;
 }
 
@@ -707,7 +707,7 @@ onBeforeUnmount(() => {
 /* Mic button */
 .voice-overlay__mic-btn {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
   width: var(--spacing-16);
   height: var(--spacing-16);
   border-radius: 50%;

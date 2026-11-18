@@ -17,13 +17,11 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, formatBytes, createLogger } from '@autobot/ui'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatBytes } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import type { NodeService, ServiceStatus } from '@/types/slm'
 import i18n from '@/i18n'
 import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
@@ -506,7 +504,7 @@ onUnmounted(() => {
 
             <!-- Last Check -->
             <td class="px-4 py-3 text-xs text-gray-500">
-              {{ formatRelativeTime(service.last_checked) }}
+              {{ formatCompactRelativeTime(service.last_checked) }}
             </td>
 
             <!-- Actions -->
@@ -584,7 +582,7 @@ onUnmounted(() => {
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />{{ $t('fleet.nodeServicesPanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
       <div class="text-xs text-gray-500">
-        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>{{ $t('fleet.nodeServicesPanel.ofValue0Services', { value0: totalServices }) }}<span v-if="lastRefresh">{{ $t('fleet.nodeServicesPanel.updatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
+        <span class="font-medium text-gray-700">{{ filteredServices.length }}</span>{{ $t('fleet.nodeServicesPanel.ofValue0Services', { value0: totalServices }) }}<span v-if="lastRefresh">{{ $t('fleet.nodeServicesPanel.updatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
       </div>
     </div>
 

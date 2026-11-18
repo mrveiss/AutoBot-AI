@@ -129,9 +129,7 @@
       </div>
     </div>
 
-    <!-- A drawn graph can still be missing a whole store. That has to stay on
-         screen: the failure notification above is a 5s toast, so without this
-         the gap became invisible while the incomplete picture stayed (#17612). -->
+    <!-- A drawn graph can still lack a whole store; the failure toast above lasts 5s, so keep this on screen (#17612). -->
     <div v-if="graphIsPartial && entities.length > 0" class="error-notification" role="status">
       <Icon name="exclamation-triangle" />
       <span>
@@ -142,6 +140,7 @@
       <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
     </div>
 
+    <KnowledgeGraphMoreFacts v-if="hasMoreFacts" :loading="isLoadingMore" @more="loadMoreFacts().then(updateCytoscapeElements)" />
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -300,7 +299,7 @@
             <ul class="relations-list">
               <li
                 v-for="relation in getEntityRelations(selectedEntity.id)"
-                :key="`${relation.from}-${relation.to}`"
+                :key="JSON.stringify([relation.from, relation.to, relation.type])"
                 @click="navigateToEntity(relation)"
               >
                 <span class="relation-type">{{ relation.type }}</span>
@@ -450,7 +449,9 @@ import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
+import KnowledgeGraphMoreFacts from '@/components/knowledge/KnowledgeGraphMoreFacts.vue'
 import { isReducedMotion } from '@/composables/useReducedMotion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 const KnowledgeGraph3D = defineAsyncComponent(() =>
   import('@/components/knowledge/KnowledgeGraph3D.vue')
 )
@@ -492,16 +493,16 @@ interface NewEntity {
 // State
 // ============================================================================
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const {
   entities,
   relations,
-  isLoading,
+  isLoading, isLoadingMore,
   errorMessage: graphError,
   sources: graphSources,
   fetchGraphData,
-  createGraphEntity,
+  createGraphEntity, hasMoreFacts, loadMoreFacts,
 } = useKnowledgeGraphEntities()
 
 /**
@@ -697,13 +698,7 @@ function formatTypeName(type: string): string {
  * @param timestamp - Unix timestamp in seconds
  * @returns Formatted date string (e.g., 'Jan 7, 2026')
  */
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: () => locale.value, unit: 'seconds', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
 
 // ============================================================================
 // Cytoscape Initialization
@@ -886,7 +881,7 @@ function updateCytoscapeElements(): void {
   for (const edge of graphEdges.value) {
     elements.push({
       data: {
-        id: `${edge.from}-${edge.to}`,
+        id: JSON.stringify([edge.from, edge.to, edge.type]), // unambiguous: `-`-joined ids collide, and two types of one pair are two edges
         source: edge.from,
         target: edge.to,
         label: edge.type
@@ -1324,7 +1319,7 @@ watch(layoutMode, () => {
 
 .action-btn.primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: transparent;
 }
 
@@ -1720,7 +1715,7 @@ watch(layoutMode, () => {
   align-items: center;
   padding: var(--spacing-md);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .panel-header h4 {
@@ -1742,7 +1737,7 @@ watch(layoutMode, () => {
 }
 
 .panel-header .close-btn {
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .panel-content {
@@ -1855,7 +1850,7 @@ watch(layoutMode, () => {
 }
 
 .relation-target .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs); height: var(--text-xs);
   color: var(--text-tertiary);
 }
 

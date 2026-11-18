@@ -52,7 +52,9 @@ class _Redis:
     async def get(self, key):
         return self.kv.get(key)
 
-    async def set(self, key, value, ex=None):
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.kv:
+            return None
         self.kv[key] = value
         return True
 
@@ -130,6 +132,7 @@ class _World:
     def request(self):
         return SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace()),
+            method="POST",
             client=None,
             headers={},
             url=SimpleNamespace(path="/api/chat/sessions/x"),

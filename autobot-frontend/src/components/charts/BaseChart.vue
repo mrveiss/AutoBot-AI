@@ -513,7 +513,7 @@ watch(
 .chart-loading-overlay .icon,
 .chart-error .icon,
 .chart-no-data .icon {
-  font-size: 32px;
+  width: 32px; height: 32px;
 }
 
 .chart-error {

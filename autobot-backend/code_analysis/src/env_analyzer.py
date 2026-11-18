@@ -23,6 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from autobot_shared.status_enums import Severity
 from utils.file_categorization import SKIP_DIRS
 from utils.line_index import LineIndex  # #12884
 
@@ -1148,7 +1149,7 @@ class EnvironmentAnalyzer:
 
                     severity = max(
                         group_values,
-                        key=lambda x: ["low", "medium", "high"].index(x.severity),
+                        key=lambda x: Severity.rank_of(x.severity),
                     ).severity
 
                     recommendation = ConfigRecommendation(

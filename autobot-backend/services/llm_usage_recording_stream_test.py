@@ -17,8 +17,6 @@ that catches the next unrecorded site on arrival.
 from __future__ import annotations
 
 import asyncio
-import importlib.util
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
@@ -28,6 +26,7 @@ import pytest
 from llm_shared.models import LLMRequest
 from services.llm_cost_tracker import LLMCostTracker
 from services.llm_usage_recording import ESTIMATED_TOKENS, STREAM_ABANDONED, recorded_stream, spend_attribution
+from testkit.real_llm_service import load_real_llm_service
 
 _REPO = Path(__file__).resolve().parents[2]
 _BACKEND = _REPO / "autobot-backend"
@@ -68,25 +67,10 @@ def tracker():
         yield double
 
 
-def _real_llm_service_module():
-    """The genuine ``services/llm_service.py``: the backend conftest stubs ``services.llm_service``.
-
-    Loaded under a private name, as ``tests/services/test_llm_service_fallback_events.py``
-    does, so the stub other tests rely on is left in place.
-    """
-    name = "_real_llm_service_16924"
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, _BACKEND / "services" / "llm_service.py")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
-    return sys.modules[name]
-
-
 @pytest.fixture
 def service(monkeypatch):
     """A real LLMService over a one-provider registry, so the stream() path is the production one."""
-    llm_service_mod = _real_llm_service_module()
+    llm_service_mod = load_real_llm_service()
     provider = _StreamingProvider()
     svc = llm_service_mod.LLMService(registry=_Registry(provider))
     monkeypatch.setattr(llm_service_mod, "get_fallback_chain_manager", lambda: MagicMock())

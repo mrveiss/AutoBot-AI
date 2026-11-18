@@ -74,10 +74,6 @@
                 {{ entry.ip_address }}
               </span>
             </div>
-            <div v-if="entry.error_message" class="entry-error">
-              <Icon name="exclamation-circle" />
-              {{ entry.error_message }}
-            </div>
             <button
               v-if="hasDetails(entry)"
               class="details-toggle"
@@ -115,7 +111,8 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import type { AuditEntry } from '@/types/audit'
-import { AUDIT_RESULT_CONFIG } from '@/types/audit'
+import { AUDIT_RESULT_CONFIG, auditTimestampToDate } from '@/types/audit'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface Props {
   type: 'session' | 'user'
@@ -141,11 +138,11 @@ const expandedIds = idExpansion.expanded
 const formatDateRange = computed(() => {
   if (props.entries.length === 0) return ''
 
-  const dates = props.entries.map((e) => new Date(e.timestamp))
+  const dates = props.entries.map((e) => auditTimestampToDate(e.timestamp))
   const earliest = new Date(Math.min(...dates.map((d) => d.getTime())))
   const latest = new Date(Math.max(...dates.map((d) => d.getTime())))
 
-  const formatDate = (d: Date) => d.toLocaleDateString()
+  const formatDate = createDateFormatter({ kind: 'date' })
 
   if (formatDate(earliest) === formatDate(latest)) {
     return formatDate(earliest)
@@ -153,10 +150,7 @@ const formatDateRange = computed(() => {
   return `${formatDate(earliest)} - ${formatDate(latest)}`
 })
 
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+const formatTime = createDateFormatter({ kind: 'time', unit: 'seconds', intl: { hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 function formatOperationName(operation: string): string {
   return operation
@@ -267,7 +261,8 @@ function toggleDetails(id: string) {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl);
+  height: var(--text-3xl);
 }
 
 .timeline-list {
@@ -396,18 +391,6 @@ function toggleDetails(id: string) {
 
 .meta-item .icon {
   color: var(--text-tertiary);
-}
-
-.entry-error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-2);
-  font-size: var(--text-sm);
-  color: rgb(239, 68, 68);
-  background: rgba(239, 68, 68, 0.1);
-  padding: var(--spacing-2);
-  border-radius: var(--radius-default);
-  margin-bottom: var(--spacing-2);
 }
 
 .details-toggle {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, createDateFormatter } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -83,10 +83,7 @@ function sourceBadgeClass(source: string): string {
   return source === 'rollback' ? 'badge-orange' : source === 'api' ? 'badge-blue' : 'badge-gray'
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 
 watch([entityType, entityId], () => {
   if (entityId.value) fetchRevisions()

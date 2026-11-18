@@ -15,6 +15,13 @@
 autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 
 # ==========================================
+# SLM SECRETS FILE (#20941)
+# ==========================================
+# Where the SLM keeps the secrets every other service reads (root key, Redis credential,
+# chroma token). _shared/tasks/read_slm_secrets_root_key.yml reads it through this var.
+slm_secrets_env_path: "/etc/autobot/slm-secrets.env"
+
+# ==========================================
 # AI STACK PORT (#17856)
 # ==========================================
 # The ONE ansible literal for the AI-stack port. Every other home (inventory, role defaults,
@@ -23,6 +30,16 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 # (AUTOBOT_AI_STACK_PORT); ansible cannot import that pydantic default, so the two literals are
 # kept equal by repo_tests/ansible_concept_forks_17856_test.py.
 ai_stack_port: 8080
+
+# ==========================================
+# SLM BACKEND PORT (#20600)
+# ==========================================
+# The ONE ansible literal for the SLM backend (uvicorn) port. roles/slm_manager, roles/common
+# (firewall_service_ports), roles/redis and the enroll playbooks all read `slm_backend_port`; none
+# restates it. Kept equal to install.sh SLM_BACKEND_PORT by
+# repo_tests/install_defaults_follow_their_source_19239_test.py. It lives in group_vars/all so every
+# play that includes a role resolves it, with or without `common` having run.
+slm_backend_port: 8000
 
 # ==========================================
 # CHROMADB HEARTBEAT PATH (#19413)
@@ -315,13 +332,12 @@ node_major: "22"
 # The NodeSource base URL has one home, read by every play (env-backed like the shell SSOT, #19662).
 nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default('https://deb.nodesource.com', true) }}"
 
+# #19805: where a GPU host gets torch. The version pair stays in constraints/shared.txt; every build of
+# that pair must exist on this index. Override for a GPU or driver this CUDA does not suit.
+backend_torch_cuda_index_url: "{{ lookup('env', 'AUTOBOT_TORCH_CUDA_INDEX_URL') | default('https://download.pytorch.org/whl/cu130', true) }}"
+
 # Package repositories
 repositories:
-  # Add NodeSource for Node.js
-  nodejs:
-    key_url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
-    repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
-
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"

@@ -108,6 +108,69 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_BUDGET_REFUSAL_DEDUP_TTL_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long the de-duplication mark of a budget-refused dispatch is kept in Redis (#21212). "
+            "One budget.dispatch_refused activity row is written per exhaustion episode; a long episode "
+            "is restated after this many seconds. Minimum 1."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between passes that put a heartbeat-enabled agent or an active routine "
+            "back on the heartbeat schedule when it is missing (#20117). A pass is the longest "
+            "a member lost between a poller's claim and its re-add stays lost; each restore is "
+            "logged. Agents that are paused, terminated or heartbeat-disabled, and routines that "
+            "are not active, are left off. Floored at 5 seconds, because each pass reads the "
+            "agent and routine tables."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS",
+        type=int,
+        default=6,
+        description=(
+            "How many times startup recovery of interrupted agent runs asks for its leader lease while "
+            "Redis gives no answer (#19601). A definite answer, including another worker holding the "
+            "lease, ends the wait at once; only silence is retried. The default spans the lease TTL, so a"
+            " worker that finds Redis down at boot still recovers once it is back. After the last attempt"
+            " recovery is skipped and the liveness monitor is the backstop."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds between two asks for the startup-recovery leader lease while Redis gives no answer "
+            "(#19601). Recovery runs in the background-services phase, so waiting never delays the app "
+            "becoming ready."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
         type=float,
         default=7.0,
@@ -128,6 +191,84 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds a file with no database row must sit in the attachment staging directory before "
+            "the attachment file sweep moves it to the quarantine subdirectory (#19756). A staged file "
+            "whose row exists is committed content and is published at the next sweep whatever its age. "
+            "Nothing is deleted: quarantined files stay until a person decides. Only the staging "
+            "directory is ever touched. Floored at 300 seconds so a slow upload still in flight is "
+            "never mistaken for an abandoned one."
+        ),
+        range=(300, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between runs of the attachment file sweep (#19756), which retries removals "
+            "recorded in the attachment deletion outbox until the file is gone and settles stale "
+            "staging files. Floored at 30 seconds."
+        ),
+        range=(30, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS",
+        type=int,
+        default=10,
+        description=(
+            "Failed attempts after which an attachment file-deletion outbox entry is marked stuck "
+            "(#19756). A stuck entry stays in the table with its last error, is skipped by the sweep "
+            "so it cannot starve newer entries, and is counted in the sweep result and log."
+        ),
+        range=(1, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds an attachment file-deletion outbox entry waits after a failed attempt before "
+            "it is retried (#19756). Floored at 30 seconds."
+        ),
+        range=(30, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_ROOT_ID",
+        type=str,
+        default="",
+        description=(
+            "Identity of the attachment storage this node owns (#19756). Every outbox row records the "
+            "identity of the node that deleted it, and a node only removes files for its own identity: "
+            "a missing file on a node that does not own the storage proves nothing. Empty derives the "
+            "identity from the host name and the storage root path. Set the same value on every node "
+            "that mounts one shared volume, or entries written by one will never be drained by the other."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_VOICE_REFERENCE_MAX_SECONDS",
         type=float,
         default=120.0,
@@ -137,5 +278,79 @@ env_registry.register_env_var(
             "else the default is used (media/audio/reference_wav.py, #18477)."
         ),
         component="voice",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_COMPANY_OS_WORKFLOW_PLANNER_APPROVAL_WAIT_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long an AI sub-step waits for a person's approval before the timeout transition of the workflow "
+            "a Workflow Plan converts into is taken, for an approval policy with a wait limit. The plan names "
+            "the policy, never the number (llc/services/company_os/plan_convert.py, #19936)."
+        ),
+        range=(1, 31536000),
+        component="llc",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE",
+        type=str,
+        default="25 3 * * *",
+        description=(
+            "5-field cron ('m h dom mon dow') for the audit that proposes a human review of webhook "
+            "trigger secrets still stored in plaintext (#19759). It files at most one pending "
+            "approval per set of trigger ids and rewrites nothing. Default daily at 03:25 UTC. "
+            "A malformed value falls back to the daily 03:00 UTC schedule with a warning."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_REJECTION_DAYS",
+        type=float,
+        default=30.0,
+        description=(
+            "Days a rejected plaintext-webhook-secret proposal keeps suppressing a new proposal for the "
+            "same (or a subset of its) trigger ids (#19759), so a human's rejection is not refiled on "
+            "every audit run. Floored at 1 day."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_HIERARCHY_VIOLATIONS_LIMIT",
+        type=int,
+        default=500,
+        description=(
+            "Most work-item hierarchy violations one report returns (#20936). The limit is applied in the "
+            "database query; the response sets truncated when more rows break the rules than are returned."
+        ),
+        range=(1, 5000),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the notification router's single-instance lock lives without a renewal (#21456). The "
+            "worker holding it renews it every third of this period; every other started worker tries to take "
+            "it at the same interval, so once the lock has lapsed (holder gone, Redis flushed or failed over) "
+            "another worker takes over routing within one interval."
+        ),
+        range=(3, 3600),
+        component="orchestrator",
     )
 )

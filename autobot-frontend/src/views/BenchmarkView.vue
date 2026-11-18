@@ -154,7 +154,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 import { useModelPicker } from '@/composables/useModelPicker'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { BaseTable, type BaseTableColumn } from '@autobot/ui'
+import { BaseTable, type BaseTableColumn, saveTextFile } from '@autobot/ui'
 import {
   type BenchmarkResultRow,
   type BenchmarkRun,
@@ -164,6 +164,7 @@ import {
   avgQuality,
   totalCost,
 } from '@/utils/benchmark'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('BenchmarkView')
@@ -286,13 +287,7 @@ async function onSaveRun(): Promise<void> {
 
 function exportCsv(): void {
   const csv = toCsv(resultRows.value, promptText.value, currentPromptType.value)
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `benchmark-${Date.now()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveTextFile(csv, `benchmark-${Date.now()}.csv`, 'text/csv;charset=utf-8')
 }
 
 async function loadHistory(): Promise<void> {
@@ -331,9 +326,7 @@ async function loadPromptSets(): Promise<void> {
 function formatCost(v: number): string {
   return `$${v.toFixed(4)}`
 }
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 onMounted(() => {
   loadPromptSets()
@@ -495,7 +488,7 @@ onMounted(() => {
   background: none;
   border: none;
   color: var(--text-tertiary);
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   cursor: pointer;
   line-height: 1;
 }

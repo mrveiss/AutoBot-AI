@@ -148,7 +148,7 @@ readonly KEPT_PACKAGES=(
     # build toolchain and development headers -- other software on the host builds with them
     build-essential cmake ninja-build pkg-config portaudio19-dev python3-dev tk-dev zlib1g-dev "lib*-dev"
     # language runtimes and their distro libraries
-    npm python3 python3-opencv python3-pip python3-prometheus-client python3-redis
+    python3 python3-opencv python3-pip python3-prometheus-client python3-redis
     python3-tk python3-venv
     # desktop, VNC and browser stack, with the runtime libraries browsers load
     chromium-browser dbus-x11 firefox fluxbox tightvncserver "tigervnc-*" ubuntu-desktop-minimal

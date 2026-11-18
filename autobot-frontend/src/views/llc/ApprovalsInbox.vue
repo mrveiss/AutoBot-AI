@@ -26,6 +26,10 @@
       </div>
     </div>
 
+    <WaitingForYou />
+
+    <StuckFileCleanupPanel />
+
     <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
 
     <template v-else>
@@ -56,7 +60,7 @@
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
-            <span class="card-meta">{{ formatDate(item.created_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.created_at) || '—' }}</span>
           </div>
 
           <div class="payload-section">
@@ -120,7 +124,7 @@
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.decidedBy', { id: item.decided_by_agent_id ?? '—' }) }}</span>
-            <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.decided_at ?? item.updated_at) || '—' }}</span>
           </div>
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
@@ -136,6 +140,8 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
+import StuckFileCleanupPanel from '@/components/llc/StuckFileCleanupPanel.vue'
+import WaitingForYou from '@/components/approvals/WaitingForYou.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -200,10 +206,6 @@ const filteredHistory = computed(() => {
 
 function formatType(val: string) {
   return val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function formatDate(iso: string | null) {
-  return formatDateTime(iso) || '—'
 }
 
 function formatJson(payload: Record<string, unknown>) {
@@ -306,7 +308,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -320,7 +322,7 @@ onUnmounted(() => {
   padding: 0 0.4rem;
   background: var(--color-error-solid);
   color: white;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   border-radius: var(--radius-full);
 }
@@ -335,7 +337,7 @@ onUnmounted(() => {
 
 .tab-btn {
   padding: 0.375rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -345,7 +347,7 @@ onUnmounted(() => {
 
 .tab-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .inbox-filters {
@@ -361,7 +363,7 @@ onUnmounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .filter-search {
@@ -414,7 +416,7 @@ onUnmounted(() => {
   display: inline-block;
   padding: 0.125rem 0.5rem;
   border-radius: var(--radius-full);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -472,7 +474,7 @@ onUnmounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 

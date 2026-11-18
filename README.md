@@ -12,7 +12,7 @@ Your data stays on your machines. Your AI stays yours.
 
 [Get Started](#quick-start) · [Documentation](docs/) · [Community](https://github.com/mrveiss/AutoBot-AI/discussions) · [Sponsor](https://github.com/sponsors/mrveiss)
 
-[![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
+[![CI](https://github.com/mrveiss/AutoBot-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/mrveiss/AutoBot-AI/branch/main/graph/badge.svg)](https://codecov.io/gh/mrveiss/AutoBot-AI)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
@@ -115,7 +115,8 @@ in **SLM Admin > Settings > LLM** (`http://localhost/slm/`, then Settings, then 
   the same file -- the SLM admin password (the installer prints it when it generated it). The main app is served by the
   node you assign the frontend role to.
 - Until onboarding is complete, the main app sends a newly logged-in user to its
-  `/onboarding` page.
+  `/onboarding` page, which has three steps: **System Check**, **Choose Preset**, and
+  **Review & Apply**.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 

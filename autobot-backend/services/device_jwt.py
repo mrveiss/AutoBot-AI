@@ -58,6 +58,7 @@ from autobot_shared.auth.jwt_core import JWTDecodeError, decode_jwt, encode_jwt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from services.audit.audit import AuditAction, audit_record
+from services.device_owner_revocation import reject_if_owner_revoked
 
 logger = get_logger(__name__)
 
@@ -277,6 +278,9 @@ async def validate_device_jwt(token: str) -> Dict[str, object]:
     2. Device still exists in the database AND has not been revoked. Both a
        deleted row and a row carrying ``revoked_at`` refuse the credential;
        the two are logged distinctly (``reason=unpaired`` vs ``reason=revoked``).
+    3. The owner (``user_id`` claim) still exists and has no revocation marker
+       newer than the token's ``iat`` (#20446; ``device_owner_revocation``).
+       A marker store that cannot answer raises the shared 503, not a 401.
 
     Revoking one device sets ``revoked_at`` on that row alone, so the same
     user's other paired devices are untouched. The check runs per handshake:
@@ -315,4 +319,6 @@ async def validate_device_jwt(token: str) -> Dict[str, object]:
         logger.warning("device_jwt: refused device_id=%s reason=unpaired", device_id)
         raise JWTDecodeError(f"device_jwt: device {device_id} has been unpaired or does not exist")
 
+    # #20446: a token minted before its owner's revocation marker (or whose owner is gone) is void.
+    await reject_if_owner_revoked(claims)
     return claims

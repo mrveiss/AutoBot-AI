@@ -243,7 +243,8 @@ onMounted(() => {
 
 .placeholder-content .icon,
 .error-content .icon {
-  font-size: 48px;
+  width: 48px;
+  height: 48px;
   color: var(--text-tertiary);
 }
 

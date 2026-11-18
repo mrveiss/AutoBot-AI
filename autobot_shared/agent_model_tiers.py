@@ -50,15 +50,17 @@ _INSTRUCTION = (
     " graph_entity_extractor man_page_knowledge_integrator step_executor network_discovery"
     " summarization translation audio_processing"
 )
-_SYSTEM = "system system_commands enhanced_system_commands interactive_terminal security_scanner llm_failsafe"
+_SYSTEM = "system system_commands enhanced_system_commands interactive_terminal security_scanner"
 
 #: Agent id -> tier name. One row per agent; every plane derives from it.
 AGENT_TIERS: dict[str, str] = {
     "default_llm": "default_llm",
     "embedding": "embedding",
-    **{a: "routing" for a in ("routing", "orchestrator")},
+    # #19733: the failsafe runs on the two smallest chat models, which every install pulls, CPU-only
+    # included, so it works when everything else is missing; and on two, so one can stand in.
+    **{a: "routing" for a in ("routing", "orchestrator", "llm_failsafe")},
     **{a: "classification" for a in ("classification", "gemma_classification", "sentiment_analysis")},
-    **{a: "light" for a in ("light_processing", "json_formatter", "npu_code_search")},
+    **{a: "light" for a in ("light_processing", "json_formatter", "npu_code_search", "llm_failsafe_secondary")},
     **{a: "instruction" for a in _INSTRUCTION.split()},
     **{a: "system" for a in _SYSTEM.split()},
     **{a: "quality" for a in _QUALITY.split()},

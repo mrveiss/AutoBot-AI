@@ -11,7 +11,7 @@
         <div class="file-info">
           <Icon :name="fileIcon" />
           <div>
-            <h4>{{ selectedFile.name }}</h4>
+            <h4>{{ displayName }}</h4>
             <p class="file-meta">
               {{ selectedFile.type }} • {{ formatFileSize(selectedFile.size || 0) }}
               <span v-if="selectedFile.date"> • {{ formatDate(selectedFile.date) }}</span>
@@ -64,7 +64,8 @@ import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { BaseButton } from '@autobot/ui'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import { formatDate, formatFileSize } from '@/utils/formatHelpers'
+import { formatDate, formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
+import { useI18n } from 'vue-i18n'
 
 interface TreeNode {
   id: string
@@ -98,6 +99,12 @@ const props = withDefaults(defineProps<Props>(), {
 defineEmits<Emits>()
 
 const { getFileIcon: getFileIconUtil } = useKnowledgeIcons()
+const { t } = useI18n()
+
+// #21037: display-only man-page label; selectedFile.name stays raw.
+const displayName = computed(() =>
+  formatManPageTitle(props.selectedFile?.name, knowledgeNodeFactType(props.selectedFile?.metadata), t),
+)
 
 const fileIcon = computed<IconName>(() => {
   if (!props.selectedFile) return 'file'
@@ -130,7 +137,8 @@ const fileIcon = computed<IconName>(() => {
 }
 
 .placeholder-state .icon {
-  font-size: var(--text-4xl);
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -170,7 +178,8 @@ const fileIcon = computed<IconName>(() => {
 }
 
 .file-info .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -214,7 +223,8 @@ const fileIcon = computed<IconName>(() => {
 
 .loading-content .icon,
 .error-content .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl);
+  height: var(--text-3xl);
   margin-bottom: var(--spacing-4);
 }
 

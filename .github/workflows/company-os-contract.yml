@@ -25,7 +25,10 @@ on:
       - 'autobot-frontend/src/views/llc/**'
       - 'autobot-frontend/src/composables/llc/**'
       - 'scripts/audit_api_wiring.py'
+      - 'scripts/audit_api_wiring_args.py'
       - '.github/workflows/company-os-contract.yml'
+      - '.github/actions/free-disk-space/**'
+      - '.github/actions/install-ci-requirements/**'
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -44,7 +47,18 @@ permissions:
 jobs:
   company-os-wiring-audit:
     name: Company OS wiring audit
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -58,10 +72,8 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
-      - name: Install backend dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary || true
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
 
       - name: Audit /api/llc wiring (blocking)
         run: |
@@ -77,7 +89,18 @@ jobs:
 
   company-os-e2e:
     name: Company OS end-to-end
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -91,10 +114,11 @@ jobs:
             requirements*.txt
             autobot-backend/requirements*.txt
 
+      - name: Install CI requirements
+        uses: ./.github/actions/install-ci-requirements
+
       - name: Install backend dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -r requirements-ci.txt --prefer-binary || true
           # Hermetic e2e essentials (no Postgres/Redis/network needed).
           python -m pip install aiosqlite pytest pytest-asyncio httpx --prefer-binary
 

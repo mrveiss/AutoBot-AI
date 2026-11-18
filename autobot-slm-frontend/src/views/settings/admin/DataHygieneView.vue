@@ -45,10 +45,8 @@ import {
   type OrphanStorageListResponse,
 } from '@/composables/useAutobotApi'
 import type { SlmUserResponse } from '@/composables/useSlmUserApi'
-import { formatFileSize } from '@/utils/formatHelpers'
-import { formatRelativeTime } from '@/utils/dateUtils'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
+import { BaseAlert, BaseModal, formatFileSize, createLogger } from '@autobot/ui'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()
@@ -293,7 +291,7 @@ const AUDIT_LIMIT_PER_OPERATION = 25
 
 /** `AuditLogEntry.timestamp` is Unix-epoch SECONDS, not an ISO string or ms. */
 function formatAuditTime(ts: number): string {
-  return formatRelativeTime(new Date(ts * 1000).toISOString())
+  return formatCompactRelativeTime(new Date(ts * 1000).toISOString())
 }
 
 const auditEntries = ref<AuditLogEntry[]>([])
@@ -430,7 +428,7 @@ onMounted(() => {
               <td class="px-3 py-2 text-gray-900">{{ c.provider }}</td>
               <td class="px-3 py-2 font-mono text-xs text-gray-600">{{ c.location }}</td>
               <td class="px-3 py-2">{{ formatFileSize(c.size_bytes) }}</td>
-              <td class="px-3 py-2 text-gray-500">{{ formatRelativeTime(c.modified_at) }}</td>
+              <td class="px-3 py-2 text-gray-500">{{ formatCompactRelativeTime(c.modified_at) }}</td>
               <td class="px-3 py-2">
                 <span>{{ c.reason }}</span>
                 <span v-if="!c.deletable" class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
