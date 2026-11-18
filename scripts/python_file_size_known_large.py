@@ -317,7 +317,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/claim_verifier.py": 768,
     "autobot-backend/services/codebase_indexing_service.py": 1010,
     "autobot-backend/services/command_approval_manager.py": 633,
-    "autobot-backend/services/config_service.py": 605,
     "autobot-backend/services/docker_task_workspace.py": 673,
     "autobot-backend/services/execution/docker_backend.py": 604,
     "autobot-backend/services/fact_extraction_service.py": 870,

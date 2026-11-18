@@ -17158,8 +17158,8 @@ export interface paths {
          * Rollback To Revision
          * @description Roll back entity config to a prior revision (#1404).
          *
-         *     Creates a new revision capturing the rollback so the action is
-         *     itself part of the audit trail.
+         *     Applies the snapshot to the live config, then records a revision so the
+         *     action is part of the audit trail (#18478). Unknown entities return 400.
          */
         post: operations["rollback_to_revision_api_config_revisions__entity_type___entity_id___revision_id__rollback_post"];
         delete?: never;
