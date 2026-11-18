@@ -13,6 +13,10 @@ to generate_response with the critique as a refinement hint.
 Issue #1373: Initial RLM prototype.
 """
 
+import asyncio
+
+import httpx
+
 from autobot_shared.logging_manager import get_logger
 from llm_shared.validated_llm import Completer, complete_validated
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
@@ -67,6 +71,28 @@ _EVAL_SCHEMA: dict = {
 }
 
 
+_TIMEOUT_ERRORS = (TimeoutError, asyncio.TimeoutError, httpx.TimeoutException)
+
+
+def _unparsed_tool_call_result(response: str, iteration: int) -> ReflectionResult | None:
+    """REFINE verdict when *response* is raw TOOL_CALL markup that never ran, else None. (#21845)
+
+    Such a reply is a non-answer; it must never reach the user because the
+    evaluator timed out or scored the markup as prose.
+    """
+    from chat_workflow.tool_call_args import tool_call_parse_error
+
+    if tool_call_parse_error(response) is None:
+        return None
+    return ReflectionResult(
+        verdict=ReflectionVerdict.REFINE,
+        quality_score=0.0,
+        critique="Response contains an unexecuted TOOL_CALL instead of an answer",
+        refinement_hint="Answer in plain text, or re-issue the tool call with params as strict JSON.",
+        iteration=iteration,
+    )
+
+
 class ResponseQualityEvaluator:
     """Evaluates LLM responses and decides whether to recurse.
 
@@ -103,6 +129,9 @@ class ResponseQualityEvaluator:
                 iteration=iteration,
             )
 
+        if (unanswered := _unparsed_tool_call_result(response, iteration)) is not None:
+            return unanswered
+
         prompt = _EVAL_PROMPT.format(query=query, response=response)
 
         try:
@@ -128,9 +157,11 @@ class ResponseQualityEvaluator:
                 exc,
                 exc_info=True,
             )
+            timed_out = isinstance(exc, _TIMEOUT_ERRORS)
             return ReflectionResult(
                 verdict=ReflectionVerdict.INDETERMINATE,
-                quality_score=0.7,
+                # #21845: a timeout means NO reading, so it carries no passing score.
+                quality_score=0.0 if timed_out else 0.7,
                 critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
                 iteration=iteration,
             )
