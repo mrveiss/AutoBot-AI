@@ -43,6 +43,35 @@ async def attachments_allowed(chat_id: str, current_user: dict | None, request) 
     return decision.get("reason") != "legacy_unowned"
 
 
+def _text_field(request_data: dict, key: str) -> str:
+    """The string at *key* (empty when absent); anything else is the client's error, not a scanner crash (400)."""
+    value = request_data.get(key)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{key} must be a string")
+    return value
+
+
+def resume_decision(request_data: dict, chat_id: str) -> dict:
+    """What ``POST /chats/{id}/resume`` hands the paused graph: the verdict, plus a stall question's answer (#21022).
+
+    Free text is scanned before it reaches the model (#16561); ``answer`` is present only when the person gave one.
+    """
+    from security.chat_message_safety import scan_chat_message
+
+    reason, answer = _text_field(request_data, "reason"), _text_field(request_data, "answer")
+    decision = {
+        "approved": request_data.get("approved", False),
+        "reason": scan_chat_message(reason, chat_id),  # #16561
+    }
+    if answer:
+        from autobot_shared.ssot_config import config
+
+        decision["answer"] = scan_chat_message(answer[: config.llm.chat_stall_answer_max_chars], chat_id)
+    return decision
+
+
 async def resume_attachment_verdict(manager, chat_id: str, current_user: dict | None, request) -> bool:
     """This resume request's STRICT verdict; a caller failing it cannot resume an attachment turn or chat (#20195).
 
@@ -154,8 +183,9 @@ async def _stream_graph_resume(
     decision: dict,
     request_id: str,
     attachment_access: bool = False,
+    auth_scope: dict | None = None,
 ):
-    """Stream graph resume after command approval interrupt (#1043).
+    """Stream graph resume after command approval interrupt (#1043), as the caller (#16845 gate, #19241).
 
     ``attachment_access`` is THIS request's STRICT session-posture verdict (#20195): it replaces the one the
     interrupted turn checkpointed, so only an owner or admin who passes now gets file text in the resumed answer.
@@ -165,7 +195,7 @@ async def _stream_graph_resume(
         yield f"data: {json.dumps(evt)}\n\n"
 
         async for msg in chat_workflow_manager.resume_graph(
-            session_id=chat_id, decision=decision, attachment_access=attachment_access
+            session_id=chat_id, decision=decision, attachment_access=attachment_access, auth_scope=auth_scope
         ):
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
             yield f"data: {json.dumps(msg_data)}\n\n"

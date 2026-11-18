@@ -25,8 +25,17 @@ import pytest
 from repo_tests._paths import repo_root
 
 import knowledge_factory as kf
+from tools.lint import _parse_cache as parse_cache
 
 COMPOSED = "autobot-backend/knowledge/_composed.py"
+#: The WRITE methods `@invalidating_writes` (#20958) wraps on the composed class, each on the mixin whose definition
+#: the real MRO resolves it to. The decorator fails loudly on a missing one, so the stub mixins must carry them.
+_WRITE_METHODS = {
+    "DocumentsMixin": ("store_fact",),
+    "BulkOperationsMixin": ("update_fact", "delete_fact"),
+    "FactsMixin": ("delete_facts_by_session",),
+    "CollectionsMixin": ("delete_collection", "bulk_delete_collection_facts"),
+}
 _MIXIN_MODULES = {
     "base": "KnowledgeBaseCore",
     "bulk": "BulkOperationsMixin",
@@ -45,6 +54,10 @@ _MIXIN_MODULES = {
 }
 
 
+async def _stub_write(self, *args, **kwargs) -> None:
+    return None
+
+
 def _holds_or_builds_a_knowledge_base(tree: ast.Module) -> list[str]:
     """Module-level KnowledgeBase-annotated names, and any `KnowledgeBase(` call."""
     found = []
@@ -59,7 +72,7 @@ def _holds_or_builds_a_knowledge_base(tree: ast.Module) -> list[str]:
 
 def test_composed_holds_and_builds_nothing() -> None:
     source = (repo_root() / COMPOSED).read_text(encoding="utf-8")
-    assert _holds_or_builds_a_knowledge_base(ast.parse(source)) == []
+    assert _holds_or_builds_a_knowledge_base(parse_cache.parse(source)) == []
 
 
 @pytest.mark.parametrize(
@@ -72,7 +85,7 @@ def test_composed_holds_and_builds_nothing() -> None:
 )
 def test_the_matcher_flags_a_global_and_a_construction_but_not_the_class(source, expected) -> None:
     """Contrast: the AST matcher is not vacuous, and the class definition is not a hit."""
-    assert _holds_or_builds_a_knowledge_base(ast.parse(source)) == expected
+    assert _holds_or_builds_a_knowledge_base(parse_cache.parse(source)) == expected
 
 
 class _Stub:
@@ -94,7 +107,7 @@ def composed(monkeypatch):
     _Stub.constructed, _Stub.outcome = 0, True
     for mod, cls in _MIXIN_MODULES.items():
         stub = types.ModuleType(f"knowledge.{mod}")
-        setattr(stub, cls, type(cls, (), {}))
+        setattr(stub, cls, type(cls, (), {name: _stub_write for name in _WRITE_METHODS.get(cls, ())}))
         monkeypatch.setitem(sys.modules, f"knowledge.{mod}", stub)
     kb_mod = types.ModuleType("knowledge_base")
     kb_mod.KnowledgeBase = _Stub

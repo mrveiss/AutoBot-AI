@@ -445,7 +445,7 @@ watch(() => props.open, (isOpen) => {
 
 .btn-primary {
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .btn-primary:hover:not(:disabled) {

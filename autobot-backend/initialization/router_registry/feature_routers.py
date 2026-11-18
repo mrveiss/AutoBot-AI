@@ -513,8 +513,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # NPU and Redis
     ("api.npu_workers", "", ["npu-workers"], "npu_workers"),
+    ("api.npu_workers_assigned", "", ["npu-workers"], "npu_workers_assigned"),
     ("api.redis_service", "/redis-service", ["redis-service"], "redis_service"),
-    # Issue #729: infrastructure_nodes removed - now served by slm-server
     # Fleet host list for HostSelector (SSH/VNC terminal in chat)
     (
         "api.infrastructure",

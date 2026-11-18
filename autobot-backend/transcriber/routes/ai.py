@@ -18,12 +18,14 @@ from fastapi.responses import StreamingResponse
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from llm_shared.run_credentials import llm_principal_scope
+from services.chat_budget_gate import ChatBudgetExceeded
 from services.llm_service import get_llm_service
 from services.llm_usage_recording import spend_attribution
 from transcriber.ai.context import build_context
 from transcriber.ai.prompts import ANALYSIS_MAX_TOKENS, get_system_prompt
 from transcriber.database import Database
-from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
+from transcriber.deps import authenticate, caller_can_access, caller_principal_of, get_transcriber_db_from_request
 from transcriber.export.segments import build_segment_list
 from transcriber.models import AiAskRequest
 
@@ -59,12 +61,18 @@ async def ai_ask(
     system_prompt = get_system_prompt(body.action, custom_question=body.custom_question)
 
     messages = _ask_messages(system_prompt, context)
-    attribution = spend_attribution(user_id=caller_id_of(request), endpoint=_ASK_ENDPOINT, recording_id=recording_id)
+    principal_id, org_id = caller_principal_of(request)
+    attribution = spend_attribution(user_id=principal_id, endpoint=_ASK_ENDPOINT, recording_id=recording_id)
 
     async def stream():
         try:
-            async for chunk in get_llm_service().stream(messages, max_tokens=ANALYSIS_MAX_TOKENS, metadata=attribution):
-                yield f"data: {json.dumps({'content': chunk})}\n\n"
+            with llm_principal_scope(principal_id, org_id):
+                async for chunk in get_llm_service().stream(
+                    messages, max_tokens=ANALYSIS_MAX_TOKENS, metadata=attribution
+                ):
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+        except ChatBudgetExceeded as exc:
+            yield f"data: {json.dumps({'error': exc.message, **exc.detail})}\n\n"
         except Exception:
             logger.exception("AI analysis failed for recording=%s", recording_id)
             yield f"data: {json.dumps({'error': 'AI analysis failed'})}\n\n"

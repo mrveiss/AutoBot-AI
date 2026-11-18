@@ -43,6 +43,7 @@ const report = {
     progression_metrics: { eligible_for_progression: true, progression_velocity: 3, blocks_count: 0, available_count: 1 },
     quality_indicators: { validation_score: 88, error_rate: 0, recent_changes: 5 },
   },
+  trends_available: true,
   trends: {
     maturity_trend: [{ timestamp: 't1', value: 50 }, { timestamp: 't2', value: 60 }],
     phase_completion_trend: [],
@@ -95,7 +96,7 @@ describe('ValidationDashboard', () => {
     expect(w.text()).toContain('91.3%')
     expect(w.findAll('[data-testid="slm-validation-alert"]').map((a) => a.text()).join(' ')).toContain('Multiple Stalled Phases')
     expect(w.findAll('[data-testid="slm-validation-recommendation"]')).toHaveLength(1)
-    expect(byId(w, 'slm-validation-trends-note').text()).toContain(L.trends.note)
+    expect(w.find('[data-testid="slm-validation-trends-note"]').exists()).toBe(false)
     expect(byId(w, 'slm-validation-trends').text()).toContain(L.trends.series.maturity_trend)
     expect(byId(w, 'slm-validation-trends').text()).not.toContain(L.trends.series.phase_completion_trend)
   })
@@ -107,6 +108,21 @@ describe('ValidationDashboard', () => {
     expect(unscored?.text()).toContain(L.phases.notScored)
     expect(unscored?.text()).toContain('ci-gate')
     expect(unscored?.text()).not.toContain('0.0%')
+  })
+
+  it('says the completion figures are not scored, never 0%, when every phase is unscored', async () => {
+    const none = { average_completion: null, min_completion: null, max_completion: null, phases_above_50: 0, phases_above_90: 0 }
+    serve({ report: { ...report, metrics: { ...report.metrics, completion_statistics: none } } })
+    const w = await mountView()
+    expect(w.text()).toContain(L.phases.notScored)
+    expect(w.text()).not.toContain('NaN')
+  })
+
+  it('says trend history is not available, with no series, when the report flags it', async () => {
+    serve({ report: { ...report, trends_available: false, trends: { maturity_trend: [], phase_completion_trend: [], capability_growth: [] } } })
+    const w = await mountView()
+    expect(byId(w, 'slm-validation-trends-note').text()).toContain(L.trends.note)
+    expect(byId(w, 'slm-validation-trends').text()).toContain(L.trends.empty)
   })
 
   it('says an alert-free, recommendation-free report has none', async () => {

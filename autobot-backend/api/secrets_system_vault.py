@@ -22,7 +22,8 @@ from typing import Dict
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from api.schemas_system import SecretCreateRequest
+from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
+from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -32,6 +33,9 @@ from services.envelope_secrets_service import SecretAccessError
 logger = get_logger(__name__)
 
 _SYSTEM_VAULT = VaultRef(VaultKind.SYSTEM)
+
+
+_METADATA_FIELDS = frozenset({"name", "description", "tags", "expires_at", "metadata"})
 
 
 def _as_uuid(secret_id: str) -> uuid.UUID | None:
@@ -118,18 +122,33 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 
+async def _unavailable_unless_not_system(vault_id: uuid.UUID) -> None:
+    """With no coordinator, a SYSTEM secret is 503 (not 404); any other id stays 'not ours'."""
+    from llc.deps import get_session
+
+    async for session in get_session():
+        if await _is_system_secret(session, vault_id):
+            raise HTTPException(status_code=503, detail="envelope secrets store not configured")
+        return
+
+
 async def rotate_system_vault_secret(
-    secret_id: str, value: str | None, owner_id: str, headers: Mapping[str, str] | None = None
+    secret_id: str, request: SecretUpdateRequest, owner_id: str, headers: Mapping[str, str] | None = None
 ) -> Dict | None:
     """Rotate a SYSTEM-vault secret's value; None when `secret_id` is not one.
 
     A SYSTEM secret has no metadata-only edit, so an update without `value`
-    is refused (ValueError -> 400) rather than silently doing nothing.
+    is refused (ValueError -> 400) rather than silently doing nothing. The same
+    holds for metadata sent with a value: it would be dropped, so it is refused.
     """
     from llc.deps import get_session
 
+    value = request.value
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
-    if vault_id is None or coordinator is None:
+    if vault_id is None:
+        return None
+    if coordinator is None:
+        await _unavailable_unless_not_system(vault_id)
         return None
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
@@ -138,6 +157,8 @@ async def rotate_system_vault_secret(
         user_id, permissions = await _principal(owner_id)
         if not value:
             raise ValueError("value is required to update a system-vault secret")
+        if request.model_fields_set & _METADATA_FIELDS:
+            raise ValueError("a system-vault secret has no editable metadata; send only the value")
         secret = await coordinator.rotate(
             session, user_id=user_id, permissions=permissions, secret_id=vault_id, new_plaintext=value.encode("utf-8")
         )
@@ -146,47 +167,51 @@ async def rotate_system_vault_secret(
     return None  # pragma: no cover -- defensive, generator always yields
 
 
-async def _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id: uuid.UUID) -> None:
-    """409 with the dependents listed when anything still consumes the secret (#20557).
+async def _guarded_vault_delete(
+    coordinator, session, vault_id: uuid.UUID, owner_id: str, confirmed_digest: str | None
+) -> None:
+    """The main route's delete: the ONE guarded delete, with the manage-authority listing (`describe_dependencies`).
 
-    The listing comes from `describe_dependencies` (manage-authority gated). The
-    caller repeats the delete with `confirm_dependents` once a human has seen it.
+    The caller repeats the delete with the 409's `dependents_digest` once a human has seen the listing.
     """
-    deps = await coordinator.describe_dependencies(
-        session, user_id=user_id, permissions=permissions, secret_id=vault_id
-    )
-    if deps:
-        dependents = [{"dependent_kind": d.dependent_kind, "dependent_id": d.dependent_id} for d in deps]
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "secret_has_dependents", "message": "Dependents use this secret", "dependents": dependents},
+    user_id, permissions = await _principal(owner_id)
+
+    async def delete() -> None:
+        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+
+    async def dependents() -> list:
+        return await coordinator.describe_dependencies(
+            session, user_id=user_id, permissions=permissions, secret_id=vault_id
         )
+
+    await guarded_delete(session, vault_id, dependents=dependents, delete=delete, confirmed_digest=confirmed_digest)
 
 
 async def delete_system_vault_secret(
     secret_id: str,
     owner_id: str,
     headers: Mapping[str, str] | None = None,
-    confirm_dependents: bool = False,
+    confirmed_digest: str | None = None,
 ) -> bool:
     """Delete a SYSTEM-vault secret; False when `secret_id` is not one.
 
-    Refused (409) while dependents exist unless `confirm_dependents` is set. The
-    internal API key is refused before any of this, so it cannot confirm.
+    Refused (409) while dependents exist unless `confirmed_digest` is the digest of the
+    listed set (see `secrets_guarded_delete`). The internal API key is refused before any
+    of this, so it cannot confirm.
     """
     from llc.deps import get_session
 
     vault_id, coordinator = _as_uuid(secret_id), _coordinator_or_none()
-    if vault_id is None or coordinator is None:
+    if vault_id is None:
+        return False
+    if coordinator is None:
+        await _unavailable_unless_not_system(vault_id)
         return False
     async for session in get_session():
         if not await _is_system_secret(session, vault_id):
             return False
         _refuse_internal_key(headers, "delete")
-        user_id, permissions = await _principal(owner_id)
-        if not confirm_dependents:
-            await _refuse_unconfirmed_dependents(coordinator, session, user_id, permissions, vault_id)
-        await coordinator.delete(session, user_id=user_id, permissions=permissions, secret_id=vault_id)
+        await _guarded_vault_delete(coordinator, session, vault_id, owner_id, confirmed_digest)
         await session.commit()
         return True
     return False  # pragma: no cover -- defensive, generator always yields

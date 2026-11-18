@@ -6,7 +6,7 @@
 
 Event names are the ActivityEventType values in llc/models/enums.py. ``writer`` says whether any
 code writes that event on the path the step takes, found by reading llc/services (no writer means
-the log cannot hold it today, which is #20101's subject). ``owner`` is the open issue that explains
+the log cannot hold it today, which is #20417's subject). ``owner`` is the open issue that explains
 the row's absence; a row missing WITHOUT an owner is a new failure and fails the test red.
 
 An action of None means "some record about this entity by this actor": for a step whose event type
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-AUDIT = "#20101"
+AUDIT = "#20417"
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,9 @@ class Expected:
     owner: str | None
     writer: str  # where the event is written on this path, or "none"
     after: str | None = None  # key of a timestamp in scenario.ids: only rows at or after it count
+    # Actions starting with this never count: step 6's resume writes control.agent_resumed after t_budget, and that
+    # is the control plane, not a budget event, so it must not satisfy "some record about agent:a" (#21166).
+    except_prefix: str | None = None
 
 
 EXPECTED: tuple[Expected, ...] = (
@@ -37,18 +40,34 @@ EXPECTED: tuple[Expected, ...] = (
     Expected("2", "agent.hired", "user", "agent:ceo", AUDIT, "none"),
     Expected("2", "agent.hired", "user", "agent:a", AUDIT, "none"),
     Expected("2", "agent.hired", "user", "agent:b", AUDIT, "none"),
-    Expected("3", None, "user", "goal", AUDIT, "no goal event type exists"),
+    # "goal.created" is a bare string in GoalService.create (ActivityEventType has no goal member), hence action None.
+    Expected("3", None, "user", "goal", None, "goal_service.create (goal.created)"),
     Expected("3", None, "user", "project", AUDIT, "no project event type exists"),
     Expected("3", "work_item.created", "user", "epic", AUDIT, "none"),
     Expected("3", "work_item.created", "user", "task", AUDIT, "none"),
     Expected(
-        "4", "work_item.assigned", "user", "task", AUDIT, "work_item_service.claim_human only (a person claiming)"
+        "4",
+        "work_item.assigned",
+        "user",
+        "task",
+        AUDIT,
+        "none on this path (PATCH assignee records nothing; only claim_human, a person claiming, does)",
     ),
     Expected(
         "5", "heartbeat.started", "system", "agent:a", AUDIT, "none (liveness_monitor writes heartbeat.failed only)"
     ),
     Expected("5", "heartbeat.completed", "system", "agent:a", AUDIT, "none"),
-    Expected("6", None, "user", "agent:a", AUDIT, "no budget event type exists", after="t_budget"),
+    # The dispatch gate, not a person, refuses the exhausted agent's next run (#21212).
+    Expected(
+        "6",
+        "budget.dispatch_refused",
+        "system",
+        "agent:a",
+        None,
+        "dispatch_gate (budget.dispatch_refused)",
+        after="t_budget",
+        except_prefix="control.",
+    ),
     Expected("7", "control.agent_paused", "user", "agent:b", None, "controls_service.pause_agent"),
     Expected("7", "control.agent_resumed", "user", "agent:b", None, "controls_service.resume_agent"),
     Expected("8", "approval.requested", "user", "approval", AUDIT, "none (sprint_autoclose only)"),

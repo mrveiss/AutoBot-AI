@@ -66,13 +66,81 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
+  it('offers no second write while one is in flight (#20756)', async () => {
+    updateSecret.mockReturnValue(new Promise(() => {}))
+    const other = { id: 'sys-2', name: 'other-key', type: 'api_key' }
+    const wrapper = mountList({ available: true, secrets: [entry, other] })
+    await wrapper.find('[data-testid="rotate-start"]').trigger('click')
+    await wrapper.find('input').setValue('new-secret-value')
+    await wrapper.find('[data-testid="rotate-save"]').trigger('click')
+    expect(wrapper.get('[data-testid="delete"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="rotate-start"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('a second delete click while the confirm is open or the write is in flight does nothing (#20756)', async () => {
+    let answer: (ok: boolean) => void = () => {}
+    confirm.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)))
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    await button.trigger('click')
+    answer(true)
+    await flushPromises()
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
+  it('remove() itself ignores a re-entrant call while busy, bypassing the disabled button (#20756)', async () => {
+    confirm.mockReturnValue(new Promise<boolean>(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    expect(button.attributes('disabled')).toBeDefined()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+  })
+
+  it('remove() ignores a click emitted while the DELETE is pending, past the first confirmation (#20756)', async () => {
+    confirm.mockResolvedValue(true)
+    deleteSecret.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.getComponent('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+    // trigger() is a no-op on a disabled element; emit the click straight to the bound handler.
+    await button.vm.$emit('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).toHaveBeenCalledOnce()
+  })
+
+  it('cancelling the confirm re-enables Delete and deletes nothing (#20756)', async () => {
+    confirm.mockResolvedValue(false)
+    const wrapper = mountList({ available: true, secrets: [entry] })
+    const button = wrapper.get('[data-testid="delete"]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(deleteSecret).not.toHaveBeenCalled()
+    expect(button.attributes('disabled')).toBeUndefined()
+  })
+
   it('delete confirms, then calls DELETE /secrets/{id}', async () => {
     confirm.mockResolvedValue(true)
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
-    expect(deleteSecret).toHaveBeenCalledWith('sys-1')
+    expect(deleteSecret).toHaveBeenCalledWith('sys-1', { chatId: undefined })
     expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
@@ -84,35 +152,48 @@ describe('SystemVaultSecrets (#17099)', () => {
     expect(deleteSecret).not.toHaveBeenCalled()
   })
 
-  it('a refused write is reported and does not reload as if it worked', async () => {
+  it('a failed write is reported as unconfirmed and reloads the list to show what is stored', async () => {
     confirm.mockResolvedValue(true)
     deleteSecret.mockRejectedValue(new Error('403'))
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('Nothing was modified')
-    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(wrapper.text()).toContain('could not be confirmed')
+    expect(wrapper.emitted('changed')).toHaveLength(1)
   })
 
   it('a delete refused for dependents lists them in a second confirm, then forces it (#20557)', async () => {
     confirm.mockResolvedValue(true)
-    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'service', dependent_id: 'scheduler' }] }
+    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'service', dependent_id: 'scheduler' }], dependents_digest: 'digest-1' }
     deleteSecret.mockRejectedValueOnce(new HttpError(409, 'Dependents use this secret', { detail })).mockResolvedValue({})
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(confirm.mock.calls[1][0].message).toContain('service:scheduler')
-    expect(deleteSecret).toHaveBeenLastCalledWith('sys-1', { confirmDependents: true })
+    expect(deleteSecret).toHaveBeenLastCalledWith('sys-1', { dependentsDigest: 'digest-1' })
   })
 
   it('declining the dependents confirm sends no forced delete (#20557)', async () => {
     confirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'agent', dependent_id: 'a-1' }] }
+    const detail = { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'agent', dependent_id: 'a-1' }], dependents_digest: 'digest-a' }
     deleteSecret.mockRejectedValue(new HttpError(409, 'Dependents use this secret', { detail }))
     const wrapper = mountList({ available: true, secrets: [entry] })
     await wrapper.find('[data-testid="delete"]').trigger('click')
     await flushPromises()
     expect(deleteSecret).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('changed')).toBeUndefined()
+  })
+
+  it('deleting one secret keeps the unsaved rotation draft of another', async () => {
+    confirm.mockResolvedValue(true)
+    const other = { id: 'sys-2', name: 'other-key', type: 'api_key' }
+    const wrapper = mountList({ available: true, secrets: [entry, other] })
+    await wrapper.findAll('[data-testid="rotate-start"]')[0].trigger('click')
+    await wrapper.find('input').setValue('draft-value')
+    await wrapper.find('[data-testid="delete"]').trigger('click')
+    await flushPromises()
+    expect(deleteSecret).toHaveBeenCalledWith('sys-2', { chatId: undefined })
+    expect((wrapper.find('input').element as HTMLInputElement).value).toBe('draft-value')
   })
 })

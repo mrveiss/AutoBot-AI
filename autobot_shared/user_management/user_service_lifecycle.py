@@ -18,21 +18,30 @@ here, merged as a union of what each side did, never a choice between them:
   ``reassign_memory`` hook. Fail-closed on hard delete is preserved.
 """
 
+import time
 import uuid
-from typing import Any
+from typing import Any, NamedTuple
 
 from sqlalchemy import select
 
-from autobot_shared.db_session import run_after_commit
+from autobot_shared.after_commit import defer_until_commit
+from autobot_shared.audit_actions import spellings_of
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
-from autobot_shared.user_management.models.audit import AuditResourceType, IdentityAuditAction
+from autobot_shared.user_management.last_platform_admin import (
+    LastPlatformAdminError,
+    LastPlatformAdminRetry,
+    ensure_not_last_platform_admin,
+)
+from autobot_shared.user_management.models.audit import AuditLog, AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.password_epoch import (
     DEACTIVATION_EPOCH_LEAD_SECONDS,
+    PASSWORD_EPOCH_TTL_SECONDS,
     PasswordEpochMark,
+    get_password_epoch,
     set_password_epoch,
 )
 from autobot_shared.user_management.user_service_base import UserServiceBase
@@ -44,12 +53,24 @@ from autobot_shared.user_management.user_service_errors import (
 logger = get_logger(__name__)
 
 
+def _admin_change_lead(is_admin: bool) -> int:
+    """Epoch lead of an admin change's marker: a demotion voids the second it happened in too (#20670)."""
+    return 0 if is_admin else DEACTIVATION_EPOCH_LEAD_SECONDS
+
+
+class AdminStatusChange(NamedTuple):
+    """What ``set_platform_admin`` did: whether the flag changed, and whether a revocation was queued (#20670)."""
+
+    changed: bool
+    sessions_revoked: bool
+
+
 class UserLifecycleMixin(UserServiceBase):
     """Password change, activation state and deletion."""
 
-    async def _require_user(self, user_id: uuid.UUID) -> UserCore:
+    async def _require_user(self, user_id: uuid.UUID, *, include_deleted: bool = False) -> UserCore:
         """Return the user, or raise ``UserNotFoundError``."""
-        user = await self.get_user(user_id)
+        user = await self.get_user(user_id, include_deleted=include_deleted)
         if not user:
             raise UserNotFoundError(f"User {user_id} not found")
         return user
@@ -109,21 +130,131 @@ class UserLifecycleMixin(UserServiceBase):
         after the commit.
         """
         mark = PasswordEpochMark(username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
-        run_after_commit(self.session, mark)
+        defer_until_commit(self.session, mark, scope=True)
         return {"sessions_revocation": "queued_after_commit"}
+
+    async def _guard_last_admin(self, user_id: uuid.UUID, action: str, attempt: str) -> None:
+        """Refuse, auditing the refusal, if the change would leave no active platform admin (#21018).
+
+        Runs first, before any other effect, so a refusal changes nothing; the caller's route commits the
+        denied audit row (``refuse_last_platform_admin``) and so releases the admin-row locks. It is the
+        first lock the request takes (admin rows in id order, the target among them), see
+        :mod:`last_platform_admin`.
+        """
+        try:
+            await ensure_not_last_platform_admin(self.session, self.user_model, user_id)
+        except LastPlatformAdminError as exc:
+            outcome = "failure" if isinstance(exc, LastPlatformAdminRetry) else "denied"
+            await self._audit_log(
+                action, AuditResourceType.USER, user_id, {"attempt": attempt, "reason": exc.code}, outcome=outcome
+            )
+            await self.session.flush()
+            raise
+
+    async def guard_deactivation(self, user_id: uuid.UUID) -> None:
+        """Refuse a deactivation of the only active admin before a caller applies any other change (#21018)."""
+        await self._guard_last_admin(user_id, IdentityAuditAction.USER_DEACTIVATED, "deactivate")
 
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
+        if not active:
+            await self.guard_deactivation(user_id)
+        handover = {} if active else await self.reassign_sessions(user_id)  # before the flip: a refusal changes nothing
         user.is_active = active
         user.updated_at = now_utc()
         await self.session.flush()
         action = IdentityAuditAction.USER_ACTIVATED if active else IdentityAuditAction.USER_DEACTIVATED
         # Reactivation revokes nothing: the tokens from before stay void, the user signs in again (#20443).
-        details = {} if active else self._revoke_tokens_after_commit(user.username)
+        details = {} if active else {**handover, **self._revoke_tokens_after_commit(user.username)}
         await self._audit_log(action, AuditResourceType.USER, user_id, details)
         logger.info("%s user: %s", "Activated" if active else "Deactivated", user_id)
         return True
+
+    async def _admin_transitions(self, user: UserCore) -> list[dict]:
+        """The ``details`` of every admin-status change recorded for *user*, in no particular order."""
+        spellings = spellings_of(IdentityAuditAction.PLATFORM_ADMIN_CHANGED)
+        rows = await self.session.execute(
+            select(AuditLog.details).where(AuditLog.action.in_(spellings), AuditLog.resource_ref == str(user.id))
+        )
+        return [details or {} for details in rows.scalars().all()]
+
+    @staticmethod
+    def _latest_transition(transitions: list[dict]) -> dict | None:
+        """The transition with the highest per-user revision: lock order, never a clock (#20670)."""
+        if not transitions:
+            return None
+        return max(transitions, key=lambda t: int(t.get("revision") or 0))
+
+    async def _admin_revocation_pending(self, user: UserCore, is_admin: bool, latest: dict | None) -> bool:
+        """Whether the last recorded admin change is to *is_admin* and its epoch marker is unconfirmed (#20670).
+
+        The durable record is the audit row ``set_platform_admin`` commits in the same transaction as
+        the flag; the confirmation is the epoch store holding a marker at or after the row's recorded
+        time plus the lead that change's marker is written with (one second for a demotion, none for a
+        promotion), so a later change in the same second never reads as the earlier one's marker. A
+        failed marker stays pending until a repeat records it, and a completed one is never repeated.
+        A row older than the marker's lifetime is settled. Raises ``RevocationCheckUnavailable`` when
+        the store cannot answer, so the caller fails closed.
+        """
+        if latest is None or latest.get("to") is not is_admin:
+            return False
+        recorded = latest.get("recorded_at")
+        if not isinstance(recorded, int):
+            return False
+        if recorded + PASSWORD_EPOCH_TTL_SECONDS < int(time.time()):
+            return False
+        epoch = await get_password_epoch(user.username, in_redis=self.epoch_in_redis)
+        return epoch is None or epoch < recorded + _admin_change_lead(is_admin)
+
+    async def _guard_demotion(self, user_id: uuid.UUID) -> None:
+        await self._guard_last_admin(user_id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
+
+    async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
+        """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
+
+        ``is_platform_admin`` is the only source of the token's admin ``role``. The old tokens are
+        revoked after the commit through the password epoch, so the change takes effect on the next
+        request. The row is locked for the read-modify-write, and each change takes the next per-user
+        revision under that lock. A change to the value already held writes nothing, except that it
+        finishes a revocation whose marker was never confirmed (:meth:`_admin_revocation_pending`),
+        so repeating the request after a 503 revokes. Raises ``UserNotFoundError``, or
+        ``LastPlatformAdminError`` when demoting the only active admin (#21018).
+        """
+        user = await self._require_user(user_id)
+        if not is_admin:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
+            await self._guard_demotion(user_id)
+        await self.session.refresh(user, with_for_update=True)
+        transitions = await self._admin_transitions(user)
+        latest = self._latest_transition(transitions)
+        if bool(user.is_platform_admin) == is_admin:
+            pending = await self._admin_revocation_pending(user, is_admin, latest)
+            if pending:
+                self._queue_admin_change_revocation(user, is_admin)
+            return AdminStatusChange(changed=False, sessions_revoked=pending)
+        await self._apply_admin_change(user, is_admin, int((latest or {}).get("revision") or 0) + 1)
+        return AdminStatusChange(changed=True, sessions_revoked=True)
+
+    async def _apply_admin_change(self, user: UserCore, is_admin: bool, revision: int) -> None:
+        """Flip the flag, queue the revocation and record the change with its revision and app-clock time."""
+        details = {
+            "from": not is_admin,
+            "to": is_admin,
+            "revision": revision,
+            "recorded_at": int(time.time()),
+            "sessions_revocation": "queued_after_commit",
+        }
+        user.is_platform_admin = is_admin
+        user.updated_at = now_utc()
+        await self.session.flush()
+        self._queue_admin_change_revocation(user, is_admin)
+        await self._audit_log(IdentityAuditAction.PLATFORM_ADMIN_CHANGED, AuditResourceType.USER, user.id, details)
+        logger.info("Platform admin %s for user: %s", "granted" if is_admin else "revoked", user.id)
+
+    def _queue_admin_change_revocation(self, user: UserCore, is_admin: bool) -> None:
+        """Queue the post-commit epoch write: lead 1 on a demotion, 0 on a promotion."""
+        mark = PasswordEpochMark(user.username, _admin_change_lead(is_admin), self.epoch_in_redis)
+        defer_until_commit(self.session, mark, scope=True)
 
     async def deactivate_user(self, user_id: uuid.UUID) -> bool:
         """Deactivate a user account; raises ``UserNotFoundError``."""
@@ -165,7 +296,7 @@ class UserLifecycleMixin(UserServiceBase):
         )
         org_ids = {user.org_id, *rows.scalars().all()} - {None}
         for org_id in sorted(org_ids, key=str):
-            run_after_commit(self.session, MembershipEpochBump(org_id))
+            defer_until_commit(self.session, MembershipEpochBump(org_id), scope=True)
 
     async def delete_user(
         self,
@@ -178,20 +309,28 @@ class UserLifecycleMixin(UserServiceBase):
         With *reassign_to*, the user's memory records are transferred to that
         user BEFORE the row is deleted (see ``_reassign_before_delete``).
 
+        A soft delete repeated on a soft-deleted user queues the revocation marker again, so a request
+        whose marker write failed (answered 503) can be retried (#20443); a hard delete cannot.
+
         Raises:
             UserNotFoundError: the user does not exist.
         """
-        user = await self._require_user(user_id)
+        user = await self._require_user(user_id, include_deleted=not hard_delete)
+        await self._guard_last_admin(user_id, IdentityAuditAction.USER_DELETED, "delete")
         details: dict[str, Any] = {"hard_delete": hard_delete}
         if reassign_to is not None:
+            await self.check_session_reassign(user_id)  # a memory move cannot be undone, so a refusal comes first
             details["reassign_to"] = str(reassign_to)
             details["reassign_counts"] = await self._reassign_before_delete(user_id, reassign_to, hard_delete)
+        details.update(
+            await self.reassign_sessions(user_id)
+        )  # chat sessions never stay with a deleted account (#20029)
 
         if hard_delete:
             await self._queue_membership_epoch_bumps(user)  # the cascade removes the rows this reads
             await self.session.delete(user)
         else:
-            user.deleted_at = now_utc()
+            user.deleted_at = user.deleted_at or now_utc()
             user.is_active = False
         await self.session.flush()
         details.update(self._revoke_tokens_after_commit(user.username))  # after the reassign and the delete

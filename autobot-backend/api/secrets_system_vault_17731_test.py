@@ -65,7 +65,7 @@ def client_and_vault(monkeypatch):
         vault = _FakeVault(admin)
 
         async def _one_session():
-            yield MagicMock(commit=AsyncMock())
+            yield MagicMock(commit=AsyncMock(), execute=AsyncMock(), rollback=AsyncMock())
 
         legacy = MagicMock()
         legacy.update_secret.return_value = None
@@ -113,6 +113,22 @@ def test_update_without_a_value_fails_closed_and_leaves_the_vault_untouched(clie
     client, vault = client_and_vault()
     response = client.put(f"/api/secrets/{_SECRET_ID}", json={"description": "only metadata"})
     assert response.status_code == 400
+    assert vault.store[uuid.UUID(_SECRET_ID)] == b"old-value"
+
+
+def test_update_with_a_value_and_metadata_is_refused_not_half_applied(client_and_vault):
+    client, vault = client_and_vault()
+    response = client.put(f"/api/secrets/{_SECRET_ID}", json={"value": "new-value", "name": "renamed"})
+    assert response.status_code == 400
+    assert vault.store[uuid.UUID(_SECRET_ID)] == b"old-value"
+
+
+def test_an_unavailable_vault_is_a_503_for_a_system_secret_not_a_404(client_and_vault, monkeypatch):
+    client, vault = client_and_vault()
+    monkeypatch.setattr(secrets_system_vault, "_coordinator_or_none", lambda: None)
+    assert client.put(f"/api/secrets/{_SECRET_ID}", json={"value": "x"}).status_code == 503
+    assert client.delete(f"/api/secrets/{_SECRET_ID}").status_code == 503
+    assert client.put(f"/api/secrets/{uuid.uuid4()}", json={"value": "x"}).status_code == 404
     assert vault.store[uuid.UUID(_SECRET_ID)] == b"old-value"
 
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Merge main into every open same-repo PR branch; a branch with no open PR is left alone (#20261).
+"""Merge main into each open same-repo PR branch that carries ``land-next``; every other branch is left alone.
 
 Run by ``.github/workflows/sync-branches-with-main.yml`` from a full clone of main.
 ``git push`` authenticates with ``AUTOBOT_PUSH_TOKEN`` and nothing else, as a
@@ -15,7 +15,8 @@ lack of the ``workflow`` scope is labelled.
 
 Merge only, never rebase, never force: a plain ``git push`` that fails because the
 branch moved is skipped and retried on the next run. A conflict is aborted and
-labelled, never resolved. The decisions live in ``branch_sync_core``; this module
+labelled, never resolved. ``--start-ci-for-pr N`` instead pushes one empty commit (no skip marker) onto PR N's
+synced head so its suite runs (#21577). The decisions live in ``branch_sync_core``; this module
 is the git and REST plumbing around them.
 """
 
@@ -106,6 +107,11 @@ class Git:
         listed = self.out("for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin")
         return [line for line in (listed or "").splitlines() if line]
 
+    def being_pushed(self) -> set:
+        """Branches a pre-push hook is gating right now; asked just before each merge (#20260)."""
+        listed = self.out("ls-remote", "origin", f"{core.PUSH_MARKER_PREFIX}*")
+        return core.branches_being_pushed(listed or "", time.time())
+
     def behind(self, branch: str, base: str) -> Optional[int]:
         count = self.out("rev-list", "--count", f"origin/{branch}..origin/{base}")
         return int(count) if count and count.isdigit() else None
@@ -131,6 +137,10 @@ class Git:
     def push(self, branch: str) -> Tuple[int, str]:
         # Plain push: rejected, never overwritten, if the branch moved since the fetch.
         return self._run([*self._auth, "push", "origin", f"HEAD:refs/heads/{branch}"])
+
+    def commit_empty(self, subject: str) -> Tuple[int, str]:
+        """One empty commit on the checked-out work branch, subject only: no body, no trailer."""
+        return self._run(["commit", "--allow-empty", "--quiet", "-m", subject])
 
     def touching(self, since: str, ref: str, path: str) -> List[Tuple[str, str]]:
         listed = self.out("log", "--format=%h%x1f%s", f"{since}..{ref}", "--", path) or ""
@@ -178,6 +188,21 @@ class SyncApi:
             if len(body) < PAGE_SIZE:
                 return items
         raise SyncApiError(f"{path}: more than 1000 pages")
+
+    def pull(self, number: int) -> Dict[str, Any]:
+        return self._expect((200,), "GET", f"/repos/{self.repo}/pulls/{number}")
+
+    def suite_runs(self, sha: str) -> List[Dict[str, Any]]:
+        """The pull_request workflow runs for exactly ``sha`` (needs ``actions: read``)."""
+        query = f"head_sha={sha}&event=pull_request&per_page={PAGE_SIZE}"
+        body = self._expect((200,), "GET", f"/repos/{self.repo}/actions/runs?{query}")
+        if not isinstance(body, dict):
+            raise SyncApiError(f"the runs list for {sha[:10]} is not an object; refusing to guess it is empty")
+        runs = list(body.get("workflow_runs") or [])
+        total = body.get("total_count")
+        if not isinstance(total, int) or total > len(runs):
+            raise SyncApiError(f"cannot tell whether {sha[:10]} has a suite: {total!r} runs reported, {len(runs)} read")
+        return runs
 
     def open_pulls(self) -> List[Dict[str, Any]]:
         return self.paginate(f"/repos/{self.repo}/pulls?state=open&sort=created&direction=asc")
@@ -315,7 +340,7 @@ def _emit(text: str) -> None:
 
 def render_summary(results: Dict[str, List[str]], dry_run: bool) -> str:
     order = (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK)
-    order += (core.OTHER_BASE, core.NO_OPEN_PR, core.POLICY, core.UNREACHABLE, core.ERROR)
+    order += (core.OTHER_BASE, core.NO_SLOT, core.NO_OPEN_PR, core.POLICY, core.UNREACHABLE, core.ERROR)
     lines = ["## Branch sync with main (#19548)", ""]
     if dry_run:
         lines += ["**Dry run: nothing was pushed, labelled or commented.**", ""]
@@ -331,11 +356,43 @@ def run(git: Git, gh: SyncApi, base: str, dry_run: bool) -> Dict[str, List[str]]
     results: Dict[str, List[str]] = {key: list(items) for key, items in plan.skipped.items()}
     syncer = Syncer(git, gh, base, dry_run)
     for target in plan.targets:
+        if target.branch in git.being_pushed():
+            _emit(f"{core.PUSH_IN_PROGRESS:>18}  {target.name}  next run syncs it")
+            results.setdefault(core.PUSH_IN_PROGRESS, []).append(target.name)
+            continue
         outcome, detail = syncer.sync(target)
         _emit(f"{outcome:>18}  {target.name}  {detail}")
         results.setdefault(outcome, []).append(f"{target.name}{' — ' + detail if detail else ''}")
     git.out("checkout", "--quiet", "--detach")
     return results
+
+
+def start_suite(git: Git, gh: SyncApi, number: int, base: str, dry_run: bool) -> Tuple[int, str]:
+    """Push ONE empty commit, without the skip marker, onto PR ``number``'s synced head (#21577).
+
+    The ordinary ``pull_request`` pipeline then runs on it. Refused (non-zero) unless ``core.refuse_start_ci``
+    allows it; a no-op (0) when the head already has a suite. The commit's parent is the head this run fetched
+    and checked against the API; the push is plain, so a branch that moved since is rejected, never overwritten.
+    """
+    pull = gh.pull(number)
+    head = pull.get("head") or {}
+    branch, sha = head.get("ref", ""), head.get("sha", "")
+    local = git.out("rev-parse", "--verify", "--quiet", f"origin/{branch}") if core.is_safe_ref(branch) else None
+    reason = core.refuse_start_ci(pull, gh.repo, base, git.behind(branch, base) if local else None, local or "")
+    if reason:
+        return 1, f"::error::not starting the suite: {reason}"
+    if core.suite_already_started(gh.suite_runs(sha), sha):
+        return 0, f"::notice::#{number} already has a suite on {sha[:10]}; nothing to start"
+    if dry_run:
+        return 0, f"dry run: would push one empty commit onto {core.code(branch)}"
+    if not git.checkout(branch) or git.commit_empty(core.start_ci_message(number))[0] != 0:
+        return 1, "::error::cannot create the empty commit"
+    if git.out("rev-parse", "HEAD^") != sha:
+        return 1, "::error::the empty commit's parent is not the verified head; not pushing"
+    kind = core.classify_push(*git.push(branch))
+    if kind != core.SYNCED:
+        return 1, f"::error::the push ended as {kind} (a moved branch is rejected, never overwritten)"
+    return 0, f"started: pushed one empty commit onto {core.code(branch)} (parent {sha[:10]})"
 
 
 def exit_code(results: Dict[str, List[str]]) -> int:
@@ -349,16 +406,33 @@ def exit_code(results: Dict[str, List[str]]) -> int:
     return 0
 
 
+def start_requested(gh: SyncApi, token: str, args: argparse.Namespace) -> int:
+    """The ``--start-ci-for-pr`` request: validate the untrusted number, then start the suite or refuse."""
+    number = core.parse_pr_number(args.start_ci_for_pr.strip())
+    if number is None:
+        _emit("::error::start_ci_for_pr must be a pull request number (digits only).")
+        return 1
+    try:
+        status, message = start_suite(Git(auth=push_auth(token)), gh, number, args.base, args.dry_run)
+    except SyncApiError as exc:
+        status, message = 1, f"::error::cannot start the suite: {exc}"
+    _emit(message)
+    return status
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", default="main")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--start-ci-for-pr", default="", help="start the suite for this PR's head; no other sync")
     args = parser.parse_args(argv)
     token = take_push_token(os.environ)
     if not token and not args.dry_run:
         _emit(f"::error::{PUSH_TOKEN_ENV} is empty; the sync pushes with it and nothing else (#19548).")
         return 1
     gh = SyncApi(build_api())
+    if args.start_ci_for_pr:
+        return start_requested(gh, token, args)
     try:
         results = run(Git(auth=push_auth(token)), gh, args.base, args.dry_run)
     except SyncApiError as exc:

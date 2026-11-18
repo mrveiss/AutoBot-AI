@@ -227,6 +227,15 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "path": "/",
     },
     {
+        "id": "autobot-slm-postgres",  # #20639
+        "running": ["slm-database"],
+        "assigned": [],
+        "host": 18,
+        "port": 5432,
+        "protocol": "tcp",
+        "path": None,
+    },
+    {
         "id": "autobot-postgres",
         "running": ["postgres"],
         "assigned": ["npu-worker"],

@@ -478,3 +478,107 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S",
+        type=int,
+        default=300,
+        description="Seconds between passes that push every linked person's copy to the SLM (#10200). Minimum 30.",
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds before a person copy the SLM refused as last platform admin is pushed again (#21018). "
+            "Range 60 to 604800."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LAST_ADMIN_RETRY_AFTER_S",
+        type=int,
+        default=1,
+        description=(
+            "Retry-After seconds sent with the 503 for a transient last-platform-admin lock failure (#21018). "
+            "Range 1 to 30."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_TTL_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the per-person lock on a copy push is held before it expires; "
+            "the SLM POST timeout is derived from it (#10200)."
+        ),
+        component="backend",
+        range=(10, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_WAIT_S",
+        type=int,
+        default=15,
+        description=(
+            "Seconds a push waits for another worker's lock on the same person " "before it records a failure (#10200)."
+        ),
+        component="backend",
+        range=(1, 120),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_POLL_MS",
+        type=int,
+        default=200,
+        description="Milliseconds between attempts to take that per-person lock (#10200).",
+        component="backend",
+        range=(20, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
+        type=int,
+        default=10,
+        description=(
+            "Members whose token-revocation marker is written at once when an organisation is "
+            "deactivated or deleted (#20443); bounds the store's concurrent writes however large the "
+            "organisation is; read by autobot_shared/user_management/password_epoch.py."
+        ),
+        component="security",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between role_denied audit records for one user on one route (#16333); repeats in "
+            "the window are counted into the next record, so a non-admin cannot flood the audit log; "
+            "read by autobot-backend/auth_rbac.py."
+        ),
+        component="security",
+        range=(1, 86400),
+    )
+)

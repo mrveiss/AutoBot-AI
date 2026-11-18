@@ -19,7 +19,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from api.conversation_file_upload import validate_and_read_upload_file
+from api.conversation_file_upload import read_upload_file
 from api.files import get_security_layer
 from api.schemas_chat import (
     ConvFileInfoData,
@@ -46,8 +46,10 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from conversation_file_mcp_dispatch import dispatch_mcp_tool
+from conversation_file_quota_owner import mcp_quota_owner, resolve_agent_quota_owner
 from security.session_ownership import validate_session_ownership
-from security.session_posture import NotSessionOwner, SessionPosture
+from security.session_posture import SessionPosture, validate_strict_hidden
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
@@ -82,12 +84,10 @@ async def _authorize_file_operation(
     if not has_permission and not (existing_only and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
-    try:
-        ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-    except NotSessionOwner as denied:  # #20195: an owner route answers 404 as for an unknown id (no existence leak)
-        raise (HTTPException(status_code=404, detail="Chat session not found") if existing_only else denied) from None
-    if existing_only and ownership.get("reason") == "legacy_unowned":
-        raise HTTPException(status_code=404, detail="Chat session not found")
+    if existing_only:  # #20195/#20413: the one decision point; another user's, unknown and unowned ids all 404
+        await validate_strict_hidden(session_id, request, must_exist=True)
+    else:
+        await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
     return user_data
 
 
@@ -141,15 +141,16 @@ async def upload_conversation_file(
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
         user_data = await _authorize_file_operation(request, session_id, "upload", existing_only=True)
-        content = await validate_and_read_upload_file(file)
         file_manager = _get_required_file_manager(request)
-
+        content, file_hash = await read_upload_file(file, file_manager, user_data.get("username"), session_id)
         file_info_dict = await file_manager.upload_file(
             session_id=session_id,
             filename=file.filename,
             content=content,
             user_id=user_data.get("username"),
             description=description,
+            file_hash=file_hash,
+            content_type=file.content_type,
         )
         file_info = ConversationFileInfo(**file_info_dict)
 
@@ -158,15 +159,9 @@ async def upload_conversation_file(
             "conversation_file_upload",
             user_data,
             session_id,
-            {
-                "filename": file.filename,
-                "file_id": file_info.file_id,
-                "size": len(content),
-            },
+            {"filename": file.filename, "file_id": file_info.file_id, "size": len(content)},
         )
-
         upload_id = f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
-
         return FileUploadResponse(
             success=True,
             message=f"File '{file.filename}' uploaded successfully to conversation",
@@ -779,6 +774,7 @@ async def agent_generate_file(request: Request, session_id: str, body: AgentGene
             created_by=body.agent_name or user_data.get("username"),
             file_type=body.file_type,
             metadata=agent_metadata,
+            quota_owner=await resolve_agent_quota_owner(request, session_id, user_data),  # not the agent (#20678)
         )
 
         _audit_file_operation(
@@ -880,54 +876,6 @@ async def get_session_mcp_tools(request: Request, session_id: str):
     return JSONResponse(content={"tools": SESSION_MCP_TOOLS, "session_id": session_id})
 
 
-async def _dispatch_mcp_tool(file_manager, session_id: str, tool_name: str, args: Dict) -> Dict:
-    """Dispatch an MCP tool call to the file manager.
-
-    Helper for session_mcp_call_tool (Issue #70).
-    """
-    if tool_name == "session_list_files":
-        result = await file_manager.list_files(session_id=session_id)
-        return {"files": result.get("files", []), "total": result.get("total_files", 0)}
-
-    if tool_name == "session_read_file":
-        file_id = args.get("file_id")
-        if not file_id:
-            raise_invalid_input("file_id", "required")
-        return await file_manager.get_file_content(session_id=session_id, file_id=file_id)
-
-    if tool_name == "session_write_file":
-        filename = args.get("filename")
-        content = args.get("content", "")
-        if not filename:
-            raise_invalid_input("filename", "required")
-        if not is_safe_file(filename):
-            raise_invalid_input("filename", f"invalid filename: {filename}")
-        return await file_manager.create_file(
-            session_id=session_id,
-            filename=filename,
-            content=content,
-            mime_type=args.get("mime_type", "text/plain"),
-            created_by="agent",
-            file_type="generated",
-        )
-
-    if tool_name == "session_search_files":
-        query = args.get("query", "")
-        results = await file_manager.search_files(session_id=session_id, query=query)
-        return {"files": results, "total": len(results)}
-
-    if tool_name == "session_delete_file":
-        file_id = args.get("file_id")
-        if not file_id:
-            raise_invalid_input("file_id", "required")
-        deleted = await file_manager.delete_file(session_id, file_id)
-        if not deleted:
-            raise_not_found("File", file_id)
-        return {"deleted": True, "file_id": file_id}
-
-    raise_invalid_input("tool_name", f"unknown tool: {tool_name}")
-
-
 @api_router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse[SessionMcpCallData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -940,7 +888,8 @@ async def session_mcp_call_tool(request: Request, session_id: str, body: MCPTool
         user_data = await _authorize_file_operation(request, session_id, "upload")
         file_manager = _get_required_file_manager(request)
 
-        result = await _dispatch_mcp_tool(file_manager, session_id, body.tool_name, body.arguments)
+        owner = await mcp_quota_owner(request, session_id, user_data, body.tool_name)
+        result = await dispatch_mcp_tool(file_manager, session_id, body.tool_name, body.arguments, owner)
 
         _audit_file_operation(
             request,

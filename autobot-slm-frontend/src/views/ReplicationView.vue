@@ -15,9 +15,8 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
-import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('ReplicationView')

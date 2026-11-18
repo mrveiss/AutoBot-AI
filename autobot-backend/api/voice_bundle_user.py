@@ -21,8 +21,7 @@ from api.voice_bundle_constants import (
     BundleAssignRequest,
 )
 from api.voice_bundle_helpers import _count_tools_for_bundle, voice_bundle_user_id
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -65,7 +64,7 @@ def _is_admin(user: dict) -> bool:
 
     Before this, a superadmin could ASSIGN a bundle via
     PUT /voice/users/{id}/bundle — guarded by
-    require_role("admin", "superadmin") below — but could not READ it back via
+    the admin gate below — but could not READ it back via
     the GET, because the read path came through here and only accepted "admin".
     Same superadmin-lockout class as #12704; this helper fell outside that
     issue's scope because it is not one of the six forked _require_admin deps.
@@ -172,6 +171,54 @@ async def get_user_bundle(
 # ---------------------------------------------------------------------------
 
 
+async def _store_user_bundle(user_id: str, bundle_name: Optional[str], assigned_by: str) -> Optional[str]:
+    """Write (or, for None, clear) the override and return what is stored. ``set_user_bundle``'s DB step."""
+    from sqlalchemy import text  # noqa: PLC0415
+
+    from user_management.database import db_session_context  # noqa: PLC0415
+
+    async with db_session_context() as session:
+        if bundle_name is None:
+            await session.execute(text("DELETE FROM user_voice_bundle WHERE user_id = :uid"), {"uid": user_id})
+        else:
+            await session.execute(
+                text("""
+                    INSERT INTO user_voice_bundle (user_id, bundle_name, assigned_by, assigned_at)
+                    VALUES (:uid, :bundle, :by, NOW())
+                    ON CONFLICT (user_id) DO UPDATE
+                      SET bundle_name = EXCLUDED.bundle_name,
+                          assigned_by = EXCLUDED.assigned_by,
+                          assigned_at = EXCLUDED.assigned_at
+                    """),
+                {"uid": user_id, "bundle": bundle_name, "by": assigned_by},
+            )
+        await session.commit()
+        # Re-read after commit so the response reflects the actual stored value.
+        row = await session.execute(
+            text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"), {"uid": user_id}
+        )
+        result = row.fetchone()
+        return result[0] if result else None
+
+
+def _audit_bundle_change(actor_id: str, user_id: str, outcome: str, metadata: dict) -> None:
+    """One audit row for a bundle change; a failed emit is logged, never raised (``set_user_bundle``)."""
+    try:
+        emit(
+            AuditEvent(
+                category=AuditCategory.SECURITY,
+                action="voice_bundle_assignment_changed",
+                actor_id=actor_id,
+                resource_type="user_voice_bundle",
+                resource_id=user_id,
+                outcome=outcome,
+                metadata=metadata,
+            )
+        )
+    except Exception:
+        logger.warning("set_user_bundle: failed to emit %s audit", outcome, exc_info=True)
+
+
 @router.put("/users/{user_id}/bundle", response_model=UserBundleResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -183,7 +230,7 @@ async def set_user_bundle(
     body: BundleAssignRequest,
     request: Request,
     admin_user: dict = Depends(get_current_user),
-    _admin: bool = Depends(require_role("admin", "superadmin")),
+    _admin: bool = Depends(check_admin_permission),
 ) -> UserBundleResponse:
     """Assign or clear a voice bundle override for a user.
 
@@ -204,75 +251,14 @@ async def set_user_bundle(
         "requested_bundle_name": body.bundle_name,
         "assignment_action": "clear" if body.bundle_name is None else "assign",
     }
-    stored_bundle_name: Optional[str] = None
-
     try:
-        from sqlalchemy import text  # noqa: PLC0415
-
-        from user_management.database import db_session_context  # noqa: PLC0415
-
-        async with db_session_context() as session:
-            if body.bundle_name is None:
-                await session.execute(
-                    text("DELETE FROM user_voice_bundle WHERE user_id = :uid"),
-                    {"uid": user_id},
-                )
-            else:
-                await session.execute(
-                    text("""
-                        INSERT INTO user_voice_bundle (user_id, bundle_name, assigned_by, assigned_at)
-                        VALUES (:uid, :bundle, :by, NOW())
-                        ON CONFLICT (user_id) DO UPDATE
-                          SET bundle_name = EXCLUDED.bundle_name,
-                              assigned_by = EXCLUDED.assigned_by,
-                              assigned_at = EXCLUDED.assigned_at
-                        """),
-                    {
-                        "uid": user_id,
-                        "bundle": body.bundle_name,
-                        "by": str(current_user_id),
-                    },
-                )
-            await session.commit()
-            # Re-read after commit so response reflects actual stored value.
-            row = await session.execute(
-                text("SELECT bundle_name FROM user_voice_bundle WHERE user_id = :uid"),
-                {"uid": user_id},
-            )
-            result = row.fetchone()
-            stored_bundle_name = result[0] if result else None
+        stored_bundle_name = await _store_user_bundle(user_id, body.bundle_name, str(current_user_id))
     except Exception as exc:
-        try:
-            emit(
-                AuditEvent(
-                    category=AuditCategory.SECURITY,
-                    action="voice_bundle_assignment_changed",
-                    actor_id=str(current_user_id),
-                    resource_type="user_voice_bundle",
-                    resource_id=user_id,
-                    outcome="failure",
-                    metadata={**_audit_meta, "error": str(exc)},
-                )
-            )
-        except Exception:
-            logger.warning("set_user_bundle: failed to emit failure audit", exc_info=True)
+        _audit_bundle_change(str(current_user_id), user_id, "failure", {**_audit_meta, "error": str(exc)})
         logger.error("set_user_bundle: DB error: %s", exc)
         raise HTTPException(status_code=500, detail="Database error") from exc
 
-    try:
-        emit(
-            AuditEvent(
-                category=AuditCategory.SECURITY,
-                action="voice_bundle_assignment_changed",
-                actor_id=str(current_user_id),
-                resource_type="user_voice_bundle",
-                resource_id=user_id,
-                outcome="success",
-                metadata={**_audit_meta, "bundle_name": stored_bundle_name},
-            )
-        )
-    except Exception:
-        logger.warning("set_user_bundle: failed to emit success audit", exc_info=True)
+    _audit_bundle_change(str(current_user_id), user_id, "success", {**_audit_meta, "bundle_name": stored_bundle_name})
 
     logger.info(
         "voice_bundle user_id=%s target=%s bundle=%s",

@@ -27,26 +27,26 @@
           </BaseButton>
         </template>
         <template v-else>
-          <BaseButton size="sm" variant="outline" data-testid="rotate-start" @click="startRotate(secret.id)">
+          <BaseButton size="sm" variant="outline" :disabled="busy" data-testid="rotate-start" @click="startRotate(secret.id)">
             {{ t('security.secretsManager.systemVault.rotate') }}
           </BaseButton>
-          <BaseButton size="sm" variant="error" data-testid="delete" @click="remove(secret)">
+          <BaseButton size="sm" variant="error" :disabled="busy" data-testid="delete" @click="remove(secret)">
             {{ t('security.secretsManager.systemVault.delete') }}
           </BaseButton>
         </template>
       </li>
     </ul>
-    <BaseAlert v-if="failed" variant="error" :message="t('security.secretsManager.systemVault.failed')" />
+    <BaseAlert v-if="failed" variant="error" :message="t('security.secretsManager.writeFailed')" />
   </BaseCard>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState, isHttpError } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, EmptyState } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useSecretWrites } from '@/composables/security/useSecretWrites'
 import { secretsApiClient } from '@/utils/SecretsApiClient'
-import { createLogger } from '@/utils/debugUtils'
 
 export interface SystemVaultEntry {
   id: string
@@ -63,11 +63,10 @@ const emit = defineEmits<{ changed: [] }>()
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
-const logger = createLogger('SystemVaultSecrets')
+const { writeFailed: failed, runWrite, deleteConfirmingDependents } = useSecretWrites()
 const rotatingId = ref<string | null>(null)
 const newValue = ref('')
 const busy = ref(false)
-const failed = ref(false)
 
 function startRotate(id: string) {
   rotatingId.value = id
@@ -79,56 +78,37 @@ function cancelRotate() {
   newValue.value = ''
 }
 
-async function run(action: () => Promise<unknown>) {
+/** Run a write on `secretId` through the shared path; a declined confirmation changes nothing. */
+async function run(secretId: string, action: () => Promise<unknown>) {
   busy.value = true
-  failed.value = false
   try {
-    await action()
-    cancelRotate()
-    emit('changed')
-  } catch (error) {
-    failed.value = true
-    logger.error('System vault write failed:', error)
+    const outcome = await runWrite('system vault write', action)
+    if (outcome === 'declined') return
+    // Only the draft of the secret acted on is dropped, and only once applied; another secret's unsaved value stays.
+    if (outcome === 'done' && rotatingId.value === secretId) cancelRotate()
+    emit('changed') // a failed write's outcome is unconfirmed, so show what is stored either way
   } finally {
     busy.value = false
   }
 }
 
-const rotate = (secret: SystemVaultEntry) => run(() => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
+const rotate = (secret: SystemVaultEntry) => run(secret.id, () => secretsApiClient.updateSecret(secret.id, { value: newValue.value }))
+
+/** Ask before deleting. `busy` also covers the open confirm, so a re-entrant click is a no-op. */
+async function askToDelete(secret: SystemVaultEntry): Promise<boolean> {
+  busy.value = true
+  try {
+    return await confirm({
+      title: t('security.secretsManager.systemVault.deleteTitle'),
+      message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
+    })
+  } finally {
+    busy.value = false
+  }
+}
 
 async function remove(secret: SystemVaultEntry) {
-  const ok = await confirm({
-    title: t('security.secretsManager.systemVault.deleteTitle'),
-    message: t('security.secretsManager.systemVault.deleteMessage', { name: secret.name })
-  })
-  if (ok) await run(() => deleteConfirmingDependents(secret))
-}
-
-interface Dependent {
-  dependent_kind: string
-  dependent_id: string
-}
-
-/** Dependents the backend refused the delete for (409), or null for any other error (#20557). */
-function dependentsOf(error: unknown): Dependent[] | null {
-  if (!isHttpError(error) || error.status !== 409) return null
-  const detail = error.details?.detail as { code?: string; dependents?: Dependent[] } | undefined
-  return detail?.code === 'secret_has_dependents' ? (detail.dependents ?? []) : null
-}
-
-/** Delete; when dependents still use the secret, list them in a second confirm before forcing it. */
-async function deleteConfirmingDependents(secret: SystemVaultEntry) {
-  try {
-    return await secretsApiClient.deleteSecret(secret.id)
-  } catch (error) {
-    const dependents = dependentsOf(error)
-    if (!dependents) throw error
-    const listed = dependents.map((d) => `${d.dependent_kind}:${d.dependent_id}`).join(', ')
-    const ok = await confirm({
-      title: t('security.secretsManager.systemVault.dependentsTitle'),
-      message: t('security.secretsManager.systemVault.dependentsMessage', { name: secret.name, dependents: listed })
-    })
-    if (ok) return secretsApiClient.deleteSecret(secret.id, { confirmDependents: true })
-  }
+  if (busy.value) return
+  if (await askToDelete(secret)) await run(secret.id, () => deleteConfirmingDependents(secret))
 }
 </script>

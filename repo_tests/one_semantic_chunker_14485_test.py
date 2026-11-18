@@ -24,6 +24,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = (
@@ -54,7 +55,7 @@ def _base_name(node: ast.expr) -> str:
 def _chunker_classes(source: str) -> list[str]:
     """Names of classes called `...SemanticChunker`, `SemanticChunkerBase`, or deriving from it."""
     found = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.ClassDef):
             if node.name.endswith(_SUFFIX) or node.name == _BASE or any(_base_name(b) == _BASE for b in node.bases):
                 found.append(node.name)
@@ -76,7 +77,7 @@ def _chunk_text_registrations(source: str) -> int:
     """How many decorated definitions register the `chunk_text` extractor."""
     return sum(
         1
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
         and any(_is_chunk_text_registration(d) for d in node.decorator_list)
     )
@@ -114,8 +115,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "semantic-chunker-fork-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2948,  # re-pinned mid-window (train 81 on main)
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

@@ -138,22 +138,6 @@ async def registered_source_ids() -> set[str]:
     return {raw.decode("utf-8") if isinstance(raw, bytes) else raw for raw in raw_ids}
 
 
-async def get_default_source_id() -> str | None:
-    """Return the ID of the most recently indexed source, or None (#2653).
-
-    None means the registry holds no source. An unreachable registry raises
-    ``RegistryUnavailable`` instead (#17982): ``list_sources`` returns ``[]`` for
-    it, and a caller cannot tell "no sources" from "could not look".
-    """
-    await registered_source_ids()
-    sources = await list_sources()
-    if not sources:
-        return None
-    # Prefer most recently synced source
-    sources.sort(key=lambda s: s.last_synced or "", reverse=True)
-    return sources[0].id
-
-
 async def delete_source(source_id: str) -> bool:
     """Delete a CodeSource from Redis.
 

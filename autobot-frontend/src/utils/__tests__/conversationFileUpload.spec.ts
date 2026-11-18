@@ -16,6 +16,8 @@ import {
   describeUploadError,
   ensureUploadSession,
   postConversationUpload,
+  uploadEtaSeconds,
+  usesCanonicalRoute,
 } from '@/utils/conversationFileUpload'
 
 type Listener = (event?: unknown) => void
@@ -46,6 +48,11 @@ class FakeXhr {
   }
   send(body: unknown) {
     this.body = body
+  }
+  aborted = false
+  abort() {
+    this.aborted = true
+    this.listeners.abort?.()
   }
 }
 
@@ -104,6 +111,91 @@ describe('postConversationUpload (#20133)', () => {
   })
 })
 
+describe('a 413 refusal keeps its stable reason (#20217)', () => {
+  const refuse = async (status: number, body: string) => {
+    const p = postConversationUpload('s1', file(), () => {})
+    FakeXhr.last.status = status
+    FakeXhr.last.responseText = body
+    FakeXhr.last.listeners.load()
+    return p.catch((e) => e)
+  }
+  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('maps the quota code and carries the server figures', async () => {
+    const detail = {
+      code: 'conversation_file_quota_exceeded',
+      message: 'x',
+      limit_bytes: 20,
+      live_bytes: 8,
+      pending_removal_bytes: 12,
+      remaining_bytes: 0,
+    }
+    const error = await refuse(413, JSON.stringify({ detail }))
+    expect(error).toMatchObject({
+      code: 'quota_exceeded',
+      status: 413,
+      refusal: { live_bytes: 8, pending_removal_bytes: 12 },
+    })
+  })
+
+  it('maps the file-too-large code', async () => {
+    const detail = { code: 'conversation_file_too_large', max_bytes: 52428800 }
+    expect(await refuse(413, JSON.stringify({ detail }))).toMatchObject({ code: 'file_too_large', status: 413 })
+  })
+
+  it('stays a plain http error for an unknown code, a non-413, a string detail or an unreadable body', async () => {
+    const unknown = JSON.stringify({ detail: { code: 'something_else' } })
+    const quotaOn401 = JSON.stringify({ detail: { code: 'conversation_file_quota_exceeded' } })
+    expect(await refuse(413, unknown)).toMatchObject({ code: 'http', status: 413 })
+    expect(await refuse(401, quotaOn401)).toMatchObject({ code: 'http', status: 401 })
+    expect(await refuse(413, JSON.stringify({ detail: 'File too large' }))).toMatchObject({ code: 'http', status: 413 })
+    expect(await refuse(413, '<html>')).toMatchObject({ code: 'http', status: 413 })
+  })
+})
+
+describe('describeUploadError for server refusals (#20217)', () => {
+  const t = (key: string, params?: Record<string, unknown>) => `${key}|${JSON.stringify(params ?? {})}`
+  const MB = 1024 * 1024
+
+  it('names the maximum for an oversize file', () => {
+    const error = new ConversationUploadError('file_too_large', 413, { max_bytes: 50 * MB })
+    expect(describeUploadError(error, t)).toBe(
+      'chat.input.uploadError.fileTooLarge|{"maxMb":50,"limitMb":0,"liveMb":0,"pendingMb":0,"remainingMb":0}'
+    )
+  })
+
+  it('reports live bytes and the room left when nothing awaits removal', () => {
+    const error = new ConversationUploadError('quota_exceeded', 413, {
+      limit_bytes: 1024 * MB,
+      live_bytes: 1000 * MB,
+      pending_removal_bytes: 0,
+      remaining_bytes: 24 * MB,
+    })
+    expect(describeUploadError(error, t)).toBe(
+      'chat.input.uploadError.quotaExceeded|{"maxMb":0,"limitMb":1024,"liveMb":1000,"pendingMb":0,"remainingMb":24}'
+    )
+  })
+
+  it('uses the human-review wording when deleted bytes still count', () => {
+    const error = new ConversationUploadError('quota_exceeded', 413, {
+      limit_bytes: 1024 * MB,
+      live_bytes: 100 * MB,
+      pending_removal_bytes: 924 * MB,
+      remaining_bytes: 0,
+    })
+    expect(describeUploadError(error, t)).toContain('chat.input.uploadError.quotaExceededPendingRemoval|')
+    expect(describeUploadError(error, t)).toContain('"pendingMb":924')
+  })
+
+  it('every key it can ask for exists in en.json', async () => {
+    const en = (await import('@/i18n/locales/en.json')).default as any
+    for (const key of ['fileTooLarge', 'quotaExceeded', 'quotaExceededPendingRemoval']) {
+      expect(en.chat.input.uploadError[key]).toEqual(expect.any(String))
+    }
+  })
+})
+
 describe('describeUploadError (#20133)', () => {
   const t = (key: string, params?: Record<string, unknown>) => `${key}|${JSON.stringify(params ?? {})}`
 
@@ -156,5 +248,83 @@ describe('ensureUploadSession (#20133)', () => {
     const create = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce('new-3')
     await expect(ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).rejects.toThrow('down')
     expect(await ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).toBe('new-3')
+  })
+})
+
+describe('usesCanonicalRoute (#20195)', () => {
+  it('sends a turn with files to the canonical route even when the overseer is on', () => {
+    expect(usesCanonicalRoute(true, ['file-1'])).toBe(true)
+  })
+
+  it('lets the overseer take a turn with no files', () => {
+    expect(usesCanonicalRoute(true, [])).toBe(false)
+  })
+
+  it('uses the canonical route whenever the overseer is off', () => {
+    expect(usesCanonicalRoute(false, [])).toBe(true)
+    expect(usesCanonicalRoute(false, ['file-1'])).toBe(true)
+  })
+
+  it('control: the decision depends on the ids, not on the overseer flag alone', () => {
+    expect(usesCanonicalRoute(true, [])).not.toBe(usesCanonicalRoute(true, ['file-1']))
+  })
+})
+
+describe('user cancel of an upload (#20133)', () => {
+  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('aborting the signal aborts the request and rejects as cancelled', async () => {
+    const controller = new AbortController()
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(FakeXhr.last.aborted).toBe(false)
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(true)
+    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+  })
+
+  it('a signal that is already aborted rejects as cancelled and never sends', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const sent = vi.spyOn(FakeXhr.prototype, 'send')
+    await expect(postConversationUpload('s1', file(), () => {}, controller.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    })
+    expect(sent).not.toHaveBeenCalled()
+    sent.mockRestore()
+  })
+
+  it('removes the abort listener once the request settles', async () => {
+    const controller = new AbortController()
+    const remove = vi.spyOn(controller.signal, 'removeEventListener')
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(remove).not.toHaveBeenCalled()
+    FakeXhr.last.listeners.load()
+    await pending
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(false)
+  })
+
+  it('control: without a signal nothing aborts', () => {
+    void postConversationUpload('s1', file(), () => {}).catch(() => {})
+    expect(FakeXhr.last.aborted).toBe(false)
+  })
+})
+
+describe('uploadEtaSeconds (#20133)', () => {
+  it('extrapolates the average rate so far', () => {
+    // 25 of 100 bytes in 10 s -> 75 bytes left at 2.5 B/s = 30 s
+    expect(uploadEtaSeconds(25, 100, 10_000)).toBeCloseTo(30)
+  })
+
+  it('has no estimate before time or bytes have passed', () => {
+    expect(uploadEtaSeconds(0, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(10, 100, 0)).toBeUndefined()
+  })
+
+  it('has no estimate when a second or less remains', () => {
+    expect(uploadEtaSeconds(100, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(99, 100, 99_000)).toBeUndefined()
   })
 })
