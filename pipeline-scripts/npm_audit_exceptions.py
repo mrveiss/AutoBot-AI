@@ -19,7 +19,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-SEVERITY_ORDER = ("critical", "high", "moderate", "low", "info")
+#: npm's own advisory vocabulary (``moderate``), not ``Severity`` -- named for its domain (#19336).
+NPM_ADVISORY_ORDER = ("critical", "high", "moderate", "low", "info")
 FAILING_SEVERITIES = ("critical", "high")
 
 _GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")
@@ -51,24 +52,29 @@ class AdvisoryException:
 #:
 #: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
 #: failing on a date would block every Python PR, where the gate blocks only the PRs that
-#: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
-#: reminder to look again before 2026-11-14.
+#: trigger the frontend suite. So the suite stays date-independent and #21736 carries the
+#: reminder to look again before 2026-12-17.
+#:
+#: The table is EMPTY whenever nothing is currently unfixable, and holds one entry per advisory
+#: that is. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
+#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded its
+#: removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-17, #21736) is the live entry:
+#: no patched version exists (latest, 4.0.7, is still affected). It retires itself -- a published
+#: patch makes the gate refuse it, and upstream ceasing to report it makes the gate demand its removal.
 ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
-    "GHSA-vfj7-8cjw-p6xm": AdvisoryException(
-        expires="2026-11-14",
+    "GHSA-fc5q-39xc-vjpf": AdvisoryException(
+        expires="2026-12-17",
         reason=(
-            "braces <= 3.0.3 stack-exhaustion DoS, published 2026-09-18, advisory API reports "
-            "first_patched_version NULL and npm reports range '*' -- no non-vulnerable version of "
-            "braces exists, which is the owner's condition for this record. No bump OF BRACES is "
-            "possible; npm does offer a fix path via the parent, and it is stylelint 7.7.0 against "
-            "a declared ^17.15.0 -- a rollback across ten majors of a devDependency. The owner "
-            "declines that trade: the chain is stylelint and @vue/eslint-config-typescript through "
-            "micromatch/fast-glob/globby, all devDependencies, and nothing in a shipped bundle "
-            "imports it. An earlier wording said 'no bump exists', which was true of braces and "
-            "wrong about the question the gate asks (ae, review of #17889). Owner decision "
-            "2026-10-03, recorded on #13400; the dependency-type scoping question is #17890."
+            "picomatch <= 4.0.7 ReDoS through single-branch repeated extglobs, with no patched "
+            "version (npm latest is 4.0.7; upstream fix PRs are open and unmerged), so no bump "
+            "or override exists. Reached through glob matching in build and dev tooling (vite, "
+            "vitest, vue-tsc, stylelint via micromatch, storybook, npm-run-all2). The lockfile "
+            "marks exactly four of the ten copies as non-dev (vite, vue-router, tinyglobby and "
+            "unplugin-utils); no autobot-frontend source file imports picomatch, and whether "
+            "those four reach the browser bundle is not established. Owner decision 2026-11-17 "
+            "on #21736, renewed or removed deliberately by the expiry."
         ),
-    )
+    ),
 }
 
 

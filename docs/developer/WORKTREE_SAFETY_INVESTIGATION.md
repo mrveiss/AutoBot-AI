@@ -179,10 +179,10 @@ git commit -m "test: simulated mass deletion"
 ### Test 2: Worktree Branch Guard
 
 ```bash
-# Create worktree on Dev_new_gui
-git worktree add .worktrees/test-branch Dev_new_gui
+# Create worktree on main
+git worktree add .worktrees/test-branch main
 
-# Try to commit in main dir (Dev_new_gui already checked out in worktree)
+# Try to commit in main dir (main already checked out in worktree)
 echo "test" > test.txt
 git add test.txt
 git commit -m "test: on shared branch"

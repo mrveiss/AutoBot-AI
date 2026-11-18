@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from knowledge.search_filters import filter_for_user_id
 from llm_shared.json_utils import extract_json_object
 
 logger = get_logger(__name__)
@@ -159,7 +160,7 @@ def _best_known_match(results: List[dict]) -> Tuple[str, float] | None:
 
 
 async def filter_skip_known(
-    kb: Any, sub_questions: List[SubQuestion]
+    kb: Any, sub_questions: List[SubQuestion], user_id: str | None = None
 ) -> Tuple[List[SubQuestion], List[SkippedSubQuestion]]:
     """Drop sub-questions already answered by a high-confidence KB fact (design §4.3).
 
@@ -173,6 +174,7 @@ async def filter_skip_known(
     skipped: List[SkippedSubQuestion] = []
     for sub in sub_questions:
         results = await kb.search(query=sub.text, top_k=config.research_corroboration_search_top_k)
+        results = await filter_for_user_id(results, kb, user_id)  # #16665: a fact the user cannot read never skips work
         match = _best_known_match(results)
         if match is None or match[1] < threshold:
             to_search.append(sub)

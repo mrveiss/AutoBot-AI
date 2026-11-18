@@ -12,8 +12,8 @@
  * Issue #754: Added ARIA attributes, keyboard navigation, high contrast toggle.
  */
 
-import { BrandMark } from '@autobot/ui'
-import { computed, onMounted, onUnmounted } from 'vue'
+import { BrandMark, usePollingJob } from '@autobot/ui'
+import { computed, onMounted } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -34,7 +34,6 @@ const highContrast = useHighContrast()
 
 // Polling interval for code sync + system updates status (1 minute)
 const STATUS_POLL_INTERVAL = 60000
-let statusPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Combined badge count for sidebar
 const combinedUpdateCount = computed(() =>
@@ -175,19 +174,15 @@ async function refreshStatusPolling(): Promise<void> {
   ])
 }
 
-onMounted(async () => {
-  if (!authStore.isAuthenticated) return
-  // Fetch initial status for both code sync and system updates
-  await refreshStatusPolling()
-  // Set up combined polling
-  statusPollTimer = setInterval(refreshStatusPolling, STATUS_POLL_INTERVAL)
-})
+// #19482: usePollingJob for scope disposal. No consecutiveErrorLimit and no paused
+// alert: this is a 60s status poll in the app chrome, where a banner would be the
+// wrong surface, so it keeps polling through failures as before.
+const statusPoller = usePollingJob(refreshStatusPolling, { intervalMs: STATUS_POLL_INTERVAL, maxAttempts: Infinity })
 
-onUnmounted(() => {
-  if (statusPollTimer) {
-    clearInterval(statusPollTimer)
-    statusPollTimer = null
-  }
+onMounted(() => {
+  if (!authStore.isAuthenticated) return
+  // The first tick fetches code sync and system updates now; then every minute.
+  statusPoller.start('')
 })
 </script>
 

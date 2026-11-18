@@ -23,6 +23,9 @@ export interface OrgNode {
   budget_spent: number
   budget_total: number
   assigned_item_count: number
+  // #15907: the periodic heartbeat on/off (`agent_org_nodes.heartbeat_enabled`);
+  // null for a person. Optional so pre-#15907 fixtures keep compiling.
+  heartbeat_enabled?: boolean | null
   children: OrgNode[]
   parent_id: string | null
   expanded?: boolean

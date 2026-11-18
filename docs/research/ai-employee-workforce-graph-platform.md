@@ -497,3 +497,13 @@ Cross-link comments posted on **#14029** (the other operand of the same fraction
    same-file rule and the milestone split pull against each other: batching them means landing all four
    at the earliest milestone, and not batching them means opening `context_overflow.py` three times.
    Recorded rather than resolved — it is a scope decision.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17802 — bug(chat): context fill is measured as cumulative spend, so compaction fires early and the user is shown a wrong percentage
+- #17805 — fix(chat): compaction activation has no compare-and-swap — two concurrent turns in one session both summarize and both reset the counter
+- #17806 — test(agents): nothing asserts that agent-facing tool schemas carry no namespace field — the rule lives in one docstring
+- #17807 — feat(agents): the delegating lead sees capability enum values, never each report actual tools and skills
+- #17808 — decision(architecture): a capability can only be shipped or deleted — there is no hidden-but-resolvable state

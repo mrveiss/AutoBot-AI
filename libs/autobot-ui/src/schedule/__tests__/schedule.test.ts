@@ -5,6 +5,8 @@
 
 import { describe, it, expect } from 'vitest'
 import { compilePickerRule, parseSpecToRule, summaryKeys, summaryText, WEEKDAYS } from '..'
+import { nextRuns } from '../nextRuns'
+import { splitTime } from '../time'
 import type { PickerRule, ScheduleSpec } from '..'
 
 const TZ = 'Europe/Helsinki'
@@ -129,6 +131,36 @@ describe('parseSpecToRule', () => {
     expect(parseSpecToRule({ kind: 'once', timezone: 'UTC', at: 'tomorrow' })).toBeNull()
     expect(parseSpecToRule({ kind: 'once', timezone: 'UTC', at: '2026-12-24T08:05' })).toEqual(
       { repeat: 'once', date: '2026-12-24', time: '08:05' })
+  })
+})
+
+describe('24:00 is a window end, never a time of day (#18432 review)', () => {
+  it('splitTime accepts 24:00 only as an end of day', () => {
+    expect(splitTime('24:00')).toBeNull()
+    expect(splitTime('24:00', true)).toEqual([24, 0])
+    expect(splitTime('24:30', true)).toBeNull()
+    expect(splitTime('23:59')).toEqual([23, 59])
+  })
+
+  it('rejects a one-off at T24:00 on import, and computes no run for it', () => {
+    const spec: ScheduleSpec = { kind: 'once', timezone: 'UTC', at: '2030-01-02T24:00' }
+    expect(parseSpecToRule(spec)).toBeNull()
+    expect(nextRuns(spec, 3, new Date('2030-01-01T00:00:00Z'))).toBeNull()
+  })
+
+  it('still compiles a minutes window ending at 24:00', () => {
+    const spec = compilePickerRule({ repeat: 'minutes', every: 5, window: { from: '20:00', to: '24:00' } }, 'UTC')
+    expect(spec).toMatchObject({ kind: 'cron', cron: '*/5 20-23 * * *' })
+  })
+})
+
+describe('day fields combine as croniter combines them (#18432 review)', () => {
+  it('a stepped day-of-month is restricted, so it is ORed with the weekday', () => {
+    // croniter, the backend scheduler, for "0 9 */2 * MON" from Tue 1 Jan 2030:
+    // Tue 01, Thu 03, Sat 05, Mon 07, Wed 09, Fri 11, Sun 13, Mon 14.
+    const spec: ScheduleSpec = { kind: 'cron', timezone: 'UTC', cron: '0 9 */2 * MON' }
+    const runs = nextRuns(spec, 8, new Date('2030-01-01T00:00:00Z'))!
+    expect(runs.map((d) => d.getUTCDate())).toEqual([1, 3, 5, 7, 9, 11, 13, 14])
   })
 })
 

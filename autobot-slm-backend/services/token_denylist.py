@@ -3,160 +3,127 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-JWT jti-denylist backed by Redis.
+JWT jti-denylist, kept in the SLM's own PostgreSQL (#18663).
 
-Revocation is enforced on the async auth path (``decode_token_async``).
-The sync ``decode_token`` path cannot check Redis and is documented
-accordingly — it is used only in contexts where a short token TTL is the
-primary guard.
+Revocation is enforced on the async auth path (``decode_token_async``). The sync
+``decode_token`` path cannot check the store and is documented accordingly -- it
+is used only where a short token TTL is the primary guard.
 
-Fail-CLOSED policy for ``is_jti_revoked`` (#16387): if Redis is unavailable
-the function raises instead of returning ``False``.  A denylist check exists
-to catch a token that was logged out or belongs to a leaked credential; if
-Redis cannot answer, "not revoked" and "unknown" are indistinguishable, and
-treating them the same would let such a token through for as long as the
-outage lasts.  The owner's decision on #16387 accepts the trade-off in the
-other direction instead: a Redis outage denies SLM login (including the
-backend admin path reached through the proxy, #16374) rather than honouring
-a possibly-revoked token.  ``decode_token_async`` (``services/auth.py``)
-catches the raise and returns 401.
+**Why PostgreSQL, not Redis (#18663).** The SLM is the configuration and
+monitoring layer: it is what deploys the fleet, Redis included, so it must work
+with nothing but its own database. With the denylist in a Redis the SLM host
+never has, the fail-closed check below refused every authenticated request and
+nobody could log in to a freshly installed SLM.
 
-Bounded access (#11443): ``get_redis_client`` does NOT return ``None``
-quickly when Redis is down or misconfigured — the shared connection
-manager retries pool creation for ~60 s while holding a global lock, which
-serialized every authenticated request behind a one-minute wait and made
-the whole SLM GUI appear dead.  Every Redis interaction is still wrapped in
-``asyncio.wait_for`` with a short deadline, and failures arm a short
-negative-cache so subsequent auths skip Redis entirely (raising immediately)
-instead of paying the timeout each time.
+Fail-CLOSED policy for ``is_jti_revoked`` (#16387, unchanged): if the store
+cannot answer, the function raises instead of returning ``False`` -- "not
+revoked" and "unknown" are different answers. ``decode_token_async``
+(``services/auth.py``) catches the raise and answers 503 (#18892). The store is now the
+database the SLM cannot run without, so this no longer denies a healthy SLM.
+
+Upgrade note: revocations recorded in Redis before #18663 are not carried over --
+tokens logged out before the upgrade stay valid until they expire (at most the
+token lifetime).
+
+``revoke_jti`` stays fail-open (#16387): a logout that cannot reach the store has
+nothing else to deny against; decode-time verification carries the guarantee.
+
+Bounded access (#11443): every store interaction runs under a short deadline, so
+auth latency is never hostage to a stuck connection.
 """
 
 import asyncio
-import logging
-import time
+from datetime import datetime, timedelta, timezone
 
-from autobot_shared.redis_client import get_async_redis_client
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import SQLAlchemyError
 
-try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
-    from redis.exceptions import RedisError as _RedisError
-except ImportError:  # pragma: no cover - redis is a hard dep in deployments
-    _RedisError = ConnectionError  # type: ignore[assignment,misc]
+from autobot_shared.logging_manager import get_logger
 
-logger = logging.getLogger(__name__)
+try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wraps them
+    import asyncpg
 
-# Failures that arm the negative-cache window shared by revoke_jti (still
-# fail-open, #16387) and is_jti_revoked (fail-closed, #16387). asyncio.TimeoutError
-# is not OSError on py3.10, and redis.exceptions.ConnectionError is not builtin
-# ConnectionError — both must be listed explicitly (#11445 review).
-_REDIS_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
+    _DRIVER_FAILURES: tuple = (asyncpg.PostgresError, asyncpg.InterfaceError)
+except ImportError:  # pragma: no cover - asyncpg is the SLM's driver in deployments
+    _DRIVER_FAILURES = ()
 
-_DENYLIST_PREFIX = "slm:jwt:denylist:"
+logger = get_logger(__name__)
 
-# Hard deadline for any denylist Redis interaction (client acquisition +
-# command). Auth latency must never be hostage to Redis (#11443).
-_REDIS_DEADLINE_SECONDS = 1.5
-# After a failure, skip Redis for this long (fail-open window) instead of
-# re-paying the deadline on every authenticated request.
-_UNAVAILABLE_RETRY_SECONDS = 30.0
+# Failures that mean "the store could not answer".
+_STORE_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, SQLAlchemyError, *_DRIVER_FAILURES)
 
-# Monotonic timestamp until which Redis is considered unavailable (0 = OK).
-_unavailable_until: float = 0.0
+# Hard deadline for any denylist store interaction (#11443).
+_STORE_DEADLINE_SECONDS = 2.0
 
 
-def _denylist_key(jti: str) -> str:
-    """Return the Redis key for *jti*."""
-    return f"{_DENYLIST_PREFIX}{jti}"
+def _session():
+    """A session on the SLM database; ConnectionError if it is not initialized yet."""
+    from services.database import db_service  # lazy: importable without the DB stack (config-mocking test harnesses)
+
+    if db_service.session_factory is None:
+        raise ConnectionError("jti denylist store unavailable: SLM database not initialized")
+    return db_service.session_factory()
 
 
-def _redis_marked_unavailable() -> bool:
-    """True while the negative-cache window from a previous failure is active."""
-    return time.monotonic() < _unavailable_until
+async def _revoke(jti: str, ttl_seconds: int) -> None:
+    from sqlalchemy.dialects.postgresql import insert  # lazy: test suites stub sqlalchemy without dialects
 
+    from models.auth_revocation import RevokedToken  # lazy, as in _session
 
-def _mark_redis_unavailable(op: str, jti: str, exc: Exception | None) -> None:
-    """Arm the negative-cache window and log the degradation once per trip."""
-    global _unavailable_until
-    was_armed = _redis_marked_unavailable()
-    _unavailable_until = time.monotonic() + _UNAVAILABLE_RETRY_SECONDS
-    if not was_armed:
-        logger.warning(
-            "%s: Redis unavailable (%s); denylist checks degraded for %.0fs (jti=%r)",
-            op,
-            exc.__class__.__name__ if exc else "no client",
-            _UNAVAILABLE_RETRY_SECONDS,
-            jti,
+    now = datetime.now(timezone.utc)
+    async with _session() as session:
+        stmt = insert(RevokedToken).values(jti=jti, expires_at=now + timedelta(seconds=ttl_seconds))
+        # A repeat revocation keeps the later expiry, never shortens it.
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["jti"],
+                set_={"expires_at": func.greatest(RevokedToken.expires_at, stmt.excluded.expires_at)},
+            )
         )
-
-
-def _mark_redis_available() -> None:
-    """Clear the negative-cache window after a successful interaction."""
-    global _unavailable_until
-    _unavailable_until = 0.0
+        # Rows of tokens that have expired anyway carry no information; prune on write.
+        await session.execute(delete(RevokedToken).where(RevokedToken.expires_at <= now))
+        await session.commit()
 
 
 async def revoke_jti(jti: str, ttl_seconds: int) -> None:
-    """Add *jti* to the denylist with a Redis TTL of *ttl_seconds*.
+    """Deny *jti* until it would have expired anyway (*ttl_seconds*, clamped to >= 1).
 
-    The key auto-expires when the original token would have expired anyway,
-    so no background cleanup is needed.  Silently no-ops if Redis is
-    unavailable (logs a warning) — bounded by the module deadline.
-
-    Unlike ``is_jti_revoked``'s fail-CLOSED revocation *check* (#16387), this
-    write path stays fail-open: a logout that cannot reach Redis has nothing
-    else to deny closed against, and decode-time verification is what now
-    carries the fail-closed guarantee.
+    Fail-open (#16387): logs a warning and returns if the store is unavailable.
     """
     ttl = max(1, ttl_seconds)
-
-    async def _do() -> bool:
-        redis = await get_async_redis_client()
-        if redis is None:
-            return False
-        await redis.set(_denylist_key(jti), "1", ex=ttl)
-        return True
-
     try:
-        ok = await asyncio.wait_for(_do(), timeout=_REDIS_DEADLINE_SECONDS)
-    except _REDIS_FAILURES as exc:
-        _mark_redis_unavailable("revoke_jti", jti, exc)
-        logger.warning("revoke_jti: jti=%r NOT revoked (Redis unavailable)", jti)
+        await asyncio.wait_for(_revoke(jti, ttl), timeout=_STORE_DEADLINE_SECONDS)
+    except _STORE_FAILURES as exc:
+        logger.warning("revoke_jti: jti=%r NOT revoked (store unavailable: %s)", jti, exc.__class__.__name__)
         return
-    if not ok:
-        _mark_redis_unavailable("revoke_jti", jti, None)
-        logger.warning("revoke_jti: jti=%r NOT revoked (Redis unavailable)", jti)
-        return
-    _mark_redis_available()
     logger.info("revoke_jti: jti=%r revoked with ttl=%d", jti, ttl)
 
 
-async def is_jti_revoked(jti: str) -> bool:
-    """Return ``True`` if *jti* is in the denylist.
+async def _lookup(jti: str) -> bool:
+    from models.auth_revocation import RevokedToken  # lazy, as in _session
 
-    Fail-CLOSED (#16387): raises when Redis is unavailable, misconfigured, or
-    slower than the module deadline (#11443), rather than returning ``False``.
-    The caller (``decode_token_async``) must deny the token on this raise --
-    "could not check" is not the same answer as "not revoked".
+    async with _session() as session:
+        row = await session.execute(
+            select(RevokedToken.jti).where(
+                RevokedToken.jti == jti, RevokedToken.expires_at > datetime.now(timezone.utc)
+            )
+        )
+        return row.first() is not None
+
+
+async def is_jti_revoked(jti: str) -> bool:
+    """Return ``True`` if *jti* is on the denylist.
+
+    Fail-CLOSED (#16387): raises when the store cannot answer within the deadline
+    (#11443) rather than returning ``False``; the caller must deny the token.
 
     Raises:
-        ConnectionError | OSError | asyncio.TimeoutError | redis.exceptions.RedisError:
-            the denylist could not be checked.
+        ConnectionError | asyncio.TimeoutError: the denylist could not be checked. A
+            database error is raised as ConnectionError, the store-unavailable type
+            ``decode_token_async`` turns into a 503 + Retry-After (#18892): the token is
+            refused, but as "could not decide", not as a dead credential (401) or a 500.
     """
-    if _redis_marked_unavailable():
-        raise ConnectionError("jti denylist check skipped: Redis recently unavailable")
-
-    async def _do() -> bool | None:
-        redis = await get_async_redis_client()
-        if redis is None:
-            return None
-        return bool(await redis.exists(_denylist_key(jti)))
-
     try:
-        result = await asyncio.wait_for(_do(), timeout=_REDIS_DEADLINE_SECONDS)
-    except _REDIS_FAILURES as exc:
-        _mark_redis_unavailable("is_jti_revoked", jti, exc)
-        raise
-    if result is None:
-        _mark_redis_unavailable("is_jti_revoked", jti, None)
-        raise ConnectionError("jti denylist check failed: no Redis client available")
-    _mark_redis_available()
-    return result
+        return await asyncio.wait_for(_lookup(jti), timeout=_STORE_DEADLINE_SECONDS)
+    except (SQLAlchemyError, *_DRIVER_FAILURES) as exc:
+        raise ConnectionError(f"jti denylist store unavailable: {exc.__class__.__name__}") from exc

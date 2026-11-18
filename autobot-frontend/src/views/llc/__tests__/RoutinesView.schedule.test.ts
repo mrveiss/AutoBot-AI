@@ -74,6 +74,14 @@ describe('RoutinesView schedule picker (#18432)', () => {
     expect('schedule_spec' in body).toBe(false) // exactly one field, today's payload
   })
 
+  it('offers only UTC, the zone the routine scheduler evaluates in', async () => {
+    const wrapper = await mountView()
+    const edit = wrapper.findAll('tbody tr button').find((b) => b.text() === 'Edit')!
+    await edit.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('select[id$="-zone"] option').map((o) => o.text())).toEqual(['UTC'])
+  })
+
   it('calls no preview endpoint until the backend serves one (#18432 backend half)', async () => {
     const wrapper = await mountView()
     await wrapper.findAll('tbody tr button').find((b) => b.text() === 'Edit')!.trigger('click')

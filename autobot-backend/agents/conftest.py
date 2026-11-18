@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Local pytest configuration for agents tests (#18094).
 
-``agents/npu_code_search_patterns.detect_language`` delegates to the canonical
+``agents/npu_code_search_patterns.language_name_for_extension`` delegates to the canonical
 ``code_intelligence.base_analyzer.detect_language``. The top-level conftest stubs
 the ``code_intelligence.base_analyzer`` submodule as a MagicMock (the package
 itself is no longer stubbed, #18070); a mock detector would hand every agents

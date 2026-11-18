@@ -1,0 +1,60 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #20750: after the backend and celery restarted onto a re-aligned internal key, check the backend
+# accepts the new key, and report the outcome on the approval. Runs on the backend node, after the
+# updater's "Wait for API to be ready", only when realign_internal_api_key_claim.yml applied a realign.
+#
+# The report is the check: it is sent with the NEW key, so the backend answering it (204) proves the
+# restarted backend authenticates the SLM's key. If it doesn't, the outcome is reported as failed with
+# the OLD key, and the run stops on this node saying what state it is in. Nothing is rolled back blindly:
+# the env files hold the SLM's key, and whichever key the running backend took is what it now accepts.
+---
+
+- name: "Internal key | Report the applied realign, with the new key (#20750)"
+  ansible.builtin.uri:
+    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-approvals/{{ internal_api_key_realign_approval_id }}/outcome"
+    method: POST
+    headers:
+      X-Internal-API-Key: "{{ internal_api_key_canonical }}"
+    body_format: json
+    body:
+      action: slm_backend_internal_key_realign
+      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+      result: applied
+    status_code: [204]
+  register: _internal_key_realign_applied
+  failed_when: false
+  no_log: true
+
+- name: "Internal key | Report the failed realign, with the old key (#20750)"
+  ansible.builtin.uri:
+    url: "{{ internal_api_key_backend_url }}/api/internal/slm/credential-approvals/{{ internal_api_key_realign_approval_id }}/outcome"
+    method: POST
+    headers:
+      X-Internal-API-Key: "{{ internal_api_key_realign_old_key }}"
+    body_format: json
+    body:
+      action: slm_backend_internal_key_realign
+      node_id: "{{ slm_node_id | default(inventory_hostname) }}"
+      result: apply_failed
+      detail: >-
+        after the restart the backend refused the SLM's key (HTTP {{ _internal_key_realign_applied.status | default('?') }})
+    status_code: [204]
+  register: _internal_key_realign_failed_report
+  failed_when: false
+  no_log: true
+  when: _internal_key_realign_applied.status | default(0) != 204
+
+- name: "Internal key | The realign did not take: say what state the node is in (#20750)"
+  ansible.builtin.fail:
+    msg: >-
+      FINDING #20750: this node's backend env files now hold the SLM's AUTOBOT_INTERNAL_API_KEY, but after
+      the restart the backend did not accept it (HTTP {{ _internal_key_realign_applied.status | default('?') }}).
+      {{ 'The backend still accepts the OLD key, so its restart did not load the new env; the failure is recorded on the approval.'
+         if _internal_key_realign_failed_report.status | default(0) == 204
+         else 'The backend accepts neither key now; the outcome could not be recorded. Check the backend process and its env file.' }}
+      Nothing was rolled back.
+  when: _internal_key_realign_applied.status | default(0) != 204

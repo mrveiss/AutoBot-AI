@@ -41,6 +41,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _BACKEND = "autobot-backend/"
@@ -53,11 +54,7 @@ _COMPAT_RE = re.compile(r"backward[- ]?compat|re-?export|\bshim\b|facade", re.IG
 #: fails `test_every_allowlist_entry_is_still_needed` -- the list shrinks, it does not rot.
 ALLOWLIST: dict[str, str] = {
     "autobot-backend/knowledge/memory_graph/__init__.py": "#12932 (decision-gated; pinned by its test)",
-    "autobot-backend/async_work/__init__.py": "#18552 (not triaged: unified async-work facade, no static importer)",
-    "autobot-backend/knowledge/connectors/auth.py": "#18552 (not triaged: re-exports of autobot_shared auth types)",
-    "autobot-backend/middleware/extension_manifest.py": "#18552 (not triaged: re-export of the plugin_sdk manifest)",
-    "autobot-backend/services/claude_agent_service.py": "#18552 (not triaged: shim over specialized_agent_service, #5429)",
-    "autobot-backend/utils/hardware_acceleration_manager.py": "#18552 (not triaged: wrapper re-export)",
+    "autobot-backend/async_work/__init__.py": "#18596 (not triaged: unified async-work facade, no static importer)",
 }
 
 
@@ -73,7 +70,7 @@ def _declares_compat(source: str) -> bool:
     if not _COMPAT_RE.search(source[:6000]):
         return False
     try:
-        doc = ast.get_docstring(ast.parse(source)) or ""
+        doc = ast.get_docstring(parse_cache.parse(source)) or ""
     except SyntaxError:
         return False
     return bool(_COMPAT_RE.search(doc))
@@ -141,8 +138,6 @@ def _compat_modules(root: Path) -> list[str]:
 REACH = declare(
     "compat-module-needs-importer",
     discover=_compat_modules,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=114,
     what="autobot-backend non-test python modules whose module docstring declares backward compatibility",
     roots=("autobot-backend",),
     growth=20,
