@@ -20,7 +20,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Awaitable, Callable
 
-from fastapi import WebSocket
+from fastapi import HTTPException, WebSocket
 
 from autobot_shared.auth.device_capabilities import DeviceCapability
 from autobot_shared.auth.permissions import Permission, is_admin_role, role_has_permission
@@ -86,9 +86,9 @@ async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     `WebSocket` constructor's ``protocols`` argument) and the query string --
     so the subprotocol/query-param check (:func:`auth_middleware.authenticate_websocket`,
     #16457) goes first. A non-browser or service caller may instead send an
-    ``Authorization`` header, an ``X-Session-ID`` session header, a dev-mode
-    header, or the internal-service key; ``get_user_from_request`` and
-    ``verify_internal_api_key`` already resolve those for HTTP requests, and
+    ``Authorization`` header, an ``X-Session-ID`` session header or a dev-mode
+    header (not the internal-service key, which is not a user: #16333);
+    ``get_user_from_request`` already resolves those for HTTP requests, and
     a WebSocket exposes the same ``headers``/``cookies`` interface
     (``authenticate_ws_admin`` relies on the same fact). Trying each in turn
     is a union of the accepted checks -- more ways to prove identity, not a
@@ -97,16 +97,20 @@ async def _resolve_ws_user(websocket: WebSocket) -> "dict | None":
     """
     from auth_middleware import (  # noqa: PLC0415
         authenticate_websocket,
-        get_auth_middleware,
-        verify_internal_api_key,
+        resolve_human_user,
     )
 
     user = await authenticate_websocket(websocket)
     if user is not None:
         return user
-    if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
-        return {"username": "service:slm", "role": "admin", "service": True}
-    return get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
+    # #16333 (owner ruling b): the service key is not a user here; no WebSocket names a service caller.
+    try:
+        # #18688: the canonical resolver, so a JWT minted before a password change is refused
+        # and an epoch store that cannot answer denies (fail closed) -- both read as "no user".
+        return await resolve_human_user(websocket)  # type: ignore[arg-type]
+    except HTTPException:
+        logger.warning("WebSocket credential refused (password-change revoked or unverifiable)")
+        return None
 
 
 async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
@@ -131,10 +135,10 @@ async def enforce_ws_authentication(websocket: WebSocket) -> "dict | None":
     return user
 
 
-def authenticate_ws_admin(websocket: WebSocket) -> bool:
-    """Fail-closed auth+authz for admin WS endpoints: a valid user (JWT/session/
-    cookie) or the internal-service key, AND admin role — matching the REST
-    endpoints' ``Depends(check_admin_permission)``.
+async def authenticate_ws_admin(websocket: WebSocket) -> bool:
+    """Fail-closed auth+authz for admin WS endpoints: a valid human user (JWT/session/
+    cookie) AND admin role — matching the REST ``Depends(check_admin_permission)``.
+    The internal service key is not an admin (#16333).
 
     A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
     so the standard auth middleware resolves the caller. Any error → deny.
@@ -148,16 +152,17 @@ def authenticate_ws_admin(websocket: WebSocket) -> bool:
         return True
     try:
         from auth_middleware import (  # noqa: PLC0415
-            get_auth_middleware,
-            verify_internal_api_key,
+            resolve_human_user,
         )
 
-        if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
-            return True
-        user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
+        # #16333 (owner ruling b): the service key is not an admin; a human admin's session is required.
+        user = await resolve_human_user(websocket)  # type: ignore[arg-type]  # #18688: revocation enforced
         if not user:
             return False
         return is_admin_role(user.get("role"))
+    except HTTPException:  # revoked JWT (401), epoch store down (503), device token (403)
+        logger.warning("WS admin auth refused (password-change revoked or unverifiable) -- denying")
+        return False
     except Exception:
         logger.warning("WS admin auth error — denying", exc_info=True)
         return False
@@ -176,7 +181,7 @@ async def enforce_ws_admin(websocket: WebSocket) -> bool:
     disabled for dev/test), ``False`` after having accepted then closed the
     socket ``4001``.
     """
-    if authenticate_ws_admin(websocket):
+    if await authenticate_ws_admin(websocket):
         return True
     try:
         await accept_websocket(websocket)
@@ -324,11 +329,10 @@ async def enforce_ws_desktop_auth(websocket: WebSocket) -> "dict | None":
     through ``is_admin_role``. #13854 deliberately removed the administrative
     short-circuit from that function because it made a predicate the most
     permissive permission source in the system; re-adding it here would reverse
-    that ruling one call site at a time. The consequence is explicit and worth
-    reading before changing this: ``ROLE_PERMISSIONS[Role.SUPERADMIN]`` is empty,
-    so **a superadmin is refused the desktop** while ``admin`` and ``operator``
-    are admitted. If that is wrong, the fix is to give superadmin its
-    ROLE_PERMISSIONS entries -- one place -- not a bypass here.
+    that ruling one call site at a time. Superadmin is admitted because
+    ``ROLE_PERMISSIONS[Role.SUPERADMIN]`` is derived from admin's set (#19125,
+    owner decision 2026-10-21), so it holds ``mcp.desktop.control`` like admin
+    and ``operator`` -- never through a bypass here.
     """
     user = await enforce_ws_remote_control_auth(
         websocket,

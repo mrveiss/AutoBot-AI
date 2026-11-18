@@ -24,7 +24,7 @@ slm_agent_user: autobot
 slm_agent_group: autobot
 
 # Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
-slm_agent_dir: /opt/autobot/autobot-slm-agent
+slm_agent_dir: "{{ autobot.base_dir }}/autobot-slm-agent"
 # #14278: the agent's dependencies live in their own venv. Installing them into
 # system Python with --break-system-packages fails on any node whose distro owns
 # a transitive dependency: pip may write to the system environment but cannot
@@ -32,6 +32,21 @@ slm_agent_dir: /opt/autobot/autobot-slm-agent
 # provisioning with "RECORD file not found. The package was installed by debian."
 slm_agent_venv: "{{ slm_agent_dir }}/venv"
 slm_agent_data_dir: /var/lib/slm-agent
+
+# #18548: the agent is deployed from its ONE source tree in the repo clone on
+# the Ansible controller (same code_source_dir fallback as the backend role),
+# never from a copy checked in under this role. Production modules only; the
+# co-located tests are source-only. ansible/tests/
+# slm_agent_deploys_source_tree_18548_test.py asserts these three values select
+# exactly the non-test .py modules of that tree.
+slm_agent_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/slm/agent"
+slm_agent_source_patterns:
+  - "*.py"
+slm_agent_source_excludes:
+  - "*_test.py"
+  - "test_*.py"
+  - "conftest.py"
+  - "tests"
 
 # Python dependencies for the agent (#11508)
 # #14278: the agent runs on its OWN venv (slm_agent_venv, see the unit's
@@ -95,3 +110,8 @@ slm_agent_version: ""
 # Redis connection (Issue #9226)
 # Agent imports from autobot_shared which requires REDIS_HOST set
 slm_agent_redis_host: "{{ redis_host | default('127.0.0.1') }}"
+
+# #19461: admin-server request timeouts in seconds. Unset by default, so slm/agent/request_timeouts.py
+# keeps the one default. Set either to pass it to the agent unit.
+# slm_agent_heartbeat_timeout:
+# slm_agent_event_sync_timeout:

@@ -33,6 +33,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from services.drift_checker import _NONSTANDARD_COMPONENT_PATHS
 
 
@@ -48,7 +49,7 @@ def deployed_root() -> str:
     each call site rather than shared here, because CodeQL only recognises a
     guard as a sanitiser within the same scope as the value it protects.
     """
-    return os.path.realpath(os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot"))
+    return os.path.realpath(os.environ.get("SLM_DEPLOYED_ROOT", FLEET_INSTALL_ROOT))
 
 
 def _resolve_deployed_dir(component: str = "autobot-slm-backend") -> str:

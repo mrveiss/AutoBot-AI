@@ -16,9 +16,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add the project root to the Python path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 
 async def _test_kb_connection():
@@ -28,9 +31,9 @@ async def _test_kb_connection():
     """
     logger.info("\n4️⃣  Testing knowledge base connection...")
     try:
-        from knowledge_base_factory import get_knowledge_base
+        from knowledge_base_factory import get_knowledge_base_or_none
 
-        kb = await get_knowledge_base()
+        kb = await get_knowledge_base_or_none()
         if kb:
             logger.info("✅ Knowledge base connection successful")
 

@@ -150,15 +150,48 @@ class Severity(Enum):
         than the enum, so #14956 adding vocabulary members did not silently
         add three always-zero keys to a shipped API response.
         """
-        return (
-            cls.UNKNOWN,
-            cls.INFO,
-            cls.MINIMAL,
-            cls.LOW,
-            cls.MEDIUM,
-            cls.HIGH,
-            cls.CRITICAL,
-        )
+        return (cls.UNKNOWN, cls.INFO, cls.MINIMAL, cls.LOW, cls.MEDIUM, cls.HIGH, cls.CRITICAL)
+
+    @classmethod
+    def risk_ladder(cls) -> "tuple[Severity, ...]":
+        """Risk levels, most severe first, as the risk reports list them (#19336)."""
+        return (cls.CRITICAL, *reversed(cls.triage_ladder()), cls.MINIMAL)
+
+    @classmethod
+    def triage_ladder(cls) -> tuple["Severity", ...]:
+        """LOW, MEDIUM, HIGH ascending; endpoints derive "high, medium, low" listings from it, reversed (#19336)."""
+        return (cls.LOW, cls.MEDIUM, cls.HIGH)
+
+    @classmethod
+    def finding_ladder(cls) -> tuple["Severity", ...]:
+        """The five rungs a code-analysis finding is graded on, ascending.
+
+        INFO, LOW, MEDIUM, HIGH, CRITICAL. Severity breakdowns that were keyed
+        by a five-member fork (``PerformanceSeverity`` and its siblings, #18098)
+        iterate this rather than the enum, so aliasing the fork to the
+        canonical did not grow a shipped response from five keys to ten.
+        """
+        return (cls.INFO, cls.LOW, cls.MEDIUM, cls.HIGH, cls.CRITICAL)
+
+    @property
+    def rank(self) -> int:
+        """Severity rank, ascending; declaration order IS the ordering -- the one sort key (#19336)."""
+        return _SEVERITY_RANK[self]
+
+    @classmethod
+    def rank_of(cls, value: "str | Severity", default: int = -1) -> int:
+        """The rank of a severity word or member (case-insensitive), or *default* outside the vocabulary."""
+        try:
+            word = value.value if isinstance(value, Severity) else value
+            return cls(str(word).lower()).rank
+        except (ValueError, AttributeError):
+            return default
+
+    @classmethod
+    def at_or_above(cls, items: list, min_severity: str) -> list:
+        """Objects whose ``.severity`` ranks at or above *min_severity*; ``ValueError`` outside the vocabulary."""
+        floor = cls(min_severity.lower()).rank
+        return [i for i in items if cls.rank_of(i.severity) >= floor]
 
     @classmethod
     def from_score(cls, score: float) -> "Severity":
@@ -199,6 +232,9 @@ class Severity(Enum):
             cls.CRITICAL: 0.9,
         }
         return scores.get(severity, 0.0)
+
+
+_SEVERITY_RANK: "dict[Severity, int]" = {member: index for index, member in enumerate(Severity)}
 
 
 # Risk-level alias — semantic shortcut for callers reasoning about "risk"
@@ -348,7 +384,7 @@ class SecretType(str, Enum):
         return frozenset(wanted)
 
 
-class Priority(Enum):
+class Priority(str, Enum):
     """
     Priority level enumeration.
 
@@ -448,6 +484,9 @@ class LLMProvider(Enum):
     # (llm_shared/providers/openrouter.py had a defensive hasattr() guard
     # against ProviderType.OPENROUTER not existing — a real symptom of the
     # triplication bug this consolidation fixes)
+    # -- registered providers that were bare strings outside the enum (#17504) --
+    CUSTOM_OPENAI = "custom_openai"  # llm_shared/providers/custom_openai.py
+    NOUS = "nous"  # llm_shared/providers/nous_portal.py
 
     @classmethod
     def supports_streaming(cls, provider: "LLMProvider") -> bool:
@@ -489,6 +528,7 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
     STARTING = "starting"
     STOPPING = "stopping"
+    CIRCUIT_OPEN = "circuit_open"  # breaker open: probes suppressed (#12771)
 
 
 class AgentStatus(Enum):

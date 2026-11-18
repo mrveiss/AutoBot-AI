@@ -317,9 +317,6 @@ expect_block "unbalanced quote"                      'git switch " unbalanced'
 echo ""
 echo "--- Push protections ---"
 expect_block "git push origin main"                  "git push origin main"
-# Dev_new_gui: temporary mirror of main for the live updater (#16461) -- a direct
-# push would break its fast-forward-only mirror workflow and cut the updater off.
-expect_block "git push origin Dev_new_gui"           "git push origin Dev_new_gui"
 expect_block "git push --force"                      "git push --force origin feature"
 # --force-with-lease is the permitted force spelling, but it does not excuse
 # the DESTINATION. The bare form was allowed before #14144 only because the

@@ -24,12 +24,11 @@ in-memory fallback (#13916's consolidation rule: two implementations of one
 thing become one reused core; this router is the first of the two, not a
 third).
 
-#14271: ``workflow_id`` is unique per-company, not globally, so create's
-pre-check (``get()`` then ``create()``) is a UX nicety for the common case,
-not the enforcement — a concurrent same-company duplicate still reaches the
-DB's ``UNIQUE (company_id, workflow_id)`` constraint, which ``create()``
-translates into ``WorkflowConflictError`` (caught here as 409) rather than
-letting it surface as an unhandled 500.
+#14271: ``workflow_id`` is unique per-company; a same-company duplicate reaches the
+DB's ``UNIQUE (company_id, workflow_id)`` constraint and surfaces as 409.
+
+#21239: create delegates to ``CompanyOsWorkflowService.create`` (admin-gated, carries
+``kind`` / ``owner_role_id``) with the path company, so there is one insert path.
 """
 
 import uuid
@@ -43,10 +42,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import assert_company_access
+from models.workflow import Workflow
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
-from ..services.workflow import WorkflowConflictError, WorkflowService
+from ..models.company_os_enums import WorkflowKind
+from ..models.enums import WorkflowStatus
+from ..services.authz import NotAuthorisedError
+from ..services.company_os.errors import CompanyOsError
+from ..services.company_os.loaders import is_company_os_row
+from ..services.company_os.workflows import CompanyOsWorkflowService
+from ..services.workflow import WorkflowService
+from ._common import actor_id
+from .company_os import http_error
 
 router = APIRouter(prefix="/workflows", tags=["llc-workflows"])
 
@@ -57,12 +65,29 @@ def _svc() -> WorkflowService:
     return _get_svc()
 
 
-def _actor_id(current_user: dict) -> uuid.UUID:
-    """Derive the acting user's id from the authenticated session, never the
-    client-supplied body (mirrors ``llc/api/contacts.py``'s ``_actor_id``,
-    #13969 review M1)."""
-    raw = current_user.get("id") or current_user.get("user_id")
-    return uuid.UUID(str(raw))
+_get_company_os = lazy_singleton(CompanyOsWorkflowService)
+
+
+def _company_os() -> CompanyOsWorkflowService:
+    return _get_company_os()
+
+
+async def _is_company_os(session: AsyncSession, company_id: uuid.UUID, workflow_id: str) -> bool:
+    """Re-load after the legacy write matched nothing: was it a Company OS row (#18446)?"""
+    existing = await _svc().get(session, company_id, workflow_id)
+    return existing is not None and is_company_os_row(existing)
+
+
+async def _company_os_status(
+    session: AsyncSession, company_id: uuid.UUID, workflow_id: str, new_status: str, actor: uuid.UUID
+) -> Optional[Workflow]:
+    """Re-dispatch a status change the legacy write refused, through the Company OS rules."""
+    if not await _is_company_os(session, company_id, workflow_id):
+        return None
+    try:
+        return await _company_os().update_status(session, company_id, workflow_id, new_status, actor=actor)
+    except (CompanyOsError, NotAuthorisedError) as exc:
+        raise http_error(exc) from exc
 
 
 # ------------------------------------------------------------------ Schemas
@@ -71,8 +96,10 @@ def _actor_id(current_user: dict) -> uuid.UUID:
 class WorkflowCreate(BaseModel):
     workflow_id: str = Field(..., min_length=1, max_length=255)
     name: Optional[str] = Field(None, max_length=255)
-    status: str = Field("planned", max_length=50)
+    status: WorkflowStatus = WorkflowStatus.PLANNED
     definition: Dict[str, Any] = Field(default_factory=dict)
+    kind: WorkflowKind = WorkflowKind.WORKFLOW
+    owner_role_id: Optional[uuid.UUID] = None
 
 
 class WorkflowStatusUpdate(BaseModel):
@@ -86,6 +113,8 @@ class WorkflowResponse(BaseModel):
     status: str
     source: str
     definition: Dict[str, Any]
+    kind: str
+    owner_role_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -116,25 +145,22 @@ async def create_workflow(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
-    existing = await _svc().get(session, company_id, body.workflow_id)
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
     try:
-        workflow = await _svc().create(
+        if body.kind is not WorkflowKind.WORKFLOW:  # meta skills stay on the Company OS route
+            raise CompanyOsError(f"kind {body.kind.value!r} is created through the Company OS route")
+        workflow = await _company_os().create(
             session,
             company_id,
-            body.workflow_id,
+            workflow_id=body.workflow_id,
             name=body.name,
-            status=body.status,
+            status=body.status.value,
             definition=body.definition,
-            actor=_actor_id(_current_user),
+            kind=body.kind.value,
+            owner_role_id=body.owner_role_id,
+            actor=actor_id(_current_user),
         )
-    except WorkflowConflictError:
-        # The pre-check above is TOCTOU under concurrency (#14271): a
-        # same-company duplicate that raced past it still hits the DB's
-        # UNIQUE(company_id, workflow_id) constraint, closing the race
-        # rather than merely narrowing it.
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
+    except (CompanyOsError, NotAuthorisedError) as exc:
+        raise http_error(exc) from exc
     await session.commit()
     return WorkflowResponse.model_validate(workflow)
 
@@ -164,7 +190,9 @@ async def update_workflow_status(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
-    workflow = await _svc().update_status(session, company_id, workflow_id, body.status, actor=_actor_id(_current_user))
+    workflow = await _svc().update_status(session, company_id, workflow_id, body.status, actor=actor_id(_current_user))
+    if workflow is None:
+        workflow = await _company_os_status(session, company_id, workflow_id, body.status, actor_id(_current_user))
     if workflow is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     await session.commit()
@@ -180,7 +208,13 @@ async def delete_workflow(
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     assert_company_access(ctx, company_id)
-    deleted = await _svc().delete(session, company_id, workflow_id, actor=_actor_id(_current_user))
+    deleted = await _svc().delete(session, company_id, workflow_id, actor=actor_id(_current_user))
+    if not deleted and await _is_company_os(session, company_id, workflow_id):
+        try:
+            await _company_os().delete(session, company_id, workflow_id, actor=actor_id(_current_user))
+        except (CompanyOsError, NotAuthorisedError) as exc:
+            raise http_error(exc) from exc
+        deleted = True
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     await session.commit()

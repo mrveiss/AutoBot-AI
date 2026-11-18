@@ -6,7 +6,10 @@ from autobot_shared.trust_enums import TrustLevel
 
 from .activity import ActorType, LLCActivityLog, LLCBase
 from .agent_wiki import LLCAgentWikiEntry
+from .ai_line import LLCAiLine
 from .approval import LLCApproval
+from .attachment import LLCWorkItemAttachment
+from .attachment_deletion import LLCAttachmentFileDeletion
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
 from .company import (
@@ -17,6 +20,9 @@ from .company import (
     CompanyUpdate,
 )
 from .company_ceo import LLCCompanyCEO
+from .company_os import LLCProcess, LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
+from .company_os_cost import CompanyOsCostEvent
+from .company_os_plan import CompanyOsWorkflowPlan
 from .company_tool import LLCCompanyTool
 from .contact import LLCContact
 from .enums import (
@@ -73,6 +79,7 @@ __all__ = [
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "LLCAiLine",
     "LLCCompanyTool",
     "LLCContact",
     "FindingProposalStatus",
@@ -92,6 +99,8 @@ __all__ = [
     "LLCWorkspaceLease",
     "LLCRunReplayLog",
     "LLCApproval",
+    "LLCAttachmentFileDeletion",
+    "LLCWorkItemAttachment",
     "LLCBase",
     "LLCBoard",
     "LLCBoardColumn",
@@ -106,6 +115,12 @@ __all__ = [
     "LLCRoleCredential",
     "LLCRoleTool",
     "LLCCompanyCEO",
+    "CompanyOsCostEvent",
+    "CompanyOsWorkflowPlan",
+    "LLCProcess",
+    "LLCRoleSkill",
+    "LLCWorkflowNode",
+    "LLCWorkflowTransition",
     "LLCReportingLine",
     "LLCRoleRate",
     "LLCRoleWorkflow",

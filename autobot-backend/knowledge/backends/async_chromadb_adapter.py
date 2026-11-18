@@ -15,11 +15,18 @@ differences are ``async def`` and ``await``.
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.slug import sanitize_token
+from knowledge.backends._chroma_args import (
+    collection_provenance,
+    delete_args,
+    get_args,
+    optional_list,
+    query_args,
+    write_args,
+)
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
 
@@ -29,12 +36,11 @@ logger = get_logger(__name__)
 # [a-zA-Z0-9._-] (e.g. the ':' the LLC layer uses in "company:<uuid>"). Map any
 # invalid character to '_' at the backend boundary so callers can keep their
 # logical naming. No-op for already-valid names (KB's own collections).
-_CHROMA_NAME_INVALID = re.compile(r"[^a-zA-Z0-9._-]")
 
 
 def _chroma_safe_name(name: str) -> str:
     """Return a ChromaDB-valid collection name (#10743)."""
-    return _CHROMA_NAME_INVALID.sub("_", name)
+    return sanitize_token(name, allowed="a-zA-Z0-9._-", replacement="_", collapse=False)
 
 
 class AsyncChromaDBCollection(AsyncBaseCollection):
@@ -57,12 +63,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        await self._raw.add(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        await self._raw.add(**write_args(ids, documents, metadatas, embeddings))
 
     async def upsert(
         self,
@@ -72,12 +73,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        await self._raw.upsert(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        await self._raw.upsert(**write_args(ids, documents, metadatas, embeddings))
 
     async def update(
         self,
@@ -87,12 +83,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         metadatas: Sequence[Metadata] | None = None,
         embeddings: Sequence[Embedding] | None = None,
     ) -> None:
-        await self._raw.update(
-            ids=list(ids),
-            documents=list(documents) if documents is not None else None,
-            metadatas=list(metadatas) if metadatas is not None else None,
-            embeddings=list(embeddings) if embeddings is not None else None,
-        )
+        await self._raw.update(**write_args(ids, documents, metadatas, embeddings))
 
     async def get(
         self,
@@ -107,20 +98,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         # AsyncChromaCollection.get has defaults for include — pass only the
         # fields caller set, letting the wrapper apply its own default when
         # include is None.
-        kwargs: dict = {}
-        if ids is not None:
-            kwargs["ids"] = list(ids)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if limit is not None:
-            kwargs["limit"] = limit
-        if offset is not None:
-            kwargs["offset"] = offset
-        if include is not None:
-            kwargs["include"] = list(include)
-        return await self._raw.get(**kwargs)
+        return await self._raw.get(**get_args(ids, where, where_document, limit, offset, include))
 
     async def query(
         self,
@@ -132,17 +110,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         where_document: WhereDocument | None = None,
         include: Sequence[str] | None = None,
     ) -> dict:
-        kwargs: dict = {"n_results": n_results}
-        if query_embeddings is not None:
-            kwargs["query_embeddings"] = [list(e) for e in query_embeddings]
-        if query_texts is not None:
-            kwargs["query_texts"] = list(query_texts)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if include is not None:
-            kwargs["include"] = list(include)
+        kwargs = query_args(query_embeddings, query_texts, n_results, where, where_document, include)
         return await self._raw.query(**kwargs)
 
     async def query_batch(
@@ -164,7 +132,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
             n_results=n_results,
             where=where,
             where_document=where_document,
-            include=list(include) if include is not None else None,
+            include=optional_list(include),
         )
 
     async def delete(
@@ -174,16 +142,7 @@ class AsyncChromaDBCollection(AsyncBaseCollection):
         where: Where | None = None,
         where_document: WhereDocument | None = None,
     ) -> None:
-        kwargs: dict = {}
-        if ids is not None:
-            kwargs["ids"] = list(ids)
-        if where is not None:
-            kwargs["where"] = where
-        if where_document is not None:
-            kwargs["where_document"] = where_document
-        if not kwargs:
-            raise ValueError("delete requires ids or where")
-        await self._raw.delete(**kwargs)
+        await self._raw.delete(**delete_args(ids, where, where_document))
 
     async def count(self) -> int:
         return int(await self._raw.count())
@@ -211,12 +170,9 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
-        provenance: dict = {"created_at": utc_timestamp()}
-        if metadata:
-            provenance.update(metadata)
         raw_col = await self._raw.get_or_create_collection(
             name=_chroma_safe_name(name),
-            metadata=provenance,
+            metadata=collection_provenance(metadata),
             embedding_function=embedding_function,
         )
         return AsyncChromaDBCollection(raw_col)
@@ -228,6 +184,12 @@ class AsyncChromaDBClient(AsyncBaseClient):
             raise ValueError(f"no such collection: {name}") from exc
         return AsyncChromaDBCollection(raw_col)
 
+    async def get_collection_or_none(self, name: str) -> AsyncBaseCollection | None:
+        # Absence is ``None``; any other failure (an unreachable server) raises,
+        # as ``AsyncChromaClient.get_collection_or_none`` does (#13920, #19519).
+        raw_col = await self._raw.get_collection_or_none(_chroma_safe_name(name))
+        return None if raw_col is None else AsyncChromaDBCollection(raw_col)
+
     async def create_collection(
         self,
         name: str,
@@ -235,9 +197,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
-        provenance: dict = {"created_at": utc_timestamp()}
-        if metadata:
-            provenance.update(metadata)
+        provenance = collection_provenance(metadata)
         try:
             raw_col = await self._raw.create_collection(
                 name=_chroma_safe_name(name),

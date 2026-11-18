@@ -51,6 +51,7 @@ from ..models.reporting_line import LLCReportingLine
 from .authz import require_company_admin
 from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
+from .company_os.errors import CompanyOsError
 
 #: #15765 needs the subject's manager and that manager's manager. The bound is
 #: on the walk, not on the organisation: two hops from the subject, whichever
@@ -256,9 +257,9 @@ class ReportingLineService(LLCServiceBase):
     @staticmethod
     def _require_placeable(holder: Holder, role: str) -> None:
         if holder.type not in _PLACEABLE:
-            raise ValueError(f"{role} must be a user or an agent, not {holder.type!r}")
+            raise CompanyOsError(f"{role} must be a user or an agent, not {holder.type!r}")
         if holder.id is None:
-            raise ValueError(f"{role} id is required")
+            raise CompanyOsError(f"{role} id is required")
 
     async def _would_cycle(
         self,
@@ -354,7 +355,7 @@ class ReportingLineService(LLCServiceBase):
                 )
             )
         if found.scalar_one_or_none() is None:
-            raise ValueError(f"{role} {holder.type}:{holder.id} does not belong to this company")
+            raise CompanyOsError(f"{role} {holder.type}:{holder.id} does not belong to this company")
 
     async def set_line(
         self,
@@ -375,19 +376,19 @@ class ReportingLineService(LLCServiceBase):
         needs its own explicit decision.
         """
         if company_id is None:
-            raise ValueError("company_id is required")
+            raise CompanyOsError("company_id is required")
         self._require_placeable(subject, "subject")
         self._require_placeable(manager, "manager")
 
         if (subject.type, subject.id) == (manager.type, manager.id):
-            raise ValueError("a subject cannot report to itself")
+            raise CompanyOsError("a subject cannot report to itself")
 
         await require_company_admin(session, company_id, actor_user_id)
         await self._require_in_company(session, company_id, subject, "subject")
         await self._require_in_company(session, company_id, manager, "manager")
 
         if await self._would_cycle(session, company_id, subject, manager):
-            raise ValueError("that reporting line would create a cycle")
+            raise CompanyOsError("that reporting line would create a cycle")
 
         # Replace rather than accumulate: line management is single-valued, and
         # the partial unique index would reject a second row anyway. Deleting
@@ -434,7 +435,7 @@ class ReportingLineService(LLCServiceBase):
         self._require_placeable(subject, "subject")
         await require_company_admin(session, company_id, actor_user_id)
         removed = await self._clear(session, company_id, subject)
-        if removed and self.activity_log:
+        if removed:
             await self.activity_log.record(
                 session=session,
                 company_id=str(company_id),
@@ -442,7 +443,7 @@ class ReportingLineService(LLCServiceBase):
                 actor_id=str(actor_user_id),
                 event_type="reporting_line.cleared",
                 entity_type="llc_reporting_line",
-                entity_id=f"{subject.type}:{subject.id}",
+                entity_id=str(subject.id),
                 after={"subject": f"{subject.type}:{subject.id}"},
             )
         return removed
@@ -470,8 +471,6 @@ class ReportingLineService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: dict,
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(row.company_id),

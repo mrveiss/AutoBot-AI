@@ -21,10 +21,12 @@ from typing_extensions import Annotated
 
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.ssot_constants import model_config
 from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data
+from services.llm_default_models import default_llm_models
 from services.playbook_executor import get_playbook_executor
 from user_management.services.llm_secrets import (
     MaskedKeySubmitted,
@@ -52,11 +54,11 @@ class LLMProviderConfig(BaseModel):
     api_key: str = ""
     endpoint: str = ""
     model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=2048, ge=1, le=128000)
+    temperature: float = Field(default=model_config.DEFAULT_TEMPERATURE, ge=0.0, le=2.0)  # #19730
+    max_tokens: int = Field(default=model_config.DEFAULT_MAX_TOKENS, ge=1, le=128000)  # #19730
 
 
-class LLMConfig(BaseModel):
+class SlmLLMConfig(BaseModel):
     """Full LLM configuration stored in SLM settings."""
 
     active_provider: str = "ollama"
@@ -73,10 +75,10 @@ class LLMConfig(BaseModel):
     kv_cache_type: str = "q8_0"
 
 
-class LLMConfigResponse(BaseModel):
+class SlmLLMConfigResponse(BaseModel):
     """Response wrapper for LLM config."""
 
-    config: LLMConfig
+    config: SlmLLMConfig
     message: str = "OK"
 
 
@@ -123,7 +125,7 @@ def _decrypt_provider_key(encrypted_key: str) -> str:
         return encrypted_key
 
 
-async def _load_llm_config(db: AsyncSession) -> LLMConfig:
+async def _load_llm_config(db: AsyncSession) -> SlmLLMConfig:
     """Load LLM config from Setting table.
 
     Provider API keys are never loaded: every entry goes through
@@ -134,7 +136,7 @@ async def _load_llm_config(db: AsyncSession) -> LLMConfig:
     rows = {s.key: s.value for s in result.scalars().all()}
 
     providers = [LLMProviderConfig(**public_provider_view(p)) for p in _stored_providers(rows).values()]
-    return LLMConfig(providers=providers, **_ollama_settings(rows))
+    return SlmLLMConfig(providers=providers, **_ollama_settings(rows))
 
 
 def _json_list(rows: Dict[str, str], key: str) -> List[str]:
@@ -143,7 +145,7 @@ def _json_list(rows: Dict[str, str], key: str) -> List[str]:
 
 
 def _ollama_settings(rows: Dict[str, str]) -> dict:
-    """Every non-provider LLMConfig field from Setting rows. Helper for _load_llm_config."""
+    """Every non-provider SlmLLMConfig field from Setting rows. Helper for _load_llm_config."""
     return dict(
         active_provider=rows.get("llm_active_provider", "ollama"),
         ollama_host=rows.get(
@@ -152,8 +154,9 @@ def _ollama_settings(rows: Dict[str, str]) -> dict:
             "0.0.0.0",  # nosec B104
         ),
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
-        gpu_models=_json_list(rows, "llm_gpu_models"),
-        cpu_models=_json_list(rows, "llm_cpu_models"),
+        # #19862: no saved choice, or an empty one, means the role's defaults; Apply never sends an empty list.
+        gpu_models=_json_list(rows, "llm_gpu_models") or default_llm_models()[0],
+        cpu_models=_json_list(rows, "llm_cpu_models") or default_llm_models()[1],
         max_loaded_models=int(rows.get("llm_max_loaded_models", "5")),
         num_parallel=int(rows.get("llm_num_parallel", "4")),
         keep_alive=rows.get("llm_keep_alive", "10m"),
@@ -207,26 +210,26 @@ async def _upsert_setting(db: AsyncSession, key: str, value: str, desc: str) -> 
         db.add(Setting(key=key, value=value, description=desc))
 
 
-@router.get("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
+@router.get("", response_model=SlmLLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def get_llm_config(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_READ))],
-) -> LLMConfigResponse:
+) -> SlmLLMConfigResponse:
     """Get current LLM configuration (admin only).
 
     API keys are omitted from the response, never masked. Before #17826 a mask
     round-tripped back as a value and overwrote every stored key on save; a
     submitted mask is now refused with 422.
     """
-    return LLMConfigResponse(config=await _load_llm_config(db))
+    return SlmLLMConfigResponse(config=await _load_llm_config(db))
 
 
-@router.put("", response_model=LLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
+@router.put("", response_model=SlmLLMConfigResponse, response_model_exclude=_NO_PROVIDER_KEYS)
 async def save_llm_config(
-    config: LLMConfig,
+    config: SlmLLMConfig,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_CONFIG_WRITE))],
-) -> LLMConfigResponse:
+) -> SlmLLMConfigResponse:
     """Save LLM configuration (admin only).
 
     A provider's ``api_key`` is write-only: send one to set or rotate it, send
@@ -264,7 +267,7 @@ async def save_llm_config(
         len(config.gpu_models),
         len(config.cpu_models),
     )
-    return LLMConfigResponse(config=await _load_llm_config(db), message="Configuration saved")
+    return SlmLLMConfigResponse(config=await _load_llm_config(db), message="Configuration saved")
 
 
 async def _test_ollama(endpoint: str) -> LLMTestResponse:

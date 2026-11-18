@@ -63,6 +63,17 @@ touch "$SECRETS_FILE"
 ensure_key _GEN_JWT gen_hex
 ensure_key _GEN_SECRET_KEY gen_hex
 ensure_key _GEN_SECRETS_ROOT_KEY gen_b64_32
+# #16375: the backend's /api/metrics/prometheus refuses a scrape without this.
+ensure_key _GEN_PROMETHEUS_SCRAPE_TOKEN gen_hex
 chown 999:999 "$SECRETS_FILE"
 chmod 640 "$SECRETS_FILE"
+
+# #16375: Prometheus presents the same token from its own file
+# (bearer_token_file). It runs as nobody (65534), which must not read
+# autobot.env, so the one value it needs is copied out, group-readable by it
+# alone. Rewritten on every start so it always matches autobot.env.
+TOKEN_FILE="/secrets/prometheus_scrape_token"
+sed -n 's/^_GEN_PROMETHEUS_SCRAPE_TOKEN=//p' "$SECRETS_FILE" | head -n 1 | tr -d '\n' >"$TOKEN_FILE"
+chown 0:65534 "$TOKEN_FILE"
+chmod 640 "$TOKEN_FILE"
 echo "secrets-init: done (values not printed)."

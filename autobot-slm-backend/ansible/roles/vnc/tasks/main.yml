@@ -211,6 +211,7 @@
     chmod 0600 /home/{{ vnc_user }}/.vnc/passwd
     chown {{ vnc_user }}:{{ vnc_group }} /home/{{ vnc_user }}/.vnc/passwd
   become: true
+  no_log: true  # #19846
   when: vnc_password_result.stdout | length > 0
   notify: restart vnc-server
 
@@ -225,6 +226,7 @@
   args:
     creates: "/home/{{ vnc_user }}/.vnc/x11vnc.passwd"
   become: true
+  no_log: true  # #19846
   when: vnc_password_result.stdout | length > 0
 
 # #16299: register the same password in the canonical secrets system, so

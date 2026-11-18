@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for MeshDBAdapter — concrete MeshGraph/MeshDB adapter (#2548)."""
+"""Tests for MeshDBAdapter — concrete NeighborStore/MeshDB adapter (#2548)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -190,14 +190,14 @@ class TestPromoteToAnchor:
 
 
 # =============================================================================
-# MeshGraph protocol surface
+# NeighborStore protocol surface
 # =============================================================================
 
 
-class TestGetNeighborsMeshGraph:
-    """MeshDBAdapter.get_neighbors satisfies the MeshGraph Protocol.
+class TestGetNeighborsNeighborStore:
+    """MeshDBAdapter.get_neighbors satisfies the NeighborStore Protocol.
 
-    MeshDB.get_neighbors returns list[dict] with ``neighbor_id`` and ``weight``
+    MeshDB.fetch_neighbor_rows returns list[dict] with ``neighbor_id`` and ``weight``
     keys.  The adapter must project these to list[tuple[str, float]] as required
     by ``propagate_staleness()``.
     """
@@ -208,17 +208,17 @@ class TestGetNeighborsMeshGraph:
             {"neighbor_id": _NODE_B, "weight": 0.85, "edge_type": "semantic"},
             {"neighbor_id": _EDGE_ID, "weight": 0.60, "edge_type": "coref"},
         ]
-        adapter, mock_db = _make_adapter(get_neighbors=db_rows)
+        adapter, mock_db = _make_adapter(fetch_neighbor_rows=db_rows)
 
         result = await adapter.get_neighbors(_NODE_A)
 
         assert result == [(_NODE_B, 0.85), (_EDGE_ID, 0.60)]
         # Adapter must pass min_weight=0.0 so no edges are discarded
-        mock_db.get_neighbors.assert_awaited_once_with(_NODE_A, min_weight=0.0)
+        mock_db.fetch_neighbor_rows.assert_awaited_once_with(_NODE_A, min_weight=0.0)
 
     @pytest.mark.asyncio
     async def test_empty_neighbors_returns_empty_list(self) -> None:
-        adapter, mock_db = _make_adapter(get_neighbors=[])
+        adapter, mock_db = _make_adapter(fetch_neighbor_rows=[])
 
         result = await adapter.get_neighbors(_NODE_A)
 
@@ -228,7 +228,7 @@ class TestGetNeighborsMeshGraph:
     async def test_weight_is_cast_to_float(self) -> None:
         """Weights stored as strings in the DB (e.g. from Redis) are coerced to float."""
         db_rows = [{"neighbor_id": _NODE_B, "weight": "0.75", "edge_type": "semantic"}]
-        adapter, mock_db = _make_adapter(get_neighbors=db_rows)
+        adapter, mock_db = _make_adapter(fetch_neighbor_rows=db_rows)
 
         result = await adapter.get_neighbors(_NODE_A)
 
@@ -238,7 +238,7 @@ class TestGetNeighborsMeshGraph:
     @pytest.mark.asyncio
     async def test_single_neighbor(self) -> None:
         db_rows = [{"neighbor_id": _NODE_B, "weight": 1.0, "edge_type": "strong"}]
-        adapter, mock_db = _make_adapter(get_neighbors=db_rows)
+        adapter, mock_db = _make_adapter(fetch_neighbor_rows=db_rows)
 
         result = await adapter.get_neighbors(_NODE_A)
 
@@ -269,7 +269,7 @@ class TestProtocolConformance:
             assert callable(getattr(adapter, method, None)), f"Missing method: {method}"
 
     def test_has_all_mesh_graph_protocol_methods(self) -> None:
-        """All methods required by StalenessPropagor's MeshGraph Protocol are present."""
+        """All methods required by StalenessPropagor's NeighborStore Protocol are present."""
         adapter = MeshDBAdapter(MagicMock())
         assert callable(getattr(adapter, "get_neighbors", None))
 
