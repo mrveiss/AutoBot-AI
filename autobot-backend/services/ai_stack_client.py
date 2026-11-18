@@ -326,8 +326,8 @@ class AIStackClient:
 
     def _ollama_tags(self):
         """Open the Ollama model listing under ``EGRESS_POLICY`` (the SSOT Ollama origin is internal).
-        #12979: pooled + ``suppress_error_log`` -- Ollama is an optional backing service and an unreachable
-        (or refused) probe is an expected, routine condition that falls through to the AI Stack fallback.
+
+        #12979: pooled + ``suppress_error_log`` -- an unreachable Ollama is routine; falls through to the AI Stack.
         """
         return get_http_client().tracked_request(
             "GET",

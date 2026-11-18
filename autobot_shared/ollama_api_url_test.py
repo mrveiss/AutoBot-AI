@@ -52,7 +52,10 @@ def test_path_prefixed_base_keeps_its_prefix():
     assert ollama_generate_url("http://gw.example/ollama") == "http://gw.example/ollama/api/generate"
 
 
-@pytest.mark.parametrize("base", ["http://ollama.example:11434", _EXPECTED, "http://ollama.example:11434/api/tags/"])
+@pytest.mark.parametrize(
+    "base",
+    ["http://ollama.example:11434", _EXPECTED, "http://ollama.example:11434/api/tags/"],
+)
 def test_named_wrappers_each_yield_one_path(base):
     root = "http://ollama.example:11434"
     assert ollama_base_url(base) == root
@@ -61,3 +64,27 @@ def test_named_wrappers_each_yield_one_path(base):
     assert ollama_pull_url(base) == root + "/api/pull"
     assert ollama_embeddings_url(base) == root + "/api/embeddings"
     assert ollama_embeddings_url(root + "/api/embeddings") == root + "/api/embeddings"
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "http://ollama.example:11434/api",
+        "http://ollama.example:11434/api/",
+        "http://ollama.example:11434/v1",
+        "http://ollama.example:11434/v1/",
+    ],
+)
+def test_api_and_v1_roots_are_stripped(base):
+    assert ollama_generate_url(base) == _EXPECTED
+    assert ollama_base_url(base) == "http://ollama.example:11434"
+
+
+def test_prefixed_api_root_keeps_its_prefix():
+    assert ollama_generate_url("http://gw.example/ollama/api") == "http://gw.example/ollama/api/generate"
+    assert ollama_generate_url("http://gw.example/ollama/v1") == "http://gw.example/ollama/api/generate"
+
+
+def test_query_string_is_unsupported_and_pinned():
+    # Not a supported form: the path is appended after the query, unchanged.
+    assert ollama_generate_url("http://ollama.example:11434?x=1") == "http://ollama.example:11434?x=1/api/generate"

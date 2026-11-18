@@ -7,16 +7,22 @@
 A configured Ollama endpoint may be a bare base URL or already carry an API
 path such as ``/api/generate``. Every caller
 builds its URL here, so the path appears exactly once whichever form is set.
+
+Supported forms: a bare base, a base ending in a known API path, a base ending
+in ``/api`` (the Ollama API root) or ``/v1`` (the OpenAI-compatible root; both
+are stripped, since every URL built here is a native ``/api/...`` one), and a
+path-prefixed gateway base. A query string or fragment is NOT supported.
 """
 
 from autobot_shared.ssot_constants import (
     PATH_OLLAMA_CHAT,
+    PATH_OLLAMA_EMBEDDINGS,
     PATH_OLLAMA_GENERATE,
     PATH_OLLAMA_PULL,
     PATH_OLLAMA_TAGS,
 )
 
-PATH_OLLAMA_EMBEDDINGS = "/api/embeddings"
+_API_ROOT_SUFFIXES = ("/api", "/v1")
 
 _OLLAMA_API_PATHS = (
     PATH_OLLAMA_GENERATE,
@@ -32,8 +38,10 @@ def ollama_api_url(base_url: str, path: str) -> str:
     base = base_url.rstrip("/")
     for known in _OLLAMA_API_PATHS:
         if base.endswith(known):
-            base = base[: -len(known)].rstrip("/")
-            break
+            return base[: -len(known)].rstrip("/") + path
+    for root in _API_ROOT_SUFFIXES:
+        if base.endswith(root):
+            return base[: -len(root)].rstrip("/") + path
     return base + path
 
 
