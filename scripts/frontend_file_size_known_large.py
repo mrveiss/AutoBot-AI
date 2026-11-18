@@ -122,14 +122,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1278,  # #17677: 1293 -> 1292 -> 1284; #21033: -> 1278
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 626,
     "autobot-frontend/src/config/ssot-config.ts": 804,  # #19821 -15
-    "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
+    "autobot-frontend/src/models/controllers/ChatController.ts": 1085,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 890,
     "autobot-frontend/src/router/index.ts": 1305,  # #20605 + #20631: 1385 -> 1305
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
-    "autobot-frontend/src/stores/useChatStore.ts": 1176,
+    "autobot-frontend/src/stores/useChatStore.ts": 1159,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/RumAgent.ts": 852,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
