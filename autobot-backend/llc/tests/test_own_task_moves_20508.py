@@ -11,8 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from llc.models.enums import WorkItemStatus
-from llc.services import work_item_own_task
+from llc.models.enums import WorkItemStatus, WorkItemType
+from llc.services import after_commit
+from llc.services.work_item_gated_done import DoneGate
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 from testkit.fake_async_session import FakeAsyncSession
 
@@ -28,7 +29,7 @@ def _no_redis():
 
 def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=None) -> MagicMock:
     return MagicMock(
-        id=uuid.uuid4(), company_id=uuid.uuid4(), status=status, created_by_user_id=created_by,
+        id=uuid.uuid4(), company_id=uuid.uuid4(), type=WorkItemType.TASK, status=status, created_by_user_id=created_by,
         assignee_user_id=assignee, reviewer_user_id=reviewer, completed_at=_NOW, cancelled_at=None, started_at=_NOW,
         checkout_run_id=uuid.uuid4(), checkout_locked_at=_NOW, version=1,
     )  # fmt: skip
@@ -36,13 +37,14 @@ def _item(status: WorkItemStatus, *, created_by=None, assignee=None, reviewer=No
 
 async def _settle() -> None:
     """Let the fence release run: it is sent after the commit, as a task (a session with no commit sends it at once)."""
-    await asyncio.gather(*work_item_own_task._release_tasks)
+    await asyncio.gather(*after_commit.after_commit_tasks)
 
 
 async def _move(item: MagicMock, new_status: WorkItemStatus, acting_user) -> MagicMock:
     session = FakeAsyncSession(results=[[item]])
-    moved = await WorkItemService(activity_log=MagicMock()).transition_status(
-        session, str(item.id), new_status, acting_user=acting_user
+    ungated = DoneGate(review_gate_svc=MagicMock(requires_review=AsyncMock(return_value=(False, None))))
+    moved = await WorkItemService(activity_log=MagicMock(record=AsyncMock())).transition_status(
+        session, str(item.id), new_status, acting_user=acting_user, done_gate=ungated
     )
     await _settle()
     return moved

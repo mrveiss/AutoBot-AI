@@ -28,6 +28,7 @@ from .authz import NotAuthorisedError, may_attach_under, require_company_admin, 
 from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
 from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
+from .company_os.errors import CompanyOsError
 
 logger = get_logger(__name__)
 
@@ -393,7 +394,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         """
         org = await self._get_or_404(company_id)
         if org.llc_status not in allowed_from:
-            raise ValueError(
+            raise CompanyOsError(
                 f"Cannot {verb} company in '{org.llc_status}' state "
                 f"(allowed from: {', '.join(sorted(allowed_from))})"
             )

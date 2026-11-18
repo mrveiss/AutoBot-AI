@@ -52,6 +52,7 @@ from ..models.role_workflow import LLCRoleWorkflow
 from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 
 class RoleWorkflowService(LLCServiceBase):
@@ -115,7 +116,7 @@ class RoleWorkflowService(LLCServiceBase):
         )
         own_kind = own.scalar_one_or_none()
         if own_kind == "meta_skill":
-            raise ValueError(f"workflow {workflow_id!r} is a meta skill; roles hold meta skills as skills")
+            raise CompanyOsError(f"workflow {workflow_id!r} is a meta skill; roles hold meta skills as skills")
         if own_kind is not None:
             return
 
@@ -126,9 +127,11 @@ class RoleWorkflowService(LLCServiceBase):
             )
         )
         if unattributed.first() is not None:
-            raise ValueError(f"workflow {workflow_id!r} has no company attribution and cannot be " "attached to a role")
+            raise CompanyOsError(
+                f"workflow {workflow_id!r} has no company attribution and cannot be " "attached to a role"
+            )
 
-        raise ValueError(f"workflow {workflow_id!r} does not exist")
+        raise CompanyOsNotFound(f"workflow {workflow_id!r} does not exist")
 
     async def attach(
         self,
@@ -140,7 +143,7 @@ class RoleWorkflowService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleWorkflow:
         if company_id is None or role_id is None or not (workflow_id or "").strip():
-            raise ValueError("company_id, role_id and workflow_id are all required")
+            raise CompanyOsError("company_id, role_id and workflow_id are all required")
 
         # Attaching a workflow to a role changes what every current and future
         # holder of that role runs, so it is an admin action — same gate as
@@ -150,7 +153,7 @@ class RoleWorkflowService(LLCServiceBase):
         await self._require_workflow(session, company_id, workflow_id)
 
         if await self.get(session, company_id, role_id, workflow_id) is not None:
-            raise ValueError(f"workflow {workflow_id!r} is already attached to role {role_id}")
+            raise CompanyOsError(f"workflow {workflow_id!r} is already attached to role {role_id}")
 
         attachment = LLCRoleWorkflow(company_id=company_id, role_id=role_id, workflow_id=workflow_id)
         session.add(attachment)
@@ -204,14 +207,14 @@ class RoleWorkflowService(LLCServiceBase):
         silently summed.
         """
         if estimated_minutes is not None and estimated_minutes < 0:
-            raise ValueError("estimated_minutes cannot be negative")
+            raise CompanyOsError("estimated_minutes cannot be negative")
         if runs_per_month is not None and runs_per_month < 0:
-            raise ValueError("runs_per_month cannot be negative")
+            raise CompanyOsError("runs_per_month cannot be negative")
 
         await require_company_admin(session, company_id, actor_user_id)
         attachment = await self.get(session, company_id, role_id, workflow_id)
         if attachment is None:
-            raise ValueError(f"workflow {workflow_id!r} is not attached to role {role_id}")
+            raise CompanyOsError(f"workflow {workflow_id!r} is not attached to role {role_id}")
 
         attachment.estimated_minutes = estimated_minutes
         attachment.runs_per_month = runs_per_month

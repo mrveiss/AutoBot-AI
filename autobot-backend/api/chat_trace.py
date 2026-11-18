@@ -15,7 +15,7 @@ looked up besides the stored messages is each approval's current state.
 
 from typing import Dict, List, Mapping
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 
 from api.schemas_chat_trace import SessionTraceData
 from api.schemas_common import DataResponse
@@ -31,14 +31,11 @@ from chat_history.session_trace import (
     project_session_trace,
 )
 from models.command_execution import CommandExecution
-from security.session_ownership import validate_session_ownership
-from security.session_posture import UNREADABLE_OWNER_DETAIL, SessionPosture
+from security.session_posture import session_not_found, validate_strict_hidden
 from utils.chat_utils import get_chat_history_manager
 
 router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
-
-_NOT_FOUND = "Chat session not found"
 
 
 async def _terminal_states(session_id: str, refs: List[ApprovalRef]) -> Dict[ApprovalRef, str]:
@@ -88,13 +85,8 @@ async def resolve_approval_states(session_id: str, refs: List[ApprovalRef]) -> M
 
 
 async def _require_readable(session_id: str, request: Request) -> None:
-    """Owner or admin passes; anyone else is told the session does not exist."""
-    try:
-        await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-    except HTTPException as exc:
-        if exc.status_code != 403 or exc.detail == UNREADABLE_OWNER_DETAIL:
-            raise
-        raise HTTPException(status_code=404, detail=_NOT_FOUND) from None
+    """Owner or admin passes; anyone else is told the session does not exist (#20413: the shared helper)."""
+    await validate_strict_hidden(session_id, request)
 
 
 @router.get("/chat/sessions/{session_id}/trace", response_model=DataResponse[SessionTraceData])
@@ -112,6 +104,6 @@ async def get_session_trace(
     await _require_readable(session_id, request)
     messages = await get_chat_history_manager(request).load_session(session_id)
     if not messages:
-        raise HTTPException(status_code=404, detail=_NOT_FOUND)
+        raise session_not_found()
     states = await resolve_approval_states(session_id, approval_refs(messages))
     return DataResponse(data=SessionTraceData(session_id=session_id, turns=project_session_trace(messages, states)))

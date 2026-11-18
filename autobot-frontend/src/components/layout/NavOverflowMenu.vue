@@ -7,7 +7,7 @@
       :class="[
         'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-1',
         hasActiveItem
-          ? 'bg-autobot-primary text-white'
+          ? 'bg-autobot-primary text-autobot-text-on-primary'
           : 'text-autobot-text-primary hover:bg-autobot-bg-tertiary'
       ]"
       @click="toggle"
@@ -16,7 +16,7 @@
       <span>{{ $t('nav.more') }}</span>
       <!-- GH#8748: count badge — Information Scent for hidden items -->
       <span
-        class="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-autobot-primary text-white text-[10px] font-bold leading-[18px] text-center"
+        class="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-autobot-primary text-autobot-text-on-primary text-[10px] font-bold leading-[18px] text-center"
         aria-hidden="true"
       >{{ items.length }}</span>
       <svg

@@ -121,7 +121,15 @@ def test_the_npu_worker_interpreter_is_decided_where_the_comment_says() -> None:
     """The map's comment redirects a version bump to the ansible role; keep it true."""
     assert _NPU_ROLE_TASKS.is_file(), f"{_NPU_ROLE_TASKS.name} moved — update the comment in code_sync.py (#15075)"
     body = _NPU_ROLE_TASKS.read_text(encoding="utf-8")
-    assert "python3.14" in body, (
-        "roles/npu-worker/tasks/main.yml no longer pins python3.14. That file, not "
-        "_COMPONENT_PYTHON_TARGET, is where the NPU worker's interpreter is decided (#13747, #15075)."
+    # #20969: the interpreter is no longer spelled out in the role. The NPU worker
+    # takes the fleet floor from the python_interpreter role (resolve.yml reads
+    # .python-version) and must not override python_interpreter_version.
+    assert "name: python_interpreter" in body, (
+        "roles/npu-worker/tasks/main.yml no longer includes the python_interpreter role. That role, "
+        "not _COMPONENT_PYTHON_TARGET, is where the NPU worker's interpreter is decided (#13747, #15075)."
     )
+    assert (
+        "python_interpreter_version" not in body
+    ), "roles/npu-worker/tasks/main.yml overrides python_interpreter_version; the NPU worker must follow the floor."
+    resolve = _NPU_ROLE_TASKS.parents[2] / "python_interpreter" / "tasks" / "resolve.yml"
+    assert ".python-version" in resolve.read_text(encoding="utf-8"), "the floor is derived from .python-version"
