@@ -101,14 +101,12 @@ async def test_an_import_stamps_the_importing_user_as_owner() -> None:
 
 
 @pytest.mark.asyncio
-async def test_replace_refuses_to_overwrite_another_users_session() -> None:
+async def test_replace_never_overwrites_another_users_session() -> None:
     manager = _manager(exists=True, owner="alice")
 
-    with pytest.raises(HTTPException) as refused:
-        await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
 
-    assert refused.value.status_code == 404
-    manager.save_session.assert_not_awaited()
+    _assert_saved_under_a_fresh_id(manager, result)
 
 
 @pytest.mark.asyncio
@@ -139,15 +137,13 @@ async def test_replace_refuses_when_ownership_cannot_be_read() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("on_conflict", ["replace", "merge"])
-async def test_an_import_over_an_ownerless_session_is_a_404_for_a_non_admin(on_conflict) -> None:
-    """#21668: nobody claims a session with no owner by writing; the answer is a missing session's 404."""
+async def test_an_import_over_an_ownerless_session_takes_a_fresh_id_for_a_non_admin(on_conflict) -> None:
+    """#21668: nobody claims a session with no owner by writing; #21731: a non-admin gets a fresh id."""
     manager = _manager(exists=True, owner=None)
 
-    with pytest.raises(HTTPException) as refused:
-        await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
 
-    assert refused.value.status_code == 404
-    manager.save_session.assert_not_awaited()
+    _assert_saved_under_a_fresh_id(manager, result)
 
 
 @pytest.mark.asyncio
@@ -166,15 +162,13 @@ async def test_an_admin_import_over_an_ownerless_session_is_refused_not_stamped(
 
 
 @pytest.mark.asyncio
-async def test_a_merge_import_into_another_users_session_is_refused() -> None:
+async def test_a_merge_import_never_merges_into_another_users_session() -> None:
     """The default conflict path (no replace) must not merge into someone else's session (#20908)."""
     manager = _manager(exists=True, owner="alice")
 
-    with pytest.raises(HTTPException) as refused:
-        await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="merge", user_data=_BOB)
 
-    assert refused.value.status_code == 404
-    manager.save_session.assert_not_awaited()
+    _assert_saved_under_a_fresh_id(manager, result)
 
 
 @pytest.mark.asyncio
@@ -247,19 +241,29 @@ async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
     owner_index.set_session_owner.assert_awaited_once_with("sess-abc", "alice")
 
 
-# --- #21731: skip answers a non-owner exactly as a missing session does ------------------
+# --- #21731: a non-owner's collision takes a fresh id and answers as a new session does --
+
+
+def _assert_saved_under_a_fresh_id(manager, result) -> None:
+    """The import succeeded without a conflict flag, under a new id; the original session is untouched."""
+    assert result["success"] is True and result["conflict"] is False, result
+    assert result["session_id"] != "sess-abc" and result["session_id"].startswith("sess-abc-imported-")
+    kwargs = manager.save_session.call_args.kwargs
+    assert kwargs["session_id"] == result["session_id"]
+    assert kwargs["replace"] is False
+    assert kwargs["metadata"]["owner"] == "bob"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("owner", ["alice", None])
-async def test_a_skip_import_by_a_non_owner_is_the_404_of_a_missing_session(owner) -> None:
+@pytest.mark.parametrize("on_conflict", ["skip", "rename"])
+async def test_a_non_owner_collision_is_a_200_with_a_new_id(owner, on_conflict) -> None:
     manager = _manager(exists=True, owner=owner)
 
-    with pytest.raises(HTTPException) as refused:
-        await import_conversation(manager, dict(_DOCUMENT), on_conflict="skip", user_data=_BOB)
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
 
-    assert refused.value.status_code == 404
-    manager.save_session.assert_not_awaited()
+    _assert_saved_under_a_fresh_id(manager, result)
+    manager.save_session.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -273,14 +277,22 @@ async def test_the_owner_skipping_their_own_session_still_reports_a_conflict() -
 
 
 @pytest.mark.asyncio
+async def test_the_owner_renaming_their_own_session_is_unchanged() -> None:
+    manager = _manager(exists=True, owner="alice")
+
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="rename", user_data=_ALICE)
+
+    assert result["success"] is True and result["conflict"] is True
+    assert result["session_id"].startswith("sess-abc-imported-")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("on_conflict", ["skip", "replace", "merge"])
 async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_over(on_conflict) -> None:
     """#21668: a stored record with an owner but no messages must not read as absent."""
     manager = _manager(exists=True, owner="alice", empty=True)
 
-    with pytest.raises(HTTPException) as refused:
-        await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
 
-    assert refused.value.status_code == 404
-    manager.save_session.assert_not_awaited()
+    _assert_saved_under_a_fresh_id(manager, result)
     manager.set_session_owner.assert_not_called()
