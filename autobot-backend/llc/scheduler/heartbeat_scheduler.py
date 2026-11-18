@@ -60,7 +60,7 @@ from ..org_role_authority import apply_org_role_bound, role_bound_enforced
 from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
-from .auth_failure import adapter_run_failure, pause_after_auth_failure
+from .auth_failure import adapter_run_failure, pause_after_auth_failure, raise_for_scheduler_internal_status
 
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
@@ -901,23 +901,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         if key_record is not None:
             await _revoke_run_key(agent_id, key_record.id, str(agent_config.get("company_id") or "") or None)
 
-    # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
-    # so the GH#8204 backoff path applies uniformly for registry adapters.
-    # This exception is caught by _run_adapter which then calls _handle_rate_limited.
-    # It never reaches the DB as a RATE_LIMITED terminal adapter status.
-    if final_status == LLCRunStatus.RATE_LIMITED:
-        logger.warning(
-            "agent %s: registry adapter signalled RATE_LIMITED for run %s — raising ProviderRateLimited",
-            agent_id,
-            external_run_id,
-        )
-        raise ProviderRateLimited(provider=agent.get("adapter_type") or "registry", retry_after_seconds=0)
-
-    # GH#10218: subscription quota exhausted is terminal-with-no-retry — surface
-    # it so _run_adapter auto-pauses the agent + notifies the board rather than
-    # recording a generic FAILED that the liveness monitor would try to recover.
-    if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
-        raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
+    raise_for_scheduler_internal_status(agent, external_run_id, result)
 
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
