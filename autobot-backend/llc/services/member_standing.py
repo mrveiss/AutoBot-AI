@@ -62,6 +62,15 @@ async def member_people(
     )
 
 
+async def display_name_of(session: AsyncSession, user_id: uuid.UUID) -> Optional[str]:
+    """The display name of one user (``display_name``, else ``username``), or ``None`` for no such user (#21136).
+
+    The single-user form of :func:`member_people`, so a route that names one actor does not copy the lookup.
+    """
+    names, _active = await member_people(session, [user_id])
+    return names.get(user_id)
+
+
 async def viewer_standing(
     session: AsyncSession, company_id: uuid.UUID, viewer_id: Optional[uuid.UUID], *, platform_admin: bool
 ) -> Dict[str, Any]:

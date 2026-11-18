@@ -18,9 +18,11 @@ import pytest
 import api.batch_jobs as _bj  # noqa: E402
 from api.batch_jobs_schedules_test import _FakeRedis  # noqa: F401  (reuse fixture)
 from api.schemas_workflows import BatchJob, BatchJobStatus, BatchJobType, BatchSchedule
+from services import batch_job_ownership as ownership
 
 
-def _seed_job(redis, job_id="job-1", status=BatchJobStatus.pending):
+def _seed_job(redis, job_id="job-1", status=BatchJobStatus.pending, owner="test"):
+    """Store a job owned by *owner* (#21650); ``owner=None`` seeds a pre-#21650 ownerless job."""
     job = BatchJob(
         job_id=job_id,
         name="Test Job",
@@ -31,6 +33,9 @@ def _seed_job(redis, job_id="job-1", status=BatchJobStatus.pending):
         created_at=datetime.now(tz=timezone.utc),
     )
     redis.set(_bj._get_job_key(job_id), job.model_dump_json())
+    redis.sadd("batch:jobs:all", job_id)
+    if owner:
+        redis.hset(ownership.owners_key(ownership.JOBS), job_id, owner)
     return job
 
 

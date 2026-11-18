@@ -12,6 +12,7 @@ with document merging support for ephemeral entities (sprints, work items).
 import uuid
 from typing import Optional
 
+from autobot_shared import kb_collection_prefixes as kb_prefixes
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
@@ -32,11 +33,11 @@ class KbCollectionManager:
     """
 
     # Collection name prefixes
-    COMPANY_PREFIX = "company"
-    PROJECT_PREFIX = "project"
-    SPRINT_PREFIX = "sprint"
-    WORK_ITEM_PREFIX = "work_item"
-    AGENT_PREFIX = "agent"
+    COMPANY_PREFIX = kb_prefixes.COMPANY_PREFIX
+    PROJECT_PREFIX = kb_prefixes.PROJECT_PREFIX
+    SPRINT_PREFIX = kb_prefixes.SPRINT_PREFIX
+    WORK_ITEM_PREFIX = kb_prefixes.WORK_ITEM_PREFIX
+    AGENT_PREFIX = kb_prefixes.AGENT_PREFIX
 
     # Collection suffixes (optional per entity)
     AGENTS_SUFFIX = "agents"

@@ -1,6 +1,6 @@
 # The one-time re-measure of #20910: the route-detector and frontend-extractor fixes newly flagged these routes, which were
-# always unconnected. They are the ONLY baseline additions ever allowed against a base; every later change stays shrink-only,
-# whatever issue an entry links. This list is frozen: it may not gain a line against the base (unconnected_code_gate_20512_test.py).
+# always unconnected. They are the only baseline additions allowed against a base, apart from those a later one-time re-measure's own
+# frozen list names (see unconnected_code_gate_20512_test.py); every other change stays shrink-only, whatever issue an entry links. This list is frozen: it may not gain a line against the base (unconnected_code_gate_20512_test.py).
 route:autobot-backend/api/a2a.py:GET /agent-card
 route:autobot-backend/api/a2a.py:GET /capabilities
 route:autobot-backend/api/a2a.py:GET /stats
@@ -243,12 +243,6 @@ route:autobot-backend/api/knowledge_audit.py:GET /compliance-summary
 route:autobot-backend/api/knowledge_audit.py:GET /permission-changes
 route:autobot-backend/api/knowledge_audit.py:GET /user-activity
 route:autobot-backend/api/knowledge_audit.py:POST /compliance-report
-route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /{upload_id}
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /expired
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /limits
-route:autobot-backend/api/knowledge_chunked_upload.py:GET /{upload_id}
-route:autobot-backend/api/knowledge_chunked_upload.py:POST /{upload_id}/complete
-route:autobot-backend/api/knowledge_chunked_upload.py:PUT /{upload_id}/chunks
 route:autobot-backend/api/knowledge_claude_memory.py:POST /import_claude_memory
 route:autobot-backend/api/knowledge_collections.py:GET /collections
 route:autobot-backend/api/knowledge_collections.py:POST /collections
@@ -347,10 +341,6 @@ route:autobot-backend/api/nl_database.py:GET /schema
 route:autobot-backend/api/nl_database.py:POST /query
 route:autobot-backend/api/nl_database.py:POST /train
 route:autobot-backend/api/personality.py:GET /languages
-route:autobot-backend/api/personality.py:GET /profiles
-route:autobot-backend/api/personality.py:GET /status
-route:autobot-backend/api/personality.py:POST /profiles
-route:autobot-backend/api/personality.py:POST /toggle
 route:autobot-backend/api/phases.py:GET /status
 route:autobot-backend/api/playwright.py:GET /capabilities
 route:autobot-backend/api/playwright.py:GET /status
@@ -503,27 +493,18 @@ route:autobot-backend/llc/api/api_keys.py:POST /{agent_id}/api-keys
 route:autobot-backend/llc/api/budget.py:GET /{agent_id}
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}
 route:autobot-backend/llc/api/budget.py:POST /{agent_id}/ingest
-route:autobot-backend/llc/api/companies.py:DELETE /{company_id}
-route:autobot-backend/llc/api/companies.py:GET /{company_id}
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/agents/search
 route:autobot-backend/llc/api/companies.py:GET /{company_id}/kb/ancestry-collections
-route:autobot-backend/llc/api/companies.py:PATCH /{company_id}
 route:autobot-backend/llc/api/companies.py:POST /{company_id}/pm-config/test
 route:autobot-backend/llc/api/company_members.py:DELETE /{company_id}/members/{user_id}
 route:autobot-backend/llc/api/company_members.py:PATCH /{company_id}/members/{user_id}
 route:autobot-backend/llc/api/company_os.py:DELETE /processes/{process_key}
-route:autobot-backend/llc/api/company_os.py:GET /processes
 route:autobot-backend/llc/api/company_os.py:GET /processes/{process_key}
-route:autobot-backend/llc/api/company_os.py:GET /workflows
 route:autobot-backend/llc/api/company_os.py:PATCH /processes/{process_key}
-route:autobot-backend/llc/api/company_os.py:POST /processes
-route:autobot-backend/llc/api/company_os.py:POST /workflows
 route:autobot-backend/llc/api/company_os_plans.py:GET /{plan_key}/revisions/{revision}
 route:autobot-backend/llc/api/company_os_plans.py:POST /{plan_key}/map/validate
 route:autobot-backend/llc/api/company_os_plans.py:PUT /{plan_key}/approval-policies
 route:autobot-backend/llc/api/company_os_skills.py:DELETE /{role_id}/skills/{grant_id}
-route:autobot-backend/llc/api/company_os_skills.py:GET /{role_id}/skills
-route:autobot-backend/llc/api/company_os_skills.py:POST /{role_id}/skills
 route:autobot-backend/llc/api/company_teams.py:DELETE /{company_id}/teams/{team_id}
 route:autobot-backend/llc/api/company_teams.py:DELETE /{company_id}/teams/{team_id}/members/{user_id}
 route:autobot-backend/llc/api/company_teams.py:POST /{company_id}/teams/{team_id}/members/{user_id}
@@ -569,10 +550,8 @@ route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/approve
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/review/request-changes
 route:autobot-backend/llc/api/work_items.py:POST /{work_item_id}/unclaim
 route:autobot-backend/llc/api/workflows.py:DELETE /{company_id}/{workflow_id}
-route:autobot-backend/llc/api/workflows.py:GET /{company_id}
 route:autobot-backend/llc/api/workflows.py:GET /{company_id}/{workflow_id}
 route:autobot-backend/llc/api/workflows.py:PATCH /{company_id}/{workflow_id}
-route:autobot-backend/llc/api/workflows.py:POST /{company_id}
 route:autobot-backend/routers/code_completion.py:GET /patterns
 route:autobot-backend/routers/code_completion.py:GET /statistics
 route:autobot-backend/routers/code_completion.py:POST /extract

@@ -48,6 +48,8 @@ GATED_HELPERS = frozenset(
 #: owner ruled the canonical search and multi-source aggregation routes are themselves
 #: explicit, caller-driven read APIs -- not a chat/agent/RAG hop -- so #16691's is_admin
 #: bypass there is the intended #16654 behaviour, same category as the three files below.
+#: knowledge_graph_facts.py and graph_bucket_visibility.py added 2026-11-10 (#20945): owner ruling on
+#: #20945, 2026-11-10 -- the knowledge-graph view is an explicit admin read, same category as #16745.
 EXPLICIT_READ_APIS = frozenset(
     {
         "autobot-backend/api/knowledge_ownership.py",
@@ -55,6 +57,8 @@ EXPLICIT_READ_APIS = frozenset(
         "autobot-backend/api/knowledge_search_scoped.py",
         "autobot-backend/api/knowledge_search.py",
         "autobot-backend/api/knowledge_search_aggregator.py",
+        "autobot-backend/api/knowledge_graph_facts.py",
+        "autobot-backend/knowledge/graph_bucket_visibility.py",
     }
 )
 #: The helper that forwards its own ``is_admin`` parameter to ``check_access``, and the superadmin's root view

@@ -300,3 +300,57 @@ class TestWebhookUnreadableSecret17981:
             resp = getattr(client, method)(path, **({"content": b"{}"} if method == "post" else {}))
         assert resp.status_code == 503
         assert resp.json() == {"detail": CREDENTIAL_UNREADABLE}, "one shape for an unreadable credential on every route"
+
+
+class TestVerifyTokenUsesSecureCompare20761:
+    """#20761: the Meta subscription challenge compares the verify token through secure_compare."""
+
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api import whatsapp
+
+        app = FastAPI()
+        app.include_router(whatsapp.router)
+        return TestClient(app, raise_server_exceptions=False)
+
+    def test_verify_goes_through_secure_compare(self):
+        from unittest.mock import AsyncMock, patch
+
+        from api import whatsapp
+
+        path = "/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=sent&hub.challenge=42"
+        with (
+            patch.object(whatsapp, "get_whatsapp_verify_token", AsyncMock(return_value="stored")),  # nosec B105
+            patch.object(whatsapp, "secure_compare", return_value=True) as compare,
+        ):
+            resp = self._client().get(path)
+        compare.assert_called_once_with("sent", "stored")
+        assert resp.status_code == 200 and resp.text == "42"
+
+    def test_non_ascii_token_is_refused_not_a_500(self):
+        from unittest.mock import AsyncMock, patch
+
+        from api import whatsapp
+
+        path = "/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=%C3%A9&hub.challenge=1"
+        with patch.object(whatsapp, "get_whatsapp_verify_token", AsyncMock(return_value="stored")):  # nosec B105
+            assert self._client().get(path).status_code == 403
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "hub.mode=subscribe&hub.challenge=42",
+            "hub.mode=unsubscribe&hub.verify_token=stored&hub.challenge=42",
+            "hub.verify_token=stored&hub.challenge=42",
+        ],
+    )
+    def test_a_missing_token_or_a_non_subscribe_mode_is_a_403(self, query):
+        from unittest.mock import AsyncMock, patch
+
+        from api import whatsapp
+
+        with patch.object(whatsapp, "get_whatsapp_verify_token", AsyncMock(return_value="stored")):  # nosec B105
+            resp = self._client().get(f"/whatsapp/webhook?{query}")
+        assert resp.status_code == 403 and "42" not in resp.text

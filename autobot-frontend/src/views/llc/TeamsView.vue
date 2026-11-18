@@ -70,8 +70,13 @@
             <p v-if="memberRows.length === 0" class="m-0 text-autobot-text-secondary" data-testid="team-no-members">{{ t('llcTeams.noMembers') }}</p>
             <BaseTable v-else :columns="memberColumns" :rows="memberRows" row-key="id" size="compact" :aria-label="t('llcTeams.membersOf', { name: selected.name })" :actions-label="t('llcTeams.colActions')" data-testid="team-members">
               <template #cell-name="{ row }">
-                <span>{{ row.name }}</span>
+                <BaseSkeleton v-if="row.namePending" width="8rem" :aria-label="t('llcTeams.loadingNames')" role="status" data-testid="team-member-name-pending" />
+                <span v-else>{{ row.name }}</span>
                 <BaseBadge v-if="row.inactive" size="sm" variant="warning" class="ms-2">{{ t('llcTeams.inactive') }}</BaseBadge>
+              </template>
+              <template #cell-role="{ value }">
+                <BaseSkeleton v-if="membersPending" width="4rem" :aria-label="t('llcTeams.loadingNames')" role="status" />
+                <span v-else>{{ roleLabel(String(value)) }}</span>
               </template>
               <template #actions="{ row }">
                 <BaseButton variant="error" size="sm" :disabled="pending" :aria-label="t('llcTeams.removeMemberAria', { name: String(row.name), team: selected.name })" data-testid="team-remove-member" @click="onRemove(String(row.id))">
@@ -81,7 +86,8 @@
             </BaseTable>
 
             <div class="flex flex-wrap items-end gap-2" data-testid="team-add">
-              <p v-if="candidates.length === 0" class="m-0 text-autobot-text-secondary" data-testid="team-no-candidates">{{ t('llcTeams.noCandidates') }}</p>
+              <BaseSkeleton v-if="membersPending" width="12rem" :aria-label="t('llcTeams.loadingNames')" role="status" />
+              <p v-else-if="candidates.length === 0" class="m-0 text-autobot-text-secondary" data-testid="team-no-candidates">{{ t('llcTeams.noCandidates') }}</p>
               <template v-else>
                 <BaseSelectMenu v-model="candidateId" :options="candidateOptions" :label="t('llcTeams.addMemberLabel')" :placeholder="t('llcTeams.addMemberPlaceholder')" :disabled="pending" />
                 <BaseButton variant="primary" :disabled="!candidateId || pending" :loading="pending" data-testid="team-add-member" @click="onAdd">
@@ -119,10 +125,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, BaseModal, BaseSelectMenu, BaseSpinner, BaseTable, EmptyState, PageHeader,
+  BaseAlert, BaseBadge, BaseButton, BaseCard, BaseInput, BaseModal, BaseSelectMenu, BaseSkeleton, BaseSpinner, BaseTable, EmptyState, PageHeader,
   type BaseTableColumn,
 } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
+import { useRoleLabel } from '@/composables/llc/roleLabel'
 import { candidatesFor, useCompanyTeams, type CompanyTeam } from '@/composables/llc/useCompanyTeams'
 
 const props = defineProps<{ companyId?: string }>()
@@ -130,7 +137,8 @@ const route = useRoute()
 const { t } = useI18n()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
-const { teams, members, state, membersFailed, errorMessage, pending, hasTeams, nameOf, isInactive, load, createTeam, deleteTeam, addMember, removeMember } =
+const roleLabel = useRoleLabel()
+const { teams, members, state, membersFailed, membersPending, errorMessage, pending, hasTeams, nameOf, isInactive, load, createTeam, deleteTeam, addMember, removeMember } =
   useCompanyTeams(useApiClient(), () => companyId.value)
 
 const selectedId = ref('')
@@ -155,6 +163,7 @@ const memberRows = computed(() =>
   (selected.value?.member_user_ids ?? []).map((userId) => ({
     id: userId,
     name: nameOf(userId),
+    namePending: membersPending.value,
     role: members.value.find((m) => m.user_id === userId)?.role ?? '',
     inactive: isInactive(userId),
   })),
