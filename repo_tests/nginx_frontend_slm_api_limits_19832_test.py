@@ -4,10 +4,9 @@
 # Author: mrveiss
 """The ``/slm/api`` locations match the SLM vhost's limits and share one port name (#19832).
 
-Companion to ``nginx_frontend_slm_api_proxy_19832_test.py``. Covers three review findings:
-the request-body cap (nginx's 1m default otherwise rejects SLM uploads), the second literal
-``slm_port`` for the one SLM port, and the upstream host of a co-located install (``install.sh``
-records the LAN address as ``slm_host`` while the uvicorn binds loopback).
+Companion to ``nginx_frontend_slm_api_proxy_19832_test.py``. Covers the request-body cap
+(nginx's 1m default otherwise rejects SLM uploads); the one-name SLM port is owned by
+``slm_backend_port_one_name_test.py``.
 
 Limits, stated: plain jinja2 rather than Ansible's templar; the ``ansible_facts`` shape is the
 one ``gather_facts`` produces, not a live host.
@@ -21,7 +20,6 @@ import jinja2
 import pytest
 import yaml
 from repo_tests._paths import repo_root
-from repo_tests._reach import declare
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "frontend"
@@ -45,6 +43,7 @@ def _render(cap: str) -> str:
         frontend_tls_cert="/c.pem",
         frontend_tls_key="/k.pem",
         frontend_dist_dir="/dist",
+        frontend_upstream_backend_port="8443",
         frontend_slm_backend_host="127.0.0.1",
         frontend_slm_backend_port="18000",
         frontend_slm_backend_protocol="http",
@@ -78,30 +77,3 @@ def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_client_max_body_size"] == "10m"
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))
     assert defaults["frontend_slm_client_max_body_size"] == "{{ slm_client_max_body_size }}"
-
-
-_SLM_PORT_SUFFIXES = {".yml", ".yaml", ".j2"}
-
-REACH_ANSIBLE_FILES = declare(
-    "ansible-files-scanned-for-slm-port",
-    discover=lambda root: [
-        p.relative_to(root).as_posix()
-        for p in (root / "autobot-slm-backend" / "ansible").rglob("*")
-        if p.suffix in _SLM_PORT_SUFFIXES and p.is_file()
-    ],
-    roots=("autobot-slm-backend/ansible",),
-    floor=436,  # population 461 when measured
-    growth=40,
-    skips=0,
-    what="ansible YAML and template files scanned for the retired slm_port name",
-)
-
-
-def test_slm_port_is_gone_and_its_readers_use_the_one_name() -> None:
-    for path in ANSIBLE.rglob("*"):
-        if path.suffix not in _SLM_PORT_SUFFIXES or not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        assert not re.search(r"\bslm_port\b", text), f"{path.relative_to(ANSIBLE)} still names slm_port"
-    local = (ANSIBLE / "playbooks" / "enroll-local.yml").read_text(encoding="utf-8")
-    assert "../inventory/group_vars/all.yml" in local, "enroll-local reads slm_backend_port without loading it"
