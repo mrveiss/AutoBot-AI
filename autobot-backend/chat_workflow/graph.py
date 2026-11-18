@@ -40,6 +40,7 @@ from chat_workflow.graph_hooks import (
     _emit_planned_agent_complete_hook,
     _emit_planned_agent_error_hooks,
 )
+from chat_workflow.graph_parse_feedback import INITIAL_PARSE_STATE, apply_parse_feedback
 from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
 from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
 from chat_workflow.graph_tool_dispatch import (
@@ -124,6 +125,8 @@ class ChatState(TypedDict, total=False):
     # Command approval (interrupt-based)
     pending_approval: Dict[str, Any] | None
     approval_decision: Dict[str, Any] | None
+    parse_retries: int  # #21843: re-asks after an unparsed TOOL_CALL this turn
+    parse_retry_pending: bool  # #21843: the last reply's TOOL_CALL did not parse; generate again
     plan_id: str  # #19951: one per plan; names the hold's card and survives the resume
 
     # Output messages streamed to frontend
@@ -197,6 +200,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             "tool_calls": [],
             "should_continue": False,
             # RLM state (#1373)
+            **INITIAL_PARSE_STATE,
             "reflection_count": 0,
             "reflection_history": [],
             "rlm_refinement_hint": "",
@@ -558,19 +562,23 @@ async def _generate_response_planned(
         session_id=session_id,
     )
 
-    return {
-        "llm_response": llm_response or "",
-        "should_continue": False,
-        "iteration_count": iteration,
-        "all_llm_responses": all_responses,
-        "tool_calls": tool_calls,
-        "workflow_messages": messages,
-        "tool_loop_warning": "",
-        # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
-        "approval_decision": None,
-        "pending_approval": None,
-        "plan_id": uuid.uuid4().hex,
-    }
+    return apply_parse_feedback(
+        state,
+        {
+            "llm_response": llm_response or "",
+            "should_continue": False,
+            "iteration_count": iteration,
+            "all_llm_responses": all_responses,
+            "tool_calls": tool_calls,
+            "workflow_messages": messages,
+            "tool_loop_warning": "",
+            # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
+            "approval_decision": None,
+            "pending_approval": None,
+            "plan_id": uuid.uuid4().hex,
+        },
+        stream_cb,
+    )
 
 
 def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
@@ -582,6 +590,20 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
         if warning:
             prompt = _inject_mid_conversation_warning(warning, prompt)
     ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
+
+
+def _inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages) -> dict:
+    """The state update of one inline (dispatching) generation pass of ``generate_response``."""
+    return {
+        "llm_response": llm_response or "",
+        "should_continue": should_continue,
+        "iteration_count": iteration,
+        "all_llm_responses": all_responses,
+        "tool_calls": parsed_tool_calls,
+        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
+        "workflow_messages": messages,
+        "tool_loop_warning": "",  # reset so a loop warning is only active for one cycle (#3254)
+    }
 
 
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -668,17 +690,8 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         session_id=session_id,
     )
 
-    return {
-        "llm_response": llm_response or "",
-        "should_continue": should_continue,
-        "iteration_count": iteration,
-        "all_llm_responses": all_responses,
-        "tool_calls": parsed_tool_calls,
-        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
-        "workflow_messages": messages,
-        # Reset loop warning so it is only active for one cycle (#3254).
-        "tool_loop_warning": "",
-    }
+    update = _inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages)
+    return apply_parse_feedback(state, update, stream_cb)  # #21843
 
 
 async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -1190,6 +1203,8 @@ def route_after_generation(state: ChatState) -> str:
         return "request_approval"
     if tool_calls:
         return "execute_tools"
+    if state.get("parse_retry_pending"):  # #21843: the model is told its TOOL_CALL did not parse, then asked again
+        return "generate_response"
     # No tool calls → run RLM self-reflection before persisting
     return "reflect_on_response"
 

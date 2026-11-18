@@ -148,3 +148,16 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
+        type=int,
+        default=2,
+        description=(
+            "Times one chat turn tells the model its TOOL_CALL did not parse and asks again (#21843); "
+            "past it the user gets the readable no-answer fallback, never the raw markup."
+        ),
+        component="chat_workflow",
+    )
+)
