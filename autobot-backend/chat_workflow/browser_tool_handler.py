@@ -28,6 +28,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.browser_error_report import build_browser_error_report, format_browser_error_text
 from chat_workflow.llm_handler import (
     _emit_after_tool_execute,
     _emit_before_tool_execute,
@@ -171,17 +172,13 @@ async def handle_browser_tool(
         # Issue #4261: Wire TOOL_ERROR hook for browser tools
         await _emit_tool_error(tool_name, e, session_id, {})
         logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
-        execution_results.append(
-            {
-                "tool": tool_name,
-                "status": "error",
-                "error": "Browser tool execution failed",
-            }
-        )
+        report = build_browser_error_report(tool_name, params, e)
+        text = format_browser_error_text(report)
+        execution_results.append({"tool": tool_name, "status": "error", "error": text, "error_detail": report})
         yield WorkflowMessage(
             type="error",
-            content=f"Browser tool '{tool_name}' execution failed",
-            metadata={"tool": tool_name, "error": True},
+            content=text,
+            metadata={"tool": tool_name, "error": True, "error_class": report["error_class"]},
         )
 
 
