@@ -22,6 +22,7 @@ from sqlalchemy import select
 from autobot_shared.cron_expression import log_stored_cron_findings
 from models.database import CodeStatus, Node, UpdateSchedule
 from services.database import db_service
+from services.node_events import split_enrollment_failed
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,10 @@ async def get_schedule_target_nodes(db, schedule: UpdateSchedule) -> list:
     if schedule.target_type == "specific":
         query = query.where(Node.node_id.in_(schedule.target_nodes or []))
     result = await db.execute(query)
-    return result.scalars().all()
+    nodes = result.scalars().all()
+    # Same enrollment filter as update-all (#21036): one operation, one behaviour on every route.
+    targets, _ = await split_enrollment_failed(db, [n.node_id for n in nodes])
+    return [n for n in nodes if n.node_id in set(targets)]
 
 
 def _format_sync_result(success_count: int, failed_count: int) -> Tuple[bool, str]:

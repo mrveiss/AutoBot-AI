@@ -55,6 +55,7 @@ from ..duplicate_detector import (  # noqa: F401
     DuplicateCodeDetector,
 )
 from ..models import APIEndpointAnalysis
+from ..problem_dedup import dedupe_same_location_problems
 from ..storage import get_code_collection
 from .duplicates import _run_standard_analysis
 from .scan_responses import ScanUnavailable
@@ -1291,8 +1292,7 @@ def _fetch_problems_from_chromadb(
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         root = source_root or Path(resolve_git_repo_root())
-        problems = filter_problems_by_file_existence(problems, root)
-
+        problems = dedupe_same_location_problems(filter_problems_by_file_existence(problems, root))  # #20493
         logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
         logger.error("Failed to fetch problems from ChromaDB: %s", e)

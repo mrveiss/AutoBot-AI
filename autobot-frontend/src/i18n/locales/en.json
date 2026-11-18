@@ -1092,6 +1092,7 @@
       "scans": {
         "stats": "Codebase Stats",
         "problems": "Problems Report",
+        "smells": "Code Smells",
         "declarations": "Declarations",
         "duplicates": "Duplicates",
         "hardcodes": "Hardcoded Values",
@@ -2342,7 +2343,14 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "emptyMessage": "No code smells detected"
+      "emptyMessage": "No code smells detected",
+      "loading": "Loading code smells",
+      "category": {
+        "label": "Files",
+        "code": "Production code",
+        "test": "Test files",
+        "all": "All files"
+      }
     },
     "declarations": {
       "title": "Declarations",
@@ -9845,6 +9853,20 @@
     }
   },
   "admin": {
+    "routes": {
+      "users": "User Management",
+      "sandbox": "Sandbox Inspector",
+      "advancedControl": "Advanced Control",
+      "budgetPolicies": "Budget Policies",
+      "systemHealth": "System Health",
+      "providerFallback": "Provider Fallback",
+      "pricing": "Model Pricing",
+      "mcpServers": "MCP Servers",
+      "conversations": "Conversation Review",
+      "permissionScopes": "Permission Scopes",
+      "cleanupProposals": "Cleanup proposals",
+      "section": "Administration"
+    },
     "systemHealth": {
       "title": "System Health",
       "subtitle": "Live backend reachability for content sources",

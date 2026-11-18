@@ -4461,6 +4461,25 @@
         "title": "EnrollRequest",
         "type": "object"
       },
+      "EnrollmentSkip": {
+        "description": "One skipped node and why.",
+        "properties": {
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "reason": {
+            "default": "skipped: enrollment incomplete (last enrollment failed)",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_id"
+        ],
+        "title": "EnrollmentSkip",
+        "type": "object"
+      },
       "ErrorHealthResponse": {
         "description": "Error subsystem health status.",
         "properties": {
@@ -15064,6 +15083,14 @@
             "default": "",
             "title": "Created At",
             "type": "string"
+          },
+          "enrollment_skipped_nodes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentSkip"
+            },
+            "title": "Enrollment Skipped Nodes",
+            "type": "array"
           },
           "failed_fleet_nodes": {
             "default": 0,

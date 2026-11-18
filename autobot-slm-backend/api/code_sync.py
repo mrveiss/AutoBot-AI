@@ -75,6 +75,7 @@ from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
 from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.enrollment_skip import EnrollmentSkip
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -116,6 +117,7 @@ from services.drift_checker import (
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
+from services.node_events import split_enrollment_failed
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -4369,6 +4371,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # last enrollment failed (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -5133,9 +5136,6 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
     """
     try:
         slm_own_ip = urlparse(settings.external_url).hostname or ""
-        seen_ids: set = set()
-        outdated_node_ids: List[str] = []
-
         async with db_service_ref.session() as db:
             # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
@@ -5144,10 +5144,8 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                 .order_by(Node.hostname)
             )
             version_outdated = nodes_result.scalars().all()
-
-            for n in version_outdated:
-                seen_ids.add(n.node_id)
-                outdated_node_ids.append(n.node_id)
+            outdated_node_ids = [n.node_id for n in version_outdated]
+            seen_ids = set(outdated_node_ids)
 
             # A: self-node inclusion — ensure the co-located SLM host is counted
             # even when heartbeat hasn't yet updated its code_status to OUTDATED.
@@ -5166,6 +5164,8 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                         _short_sha(remote_commit),
                     )
                     outdated_node_ids.append(slm_node.node_id)
+
+            outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(db, outdated_node_ids)
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)
