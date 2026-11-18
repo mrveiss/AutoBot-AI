@@ -474,7 +474,7 @@ def test_open_pulls_paginates_and_fails_closed() -> None:
 
 def test_the_summary_names_every_outcome() -> None:
     summary = bs.render_summary({core.SYNCED: ["#1 `a`"], core.FORK: ["#3"]}, dry_run=False)
-    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK):
+    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK, core.NO_SLOT):
         assert f"| {outcome} |" in summary
     assert "| synced | 1 |" in summary and "- #1 `a`" in summary
 
