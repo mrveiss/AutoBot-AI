@@ -172,7 +172,7 @@ async def test_fetch_and_pull_use_the_env_backed_transport_timeout():
 
     tracker = GitTracker(repo_path="/path/to/repo")
     with patch.object(git_tracker, "_is_git_repo", return_value=True):
-        with patch.object(git_tracker, "run_git", new_callable=AsyncMock, return_value=("", 0)) as run:
+        with patch.object(git_tracker, "run_git_capture", new_callable=AsyncMock, return_value=("", 0)) as run:
             await tracker.fetch_remote()
             await tracker.pull_updates()
             await tracker.get_local_commit()

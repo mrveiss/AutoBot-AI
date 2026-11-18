@@ -31,7 +31,7 @@
     # so the role's `backend_install_dir | dirname` derivation of the deploy
     # root (autobot_shared PYTHONPATH entry, uvicorn --log-config) still
     # resolves to /opt/autobot instead of /opt.
-    backend_deployed_root: /opt/autobot
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
@@ -40,7 +40,6 @@
     # Server settings (Issue #858/#861)
     backend_host: "0.0.0.0"
     backend_port: 8443
-    backend_workers: 4
 
     # Celery worker settings (Issue #863)
     celery_concurrency: 4
@@ -68,6 +67,6 @@
       debug:
         msg:
           - "✅ Backend deployment complete"
-          - "Backend API: https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_port | default(8443) }}"
+          - "Backend API: https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_nginx_port | default(8443) }}"
           - "Celery Worker: Running with {{ celery_concurrency }} workers"
           - "Logs: ssh autobot@{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }} 'journalctl -u autobot-backend -f'"

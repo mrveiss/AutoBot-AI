@@ -446,6 +446,14 @@ class TestGQAExpansion:
         result = attn.forward(q, kv)
         assert result.output.shape == (1, 4, 4, 32)
 
+    def test_repeat_kv_repeats_each_head_in_place(self):
+        """Eager repeat_kv equals repeat_interleave on the head axis, with no TorchScript (#19686)."""
+        from llm_shared.optimization.flash_attention import repeat_kv
+
+        kv = torch.randn(1, 4, 2, 8)
+        assert torch.equal(repeat_kv(kv, 3), torch.repeat_interleave(kv, 3, dim=2))
+        assert repeat_kv(kv, 1) is kv
+
 
 class TestFusedRoPE:
     """Tests for fused RoPE kernel integration."""

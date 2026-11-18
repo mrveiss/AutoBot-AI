@@ -70,7 +70,7 @@ def _constructs_knowledge_base(node: ast.AST) -> bool:
     return False
 
 
-@pytest.mark.parametrize("provider", ["get_knowledge_base", "get_cached_knowledge_base"])
+@pytest.mark.parametrize("provider", ["provide_knowledge_base", "get_cached_knowledge_base"])
 def test_dependency_provider_is_async(provider: str) -> None:
     """A sync provider cannot await initialize(), so it can only return a broken instance."""
     fn = _find_function(_parse(_DEPENDENCIES), provider)
@@ -81,7 +81,7 @@ def test_dependency_provider_is_async(provider: str) -> None:
     )
 
 
-@pytest.mark.parametrize("provider", ["get_knowledge_base", "get_cached_knowledge_base"])
+@pytest.mark.parametrize("provider", ["provide_knowledge_base", "get_cached_knowledge_base"])
 def test_dependency_provider_does_not_construct(provider: str) -> None:
     fn = _find_function(_parse(_DEPENDENCIES), provider)
     assert fn is not None, f"dependencies.{provider} not found"
@@ -93,18 +93,18 @@ def test_dependency_provider_does_not_construct(provider: str) -> None:
 
 def test_dependency_provider_delegates_to_the_canonical_factory() -> None:
     tree = _parse(_DEPENDENCIES)
-    live = _find_function(tree, "get_knowledge_base")
-    assert live is not None, "dependencies.get_knowledge_base not found"
+    live = _find_function(tree, "provide_knowledge_base")
+    assert live is not None, "dependencies.provide_knowledge_base not found"
     assert "get_or_create_knowledge_base" in _called_names(live), (
-        "dependencies.get_knowledge_base must return the app-state instance via "
+        "dependencies.provide_knowledge_base must return the app-state instance via "
         "knowledge_factory.get_or_create_knowledge_base"
     )
     cached = _find_function(tree, "get_cached_knowledge_base")
     assert cached is not None, "dependencies.get_cached_knowledge_base not found"
     delegates = _called_names(cached)
-    assert "get_knowledge_base" in delegates or "get_or_create_knowledge_base" in delegates, (
+    assert "provide_knowledge_base" in delegates or "get_or_create_knowledge_base" in delegates, (
         "dependencies.get_cached_knowledge_base must resolve the same instance as "
-        "get_knowledge_base — app.state is already the cache"
+        "provide_knowledge_base — app.state is already the cache"
     )
 
 
@@ -143,10 +143,25 @@ def test_canonical_factories_still_initialize_before_returning() -> None:
     """
     factory = _REPO / "autobot-backend" / "knowledge_factory.py"
     tree = _parse(factory)
-    for name in ("_create_new_knowledge_base", "get_knowledge_base_async"):
+    # #18122 S1: get_knowledge_base_async delegates to _create_under_lock, which calls
+    # _create_new_knowledge_base -- the one function that constructs and initializes.
+    for name in ("_create_new_knowledge_base",):
         fn = _find_function(tree, name)
         assert fn is not None, f"knowledge_factory.{name} not found"
         assert "initialize" in _called_names(fn), (
             f"knowledge_factory.{name} no longer calls initialize(); every provider that "
             "delegates to it would start handing out uninitialized instances"
         )
+
+    delegate = _find_function(tree, "get_knowledge_base_async")
+    assert delegate is not None and "_create_under_lock" in _called_names(delegate)
+
+    # The chain must be unbroken from both public entry points down to the constructor.
+    entry = _find_function(tree, "get_or_create_knowledge_base")
+    assert entry is not None and "_create_under_lock" in _called_names(
+        entry
+    ), "knowledge_factory.get_or_create_knowledge_base no longer reaches _create_under_lock"
+    locked = _find_function(tree, "_create_under_lock")
+    assert locked is not None and "_create_new_knowledge_base" in _called_names(
+        locked
+    ), "knowledge_factory._create_under_lock no longer reaches _create_new_knowledge_base"

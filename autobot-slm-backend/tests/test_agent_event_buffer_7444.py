@@ -241,9 +241,10 @@ class TestPrune:
 # was free while it did. The defect was reachability in one case and scheduling
 # in the other, and only the call site records those.
 
+# One tree: the slm_agent role deploys slm/agent/ itself (#18548), so there is
+# no mirror copy left to assert against.
 _AGENT_SOURCES = [
     "autobot-slm-backend/slm/agent/agent.py",
-    "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/agent.py",
 ]
 
 

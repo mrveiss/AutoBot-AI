@@ -34,11 +34,11 @@ from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus, get_adapter
+from .heartbeat_prompt import build_heartbeat_prompt
 from .subprocess_support import (
     check_output_stall,
     probe_pid,
     probe_pid_identity,
-    render_context_markdown,
     terminate_pid,
 )
 
@@ -363,8 +363,8 @@ class SubprocessLifecycleAdapter:
         raise NotImplementedError
 
     def _build_prompt(self, context: dict) -> str:
-        """Render the heartbeat context as structured Markdown (GH#9622/GH#9769)."""
-        return render_context_markdown(context)
+        """Instruction plus the heartbeat context as Markdown (GH#9622/GH#9769, #20247)."""
+        return build_heartbeat_prompt(context)
 
     # Status ----------------------------------------------------------------
     async def status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:

@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.status_enums import Severity
 from code_intelligence.llm_pattern_analyzer import (
     BatchingAnalyzer,
     BatchingOpportunity,
@@ -94,9 +95,8 @@ class TestOptimizationPriority:
 
     def test_all_priorities_exist(self):
         """Verify all expected priorities exist."""
-        expected = ["critical", "high", "medium", "low", "info"]
-        actual = [priority.value for priority in OptimizationPriority]
-        assert set(expected) == set(actual)
+        actual = [priority.value for priority in reversed(Severity.finding_ladder())]
+        assert actual == ["critical", "high", "medium", "low", "info"]
 
     def test_priority_values(self):
         """Test specific priority values."""
@@ -922,7 +922,7 @@ class TestConvenienceFunctions:
         priorities = get_optimization_priorities()
         assert "critical" in priorities
         assert "high" in priorities
-        assert len(priorities) == len(OptimizationPriority)
+        assert priorities == ["critical", "high", "medium", "low", "info"]
 
     def test_get_cache_opportunity_types(self):
         """Test getting cache opportunity types."""

@@ -7,9 +7,9 @@
 #
 # The .env was generated from a legacy config system with wrong port values.
 # This playbook corrects them to match production reality:
-#   - Frontend: nginx HTTPS on 443 (not dev server 5173)
+#   - Frontend: nginx HTTPS on 443 (not dev server 5173); AUTOBOT_FRONTEND_PORT stays the Vite port (#19326)
 #   - NPU Worker: port 8081 (not 8082)
-#   - AI Stack / Ollama: port 11434 on .20 (not 8080 on .24)
+#   - AI Stack: port 8080 (11434 is the Ollama port, a different service)
 #
 # Usage:
 #   cd autobot-slm-backend/ansible
@@ -21,20 +21,37 @@
   gather_facts: false
 
   vars:
-    env_file: /opt/autobot/.env
+    env_file: "{{ autobot.base_dir }}/.env"
     frontend_host: "{{ infrastructure.hosts.frontend }}"
-    frontend_port: "443"
+    frontend_tls_port: "443"
     npu_host: "{{ infrastructure.hosts.npu }}"
     npu_port: "8081"
     ai_stack_host: "{{ infrastructure.hosts.backend }}"
-    ai_stack_port: "11434"
 
   tasks:
-    - name: "Fix | Frontend port 5173 → 443"
+    - name: "Fix | Frontend is served by nginx, not the Vite dev server (#19326)"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_FRONTEND_SERVED_BY='
+        line: "AUTOBOT_FRONTEND_SERVED_BY=nginx"
+
+    - name: "Fix | Frontend HTTPS on nginx (#19326)"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_FRONTEND_TLS_ENABLED='
+        line: "AUTOBOT_FRONTEND_TLS_ENABLED=true"
+
+    - name: "Fix | Frontend HTTPS port 443 (#19326)"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_FRONTEND_TLS_PORT='
+        line: "AUTOBOT_FRONTEND_TLS_PORT={{ frontend_tls_port }}"
+
+    - name: "Fix | AUTOBOT_FRONTEND_PORT is the Vite port; drop the 443 an older run wrote (#19326)"
       lineinfile:
         path: "{{ env_file }}"
         regexp: '^AUTOBOT_FRONTEND_PORT='
-        line: "AUTOBOT_FRONTEND_PORT={{ frontend_port }}"
+        state: absent
 
     - name: "Fix | Frontend URL http:5173 → https:443"
       lineinfile:
@@ -42,11 +59,12 @@
         regexp: '^AUTOBOT_FRONTEND_URL='
         line: "AUTOBOT_FRONTEND_URL=https://{{ frontend_host }}"
 
-    - name: "Fix | VITE frontend port 5173 → 443"
+    # VITE_FRONTEND_PORT is the dev port; the SPA's OAuth callback reads the served one (#20058)
+    - name: "Fix | SPA served port goes under its own name"
       lineinfile:
         path: "{{ env_file }}"
-        regexp: '^VITE_FRONTEND_PORT='
-        line: "VITE_FRONTEND_PORT={{ frontend_port }}"
+        regexp: '^VITE_FRONTEND_(SERVED_)?PORT='
+        line: "VITE_FRONTEND_SERVED_PORT={{ frontend_tls_port }}"
 
     - name: "Fix | NPU Worker port 8082 → 8081"
       lineinfile:
@@ -125,9 +143,9 @@
           ║  SLM .env Port Fix Complete                          ║
           ╚═══════════════════════════════════════════════════════╝
           Fixed values in {{ env_file }}:
-            AUTOBOT_FRONTEND_PORT: 5173 → 443 (nginx HTTPS)
+            AUTOBOT_FRONTEND_SERVED_BY: nginx, AUTOBOT_FRONTEND_TLS_PORT: 443 (nginx HTTPS)
             AUTOBOT_NPU_WORKER_PORT: 8082 → 8081
             AUTOBOT_AI_STACK_HOST: {{ infrastructure.hosts.aiml }} → {{ infrastructure.hosts.backend }}
-            AUTOBOT_AI_STACK_PORT: 8080 → 11434 (Ollama)
+            AUTOBOT_AI_STACK_PORT: set to {{ ai_stack_port }} (AI Stack; 11434 is Ollama)
           SLM backend health: {{ health.status | default('unknown') }}
           ═══════════════════════════════════════════════════════

@@ -29,6 +29,13 @@ Per-guard env vars override the profile (and win over it):
     AUTOBOT_GUARD_ABSTAIN            -> abstain_on_low_confidence       (bool)
     AUTOBOT_GUARD_MAX_IDENTICAL      -> max_identical_tool_calls        (int)
 
+DEV-ONLY (#17463): the ``minimal`` profile, and ``AUTOBOT_GUARD_REQUIRE_APPROVAL=false``, switch the loop's
+approval off. They are safe only because ``AgentLoop`` has no production caller (#11221) -- the live
+approval policy is the three AI lines in ``services/ai_line_enforcement.py`` (#18430), which no env var
+loosens. ``repo_tests/ai_line_single_policy_18430_test.py`` fails if ``AgentLoop`` gains a production
+caller while this profile can still disable approval; wire the loop's ``_requires_approval`` through the
+enforcement point first.
+
 Always-on safety guards are NOT governed here: forbidden_work enforcement
 (agent identity, GH#11145) and config-protection (``AUTOBOT_ALLOW_CONFIG_EDITS``,
 GH#11148) are controlled separately by design.

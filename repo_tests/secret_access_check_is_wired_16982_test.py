@@ -59,6 +59,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root as _repo_root
+
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 
 _SYMBOL = "is_accessible_by"
 
@@ -71,13 +75,8 @@ _DEFINING_MODULE = "autobot-backend/models/secret.py"
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-slm-backend")
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
-
-
 def _is_test_path(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in f"/{rel}"
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}"
 
 
 def _production_modules() -> list[Path]:
@@ -103,7 +102,7 @@ _FORWARDING_BUILTINS = frozenset({"getattr", "setattr", "hasattr", "delattr"})
 def _parsed(path: Path) -> ast.AST | None:
     """The module tree, or None when it cannot be read or parsed."""
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, UnicodeDecodeError):
         return None
 

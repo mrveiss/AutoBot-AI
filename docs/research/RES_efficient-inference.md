@@ -1978,3 +1978,9 @@ AUTOBOT_CACHE_L2_TTL=300  # 5 minutes for cloud responses
 | 4 | CUDA Graphs | Medium | Built-in |
 | 5 | Medusa Heads | High | Training needed |
 | 6 | Prompt Compression | Medium | Code changes |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #717 — feat(llm): Efficient Inference Design - Provider-Aware Optimization Layer (closed)

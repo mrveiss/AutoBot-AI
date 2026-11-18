@@ -1,0 +1,85 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# Runs only when main.yml found Node.js absent or below node_major (#19661).
+---
+
+- name: "nodejs | Install prerequisites"
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+    state: present
+  become: true
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Download the NodeSource setup script"
+  ansible.builtin.get_url:
+    url: "{{ nodesource_base_url }}/setup_{{ nodejs_major_version }}.x"
+    dest: /root/nodesource_setup.sh
+    mode: '0700'
+    force: true
+  become: true
+  tags: ['deps', 'nodejs']
+
+# Rewrites nodesource.list, so a host on an older major moves to node_major's repository.
+- name: "nodejs | Point NodeSource at node_major"
+  ansible.builtin.command:
+    cmd: bash /root/nodesource_setup.sh
+  become: true
+  changed_when: true
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Remove the setup script"
+  ansible.builtin.file:
+    path: /root/nodesource_setup.sh
+    state: absent
+  become: true
+  tags: ['deps', 'nodejs']
+
+# #6719: bounded shell apt-get update -- see roles/nginx/tasks/main.yml for
+# rationale. Ansible's apt module aborts on any partial-fetch warning, the
+# CLI does not. cache_valid_time alone isn't enough once cache ages past 1h.
+- name: "nodejs | Refresh apt cache (best-effort, bounded; #6719)"
+  ansible.builtin.command:
+    cmd: >-
+      timeout 60 apt-get update -qq
+      -o Acquire::Retries=0
+      -o Acquire::http::Timeout=10
+  become: true
+  changed_when: false
+  failed_when: false
+  tags: ['deps', 'nodejs']
+
+# `latest`, because `present` leaves an installed older major where it is.
+- name: "nodejs | Install Node.js"
+  ansible.builtin.apt:
+    name: nodejs
+    state: latest  # noqa: package-latest
+  become: true
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Read the version after the install"
+  ansible.builtin.command:
+    cmd: node --version
+  register: _node_after
+  changed_when: false
+  tags: ['deps', 'nodejs']
+  when: not ansible_check_mode
+
+- name: "nodejs | The host is on node_major"
+  ansible.builtin.assert:
+    that: _node_after.stdout is match('^v' ~ nodejs_major_version ~ '\\.')
+    fail_msg: "Expected Node.js {{ nodejs_major_version }}, found {{ _node_after.stdout }}"
+  tags: ['deps', 'nodejs']
+  when: not ansible_check_mode
+
+# Read by the updater: npm steps and running services follow a new major.
+- name: "nodejs | Record the upgrade"
+  ansible.builtin.set_fact:
+    _nodejs_upgraded: true
+  tags: ['deps', 'nodejs']
+  when: not ansible_check_mode

@@ -81,6 +81,28 @@ from .code_fingerprinting import (
     get_clone_types,
     get_fingerprint_types,
 )
+from .code_generation import (
+    CodeContext,
+    CodeRefactoringRequest,
+    CodeRefactoringType,
+    CodeValidator,
+    DiffGenerator,
+    GeneratedCode,
+    GenerationStatus,
+    LLMCodeGenerator,
+    PromptTemplateManager,
+    RefactoringPromptTemplate,
+    RefactoringResult,
+    ValidationResult,
+    ValidationStatus,
+    generate_diff,
+    get_generation_statuses,
+    get_refactoring_types,
+    get_validation_statuses,
+    list_prompt_templates,
+    refactor_code,
+    validate_code,
+)
 from .code_review_engine import (
     CodeReviewEngine,
     DiffFile,
@@ -98,23 +120,21 @@ from .code_review_engine import (
     review_file,
     review_staged,
 )
-from .conversation_flow_analyzer import (
+from .conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationFlowAnalyzer,
+    ConversationIntentClassifier,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
-    IntentClassifier,
     Optimization,
-)
-from .conversation_flow_analyzer import OptimizationType as ConversationOptimizationType
-from .conversation_flow_analyzer import (
     ResponseClassifier,
     ResponseType,
+    SessionConversationFlow,
     analyze_conversations,
     classify_intent,
     classify_response,
@@ -125,13 +145,13 @@ from .conversation_flow_analyzer import (
 )
 from .doc_generator import (
     ClassDoc,
+    CodeElementType,
     DiagramSpec,
     DiagramType,
     DocCompleteness,
     DocFormat,
     DocGenerator,
     DocSection,
-    ElementType,
     ExampleDoc,
     ExceptionDoc,
     FunctionDoc,
@@ -148,28 +168,6 @@ from .doc_generator import (
     get_doc_formats,
     get_doc_sections,
     get_element_types,
-)
-from .llm_code_generator import (
-    CodeContext,
-    CodeValidator,
-    DiffGenerator,
-    GeneratedCode,
-    GenerationStatus,
-    LLMCodeGenerator,
-    PromptTemplate,
-    PromptTemplateManager,
-    RefactoringRequest,
-    RefactoringResult,
-    RefactoringType,
-    ValidationResult,
-    ValidationStatus,
-    generate_diff,
-    get_generation_statuses,
-    get_refactoring_types,
-    get_validation_statuses,
-    list_prompt_templates,
-    refactor_code,
-    validate_code,
 )
 from .llm_pattern_analyzer import (
     BatchingAnalyzer,
@@ -208,12 +206,12 @@ from .llm_pattern_analyzer import (
 from .log_pattern_miner import (
     Anomaly,
     AnomalyType,
-    LogEntry,
+    DetectedLogPattern,
     LogLevel,
-    LogPattern,
     LogPatternMiner,
+    LogPatternType,
     MiningResult,
-    PatternType,
+    ParsedLogEntry,
     SessionFlow,
     analyze_logs,
     get_anomaly_types,
@@ -224,26 +222,26 @@ from .multi_language_scanner import (
     CodebaseScanner,
     codebase_scanner,
     create_multi_language_scanner,
-    scan_codebase,
 )
 from .multi_language_scanner import scan_directory as scan_dir_multi
 from .multi_language_scanner import scan_file as scan_file_multi
+from .multi_language_scanner import (
+    scan_multilang_codebase,
+)
 
 # Code Pattern Detection & Optimization (Issue #208)
+from .pattern_analysis import CodePatternType  # Types; Refactoring types; Storage functions
 from .pattern_analysis import (
     CodeLocation,
-    CodePattern,
     CodePatternAnalyzer,
     ComplexityAnalyzer,
     ComplexityHotspot,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternCluster,
     PatternSeverity,
-)
-from .pattern_analysis import PatternType as CodePatternType  # Types; Refactoring types; Storage functions
-from .pattern_analysis import (
     RefactoringSuggestion,
     RefactoringSuggestionGenerator,
     RegexOpportunity,
@@ -267,19 +265,19 @@ from .performance_analyzer import (
 )
 from .precommit_analyzer import (
     CheckCategory,
-    CheckDefinition,
-    CheckResult,
     CheckSeverity,
-    CommitCheckResult,
     PrecommitAnalyzer,
+    PrecommitCheckDefinition,
+    PrecommitCheckResult,
+    PrecommitCommitCheckResult,
     analyze_precommit,
     get_check_categories,
     get_precommit_checks,
 )
 from .redis_optimizer import (
-    OptimizationResult,
     OptimizationSeverity,
-    OptimizationType,
+    RedisOptimizationResult,
+    RedisOptimizationType,
     RedisOptimizer,
     analyze_redis_usage,
 )
@@ -315,8 +313,8 @@ __all__ = [
     "AntiPatternResult",
     # Redis optimization (Issue #220)
     "RedisOptimizer",
-    "OptimizationResult",
-    "OptimizationType",
+    "RedisOptimizationResult",
+    "RedisOptimizationType",
     "OptimizationSeverity",
     "analyze_redis_usage",
     # Security analysis (Issue #219)
@@ -336,10 +334,10 @@ __all__ = [
     # Pre-commit analysis (Issue #223)
     "PrecommitAnalyzer",
     "CheckCategory",
-    "CheckDefinition",
-    "CheckResult",
+    "PrecommitCheckDefinition",
+    "PrecommitCheckResult",
     "CheckSeverity",
-    "CommitCheckResult",
+    "PrecommitCommitCheckResult",
     "analyze_precommit",
     "get_precommit_checks",
     "get_check_categories",
@@ -374,12 +372,12 @@ __all__ = [
     # Log pattern mining (Issue #226)
     "Anomaly",
     "AnomalyType",
-    "LogEntry",
+    "ParsedLogEntry",
     "LogLevel",
-    "LogPattern",
+    "DetectedLogPattern",
     "LogPatternMiner",
     "MiningResult",
-    "PatternType",
+    "LogPatternType",
     "SessionFlow",
     "analyze_logs",
     "get_anomaly_types",
@@ -389,13 +387,13 @@ __all__ = [
     "AnalysisResult",
     "Bottleneck",
     "BottleneckType",
-    "ConversationFlow",
+    "SessionConversationFlow",
     "ConversationFlowAnalyzer",
     "ConversationMessage",
     "FlowPattern",
     "FlowState",
     "IntentCategory",
-    "IntentClassifier",
+    "ConversationIntentClassifier",
     "Optimization",
     "ConversationOptimizationType",
     "ResponseClassifier",
@@ -414,11 +412,11 @@ __all__ = [
     "GeneratedCode",
     "GenerationStatus",
     "LLMCodeGenerator",
-    "PromptTemplate",
+    "RefactoringPromptTemplate",
     "PromptTemplateManager",
-    "RefactoringRequest",
+    "CodeRefactoringRequest",
     "RefactoringResult",
-    "RefactoringType",
+    "CodeRefactoringType",
     "ValidationResult",
     "ValidationStatus",
     "generate_diff",
@@ -494,7 +492,7 @@ __all__ = [
     "DocGenerator",
     "DocFormat",
     "DocSection",
-    "ElementType",
+    "CodeElementType",
     "DocCompleteness",
     "DiagramType",
     "ParameterDoc",
@@ -521,7 +519,7 @@ __all__ = [
     "RefactoringSuggestionGenerator",
     "RegexPatternDetector",
     "CodeLocation",
-    "CodePattern",
+    "DetectedCodePattern",
     "ComplexityHotspot",
     "DuplicatePattern",
     "ModularizationSuggestion",
@@ -560,7 +558,7 @@ __all__ = [
     "CodebaseScanner",
     "codebase_scanner",
     "create_multi_language_scanner",
-    "scan_codebase",
+    "scan_multilang_codebase",
     "scan_dir_multi",
     "scan_file_multi",
 ]

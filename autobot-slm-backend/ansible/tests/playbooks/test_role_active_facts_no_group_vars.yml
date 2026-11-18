@@ -11,14 +11,14 @@
 # and services/blue_green.py, which invoke it with a bare `-i "<host>,"`
 # inventory string -- not a directory at all.
 #
-# Without this test, drift between inventory/group_vars/all.yml and
-# playbooks/vars/role_active_facts.yml goes undetected (the regression
-# that #7093 had to fix retroactively).
+# The facts file is the ONE definition (#14678); this proves deploy.yml's
+# explicit vars_files load of that same file evaluates to the expected values
+# when no group_vars/ directory sits beside the inventory.
 #
 # Usage:
 #   cd autobot-slm-backend/ansible
-#   ansible-playbook -i tests/inventory/test_role_facts.yml \
-#                    tests/playbooks/test_role_active_facts_no_group_vars.yml
+#   (see .github/workflows/ansible-role-facts-test.yml: the inventory is copied
+#   alone into a temp dir first, so no group_vars/ is adjacent)
 ---
 - name: "Test: role_*_active facts via vars_files (#7094 dynamic-inventory codepath)"
   hosts: all
@@ -28,9 +28,9 @@
   # Critical: load via vars_files (NOT group_vars symlink).
   # Path is relative to this playbook file:
   #   tests/playbooks/test_role_active_facts_no_group_vars.yml
-  #     ../../playbooks/vars/role_active_facts.yml
+  #     ../../inventory/group_vars/all.yml
   vars_files:
-    - ../../playbooks/vars/role_active_facts.yml
+    - ../../inventory/group_vars/all.yml
 
   tasks:
     - name: "role_backend_active matches expected"

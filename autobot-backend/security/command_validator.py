@@ -22,7 +22,7 @@ _COMMAND_REQUEST_KEYWORDS = frozenset({"run", "execute", "command"})
 _DANGEROUS_CHARS = frozenset({"&", ";", "|", ">", "<", "`", "$"})
 
 
-class CommandValidator:
+class QueryCommandSafelist:
     """Validates and sanitizes system commands using a predefined safelist."""
 
     def __init__(self, config_path: str = None):
@@ -179,4 +179,4 @@ class CommandValidator:
         }
 
 
-get_command_validator = lazy_singleton(CommandValidator)
+get_command_validator = lazy_singleton(QueryCommandSafelist)

@@ -9,9 +9,9 @@ swallowed best-effort mirror delete/rotate (#10334) leaves the unified copy out 
 read-first would serve. This Celery task runs the reconciliation sweep on a schedule.
 """
 
-import asyncio
 import logging
 
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 @celery_app.task(name="tasks.reconcile_credentials")
 def reconcile_credentials() -> dict:
     """Reconcile mirrored unified credential copies against the canonical SQLite store."""
-    return asyncio.run(_run())
+    return run_in_worker_loop(_run())
 
 
 async def _run() -> dict:

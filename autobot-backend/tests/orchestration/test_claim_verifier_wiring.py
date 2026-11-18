@@ -20,8 +20,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from services.grounded_agent import GroundedAgent
-from services.grounded_agent_models import Claim, ClaimStatus
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod
 
 
 def _make_claim(text: str = "test claim") -> Claim:
@@ -65,9 +64,9 @@ class TestEscalateToClaimVerifier:
 
         # _make_claim_verifier is a module-level helper; patch it directly.
         with patch("services.grounded_agent._make_claim_verifier", return_value=mock_verifier):
-            result = await agent._escalate_to_claim_verifier(claim, "")
+            result = await agent._escalate_to_claim_verifier(claim, "", "alice")
 
-        mock_verifier.kb_rag_search.assert_called_once_with(claim.claim_text)
+        mock_verifier.kb_rag_search.assert_called_once_with(claim.claim_text, "alice")
         # confidence >= 0.8 → VERIFIED
         assert result.kb_status == ClaimStatus.VERIFIED
         assert result.confidence == pytest.approx(0.85)

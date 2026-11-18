@@ -11,12 +11,11 @@ Privacy: Audio is sent off-box — opt-in only (key must be set explicitly).
 """
 
 import asyncio
-import os
 from typing import List, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import TranscriptSegment
+from voice_processing.providers import ProviderFailed, TranscriptSegment, failures_as_provider_failed
 from voice_processing.providers.cloud.base import _DEFAULT_TIMEOUT, CloudSpeechProvider
 
 logger = get_logger(__name__)
@@ -33,21 +32,13 @@ class AssemblyAIProvider(CloudSpeechProvider):
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Upload, submit, poll AssemblyAI; return diarized segments."""
-        if not self.is_configured:
-            logger.error("AssemblyAIProvider: ASSEMBLYAI_API_KEY not set")
-            return []
-        if not os.path.exists(audio_path):
-            logger.error("AssemblyAIProvider: audio file not found: %s", audio_path)
-            return []
-        try:
+        self._require_ready(audio_path)
+        with failures_as_provider_failed(self.provider_name):
             with open(audio_path, "rb") as fh:
                 audio_bytes = fh.read()
             upload_url = await self._upload(audio_bytes)
             transcript_id = await self._submit(upload_url, language)
             return await self._poll(transcript_id, language)
-        except Exception as exc:
-            logger.error("AssemblyAIProvider: transcription failed: %s", exc)
-            return []
 
     def _headers(self) -> dict:
         return {"authorization": self._api_key or "", "content-type": "application/json"}
@@ -83,36 +74,35 @@ class AssemblyAIProvider(CloudSpeechProvider):
             async with get_http_client().tracked_request(
                 "GET", f"{_BASE_URL}/transcript/{transcript_id}", headers=self._headers(), timeout=_DEFAULT_TIMEOUT
             ) as resp:
+                if resp.status != 200:
+                    raise ProviderFailed(f"AssemblyAI poll failed: {resp.status}")
                 data = await resp.json()
             status = data.get("status")
             if status == "completed":
                 return self._parse(data, language)
             if status == "error":
                 logger.error("AssemblyAIProvider: job error: %s", data.get("error"))
-                return []
+                raise ProviderFailed("AssemblyAI job ended in error")
             await asyncio.sleep(_POLL_INTERVAL)
             elapsed += _POLL_INTERVAL
         logger.error("AssemblyAIProvider: poll timeout after %.0fs", _POLL_TIMEOUT)
-        return []
+        raise ProviderFailed(f"AssemblyAI poll timed out after {_POLL_TIMEOUT:.0f}s")
 
     def _parse(self, data: dict, language: Optional[str]) -> List[TranscriptSegment]:
         """Map AssemblyAI utterances to TranscriptSegments."""
         segments: List[TranscriptSegment] = []
-        try:
-            for utt in data.get("utterances") or []:
-                speaker = f"SPEAKER_{utt.get('speaker', 'A')}"
-                segments.append(
-                    TranscriptSegment(
-                        text=utt.get("text", ""),
-                        start_time=utt.get("start", 0) / 1000.0,
-                        end_time=utt.get("end", 0) / 1000.0,
-                        confidence=float(utt.get("confidence", 0.0)),
-                        language=language,
-                        speaker=speaker,
-                    )
+        for utt in data.get("utterances") or []:
+            speaker = f"SPEAKER_{utt.get('speaker', 'A')}"
+            segments.append(
+                TranscriptSegment(
+                    text=utt.get("text", ""),
+                    start_time=utt.get("start", 0) / 1000.0,
+                    end_time=utt.get("end", 0) / 1000.0,
+                    confidence=float(utt.get("confidence", 0.0)),
+                    language=language,
+                    speaker=speaker,
                 )
-        except Exception as exc:
-            logger.error("AssemblyAIProvider: parse error: %s", exc)
+            )
         return segments
 
     @property

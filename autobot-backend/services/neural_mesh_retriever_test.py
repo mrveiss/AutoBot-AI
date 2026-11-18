@@ -254,7 +254,7 @@ class TestMergeWithExpansion:
         assert "new_node" in merged_ids
 
     def test_merge_boosts_seed_score_with_ppr(self) -> None:
-        """Seed results receive their PPR score added to the base score."""
+        """Seed results blend their PPR score through blend_graph_score (#18141; was base + ppr)."""
         retriever = _make_retriever()
         seeds = [{"metadata": {"chunk_id": "s1"}, "score": 0.3, "content": "x"}]
         expanded_scores = [("s1", 0.5)]
@@ -262,7 +262,7 @@ class TestMergeWithExpansion:
         merged = retriever._merge_with_expansion(seeds, expanded_scores)
 
         s1_result = next(r for r in merged if r.get("metadata", {}).get("chunk_id") == "s1")
-        assert abs(s1_result["score"] - 0.8) < 1e-9
+        assert abs(s1_result["score"] - ((1 - 0.3) * 0.3 + 0.3 * 0.5)) < 1e-9
 
     def test_merge_with_empty_expansion(self) -> None:
         """Empty expanded_scores returns only seed results unchanged."""

@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llm_shared.pricing.sources import ModelPricing
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # ---------------------------------------------------------------------------
 # ModelPricing round-trip
@@ -143,24 +144,7 @@ class _DictRedis:
         return 1 if self.data.pop(key, None) is not None else 0
 
     def pipeline(self):
-        return _DictPipeline(self)
-
-
-class _DictPipeline:
-    def __init__(self, redis: _DictRedis) -> None:
-        self._redis, self._queued = redis, []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return None
-
-    def setex(self, key, ttl, value):
-        self._queued.append((key, ttl, value))
-
-    async def execute(self, raise_on_error=True):
-        return [await self._redis.setex(*queued) for queued in self._queued]
+        return FakeAsyncPipeline(self)
 
 
 @pytest.fixture

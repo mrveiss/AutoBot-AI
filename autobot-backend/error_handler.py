@@ -62,7 +62,7 @@ def with_default_on_error(
     Decorator that logs an error and returns a caller-supplied default value.
 
     Renamed from ``with_error_handling`` (#14191): this module's decorator and
-    ``utils.error_boundaries.decorators.with_error_handling`` shared that name
+    ``autobot_shared.error_boundaries.decorators.with_error_handling`` shared that name
     with disjoint signatures and opposite behaviour on ``HTTPException`` — the
     other re-raises it to preserve intentional status codes, this one caught
     it like any other exception and returned ``default_return``. The name
@@ -141,7 +141,7 @@ def with_default_on_error(
     return decorator
 
 
-class CircuitBreaker:
+class CircuitBreakerDecorator:
     """
     Circuit breaker pattern for handling external service failures.
     """
@@ -308,7 +308,7 @@ def get_user_data(user_id: str) -> list:
     return fetch_from_database(user_id)
 
 # Using circuit breaker
-@CircuitBreaker(failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT)
+@CircuitBreakerDecorator(failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT)
 def unstable_service_call():
     # After 5 failures, circuit opens for 60 seconds
     return external_service.call()
