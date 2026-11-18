@@ -1221,7 +1221,7 @@ def route_after_reflection(state: ChatState) -> str:
     from rlm.types import RLMConfig
 
     history = state.get("reflection_history", [])
-    if not history:
+    if not history or not state.get("llm_response"):  # nothing was evaluated: a stale REFINE must not loop (#21843)
         return "inline_judge_response"
 
     # Use default config ceiling — the actual config is in the node
