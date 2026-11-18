@@ -20,6 +20,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from autobot_shared.testfile_names import is_test_filename
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.extraction_registry import (
@@ -42,8 +43,10 @@ _ROOTS = DEFAULT_ROOTS + TOOLING_ROOTS
 
 
 def _is_source_python(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return rel.endswith(".py") and not (name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel)
+    """A non-test Python file: the only kind that can be a second definition of a concept."""
+    return rel.endswith(".py") and not (
+        is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
+    )
 
 
 def _source_population(root: Path) -> list[str]:
@@ -193,3 +196,55 @@ def test_the_provider_check_names_the_one_that_does_not_use_the_scope() -> None:
 def test_each_service_uses_the_shared_scope(rel: str) -> None:
     bad = _providers_not_using_the_scope((repo_root() / rel).read_text(encoding="utf-8"), _PROVIDERS[rel])
     assert not bad, f"#15068: {rel}: {bad} no longer open their sessions through async_session_scope"
+
+
+@pytest.mark.parametrize(
+    ("rel", "expected"),
+    [
+        ("autobot-backend/user_management/database.py", True),
+        ("autobot-backend/user_management/database_test.py", False),
+        ("autobot-backend/tests/test_database.py", False),
+        ("autobot-slm-backend/tests/conftest.py", False),
+        ("autobot-backend/user_management/test_database.py", False),
+        ("autobot-backend/user_management/schema.sql", False),
+    ],
+)
+def test_the_test_path_filter_skips_tests_and_keeps_source(rel: str, expected: bool) -> None:
+    assert _is_source_python(rel) is expected
+
+
+def _post_commit_entry():
+    return next(e for e in REGISTRY if seeds_post_commit_list is e.detector)
+
+
+def _post_commit_seeders() -> tuple[list[str], int]:
+    """Non-test files in the entry's roots that seed the post-commit list, and files parsed for the key."""
+    entry, root = _post_commit_entry(), repo_root()
+    found: list[str] = []
+    parsed = 0
+    for rel in REACH.examined(root):
+        if not rel.startswith(tuple(r + "/" for r in entry.roots)) or not _is_source_python(rel):
+            continue
+        source = (root / rel).read_text(encoding="utf-8")
+        if "_post_commit_cbs" not in source and "POST_COMMIT_CALLBACKS" not in source:
+            continue
+        parsed += 1
+        if entry.detector(parse_cache.parse(source)):
+            found.append(rel)
+    return found, parsed
+
+
+def test_the_post_commit_scan_is_not_vacuous() -> None:
+    """The canonical seeder and UserService's reader both mention the key; fewer is a blind scan (#15068)."""
+    _, parsed = _post_commit_seeders()
+    assert parsed >= 2, f"parsed {parsed} files mentioning the post-commit key"
+
+
+def test_exactly_the_canonical_site_seeds_the_post_commit_list() -> None:
+    """The registry sweep proves no OTHER file seeds it; this proves the canonical one still does (#15068)."""
+    seeders, _ = _post_commit_seeders()
+    entry = _post_commit_entry()
+    assert seeders == [entry.canonical], (
+        f"#15068: {seeders} seed session.info['_post_commit_cbs']; the transaction scope lives once in "
+        f"{entry.canonical}. Call `async_session_scope(<your session maker>)` instead of copying its body."
+    )
