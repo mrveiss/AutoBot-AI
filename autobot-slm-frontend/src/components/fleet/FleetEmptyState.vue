@@ -16,7 +16,7 @@ const fleetStore = useFleetStore()
 </script>
 
 <template>
-  <div v-if="fleetStore.nodesError" class="card p-12 text-center text-red-700" role="alert" data-testid="fleet-load-error">
+  <div v-if="fleetStore.nodesError" class="card p-12 text-center text-autobot-error" role="alert" data-testid="fleet-load-error">
     {{ $t('fleetOverview.loadFailed', { message: fleetStore.nodesError }) }}
   </div>
   <div v-else class="card p-12 text-center">

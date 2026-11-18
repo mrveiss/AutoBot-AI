@@ -28,7 +28,7 @@ const message = computed(() => {
 </script>
 
 <template>
-  <div v-if="message" class="card p-4 mb-4 text-sm text-yellow-800 bg-yellow-50" role="alert" data-testid="fleet-incomplete-notice">
+  <div v-if="message" class="card p-4 mb-4 text-sm text-autobot-warning-hover bg-autobot-warning-bg" role="alert" data-testid="fleet-incomplete-notice">
     {{ message }}
   </div>
 </template>
