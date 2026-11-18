@@ -85,7 +85,7 @@ class TestGetActiveIndexingTask:
         from api.codebase_analytics.endpoints.stats import _get_active_indexing_task
 
         with patch.object(stats, "indexing_tasks", {}):
-            result = _get_active_indexing_task()
+            result = _get_active_indexing_task(source_id="s1")
             assert result is None
 
     def test_returns_none_when_all_tasks_completed(self):
@@ -98,7 +98,7 @@ class TestGetActiveIndexingTask:
             "task-2": {"status": "failed"},
         }
         with patch.object(stats, "indexing_tasks", mock_tasks):
-            result = _get_active_indexing_task()
+            result = _get_active_indexing_task(source_id="s1")
             assert result is None
 
     def test_returns_running_task(self):
@@ -109,6 +109,7 @@ class TestGetActiveIndexingTask:
         mock_tasks = {
             "task-1": {
                 "status": "running",
+                "source_id": "s1",
                 "progress": {"current": 50, "total": 100},
                 "phases": {"current_phase": "scan"},
                 "stats": {"files_scanned": 50},
@@ -116,7 +117,7 @@ class TestGetActiveIndexingTask:
             }
         }
         with patch.object(stats, "indexing_tasks", mock_tasks):
-            result = _get_active_indexing_task()
+            result = _get_active_indexing_task(source_id="s1")
             assert result is not None
             assert result["task_id"] == "task-1"
             assert result["progress"]["current"] == 50
@@ -133,6 +134,7 @@ class TestGetActiveIndexingTask:
         mock_tasks = {
             "stale-task": {
                 "status": "running",
+                "source_id": "s1",
                 "progress": {"current": 10, "total": 100},
                 "phases": {},
                 "stats": {},
@@ -140,7 +142,7 @@ class TestGetActiveIndexingTask:
             }
         }
         with patch.object(stats, "indexing_tasks", mock_tasks):
-            result = _get_active_indexing_task()
+            result = _get_active_indexing_task(source_id="s1")
             assert result is None
 
     def test_returns_fresh_task_ignoring_stale(self):
@@ -157,10 +159,12 @@ class TestGetActiveIndexingTask:
         mock_tasks = {
             "stale-task": {
                 "status": "running",
+                "source_id": "s1",
                 "started_at": old_time.isoformat(),
             },
             "fresh-task": {
                 "status": "running",
+                "source_id": "s1",
                 "progress": {"current": 75, "total": 100},
                 "phases": {"current_phase": "store"},
                 "stats": {"files_scanned": 200},
@@ -168,7 +172,7 @@ class TestGetActiveIndexingTask:
             },
         }
         with patch.object(stats, "indexing_tasks", mock_tasks):
-            result = _get_active_indexing_task()
+            result = _get_active_indexing_task(source_id="s1")
             assert result is not None
             assert result["task_id"] == "fresh-task"
 

@@ -21,6 +21,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.error_boundaries.types import PassThroughError
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 from services.gateway.gateway_manager import GatewayManager
 from services.gateway.ingest_governor import ingest_governor
 from services.telegram_bot_service import (
@@ -307,7 +308,7 @@ async def verify_telegram_secret(request: Request) -> None:
             detail="Missing authentication header",
         )
 
-    if not secrets.compare_digest(request_secret, stored_secret):
+    if not secure_compare(request_secret, stored_secret):
         logger.warning("Telegram webhook authentication failed - invalid secret token")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 

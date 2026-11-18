@@ -24,12 +24,11 @@ in-memory fallback (#13916's consolidation rule: two implementations of one
 thing become one reused core; this router is the first of the two, not a
 third).
 
-#14271: ``workflow_id`` is unique per-company, not globally, so create's
-pre-check (``get()`` then ``create()``) is a UX nicety for the common case,
-not the enforcement — a concurrent same-company duplicate still reaches the
-DB's ``UNIQUE (company_id, workflow_id)`` constraint, which ``create()``
-translates into ``WorkflowConflictError`` (caught here as 409) rather than
-letting it surface as an unhandled 500.
+#14271: ``workflow_id`` is unique per-company; a same-company duplicate reaches the
+DB's ``UNIQUE (company_id, workflow_id)`` constraint and surfaces as 409.
+
+#21239: create delegates to ``CompanyOsWorkflowService.create`` (admin-gated, carries
+``kind`` / ``owner_role_id``) with the path company, so there is one insert path.
 """
 
 import uuid
@@ -47,11 +46,13 @@ from models.workflow import Workflow
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
+from ..models.company_os_enums import WorkflowKind
+from ..models.enums import WorkflowStatus
 from ..services.authz import NotAuthorisedError
 from ..services.company_os.errors import CompanyOsError
 from ..services.company_os.loaders import is_company_os_row
 from ..services.company_os.workflows import CompanyOsWorkflowService
-from ..services.workflow import WorkflowConflictError, WorkflowService
+from ..services.workflow import WorkflowService
 from ._common import actor_id
 from .company_os import http_error
 
@@ -95,8 +96,10 @@ async def _company_os_status(
 class WorkflowCreate(BaseModel):
     workflow_id: str = Field(..., min_length=1, max_length=255)
     name: Optional[str] = Field(None, max_length=255)
-    status: str = Field("planned", max_length=50)
+    status: WorkflowStatus = WorkflowStatus.PLANNED
     definition: Dict[str, Any] = Field(default_factory=dict)
+    kind: WorkflowKind = WorkflowKind.WORKFLOW
+    owner_role_id: Optional[uuid.UUID] = None
 
 
 class WorkflowStatusUpdate(BaseModel):
@@ -110,6 +113,8 @@ class WorkflowResponse(BaseModel):
     status: str
     source: str
     definition: Dict[str, Any]
+    kind: str
+    owner_role_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -140,25 +145,22 @@ async def create_workflow(
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
     assert_company_access(ctx, company_id)
-    existing = await _svc().get(session, company_id, body.workflow_id)
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
     try:
-        workflow = await _svc().create(
+        if body.kind is not WorkflowKind.WORKFLOW:  # meta skills stay on the Company OS route
+            raise CompanyOsError(f"kind {body.kind.value!r} is created through the Company OS route")
+        workflow = await _company_os().create(
             session,
             company_id,
-            body.workflow_id,
+            workflow_id=body.workflow_id,
             name=body.name,
-            status=body.status,
+            status=body.status.value,
             definition=body.definition,
+            kind=body.kind.value,
+            owner_role_id=body.owner_role_id,
             actor=actor_id(_current_user),
         )
-    except WorkflowConflictError:
-        # The pre-check above is TOCTOU under concurrency (#14271): a
-        # same-company duplicate that raced past it still hits the DB's
-        # UNIQUE(company_id, workflow_id) constraint, closing the race
-        # rather than merely narrowing it.
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Workflow already exists")
+    except (CompanyOsError, NotAuthorisedError) as exc:
+        raise http_error(exc) from exc
     await session.commit()
     return WorkflowResponse.model_validate(workflow)
 

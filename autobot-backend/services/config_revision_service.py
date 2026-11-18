@@ -16,6 +16,7 @@ favour recall); this module declares no vocabulary (#17337). See
 ``docs/developer/REDACTION_BOUNDARY.md``.
 """
 
+import asyncio
 import uuid
 from typing import Any, Dict, List
 
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, MatchPolicy, is_credential_entry
 from models.config_revision import ConfigRevision
+from services.config_rollback import rollback_locked
 
 logger = get_logger(__name__)
 
@@ -109,19 +111,19 @@ class ConfigRevisionService:
     ) -> ConfigRevision:
         """Restore config to a prior snapshot and record the rollback (#1404).
 
-        Returns the new revision that captures the rollback action.
+        The snapshot is applied to the live config first (#18478); a failed
+        apply raises before any rollback row is written. Returns the new
+        revision that captures the rollback action.
         """
         target = await self._get_or_raise(revision_id)
-        current = await self._get_latest(target.entity_type, target.entity_id)
-
-        new_revision = await self.create_revision(
-            entity_type=target.entity_type,
-            entity_id=target.entity_id,
-            before_config=current.after_config if current else None,
-            after_config=target.after_config or {},
-            source="rollback",
-            created_by=created_by,
+        live_before, live_after = await asyncio.to_thread(
+            rollback_locked,
+            target.entity_type,
+            target.entity_id,
+            target.after_config or {},
+            target.before_config,
         )
+        new_revision = await self._record_applied_rollback(target, revision_id, created_by, live_before, live_after)
         logger.info(
             "Rolled back %s/%s to revision %s (new revision %s)",
             target.entity_type,
@@ -130,6 +132,27 @@ class ConfigRevisionService:
             new_revision.id,
         )
         return new_revision
+
+    async def _record_applied_rollback(self, target, revision_id, created_by, live_before, live_after):
+        """Record a rollback whose snapshot is already live; a failed write is logged, then raised."""
+        try:
+            return await self.create_revision(
+                entity_type=target.entity_type,
+                entity_id=target.entity_id,
+                before_config=live_before,
+                after_config=live_after,
+                source="rollback",
+                created_by=created_by,
+            )
+        except Exception:
+            logger.error(
+                "Rollback of %s/%s to revision %s was applied live but its audit row was not written",
+                target.entity_type,
+                target.entity_id,
+                revision_id,
+                exc_info=True,
+            )
+            raise
 
     # -- Read ----------------------------------------------------------
 

@@ -124,7 +124,7 @@ adds a **whole-codebase audit** delta that #18330 does not cover.
 |---|---|---|
 | `.claude/skills/secreview/SKILL.md` (133 lines) | full read | diff-scoped fast path; severity table + `BLOCK/APPROVE` verdict; no closure states, no coverage record, no LLM/agent attack class (0 hits for `prompt`/`llm`) |
 | `review-fleet` skill (plugin repo, 141 lines) | grep of phases | 10 finders + verifiers; drops `confirmed:false` / `confidence<0.7` silently |
-| `.claude/agents/security-auditor.md` (308 lines) | process + report sections | single pass, prose `security-report.md`; **no verification, coverage, fingerprint or schema**; lines 197, 230, 286, 291 are `[Code example removed for token optimization …]` placeholders — the report template the agent is told to follow is missing |
+| plugin `autobot-dev-skills` `skills/review/references/security-auditor.md` (308 lines) | process + report sections | single pass, prose `security-report.md`; **no verification, coverage, fingerprint or schema**; lines 197, 230, 286, 291 are `[Code example removed for token optimization …]` placeholders — the report template the agent is told to follow is missing |
 | `.github/workflows/ai-security-review.yml` | prompt + output steps | runs `secreview` read-only, advisory comment + step summary; untrusted-diff mitigation documented |
 | `.github/workflows/security.yml`, `pr-blocking-findings.yml` | headers / tool lines | semgrep/CodeQL SARIF; `blocks-merge` label gate (#10024) |
 | `docs/developer/THREAT_MODEL.md` | section list + grep | six subsystems (path, session, plugins, secrets, remote desktop, graph-RAG); prompt injection only for dev research tooling (line 142) — **no runtime agent/LLM trust-boundary section** |
@@ -134,7 +134,7 @@ adds a **whole-codebase audit** delta that #18330 does not cover.
 
 | # | Candidate (delta only) | Applies to | Visible benefit | Hidden cost | Verdict | Effort |
 |---|---|---|---|---|---|---|
-| 1 | **Phased whole-codebase audit mode** for the `security-auditor` agent: recon → coverage ledger (surface × boundary × subsystem × attack class, states `planned/covered/candidate/blocked/deferred/out_of_scope`) → hunter waves → fresh disprove-verifier per candidate → validated JSON → report derived from JSON; exactly two terminal states (complete / `incomplete` + reason) | `.claude/agents/security-auditor.md` | turns a one-shot prose report into evidenced, resumable coverage; "nothing found" becomes distinguishable from "did not look" | dozens of agent calls per run vs the weekly model budget; long prompt corpus to maintain | **adopt-with-conditions** — explicit `quick`/`standard` profile and an invocation budget that reserves verifiers *before* hunters; never a per-PR job | significant |
+| 1 | **Phased whole-codebase audit mode** for the `autobot-dev-skills:reviewer` agent (security-auditor lens): recon → coverage ledger (surface × boundary × subsystem × attack class, states `planned/covered/candidate/blocked/deferred/out_of_scope`) → hunter waves → fresh disprove-verifier per candidate → validated JSON → report derived from JSON; exactly two terminal states (complete / `incomplete` + reason) | plugin `autobot-dev-skills` `skills/review/references/security-auditor.md` | turns a one-shot prose report into evidenced, resumable coverage; "nothing found" becomes distinguishable from "did not look" | dozens of agent calls per run vs the weekly model budget; long prompt corpus to maintain | **adopt-with-conditions** — explicit `quick`/`standard` profile and an invocation budget that reserves verifiers *before* hunters; never a per-PR job | significant |
 | 2 | **Restore the missing report template** in `security-auditor.md` (4 placeholders) — subsumed by #1's JSON-derived report | same | the agent's stated output contract becomes real | none | **adopt** (defect, not a feature) | trivial |
 | 3 | **Findings schema + Python validator** (three verdicts; `needs_validation` forbids severity and requires the exact blocker + validation plan; `rejected` retained so it is not re-raised) shared by secreview, review-fleet and the auditor | new `scripts/security/` validator + schema; consumers #18331, plugin #17 | #18331 adds fields but nothing machine-checks them; one schema serves three producers | a schema everyone must keep in step | **adopt** — Python, not the reference's Node, to avoid a second toolchain; extends #18331 rather than duplicating it | moderate |
 | 4 | **Additive multi-run carry-forward**: a prior confirmed finding carries only if its source is unchanged *and* it re-verifies; prior `needs_validation`/`blocked`/`deferred` become current work; a scoped run never implies "rest is fine" | auditor ledger (#1); fingerprints from #18335 | repeated runs compound coverage (vendor: one run ≈ half of total, self-reported) | needs a durable ledger location outside the scratchpad | **adopt-with-conditions** — depends on #18335 fingerprints | moderate |
@@ -157,7 +157,7 @@ adds a **whole-codebase audit** delta that #18330 does not cover.
   (#10024); the reference output never reaches a gate.
 - **Static + LLM layering.** semgrep/CodeQL SARIF in `security.yml`, with the LLM review explicitly
   advisory and its untrusted-diff mitigations documented in `ai-security-review.yml`.
-- **Findings become tracked issues** (`secreview` follow-up rule, `research-to-issues`), whereas the
+- **Findings become tracked issues** (`secreview` follow-up rule, `/autobot-dev-skills:lifecycle research-to-issues`), whereas the
   reference leaves Markdown in a home directory.
 - **Codified trust boundaries** per subsystem with canonical enforcement points (THREAT_MODEL) —
   the reference re-derives the architecture in every run's recon phase.
@@ -179,7 +179,7 @@ adds a **whole-codebase audit** delta that #18330 does not cover.
 
 | File | Change |
 |---|---|
-| `.claude/agents/security-auditor.md` | replace prose process with phased mode + profiles + budget; replace the 4 placeholders with the JSON-derived report contract |
+| plugin `autobot-dev-skills` `skills/review/references/security-auditor.md` | replace prose process with phased mode + profiles + budget; replace the 4 placeholders with the JSON-derived report contract |
 | `.claude/skills/secreview/SKILL.md` | add the AI/agent checklist block and the source-visibility rule (rides in the #18331/#18332 PR — same file) |
 | `docs/developer/THREAT_MODEL.md` | new section 7: runtime agent/LLM trust boundaries with canonical enforcement points (`knowledge/ingest_sanitize.py`, `knowledge/query_sanitizer.py`, `a2a/trust_score.py`, MCP routes) |
 | `scripts/security/` (new) | findings schema + Python validator + test; invoked by the auditor and, optionally, `ai-security-review.yml` |

@@ -14,7 +14,7 @@
 # including mid-filename.
 #
 # Measured against `bandit -c .bandit -r autobot-backend/ autobot-slm-backend/
-# autobot_shared/` (the exact invocation code-quality.yml and security.yml
+# autobot_shared/` (the exact invocation _gate-code-quality.yml and _gate-security.yml
 # run) with `git ls-files` as ground truth: the pre-fix bare entries `temp`,
 # `logs`, `reports`, `archive` and `venv` silently excluded 34 tracked
 # production files that matched none of them as a real directory — among

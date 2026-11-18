@@ -22,7 +22,6 @@ from fastapi import (
     HTTPException,
     Query,
     WebSocket,
-    WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -59,6 +58,7 @@ from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
 from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
@@ -1166,7 +1166,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
             except json.JSONDecodeError as e:
                 logger.debug("Invalid JSON in monitoring WebSocket: %s", e)
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         await ws_manager.disconnect(websocket)
     except Exception as e:
         logger.error("WebSocket error: %s", e)

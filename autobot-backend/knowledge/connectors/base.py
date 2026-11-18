@@ -620,8 +620,7 @@ class AbstractConnector(ABC):
         sources_failed: int,
     ) -> None:
         """Write current job state to Redis with a 24h TTL."""
-        import os
-
+        from autobot_shared.leader_lease import worker_identity
         from autobot_shared.redis_client import get_async_redis_client
 
         redis = await get_async_redis_client(database="knowledge")
@@ -636,7 +635,7 @@ class AbstractConnector(ABC):
                     "sources_total": sources_total,
                     "sources_done": sources_done,
                     "sources_failed": sources_failed,
-                    "worker_id": "%s-%d" % (os.uname().nodename, os.getpid()),
+                    "worker_id": worker_identity(),
                     "last_updated": datetime_now().isoformat(),
                 },
                 ensure_ascii=False,

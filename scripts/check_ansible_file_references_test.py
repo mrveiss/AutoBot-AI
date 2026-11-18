@@ -153,6 +153,24 @@ def test_a_group_no_inventory_defines_is_reported(tmp_path):
     assert "hosts: browser" in result.stdout
 
 
+def test_a_hosts_key_in_a_group_vars_data_file_is_not_a_play_target(tmp_path):
+    """`hosts:` in group_vars is a data key (#21343); only a play file's `hosts:` names a target."""
+    _inventory(tmp_path, "all:\n  children:\n    frontend:\n      hosts:\n        web-1: {}\n")
+    data = tmp_path / "component" / "ansible" / "inventory" / "group_vars"
+    data.mkdir(parents=True)
+    (data / "infrastructure.yml").write_text(
+        "---\ninfrastructure_hosts: &h\n  slm: x\ninfrastructure:\n  hosts: *h\n  other:\n    hosts: nowhere\n",
+        encoding="utf-8",
+    )
+    _play(tmp_path, "- name: Deploy\n  hosts: frontend\n  tasks: []\n")
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout
+    assert guard._host_patterns("---\n# c\nfoo:\n  hosts: nowhere\n") == []
+    assert guard._host_patterns("---\n# c\n- name: p\n  hosts: nowhere\n") == [(4, "nowhere")]
+
+
 def test_a_group_defined_by_any_inventory_resolves(tmp_path):
     """Several inventories ship, describing different topologies.
 

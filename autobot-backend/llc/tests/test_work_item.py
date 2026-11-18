@@ -9,6 +9,7 @@ import pytest
 
 from llc.models.enums import AssigneeType, WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
+from llc.services.work_item_gated_done import DoneGate
 from llc.services.work_item_service import (
     InvalidTransition,
     WorkItemService,
@@ -212,7 +213,8 @@ class TestStatusTransitions:
     async def test_valid_in_progress_to_done(self, service, mock_session):
         item = _make_item(status=WorkItemStatus.IN_PROGRESS)
         mock_session._db_result.scalar_one_or_none.return_value = item
-        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.DONE)
+        ungated = DoneGate(review_gate_svc=AsyncMock(requires_review=AsyncMock(return_value=(False, None))))
+        result = await service.transition_status(mock_session, str(item.id), WorkItemStatus.DONE, done_gate=ungated)
         assert result.status == WorkItemStatus.DONE
         assert result.completed_at is not None
 
