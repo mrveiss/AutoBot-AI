@@ -24,6 +24,8 @@ known ``session_id`` could destroy another user's conversation.
 
 from __future__ import annotations
 
+import uuid
+from types import SimpleNamespace
 from typing import Any, Dict
 from unittest.mock import AsyncMock
 
@@ -64,12 +66,18 @@ def stored_record(monkeypatch):
     """``session_file_exists`` answers from the manager's ``record_exists`` flag instead of the disk."""
 
     async def _exists(manager, session_id):
-        return manager.record_exists
+        return manager.record_exists and session_id == _DOCUMENT["session_id"]  # a fresh id is always free
 
     monkeypatch.setattr(conversation_export, "session_file_exists", _exists)
 
 
-def _manager(*, exists: bool = False, owner: Any = None, owner_raises: bool = False, empty: bool = False):
+def _manager(
+    *,
+    exists: bool = False,
+    owner: Any = None,
+    owner_raises: bool = False,
+    empty: bool = False,
+):
     manager = AsyncMock()
     manager.save_session = AsyncMock()
     manager.record_exists = exists
@@ -93,6 +101,7 @@ async def test_an_import_stamps_the_importing_user_as_owner() -> None:
     result = await import_conversation(manager, dict(_DOCUMENT), user_data=_ALICE)
 
     assert result["success"] is True, result["message"]
+    assert result["session_id"] != "sess-abc"  # #21731: a free id is not kept either
     metadata = manager.save_session.call_args.kwargs["metadata"]
     assert metadata is not None, "import produced a session with no owner (#14026)"
     assert metadata["owner"] == "alice"
@@ -137,7 +146,9 @@ async def test_replace_refuses_when_ownership_cannot_be_read() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("on_conflict", ["replace", "merge"])
-async def test_an_import_over_an_ownerless_session_takes_a_fresh_id_for_a_non_admin(on_conflict) -> None:
+async def test_an_import_over_an_ownerless_session_takes_a_fresh_id_for_a_non_admin(
+    on_conflict,
+) -> None:
     """#21668: nobody claims a session with no owner by writing; #21731: a non-admin gets a fresh id."""
     manager = _manager(exists=True, owner=None)
 
@@ -147,12 +158,17 @@ async def test_an_import_over_an_ownerless_session_takes_a_fresh_id_for_a_non_ad
 
 
 @pytest.mark.asyncio
-async def test_an_admin_import_over_an_ownerless_session_is_refused_not_stamped(owner_index) -> None:
+async def test_an_admin_import_over_an_ownerless_session_is_refused_not_stamped(
+    owner_index,
+) -> None:
     """#21668: an admin's owner assignment goes through the approval queue (#17038), not an import."""
     manager = _manager(exists=True, owner=None)
 
     result = await import_conversation(
-        manager, dict(_DOCUMENT), on_conflict="replace", user_data={"username": "root", "role": "admin"}
+        manager,
+        dict(_DOCUMENT),
+        on_conflict="replace",
+        user_data={"username": "root", "role": "admin"},
     )
 
     assert result["success"] is False and result["conflict"] is True
@@ -183,7 +199,9 @@ async def test_a_merge_import_is_refused_when_the_owner_is_unreadable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session(monkeypatch) -> None:
+async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session(
+    monkeypatch,
+) -> None:
     manager = _manager()
 
     async def _gone(manager, session_id):
@@ -198,7 +216,9 @@ async def test_an_unreadable_store_fails_closed_instead_of_reading_as_no_session
 
 
 @pytest.mark.asyncio
-async def test_the_checks_and_the_save_run_inside_the_session_lease(monkeypatch) -> None:
+async def test_the_checks_and_the_save_run_inside_the_session_lease(
+    monkeypatch,
+) -> None:
     from contextlib import asynccontextmanager
 
     from services import conversation_export
@@ -228,14 +248,17 @@ async def test_an_import_into_a_marked_index_is_listed(owner_index) -> None:
     result = await import_conversation(_manager(), dict(_DOCUMENT), user_data=_ALICE)
 
     assert result["success"] is True
-    listed = await owned_session_ids(owner_index, "alice", ["s-old", "sess-abc"], AsyncMock())
-    assert listed == {"s-old", "sess-abc"}
+    listed = await owned_session_ids(owner_index, "alice", ["s-old", result["session_id"]], AsyncMock())
+    assert listed == {"s-old", result["session_id"]}
 
 
 @pytest.mark.asyncio
 async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
     await import_conversation(
-        _manager(exists=True, owner="alice"), dict(_DOCUMENT), on_conflict="replace", user_data=_ALICE
+        _manager(exists=True, owner="alice"),
+        dict(_DOCUMENT),
+        on_conflict="replace",
+        user_data=_ALICE,
     )
 
     owner_index.set_session_owner.assert_awaited_once_with("sess-abc", "alice")
@@ -247,7 +270,8 @@ async def test_replacing_ones_own_session_keeps_it_indexed(owner_index) -> None:
 def _assert_saved_under_a_fresh_id(manager, result) -> None:
     """The import succeeded without a conflict flag, under a new id; the original session is untouched."""
     assert result["success"] is True and result["conflict"] is False, result
-    assert result["session_id"] != "sess-abc" and result["session_id"].startswith("sess-abc-imported-")
+    assert result["session_id"] != "sess-abc"
+    assert uuid.UUID(result["session_id"]).version == 4, "the fresh id is server-generated, not derived (#21731)"
     kwargs = manager.save_session.call_args.kwargs
     assert kwargs["session_id"] == result["session_id"]
     assert kwargs["replace"] is False
@@ -264,6 +288,67 @@ async def test_a_non_owner_collision_is_a_200_with_a_new_id(owner, on_conflict) 
 
     _assert_saved_under_a_fresh_id(manager, result)
     manager.save_session.assert_awaited_once()
+
+
+def _normalise(result: Dict[str, Any]) -> Dict[str, Any]:
+    """The response with its random id masked, so two responses compare on everything else."""
+    return {**result, "session_id": "ID", "message": result["message"].replace(result["session_id"], "ID")}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("on_conflict", ["skip", "replace", "merge", "rename"])
+async def test_a_free_id_and_a_foreign_id_answer_identically(on_conflict) -> None:
+    """#21731: the response must not reveal whether the requested id exists under another owner."""
+    free, foreign = _manager(), _manager(exists=True, owner="alice")
+
+    r_free = await import_conversation(free, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
+    r_foreign = await import_conversation(foreign, dict(_DOCUMENT), on_conflict=on_conflict, user_data=_BOB)
+
+    assert r_free.keys() == r_foreign.keys()
+    for result in (r_free, r_foreign):
+        assert result["session_id"] != "sess-abc"
+        assert result["message"] == f"Imported 1 messages into session {result['session_id']!r}"
+    assert _normalise(r_free) == _normalise(r_foreign)
+    assert free.save_session.call_args.kwargs.keys() == foreign.save_session.call_args.kwargs.keys()
+    assert free.get_session_owner.await_count == foreign.get_session_owner.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_the_foreign_session_is_untouched_by_the_import() -> None:
+    manager = _manager(exists=True, owner="alice")
+
+    result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="replace", user_data=_BOB)
+
+    manager.save_session.assert_awaited_once()
+    assert manager.save_session.call_args.kwargs["session_id"] == result["session_id"] != "sess-abc"
+    assert manager.save_session.call_args.kwargs["replace"] is False
+
+
+@pytest.mark.asyncio
+async def test_imports_in_the_same_second_get_distinct_ids(monkeypatch) -> None:
+    """The id no longer comes from the clock: same-second imports cannot collide and merge."""
+    monkeypatch.setattr("time.time", lambda: 1_700_000_000.0)
+
+    ids = {(await import_conversation(_manager(), dict(_DOCUMENT), user_data=_BOB))["session_id"] for _ in range(20)}
+
+    assert len(ids) == 20
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_id_that_already_has_a_record_is_never_used(monkeypatch) -> None:
+    """Create-only: an id with a stored record is skipped, so the save cannot merge into it."""
+    taken = "00000000-0000-4000-8000-000000000001"
+    ids = iter([uuid.UUID(taken), uuid.UUID("00000000-0000-4000-8000-000000000002")])
+    monkeypatch.setattr(conversation_export, "uuid", SimpleNamespace(uuid4=lambda: next(ids)))  # not the global uuid
+
+    async def _exists(manager, session_id):
+        return session_id == taken
+
+    monkeypatch.setattr(conversation_export, "session_file_exists", _exists)
+
+    result = await import_conversation(_manager(), dict(_DOCUMENT), user_data=_BOB)
+
+    assert result["session_id"] == "00000000-0000-4000-8000-000000000002"
 
 
 @pytest.mark.asyncio
@@ -283,12 +368,14 @@ async def test_the_owner_renaming_their_own_session_is_unchanged() -> None:
     result = await import_conversation(manager, dict(_DOCUMENT), on_conflict="rename", user_data=_ALICE)
 
     assert result["success"] is True and result["conflict"] is True
-    assert result["session_id"].startswith("sess-abc-imported-")
+    assert result["session_id"] != "sess-abc" and uuid.UUID(result["session_id"]).version == 4
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("on_conflict", ["skip", "replace", "merge"])
-async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_over(on_conflict) -> None:
+async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_over(
+    on_conflict,
+) -> None:
     """#21668: a stored record with an owner but no messages must not read as absent."""
     manager = _manager(exists=True, owner="alice", empty=True)
 

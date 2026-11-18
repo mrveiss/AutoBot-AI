@@ -25,6 +25,7 @@ then reached through one member access; a helper of a file that does not import 
 
 from __future__ import annotations
 
+import posixpath
 import re
 
 from repo_tests._unconnected_clients import _VERBS, prepared_text
@@ -38,8 +39,9 @@ _URL_HELPER = re.compile(
 )
 _METHOD_OPTION = re.compile(r"""(['"]?)method\1\s*:\s*['"](?P<verb>\w+)['"]""")
 _PATH_TAIL = r"/[^`'\"\s]*"
-#: The module stem of each ``import ... from '<path>/<stem>[.ext]'`` in a file.
-_IMPORT_STEM = re.compile(r"""from\s+['"][^'"]*?/(\w+)(?:\.\w+)?['"]""")
+#: The specifier of each ``import ... from '<specifier>'`` in a file.
+_IMPORT_SPEC = re.compile(r"""from\s+['"]([^'"]+)['"]""")
+_SOURCE_EXT = re.compile(r"\.(?:ts|tsx|js|vue)$")
 _MEMBER = r"(?:\w+\.)?"  # ``deps.`` in front of a receiver or helper handed in as a member of a parameter object
 HelperCalls = dict[tuple[str, str], set[str]]
 
@@ -100,7 +102,10 @@ def _verb(verb: str, arguments: str) -> str:
 
 
 def _calls_of(
-    helper: re.Match[str], calls: str, receivers: dict[str, str], handed_in: bool = False
+    helper: re.Match[str],
+    calls: str,
+    receivers: dict[str, str],
+    handed_in: bool = False,
 ) -> set[tuple[str, str]]:
     """The calls in *calls* through *helper*; *handed_in* reads the client and the helper as members of a parameter."""
     member = _MEMBER if handed_in else ""
@@ -124,14 +129,36 @@ def helper_calls_in(rel: str, text: str) -> set[tuple[str, str]]:
     return found
 
 
+def _imported_modules(rel: str, text: str) -> set[str]:
+    """The extension-less repo paths *rel* imports: a relative specifier against *rel*'s directory, the ``@/``
+    alias against the ``src`` root *rel* sits under. A bare package specifier names no repo file."""
+    root = rel.split("/src/", 1)[0] + "/src" if "/src/" in rel else ""
+    out = set()
+    for spec in _IMPORT_SPEC.findall(text):
+        if spec.startswith("."):
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), spec))
+        elif spec.startswith("@/") and root:
+            target = posixpath.join(root, spec[2:])
+        else:
+            continue
+        out.add(_SOURCE_EXT.sub("", target))
+    return out
+
+
+def _is_module(other: str, modules: set[str]) -> bool:
+    """True when *other* is one of the *modules* (or the ``index`` of a directory among them)."""
+    bare = _SOURCE_EXT.sub("", other)
+    return bare in modules or (bare.endswith("/index") and bare[: -len("/index")] in modules)
+
+
 def _handed_in_calls(rel: str, text: str, texts: dict[str, str]) -> HelperCalls:
     """The calls through *rel*'s URL helpers made in the files it imports, which it hands the helper and client."""
     receivers, _script, own_calls = prepared_text(rel, text)
     helpers = list(_URL_HELPER.finditer(own_calls))
-    stems = set(_IMPORT_STEM.findall(text))
+    modules = _imported_modules(rel, text)
     out: HelperCalls = {}
     for other, other_text in texts.items():
-        if other == rel or not helpers or other.rsplit("/", 1)[-1].split(".")[0] not in stems:
+        if other == rel or not helpers or not _is_module(other, modules):
             continue
         calls = prepared_text(other, other_text)[2]
         for helper in helpers:

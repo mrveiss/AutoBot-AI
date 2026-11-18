@@ -503,7 +503,12 @@ _CALLER = "export function useCaller(deps) {\n  return deps.api.get(`${deps.plan
 @pytest.mark.parametrize(
     ("label", "owner", "caller", "connected"),
     [
-        ("a helper handed in by the file that imports the caller", _OWNER, _CALLER, True),
+        (
+            "a helper handed in by the file that imports the caller",
+            _OWNER,
+            _CALLER,
+            True,
+        ),
         (
             "a helper whose owner does not import the caller",
             _OWNER.replace("import { useCaller } from './caller'\n", ""),
@@ -516,8 +521,18 @@ _CALLER = "export function useCaller(deps) {\n  return deps.api.get(`${deps.plan
             _CALLER.replace("deps.api", "deps.fetcher"),
             False,
         ),
-        ("a handed-in call of another method", _OWNER, _CALLER.replace(".get(", ".delete("), False),
-        ("a handed-in call of another helper", _OWNER, _CALLER.replace("plantedUrl", "otherUrl"), False),
+        (
+            "a handed-in call of another method",
+            _OWNER,
+            _CALLER.replace(".get(", ".delete("),
+            False,
+        ),
+        (
+            "a handed-in call of another helper",
+            _OWNER,
+            _CALLER.replace("plantedUrl", "otherUrl"),
+            False,
+        ),
     ],
 )
 def test_a_route_reached_through_a_helper_handed_to_the_calling_file_counts_as_connected(
@@ -526,3 +541,26 @@ def test_a_route_reached_through_a_helper_handed_to_the_calling_file_counts_as_c
     """#21307: ``deps.api.get(`${deps.helper()}/x`)`` follows the helper the importing file declares."""
     files = {**_PLANTED, f"{_MAIN}/owner.ts": owner, f"{_MAIN}/caller.ts": caller}
     assert (_KEY not in _fired(tmp_path, files)) is connected, label
+
+
+def test_a_same_stem_file_in_another_directory_is_not_the_imported_caller(
+    tmp_path: Path,
+) -> None:
+    """#21731: the import specifier resolves to a path; a ``caller`` elsewhere shares only the stem."""
+    files = {
+        **_PLANTED,
+        f"{_MAIN}/owner.ts": _OWNER,
+        f"{_MAIN}/caller.ts": "export const unrelated = 1\n",
+        f"{_MAIN}/other/caller.ts": _CALLER,
+    }
+    assert _KEY in _fired(tmp_path, files)
+
+
+def test_the_at_alias_resolves_to_the_src_root(tmp_path: Path) -> None:
+    owner = _OWNER.replace("'./caller'", "'@/composables/caller'")
+    files = {
+        **_PLANTED,
+        f"{_MAIN}/owner.ts": owner,
+        f"{_MAIN}/composables/caller.ts": _CALLER,
+    }
+    assert _KEY not in _fired(tmp_path, files)
