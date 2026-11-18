@@ -236,7 +236,7 @@ const copyCommand = () => {
 .step-badge {
   @apply text-xs font-semibold px-2 py-1 rounded;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .step-status {

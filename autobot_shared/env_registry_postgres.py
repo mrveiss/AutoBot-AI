@@ -122,3 +122,19 @@ register_env_var(
         component="postgres",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SECRET_DELETE_LOCK_TIMEOUT_MS",
+        type=int,
+        default=5000,
+        description=(
+            "Milliseconds a secret delete waits for the secret's row lock before it gives up with a 503 and a "
+            "Retry-After header; the lock serializes the dependents check against a dependent being registered "
+            "(api/secrets_guarded_delete.py, #21039). Raising it tolerates a slower concurrent registration; "
+            "lowering it frees the pool connection sooner."
+        ),
+        component="postgres",
+        range=(100, 60000),
+    )
+)

@@ -12,15 +12,15 @@
  * response carries no "may manage" fact, so the controls are shown and a refusal is reported, never
  * guessed from a role here.
  *
- * The view is not remounted when the route moves to another company, so everything is scoped to the
- * company a request was sent for: the id is captured at send time, a change of company drops the rows,
- * and a response for a company no longer shown is discarded.
+ * The company layout remounts the view on a company switch (#21502), but a late answer can still
+ * arrive for a company no longer shown, so the id is captured at send time, a change of company
+ * drops the rows, and such an answer is discarded.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import type { Member as CompanyMember } from '@/composables/llc/useCompanyMembers'
+import { isMembersEnvelope, type Member as CompanyMember, type MembersResponse } from '@/composables/llc/useCompanyMembers'
 
 const logger = createLogger('useCompanyTeams')
 
@@ -52,6 +52,8 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
   const members = ref<Member[]>([])
   const state = ref<TeamsState>('loading')
   const membersFailed = ref(false)
+  // True while the members read is in flight: the teams show first, member names wait (#20816).
+  const membersPending = ref(false)
   const errorMessage = ref('')
   const pending = ref(false)
   // Bumped when the company changes: a response captured under an older generation is discarded.
@@ -66,6 +68,31 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
   const isInactive = (userId: string): boolean =>
     members.value.find((m) => m.user_id === userId)?.is_active === false
 
+  /**
+   * The members read is not awaited: teams render as soon as their own read answers, and the
+   * names fill in when the members arrive (a slow or never-answering read must not hide the teams).
+   * A reload after the names are known keeps them; only the first read shows them pending.
+   */
+  function readMembers(id: string, current: () => boolean): void {
+    if (members.value.length === 0) membersPending.value = true
+    void (api.get(`/api/llc/companies/${id}/members`) as Promise<MembersResponse>).then(
+      (res) => {
+        if (!current()) return
+        // #21096: a reply without the envelope is a failed read, not a company with no members.
+        const ok = isMembersEnvelope(res)
+        membersFailed.value = !ok
+        members.value = ok ? res.members : []
+        membersPending.value = false
+      },
+      () => {
+        if (!current()) return
+        membersFailed.value = true
+        members.value = []
+        membersPending.value = false
+      },
+    )
+  }
+
   async function load(): Promise<void> {
     const id = companyId()
     if (!id) return
@@ -74,13 +101,9 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
     const current = () => mine === generation && req === loadSeq
     // A reload keeps the table on screen; only the first load of a company shows the loading state.
     if (teams.value.length === 0) state.value = 'loading'
-    const [teamsResult, membersResult] = await Promise.allSettled([
-      api.get(`/api/llc/companies/${id}/teams`) as Promise<CompanyTeamsResponse>,
-      api.get(`/api/llc/companies/${id}/members`) as Promise<Member[]>,
-    ])
+    readMembers(id, current)
+    const teamsResult = await Promise.allSettled([api.get(`/api/llc/companies/${id}/teams`) as Promise<CompanyTeamsResponse>]).then((r) => r[0])
     if (!current()) return
-    membersFailed.value = membersResult.status === 'rejected'
-    members.value = membersResult.status === 'fulfilled' && Array.isArray(membersResult.value) ? membersResult.value : []
     if (teamsResult.status === 'fulfilled') {
       teams.value = Array.isArray(teamsResult.value?.teams) ? teamsResult.value.teams : []
       state.value = 'ready'
@@ -134,6 +157,7 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
     teams.value = []
     members.value = []
     membersFailed.value = false
+    membersPending.value = false
     errorMessage.value = ''
     pending.value = false
     state.value = 'loading'
@@ -143,7 +167,7 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
   const hasTeams = computed(() => teams.value.length > 0)
 
   return {
-    teams, members, state, membersFailed, errorMessage, pending, hasTeams,
+    teams, members, state, membersFailed, membersPending, errorMessage, pending, hasTeams,
     nameOf, isInactive, load, createTeam, deleteTeam, addMember, removeMember,
   }
 }
