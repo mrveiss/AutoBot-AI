@@ -143,7 +143,8 @@ register_env_var(
         default=1500,
         description=(
             "Cap on the visible-text excerpt a navigate result carries after the URL and "
-            "title; whitespace runs are collapsed first (#21772)."
+            "title; whitespace runs are collapsed first (#21772). The browser worker reads the same variable, so the "
+            "worker and the backend share one cap."
         ),
         component="backend",
     )
