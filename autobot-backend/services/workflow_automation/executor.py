@@ -530,11 +530,7 @@ class WorkflowExecutor:
         workflows: Dict[str, ActiveWorkflow],
     ) -> None:
         """Approve and execute workflow step"""
-        current_step = workflow.steps[workflow.current_step_index]
-
-        if current_step.step_id != step_id:
-            logger.error(f"Step ID mismatch: expected {current_step.step_id}, got {step_id}")
-            return
+        current_step = workflow.step_awaiting_decision(step_id)
 
         current_step.begin_after_approval()  # a repeated approve is refused (409), never run twice
 
@@ -643,16 +639,14 @@ class WorkflowExecutor:
         workflows: Dict[str, ActiveWorkflow],
     ) -> None:
         """Skip current workflow step"""
-        current_step = workflow.steps[workflow.current_step_index]
+        current_step = workflow.step_awaiting_decision(step_id)
+        current_step.status = WorkflowStepStatus.SKIPPED
+        current_step.completed_at = datetime.now(tz=timezone.utc)
+        workflow.current_step_index += 1
 
-        if current_step.step_id == step_id:
-            current_step.status = WorkflowStepStatus.SKIPPED
-            current_step.completed_at = datetime.now(tz=timezone.utc)
-            workflow.current_step_index += 1
-
-            # Continue with next step
-            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-            await self.process_next_step(workflow, workflows)
+        # Continue with next step
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+        await self.process_next_step(workflow, workflows)
 
     async def _execute_command(
         self, workflow: ActiveWorkflow, command: str, value_redactor: Callable[[str], str]

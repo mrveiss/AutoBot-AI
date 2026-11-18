@@ -5,24 +5,22 @@
 
 - name: restart vnc
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  systemd:
-    name: autobot-vnc
-    state: restarted
-  become: true
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-vnc
+    restart_unit_tolerate_failure: true
   # (#2872) Intentional: VNC service may not be deployed on all browser
   # nodes (install_vnc flag).  Handler is notified from tasks that are
   # conditionally included, so it must tolerate the unit being absent.
-  failed_when: false
 
 - name: restart playwright
   when: autobot_restart_services | default(true) | bool  # #20743: false on a sync without restarts
-  systemd:
-    name: autobot-playwright
-    state: restarted
-  become: true
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-playwright
+    restart_unit_tolerate_failure: true
   # (#2872) Intentional: Playwright service may not be deployed yet when
   # the handler fires during initial provisioning.
-  failed_when: false
 
 - name: reload systemd
   systemd:

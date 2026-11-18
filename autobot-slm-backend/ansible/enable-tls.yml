@@ -131,9 +131,9 @@
         slm_frontend_publish_build_env: {}
 
     - name: restart frontend
-      ansible.builtin.systemd:
-        name: autobot-frontend
-        state: restarted
+      ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-frontend
 
 
 # ===== Backend TLS Enablement =====
@@ -205,10 +205,10 @@
 
   handlers:
     - name: restart backend
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
-      ignore_errors: true
+      ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend
+        restart_unit_tolerate_failure: true
 
 
 # ===== Redis TLS Enablement =====
@@ -278,11 +278,11 @@
 
   handlers:
     - name: restart redis
-      ansible.builtin.systemd:
-        # #14516: redis-stack's unit; `redis-server` does not exist on these hosts.
-        name: "{{ redis_service_name | default('redis-stack-server') }}"
-        state: restarted
-      ignore_errors: true
+      # #14516: redis-stack's unit; `redis-server` does not exist on these hosts.
+      ansible.builtin.include_tasks: _shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: "{{ redis_service_name | default('redis-stack-server') }}"
+        restart_unit_tolerate_failure: true
 
 
 # ===== Summary =====

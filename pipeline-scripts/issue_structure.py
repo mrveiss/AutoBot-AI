@@ -49,7 +49,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
-from issue_api import IssueApiError, IssueClient, ensure_label, load_upsert  # noqa: E402
+from issue_api import IssueApiError, IssueClient, ensure_label, list_issues, load_upsert  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -366,14 +366,9 @@ def check_issue_structure(client: StructureClient, number: int) -> List[str]:
 
 def open_issues(client: StructureClient) -> List[Dict[str, Any]]:
     """Every open issue (not PRs), paginated up to the page cap."""
-    items: List[Dict[str, Any]] = []
-    for page in range(1, SWEEP_MAX_PAGES + 1):
-        query = urllib.parse.urlencode({"state": "open", "per_page": SWEEP_PAGE_SIZE, "page": page})
-        batch = client.call("GET", f"/repos/{client.repo}/issues?{query}")
-        items += [item for item in batch if not item.get("pull_request")]
-        if len(batch) < SWEEP_PAGE_SIZE:
-            return items
-    logger.warning("sweep stopped at the %d-page cap; later issues wait for an issue event", SWEEP_MAX_PAGES)
+    items, complete = list_issues(client, {"state": "open"}, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
+    if not complete:
+        logger.warning("sweep stopped at the %d-page cap; later issues wait for an issue event", SWEEP_MAX_PAGES)
     return items
 
 

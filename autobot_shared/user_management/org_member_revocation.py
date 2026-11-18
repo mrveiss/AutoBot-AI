@@ -24,7 +24,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.db_session import run_after_commit
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.user_management.models.user import UserCore
 from autobot_shared.user_management.password_epoch import DEACTIVATION_EPOCH_LEAD_SECONDS, MembersPasswordEpochMark
 
@@ -41,5 +41,7 @@ async def queue_member_token_revocation(
     rows = await session.execute(select(user_model.username).where(user_model.org_id == org_id))
     usernames = tuple(sorted(set(rows.scalars().all())))
     if usernames:
-        run_after_commit(session, MembersPasswordEpochMark(usernames, DEACTIVATION_EPOCH_LEAD_SECONDS, in_redis))
+        defer_until_commit(
+            session, MembersPasswordEpochMark(usernames, DEACTIVATION_EPOCH_LEAD_SECONDS, in_redis), scope=True
+        )
     return {"sessions_revocation": "queued_after_commit", "members_queued": len(usernames)}

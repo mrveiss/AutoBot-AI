@@ -12,6 +12,7 @@ from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session_factory
 
+from ..exceptions import RunKeyIssueFailed
 from ..services.api_key import ApiKeyService
 
 logger = get_logger(__name__)
@@ -33,8 +34,9 @@ _RUN_KEY_TTL_SECONDS = _run_key_ttl(env_float("LLC_RUN_KEY_TTL_SECONDS", 0.0), A
 async def issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[str]]:
     """Issue an ephemeral run-scoped LLC API key. Returns (record, plaintext).
 
-    Best-effort: on failure the agent still runs, just without a key (returns
-    ``(None, None)``) — the run is logged rather than blocked.
+    Raises :class:`RunKeyIssueFailed` when the key cannot be issued: an agent dispatched
+    without its key cannot call the Agent API, so the run fails visibly (#20149) instead of
+    running keyless. The cause is logged here and chained, not put in the exception text.
     """
     factory = get_async_session_factory()
     try:
@@ -47,9 +49,9 @@ async def issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[s
                 expires_at=datetime.now(tz=timezone.utc) + timedelta(seconds=_RUN_KEY_TTL_SECONDS),
             )
         return record, raw
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to issue ephemeral heartbeat key for agent %s", agent_id)
-        return None, None
+        raise RunKeyIssueFailed(agent_id) from exc
 
 
 async def revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:

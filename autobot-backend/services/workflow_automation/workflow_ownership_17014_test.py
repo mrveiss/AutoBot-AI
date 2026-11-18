@@ -26,7 +26,7 @@ from auth_middleware import get_current_user
 from services.workflow_secret_service import StepSecrets
 
 from . import routes
-from .models import ActiveWorkflow, AutomationMode
+from .models import ActiveWorkflow, AutomationMode, WorkflowStep
 from .workflow_ownership import caller_id, is_owner_or_admin
 from .ws_endpoint import may_control
 
@@ -65,7 +65,9 @@ class _Manager:
         return True
 
     def get_workflow_status(self, workflow_id):
-        return {"workflow_id": workflow_id}
+        """What the real manager returns: the workflow's own ``to_status_dict`` (#12363)."""
+        workflow = self.active_workflows.get(workflow_id) or self.completed_workflows.get(workflow_id)
+        return workflow.to_status_dict() if workflow else None
 
     def get_pending_approval(self, workflow_id):
         return None
@@ -192,6 +194,18 @@ def test_state_and_control_routes_refuse_another_user(monkeypatch, method, path)
 def test_state_routes_allow_the_owner(monkeypatch, method, path):
     client, _ = _client(monkeypatch, ALICE)
     assert getattr(client, method)(path).status_code == 200
+
+
+def test_workflow_status_route_serves_the_real_status_dict(monkeypatch):
+    """The ``response_model`` must describe ``to_status_dict`` itself, not a stub of it (#12363)."""
+    workflow = _workflow("u-alice")
+    workflow.steps = [WorkflowStep(step_id="s1", command="ls", description="list")]
+    client, _ = _client(monkeypatch, ALICE, workflow)
+    response = client.get("/workflow_status/wf-1")
+    assert response.status_code == 200
+    body = response.json()["workflow"]
+    assert body == workflow.to_status_dict()
+    assert body["steps"][0]["step_id"] == "s1"
 
 
 def test_create_workflow_records_the_caller_as_owner(monkeypatch):

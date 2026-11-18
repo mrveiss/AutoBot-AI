@@ -88,11 +88,24 @@ def env_int(name: str, default: int) -> int:
     Returns *default* silently when the var is absent.
     Logs a warning and returns *default* when the var is set but not a valid integer.
     """
-    raw = env_raw(name)
-    if raw is None:
+    return parse_int_or_default(name, env_raw(name), default)
+
+
+def parse_int_or_default(name: str, raw: object, default: int) -> int:
+    """Parse *raw* as an int, returning *default* (with a warning) when absent, blank or unparseable (#20683).
+
+    The single definition of "tolerant int parse" for both routes: :func:`env_int` feeds it
+    ``os.environ``; pydantic ``mode="before"`` field validators feed it the value settings
+    loading hands them, so a bad value falls back instead of raising ``ValidationError``.
+    """
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    if blank_to_none(raw) is None:
         return default
     try:
-        return int(raw)
+        return int(str(raw).strip())
     except ValueError:
         logger.warning("Invalid %s=%r; using default %d", name, raw, default)
         return default
@@ -110,16 +123,7 @@ def env_int_clamped(
     valid integer.  Returns *default* silently when the var is absent.
     Clamps to [min_v, max_v] when either bound is provided.
     """
-    raw = env_raw(name)
-    if raw is None:
-        value = default
-    else:
-        try:
-            value = int(raw)
-        except ValueError:
-            logger.warning("Invalid %s=%r; using %d", name, raw, default)
-            value = default
-    return _clamped(name, value, min_v, max_v)
+    return _clamped(name, parse_int_or_default(name, env_raw(name), default), min_v, max_v)
 
 
 def _clamped(name: str, value, min_v, max_v):
@@ -140,6 +144,22 @@ def _clamped(name: str, value, min_v, max_v):
     if clamped != value:
         logger.warning("%s=%r is outside [%s, %s]; using %r", name, value, min_v, max_v, clamped)
     return clamped
+
+
+def within_range(name: str, value, bounds: tuple | None) -> bool:
+    """True when numeric *value* lies in inclusive ``(min, max)`` *bounds* (``None`` = open end).
+
+    Out of range warns naming the variable and the range only; the value is
+    omitted because a registry spec carries no secret marker (#20722).
+    Non-numeric values and ``bounds=None`` are never checked.
+    """
+    if bounds is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return True
+    min_v, max_v = bounds
+    if (min_v is None or value >= min_v) and (max_v is None or value <= max_v):
+        return True
+    logger.warning("%s is outside [%s, %s]; using the default", name, min_v, max_v)
+    return False
 
 
 def env_float_clamped(
@@ -176,6 +196,22 @@ def env_float_clamped(
             logger.warning("%s=%r must be a positive finite number; using %s", name, raw, default)
             value = default
     return _clamped(name, value, min_v, max_v)
+
+
+def env_registered(name: str, *, positive_finite: bool = False):
+    """A registered numeric env var, read within the range its registry entry declares.
+
+    The default and the ``(min, max)`` come from ``REGISTRY``, so the registered range is the one enforced; a
+    malformed value falls back to the default and an out-of-range one is clamped, each with a warning.
+    ``positive_finite`` (floats only) also rejects NaN, infinity and non-positive values.
+    """
+    from autobot_shared.env_registry import REGISTRY
+
+    spec = REGISTRY[name]
+    low, high = spec.range or (None, None)
+    if spec.type is int:
+        return env_int_clamped(name, spec.default, low, high)
+    return env_float_clamped(name, spec.default, low, high, positive_finite=positive_finite)
 
 
 # Canonical truthy set for boolean env flags. Single source of truth so guards

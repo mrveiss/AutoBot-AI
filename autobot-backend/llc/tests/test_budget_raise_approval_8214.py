@@ -18,7 +18,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from llc.api.budget import UpdateLimitRequest
-from llc.models.budget import TOKEN_LIMIT_MAX, LLCAgentBudget
+from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget
 from llc.models.enums import ApprovalStatus
 from llc.services.approval import ApprovalHookError
 from llc.services.approval_hooks import BudgetOverridePayload
@@ -219,3 +219,15 @@ def test_a_token_limit_the_column_cannot_store_is_refused_at_the_request() -> No
         BudgetOverridePayload(agent_id="a1", token_limit=TOKEN_LIMIT_MAX + 1)
     assert UpdateLimitRequest(token_limit=TOKEN_LIMIT_MAX).token_limit == TOKEN_LIMIT_MAX
     assert BudgetOverridePayload(agent_id="a1", token_limit=TOKEN_LIMIT_MAX).token_limit == TOKEN_LIMIT_MAX
+
+
+def test_a_token_limit_below_one_is_refused_at_the_request() -> None:
+    """The floor is a literal here, so the pin holds even if the constant is edited (#20930)."""
+    assert TOKEN_LIMIT_MIN == 1
+    for bad in (0, -1, -9223372036854775808):
+        with pytest.raises(ValidationError):
+            UpdateLimitRequest(token_limit=bad)
+        with pytest.raises(ValidationError):
+            BudgetOverridePayload(agent_id="a1", token_limit=bad)
+    assert UpdateLimitRequest(token_limit=1).token_limit == 1
+    assert BudgetOverridePayload(agent_id="a1", token_limit=1).token_limit == 1

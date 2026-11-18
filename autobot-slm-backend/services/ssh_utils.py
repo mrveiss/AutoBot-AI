@@ -22,20 +22,21 @@ from typing import Annotated
 
 from pydantic import AfterValidator
 
+from autobot_shared.logging_once import log_once
+
 logger = logging.getLogger(__name__)
 
-# Paths already warned about — warn once per path per process so a persistent
-# permissions misconfiguration degrades with a single actionable line instead
-# of replacing crash spam with log spam (#11793).
-_WARNED_PATHS: set = set()
 
+def _warn_key_unusable(path: str, detail: str) -> None:
+    """Log the not-usable WARNING for *path* at most once per process (#11793).
 
-def _warn_once(path: str, detail: str) -> None:
-    """Log the not-usable WARNING for *path* at most once per process."""
-    if path in _WARNED_PATHS:
-        return
-    _WARNED_PATHS.add(path)
-    logger.warning(
+    Once per path so a persistent permissions misconfiguration degrades with a single actionable
+    line instead of replacing crash spam with log spam.
+    """
+    log_once(
+        logger,
+        logging.WARNING,
+        path,
         "SSH key %s is not usable (%s); falling back to default ssh identity",
         path,
         detail,
@@ -170,7 +171,7 @@ def _ssh_key_usable(key_path) -> bool:
         if os.access(path, os.R_OK):
             return True
     except OSError as exc:  # PermissionError included — EACCES on parent dir
-        _warn_once(path, f"errno {exc.errno}: {exc.strerror or exc}")
+        _warn_key_unusable(path, f"errno {exc.errno}: {exc.strerror or exc}")
         return False
-    _warn_once(path, "exists but is not readable by the SLM process")
+    _warn_key_unusable(path, "exists but is not readable by the SLM process")
     return False
