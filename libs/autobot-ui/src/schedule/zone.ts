@@ -4,6 +4,8 @@
 // IANA-zone wall-clock arithmetic on top of Intl only (no dependency). The
 // zone database ships with the runtime, so DST rules are the platform's.
 
+import { isoDateStamp } from '../utils/format'
+
 const cache = new Map<string, Intl.DateTimeFormat>()
 const DAY_MS = 86_400_000
 
@@ -83,5 +85,5 @@ export function listZones(...include: string[]): string[] {
 export function zoneDate(ms: number, zone: string, plusDays = 0): string {
   const p = localParts(ms, zone)
   const d = new Date(Date.UTC(p.y, p.m - 1, p.d + plusDays))
-  return d.toISOString().slice(0, 10)
+  return isoDateStamp(d)
 }

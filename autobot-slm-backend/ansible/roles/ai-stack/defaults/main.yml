@@ -11,6 +11,9 @@ ai_user: autobot
 ai_group: autobot
 ai_install_dir: "{{ autobot.base_dir }}/autobot-ai-stack"
 ai_log_dir: /var/log/autobot
+# AUTOBOT_LOGS_DIR (#20894): the application's own rotating handlers. Distinct from ai_log_dir, where the unit's
+# StandardOutput= appends the same file names; one file written by both would carry duplicates and be orphaned on rotation.
+ai_app_log_dir: "{{ ai_install_dir }}/logs"
 # Issue #3097: ai-stack and backend share /var/lib/autobot for data storage
 ai_data_dir: /var/lib/autobot
 
@@ -75,9 +78,8 @@ ai_translation_model: "mistral:7b-instruct"
 # Classification tier (gemma2:2b)
 ai_classification_model: "gemma2:2b"
 ai_sentiment_analysis_model: "gemma2:2b"
-# System tier (dolphin-llama3:8b) -- the failsafe matches the backend's (#19332)
+# System tier (dolphin-llama3:8b)
 ai_system_commands_model: "dolphin-llama3:8b"
-ai_llm_failsafe_model: "{{ ai_system_commands_model }}"
 
 # #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
 #

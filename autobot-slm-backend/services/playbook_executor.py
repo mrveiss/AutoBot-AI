@@ -37,6 +37,8 @@ from services.playbook_code_source_gate import refusal_without_code_source
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.process_group import KILL_GRACE_S, kill_process_group
 from services.provision_progress import TaskProgressTracker
+from services.rollback_target import deploy_ref_vars
+from services.sync_restart import reject_negated_tags
 from services.unit_names import validate_unit_extra_vars
 
 logger = logging.getLogger(__name__)
@@ -429,6 +431,7 @@ class PlaybookExecutor:
         extra_vars_file: Path | None,
         check_mode: bool,
         inventory_path: Path | None = None,
+        skip_tags: List[str] | None = None,
     ) -> List[str]:
         """
         Build Ansible command with parameters.
@@ -447,8 +450,10 @@ class PlaybookExecutor:
 
         if limit:
             cmd.extend(["--limit", ",".join(limit)])
-        if tags:
-            cmd.extend(["--tags", ",".join(tags)])
+        reject_negated_tags(tags)  # #20743: --tags has no negation; a skip goes in skip_tags
+        for flag, values in (("--tags", tags), ("--skip-tags", skip_tags)):
+            if values:
+                cmd.extend([flag, ",".join(values)])
         if extra_vars_file:
             cmd.extend(["-e", f"@{extra_vars_file}"])
         if check_mode:
@@ -1179,6 +1184,7 @@ class PlaybookExecutor:
         detach: bool = False,
         timeout_s: float | None = None,
         must_run: List[str] | None = None,
+        skip_tags: List[str] | None = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -1191,7 +1197,7 @@ class PlaybookExecutor:
         Args:
             playbook_name: Name of playbook file (e.g., "update-all-nodes.yml")
             limit: List of hosts to limit execution to
-            tags: List of tags to run
+            tags / skip_tags: Tags to run / not to run (#20743: `tags` cannot negate, so a skip goes here)
             extra_vars: Extra variables to pass to playbook
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
@@ -1227,18 +1233,12 @@ class PlaybookExecutor:
         stage_dir = self._stage_dir_for_run(detach)
         effective_inventory, dynamic_inv_path = await self._select_inventory(inventory_path, stage_dir)
 
-        # Merge stored SLM secrets so standalone re-deploys get the wizard's secrets (#3519); the caller's
-        # keys are written !unsafe, the secrets are not (#19005).
-        merged_extra_vars: Dict[str, str] = {**await fetch_deploy_secrets(), **(extra_vars or {})}
-        extra_vars_file = self._stage_extra_vars(merged_extra_vars, stage_dir, tuple(extra_vars or ()))
+        # Stored SLM secrets (#3519) + a rollback's deploy ref (#20214); only the caller's keys are !unsafe (#19005).
+        merged = {**await fetch_deploy_secrets(), **await deploy_ref_vars(playbook_name), **(extra_vars or {})}
+        extra_vars_file = self._stage_extra_vars(merged, stage_dir, tuple(extra_vars or ()))
 
         cmd = self._build_ansible_command(
-            playbook_path,
-            limit,
-            tags,
-            extra_vars_file,
-            check_mode,
-            inventory_path=effective_inventory,
+            playbook_path, limit, tags, extra_vars_file, check_mode, effective_inventory, skip_tags
         )
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 

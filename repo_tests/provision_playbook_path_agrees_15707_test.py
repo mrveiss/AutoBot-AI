@@ -35,6 +35,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 from autobot_shared import fleet_constants
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
 REPO_ROOT = repo_root()
@@ -73,7 +74,7 @@ def default_repo_path() -> str:
     The fallback is a ``fleet_constants`` name git_tracker must import from there (#15708); it is
     resolved against that module. Reading the AST means a commented-out copy never matches.
     """
-    tree = ast.parse(_GIT_TRACKER.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_GIT_TRACKER.read_text(encoding="utf-8"))
     fleet = {
         a.asname or a.name
         for n in tree.body
@@ -98,7 +99,7 @@ def code_sync_playbook_path() -> str:
     so the string literals in it are the path segments. Read them rather than
     importing: importing `code_sync` pulls in the whole SLM API surface.
     """
-    tree = ast.parse(_CODE_SYNC.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_CODE_SYNC.read_text(encoding="utf-8"))
     segments: dict[str, list[str]] = {}
     for node in ast.walk(tree):
         target = None

@@ -26,6 +26,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
+from knowledge.fact_stream import collect_facts, stream_facts
 from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
@@ -385,7 +386,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """Schedule a background BM25 corpus-stats recompute (#2033).
 
         Called after fact mutations so IDF values stay current.
-        Uses ``asyncio.create_task`` to avoid blocking the caller.
+        Doesn't block the caller, and writes in quick succession share one (#19726).
         Callers performing bulk mutations should skip per-item calls
         and invoke this once after the batch completes (#2079).
         """
@@ -393,8 +394,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         if not hasattr(self, "_get_keyword_searcher"):
             return
         try:
-            searcher = self._get_keyword_searcher()
-            asyncio.create_task(searcher.recompute_corpus_stats())
+            self._get_keyword_searcher().request_refresh()
         except Exception as exc:
             logger.warning("BM25 stats refresh scheduling failed: %s", exc)
 
@@ -993,26 +993,8 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         self.ensure_initialized()
 
         try:
-            fact_keys = await self._scan_redis_keys_async("fact:*")
-
-            if not fact_keys:
-                return []
-
-            if offset > 0:
-                fact_keys = fact_keys[offset:]
-            if limit is not None:
-                fact_keys = fact_keys[:limit]
-
-            facts = []
-            pipeline = self.redis().pipeline()
-            for key in fact_keys:
-                pipeline.hgetall(key)
-            facts_data = await pipeline.execute()
-
-            for key, fact_data in zip(fact_keys, facts_data):
-                fact = self._process_fact_data(key, fact_data, collection)
-                if fact:
-                    facts.append(fact)
+            stream = stream_facts(self.redis(), self._process_fact_data, collection, include_quarantined)
+            facts = await collect_facts(stream, offset, limit)
 
             return await apply_quarantine(facts, include_quarantined, audit_actor)
 

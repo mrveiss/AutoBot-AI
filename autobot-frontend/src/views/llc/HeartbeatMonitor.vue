@@ -162,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveBlob } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -344,13 +345,7 @@ async function downloadFixture(run: AgentRun) {
     const url = `${getApiBase()}/llc/agents/${selectedAgent.value.id}/runs/${run.id}/fixture`
     const res = await fetchWithAuth(url)
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    const blob = await res.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = `fixture_${run.id.slice(0, 8)}.json`
-    a.click()
-    URL.revokeObjectURL(objectUrl)
+    saveBlob(await res.blob(), `fixture_${run.id.slice(0, 8)}.json`)
   } catch (err) {
     logger.error('Fixture export failed', err)
   } finally {
@@ -530,7 +525,7 @@ onUnmounted(() => {
 .btn-trigger {
   padding: 0.3rem 0.75rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: 0.8rem;

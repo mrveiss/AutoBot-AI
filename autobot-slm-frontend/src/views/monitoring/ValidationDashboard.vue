@@ -58,7 +58,7 @@
       <ValidationFindings :alerts="report.alerts" :recommendations="report.recommendations" />
 
       <BaseCard :title="t('monitoring.validationDashboard.trends.title')">
-        <BaseAlert variant="info" :message="t('monitoring.validationDashboard.trends.note')" data-testid="slm-validation-trends-note" />
+        <BaseAlert v-if="!report.trends_available" variant="info" :message="t('monitoring.validationDashboard.trends.note')" data-testid="slm-validation-trends-note" />
         <BaseTable
           :columns="trendColumns" :rows="trendRows" row-key="series" :aria-label="t('monitoring.validationDashboard.trends.title')"
           :empty-title="t('monitoring.validationDashboard.trends.empty')" data-testid="slm-validation-trends"

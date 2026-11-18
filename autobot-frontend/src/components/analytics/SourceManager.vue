@@ -92,7 +92,7 @@
                 </div>
                 <div class="source-timestamps">
                   <span v-if="source.last_synced" class="source-synced">
-                    {{ $t('analytics.sources.synced') }} {{ formatRelativeTime(source.last_synced) }}
+                    {{ $t('analytics.sources.synced') }} {{ formatSyncedAt(source.last_synced) }}
                   </span>
                   <span v-else class="source-never-synced">{{ $t('analytics.sources.neverSynced') }}</span>
                 </div>
@@ -191,13 +191,13 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, BaseButton } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, BaseButton, formatRelativeTime } from '@autobot/ui'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useAnalyticsSourceManagement } from '@/composables/analytics/useAnalyticsSourceManagement'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourceManager')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { confirm } = useConfirmDialog()
 
 // ---- Types ----------------------------------------------------------------
@@ -384,16 +384,8 @@ function getAccessIcon(access: string): IconName {
   return icons[access] ?? 'lock'
 }
 
-function formatRelativeTime(isoString: string): string {
-  const now = Date.now()
-  const then = new Date(isoString).getTime()
-  const diffMs = now - then
-  const diffMins = Math.floor(diffMs / 60000)
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  return `${Math.floor(diffHours / 24)}d ago`
+function formatSyncedAt(isoString: string): string {
+  return formatRelativeTime(isoString, { locale: locale.value, maxUnit: 'day' })
 }
 
 // ---- Lifecycle ------------------------------------------------------------

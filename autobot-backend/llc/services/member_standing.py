@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.models.user import User
 
-from .authz import membership_role
+from .authz import NotAuthorisedError, membership_role, require_company_admin_unless_platform
 from .membership_policy import grantable_roles
 
 
@@ -62,6 +62,15 @@ async def member_people(
     )
 
 
+async def display_name_of(session: AsyncSession, user_id: uuid.UUID) -> Optional[str]:
+    """The display name of one user (``display_name``, else ``username``), or ``None`` for no such user (#21136).
+
+    The single-user form of :func:`member_people`, so a route that names one actor does not copy the lookup.
+    """
+    names, _active = await member_people(session, [user_id])
+    return names.get(user_id)
+
+
 async def viewer_standing(
     session: AsyncSession, company_id: uuid.UUID, viewer_id: Optional[uuid.UUID], *, platform_admin: bool
 ) -> Dict[str, Any]:
@@ -69,9 +78,24 @@ async def viewer_standing(
 
     ``viewer_role`` is ``None`` for a caller with no membership (a platform admin in a company it
     does not belong to). ``viewer_grantable_roles`` is what :mod:`membership_policy` would allow.
+    ``viewer_can_manage`` is whether the company owner/admin writes would let the caller through (#20542):
+    the very check the CEO routes make, :func:`require_company_admin_unless_platform`, so a platform admin
+    with no membership is told ``True`` and the client keeps no copy of the rule.
     """
     role = None if viewer_id is None else await membership_role(session, company_id, viewer_id, for_update=False)
     return {
         "viewer_role": role,
+        "viewer_can_manage": await _may_manage(session, company_id, viewer_id, platform_admin),
         "viewer_grantable_roles": grantable_roles(role, platform_admin=platform_admin),
     }
+
+
+async def _may_manage(
+    session: AsyncSession, company_id: uuid.UUID, viewer_id: Optional[uuid.UUID], platform_admin: bool
+) -> bool:
+    """Whether the owner/admin gate the company writes share lets this caller through."""
+    try:
+        await require_company_admin_unless_platform(session, company_id, viewer_id, platform_admin=platform_admin)
+    except NotAuthorisedError:
+        return False
+    return True

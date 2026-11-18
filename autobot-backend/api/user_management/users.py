@@ -40,6 +40,8 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
+from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import (
     DuplicateUserError,
     SessionReassignError,
@@ -67,7 +69,10 @@ logger = get_logger(__name__)
     response_model=UserListResponse,
     summary="List users",
     description="List users with pagination and optional search filter.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
@@ -267,8 +272,9 @@ async def update_user(
             avatar_url=user_data.avatar_url,
             preferences=user_data.preferences,
         )
-
-        return _user_to_response(user)
+        response = _user_to_response(user)
+        await commit_or_503(user_service.session, RENAME_REVOCATION_INCOMPLETE_MESSAGE)  # a failed revocation is told
+        return response
 
     except UserNotFoundError:
         raise HTTPException(
@@ -301,6 +307,7 @@ async def delete_user(
     """Delete user account, optionally reassigning memory ownership to *reassign_to*."""
     try:
         await user_service.delete_user(user_id, hard_delete=hard_delete, reassign_to=reassign_to)
+        await commit_or_503(user_service.session)  # a failed revocation is answered, not only logged (#20443)
         return UserDeletedResponse(
             message=f"User {user_id} deleted successfully",
         )
@@ -312,6 +319,8 @@ async def delete_user(
         )
     except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # -------------------------------------------------------------------------
@@ -324,7 +333,10 @@ async def delete_user(
     response_model=UserResponse,
     summary="Activate user",
     description="Activate a deactivated user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def activate_user(
     user_id: uuid.UUID,
@@ -348,7 +360,10 @@ async def activate_user(
     response_model=UserResponse,
     summary="Deactivate user",
     description="Deactivate a user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def deactivate_user(
     user_id: uuid.UUID,
@@ -357,6 +372,7 @@ async def deactivate_user(
     """Deactivate user account."""
     try:
         await user_service.deactivate_user(user_id)
+        await commit_or_503(user_service.session)  # a failed revocation is answered, not only logged (#20443)
         user = await user_service.get_user(user_id)
         return _user_to_response(user)
 
@@ -367,6 +383,8 @@ async def deactivate_user(
         )
     except SessionReassignError as exc:  # #20029
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --
@@ -383,7 +401,9 @@ async def deactivate_user(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Assign role",
-    description="Assign a role to a user.",
+    description=(
+        "Assign a role to a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -412,7 +432,9 @@ async def assign_role(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
-    description="Revoke a role from a user.",
+    description=(
+        "Revoke a role from a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -448,6 +470,7 @@ async def revoke_role(
     summary="Set user role by name",
     description=(
         "Replace all system roles for a user with the named role (admin, user, readonly). "
+        "Changes permissions only, never platform admin status (PUT /{user_id}/admin). "
         "Requires admin privilege. Issue #1801."
     ),
     dependencies=[

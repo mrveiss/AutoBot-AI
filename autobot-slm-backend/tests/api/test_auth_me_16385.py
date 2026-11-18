@@ -165,7 +165,7 @@ app.include_router(_me_router, prefix="/api/auth")
 
 def _mint_token(secret: str = _SECRET_KEY, **claims: object) -> str:
     """Mint an HS256 token. Defaults to the secret get_current_user verifies against."""
-    data: dict = {"sub": "testuser", "admin": False, "role": "user"}
+    data: dict = {"sub": "testuser", "admin": True, "role": "admin"}
     data.update(claims)
     if secret == _SECRET_KEY:
         return AuthService().create_access_token(data=data)
@@ -246,7 +246,7 @@ class TestAuthMeValidToken:
         token = _mint_token()
         resp = _get_me(headers={"Authorization": f"Bearer {token}"})
         assert 200 <= resp.status_code < 300, resp.text
-        assert resp.json() == {"username": "testuser", "is_admin": False, "user_type": "slm_admin"}
+        assert resp.json() == {"username": "testuser", "is_admin": True, "user_type": "slm_admin"}
 
 
 class TestAuthMePasswordEpoch:

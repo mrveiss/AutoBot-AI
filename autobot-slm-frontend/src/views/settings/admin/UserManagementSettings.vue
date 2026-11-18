@@ -32,6 +32,7 @@ import {
 } from '@/composables/useSsoApi'
 import PasswordChangeForm from '@shared/components/PasswordChangeForm.vue'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import PersonPushFailuresAlert from './PersonPushFailuresAlert.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -476,11 +477,10 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
 <template>
   <div class="p-6 space-y-6">
-    <!-- Messages -->
+    <PersonPushFailuresAlert />
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.userManagementSettings.dismissError')" @dismiss="error = null" />
 
     <BaseAlert v-if="success" variant="success" :message="success" />
-
     <!-- Authentication Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.authenticationStatus') }}</h2>

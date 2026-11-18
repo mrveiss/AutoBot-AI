@@ -45,7 +45,9 @@ from fastapi import (
     Query,
     Request,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.knowledge_chunked_upload import router as chunked_upload_router
 from api.knowledge_office_upload import OFFICE_EXTENSIONS, extract_office_upload, verified_upload_extension
 from api.knowledge_upload_limit import router as upload_limit_router
 from api.schemas_knowledge import (
@@ -61,6 +63,7 @@ from api.schemas_knowledge import (
     WatchFolderStatsResponse,
 )
 from api.system_health import ComponentHealth, KnownProbes, register_health_probe
+from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -125,6 +128,7 @@ from knowledge.upload_rejections import no_text_rejection as _no_text_rejection
 from knowledge_factory import get_or_create_knowledge_base
 from security.upload_filename_policy import is_safe_file, require_safe_upload
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.kb_wipe_request import request_kb_wipe
 from services.knowledge.stats_service import fetch_kb_core_stats  # Issue #11554 canonical stats
 from utils.path_validation import contains_path_traversal
 
@@ -1212,11 +1216,17 @@ async def upload_file_to_knowledge(
     category = form.get("category", "uploads")
     tags = _parse_upload_tags(form.get("tags", "[]"))
 
+    return await ingest_uploaded_document(kb_to_use, req, filename, file_content, title, category, tags)
+
+
+async def ingest_uploaded_document(
+    kb_to_use, req: Request, filename: str, file_content: bytes, title: str, category: str, tags: list
+) -> UploadFileResponse:
+    """Extract, clean and store a document whose bytes have passed the size gate of the way they arrived."""
     content, extracted_doc = await extract_within_deadline(_extract_file_content, filename, file_content)
     if not _has_usable_content(content, extracted_doc):
-        # #13884: distinguish "we could not read it" from "it is empty". A scanned
-        # PDF parses fine and yields nothing, and a generic message left the user
-        # with no way to tell that OCR — not a different file — is what is needed.
+        # #13884: "could not read it" isn't "it is empty". A scanned PDF parses fine and yields nothing,
+        # and a generic message left the user no way to tell that OCR, not another file, is what's needed.
         raise _no_text_rejection(extracted_doc)
 
     # Issue #5064: sanitize against prompt injection; #13708: also the redact_content chokepoint,
@@ -1410,7 +1420,6 @@ async def upload_audio_file(
         whisper_model: Whisper model size (default "base").
         language:      ISO-639-1 language hint (optional).
     """
-    import json as _json
     import os as _os
     import tempfile as _tmp
 
@@ -1439,14 +1448,7 @@ async def upload_audio_file(
     category = form.get("category", "audio")
     whisper_model = form.get("whisper_model", "base")
     language = form.get("language") or None
-    try:
-        raw_tags = form.get("tags", "[]")
-        tags = _json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
-        if not isinstance(tags, list):
-            tags = []
-        tags = [str(t)[:50] for t in tags[:20]]
-    except (_json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_upload_tags(form.get("tags", "[]"))
 
     # Write to a temp file so AudioConnector can read it by path
     with _tmp.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
@@ -1948,21 +1950,6 @@ async def search_man_pages(
     }
 
 
-async def _clear_kb_via_redis(kb) -> int:
-    """Clear knowledge base via Redis fallback (Issue #398: extracted)."""
-    if not (hasattr(kb, "redis") and kb.redis):
-        logger.error("No clear method available for knowledge base implementation")
-        raise HTTPException(status_code=500, detail="Knowledge base clearing not supported")
-
-    keys = await kb.redis.keys("fact:*")
-    if keys:
-        await kb.redis.delete(*keys)
-    index_keys = await kb.redis.keys("index:*")
-    if index_keys:
-        await kb.redis.delete(*index_keys)
-    return len(keys) if keys else 0
-
-
 @router.post("/clear_all", response_model=ClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1973,59 +1960,15 @@ async def clear_all_knowledge(
     admin_check: bool = Depends(check_admin_permission),
     request: dict = None,
     req: Request = None,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ):
-    """Clear all entries from the knowledge base - DESTRUCTIVE OPERATION.
+    """Request a wipe of the knowledge base - it deletes nothing (#21048, #17038).
 
-    Issue #744: Requires admin authentication.
+    Requires an admin who is a user. Creates (or reuses) a pending wipe approval and returns its reference;
+    the wipe runs only after a human approves it in the Approvals inbox, and is never auto-approved.
     """
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        # Issue #5407: KB instance not initialized.
-        logger.warning("clear_all_knowledge: KB uninitialized - returning error status")
-        from knowledge.metrics import autobot_kb_degradation_total
-
-        autobot_kb_degradation_total.labels(endpoint="clear_all", reason="kb_uninit").inc()
-        return {
-            "status": "error",
-            "items_removed": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
-
-    logger.warning("Starting DESTRUCTIVE operation: clearing all knowledge base entries")
-    try:
-        stats_before = await kb.get_stats()
-        items_before = stats_before.get("total_facts", 0)
-    except Exception:
-        items_before = 0
-
-    if hasattr(kb, "clear_all"):
-        result = await kb.clear_all()
-        items_removed = result.get("items_removed", items_before)
-    else:
-        try:
-            items_removed = await _clear_kb_via_redis(kb)
-        except Exception as e:
-            logger.error("Error during knowledge base clearing: %s", e)
-            raise HTTPException(status_code=500, detail="Failed to clear")
-
-    logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
-    _user = get_auth_middleware().get_user_from_request(req)
-    audit_record(
-        user_id=str((_user or {}).get("user_id", "unknown")),
-        action=AuditAction.KNOWLEDGE_REMOVE,
-        resource_type="knowledge_doc",
-        resource_id="all",
-        ip_address=req.client.host if req and req.client else "unknown",
-        session_id=None,
-        outcome="success",
-        metadata={"items_removed": items_removed},
-    )
-    return {
-        "status": "success",
-        "items_removed": items_removed,
-        "items_before": items_before,
-        "message": f"Successfully cleared knowledge base. Removed {items_removed} entries.",
-    }
+    return await request_kb_wipe(current_user, session)
 
 
 # Legacy endpoints for backward compatibility
@@ -3055,6 +2998,7 @@ from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
 router.include_router(upload_limit_router)
+router.include_router(chunked_upload_router)
 
 # ===== CONSOLIDATED KNOWLEDGE ROUTERS (Issue #708) =====
 # These routers were previously registered separately in feature_routers.py

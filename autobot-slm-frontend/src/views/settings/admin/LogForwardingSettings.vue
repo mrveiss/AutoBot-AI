@@ -11,14 +11,13 @@
  */
 
 import { ref, reactive, onMounted } from 'vue'
-import { BaseAlert, BaseModal, BaseSwitch } from '@autobot/ui'
+import { BaseAlert, BaseModal, BaseSwitch, createLogger } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import type { LogForwardingDestination } from '@/composables/autobotAdminModels'
 import {
   defaultForm, formFromDestination, destinationTypes, getUrlPlaceholder, buildCreateBody, buildUpdateBody,
 } from './logForwardingForm'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LogForwardingSettings')
 const { t } = useI18n()

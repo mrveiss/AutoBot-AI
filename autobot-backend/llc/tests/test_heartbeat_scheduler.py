@@ -279,6 +279,7 @@ class TestHandleDueAgent:
 # ---------------------------------------------------------------------------
 
 _HBS = "llc.scheduler.heartbeat_scheduler"
+_INGEST = "llc.services.budget.BudgetService.ingest_cost_event"
 
 
 @pytest.mark.asyncio
@@ -295,9 +296,9 @@ class TestDispatchAdapterRouting:
 
     async def test_claude_code_routed_through_registry(self):
         agent = _make_agent(adapter_type="claude_code")
-        fake_adapter = MagicMock()
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter) as mock_get,
+            patch(f"{_HBS}.adapter_block_reason", return_value=None),  # routing, not this host's CLI
+            patch(f"{_HBS}.get_adapter", return_value=MagicMock()) as mock_get,
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -516,8 +517,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
@@ -533,8 +534,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "claude"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -553,8 +554,8 @@ class TestCliAvailabilityGate:
         fake_adapter = MagicMock()
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=False),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=False),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
         ):
             await _dispatch_adapter(agent, {})
@@ -569,8 +570,8 @@ class TestCliAvailabilityGate:
         fake_adapter._required_cli = "gh"
 
         with (
-            patch(f"{_HBS}.get_adapter", return_value=fake_adapter),
-            patch(f"{_HBS}.is_subprocess_adapter", return_value=True),
+            patch("llc.scheduler.dispatch_gate.get_adapter", return_value=fake_adapter),
+            patch("llc.scheduler.dispatch_gate.is_subprocess_adapter", return_value=True),
             patch(f"{_HBS}._dispatch_registry_adapter", new=AsyncMock()) as mock_reg,
             pytest.raises(HeartbeatDispatchSkipped),
         ):
@@ -627,7 +628,6 @@ class TestRecordRunForReplayH1:
         """
         import os
         import tempfile
-        import time
 
         from llc.adapters.claude_code_adapter import _output_path
         from llc.adapters.subprocess_base import placeholder_run_id
@@ -645,10 +645,11 @@ class TestRecordRunForReplayH1:
                 fh.write('{"type": "result", "is_error": false}\n')
 
             # Decoy file with later mtime — mtime-glob would pick this first.
-            time.sleep(0.01)
             decoy_path = os.path.join(tmpdir, f"llc_agent_{agent_id}_99999_decoy.jsonl")
             with open(decoy_path, "w", encoding="utf-8") as fh:
                 fh.write('{"type": "decoy"}\n')
+            later = os.stat(exact_path).st_mtime + 10
+            os.utime(decoy_path, (later, later))
 
             captured: dict = {}
             mock_svc = MagicMock()
@@ -895,7 +896,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest),
+            patch(_INGEST, new=mock_ingest),
         ):
             await _ingest_adapter_usage(agent, result)
 
@@ -907,7 +908,7 @@ class TestIngestAdapterUsage:
         agent = _make_agent(adapter_type="claude_code")
         result = AdapterRunStatus(status=LLCRunStatus.COMPLETED)  # tokens None
         mock_ingest = AsyncMock()
-        with patch(f"{_HBS}.BudgetService.ingest_cost_event", new=mock_ingest):
+        with patch(_INGEST, new=mock_ingest):
             await _ingest_adapter_usage(agent, result)
         mock_ingest.assert_not_awaited()
 
@@ -923,10 +924,7 @@ class TestIngestAdapterUsage:
 
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(
-                f"{_HBS}.BudgetService.ingest_cost_event",
-                new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0)),
-            ),
+            patch(_INGEST, new=AsyncMock(side_effect=BudgetExhausted("agent", 100.0, 50.0))),
             pytest.raises(BudgetExhausted),
         ):
             await _ingest_adapter_usage(agent, result)
@@ -940,7 +938,7 @@ class TestIngestAdapterUsage:
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
         with (
             patch(f"{_HBS}.get_async_session_factory", return_value=factory),
-            patch(f"{_HBS}.BudgetService.ingest_cost_event", new=AsyncMock(side_effect=RuntimeError("db down"))),
+            patch(_INGEST, new=AsyncMock(side_effect=RuntimeError("db down"))),
         ):
             await _ingest_adapter_usage(agent, result)  # must not raise
 

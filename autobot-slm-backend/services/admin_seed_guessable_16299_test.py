@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -42,3 +43,15 @@ def test_a_strong_password_and_no_password_pass(monkeypatch) -> None:
 def test_an_existing_admin_is_never_checked(monkeypatch) -> None:
     monkeypatch.setenv("SLM_ADMIN_PASSWORD", "admin")
     assert seed.password_for_existing_admin() == "admin"
+
+
+def test_the_random_password_notice_names_the_way_back() -> None:
+    """#20527: the role installs this command at /usr/local/bin/autobot-admin."""
+    assert "autobot-admin reset-password admin" in seed.RANDOM_ADMIN_NOTICE
+
+
+def test_the_notice_is_what_startup_logs() -> None:
+    main = Path(seed.__file__).resolve().parent.parent / "main.py"
+    assert "logger.critical(RANDOM_ADMIN_NOTICE)" in main.read_text(encoding="utf-8")
+    role = main.parent / "ansible/roles/slm_manager/tasks/main.yml"
+    assert "dest: /usr/local/bin/autobot-admin" in role.read_text(encoding="utf-8")

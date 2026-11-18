@@ -26,6 +26,10 @@
       </div>
     </div>
 
+    <WaitingForYou />
+
+    <StuckFileCleanupPanel />
+
     <div v-if="!companyId" class="state-msg">{{ $t('llc.approvals.selectCompany') }}</div>
 
     <template v-else>
@@ -136,6 +140,8 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
+import StuckFileCleanupPanel from '@/components/llc/StuckFileCleanupPanel.vue'
+import WaitingForYou from '@/components/approvals/WaitingForYou.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -341,7 +347,7 @@ onUnmounted(() => {
 
 .tab-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .inbox-filters {

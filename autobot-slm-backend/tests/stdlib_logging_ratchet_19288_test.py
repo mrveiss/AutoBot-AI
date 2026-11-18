@@ -19,6 +19,8 @@ from pathlib import Path
 from repo_tests._mocked_config_import import run_sweep
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+
 _SLM_ROOT = repo_root() / "autobot-slm-backend"
 _BASELINE = Path(__file__).with_name("stdlib_logging_baseline_19288.txt")
 
@@ -53,9 +55,7 @@ def _sources() -> list[Path]:
     for path in sorted(_SLM_ROOT.rglob("*.py")):
         rel = path.relative_to(_SLM_ROOT)
         name = rel.name
-        if {"tests", "test"} & set(rel.parts[:-1]) or name == "conftest.py":
-            continue
-        if name.endswith("_test.py") or name.startswith("test_"):
+        if {"tests", "test"} & set(rel.parts[:-1]) or is_test_filename(name, include_js=False):
             continue
         out.append(path)
     return out

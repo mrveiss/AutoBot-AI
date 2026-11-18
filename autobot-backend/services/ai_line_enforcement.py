@@ -30,10 +30,10 @@ category, and an approval that cannot be recorded still leaves the action un-run
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -43,6 +43,7 @@ from typing import Any, Iterable, Mapping, Optional
 from sqlalchemy import select
 
 from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
     SCOPE_COMPANY,
     VERIFIED_COMPANY_KEY,
     VERIFIED_USER_KEY,
@@ -50,15 +51,22 @@ from autobot_shared.ai_lines import (
     LineResolution,
     LineScope,
     action_key,
+    declared_categories_of,
     is_mutating,
     resolve_line,
     resolve_scope,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.status_enums import CommandRisk
-from autobot_shared.tool_catalogue import approval_category_for, valid_approval_categories
+from autobot_shared.tool_catalogue import (
+    ALWAYS_AVAILABLE_TOOLS,
+    approval_category_for,
+    canonical_tool_name,
+    valid_approval_categories,
+)
 from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
@@ -166,8 +174,10 @@ async def resolve_action_line(
     scope = resolve_scope(company_id, user_id)
     stored, unavailable = await _stored(scope, key)
     read_only = _is_read_only_command(tool_name, params)
-    # A work item's own declared gate still applies to a read; the baseline's "destructive" one cannot.
-    gated = list(declared_categories) if read_only else await gated_categories(declared_categories)
+    # A work item's own declared gate still applies to a read or to an always-available tool (#17237); the baseline's
+    # floor cannot.
+    unmanaged = read_only or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS
+    gated = list(declared_categories) if unmanaged else await gated_categories(declared_categories)
     category = approval_category_for(tool_name, gated)
     return resolve_line(
         key,
@@ -180,10 +190,21 @@ async def resolve_action_line(
     )
 
 
+def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
+    """Whether the turn itself puts *tool_name* behind a person's approval (#20195).
+
+    A turn that carries attached files holds untrusted text in its prompt, so every tool call of it needs a
+    yes, reads included. The two conversation tools stay free: gating them would stall the answer itself. This
+    is the existing ``role_requires_approval`` floor of ``resolve_line`` (a stored ``never`` still refuses).
+    """
+    return bool(getattr(ctx, "approve_every_call", False)) and tool_name not in CONVERSATION_TOOLS
+
+
 async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
-    """Plan-time projection for the chat graph's interrupt: any line stricter than line 1 (GH#11202).
+    """Plan-time projection for the chat graph's interrupt: line 2 (GH#11202).
 
     Asks the same resolver ``enforce_line`` applies, so the interrupt and the dispatch seam cannot disagree.
+    Line 3 gets no card: no yes lifts it. The dispatch seam refuses it and the model is told (#19957).
     """
     params = tool_call.get("params") or tool_call.get("arguments") or {}
     resolution = await resolve_action_line(
@@ -191,9 +212,10 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         params if isinstance(params, dict) else {},
         (getattr(ctx, "context", None) or {}).get(VERIFIED_COMPANY_KEY),
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
+        role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
-    return resolution.line is not AiLine.AUTONOMOUS
+    return resolution.line is AiLine.DRAFT_THEN_SEND
 
 
 def _fingerprint_key() -> bytes:
@@ -211,11 +233,13 @@ def _fingerprint_key() -> bytes:
     return _PROCESS_KEY
 
 
-@functools.lru_cache(maxsize=1)
 def _warn_random_key_once() -> None:
-    logger.error(
+    log_once(
+        logger,
+        logging.ERROR,
+        "random_process_key",
         "AUTOBOT_JWT_SECRET (and SECRET_KEY) are unset: AI-line approvals are bound with a random per-process key "
-        "and must be given again after a restart"
+        "and must be given again after a restart",
     )
 
 
@@ -283,7 +307,7 @@ async def _file_hold(
         )
 
 
-async def _report(verdict: LineVerdict, requested_by: str, surface: str) -> None:
+async def _report(verdict: LineVerdict, requested_by: str, surface: str, floor_waived: bool = False) -> None:
     """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action."""
     try:
         await audit_log(
@@ -291,7 +315,12 @@ async def _report(verdict: LineVerdict, requested_by: str, surface: str) -> None
             result="success",
             user_id=requested_by,
             resource=verdict.resolution.key,
-            details={"surface": surface, "source": verdict.resolution.source, "approval_id": verdict.approval_id},
+            details={
+                "surface": surface,
+                "source": verdict.resolution.source,
+                "approval_id": verdict.approval_id,
+                **({"attachment_floor_waived": True} if floor_waived else {}),  # #20195: ran on the admin's setting
+            },
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI line report for %s was not recorded: %s", verdict.resolution.key, exc)
@@ -309,8 +338,11 @@ async def enforce_line(
     role_requires_approval: bool = False,
     hold_in_approvals: bool = True,
     approved_fingerprints: frozenset[str] = frozenset(),
+    floor_waived: bool = False,
 ) -> LineVerdict:
     """Decide and apply the line for one agent action: line 1 RUN (reported), 2 HOLD, 3 REFUSE.
+
+    ``floor_waived``: the admin setting lifted the attachment floor for this call (#20195); the report says so.
 
     ``hold_in_approvals=False`` is for a surface that holds the action in its own live queue (the terminal):
     the decision is still made here, the hold is not duplicated. ``approved_fingerprints`` are the
@@ -333,7 +365,7 @@ async def enforce_line(
         verdict = await _hold(
             resolution, params or {}, resolve_scope(company_id, user_id), requested_by, surface, hold_in_approvals
         )
-    await _report(verdict, requested_by, surface)
+    await _report(verdict, requested_by, surface, floor_waived)
     return verdict
 
 

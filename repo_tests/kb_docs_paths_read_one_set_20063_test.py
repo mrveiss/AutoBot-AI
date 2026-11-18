@@ -17,6 +17,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, in_doc_set, should_exclude_file
+from tools.lint import _parse_cache as parse_cache
 
 _ROOT = repo_root()
 _BACKEND = _ROOT / "autobot-backend"
@@ -41,7 +42,7 @@ def hand_written_doc_lists(source: str) -> list[int]:
     """Lines of a list, tuple or set literal holding two or more documentation paths."""
     return [
         node.lineno
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, (ast.List, ast.Tuple, ast.Set))
         and sum(isinstance(e, ast.Constant) and _doc_like(e.value) for e in node.elts) >= 2
     ]
@@ -75,7 +76,7 @@ def test_the_list_detector_has_both_sides(source: str, flagged: bool) -> None:
 
 
 def _indexer_lists() -> dict[str, list[str]]:
-    tree = ast.parse((_ROOT / _INDEXER).read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_ROOT / _INDEXER).read_text(encoding="utf-8"))
     return {
         node.targets[0].id: ast.literal_eval(node.value)
         for node in tree.body
@@ -126,6 +127,8 @@ def test_membership(path: str, member: bool) -> None:
 
 def test_the_retired_scan_helpers_stay_folded_into_the_indexer() -> None:
     source = (_BACKEND / "api/knowledge_population.py").read_text(encoding="utf-8")
-    names = {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    names = {
+        n.name for n in ast.walk(parse_cache.parse(source)) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
     assert not names & {"_scan_doc_files", "_process_all_doc_files", "_process_doc_file"}
     assert "get_doc_indexer_service" in source

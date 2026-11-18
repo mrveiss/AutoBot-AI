@@ -23,7 +23,7 @@ down in a pull request that nobody will read again:
 
 * `check_syntax.py` byte-compiled four named files. **`black --check` alone**
   guarantees that coverage. A linter has to parse Python before it can judge it,
-  so a syntax error fails black with exit 123, and `.github/workflows/code-quality.yml`
+  so a syntax error fails black with exit 123, and `.github/workflows/_gate-code-quality.yml`
   runs it over `autobot-backend/` and `autobot_shared/` with no exclusions.
 
   `flake8` did **not** cover three of the four until #14419. Its `.flake8`
@@ -60,8 +60,10 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO = repo_root()
-_WORKFLOW = _REPO / ".github" / "workflows" / "code-quality.yml"
+_WORKFLOW = _REPO / ".github" / "workflows" / "_gate-code-quality.yml"
 
 #: The files `check_syntax.py` byte-compiled. Something must still parse each.
 _GUARDED_FILES = (
@@ -116,7 +118,7 @@ def _references(source: str, module: str, attribute: str) -> bool:
     accepts `…get_metrics_managerRenamed` as evidence for `get_metrics_manager`,
     so renaming the very symbol the citation covers would leave the guard green.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     dotted = re.compile(rf"{re.escape(module)}\.{re.escape(attribute)}(?!\w)")
     for node in ast.walk(tree):
         if isinstance(node, ast.alias) and node.name == attribute:
@@ -175,7 +177,7 @@ def _flake8_prunes(rel: str, patterns: list[str]) -> bool:
 
 
 def _invocation(workflow_text: str, tool: str) -> str | None:
-    """The line in code-quality.yml that actually runs *tool*, if any."""
+    """The line in _gate-code-quality.yml that actually runs *tool*, if any."""
     for line in workflow_text.splitlines():
         if f"-m {tool}" in line and "pip install" not in line:
             return line
