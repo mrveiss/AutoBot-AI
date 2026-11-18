@@ -10,6 +10,7 @@
  * variables were.
  */
 import { ref, type Ref } from 'vue'
+import { getEnvPositiveInt } from '@autobot/ui'
 import type { ProvisionLogEntry, ProvisionStatus } from '@autobot/slm-contract'
 import type { UsePollingJobReturn } from '@/composables/usePollingJob'
 import { slmApi, type SlmApi } from '@/utils/slmApi'
@@ -21,13 +22,8 @@ export const POLL_INTERVAL_MS = 3000
 export const HEARTBEAT_STALE_MS = 30000
 export const STALE_CHECK_INTERVAL_MS = 5000
 
-function positiveInt(raw: unknown, fallback: number): number {
-  const parsed = Number(raw)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
-}
-
 /** The dashboard policy (#19482): a poller stops after this many consecutive failed reads. */
-export const POLL_CONSECUTIVE_ERROR_LIMIT = positiveInt(import.meta.env.VITE_SLM_POLL_ERROR_LIMIT, 5)
+export const POLL_CONSECUTIVE_ERROR_LIMIT = getEnvPositiveInt(import.meta.env, 'VITE_SLM_POLL_ERROR_LIMIT', 5)
 
 export interface ProvisionState {
   status: Ref<ProvisionStatus>
