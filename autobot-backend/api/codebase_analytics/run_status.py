@@ -272,6 +272,27 @@ def _is_overdue(meta: dict, hard_timeout: float, now: datetime) -> bool:
     return now - begun > timedelta(seconds=hard_timeout + ABANDON_GRACE_SECONDS)
 
 
+#: Orders a record none of whose timestamps can be read: older than every real run.
+_UNORDERED = datetime(1970, 1, 1, tzinfo=timezone.utc)
+#: Newest-knowledge first: the start, else the end (a run that took over a record never recorded its start
+#: and began before it ended), else the last completed run.
+_ORDERING_KEYS = ("latest_started_at", "latest_finished_at", "last_completed_at")
+
+
+def ordered_at(meta: dict) -> str:
+    """When this record's newest run happened, as an ISO timestamp with an offset, never empty (#21621).
+
+    Run ids are uuid4s with no order, and a run whose start write was lost has an empty ``started_at``;
+    readers that must tell which of two runs is newer compare this instead.
+    """
+    for key in _ORDERING_KEYS:
+        try:
+            return parse_utc_iso(meta[key]).isoformat()
+        except (KeyError, ValueError, TypeError):
+            continue
+    return _UNORDERED.isoformat()
+
+
 def _present(meta: dict, hard_timeout: float, now: datetime) -> dict:
     """The record as readers see it.  A run still ``running`` past its limit reads as ``abandoned``."""
     status, reason, finished = (
@@ -287,6 +308,7 @@ def _present(meta: dict, hard_timeout: float, now: datetime) -> dict:
         "partial": status in PARTIAL_STATUSES,
         "reason": reason,
         "started_at": meta.get("latest_started_at", ""),
+        "ordered_at": ordered_at(meta),
         "finished_at": finished,
         "last_completed_at": meta.get("last_completed_at", ""),
     }
@@ -314,7 +336,33 @@ async def describe_run_state(
             raise RuntimeError("code collection unavailable")
         return None
     meta = await _read(collection, source_id)
-    return _present(meta, hard_timeout, _as_utc(now) if now else _now()) if meta else None
+    if not meta or not _belongs_to(meta, source_id):
+        return None
+    return _present(meta, hard_timeout, _as_utc(now) if now else _now())
+
+
+def _belongs_to(meta: dict, source_id: str) -> bool:
+    """A record that names another source is never served as this source's run (#21417)."""
+    owner = meta.get(_OWNER_KEY)
+    return owner is None or owner == source_id
+
+
+async def delete_run_record(source_id: str) -> bool:
+    """Remove exactly ``source_id``'s run record; True if one was removed.
+
+    Deletes stored data, so the only caller is the executor of an APPROVED cleanup proposal
+    (``services/source_run_record_cleanup_action.py``, #17038); the delete path of a source
+    only proposes it.  A record that names another source is left alone.
+    """
+    collection = await get_code_collection_async()
+    if collection is None:
+        raise RuntimeError("code collection unavailable")
+    async with _UPDATE_LOCK:
+        meta = await _read(collection, source_id)
+        if not meta or not _belongs_to(meta, source_id):
+            return False
+        await collection.delete(ids=[run_record_id(source_id)])
+    return True
 
 
 async def run_response_fields(source_id: str | None) -> dict:
