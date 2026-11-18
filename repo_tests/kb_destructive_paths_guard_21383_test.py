@@ -29,7 +29,7 @@ _NAMES_ONLY = ("autobot_shared/auth/mcp_tool_permissions.py", "autobot-backend/s
 def _discover(root: Path) -> list[str]:
     """Every tracked .py/.sh path; an empty tree yields [] so the floor raises the typed refusal."""
     try:
-        return tracked_paths(Path(root), "*.py", "*.sh")
+        return [p for p in tracked_paths(Path(root), ".") if p.endswith(_SUFFIXES)]
     except EmptyEnumeration:
         return []
 

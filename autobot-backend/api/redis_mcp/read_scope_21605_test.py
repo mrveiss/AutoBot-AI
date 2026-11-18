@@ -8,15 +8,18 @@ The guard class at the bottom fails when a tool is granted to non-admins with a 
 argument but the router does not run the read-scope check before dispatch.
 """
 
+import importlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from api.redis_mcp import router as router_module
 from api.redis_mcp.rbac import SCOPED_READ_ARGS, TOOL_ACCESS_MATRIX, ToolAccess, validate_read_scope
 from api.redis_mcp.router import RedisToolCallRequest, call_redis_mcp_tool, redis_mcp_tool_endpoint
 from api.redis_mcp.tools import get_all_tools
+
+# The package re-exports `router` (an APIRouter), so `from api.redis_mcp import router` is not the module.
+router_module = importlib.import_module("api.redis_mcp.router")
 
 USER = {"user_id": "u1", "role": "user"}
 ADMIN = {"user_id": "a1", "role": "admin"}

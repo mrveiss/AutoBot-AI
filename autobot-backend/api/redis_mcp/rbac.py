@@ -106,7 +106,7 @@ def validate_key_namespace(key: str, is_admin: bool, access: ToolAccess) -> tupl
 # Databases that hold user content (KB facts, conversations, sessions). Raw tools reach them
 # only for admins: a raw hash read there bypasses per-fact visibility and the research
 # quarantine (#21605). Names, resolved to numbers so an alias or an env override follows.
-ADMIN_ONLY_DATABASES = frozenset({"knowledge", "sessions", "agents"})
+RESTRICTED_DATABASES = frozenset({"knowledge", "sessions", "agents"})
 
 # Tool arguments that name a key (or a key glob) the call reads, and the one naming a search index.
 _READ_KEY_ARGS = ("key", "pattern", "prefix")
@@ -127,12 +127,12 @@ def _database_number(name: str) -> int | None:
     return DATABASE_MAPPING.get(name)
 
 
-def is_admin_only_database(name: str | None) -> bool:
+def is_restricted_database(name: str | None) -> bool:
     """True when *name* (or an alias of it) is a database raw tools may reach only as an admin."""
     if not name:
         return False
     number = _database_number(name)
-    return number is not None and number in {_database_number(n) for n in ADMIN_ONLY_DATABASES}
+    return number is not None and number in {_database_number(n) for n in RESTRICTED_DATABASES}
 
 
 def read_keys(args: dict) -> list[str]:
@@ -154,7 +154,7 @@ def validate_read_scope(args: dict, is_admin: bool) -> tuple[bool, str | None]:
     if is_admin:
         return True, None
     database = args.get("database")
-    if is_admin_only_database(database):
+    if is_restricted_database(database):
         return False, f"Read denied: database '{database}' is admin-only for raw tools"
     for key in read_keys(args):
         if not key.startswith(AGENT_NAMESPACE_PREFIX):
