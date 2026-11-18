@@ -30,6 +30,7 @@ import functools
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _TREE = "autobot-infrastructure/"
@@ -66,7 +67,8 @@ _SHARED_REGISTRY_NAMES = frozenset({"ServiceRegistry", "get_deployment_registry"
 def _defines_registry(source: str) -> bool:
     """True when `source` declares a class named ServiceRegistry at any depth."""
     return any(
-        isinstance(node, ast.ClassDef) and node.name == "ServiceRegistry" for node in ast.walk(ast.parse(source))
+        isinstance(node, ast.ClassDef) and node.name == "ServiceRegistry"
+        for node in ast.walk(parse_cache.parse(source))
     )
 
 
@@ -76,7 +78,7 @@ def _imports_shared_registry(source: str) -> bool:
         isinstance(node, ast.ImportFrom)
         and node.module == "deployment_registry"
         and any(alias.name in _SHARED_REGISTRY_NAMES for alias in node.names)
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
     )
 
 
@@ -137,7 +139,7 @@ def test_each_former_copy_imports_the_shared_registry(rel: str) -> None:
 
 def test_service_status_is_the_canonical_health_enum() -> None:
     """#6973: the scripts' status type is an alias of HealthStatus, never a fresh Enum."""
-    tree = ast.parse(_read(_CANONICAL))
+    tree = parse_cache.parse(_read(_CANONICAL))
     aliases = [
         node.value.id
         for node in tree.body
@@ -170,7 +172,7 @@ def _declares_service_table(source: str | ast.AST) -> bool:
 
 
 def _tree(source: str | ast.AST) -> ast.AST:
-    return ast.parse(source) if isinstance(source, str) else source
+    return parse_cache.parse(source) if isinstance(source, str) else source
 
 
 def _calls_with_slash(fn: ast.AST, attr: str) -> bool:
@@ -262,7 +264,7 @@ def _repo_scan() -> tuple[tuple[str, ...], tuple[str, ...], int, int]:
             source = _read(rel)
             if not _could_declare(source):
                 continue
-            tree = ast.parse(source)
+            tree = parse_cache.parse(source)
         except (OSError, SyntaxError, UnicodeDecodeError):
             continue
         parsed += 1
@@ -302,7 +304,7 @@ def test_no_url_join_is_declared_outside_the_core() -> None:
 
 @pytest.mark.parametrize("rel", ("autobot-backend/utils/service_registry.py", _CANONICAL))
 def test_both_registries_consume_the_core(rel: str) -> None:
-    tree = ast.parse(_read(rel))
+    tree = parse_cache.parse(_read(rel))
     imported = {
         alias.name
         for node in ast.walk(tree)

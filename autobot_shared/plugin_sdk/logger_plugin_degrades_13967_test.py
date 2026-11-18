@@ -19,7 +19,6 @@ indistinguishable from the other five, which is exactly what #13677's
 from __future__ import annotations
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
 
@@ -51,15 +50,26 @@ def mod():
 class TestDefaultPathIsNotShared:
     def test_the_default_is_not_the_shared_tmp_name(self, mod, monkeypatch):
         monkeypatch.delenv("AUTOBOT_LOG_DIR", raising=False)
+        monkeypatch.delenv("AUTOBOT_LOGS_DIR", raising=False)
         path = mod._default_log_path()
         assert str(path) != "/tmp/plugin_events.log", "a fixed name in a shared dir locks out every other user"
 
-    def test_the_default_is_per_user_when_it_must_fall_back_to_tmp(self, mod, monkeypatch):
+    def test_the_default_is_the_resolver_directory(self, mod, monkeypatch):
+        monkeypatch.delenv("AUTOBOT_LOGS_DIR", raising=False)
         monkeypatch.delenv("AUTOBOT_LOG_DIR", raising=False)
-        path = mod._default_log_path()
-        assert str(os.getuid()) in str(path), "a /tmp fallback must be per-user or it recreates the collision"
+        from autobot_shared.log_dir import resolve_logs_dir
+
+        assert mod._default_log_path() == resolve_logs_dir() / "plugin_events.log"
 
     def test_the_configured_log_directory_wins(self, mod, monkeypatch, tmp_path):
+        """AUTOBOT_LOGS_DIR is what installs set (#20894); the old code read only AUTOBOT_LOG_DIR
+        and so fell back to a temp dir on every deployed node (control: fails on that code)."""
+        monkeypatch.delenv("AUTOBOT_LOG_DIR", raising=False)
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path))
+        assert mod._default_log_path() == tmp_path / "plugin_events.log"
+
+    def test_the_deprecated_alias_is_still_read(self, mod, monkeypatch, tmp_path):
+        monkeypatch.delenv("AUTOBOT_LOGS_DIR", raising=False)
         monkeypatch.setenv("AUTOBOT_LOG_DIR", str(tmp_path))
         assert mod._default_log_path() == tmp_path / "plugin_events.log"
 

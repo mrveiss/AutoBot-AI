@@ -39,6 +39,8 @@ import pytest
 from repo_tests._infra_backend_names import backend_only_names
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 MONITORING_DIR = repo_root() / "autobot-infrastructure" / "shared" / "scripts" / "monitoring"
 
 #: Floors. A discovery-based guard that finds nothing reports a clean run having asserted
@@ -145,7 +147,7 @@ def test_the_monitoring_directory_is_where_this_guard_thinks_it_is() -> None:
 
 @pytest.mark.parametrize("script", _scripts(), ids=lambda p: p.name)
 def test_every_inserted_sys_path_root_holds_the_packages_that_script_imports(script: Path) -> None:
-    tree = ast.parse(script.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(script.read_text(encoding="utf-8"))
     roots = _inserted_roots(tree, script)
     needed = _local_import_roots(tree)
     if not needed:
@@ -193,7 +195,7 @@ def test_this_guard_actually_checked_some_requirements() -> None:
     parametrized test above would report all-green having compared no package against any root.
     A floor on files examined does not catch that; this one does.
     """
-    checked = sum(len(_local_import_roots(ast.parse(s.read_text(encoding="utf-8")))) for s in _scripts())
+    checked = sum(len(_local_import_roots(parse_cache.parse(s.read_text(encoding="utf-8")))) for s in _scripts())
     assert checked >= MIN_REQUIREMENTS_CHECKED, (
         f"only {checked} local import roots were checked across {len(_scripts())} scripts; "
         "expected at least "

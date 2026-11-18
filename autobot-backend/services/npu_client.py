@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
+from autobot_shared.egress_allowlist import normalize_origin
 from autobot_shared.embedding_model import active_embedding_model, npu_worker_model_name
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.http_client import get_http_client
@@ -283,6 +284,12 @@ class NPUClient:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
+                    if data.get("mock") is not False:
+                        logger.warning(
+                            "NPU worker %s did not confirm real embeddings; rejecting response",
+                            normalize_origin(base_url) or "<invalid origin>",
+                        )
+                        return None
                     return EmbeddingResult(
                         embeddings=data.get("embeddings", []),
                         model_used=data.get("model_used", model_name),

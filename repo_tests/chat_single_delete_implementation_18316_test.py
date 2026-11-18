@@ -25,6 +25,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend/api",)
@@ -65,7 +66,7 @@ def _receiver_name(node: ast.Attribute) -> str:
 def _direct_delete_calls(source: str) -> list[int]:
     """Line numbers of `<...chat_history...>.delete_session(` calls."""
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         func = getattr(node, "func", None)
         if isinstance(node, ast.Call) and isinstance(func, ast.Attribute):
             if func.attr == "delete_session" and "chat_history" in _receiver_name(func):
@@ -77,7 +78,7 @@ def _delete_functions(source: str) -> list[str]:
     """Names of the functions that contain a direct chat-history delete call."""
     return [
         fn.name
-        for fn in ast.walk(ast.parse(source))
+        for fn in ast.walk(parse_cache.parse(source))
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and _direct_delete_calls(ast.unparse(fn))
     ]
 

@@ -33,6 +33,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -47,6 +48,8 @@ GATED_HELPERS = frozenset(
 #: owner ruled the canonical search and multi-source aggregation routes are themselves
 #: explicit, caller-driven read APIs -- not a chat/agent/RAG hop -- so #16691's is_admin
 #: bypass there is the intended #16654 behaviour, same category as the three files below.
+#: knowledge_graph_facts.py and graph_bucket_visibility.py added 2026-11-10 (#20945): owner ruling on
+#: #20945, 2026-11-10 -- the knowledge-graph view is an explicit admin read, same category as #16745.
 EXPLICIT_READ_APIS = frozenset(
     {
         "autobot-backend/api/knowledge_ownership.py",
@@ -54,6 +57,8 @@ EXPLICIT_READ_APIS = frozenset(
         "autobot-backend/api/knowledge_search_scoped.py",
         "autobot-backend/api/knowledge_search.py",
         "autobot-backend/api/knowledge_search_aggregator.py",
+        "autobot-backend/api/knowledge_graph_facts.py",
+        "autobot-backend/knowledge/graph_bucket_visibility.py",
     }
 )
 #: The helper that forwards its own ``is_admin`` parameter to ``check_access``, and the superadmin's root view
@@ -108,7 +113,7 @@ REACH = declare(
 def admin_bypass_calls(source: str) -> list[int]:
     """Line numbers of gated-helper calls in *source* that pass ``is_admin=``."""
     lines = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -127,14 +132,14 @@ def canonical_helper_calls(source: str) -> list[int]:
     """Line numbers of calls to the canonical admin-aware fact-read helpers in *source*."""
     return [
         n.lineno
-        for n in ast.walk(ast.parse(source))
+        for n in ast.walk(parse_cache.parse(source))
         if isinstance(n, ast.Call) and _call_name(n) in CANONICAL_READ_HELPERS
     ]
 
 
 def helper_forwards_admin(source: str, helper: str = "can_read_fact") -> bool:
     """Whether *helper*'s body in *source* passes ``is_admin=`` to ``check_access``."""
-    for fn in ast.walk(ast.parse(source)):
+    for fn in ast.walk(parse_cache.parse(source)):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.name == helper:
             return any(
                 isinstance(n, ast.Call)

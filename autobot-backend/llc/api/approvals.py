@@ -20,11 +20,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.deps import assert_company_access, get_session, load_authorized, service_dep
 from models.approval import Approval
 from services.ai_line_change_action import ACTION as LINE_CHANGE_ACTION
 from services.approval_execution import is_server_only_action, run_post_approval_actions, set_verified_decider
+from services.project_backfill_action import ACTION as PROJECT_BACKFILL_ACTION
 from user_management.services import TenantContext
 
 from ..models.enums import ApprovalStatus, ApprovalType
@@ -51,7 +54,6 @@ _service = service_dep(ApprovalService)
 class ApprovalRequest(BaseModel):
     company_id: uuid.UUID
     type: ApprovalType
-    requested_by_agent_id: uuid.UUID
     payload: Dict[str, Any] = {}
 
 
@@ -110,11 +112,11 @@ async def request_approval(
                 company_id=body.company_id,
                 gate_type=body.type,
                 payload=body.payload,
-                requested_by=_recorded_requester(body, ctx),
-                actor_user_id=ctx.user_id,  # the verified caller, not the claimed requester
+                requested_by=_recorded_requester(ctx),  # the verified caller; the body names no requester (#20521)
+                actor_user_id=ctx.user_id,
             )
     except ApprovalHookError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise http_refusal(422, exc, scope="approvals.request_approval") from None
     await svc.publish_requested(approval)
     return _to_response(approval)
 
@@ -205,17 +207,21 @@ async def decide_approval(
         await session.commit()
     except NotAuthorisedError as exc:
         await session.rollback()
-        logger.warning("Refused approval decision on %s: %s", aid, exc)
+        logger.warning("Refused approval decision on %s: %s", aid, safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Only a company owner or admin may decide an approval")
     except ApprovalHookError as exc:
         await session.rollback()
-        logger.warning("Approval %s left pending: its action could not be applied: %s", aid, exc)
+        logger.warning(
+            "Approval %s left pending: its action could not be applied: %s",
+            aid,
+            safe_log_text(repr(exc)),
+        )
         raise HTTPException(
             status_code=409, detail="The approved action could not be applied; the approval is still pending"
         )
     except ApprovalNotFoundError as exc:
         await session.rollback()
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        logger.error("Exception in API handler: %s", safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail="Internal server error")
     except (ApprovalStateError, ApprovalRequiredError):
         await session.rollback()
@@ -229,10 +235,13 @@ async def decide_approval(
     await svc.log_decision_to_kb(approval)  # GH#8243: index to decisions KB
     if body.decision == ApprovalStatus.APPROVED:
         # #18430: this route decided an approval without ever running what it proposed. Same dispatcher as
-        # the generic route, but ONLY for the AI-line change: approvals here are self-created with arbitrary
-        # payloads, and running any registered action from one is the #17161 class.
+        # the generic route, but ONLY for the AI-line change and the project backfill (#18978: both server-only,
+        # and svc.decide above already refused a decider they do not allow): approvals here are self-created
+        # with arbitrary payloads, and running any registered action from one is the #17161 class.
         set_verified_decider(approval, decided_by)  # the verified caller (ctx.user_id), see _verified_decider
-        await run_post_approval_actions(approval, session, only=frozenset({LINE_CHANGE_ACTION}))
+        await run_post_approval_actions(
+            approval, session, only=frozenset({LINE_CHANGE_ACTION, PROJECT_BACKFILL_ACTION})
+        )
     return _to_response(approval)
 
 
@@ -248,16 +257,17 @@ def _refuse_unrequestable(body: ApprovalRequest) -> None:
         raise HTTPException(status_code=422, detail="A hire approval is requested through the agent-hires route")
 
 
-def _recorded_requester(body: ApprovalRequest, ctx: TenantContext) -> uuid.UUID:
-    """Who the approval records as having asked: the verified caller for a type the four-eyes rule covers (#8214).
+def _recorded_requester(ctx: TenantContext) -> uuid.UUID:
+    """Who the approval records as having asked: the verified caller, for every type (#20521, #8214).
 
-    The body's ``requested_by_agent_id`` is the caller's claim; letting it name someone else would let the one
-    who asked also approve with a second admin present. Other types keep the claim, and so does a caller with
-    no user id (an agent credential), which cannot decide an approval anyway.
+    A requester the body could name would let the one who asked also approve with a second admin present, and
+    would let any caller put another person's name on a request. A credential with no user id is refused the
+    way ``_common.actor_id`` refuses it on every other route that records the caller (401): the agent keys are
+    accepted only on the agent API, so this route has no agent identity it could record.
     """
-    if body.type == ApprovalType.BUDGET_OVERRIDE and ctx.user_id is not None:
-        return ctx.user_id
-    return body.requested_by_agent_id
+    if ctx.user_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return ctx.user_id
 
 
 def _verified_decider(ctx: TenantContext, body: ApprovalDecision) -> uuid.UUID:

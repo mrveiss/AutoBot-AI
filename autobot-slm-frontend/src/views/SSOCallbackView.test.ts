@@ -65,6 +65,16 @@ describe('SSOCallbackView (#18394)', () => {
     expect(push).toHaveBeenCalledWith({ name: 'login', query: { error: 'no_token' } })
   })
 
+  it.each([
+    ['admin_only', 'admin_only'],
+    ['access_denied', 'sso_failed'],
+  ])('carries the backend error %s to login as %s (#20631)', async (error, shown) => {
+    query.error = error
+    mountView()
+    await flushPromises()
+    expect(push).toHaveBeenCalledWith({ name: 'login', query: { error: shown } })
+  })
+
   it('sends a rejected code to login with sso_failed', async () => {
     query.code = 'used'
     rawRequest.mockResolvedValue({ ok: false })

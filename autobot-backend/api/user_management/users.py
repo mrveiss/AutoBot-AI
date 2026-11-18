@@ -40,6 +40,7 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
 from autobot_shared.user_management.revocation_outcome import RENAME_REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import (
     DuplicateUserError,
@@ -68,7 +69,10 @@ logger = get_logger(__name__)
     response_model=UserListResponse,
     summary="List users",
     description="List users with pagination and optional search filter.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
@@ -315,6 +319,8 @@ async def delete_user(
         )
     except SessionReassignError as exc:  # #20029: refused, so no session is left without an owner
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # -------------------------------------------------------------------------
@@ -327,7 +333,10 @@ async def delete_user(
     response_model=UserResponse,
     summary="Activate user",
     description="Activate a deactivated user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def activate_user(
     user_id: uuid.UUID,
@@ -351,7 +360,10 @@ async def activate_user(
     response_model=UserResponse,
     summary="Deactivate user",
     description="Deactivate a user account.",
-    dependencies=[Depends(user_management_route_marker)],
+    dependencies=[
+        Depends(user_management_route_marker),
+        Depends(require_platform_admin),
+    ],
 )
 async def deactivate_user(
     user_id: uuid.UUID,
@@ -371,6 +383,8 @@ async def deactivate_user(
         )
     except SessionReassignError as exc:  # #20029
         raise HTTPException(status_code=exc.status_code, detail=str(exc))
+    except LastPlatformAdminError as exc:  # #21018
+        raise await refuse_last_platform_admin(user_service.session, exc)
 
 
 # Password Management: split into api/user_management/password_change.py (#15743) --
@@ -387,7 +401,9 @@ async def deactivate_user(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Assign role",
-    description="Assign a role to a user.",
+    description=(
+        "Assign a role to a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -416,7 +432,9 @@ async def assign_role(
     "/{user_id}/roles/{role_id}",
     response_model=RoleAssignmentResponse,
     summary="Revoke role",
-    description="Revoke a role from a user.",
+    description=(
+        "Revoke a role from a user. Changes permissions only, " "never platform admin status (PUT /{user_id}/admin)."
+    ),
     dependencies=[
         Depends(user_management_route_marker),
         Depends(require_platform_admin),
@@ -452,6 +470,7 @@ async def revoke_role(
     summary="Set user role by name",
     description=(
         "Replace all system roles for a user with the named role (admin, user, readonly). "
+        "Changes permissions only, never platform admin status (PUT /{user_id}/admin). "
         "Requires admin privilege. Issue #1801."
     ),
     dependencies=[

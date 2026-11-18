@@ -107,6 +107,7 @@
 
 <script setup lang="ts">
 import { BaseButton } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, useSlots } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
@@ -277,9 +278,8 @@ async function pollDeviceFlow(): Promise<void> {
   }
 }
 
-function formatExpiry(ts: number): string {
-  return new Date(ts * 1000).toLocaleString(locale.value)
-}
+/** An expiry in epoch seconds, in the app's language. */
+const formatExpiry = (ts: number): string => createDateFormatter({ unit: 'seconds', locale: locale.value })(ts)
 </script>
 
 <style scoped>

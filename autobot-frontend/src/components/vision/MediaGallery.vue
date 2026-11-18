@@ -174,14 +174,15 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, saveTextFile } from '@autobot/ui'
+import { createDateFormatter, formatISOString } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
-import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
+import type { GalleryItem } from '@/types/visionMultimodal';
 
 const { t } = useI18n();
 const { showToast } = useNotificationBus();
@@ -234,19 +235,12 @@ const truncateFilename = (filename: string, maxLength: number = 20): string => {
   return `${truncatedName}.${ext}`;
 };
 
-const formatDate = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const formatDate = createDateFormatter({
+  kind: 'date',
+  intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+});
 
-const formatFullDate = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleString();
-};
+const formatFullDate = formatISOString;
 
 const downloadItem = (item: GalleryItem) => {
   if (!item.analysisResult) {
@@ -255,13 +249,7 @@ const downloadItem = (item: GalleryItem) => {
   }
 
   const dataStr = JSON.stringify(item.analysisResult, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${item.filename.split('.')[0]}_analysis.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveTextFile(dataStr, `${item.filename.split('.')[0]}_analysis.json`, 'application/json');
 };
 
 const clearAll = () => {

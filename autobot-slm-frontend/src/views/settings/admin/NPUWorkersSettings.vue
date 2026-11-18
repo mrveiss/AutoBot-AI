@@ -12,8 +12,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, BaseModal, PollingPausedAlert, createLogger } from '@autobot/ui'
 import NPUAssignedWorkersPanel from './NPUAssignedWorkersPanel.vue'
 
 const logger = createLogger('NPUWorkersSettings')

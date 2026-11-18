@@ -24,13 +24,14 @@ from api.schemas_agent import (
 )
 from api.user_management.dependencies import (
     get_organization_service,
+    get_tenant_context,
     require_platform_admin,
     user_management_route_marker,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.user_management.revocation_outcome import commit_or_503
-from user_management.services import OrganizationService
+from user_management.services import OrganizationService, TenantContext
 from user_management.services.organization_service import (
     DuplicateOrganizationError,
     OrganizationNotFoundError,
@@ -38,6 +39,8 @@ from user_management.services.organization_service import (
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 logger = get_logger(__name__)
+
+_NOT_A_MEMBER = "You are not a member of the requested organization"
 
 
 # -------------------------------------------------------------------------
@@ -118,14 +121,17 @@ async def create_organization(
     "/{org_id}",
     response_model=OrganizationResponse,
     summary="Get organization",
-    description="Get a specific organization by ID.",
+    description="Get a specific organization by ID (own organization or platform admin).",
     dependencies=[Depends(user_management_route_marker)],
 )
 async def get_organization(
     org_id: uuid.UUID,
+    context: TenantContext = Depends(get_tenant_context),
     org_service: OrganizationService = Depends(get_organization_service),
 ):
-    """Get organization by ID."""
+    """Get organization by ID: the caller's own organisation, or any for a platform admin."""
+    if not (context.is_platform_admin or context.org_id == org_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NOT_A_MEMBER)
     org = await org_service.get_organization(org_id)
     if not org:
         raise HTTPException(
@@ -145,11 +151,13 @@ async def get_organization(
 )
 async def get_organization_by_slug(
     slug: str,
+    context: TenantContext = Depends(get_tenant_context),
     org_service: OrganizationService = Depends(get_organization_service),
 ):
-    """Get organization by slug."""
+    """Get organization by slug: the caller's own organisation, or any for a platform admin."""
     org = await org_service.get_organization_by_slug(slug)
-    if not org:
+    # Another organisation's slug answers exactly as an unknown one does.
+    if not org or not (context.is_platform_admin or context.org_id == org.id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Organization with slug '{slug}' not found",
@@ -269,9 +277,12 @@ async def deactivate_organization(
 )
 async def get_organization_stats(
     org_id: uuid.UUID,
+    context: TenantContext = Depends(get_tenant_context),
     org_service: OrganizationService = Depends(get_organization_service),
 ):
-    """Get organization statistics."""
+    """Get organization statistics: the caller's own organisation, or any for a platform admin."""
+    if not (context.is_platform_admin or context.org_id == org_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NOT_A_MEMBER)
     try:
         stats = await org_service.get_organization_stats(org_id)
         return OrganizationStatsResponse(**stats)
