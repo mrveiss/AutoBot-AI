@@ -13,8 +13,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -78,4 +78,4 @@ def cleanup_expired_snapshots(self, ttl_days: int = None) -> Dict[str, int]:
     if ttl_days is None:
         ttl_days = int(os.getenv("AUTOBOT_SNAPSHOT_TTL_DAYS", _DEFAULT_TTL_DAYS))
 
-    return run_or_schedule(_async_cleanup_expired_snapshots(ttl_days))
+    return run_in_worker_loop(_async_cleanup_expired_snapshots(ttl_days))

@@ -82,6 +82,18 @@ def _get_seeded_default() -> str:
         return ""
 
 
+def _matches_seeded(password: str, seeded: str) -> bool:
+    """Constant-time compare of the login password with the seeded default.
+
+    Lazy import, like ``_get_seeded_default``: a non-empty ``seeded`` can only
+    exist when ``autobot_shared`` imported there, so this import cannot fail
+    on the bare-script path where the seeded default is empty (#20761).
+    """
+    from autobot_shared.security.constant_time import secure_compare  # noqa: PLC0415
+
+    return secure_compare(password, seeded)
+
+
 def check_guessable(password: str) -> str | None:
     """Why *password* is too guessable to seed an admin account with, or ``None`` (#16299).
 
@@ -116,7 +128,7 @@ def check_password_weakness(password: str) -> str | None:
     #    Only meaningful when AUTOBOT_ADMIN_PASSWORD is set; otherwise the
     #    seeded default is empty and this branch is skipped.
     seeded = _get_seeded_default()
-    if seeded and password == seeded:
+    if seeded and _matches_seeded(password, seeded):
         return "Password matches the operator-configured default — please change it immediately."
 
     return check_guessable(password)

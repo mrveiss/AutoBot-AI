@@ -22,12 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared import node_proxy
 from autobot_shared.http_egress_guard import EgressBlockedError, assert_egress_policy
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.slm_credential_deletion import (
-    ACTION,
-    CREDENTIAL_KIND,
+from autobot_shared.slm_credential_actions import (
     NODE_NOT_FOUND_DETAIL,
     PROPOSAL_PATH,
     SPLIT_DEPLOYMENT_MESSAGE,
+    SSH_PASSWORD_DELETE,
     claim_path,
     is_split_without_tls,
 )
@@ -71,7 +70,7 @@ async def propose_password_deletion(node: Node) -> bool:
     if not base_url or not node_proxy.internal_api_key():
         logger.warning("Deletion of node %s's stored SSH password not proposed: backend URL or key unset", node.node_id)
         return False
-    body: dict[str, Any] = {"node_id": node.node_id, "credential_kind": CREDENTIAL_KIND}
+    body: dict[str, Any] = {"action": SSH_PASSWORD_DELETE.name, "node_id": node.node_id}
     url = f"{base_url}{PROPOSAL_PATH}"
     try:
         await assert_egress_policy(url)  # #17576: the backend's address comes from config, still checked
@@ -91,7 +90,11 @@ async def propose_password_deletion(node: Node) -> bool:
             reason,
         )
         return False
-    logger.info("Proposed %s for node %s: the stored SSH password awaits a human decision", ACTION, node.node_id)
+    logger.info(
+        "Proposed %s for node %s: the stored SSH password awaits a human decision",
+        SSH_PASSWORD_DELETE.name,
+        node.node_id,
+    )
     return True
 
 
@@ -115,7 +118,7 @@ async def _claim_approval(approval_id: uuid.UUID, node_id: str) -> None:
         async with node_proxy.node_client() as client:
             response = await client.post(
                 url,
-                json={"node_id": node_id},
+                json={"action": SSH_PASSWORD_DELETE.name, "node_id": node_id},
                 headers=node_proxy.internal_headers(),
             )
     except EgressBlockedError as exc:
@@ -141,7 +144,11 @@ async def _audit(db: AsyncSession, node_id: str, approval_id: uuid.UUID, phase: 
         resource_id=node_id,
         description=f"Stored SSH password deletion ({phase}) under approval {approval_id}",
         success=success,
-        extra_data={"approval_id": str(approval_id), "credential_kind": CREDENTIAL_KIND, "phase": phase},
+        extra_data={
+            "approval_id": str(approval_id),
+            "credential_kind": SSH_PASSWORD_DELETE.credential_kind,
+            "phase": phase,
+        },
     )
     await db.commit()
 

@@ -28,6 +28,7 @@ import time
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 
 logger = get_logger(__name__)
 
@@ -111,7 +112,7 @@ class SecurityCardSigner:
         payload = _canonical_payload(card, issued_at)
         actual_sig = _hmac_sign(payload)
 
-        if not hmac.compare_digest(actual_sig, expected_sig):
+        if not secure_compare(actual_sig, expected_sig):
             logger.warning("A2A security card signature mismatch")
             raise ValueError("Invalid security card signature")
 

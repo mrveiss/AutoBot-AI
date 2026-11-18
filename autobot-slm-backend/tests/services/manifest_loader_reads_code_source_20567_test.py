@@ -94,3 +94,23 @@ def test_load_all_unions_the_roots_with_the_first_winning(tmp_path: Path) -> Non
         _MANIFEST.replace("autobot-example", "autobot-extra").format(description="extra"), encoding="utf-8"
     )
     assert set(_live(code_source, base).load_all()) == {"autobot-extra"}
+
+
+def test_the_default_loader_prefers_code_source_over_the_installs_copy(tmp_path: Path, monkeypatch) -> None:
+    """``ManifestLoader()`` with no arguments: the path production uses, through the SSOT config."""
+    from types import SimpleNamespace
+
+    from services import manifest_loader
+
+    code_source, base = tmp_path / "code_source", tmp_path / "install"
+    _write(code_source, "from code_source")
+    _write(base, "from the install")
+    monkeypatch.delenv("SLM_INFRA_BASE_DIR", raising=False)
+    monkeypatch.setattr(
+        manifest_loader,
+        "ssot_config",
+        SimpleNamespace(path=SimpleNamespace(code_source_path=code_source, base_dir=base)),
+    )
+    loader = ManifestLoader()
+    assert loader.load("example").description == "from code_source"
+    assert loader._infra_base == code_source / "autobot-infrastructure"

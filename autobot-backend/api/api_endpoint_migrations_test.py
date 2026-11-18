@@ -2288,7 +2288,7 @@ class TestSearchManPagesEndpoint:
 
 
 class TestClearAllKnowledgeEndpoint:
-    """Test migrated POST /clear_all endpoint"""
+    """POST /clear_all only PROPOSES a wipe (#21048, #17038); behaviour is covered by kb_wipe_request_21048_test.py"""
 
     def test_clear_all_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
@@ -2301,78 +2301,25 @@ class TestClearAllKnowledgeEndpoint:
         assert "ErrorCategory.SERVER_ERROR" in source
         assert 'error_code_prefix="KNOWLEDGE"' in source
 
-    def test_clear_all_no_outer_try_catch(self):
-        """Verify outer try-catch block was removed"""
+    def test_clear_all_proposes_through_the_shared_entry(self):
+        """The route delegates to request_kb_wipe: no try block and no store of its own"""
         import inspect
 
         from api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
-        # Should have inner try blocks for non-fatal operations
-        try_count = source.count("try:")
-        assert try_count >= 2  # Stats retrieval + Redis clearing (inner only)
+        assert "request_kb_wipe(current_user, session)" in source
+        assert "try:" not in source and "get_or_create_knowledge_base" not in source
 
-    @pytest.mark.asyncio
-    async def test_clear_all_offline_state(self):
-        """Verify endpoint handles offline state gracefully"""
-        from fastapi import Request
-
-        from api.knowledge import clear_all_knowledge
-
-        mock_request = Mock(spec=Request)
-        mock_request.app = Mock()
-
-        # Mock get_or_create_knowledge_base to return None (offline)
-        with patch(
-            "backend.api.knowledge.get_or_create_knowledge_base",
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            response = await clear_all_knowledge({}, mock_request)
-
-            assert response["status"] == "error"
-            assert "not initialized" in response["message"]
-            assert response["items_removed"] == 0
-
-    @pytest.mark.asyncio
-    async def test_clear_all_uses_clear_all_method(self):
-        """Verify endpoint uses clear_all method when available"""
-        from fastapi import Request
-
-        from api.knowledge import clear_all_knowledge
-
-        mock_request = Mock(spec=Request)
-        mock_request.app = Mock()
-
-        # Mock knowledge base with clear_all method
-        mock_kb = Mock()
-        mock_kb.clear_all = AsyncMock(return_value={"items_removed": 42})
-        mock_kb.get_stats = AsyncMock(return_value={"total_facts": 42})
-
-        with patch(
-            "backend.api.knowledge.get_or_create_knowledge_base",
-            new_callable=AsyncMock,
-            return_value=mock_kb,
-        ):
-            response = await clear_all_knowledge({}, mock_request)
-
-            assert response["status"] == "success"
-            assert response["items_removed"] == 42
-            assert response["items_before"] == 42
-            mock_kb.clear_all.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_clear_all_logs_warning_for_destructive_operation(self):
-        """Verify destructive operation is logged with warning"""
+    def test_clear_all_deletes_nothing_itself(self):
+        """Verify the route cannot reach a delete: no clear_all method call and no Redis access"""
         import inspect
 
         from api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
-
-        # Should log warning before clearing
-        assert "logger.warning" in source
-        assert "DESTRUCTIVE" in source
+        assert "kb.clear_all" not in source and "redis" not in source.lower()
+        assert "deletes nothing" in source
 
 
 class TestBatch16MigrationStats:
@@ -2425,12 +2372,12 @@ class TestBatch16MigrationStats:
         # 5. Pattern-specific verification
 
         search_tests = 5  # All aspects covered
-        clear_all_tests = 5  # All aspects covered
+        clear_all_tests = 3  # #21048: the route only proposes
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
         total_batch_16_tests = search_tests + clear_all_tests + batch_stats_tests
 
-        assert total_batch_16_tests == 14  # Comprehensive coverage
+        assert total_batch_16_tests == 12  # Comprehensive coverage
 
 
 class TestGetFactsByCategoryEndpoint:
@@ -19611,7 +19558,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ConfigService.get_full_config", source)
 
         # Check unified config manager usage
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
 
         # Check NetworkConstants usage for hosts
         self.assertIn("NetworkConstants", source)
@@ -21238,18 +21185,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_126_migration_preserves_config_manager_operations(self):
-        """Verify migration preserves unified_config_manager operations"""
+        """Verify migration preserves config_manager operations"""
         from api import embeddings
 
         # Check get_embedding_settings uses config manager
         source_get = inspect.getsource(embeddings.get_embedding_settings)
-        self.assertIn("unified_config_manager.get_nested", source_get)
+        self.assertIn("config_manager.get_nested", source_get)
         self.assertIn("backend.llm.unified.embedding", source_get)
 
         # Check update_embedding_settings uses config manager
         source_update = inspect.getsource(embeddings.update_embedding_settings)
-        self.assertIn("unified_config_manager.set_nested", source_update)
-        self.assertIn("unified_config_manager.save_settings", source_update)
+        self.assertIn("config_manager.set_nested", source_update)
+        self.assertIn("config_manager.save_settings", source_update)
         self.assertIn("ConfigService.clear_cache", source_update)
 
     def test_batch_126_migration_preserves_default_config_fallback(self):
@@ -23475,7 +23422,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.get_developer_config)
-        self.assertIn("unified_config_manager.get_nested", source)
+        self.assertIn("config_manager.get_nested", source)
         self.assertIn("enabled", source)
         self.assertIn("enhanced_errors", source)
         self.assertIn("endpoint_suggestions", source)
@@ -23486,7 +23433,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.update_developer_config)
-        self.assertIn("unified_config_manager.set_nested", source)
+        self.assertIn("config_manager.set_nested", source)
         self.assertIn("save_settings()", source)
         self.assertIn("ConfigService.clear_cache()", source)
         self.assertIn("Developer configuration updated", source)
@@ -23508,12 +23455,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check get_api_endpoints
         source_endpoints = inspect.getsource(developer.get_api_endpoints)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_endpoints)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_endpoints)
         self.assertIn("HTTPException(status_code=403", source_endpoints)
 
         # Check get_system_info
         source_info = inspect.getsource(developer.get_system_info)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_info)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_info)
         self.assertIn("HTTPException(status_code=403", source_info)
 
     # ==============================================
@@ -23652,7 +23599,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import services
 
         source = inspect.getsource(services.get_version)
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
         self.assertIn("SystemInfo", source)
         self.assertIn("version", source)
         self.assertIn("uptime", source)

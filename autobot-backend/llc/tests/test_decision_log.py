@@ -300,7 +300,7 @@ async def test_log_decision_to_kb_calls_writer() -> None:
     approval = _make_approval()
     svc = ApprovalService()
 
-    with patch("llc.services.approval.DecisionLogWriter") as MockWriter:
+    with patch("llc.kb.decision_log.DecisionLogWriter") as MockWriter:
         instance = AsyncMock()
         MockWriter.return_value = instance
         await svc.log_decision_to_kb(approval)
@@ -314,7 +314,7 @@ async def test_log_decision_to_kb_swallows_exceptions() -> None:
     approval = _make_approval()
     svc = ApprovalService()
 
-    with patch("llc.services.approval.DecisionLogWriter") as MockWriter:
+    with patch("llc.kb.decision_log.DecisionLogWriter") as MockWriter:
         instance = AsyncMock()
         instance.write.side_effect = RuntimeError("KB down")
         MockWriter.return_value = instance

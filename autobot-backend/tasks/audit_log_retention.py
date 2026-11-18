@@ -19,9 +19,9 @@ AUTOBOT_AUDIT_RETENTION_DAYS is set to a positive integer.
 
 from typing import Any, Dict
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.worker_loop import run_in_worker_loop
 from celery_app import celery_app
 from services.audit.audit import AuditCategory, AuditEvent, apply_retention
 from services.audit.audit import emit as audit_emit
@@ -78,4 +78,4 @@ def cleanup_expired_audit_logs(self, retention_days: int = None, dry_run: bool =
     """
     if retention_days is None:
         retention_days = _AUDIT_RETENTION_DAYS
-    return run_or_schedule(_async_cleanup_expired_audit_logs(retention_days, dry_run))
+    return run_in_worker_loop(_async_cleanup_expired_audit_logs(retention_days, dry_run))

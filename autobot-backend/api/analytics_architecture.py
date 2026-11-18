@@ -47,6 +47,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import Severity
+from autobot_shared.testfile_names import is_test_filename
 
 logger = get_logger(__name__)
 
@@ -460,11 +461,7 @@ class ArchitectureAnalyzer:
 
     def _should_skip_python_file(self, py_file: Path) -> bool:
         """Check if a Python file should be skipped from analysis. (Issue #315 - extracted)"""
-        if "__pycache__" in str(py_file):
-            return True
-        if "test_" in py_file.name or "_test.py" in py_file.name:
-            return True
-        return False
+        return "__pycache__" in str(py_file) or is_test_filename(py_file.name, include_js=False, include_conftest=False)
 
     def _collect_files_from_directory(self, dir_path: Path) -> List[str]:
         """Collect Python files from a directory. (Issue #315 - extracted)"""
