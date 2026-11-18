@@ -568,9 +568,10 @@ def test_only_the_publisher_writes_the_projection_anywhere_in_the_backend() -> N
             offenders[rel] = extra
 
     assert parsed > 0, "no backend file mentions the projection — the scan is looking in the wrong place"
+    offender_names = {k: sorted(v) for k, v in offenders.items()}
     assert offenders == {}, (
         f"#18122: these write app.state.knowledge_base outside the publisher: "
-        f"{ {k: sorted(v) for k, v in offenders.items()} }. The projection has one writer, "
+        f"{offender_names}. The projection has one writer, "
         "`knowledge_factory._publish_knowledge_base`; anything else can set it to a value "
         "the singleton disagrees with — which is the whole defect this file exists for."
     )
