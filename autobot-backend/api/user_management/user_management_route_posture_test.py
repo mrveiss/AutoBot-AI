@@ -89,6 +89,7 @@ _EXPECTED_POSTURE = {
     ("POST", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # assign_role (#15738)
     ("DELETE", "/user-management/users/{user_id}/roles/{role_id}"): _ADMIN,  # revoke_role (#15738)
     ("PUT", "/user-management/users/{user_id}/role"): _ADMIN,  # set_user_role (#1801)
+    ("PUT", "/user-management/users/{user_id}/admin"): _ADMIN,  # set_admin_status (#20670)
     ("GET", "/user-management/teams"): _ADMIN,  # #16276
     ("POST", "/user-management/teams"): _ADMIN,  # #16276
     ("GET", "/user-management/teams/{team_id}"): _ADMIN,  # #16276

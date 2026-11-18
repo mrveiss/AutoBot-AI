@@ -17,10 +17,8 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue'
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-} from '@/utils/VisionMultimodalApiClient'
+import { getAutomationOpportunities } from '@/composables/useVisionApi'
+import type { AutomationOpportunity } from '@/types/visionMultimodal'
 import { createLogger } from '@/utils/debugUtils'
 import { normalizeUrl } from '@/utils/urlUtils'
 import Icon from '@/components/ui/Icon.vue'
@@ -55,10 +53,8 @@ const automationLoading = ref(false)
 async function loadAutomationOpportunities(): Promise<void> {
   automationLoading.value = true
   try {
-    const res = await visionMultimodalApiClient.getAutomationOpportunities()
-    if (res.success && res.data) {
-      automationOpportunities.value = res.data.opportunities || []
-    }
+    const res = await getAutomationOpportunities()
+    automationOpportunities.value = (res.opportunities || []) as AutomationOpportunity[]
   } catch (e) {
     logger.warn('Failed to load automation opportunities:', e)
   } finally {

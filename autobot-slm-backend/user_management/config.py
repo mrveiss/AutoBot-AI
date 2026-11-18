@@ -12,11 +12,13 @@ Two PostgreSQL databases, both colocated on the SLM server:
 Credentials are injected via /etc/autobot/db-credentials.env (Ansible-managed).
 """
 
+import logging
 import os
 from dataclasses import dataclass
 
 from autobot_shared import postgres_identity as pg
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.postgres_dsn import build_postgres_dsn
 from autobot_shared.secret_redaction import redact_value
 
@@ -92,11 +94,21 @@ def _slm_role_on_users_db() -> str:
     """
     role, legacy = os.getenv("SLM_POSTGRES_USER") or "", os.getenv("AUTOBOT_POSTGRES_USER") or ""
     if role and legacy and role != legacy:
-        _warn_once("conflict", "SLM_POSTGRES_USER and AUTOBOT_POSTGRES_USER differ; SLM_POSTGRES_USER wins (#19320)")
+        log_once(
+            logger,
+            logging.WARNING,
+            "conflict",
+            "SLM_POSTGRES_USER and AUTOBOT_POSTGRES_USER differ; SLM_POSTGRES_USER wins (#19320)",
+        )
     if role:
         return role
     if legacy:
-        _warn_once("deprecated", "AUTOBOT_POSTGRES_USER as the SLM's user-DB role is deprecated; set SLM_POSTGRES_USER")
+        log_once(
+            logger,
+            logging.WARNING,
+            "deprecated",
+            "AUTOBOT_POSTGRES_USER as the SLM's user-DB role is deprecated; set SLM_POSTGRES_USER",
+        )
         return legacy
     return pg.SLM_DB_ROLE
 
@@ -109,22 +121,13 @@ def _warn_legacy_compose_names() -> None:
     """
     names = os.getenv("AUTOBOT_COMPOSE_LEGACY_DB_VARS", "").split()
     if names:
-        _warn_once(
+        log_once(
+            logger,
+            logging.WARNING,
             "compose-legacy",
             f"Deprecated compose variables {', '.join(names)}: use AUTOBOT_POSTGRES_USER, SLM_DB_NAME and "
             "AUTOBOT_POSTGRES_DB. The old names stop working after one release (#19948)",
         )
-
-
-#: Warnings already logged by this process (each fires once, never per connection).
-_WARNED: set[str] = set()
-
-
-def _warn_once(key: str, message: str) -> None:
-    """Log *message* once per process. Names variables only, never their values."""
-    if key not in _WARNED:
-        _WARNED.add(key)
-        logger.warning(message)
 
 
 def _build_url(host: str, port: str, database: str, user: str, password: str) -> str:

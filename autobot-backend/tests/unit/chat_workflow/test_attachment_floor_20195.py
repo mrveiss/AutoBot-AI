@@ -208,8 +208,11 @@ def test_the_turn_that_names_a_file_marks_the_chat(world):
     assert asyncio.run(attachment_floor.chat_used_attachment("chat-1")) is True
 
 
-def test_session_governance_stamps_the_floor_from_the_record(world):
+def test_session_governance_stamps_the_floor_from_the_record(world, monkeypatch):
     from chat_workflow.session_role import apply_session_governance
+
+    # The floor stamp is the subject; the baseline overlay (on by default, #19957) reads another SLM key.
+    monkeypatch.setattr("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", False)
 
     asyncio.run(attachment_floor.mark_chat("chat-1"))
     with (

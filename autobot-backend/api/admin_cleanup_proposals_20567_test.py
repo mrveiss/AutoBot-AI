@@ -17,6 +17,17 @@ from api import admin_cleanup_proposals as routes
 from services import install_cleanup_actions as acts
 
 
+def _json_arrow_for_old_sqlite(engine) -> None:
+    """Some SQLite builds predate ``->>``: run the same statement through ``json_extract`` (same result)."""
+    import re
+
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute", retval=True)
+    def _rewrite(_conn, _cursor, statement, parameters, _context, _many):  # noqa: ANN001
+        return re.sub(r"\(?(\w+\.context) ->> \?\)?", r"json_extract(\1, ?)", statement), parameters
+
+
 def _seed(root: Path) -> None:
     backend = root / "autobot-backend"
     backend.mkdir(parents=True)
@@ -27,18 +38,29 @@ def _seed(root: Path) -> None:
 
 
 async def test_status_counts_and_proposal_does_not_remove(tmp_path: Path) -> None:
+    """The REAL approval service over real SQLite: a PENDING row is stored, and nothing is removed."""
+    from sqlalchemy import select
+
+    from models.approval import Approval, ApprovalComment, TaskApprovalLink
+    from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
+
     await asyncio.to_thread(_seed, tmp_path)
-    create = AsyncMock(return_value=SimpleNamespace(id="a1", status="pending"))
-    service = SimpleNamespace(create_approval=create, list_approvals=AsyncMock(return_value=[]))
-    with (
-        patch.object(acts, "install_root", return_value=tmp_path),
-        patch.object(routes, "ApprovalGateService", return_value=service),
+    async for factory in real_savepoint_session_factory(
+        [Approval.__table__, ApprovalComment.__table__, TaskApprovalLink.__table__]
     ):
-        status = await routes.env_copies_status()
-        reply = await routes.propose_env_copies_cleanup({"id": "u1"}, MagicMock())
+        _json_arrow_for_old_sqlite(factory.kw["bind"])
+        async with factory() as session:
+            with patch.object(acts, "install_root", return_value=tmp_path):
+                status = await routes.env_copies_status()
+                reply = await routes.propose_env_copies_cleanup({"id": "u1"}, session)
+                with pytest.raises(HTTPException) as repeat:  # the real pending lookup finds the first one
+                    await routes.propose_env_copies_cleanup({"id": "u1"}, session)
+        async with factory() as session:
+            rows = (await session.execute(select(Approval))).scalars().all()
     assert status.count == 1 and reply.action == acts.ENV_COPIES_ACTION
-    assert reply.status == "pending"
-    assert create.await_args.kwargs["context"] == {"action": acts.ENV_COPIES_ACTION, "node": acts.node_identity()}
+    assert reply.status == "pending" and repeat.value.status_code == 409
+    assert len(rows) == 1 and str(rows[0].id) == reply.approval_id and rows[0].status == "pending"
+    assert rows[0].context == {"action": acts.ENV_COPIES_ACTION, "node": acts.node_identity()}
     assert len(await asyncio.to_thread(lambda: list((tmp_path / "autobot-backend").glob(".env.*~")))) == 2
 
 

@@ -891,10 +891,10 @@ sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 # and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
 # stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
 # so import-time behaviour for api/*.py is never worse than the old hand-written stub.
-_real_load_and_bind(
-    "code_intelligence.merge_conflict_resolver",
-    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
-)
+# #21004: merge_conflict_resolver imports the canonical code_intelligence.python_files, so that
+# leaf is real-loaded first (the real package __init__ stays unexecuted).
+for _leaf in ("python_files", "merge_conflict_resolver"):
+    _real_load_and_bind(f"code_intelligence.{_leaf}", backend_root / "code_intelligence" / f"{_leaf}.py")
 
 # NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
 # real-loaded again by code_intelligence/conftest.py, which runs after this file and

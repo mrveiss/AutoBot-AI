@@ -32,6 +32,7 @@ class _Log:
     def __init__(self) -> None:
         self.errors: list[str] = []
         self.infos: list[str] = []
+        self.warnings: list[str] = []
 
     def error(self, fmt: str, *args) -> None:
         self.errors.append(fmt % args)
@@ -39,8 +40,11 @@ class _Log:
     def info(self, fmt: str, *args) -> None:
         self.infos.append(fmt % args)
 
+    def warning(self, fmt: str, *args) -> None:
+        self.warnings.append(fmt % args)
 
-def _guard(root: Path, known_large=None, tracked=None, floor=0):
+
+def _guard(root: Path, known_large=None, tracked=None, floor=0, table: Path | None = None):
     """A FileSizeGuard over a fake script namespace, bound the way the real scripts bind it."""
     ns = {
         "MAX_LINES": MAX,
@@ -53,6 +57,7 @@ def _guard(root: Path, known_large=None, tracked=None, floor=0):
         "tracked_fake": lambda _root: list(tracked or []),
         "count_lines": core.count_lines,
         "unmeasured": core.unmeasured,
+        "KNOWN_LARGE_FILE": table,
     }
     guard = core.FileSizeGuard(ns, floor_name="MIN_FAKE", tracked_name="tracked_fake", summary="ok %d %d")
     ns.update(
@@ -84,15 +89,37 @@ def test_a_grandfathered_file_that_grew_fails_and_one_at_its_size_passes(tmp_pat
     assert guard.verdict("old.py", 10) is None
 
 
-def test_a_grandfathered_file_under_its_ceiling_must_lower_it(tmp_path):
+def test_a_grandfathered_file_under_its_ceiling_passes_without_touching_the_table(tmp_path):
+    """#19673: a shrink must not need an edit to the shared table; the merge base gates it instead."""
     guard, _ = _guard(tmp_path, known_large={"old.py": 10})
-    assert "Lower the ceiling to 9" in guard.verdict("old.py", 9)
+    assert guard.verdict("old.py", 9) is None
+    assert guard.verdict("old.py", MAX + 1) is None
+    assert "over its recorded ceiling" in guard.verdict("old.py", 11)  # contrast: growth still fails
+
+
+def test_repin_lowers_ints_only_and_drops_compliant_entries(tmp_path):
+    table = tmp_path / "table.py"
+    table.write_text(
+        'KNOWN_LARGE = {\n    "a.py": 10,  # keep me\n    # note\n    "b.py": 9,\n'
+        '    "c.py": 8,\n    "gone.py": 7,\n    "d.py": 6,\n}\n',
+        encoding="utf-8",
+    )
+    known = {"a.py": 10, "b.py": 9, "c.py": 8, "gone.py": 7, "d.py": 6}
+    guard, ns = _guard(tmp_path, known_large=known, table=table)
+    for rel, n in {"a.py": 6, "b.py": 9, "c.py": MAX, "d.py": 7}.items():  # d.py grew: never raised
+        _write(tmp_path, rel, n)
+    assert guard.repin_ceilings() == 0
+    assert table.read_text(encoding="utf-8") == (
+        'KNOWN_LARGE = {\n    "a.py": 6,  # keep me\n    # note\n    "b.py": 9,\n'
+        '    "gone.py": 7,\n    "d.py": 6,\n}\n'
+    )
+    assert any("gone.py" in w for w in ns["logger"].warnings)
 
 
 def test_a_grandfathered_file_now_compliant_must_drop_its_entry(tmp_path):
     guard, _ = _guard(tmp_path, known_large={"old.py": 10})
     assert "Delete its KNOWN_LARGE entry" in guard.verdict("old.py", MAX)  # at the limit counts as compliant
-    assert "Delete its KNOWN_LARGE entry" not in guard.verdict("old.py", MAX + 1)
+    assert guard.verdict("old.py", MAX + 1) is None  # still over the limit and under the ceiling: fine
 
 
 def test_known_large_keys_match_backslash_paths(tmp_path):
@@ -173,3 +200,14 @@ def test_the_guard_reads_configuration_live_not_at_construction(tmp_path):
     assert guard.verdict("f.py", MAX + 1) is not None
     ns["MAX_LINES"] = MAX + 1
     assert guard.verdict("f.py", MAX + 1) is None
+
+
+def test_repin_reports_an_entry_it_cannot_rewrite_and_keeps_crlf(tmp_path):
+    table = tmp_path / "table.py"
+    table.write_bytes(b"KNOWN_LARGE = {\r\n    'q.py': 10,\r\n    \"a.py\": 10,\r\n}\r\n")
+    guard, ns = _guard(tmp_path, known_large={"q.py": 10, "a.py": 10}, table=table)
+    _write(tmp_path, "q.py", 5)
+    _write(tmp_path, "a.py", 6)
+    guard.repin_ceilings()
+    assert table.read_bytes() == b"KNOWN_LARGE = {\r\n    'q.py': 10,\r\n    \"a.py\": 6,\r\n}\r\n"
+    assert any("q.py" in w for w in ns["logger"].warnings)
