@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template
 
+import browser_tool_prompt
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.supported_languages import SUPPORTED_LANGUAGES
@@ -656,9 +657,8 @@ class PromptManager:
         Raises:
             KeyError: If prompt key is not found
         """
-        # Issue #6724: inject SSOT VM/port defaults so templates can use {{ vm_main }}
-        # etc. without each caller needing to pass them. Caller kwargs win on conflict.
-        merged_kwargs = {**_get_ssot_template_vars(), **kwargs}
+        # #6724 SSOT VM/port defaults + #21772 generated sections; caller kwargs win on conflict.
+        merged_kwargs = {**_get_ssot_template_vars(), **browser_tool_prompt.template_vars(), **kwargs}
 
         # Issue #4484: handle YAML section overrides
         if overrides and prompt_key in self.yaml_sections:

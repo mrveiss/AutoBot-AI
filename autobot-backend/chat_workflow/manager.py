@@ -25,6 +25,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
@@ -1803,21 +1804,7 @@ class ChatWorkflowManager(
             "You MUST use ONLY the following tool names:\n"
             "- execute_command: Run shell commands\n"
             "- web_search: Search the web for information\n"
-            "- navigate: Browse to a URL\n"
-            "- click: Click an element on a web page\n"
-            "- fill: Fill a form field on a web page\n"
-            "- select: Select an option on a web page\n"
-            "- hover: Hover over an element\n"
-            "- screenshot: Capture the current page\n"
-            "- evaluate: Evaluate JavaScript on a web page\n"
-            "- get_text: Get text from an element\n"
-            "- get_attribute: Get an attribute from an element\n"
-            "- wait_for_selector: Wait for an element to appear\n"
-            "- browser_state: Get the current page's numbered interactive-element menu\n"
-            "- click_index: Click an element by its numbered index\n"
-            "- fill_index: Fill an element by its numbered index\n"
-            "- select_index: Select an option on an element by its numbered index\n"
-            "- hover_index: Hover over an element by its numbered index\n"
+            f"{render_tool_name_reminder_lines()}"
             "- delegate: Delegate a subtask to a subordinate agent\n"
             "- respond: Signal task completion with a final message\n"
             "Do NOT invent new tool names. Use ONLY the names listed above.\n\n"

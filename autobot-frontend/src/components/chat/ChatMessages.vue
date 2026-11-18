@@ -560,7 +560,7 @@
 </template>
 
 <script setup lang="ts">
-import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
@@ -865,40 +865,7 @@ const getContentClass = (message: ChatMessage): string => {
 const formatCache = new Map<string, string>()
 const FORMAT_CACHE_MAX = 500
 
-const formatMessageContentRaw = (content: string): string => {
-  // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
-  let formatted = content
-    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '') // OSC sequences: BEL
-    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '') // OSC sequences: ST
-    .replace(/\u001b[=>]/g, '') // Set numeric keypad mode
-    .replace(/\u001b[()][AB012]/g, '') // Character set selection
-    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
-    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
-    .trim()
-
-  // Strip internal protocol tags — ONE spelling, shared (#680, #18065).
-  // This line used to carry /<tool_call…>/gs with no `i`, so it could not strip
-  // the UPPERCASE tag the prompts actually teach.
-  formatted = stripProtocolTagsForDisplay(formatted)
-
-  // Process code blocks
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
-  })
-
-  // Basic markdown formatting
-  formatted = formatted
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-
-  // Links
-  formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-
-  return sanitizeChatHtml(formatted)
-}
+const formatMessageContentRaw = formatChatMessageHtml
 
 const formatMessageContent = (content: string, messageId?: string): string => {
   const cacheKey = messageId ? `${messageId}:${content.length}` : content
