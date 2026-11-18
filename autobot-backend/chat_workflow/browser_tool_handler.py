@@ -79,42 +79,6 @@ async def validate_browser_params(tool_name: str, params: dict[str, Any]) -> str
     return None
 
 
-_SELECTOR_PARAM_KEYS = ("selector", "element", "target")
-_SELECTOR_MAX_CHARS = 120
-
-
-def _selector_hint(params: dict[str, Any]) -> str:
-    """Return a short, quoted selector from the tool params, or ''. Issue #21769."""
-    for key in _SELECTOR_PARAM_KEYS:
-        value = params.get(key) if isinstance(params, dict) else None
-        if isinstance(value, str) and value:
-            return f" (selector: {value[:_SELECTOR_MAX_CHARS]!r})"
-    return ""
-
-
-def describe_browser_error(tool_name: str, params: dict[str, Any], exc: BaseException) -> str:
-    """Sanitized, specific reason a browser tool failed. Issue #21769.
-
-    Classifies the failure (timeout, selector not found, unavailable)
-    and names the selector; the raw exception text is logged by the
-    caller and never returned, so internals and secrets stay out of the reply.
-    """
-    text = f"{type(exc).__name__} {getattr(exc, 'detail', '') or exc}".lower()
-    status = getattr(exc, "status_code", None)
-    if status == 504 or "timeout" in text or "timed out" in text:
-        if "selector" in text or "waiting for" in text:
-            kind = "timed out waiting for the element"
-        else:
-            kind = "timed out"
-    elif "not found" in text or "no element" in text or "strict mode" in text:
-        kind = "element not found"
-    elif status == 503 or "unavailable" in text:
-        kind = "the browser service is unavailable"
-    else:
-        kind = "failed"
-    return f"Browser tool '{tool_name}' {kind}{_selector_hint(params)}."
-
-
 async def handle_browser_tool(
     tool_call: dict[str, Any],
     execution_results: list[dict[str, Any]],
@@ -207,11 +171,16 @@ async def handle_browser_tool(
         # Issue #4261: Wire TOOL_ERROR hook for browser tools
         await _emit_tool_error(tool_name, e, session_id, {})
         logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
-        reason = describe_browser_error(tool_name, params, e)
-        execution_results.append({"tool": tool_name, "status": "error", "error": reason})
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "error",
+                "error": "Browser tool execution failed",
+            }
+        )
         yield WorkflowMessage(
             type="error",
-            content=reason,
+            content=f"Browser tool '{tool_name}' execution failed",
             metadata={"tool": tool_name, "error": True},
         )
 
