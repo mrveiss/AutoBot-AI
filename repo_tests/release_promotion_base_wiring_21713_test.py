@@ -53,20 +53,29 @@ KNOWN_IN_SCOPE = {
 }
 
 
-def _imported(tree: ast.AST) -> set[str]:
+def _import_from(node: ast.ImportFrom, package: tuple[str, ...]) -> set[str]:
+    """Candidate module names one ``from`` import reaches: the module and each ``module.name`` submodule."""
+    mod = node.module or ""
+    if node.level == 0:
+        if mod != "repo_tests" and not mod.startswith("repo_tests."):
+            return set()
+        base = mod.removeprefix("repo_tests").strip(".")
+    else:  # package-relative: `.` is the importer's own package, each further dot one level up
+        up = node.level - 1
+        parts = package[: len(package) - up] if up <= len(package) else ()
+        base = ".".join((*parts, *([mod] if mod else [])))
+    names = {f"{base}.{a.name}" if base else a.name for a in node.names}
+    return names | ({base} if base else set())
+
+
+def _imported(tree: ast.AST, package: tuple[str, ...] = ()) -> set[str]:
     """repo_tests module names (dotted, relative to the package) this module imports."""
     out: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             out |= {a.name.removeprefix("repo_tests.") for a in node.names if a.name.startswith("repo_tests.")}
         elif isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            if node.level == 0 and mod.startswith("repo_tests."):
-                out.add(mod.removeprefix("repo_tests."))
-            elif (node.level == 0 and mod == "repo_tests") or (node.level == 1 and not mod):
-                out |= {a.name for a in node.names}
-            elif node.level == 1:
-                out.add(mod)
+            out |= _import_from(node, package)
     return out
 
 
@@ -74,8 +83,9 @@ def _module_imports(root: Path) -> dict[str, set[str]]:
     graph = {}
     tests = root / _REPO_TESTS
     for path in tests.rglob("*.py"):
-        name = ".".join(path.relative_to(tests).with_suffix("").parts)
-        graph[name] = _imported(parse_cache.parse(path.read_text(encoding="utf-8"), str(path)))
+        parts = path.relative_to(tests).with_suffix("").parts
+        package = parts[:-1]
+        graph[".".join(parts)] = _imported(parse_cache.parse(path.read_text(encoding="utf-8"), str(path)), package)
     return graph
 
 
@@ -114,7 +124,14 @@ def runs_base_reader(step: dict, readers: set[str], root: Path) -> bool:
 
 
 def _matches_release(patterns) -> bool:
-    return any(fnmatch.fnmatchcase(RELEASE, p) for p in patterns or [])
+    """GitHub filter semantics: patterns apply in order, a later ``!`` pattern excludes and a later
+    positive one re-includes (#21713 review)."""
+    matched = False
+    for pattern in patterns or []:
+        negated = pattern.startswith("!")
+        if fnmatch.fnmatchcase(RELEASE, pattern.removeprefix("!")):
+            matched = not negated
+    return matched
 
 
 def release_prs_reach(doc: dict) -> bool:
@@ -155,15 +172,20 @@ def _condition_gap(step: dict, guard: dict, what: str) -> str | None:
 
 
 def _export_index(steps: list[dict], output: str) -> int | None:
-    """The step whose env leads with *output* (the whole name, not a longer one) and exports it (#21713)."""
+    """The step that exports AUTOBOT_RATCHET_BASE_SHA from an env var led by *output* (the whole
+    name, not a longer one), so the exported variable is the one carrying the action's output (#21713)."""
     leads = re.compile(r"\$\{\{\s*" + re.escape(output) + r"(?![\w.-])")
     for i, step in enumerate(steps):
-        env = (step.get("env") or {}).values()
         run = str(step.get("run", ""))
-        if any(leads.match(str(v).strip()) for v in env) and (
-            "AUTOBOT_RATCHET_BASE_SHA=" in run and "GITHUB_ENV" in run
-        ):
-            return i
+        if "GITHUB_ENV" not in run:
+            continue
+        for var, value in (step.get("env") or {}).items():
+            exported = re.search(
+                r"AUTOBOT_RATCHET_BASE_SHA=\"?\$(?:\{" + re.escape(var) + r"\}|" + re.escape(var) + r"(?!\w))",
+                run,
+            )
+            if leads.match(str(value).strip()) and exported:
+                return i
     return None
 
 
@@ -172,7 +194,10 @@ def wiring_gap(steps: list[dict], readers: set[str], root: Path) -> str | None:
     first = next((i for i, s in enumerate(steps) if runs_base_reader(s, readers, root)), None)
     if first is None:
         return None
-    action = next((i for i, s in enumerate(steps[:first]) if s.get("uses") == ACTION and s.get("id")), None)
+    action = next(
+        (i for i, s in enumerate(steps[:first]) if s.get("uses") == ACTION and s.get("id")),
+        None,
+    )
     if action is None:
         return f"no `uses: {ACTION}` with an id before the guard step"
     gap = _checkout_gap([s for s in steps[:action] if "actions/checkout" in str(s.get("uses", ""))])
@@ -182,10 +207,13 @@ def wiring_gap(steps: list[dict], readers: set[str], root: Path) -> str | None:
     export = _export_index(steps[action + 1 : first], output)
     if export is None:
         return f"no step between the action and the guard exports AUTOBOT_RATCHET_BASE_SHA from {output}"
-    guard = steps[first]
-    return _condition_gap(steps[action], guard, "action") or _condition_gap(
-        steps[action + 1 + export], guard, "export step"
-    )
+    for guard in (s for s in steps[first:] if runs_base_reader(s, readers, root)):
+        gap = _condition_gap(steps[action], guard, "action") or _condition_gap(
+            steps[action + 1 + export], guard, "export step"
+        )
+        if gap:
+            return gap
+    return None
 
 
 def _jobs_in_scope(root: Path) -> list[tuple[str, str, str | None]]:
@@ -255,7 +283,10 @@ _EXPORT = {
             [
                 _CHECKOUT,
                 _ACTION_STEP,
-                {**_EXPORT, "env": {"EVENT_BASE": "${{ steps.release-base.outputs.base-sha-old }}"}},
+                {
+                    **_EXPORT,
+                    "env": {"EVENT_BASE": "${{ steps.release-base.outputs.base-sha-old }}"},
+                },
                 _GUARD,
             ],
             "exports AUTOBOT_RATCHET_BASE_SHA",
@@ -269,15 +300,41 @@ _EXPORT = {
             "no `uses:",
         ),
         # #21713 review: a plugin module argument is not the repo_tests root.
-        ([_CHECKOUT, {"run": "python -m pytest autobot-backend -p repo_tests.stable_shard -q"}], None),
+        (
+            [
+                _CHECKOUT,
+                {"run": "python -m pytest autobot-backend -p repo_tests.stable_shard -q"},
+            ],
+            None,
+        ),
         # #21713 review: the HEAD^1 fallback needs a parent in the checkout.
         ([_SHALLOW, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is 1"),
-        ([{**_CHECKOUT, "with": {"fetch-depth": 1}}, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is 1"),
-        ([{**_CHECKOUT, "with": {"fetch-depth": "${{ x }}"}}, _ACTION_STEP, _EXPORT, _GUARD], "fetch-depth is"),
-        ([{**_CHECKOUT, "with": {"fetch-depth": 0}}, _ACTION_STEP, _EXPORT, _GUARD], None),
+        (
+            [{**_CHECKOUT, "with": {"fetch-depth": 1}}, _ACTION_STEP, _EXPORT, _GUARD],
+            "fetch-depth is 1",
+        ),
+        (
+            [
+                {**_CHECKOUT, "with": {"fetch-depth": "${{ x }}"}},
+                _ACTION_STEP,
+                _EXPORT,
+                _GUARD,
+            ],
+            "fetch-depth is",
+        ),
+        (
+            [{**_CHECKOUT, "with": {"fetch-depth": 0}}, _ACTION_STEP, _EXPORT, _GUARD],
+            None,
+        ),
         # #21713 review: the wiring runs whenever the guard does.
-        ([_CHECKOUT, {**_ACTION_STEP, "if": _ONLY_MAIN}, _EXPORT, _GUARD], "action's `if:"),
-        ([_CHECKOUT, _ACTION_STEP, {**_EXPORT, "if": _ONLY_MAIN}, _GUARD], "export step's `if:"),
+        (
+            [_CHECKOUT, {**_ACTION_STEP, "if": _ONLY_MAIN}, _EXPORT, _GUARD],
+            "action's `if:",
+        ),
+        (
+            [_CHECKOUT, _ACTION_STEP, {**_EXPORT, "if": _ONLY_MAIN}, _GUARD],
+            "export step's `if:",
+        ),
         (
             [
                 _CHECKOUT,
@@ -286,6 +343,43 @@ _EXPORT = {
                 {**_GUARD, "if": "inputs.x"},
             ],
             None,
+        ),
+        # #21713 review: every base-reading guard is checked, not only the first.
+        (
+            [
+                _CHECKOUT,
+                {**_ACTION_STEP, "if": "inputs.x"},
+                {**_EXPORT, "if": "inputs.x"},
+                {**_GUARD, "if": "inputs.x"},
+                _GUARD,
+            ],
+            "differs from the guard's",
+        ),
+        # #21713 review: the exported variable is the one carrying the action's output.
+        (
+            [
+                _CHECKOUT,
+                _ACTION_STEP,
+                {
+                    **_EXPORT,
+                    "run": 'echo "AUTOBOT_RATCHET_BASE_SHA=wrong" >> "$GITHUB_ENV"',
+                },
+                _GUARD,
+            ],
+            "exports AUTOBOT_RATCHET_BASE_SHA",
+        ),
+        (
+            [
+                _CHECKOUT,
+                _ACTION_STEP,
+                {
+                    **_EXPORT,
+                    "env": {**_EXPORT["env"], "UNUSED": "x"},
+                    "run": 'echo "AUTOBOT_RATCHET_BASE_SHA=$UNUSED" >> "$GITHUB_ENV"',
+                },
+                _GUARD,
+            ],
+            "exports AUTOBOT_RATCHET_BASE_SHA",
         ),
     ],
 )
@@ -304,7 +398,60 @@ def test_the_wiring_check_on_fixtures(steps, gap) -> None:
         ({"workflow_call": {"inputs": {}}}, True),
         ({"push": {"branches": ["main"]}, "workflow_dispatch": None}, False),
         ("pull_request", True),
+        # #21713 review: filters apply in order -- a later `!` excludes, a later positive re-includes.
+        ({"pull_request": {"branches": ["*", "!release"]}}, False),
+        ({"pull_request": {"branches": ["*", "!release", "release"]}}, True),
+        ({"pull_request": {"branches": ["*"]}}, True),
     ],
 )
 def test_which_workflows_a_release_pr_reaches(on, reached) -> None:
     assert release_prs_reach({True: on}) is reached
+
+
+# --- discovery fixtures: import closure, target mapping, tracked lists (positive and negative) ---
+
+
+def _graph(tmp_path: Path, files: dict[str, str]) -> dict[str, set[str]]:
+    for rel, text in files.items():
+        path = tmp_path / _REPO_TESTS / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return _module_imports(tmp_path)
+
+
+def test_the_import_closure_follows_submodule_and_relative_imports(
+    tmp_path: Path,
+) -> None:
+    graph = _graph(
+        tmp_path,
+        {
+            "_ratchet_base.py": "",
+            "helpers/__init__.py": "",
+            "helpers/base.py": "from repo_tests import _ratchet_base\n",
+            "helpers/rel.py": "from .. import _ratchet_base\n",
+            "a_test.py": "from repo_tests.helpers import base\n",
+            "b_test.py": "from repo_tests.helpers import rel\n",
+            "c_test.py": "import os\nfrom repo_tests import unrelated\n",
+            "unrelated.py": "",
+        },
+    )
+    readers = base_readers(graph)
+    assert {"helpers.base", "helpers.rel", "a_test", "b_test"} <= readers
+    assert not {"c_test", "unrelated"} & readers
+
+
+def test_a_target_maps_to_a_reader_only_when_it_names_one() -> None:
+    readers = {BASE_MODULE, "x_test", "helpers.base"}
+    assert _targets_base_reader("x_test.py", readers)
+    assert _targets_base_reader("helpers", readers)
+    assert _targets_base_reader(None, readers)
+    assert not _targets_base_reader("other_test.py", readers)
+
+
+def test_a_tracked_guard_list_counts_only_active_entries(tmp_path: Path) -> None:
+    (tmp_path / "guards.txt").write_text("# repo_tests/x_test.py\nrepo_tests/other_test.py\n", encoding="utf-8")
+    (tmp_path / "live.txt").write_text("repo_tests/x_test.py\n", encoding="utf-8")
+    step = {"run": "python -m pytest $(cat guards.txt)"}
+    live = {"run": "python -m pytest $(cat live.txt)"}
+    assert not runs_base_reader(step, {BASE_MODULE, "x_test"}, tmp_path)
+    assert runs_base_reader(live, {BASE_MODULE, "x_test"}, tmp_path)
