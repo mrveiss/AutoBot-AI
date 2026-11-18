@@ -71,7 +71,7 @@ def check_environment():
         logger.error("OpenVINO initialization failed", error=str(e))
 
     # Check environment variables
-    required_env = ["NPU_WORKER_HOST", "NPU_WORKER_PORT"]
+    required_env = ["NPU_WORKER_PORT"]  # bind host has a default and two accepted names
     for env_var in required_env:
         env_val = os.getenv(env_var)
         if env_val:
@@ -102,7 +102,7 @@ def main():
     check_environment()
 
     # Get configuration
-    host = os.getenv("NPU_WORKER_HOST", "0.0.0.0")
+    host = os.getenv("NPU_WORKER_BIND_HOST") or os.getenv("NPU_WORKER_HOST", "0.0.0.0")
     port = int(os.getenv("NPU_WORKER_PORT", 8081))
     workers = int(os.getenv("NPU_WORKER_WORKERS", 1))
 

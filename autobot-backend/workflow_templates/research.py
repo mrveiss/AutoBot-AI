@@ -18,7 +18,7 @@ from typing import List
 
 from autobot_types import TaskComplexity
 
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 
 def _create_comprehensive_research_steps() -> List[WorkflowStep]:
@@ -83,7 +83,7 @@ def create_comprehensive_research_template() -> WorkflowTemplate:
         id="comprehensive_research",
         name="Comprehensive Research",
         description="Multi-source research with knowledge base integration",
-        category=TemplateCategory.RESEARCH,
+        category=WorkflowTemplateCategory.RESEARCH,
         complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=25,
         agents_involved=["librarian", "research", "knowledge_manager"],
@@ -184,7 +184,7 @@ def create_competitive_analysis_template() -> WorkflowTemplate:
         id="competitive_analysis",
         name="Competitive Analysis",
         description="Comprehensive competitive landscape analysis",
-        category=TemplateCategory.RESEARCH,
+        category=WorkflowTemplateCategory.RESEARCH,
         complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=35,
         agents_involved=["research", "orchestrator", "knowledge_manager"],
@@ -300,7 +300,7 @@ def create_technology_research_template() -> WorkflowTemplate:
         id="technology_research",
         name="Technology Research",
         description="In-depth technology evaluation and comparison",
-        category=TemplateCategory.RESEARCH,
+        category=WorkflowTemplateCategory.RESEARCH,
         complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=30,
         agents_involved=["librarian", "research", "orchestrator", "knowledge_manager"],
@@ -386,7 +386,7 @@ def create_autoresearch_loop_template() -> WorkflowTemplate:
             "Autonomous ML experimentation: web search → hypothesis → train 5 min "
             "→ evaluate val_bpb → keep/discard → index findings"
         ),
-        category=TemplateCategory.RESEARCH,
+        category=WorkflowTemplateCategory.RESEARCH,
         complexity=TaskComplexity.COMPLEX,  # was an alias of COMPLEX (#13806); the kind is on `category`
         estimated_duration_minutes=15,
         agents_involved=["research", "orchestrator", "knowledge_manager"],

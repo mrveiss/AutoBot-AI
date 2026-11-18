@@ -15,8 +15,8 @@ import uuid
 import pytest
 from fastapi import HTTPException, status
 
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.schemas import UserCreate, UserUpdate
-from user_management.services.user_service import DuplicateUserError
 
 
 @pytest.fixture

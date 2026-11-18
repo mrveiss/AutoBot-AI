@@ -180,14 +180,13 @@ async def reset_knowledge_base():
     logger.info("\n3. Testing knowledge base initialization...")
 
     try:
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
 
         # Create a fresh knowledge base
-        kb = KnowledgeBase()
-        logger.info(f"✅ Knowledge base created (will use Redis DB: {kb.redis_db})")
-
-        # Initialize it
-        await kb.ainit()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
+        logger.info(f"✅ Knowledge base ready (Redis DB: {kb.redis_db})")
         logger.info("✅ Knowledge base initialized successfully")
 
         # Check embedding model and dimensions

@@ -43,7 +43,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _REPO_ROOT = repo_root()
 _POST_CHECKOUT = _REPO_ROOT / "scripts" / "hooks" / "post-checkout"
@@ -97,9 +97,9 @@ fi"""
 
 
 def _git(cwd: Path, *args: str, check: bool = False) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls,
-    checkout included, at the real repository instead of tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=scrubbed_git_env())
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
+    the real repository instead of the throwaway one under tmp_path."""
+    return git(cwd, *args, check=check)
 
 
 def _install(path: Path, content: bytes) -> None:
@@ -119,9 +119,7 @@ def _seed_repo(tmp_path: Path, post_checkout_text: str, *, with_new_template: bo
     _install(repo / "scripts" / "hooks" / "pre-commit-branch-guard-wrapper", _OLD_WRAPPER.read_bytes())
     if with_new_template:
         _install(repo / "tools" / "git-hooks" / "pre-commit", _NEW_PRECOMMIT_TEMPLATE.read_bytes())
-    _git(tmp_path, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")

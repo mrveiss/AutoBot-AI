@@ -111,6 +111,10 @@ def _transcribe_with_whisper_cpu(
     except ImportError as exc:
         raise RuntimeError("whisper package not installed.  Run: pip install openai-whisper") from exc
 
+    # Not revision-pinned, on purpose (#17780, #17778): this is the one backend that
+    # exposes no_speech_prob (see _mean_no_speech_prob), which the transformers
+    # pipeline cannot supply, and openai-whisper downloads weights by model name
+    # from its own CDN -- there is no HuggingFace revision to pin.
     model = whisper.load_model(model_name)
     options: dict = {}
     if language:

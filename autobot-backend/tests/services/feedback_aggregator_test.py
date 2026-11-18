@@ -207,3 +207,34 @@ def test_signal_roundtrip_serialisation():
     assert restored.reject_count == 3
     assert restored.aversion == 0.5
     assert restored.last_reason == "why"
+
+
+# ---------------------------------------------------------------------------
+# #18094: one GLOBAL_USER spelling; rows under the legacy spelling stay readable
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_new_global_writes_use_the_canonical_spelling():
+    from constants.user_scope_constants import GLOBAL_USER
+
+    agg, redis = _agg()
+    await agg.record_signal("rejected", "regex_approach", task_class="code-fix", org_id="orgA")
+
+    assert list(redis.store) == [FeedbackAggregator._key("orgA", GLOBAL_USER, "code-fix", "regex_approach")]
+
+
+@pytest.mark.asyncio
+async def test_reader_finds_a_row_written_under_the_legacy_spelling():
+    from constants.user_scope_constants import GLOBAL_USER, LEGACY_GLOBAL_USER_SPELLINGS
+
+    agg, redis = _agg()
+    await _reject_n(agg, "regex_approach", 6, task_class="code-fix", org_id="orgA")
+    canonical_key = FeedbackAggregator._key("orgA", GLOBAL_USER, "code-fix", "regex_approach")
+    legacy_key = FeedbackAggregator._key("orgA", LEGACY_GLOBAL_USER_SPELLINGS[0], "code-fix", "regex_approach")
+    redis.store[legacy_key] = redis.store.pop(canonical_key)
+
+    bias = await agg.get_bias("regex_approach", task_class="code-fix", org_id="orgA", user_id="u_new")
+
+    assert bias is not None
+    assert bias.bias < 0

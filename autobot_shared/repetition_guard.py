@@ -30,6 +30,7 @@ concurrent across sessions.
 from typing import Any, Dict, Optional, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.tool_catalogue import ToolEffect, tools_with
 
 logger = get_logger(__name__)
 
@@ -40,7 +41,7 @@ STAGNATION_STATE_KEY = "_stagnation_guard"
 # Tools whose whole purpose is to be re-issued until something changes. A
 # changing result already exempts them via the pair key; this covers the case
 # where the result is legitimately identical between polls.
-POLLABLE_TOOLS = frozenset({"sleep", "wait", "poll", "check_status"})
+POLLABLE_TOOLS = tools_with(ToolEffect.POLL)  # declared once in tool_catalogue (#18294)
 
 
 def _canonical_args(tool_call: Dict[str, Any]) -> Any:
@@ -50,9 +51,9 @@ def _canonical_args(tool_call: Dict[str, Any]) -> Any:
 
 def call_fingerprint(tool_call: Dict[str, Any]) -> str:
     """Stable hash of ``(tool name, canonical args)``."""
-    from agent_loop.fingerprint import content_hash  # noqa: PLC0415
+    from agent_loop.fingerprint import normalized_content_hash  # noqa: PLC0415
 
-    return content_hash([tool_call.get("name", ""), _canonical_args(tool_call)])
+    return normalized_content_hash([tool_call.get("name", ""), _canonical_args(tool_call)])
 
 
 def last_result_hash(tool_name: str, execution_results: list) -> Optional[str]:
@@ -62,11 +63,11 @@ def last_result_hash(tool_name: str, execution_results: list) -> Optional[str]:
     requiring a post-dispatch hook, so the guard stays a single pre-dispatch
     check like every other ``_enforce_*`` at this seam.
     """
-    from agent_loop.fingerprint import content_hash  # noqa: PLC0415
+    from agent_loop.fingerprint import normalized_content_hash  # noqa: PLC0415
 
     for entry in reversed(execution_results or []):
         if isinstance(entry, dict) and entry.get("tool") == tool_name:
-            return content_hash(entry.get("result", entry.get("error", "")))
+            return normalized_content_hash(entry.get("result", entry.get("error", "")))
     return None
 
 

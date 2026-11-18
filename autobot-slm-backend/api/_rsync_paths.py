@@ -29,20 +29,16 @@ from __future__ import annotations
 
 import asyncio
 import getpass
-import logging
 import shutil
 from pathlib import Path
 from typing import List
 
-from services.deploy_artifacts import rsync_artifact_excludes, rsync_host_state_args
+from autobot_shared.logging_manager import get_logger
+from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes, rsync_host_state_args
 from services.deployed_dir_resolver import get_release_component_dir
 from services.drift_checker import deploy_only_entries, owned_subtrees
 
-# stdlib logging, matching `code_sync` and `_colocated_role_procedures`: the
-# test harness mocks the config `get_logger` reads, so calling it at import
-# time raises `TypeError: '>' not supported between MagicMock and int` from
-# RotatingFileHandler. CLAUDE.md allows stdlib logging for exactly this.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: How many blocked deletions to name in a preview before truncating.
 _BLOCKED_DELETION_PREVIEW: int = 20
@@ -194,6 +190,7 @@ async def _restore_component_snapshot(component: str, snapshot: str, steps: List
         proc = await asyncio.create_subprocess_exec(
             "rsync",
             "-a",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             f"{snapshot}/",
             f"{deployed_dir}/",

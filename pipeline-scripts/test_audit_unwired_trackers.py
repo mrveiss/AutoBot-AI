@@ -19,9 +19,8 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import audit_unwired_trackers as audit
+import pytest
 
 # ---------------------------------------------------------------------------
 # extract_tracker_refs / ISSUE_REF_RE — #6928 regex coverage
@@ -62,10 +61,11 @@ def test_extract_tracker_refs_only_first_40_lines(tmp_path: Path) -> None:
 
 
 def test_extract_tracker_refs_unreadable_file(tmp_path: Path) -> None:
-    """OSError / UnicodeDecodeError must return [] not crash the audit."""
+    """OSError / UnicodeDecodeError must raise TrackerLookupError, never [] (#21582)."""
     f = tmp_path / "binary.py"
     f.write_bytes(b"\x80\x81\x82\xfe\xff\x00")
-    assert audit.extract_tracker_refs(f) == []
+    with pytest.raises(audit.TrackerLookupError, match="binary.py"):
+        audit.extract_tracker_refs(f)
 
 
 # ---------------------------------------------------------------------------
@@ -178,21 +178,23 @@ def test_grep_count_excludes_self_and_test_paths() -> None:
 
 
 def test_grep_count_handles_grep_error() -> None:
-    """grep returncode > 1 means an error — return -1 (skip) not 0."""
+    """grep returncode > 1 means an error — raise, never -1 (which would drop the file silently)."""
     fake_run = MagicMock(returncode=2, stdout="", stderr="grep: I/O error")
     with patch.object(audit.subprocess, "run", return_value=fake_run):
-        assert audit.grep_count_production_callers("foo", Path("/dev/null")) == -1
+        with pytest.raises(audit.TrackerLookupError):
+            audit.grep_count_production_callers("foo", Path("/dev/null"))
 
 
 def test_grep_count_handles_timeout() -> None:
-    """subprocess.TimeoutExpired must return -1, not crash."""
+    """subprocess.TimeoutExpired must raise TrackerLookupError, not read as wired."""
     import subprocess as _sp
 
     def _raise(*_a, **_kw):
         raise _sp.TimeoutExpired(cmd="grep", timeout=60)
 
     with patch.object(audit.subprocess, "run", side_effect=_raise):
-        assert audit.grep_count_production_callers("foo", Path("/dev/null")) == -1
+        with pytest.raises(audit.TrackerLookupError):
+            audit.grep_count_production_callers("foo", Path("/dev/null"))
 
 
 # ---------------------------------------------------------------------------
@@ -261,15 +263,17 @@ def test_fetch_closed_tracker_set_parses_gh_output() -> None:
 
 
 def test_fetch_closed_tracker_set_gh_unavailable() -> None:
-    """gh missing or non-zero exit must degrade gracefully to empty set."""
+    """gh missing must raise, never read as "no closed trackers" (#21582)."""
     with patch.object(audit.subprocess, "run", side_effect=FileNotFoundError("gh")):
-        assert audit.fetch_closed_tracker_set() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.fetch_closed_tracker_set()
 
 
 def test_fetch_closed_tracker_set_invalid_json() -> None:
     fake_run = MagicMock(returncode=0, stdout="<<not json>>", stderr="")
     with patch.object(audit.subprocess, "run", return_value=fake_run):
-        assert audit.fetch_closed_tracker_set() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.fetch_closed_tracker_set()
 
 
 # ---------------------------------------------------------------------------
@@ -301,9 +305,10 @@ def test_existing_audit_issues_extracts_tracker_numbers() -> None:
 
 
 def test_existing_audit_issues_gh_failure() -> None:
-    """gh failures must return empty set (open-mode default — file new ones)."""
+    """gh failures must raise: an empty set would make --file-issues file duplicates (#21582)."""
     with patch.object(audit.subprocess, "run", side_effect=FileNotFoundError("gh")):
-        assert audit.existing_audit_issues_by_tracker() == set()
+        with pytest.raises(audit.TrackerLookupError):
+            audit.existing_audit_issues_by_tracker()
 
 
 # ---------------------------------------------------------------------------
@@ -514,3 +519,73 @@ def test_scan_still_flags_truly_orphaned_module(tmp_path: Path) -> None:
     assert len(findings) == 1
     assert findings[0].tracker == 4242
     assert findings[0].file.endswith("ghost_module.py")
+
+
+# ---------------------------------------------------------------------------
+# main() stdout contract — the workflow redirects stdout into findings.json (#21164)
+# ---------------------------------------------------------------------------
+
+_FIXTURE = [audit.Finding(file="autobot-backend/foo.py", tracker=42, tracker_state="CLOSED", production_callers=0)]
+
+
+def _scan_emitting_diagnostic() -> list:
+    audit.logger.warning("diagnostic that must stay off the report stream")
+    return list(_FIXTURE)
+
+
+def test_main_json_stdout_is_only_the_json_report(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch.object(audit, "scan", _scan_emitting_diagnostic), patch.object(sys, "argv", ["audit", "--json"]):
+        assert audit.main() == 1
+    out = capsys.readouterr().out
+    parsed = json.loads(out)
+    assert parsed == [
+        {"file": "autobot-backend/foo.py", "tracker": 42, "tracker_state": "CLOSED", "production_callers": 0}
+    ]
+    assert out == audit.render_json(_FIXTURE) + "\n"
+
+
+def test_main_human_stdout_is_the_literal_report(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch.object(audit, "scan", _scan_emitting_diagnostic), patch.object(sys, "argv", ["audit"]):
+        assert audit.main() == 1
+    expected = (
+        "❌ 1 unwired-tracker finding(s):\n"
+        "\n"
+        f"{'FILE':<70}  {'TRACKER':>10}  {'STATE':<8}  CALLERS\n"
+        f"{'autobot-backend/foo.py':<70}  #{'42':<9}  {'CLOSED':<8}  0\n"
+        "\n"
+        "Each finding represents a module whose tracker issue is closed but\n"
+        "whose code has zero production callers. Per #6836, file a wire-in\n"
+        "issue for each, or run with --file-issues.\n"
+        "\n"  # print() added a second newline after the report's own; sys.stdout.write keeps it
+    )
+    assert capsys.readouterr().out == expected
+
+
+def test_main_file_issues_caps_dedupes_and_keeps_stdout_order(capsys: pytest.CaptureFixture[str]) -> None:
+    """Old path: dedupe against open issues, cap with --max-issues, then `filed #N` lines, then the report."""
+    findings = [
+        audit.Finding(file=f"autobot-backend/m{n}.py", tracker=n, tracker_state="CLOSED", production_callers=0)
+        for n in (1, 2, 3, 4)
+    ]
+    # tracker 1 is already filed (deduped); --max-issues 2 files 2 and 3; tracker 4 is cap-deferred.
+    # Any other tracker reaching file_discovery_issue raises KeyError and fails the test.
+    filed = {2: 900, 3: 901}
+    calls: list[int] = []
+
+    def fake_file(finding: audit.Finding) -> int:
+        calls.append(finding.tracker)
+        return filed[finding.tracker]
+
+    with (
+        patch.object(audit, "scan", return_value=findings),
+        patch.object(audit, "existing_audit_issues_by_tracker", return_value={1}),
+        patch.object(audit, "file_discovery_issue", side_effect=fake_file),
+        patch.object(sys, "argv", ["audit", "--file-issues", "--json", "--max-issues", "2"]),
+    ):
+        assert audit.main() == 1
+    assert calls == [2, 3]  # without the cap 4 is filed (KeyError); without dedupe 1 is filed (KeyError)
+    # The report still lists all four findings, as the old main() rendered the full list; filed lines come first.
+    assert capsys.readouterr().out == (
+        "filed #900 for autobot-backend/m2.py (tracker #2)\n"
+        "filed #901 for autobot-backend/m3.py (tracker #3)\n" + audit.render_json(findings) + "\n"
+    )

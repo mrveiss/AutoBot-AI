@@ -312,6 +312,43 @@ async def init_database() -> None:
             await asyncio.sleep(_DB_INIT_RETRY_DELAY_SECONDS)
 
 
+@asynccontextmanager
+async def isolated_session_factory() -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
+    """A session factory on a private, unpooled engine, disposed on exit (#18094).
+
+    For one-shot work on a short-lived event loop outside the app's own loop -- e.g.
+    provider-key hydration from a Celery worker init or a CLI. The shared engine's
+    pooled connections are bound to the loop that opened them, so borrowing it from a
+    loop that is about to close would leave dead connections behind for the next user.
+    """
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(get_deployment_config().postgres_url, poolclass=NullPool)
+    try:
+        yield async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    finally:
+        await engine.dispose()
+
+
+def reset_after_fork() -> None:
+    """Drop the engine and session factory inherited from a parent process (#20887).
+
+    Synchronous on purpose: ``close_database()`` needs a loop, and the inherited
+    pool's connections belong to the parent's sockets and loop. ``close=False``
+    discards them without touching those sockets, so the child never closes a
+    connection the parent still uses. The next ``get_async_engine()`` builds a
+    fresh engine on the child's own loop.
+    """
+    global _async_engine, _async_session_factory
+
+    engine = _async_engine
+    _async_engine = None
+    _async_session_factory = None
+    if engine is not None:
+        engine.sync_engine.dispose(close=False)
+        logger.info("Inherited PostgreSQL async engine dropped after fork")
+
+
 async def close_database() -> None:
     """
     Close the database connection pool.

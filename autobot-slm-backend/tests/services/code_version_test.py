@@ -108,7 +108,7 @@ def _real_modules_swapped():
 def slm_db_session():
     """Create an in-memory SQLite database for SLM models."""
     with _real_modules_swapped():
-        engine = create_engine(
+        engine = create_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
             "sqlite:///:memory:", echo=False
         )  # canonical: ignore py-adhoc-db-engine (test-local engine)
         Base.metadata.create_all(engine)
@@ -364,7 +364,10 @@ class TestHasFailedAutobotService:
         real packages instead of the root-conftest MagicMock stubs (#11737).
         """
         with _real_modules_swapped():
-            module = importlib.import_module("api.nodes")
+            try:
+                module = importlib.import_module("api.nodes")
+            finally:
+                sys.modules.pop("services.node_events", None)  # do not leak real-model binding (#17856)
         return module._has_failed_autobot_service(extra_data)
 
     def test_returns_false_when_extra_data_is_none(self):

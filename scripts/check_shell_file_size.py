@@ -16,12 +16,12 @@ The ratchet has the same three-way semantics as the Python one, and turns one
 way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-"Below its ceiling -> fail" is the part that looks wrong and is not: an
-unlowered ceiling re-licenses the lines just cut, so a shrink that is not
-recorded is a shrink that can be spent again.
+"Below its ceiling -> pass" (#19673): a ceiling above the measured size is harmless, because the
+ratchet test also bounds the file by its length at the merge base, so the lines just cut cannot
+be spent again.
 
 A file that cannot be read is a violation, not a skip. `count_lines` returns
 None for missing, unreadable, not-a-file and not-UTF-8 alike, and None means
@@ -43,7 +43,6 @@ growing while that happens.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import pathlib
 import sys
@@ -53,22 +52,25 @@ import sys
 # into that path — the same trade `check_python_file_size.py` takes.
 logger = logging.getLogger(__name__)
 
-# scripts/ is not a package; put the repo root on the path so the shared
-# ratchet engine is importable when this runs as a bare hook.
+# scripts/ is not a package; put the repo root on the path so the canonical
+# git-env scrub is importable when this runs as a bare hook.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from tools.lint import file_size_engine as engine  # noqa: E402
+from autobot_shared.paths import project_root as repo_root  # noqa: E402, F401  # read via GUARD (live namespace)
+from tools.lint._file_size_guard import (  # noqa: E402, F401  # names read via GUARD (live namespace)
+    FileSizeGuard,
+    count_lines,
+    git_tracked,
+    load_known_large,
+    normalise,
+    unmeasured,
+)
 from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
 
 #: Repo-relative path of this hook, quoted in every message that asks for an edit.
 SELF_REL = "scripts/check_shell_file_size.py"
-
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: A ceiling lowered in one file alone leaves the other holding the old size,
-#: and the gap between them is spendable (#14498).
-RATCHET_REL = "repo_tests/shell_file_size_ratchet_baseline.py"
 
 #: Prefixes this gate does not cover, mirrored from its own `exclude:` in
 #: `.pre-commit-config.yaml`. The tree walk runs independently of pre-commit,
@@ -84,107 +86,58 @@ MIN_TRACKED_SH_FILES = 180
 
 #: Grandfathered files: over MAX_LINES when this gate landed, mapped to the
 #: line count recorded for each. THIS MAPPING ONLY SHRINKS. Never add an entry
-#: to make a new file pass — split the file. Mirrored in RATCHET_REL; lower an
-#: entry in both in the same commit.
+#: to make a new file pass — split the file. The only copy
+#: (#19544): the ratchet test checks it against the base commit's.
 #:
 #: Ten entries, not the 509 the Python gate had to carry, which is why they sit
 #: inline here rather than in a sibling data module.
+#: The file ``--repin-ceilings`` rewrites (#19673): the table is inline, so it is this script.
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve()
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 652,
+    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 651,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/zero-downtime-update.sh": 614,
     "autobot-infrastructure/shared/scripts/cleanup-disk-space.sh": 838,
     "autobot-infrastructure/shared/scripts/deployment/validate_access_control.sh": 659,
     "autobot-infrastructure/shared/scripts/install-bare-metal.sh": 882,
     "autobot-infrastructure/shared/scripts/install-slm.sh": 822,
-    "autobot-slm-backend/ansible/deploy.sh": 718,
+    "autobot-slm-backend/ansible/deploy.sh": 712,
     # #17929: +41 for the /dev/tty prompt helper. The documented `curl | sudo bash`
     # aborted silently at the password prompt -- stdin is the script pipe, `read`
     # got EOF, `set -e` killed it. The file is delivered BY curl, so it cannot
     # source a helper and cannot be split; the exemption's own reason still holds.
-    "install.sh": 1321,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
+    "install.sh": 1168,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
-    "scripts/pr-preflight.sh": 818,
+    "scripts/pr-preflight.sh": 815,
 }
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[1]
-
-
-def _config() -> engine.GateConfig:
-    """This gate's configuration, read from the module globals AT CALL TIME (#17377)."""
-    return engine.GateConfig(
-        label="shell-file-size",
-        max_lines=MAX_LINES,
-        self_rel=SELF_REL,
-        ratchet_rel=RATCHET_REL,
-        excluded_prefixes=EXCLUDED_PREFIXES,
-        min_tracked_files=MIN_TRACKED_SH_FILES,
-        known_large=KNOWN_LARGE,
-        globs=("*.sh",),
-        summary_noun="file(s)",
-        commit_skips_excluded=True,
-    )
-
-
-# Thin delegations. Each exists because the ratchet and parity tests, or `main`, call it by
-# this name; the behaviour is the engine's, shared with the Python and frontend gates.
-def normalise(path: str) -> str:
-    return engine.normalise(path)
-
-
-def count_lines(path: pathlib.Path) -> int | None:
-    return engine.count_lines(path)
-
-
+#: In-scope, git-tracked ``*.sh`` paths under *root*, relative to it.
 def tracked_shell_files(root: pathlib.Path) -> list[str]:
-    return engine.tracked_files(_config(), root)
+    """In-scope tracked paths under *root*; EXCLUDED_PREFIXES is read at call time, not bound at import."""
+    return git_tracked(root, ("*.sh",), EXCLUDED_PREFIXES)
 
 
-def verdict(rel: str, line_count: int) -> str | None:
-    return engine.verdict(_config(), rel, line_count)
-
-
-def unmeasured(rel: str) -> str:
-    return engine.unmeasured(rel)
-
-
-def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
-    return engine.vanished_entry_problem(_config(), rel, root)
-
-
-def _reach_breach_problem(reached: int) -> str:
-    return engine.reach_breach_problem(_config(), reached)
-
-
-def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> engine.ScanResult:
-    return engine.scan_tracked_files(_config(), root, tracked)
-
-
-def audit_ceilings() -> tuple[int, list[str]]:
-    return engine.audit_ceilings(_config(), repo_root(), tracked_shell_files, _scan_tracked_files)
-
-
-def run_audit() -> int:
-    return engine.run_audit(_config(), logger, audit_ceilings)
-
-
-def check_paths(paths: list[str]) -> int:
-    """The commit path: rule on the staged files pre-commit passed in."""
-    return engine.check_paths(_config(), repo_root(), paths, logger)
+GUARD = FileSizeGuard(
+    globals(),
+    floor_name="MIN_TRACKED_SH_FILES",
+    tracked_name="tracked_shell_files",
+    summary="shell-file-size ceilings: %d file(s) scanned, %d grandfathered, all live and at size.",
+)
+_grandfathered_verdict = GUARD.grandfathered_verdict
+verdict = GUARD.verdict
+_vanished_entry_problem = GUARD.vanished_entry_problem
+_report_unmeasured = GUARD.report_unmeasured
+_scan_tracked_files = GUARD.scan_tracked_files
+audit_ceilings = GUARD.audit_ceilings
+_reach_breach_problem = GUARD.reach_breach_problem
+run_audit = GUARD.run_audit
+check_paths = GUARD.check_paths
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for both the hook path and ``--audit-ceilings``."""
+    """Entry point for the hook path, ``--audit-ceilings`` and ``--repin-ceilings``."""
     configure_logging(logger)
-    parser = argparse.ArgumentParser(description="Reject oversized shell files (#17353).")
-    parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .sh file")
-    parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
-    args = parser.parse_args(argv)
-    if args.audit_ceilings:
-        return run_audit()
-    return check_paths(args.paths)
+    return GUARD.cli(argv, "Reject oversized shell files (#17353).", "walk every tracked .sh file")
 
 
 if __name__ == "__main__":

@@ -25,11 +25,15 @@ const i18n = createI18n({
   messages: {
     en: {
       analytics: {
+        truncation: {
+          showingOf: 'Showing {shown} of {total}',
+          showMore: 'Show {count} more',
+          serverLimited: 'Showing the top {shown} of {total}. The server limits this list.',
+        },
         declarations: {
           title: 'Declarations',
           total: 'Total',
           exported: 'exported',
-          showingOf: 'Showing {shown} of {total} {type}',
           emptyMessage: 'No declarations detected',
           types: {
             function: 'Functions',
@@ -146,16 +150,25 @@ describe('DeclarationsSection (#5369)', () => {
     })
   })
 
-  describe('overflow footer', () => {
-    it('shows "Showing 30 of N" when a group has more than 30 items', async () => {
+  describe('show more (#12741)', () => {
+    it('is a button that reveals the next rows and keeps the count accurate', async () => {
       const items = Array.from({ length: 35 }, (_, i) =>
         makeDecl({ declaration_type: 'function', name: `f${i}`, line_number: i }),
       )
       const w = mountSection(items)
       const header = w.find('.accordion-header')
       await header.trigger('click')
-      expect(w.find('.show-more').exists()).toBe(true)
-      expect(w.find('.show-more').text()).toContain('35')
+      const rows = () => w.findAll('.list-item')
+      expect(rows()).toHaveLength(30)
+      expect(w.find('[data-testid="truncation-count"]').text()).toBe('Showing 30 of 35')
+
+      const button = w.find('[data-testid="truncation-show-more"]')
+      expect(button.element.tagName).toBe('BUTTON')
+      await button.trigger('click')
+
+      expect(rows()).toHaveLength(35)
+      // Everything is visible now, so the notice (and its button) is gone.
+      expect(w.find('[data-testid="truncation-show-more"]').exists()).toBe(false)
     })
   })
 })

@@ -25,24 +25,13 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
     echo "FATAL: cannot load lib/_common.sh — refusing to report clean" >&2
     exit 1
 }
+# shellcheck source=../../../../scripts/lib/hook-python.sh
+source "$SCRIPT_DIR/../../../../scripts/lib/hook-python.sh" || {
+    echo "FATAL: cannot load scripts/lib/hook-python.sh — refusing to report clean" >&2
+    exit 1
+}
 
 PYTHON_SCRIPT="${SCRIPT_DIR}/function_length_checker.py"
-
-# Find Python interpreter
-find_python() {
-    # Check venv first, then system python
-    if [[ -n "${VIRTUAL_ENV:-}" ]]; then
-        echo "$VIRTUAL_ENV/bin/python"
-    elif [[ -f "$(git rev-parse --show-toplevel 2>/dev/null)/venv/bin/python" ]]; then
-        echo "$(git rev-parse --show-toplevel)/venv/bin/python"
-    elif command -v python3 &> /dev/null; then
-        echo "python3"
-    elif command -v python &> /dev/null; then
-        echo "python"
-    else
-        echo ""
-    fi
-}
 
 # Get staged Python files (excluding tests, __init__, temp directories, migrations).
 # Named get_staged_python_files to avoid shadowing _common.sh's get_staged_files.
@@ -77,12 +66,8 @@ main() {
     echo ""
 
     local python_cmd
-    python_cmd=$(find_python)
-
-    if [[ -z "$python_cmd" ]]; then
-        echo -e "${YELLOW}WARNING: Python not found, skipping function length check${NC}"
-        exit 0
-    fi
+    # #21163: the one resolver; an unresolvable interpreter blocks instead of skipping the check.
+    python_cmd=$(resolve_repo_python) || exit 1
 
     if [[ ! -f "$PYTHON_SCRIPT" ]]; then
         echo -e "${RED}ERROR: function_length_checker.py not found at $PYTHON_SCRIPT${NC}"

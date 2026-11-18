@@ -18,7 +18,7 @@ from typing import Any, Dict
 
 import pytest
 
-from services.gateway.channel_adapters.base import BaseChannelAdapter
+from services.gateway.adapters.transport_base import BaseChannelAdapter
 from services.gateway.config import GatewayConfig
 from services.gateway.gateway import Gateway
 from services.gateway.types import ChannelMessage, ChannelType, GatewayMessageType, GatewaySession
@@ -101,7 +101,7 @@ async def _build_gateway_with_session(user_id: str = "u1") -> tuple[Gateway, Gat
 
 
 class TestChannelAdapterIngestGovernance:
-    """#14028 governance applied at the channel_adapters seam, asserted
+    """#14028 governance applied at the adapters seam, asserted
     separately from the platform-adapter seam per the corrected acceptance
     criteria (two disjoint ingest stacks, see issue #14028 comment history)."""
 

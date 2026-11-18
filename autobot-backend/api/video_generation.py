@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import uuid
 from typing import Optional
 
@@ -33,6 +32,7 @@ from auth_middleware import get_current_user
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import redis_get, redis_set
+from services.provider_key_vault import key_status, resolve_video_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -136,15 +136,9 @@ async def list_providers(current_user=Depends(get_current_user)):
     """Return which video providers have API keys configured."""
     providers = []
     for name in provider_names():
-        env_var = _PROVIDER_ENV.get(name, "")
-        configured = bool(os.environ.get(env_var))
-        providers.append(
-            ProviderStatus(
-                name=name,
-                available=configured,
-                reason=None if configured else f"{env_var} not set",
-            )
-        )
+        # #18094: through the vault-backed resolver; a refusal reports its reason, never the value.
+        available, reason = key_status(resolve_video_provider_key, _PROVIDER_ENV.get(name, ""))
+        providers.append(ProviderStatus(name=name, available=available, reason=reason))
     return ProvidersResponse(providers=providers)
 
 
@@ -161,11 +155,10 @@ async def generate_video(request: VideoGenerationRequest, current_user=Depends(g
         return VideoJobResponse(success=False, error=str(exc))
 
     if not provider.available:
-        env_var = _PROVIDER_ENV.get(request.provider, "API key")
         return VideoJobResponse(
             success=False,
             provider=request.provider,
-            error=f"{env_var} not configured — {request.provider} provider disabled",
+            error=f"{provider.unavailable_reason} — {request.provider} provider disabled",
         )
 
     try:

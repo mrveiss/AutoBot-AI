@@ -25,17 +25,21 @@ the stub — and every other test relying on it — stays untouched (no
 ``sys.modules`` pollution of the canonical name). Issue #11648.
 """
 
-import importlib.util
 import sys
 import types
 from pathlib import Path
 
 import pytest
 
+from testkit.module_stubs import StubSet
 from tests.helpers.llm_judge_fixture import llm_judge  # noqa: F401
 
 _BACKEND_ROOT = Path(__file__).parent.parent
 _REAL_AM_KEY = "_integration_real_auth_middleware"
+
+# Every sys.modules / __path__ change below goes through StubSet and is undone in
+# pytest_unconfigure (#13596); the hand-rolled version restored nothing.
+_stubs = StubSet()
 
 
 def _repair_stubbed_packages() -> None:
@@ -57,12 +61,12 @@ def _repair_stubbed_packages() -> None:
         if mod is None:
             continue
         if not isinstance(mod, types.ModuleType):
-            replacement = types.ModuleType(pkg)
-            replacement.__dict__.update(getattr(mod, "__dict__", {}))
-            replacement.__path__ = [str(_BACKEND_ROOT / pkg)]
-            sys.modules[pkg] = replacement
+            replacement = _stubs.install_package(pkg, _BACKEND_ROOT / pkg)
+            # install_package owns __path__; carry over everything else the old object had.
+            carried = {k: v for k, v in getattr(mod, "__dict__", {}).items() if k != "__path__"}
+            replacement.__dict__.update(carried)
         elif not mod.__dict__.get("__path__") and (_BACKEND_ROOT / pkg).is_dir():
-            mod.__path__ = [str(_BACKEND_ROOT / pkg)]
+            _stubs.adopt_package(pkg, _BACKEND_ROOT / pkg)
 
 
 def load_real_auth_middleware():
@@ -78,15 +82,12 @@ def load_real_auth_middleware():
     if _REAL_AM_KEY in sys.modules:
         return sys.modules[_REAL_AM_KEY]
     _repair_stubbed_packages()
-    spec = importlib.util.spec_from_file_location(_REAL_AM_KEY, _BACKEND_ROOT / "auth_middleware.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[_REAL_AM_KEY] = module
-    try:
-        spec.loader.exec_module(module)
-    except Exception:
-        sys.modules.pop(_REAL_AM_KEY, None)
-        raise
-    return module
+    return _stubs.real_load(_REAL_AM_KEY, _BACKEND_ROOT / "auth_middleware.py")
+
+
+def pytest_unconfigure(config) -> None:  # noqa: ARG001
+    """Undo the alias module, any repaired ``__path__`` and replaced packages."""
+    _stubs.restore()
 
 
 @pytest.fixture(scope="session")

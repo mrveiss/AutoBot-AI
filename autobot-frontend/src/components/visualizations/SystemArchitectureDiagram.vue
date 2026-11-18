@@ -6,8 +6,8 @@
     <!-- Header -->
     <div class="diagram-header">
       <div class="header-content">
-        <h3><Icon name="sitemap" /> {{ title || t('visualizations.systemArchitecture.defaultTitle') }}</h3>
-        <p class="header-description">{{ t('visualizations.systemArchitecture.headerDescription') }}</p>
+        <h3 v-if="!embedded"><Icon name="sitemap" /> {{ title || t('visualizations.systemArchitecture.defaultTitle') }}</h3>
+        <p v-if="!embedded" class="header-description">{{ t('visualizations.systemArchitecture.headerDescription') }}</p>
       </div>
       <div class="header-actions">
         <button @click="refreshArchitecture" :disabled="isLoading" class="action-btn">
@@ -509,6 +509,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
+import { saveTextFile } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
@@ -587,10 +588,10 @@ interface Props {
   height?: number
   autoRefresh?: boolean
   refreshInterval?: number
+  embedded?: boolean // in a dashboard frame that shows the title: hide this one's own (#16744)
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: undefined,
   height: 600,
   autoRefresh: true,
   refreshInterval: 30000
@@ -726,7 +727,7 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       height: 80,
       status: getServiceStatus(serviceHealth, 'frontend'),
       host: config.vm.frontend,
-      port: config.port.frontend,
+      port: config.port.frontendServed,
       description: 'Vue 3 + TypeScript web interface',
       metrics: 'Active',
       group: 'presentation'
@@ -1133,15 +1134,7 @@ function exportDiagram() {
 
   const serializer = new XMLSerializer()
   const svgString = serializer.serializeToString(svg)
-  const blob = new Blob([svgString], { type: 'image/svg+xml' })
-  const url = URL.createObjectURL(blob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'system-architecture.svg'
-  link.click()
-
-  URL.revokeObjectURL(url)
+  saveTextFile(svgString, 'system-architecture.svg', 'image/svg+xml')
 }
 
 // ============================================================================
@@ -1248,7 +1241,7 @@ watch(() => currentView.value, () => {
   color: var(--text-primary);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 
