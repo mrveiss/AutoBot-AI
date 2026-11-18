@@ -82,7 +82,7 @@ export function resolveEntityRoute(anchor: ParsedEntityAnchor): RouteLocationRaw
 }
 
 /** Escape the HTML-significant characters in plain text. */
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -108,7 +108,8 @@ export function renderMarkdownLinks(content: string): string {
     if (/^https?:\/\//i.test(href)) {
       return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
     }
-    return label
+    // Not an entity anchor or http(s) link: leave the prose untouched (`arr[0](x)`), never a link.
+    return _match
   })
 }
 

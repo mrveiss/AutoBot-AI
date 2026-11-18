@@ -175,7 +175,7 @@
             <summary class="summary-toggle">
               {{ $t('chat.contextWindow.summaryToggle') }}
             </summary>
-            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
           </details>
         </div>
 
@@ -183,7 +183,7 @@
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
-            <div class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
             <div v-if="store.isTyping && isLastMessage(message)" class="typing-indicator">
               <div class="typing-dots">
                 <span></span>
@@ -194,7 +194,7 @@
           </div>
 
           <!-- Regular message content -->
-          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
 
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
@@ -560,10 +560,12 @@
 </template>
 
 <script setup lang="ts">
-import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { createEntityAnchorClickHandler } from '@/composables/chat/useEntityAnchors'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -862,43 +864,14 @@ const getContentClass = (message: ChatMessage): string => {
  * Key: message id + content length (cheap proxy for content identity).
  * Avoids re-running 11 regex ops for unchanged messages on every render.
  */
+const router = useRouter()
+// #9479: entity anchors rendered by the shared formatter navigate in-app.
+const handleContentClick = createEntityAnchorClickHandler(router)
+
 const formatCache = new Map<string, string>()
 const FORMAT_CACHE_MAX = 500
 
-const formatMessageContentRaw = (content: string): string => {
-  // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
-  let formatted = content
-    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '') // OSC sequences: BEL
-    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '') // OSC sequences: ST
-    .replace(/\u001b[=>]/g, '') // Set numeric keypad mode
-    .replace(/\u001b[()][AB012]/g, '') // Character set selection
-    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
-    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
-    .trim()
-
-  // Strip internal protocol tags — ONE spelling, shared (#680, #18065).
-  // This line used to carry /<tool_call…>/gs with no `i`, so it could not strip
-  // the UPPERCASE tag the prompts actually teach.
-  formatted = stripProtocolTagsForDisplay(formatted)
-
-  // Process code blocks
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
-  })
-
-  // Basic markdown formatting
-  formatted = formatted
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-
-  // Links
-  formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-
-  return sanitizeChatHtml(formatted)
-}
+const formatMessageContentRaw = formatChatMessageHtml
 
 const formatMessageContent = (content: string, messageId?: string): string => {
   const cacheKey = messageId ? `${messageId}:${content.length}` : content

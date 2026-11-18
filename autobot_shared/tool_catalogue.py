@@ -83,6 +83,10 @@ BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
 BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
 BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
 BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
+#: #21772: tools that read a page without a selector. Governed elsewhere (read effect / web research), so kept out of
+#: BROWSER_TOOLS; the chat prompt teaches the union below.
+PAGE_READING_TOOLS = ("extract_content", "scrape_url", "extract_structured_data")
+BROWSER_PROMPT_TOOLS = BROWSER_TOOLS + PAGE_READING_TOOLS
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
