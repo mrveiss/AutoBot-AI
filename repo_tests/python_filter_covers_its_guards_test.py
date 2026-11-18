@@ -461,8 +461,9 @@ COVERAGE_CONTRASTS = (
     ("autobot-backend/main.py", True),
     # #15713 widened the filter to this tree; a role default is covered now.
     ("autobot-slm-backend/ansible/roles/backend/defaults/main.yml", True),
-    # A workflow the filter does NOT name -- the shape the record exists for.
-    (".github/workflows/actionlint.yml", False),
+    # A workflow the filter does NOT name -- the shape the record exists for. (#21713: actionlint.yml,
+    # the earlier example, is named now as the promotion-base guard's dedicated workflow.)
+    (".github/workflows/pr-template-check.yml", False),
     # A generated frontend type a guard compares against.
     ("autobot-slm-frontend/openapi.json", False),
 )
