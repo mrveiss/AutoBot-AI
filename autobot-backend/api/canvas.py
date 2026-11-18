@@ -40,8 +40,9 @@ from api.schemas_canvas import (
 )
 from auth_middleware import get_current_user
 from autobot_shared.tracing import get_tracer
+from canvas.events import publish_cell as _publish_cell
 from canvas.models import Canvas, CanvasCell, CellState
-from canvas.vega_validation import validate_vegalite_spec
+from canvas.rich_payload import validate_and_sanitize_rich_payload as _validate_and_sanitize_rich_payload
 from user_management.database import get_async_session
 
 logger = structlog.get_logger(__name__)
@@ -85,69 +86,6 @@ _CANVAS_PAGE_CSP = "default-src 'none'; " "style-src 'unsafe-inline'; " "img-src
 def _user_id(current_user: dict) -> str:
     """Extract stable user identifier from JWT dict."""
     return current_user.get("user_id") or current_user.get("id") or current_user.get("username", "")
-
-
-def _validate_and_sanitize_rich_payload(rich_payload: dict | None, cell_type: str) -> dict | None:
-    """
-    Validate and sanitize a rich payload.  Returns the sanitized payload or None.
-
-    Rules (Phase 2):
-    - chart cells: richPayload must have payloadType='vega-lite', specVersion='5',
-      and spec that passes Vega-Lite v5 validation.
-    - code cells: richPayload must have payloadType='code'; executable must be false.
-    - executable: true is always rejected.
-    """
-    if rich_payload is None:
-        return None
-    if not isinstance(rich_payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="richPayload must be a JSON object or null.",
-        )
-
-    payload_type = rich_payload.get("payloadType")
-
-    # executable: true is forbidden in Phase 2
-    if rich_payload.get("executable") is True:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="executable: true is not supported until Phase 3.",
-        )
-
-    if cell_type == "chart":
-        if payload_type != "vega-lite":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="chart cells require richPayload.payloadType='vega-lite'.",
-            )
-        if rich_payload.get("specVersion") != "5":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="chart cells require richPayload.specVersion='5' (Vega-Lite v5).",
-            )
-        try:
-            sanitized_spec = validate_vegalite_spec(rich_payload.get("spec"))
-        except ValueError as exc:
-            # 422 = client-input validation error; the message is crafted by
-            # validate_vegalite_spec and reflects only the caller's own spec,
-            # so returning it leaks no internal state (unlike 500 paths).
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=str(exc),
-            ) from exc
-        return {**rich_payload, "spec": sanitized_spec, "executable": False}
-
-    if cell_type == "code":
-        if payload_type != "code":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="code cells require richPayload.payloadType='code'.",
-            )
-        # Force executable: false
-        return {**rich_payload, "executable": False}
-
-    # For text/image cells, richPayload is ignored (Phase 1 compatibility)
-    return None
 
 
 def _log_metric(event: str, **kw) -> None:
@@ -249,6 +187,8 @@ async def put_canvas(
             canvas.updated_at = now
 
             # Upsert provided cells (position/content/type only — state unchanged)
+            # #17020: mutated cells announced after commit — see canvas.events.
+            touched: list[CanvasCell] = []
             for item in body.cells:
                 cell_result = await session.execute(
                     select(CanvasCell).where(
@@ -262,9 +202,13 @@ async def put_canvas(
                     cell.content = item.content
                     cell.type = item.type
                     cell.updated_at = now
+                    touched.append(cell)
 
             await session.commit()
             _log_metric("canvas.autosave.success", canvas_id=str(canvas_id))
+
+            for cell in touched:
+                await _publish_cell(canvas_id, cell)
 
             return CanvasPutResponse(save_token=new_token, saved_at=now)
 
@@ -314,6 +258,7 @@ async def add_cell(
         await session.commit()
         await session.refresh(cell)
 
+        await _publish_cell(canvas_id, cell)
         return CellOut.model_validate(cell)
 
 
@@ -382,6 +327,7 @@ async def transition_cell(
         metric_key = "canvas.draft.accepted" if body.action in ("accept", "edit") else "canvas.draft.discarded"
         _log_metric(metric_key, canvas_id=str(canvas_id), cell_id=str(cell_id))
 
+        await _publish_cell(canvas_id, cell)
         return CellTransitionResponse(
             id=cell.id,
             state=cell.state,

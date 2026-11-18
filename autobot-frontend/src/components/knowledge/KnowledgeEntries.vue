@@ -186,7 +186,7 @@
               />
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
-              <span class="entry-title">{{ entry.title || $t('knowledge.entries.untitled') }}</span>
+              <span class="entry-title">{{ formatManPageTitle(entry.title, entry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
               <span
                 v-if="getVerificationStatus(entry)"
                 class="provenance-dot"
@@ -258,7 +258,7 @@
       <!-- Pagination -->
       <div class="pagination">
         <BaseButton
-          variant="outline-solid"
+          variant="outline"
           size="sm"
           @click="currentPage--"
           :disabled="currentPage === 1"
@@ -272,7 +272,7 @@
         </span>
 
         <BaseButton
-          variant="outline-solid"
+          variant="outline"
           size="sm"
           @click="currentPage++"
           :disabled="currentPage === totalPages"
@@ -295,7 +295,7 @@
         <div class="entry-metadata">
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.titleLabel') }}</label>
-            <span>{{ currentEntry.title || $t('knowledge.entries.untitled') }}</span>
+            <span>{{ formatManPageTitle(currentEntry.title, currentEntry.metadata?.factType, $t) || $t('knowledge.entries.untitled') }}</span>
           </div>
           <div class="meta-item">
             <label>{{ $t('knowledge.entries.categoryViewLabel') }}</label>
@@ -444,17 +444,17 @@ import ConnectorManager from './connectors/ConnectorManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
 import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
-import { formatDate, formatDateTime } from '@/utils/formatHelpers'
+import { formatDate, formatDateTime, formatManPageTitle, isoDateStamp } from '@/utils/formatHelpers'
 // #9724: the FA-class variant rendered empty SVGs through <Icon :name>
 import { getDocumentTypeIconName as getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
 import { useVirtualScroll } from '@/composables/useVirtualScroll'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useModal } from '@/composables/useModal'
 import { createLogger } from '@/utils/debugUtils'
+import { escapeHtml, sanitizeKnowledgeHtml } from '@/utils/sanitize'
 
 type ExportFormat = 'json' | 'csv' | 'markdown'
 
@@ -596,7 +596,7 @@ const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
     .filter(doc => selection.isSelected(doc))
     .map(doc => ({
       id: doc.id,
-      title: doc.title || t('knowledge.entries.untitled'),
+      title: formatManPageTitle(doc.title, doc.metadata?.factType, t) || t('knowledge.entries.untitled'),
       category: doc.category,
       tags: doc.tags
     }))
@@ -704,12 +704,12 @@ const handleExport = (format: ExportFormat) => {
       extension = 'json'
   }
 
-  downloadFile(content, `knowledge-export-${new Date().toISOString().split('T')[0]}.${extension}`, mimeType)
+  downloadFile(content, `knowledge-export-${isoDateStamp()}.${extension}`, mimeType)
 }
 
 const generateMarkdownExport = (entries: KnowledgeDocument[]): string => {
   const lines: string[] = ['# Knowledge Base Export', '']
-  lines.push(`> Exported on ${new Date().toLocaleDateString()}`)
+  lines.push(`> Exported on ${formatDate(new Date())}`)
   lines.push(`> ${entries.length} entries`)
   lines.push('')
 
@@ -857,15 +857,13 @@ const closeDialog = () => {
   dialogMode.value = 'view'
 }
 
-// NOTE: formatDate and formatDateTime removed - now using shared utilities from @/utils/formatHelpers
-
 const formatContent = (content: string): string => {
-  // Basic markdown-like formatting
-  return content
+  // #19118: escape, format, then sanitise (#2847 sanitiser) - stored content is untrusted
+  return sanitizeKnowledgeHtml(escapeHtml(content)
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/`(.*?)`/g, '<code>$1</code>'))
 }
 
 // Icon mapping now centralized in @/utils/iconMappings

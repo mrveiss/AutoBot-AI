@@ -31,7 +31,7 @@ from autobot_shared.idempotency import (
     ReplayedResponse,
     claim,
     complete,
-    release,
+    release_key,
     storage_key,
 )
 
@@ -95,7 +95,7 @@ class TestTheThreeStates:
         """A failed create is not a completed one: holding the key would make
         the retry the caller must perform impossible until the TTL expires."""
         held = await claim(redis, KEY)
-        assert await release(redis, KEY, held.token) is True
+        assert await release_key(redis, KEY, held.token) is True
 
         assert (await claim(redis, KEY)).token
 
@@ -234,11 +234,11 @@ class TestFencing:
         await redis.delete(KEY)
         successor = await claim(redis, KEY)
 
-        dropped = await release(redis, KEY, lapsed.token)
+        dropped = await release_key(redis, KEY, lapsed.token)
 
         assert dropped is False, "a lapsed request deleted a live claim"
         assert (await claim(redis, KEY)).in_flight, "a third caller could now create as well"
-        assert await release(redis, KEY, successor.token) is True
+        assert await release_key(redis, KEY, successor.token) is True
 
     @pytest.mark.asyncio
     async def test_the_holder_is_never_blocked_by_its_own_token(self, redis):
@@ -255,7 +255,7 @@ class TestFencing:
     async def test_two_sequential_claims_get_different_tokens(self, redis):
         """A token that repeated would fence nothing."""
         first = await claim(redis, KEY)
-        await release(redis, KEY, first.token)
+        await release_key(redis, KEY, first.token)
         second = await claim(redis, KEY)
 
         assert first.token != second.token

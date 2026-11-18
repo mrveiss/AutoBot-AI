@@ -19,11 +19,11 @@
  *
  * `ROLE_PERMISSIONS` is the backend's own grant map, generated too (#16491):
  * every role holds exactly what the backend's `ROLE_PERMISSIONS` grants it,
- * with no hand-curated subset left to drift. That includes `superadmin: []`:
- * the backend deliberately gives it no granular permissions (#13854), and
- * every check here admits it through the administrative short-circuit
- * (`userStore.isAdmin` / `isAdminRole`) instead, as `is_admin_role()` does
- * on the backend.
+ * with no hand-curated subset left to drift. That includes `superadmin`,
+ * which the backend derives from admin's set (#19125, owner decision
+ * 2026-10-21), so it holds every permission admin does; the administrative
+ * short-circuit (`userStore.isAdmin` / `isAdminRole`) still admits it as
+ * `is_admin_role()` does on the backend.
  *
  * The backend remains the authority regardless of what this returns; this
  * only decides what the UI offers.
@@ -92,6 +92,29 @@ export function usePermissions() {
   }
 
   /**
+   * Does the caller's ROLE TABLE hold this permission -- with no
+   * administrative override.
+   *
+   * Use this, not `hasPermission`, wherever the UI must agree with a backend
+   * gate that asks `role_has_permission`. #13854 removed the administrative
+   * short-circuit from that predicate on purpose, because it made the
+   * predicate the most permissive permission source in the system. So
+   * `hasPermission`'s `isAdmin` bypass disagrees with every such gate for any
+   * admin role whose table entry lacks the permission.
+   *
+   * Before #19125 `superadmin` was the live case: its `ROLE_PERMISSIONS`
+   * entry was empty, so the desktop socket refused it (#17054) while
+   * `hasPermission('mcp.desktop.control')` returned true (#17370). Its entry is
+   * now derived from admin's, so the two agree; prefer this method anyway for a
+   * control that mirrors a `role_has_permission` gate.
+   *
+   * `hasPermission` is left alone deliberately -- its administrative override
+   * is relied on by call sites this did not audit.
+   */
+  const holdsPermission = (permission: Permission | string): boolean =>
+    permissions.value.includes(permission as Permission)
+
+  /**
    * Check if user has ANY of the specified permissions
    */
   const hasAnyPermission = (perms: (Permission | string)[]): boolean => {
@@ -143,6 +166,7 @@ export function usePermissions() {
 
     // Permission checks
     hasPermission,
+    holdsPermission,
     hasAnyPermission,
     hasAllPermissions,
     canAccess

@@ -88,18 +88,15 @@
             <div class="progress-track">
               <div
                 class="progress-fill"
-                :style="{ width: getProgressPercent(wf) + '%' }"
+                :style="{ width: getWorkflowStepDisplay(wf).percent + '%' }"
                 :class="getProgressClass(wf)"
               ></div>
             </div>
             <div class="progress-meta">
               <span class="step-counter">
-                {{ $t('workflow.liveDashboard.stepOf', {
-                  current: wf.current_step + 1,
-                  total: wf.total_steps
-                }) }}
+                {{ $t('workflow.liveDashboard.stepOf', stepOf(wf)) }}
               </span>
-              <span class="progress-pct">{{ Math.round(getProgressPercent(wf)) }}%</span>
+              <span class="progress-pct">{{ getWorkflowStepDisplay(wf).percent }}%</span>
             </div>
           </div>
 
@@ -158,6 +155,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, ref, onUnmounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress';
 import { createLogger } from '@/utils/debugUtils';
 import { useEventBus } from '@/composables/useEventBus'
 import type { LiveEvent } from '@/services/LiveEventService'
@@ -276,16 +274,13 @@ function getStatusLabel(wf: ActiveWorkflow): string {
   return t('workflow.liveDashboard.pending');
 }
 
-function getProgressPercent(wf: ActiveWorkflow): number {
-  if (wf.total_steps === 0) return 0;
-  const done = wf.steps.filter(
-    s => s.status === 'completed' || s.status === 'skipped',
-  ).length;
-  return (done / wf.total_steps) * 100;
+function stepOf(wf: ActiveWorkflow): { current: number; total: number } {
+  const { current, total } = getWorkflowStepDisplay(wf);
+  return { current, total };
 }
 
 function getProgressClass(wf: ActiveWorkflow): string {
-  if (wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
+  if (wf.is_cancelled || wf.steps.some(s => s.status === 'failed')) return 'progress-failed';
   if (wf.is_paused) return 'progress-paused';
   if (wf.completed_at) return 'progress-completed';
   return 'progress-active';
@@ -318,20 +313,48 @@ function formatElapsed(wf: ActiveWorkflow): string {
 // boundary: subscribing to what this client is showing is the same set it is
 // entitled to, and there is no channel that means "every workflow" without
 // re-opening what #17358 closed.
-const WORKFLOW_EVENT_TYPES = new Set([
-  'workflow_status_update',
-  'step_completed',
+// #17643: the names below are the ones `autobot-backend/api/workflow.py`
+// actually publishes to `workflow:{workflow_id}`, read off each publish site.
+// The set here used to hold `workflow_status_update` and a bare
+// `step_completed`, and no backend publishes either under any spelling -- so a
+// workflow that failed or was cancelled never left the active list without a
+// manual click, and nothing moved mid-run. Only completion got through.
+//
+// They are split by what the event means for the list rather than handled
+// alike: a terminal event changes WHICH workflows are active, so the list is
+// refetched; a progress event leaves membership alone and only moves one
+// card's step counter, so it is applied in place. #17477 and #17364 both read
+// the old uniform handling as a per-step refetch cost -- that cost is real,
+// and this split is where it goes away, rather than by dropping the events.
+const TERMINAL_EVENT_TYPES = new Set([
   'workflow_completed',
+  'workflow_failed',
+  'workflow_cancelled',
+]);
+
+const PROGRESS_EVENT_TYPES = new Set([
+  'workflow_step_started',
+  'workflow_step_completed',
+  'workflow_approval',
+  'workflow_approval_required',
 ]);
 
 /** workflow_id -> its unsubscribe handle, so a departed workflow is dropped. */
 const unsubByWorkflow = new Map<string, () => void>();
 
 function onWorkflowEvent(event: LiveEvent): void {
-  if (!WORKFLOW_EVENT_TYPES.has(event.event_type)) return;
-  logger.info('Received live workflow event:', event.event_type);
-  emit('workflow-update', event.payload);
-  emit('refresh');
+  if (TERMINAL_EVENT_TYPES.has(event.event_type)) {
+    logger.info('Received terminal workflow event:', event.event_type);
+    emit('refresh');
+    return;
+  }
+  if (PROGRESS_EVENT_TYPES.has(event.event_type)) {
+    logger.info('Received workflow progress event:', event.event_type);
+    // The event type rides along in the payload: a started step and a
+    // completed one carry the same fields and are told apart only by which
+    // event delivered them.
+    emit('workflow-update', { ...event.payload, event_type: event.event_type });
+  }
 }
 
 function syncSubscriptions(ids: string[]): void {
@@ -447,15 +470,15 @@ onUnmounted(() => {
   min-width: 140px;
 }
 
-.stat-chip i {
-  font-size: var(--text-base);
+.stat-chip .icon {
+  width: var(--text-base); height: var(--text-base);
   color: var(--text-secondary);
 }
 
-.stat-chip:nth-child(1) i { color: var(--color-success); }
-.stat-chip:nth-child(2) i { color: var(--color-warning); }
-.stat-chip:nth-child(3) i { color: var(--color-info); }
-.stat-chip:nth-child(4) i { color: var(--color-error); }
+.stat-chip:nth-child(1) .icon { color: var(--color-success); }
+.stat-chip:nth-child(2) .icon { color: var(--color-warning); }
+.stat-chip:nth-child(3) .icon { color: var(--color-info); }
+.stat-chip:nth-child(4) .icon { color: var(--color-error); }
 
 .stat-value {
   font-size: var(--text-lg);
@@ -485,7 +508,7 @@ onUnmounted(() => {
   gap: var(--spacing-2-5);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -524,9 +547,9 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.empty-state i,
-.loading-state i {
-  font-size: 40px;
+.empty-state .icon,
+.loading-state .icon {
+  width: 40px; height: 40px;
   margin-bottom: var(--spacing-3);
 }
 
@@ -684,7 +707,7 @@ onUnmounted(() => {
 }
 
 .timeline-dot.failed {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   border-color: var(--color-error);
   color: white;
 }
@@ -692,7 +715,7 @@ onUnmounted(() => {
 .timeline-dot.executing {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .timeline-dot.waiting_approval {

@@ -5,13 +5,15 @@
  * Test browser console to verify no chat deletion errors appear
  */
 
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 async function testBrowserConsoleErrors() {
     console.log('🖥️ TESTING BROWSER CONSOLE FOR CHAT DELETION ERRORS');
     console.log('='.repeat(60));
 
     try {
         // Test browser console behavior with chat deletion
-        const response = await fetch('http://localhost:3000/test-console-monitoring', {
+        const response = await fetch(`http://localhost:${BROWSER_PORT}/test-console-monitoring`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -82,7 +84,7 @@ async function testBrowserConsoleErrors() {
             // Alternative: Direct browser test
             console.log('📱 Alternative: Direct Browser Test...');
 
-            const directResponse = await fetch('http://localhost:3000/send-test-message', {
+            const directResponse = await fetch(`http://localhost:${BROWSER_PORT}/send-test-message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

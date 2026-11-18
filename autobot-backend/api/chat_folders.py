@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 
-from api.schemas_chat import FolderCreate, FolderUpdate, SessionFolderAssign
+from api.schemas_chat_folders import FolderCreate, FolderUpdate, SessionFolderAssign
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger

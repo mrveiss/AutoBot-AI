@@ -26,6 +26,7 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
 import { firePointer } from './pointerTestUtils'
+import { waitForEmitCount, waitForLastEmit, waitForTicks } from './emitTestUtils'
 
 function step(id: string, x: number, y: number): CanvasNode {
   return {
@@ -80,6 +81,7 @@ describe('adding a node is undoable/redoable (#14612)', () => {
     expect(undoBtn(w).attributes('disabled')).toBeUndefined()
 
     await undoBtn(w).trigger('click')
+    await waitForLastEmit(w, 'node-removed', [added.id])
     expect(w.emitted('node-removed')?.at(-1)).toEqual([added.id])
     expect(undoBtn(w).attributes('disabled')).toBeDefined()
     expect(redoBtn(w).attributes('disabled')).toBeUndefined()
@@ -159,6 +161,10 @@ describe('moving a node by drag is undoable as ONE step, not one per tick (#1461
 
     await undoBtn(w).trigger('click')
     await redoBtn(w).trigger('click')
+    await waitForTicks(
+        () => (w.emitted('node-moved')?.length ?? 0) > 0,
+        "'node-moved' to have emitted before its payload is read",
+    )
     expect((w.emitted('node-moved') as unknown as [string, { x: number; y: number }][]).at(-1)).toEqual([
       'n1',
       finalPos,
@@ -176,6 +182,7 @@ describe('moving a node by keyboard is undoable (#14612)', () => {
     // undo below still restores the off-grid start exactly.
     expect(w.emitted('node-moved')).toEqual([['n1', { x: 20, y: 10 }]])
     await undoBtn(w).trigger('click')
+    await waitForEmitCount(w, 'node-moved', 2)
     expect((w.emitted('node-moved') as unknown as unknown[]).length).toBe(2)
     expect((w.emitted('node-moved') as unknown as [string, { x: number; y: number }][]).at(-1)).toEqual([
       'n1',

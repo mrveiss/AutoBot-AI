@@ -18,6 +18,7 @@ from autobot_shared.logging_manager import get_logger
 from knowledge.provenance import document_origins
 
 from ..config import AGENT_API_BASE_URL, AGENT_API_KEY_PLACEHOLDER
+from ..services.company_os.errors import CompanyOsError, CompanyOsNotFound
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
 from .inheritance import KbInheritanceResolver
@@ -85,7 +86,7 @@ class HeartbeatContextBuilder:
         elif context_mode == "fat":
             return await self._build_fat(session, agent_id, work_item_id, company_id=company_id)
         else:
-            raise ValueError(f"Unknown context_mode: {context_mode}")
+            raise CompanyOsError(f"Unknown context_mode: {context_mode}")
 
     async def _build_thin(
         self,
@@ -102,7 +103,7 @@ class HeartbeatContextBuilder:
         """
         work_item = await self.work_item_service.get(session, work_item_id, company_id=company_id)
         if work_item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
 
         return {
             "work_item_id": str(work_item_id),
@@ -110,52 +111,16 @@ class HeartbeatContextBuilder:
             "agent_api_key": AGENT_API_KEY_PLACEHOLDER,
         }
 
-    async def _build_fat(
+    async def _gather_rag_results(
         self,
-        session: AsyncSession,
+        company_collections: List,
+        company_id: str,
+        project_id: Optional[str],
         agent_id: str,
         work_item_id: uuid.UUID,
-        *,
-        company_id: str,
-    ) -> Dict[str, Any]:
-        """Build rich context with parallel RAG queries (GH#8236).
-
-        DB-dependent steps run sequentially first to avoid sharing an AsyncSession
-        across concurrent tasks (GH#8566). RAG queries (no session) then run in
-        parallel for performance (P95 ≤ 2s total).
-
-        Returns:
-            Dict with goal_ancestry, company_context, project_context, agent_memory,
-            similar_past_work, acceptance_criteria, work_item_detail
-        """
-        work_item = await self.work_item_service.get(session, work_item_id, company_id=company_id)
-        if work_item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
-
-        # The scope every downstream RAG/goal lookup runs under is the caller's,
-        # never the fetched row's (#13756). The row is only reachable under that
-        # scope now, so a mismatch means the store ignored the filter.
-        if str(work_item.company_id) != str(company_id):
-            raise ValueError(f"Work item {work_item_id} not found")
-
-        project_id = str(work_item.project_id) if work_item.project_id else None
-        query_text = f"{work_item.title}\n{work_item.description or ''}"
-
-        # Step 1: Resolve inheritance collection chain from DB (sequential — session safety).
-        company_collections: List = []
-        if hasattr(self.inheritance_resolver, "get_query_collections"):
-            try:
-                company_collections = await self.inheritance_resolver.get_query_collections(session, company_id)
-            except Exception as e:
-                logger.warning("Failed to resolve KB collections for company %s: %s", company_id, e)
-
-        # Step 2: Fetch similar completed items from DB (sequential — session safety).
-        past_work = await self._get_similar_completed_items(session, project_id, query_text, max_results=3)
-
-        # Step 2b: Fetch agent wiki entries (DB, sequential — session safety; GH#9021).
-        agent_wiki_md = await self._get_agent_wiki(session, agent_id, work_item.company_id)
-
-        # Step 3: Parallel RAG queries — no session needed after this point (GH#8566).
+        query_text: str,
+    ) -> list:
+        """Run the company/project/agent RAG queries in parallel (helper for _build_fat)."""
         company_task = (
             self.inheritance_resolver.search_with_collections(
                 collections=company_collections,
@@ -192,11 +157,61 @@ class HeartbeatContextBuilder:
             else asyncio.sleep(0)
         )
 
-        rag_results = await asyncio.gather(
+        return await asyncio.gather(
             company_task,
             project_task,
             agent_task,
             return_exceptions=True,
+        )
+
+    async def _build_fat(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        work_item_id: uuid.UUID,
+        *,
+        company_id: str,
+    ) -> Dict[str, Any]:
+        """Build rich context with parallel RAG queries (GH#8236).
+
+        DB-dependent steps run sequentially first to avoid sharing an AsyncSession
+        across concurrent tasks (GH#8566). RAG queries (no session) then run in
+        parallel for performance (P95 ≤ 2s total).
+
+        Returns:
+            Dict with goal_ancestry, company_context, project_context, agent_memory,
+            similar_past_work, acceptance_criteria, work_item_detail
+        """
+        work_item = await self.work_item_service.get(session, work_item_id, company_id=company_id)
+        if work_item is None:
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
+
+        # The scope every downstream RAG/goal lookup runs under is the caller's,
+        # never the fetched row's (#13756). The row is only reachable under that
+        # scope now, so a mismatch means the store ignored the filter.
+        if str(work_item.company_id) != str(company_id):
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
+
+        project_id = str(work_item.project_id) if work_item.project_id else None
+        query_text = f"{work_item.title}\n{work_item.description or ''}"
+
+        # Step 1: Resolve inheritance collection chain from DB (sequential — session safety).
+        company_collections: List = []
+        if hasattr(self.inheritance_resolver, "get_query_collections"):
+            try:
+                company_collections = await self.inheritance_resolver.get_query_collections(session, company_id)
+            except Exception as e:
+                logger.warning("Failed to resolve KB collections for company %s: %s", company_id, e)
+
+        # Step 2: Fetch similar completed items from DB (sequential — session safety).
+        past_work = await self._get_similar_completed_items(session, project_id, query_text, max_results=3)
+
+        # Step 2b: Fetch agent wiki entries (DB, sequential — session safety; GH#9021).
+        agent_wiki_md = await self._get_agent_wiki(session, agent_id, work_item.company_id)
+
+        # Step 3: Parallel RAG queries — no session needed after this point (GH#8566).
+        rag_results = await self._gather_rag_results(
+            company_collections, company_id, project_id, agent_id, work_item_id, query_text
         )
 
         company_ctx_raw = rag_results[0] if not isinstance(rag_results[0], Exception) else None
@@ -246,13 +261,11 @@ class HeartbeatContextBuilder:
         Returns:
             Dict with 'chunks', 'sources' and 'document_sources' keys.
 
-        ``sources`` holds **company** ids and always has — it answers which tenant
-        a chunk was inherited from. #17527 asks for a document's source to be
-        identifiable, and a key named ``sources`` answering tenancy is a provenance-
-        shaped name over a different question: a caller asking where a chunk came
-        from received a company id with no signal it was not the answer. The
-        tenancy list is unchanged, because callers depend on it; the document
-        origin is surfaced beside it.
+        ``sources`` holds **company** ids and always has -- it answers which tenant a chunk
+        was inherited from. The document's origin is surfaced beside it as
+        ``document_sources`` (#17618), because a key named ``sources`` answering tenancy
+        is a provenance-shaped name over a different question. The tenancy list is
+        unchanged: callers depend on it.
         """
         if not results:
             return {"chunks": [], "sources": [], "document_sources": []}
@@ -276,9 +289,8 @@ class HeartbeatContextBuilder:
         return {
             "chunks": chunks,
             "sources": list(sources_set),
-            # Five intake legs write provenance in five dialects; the accessor
-            # knows all of them and returns nothing for a shape it does not
-            # recognise, rather than a placeholder (#17527).
+            # Five intake legs write provenance in five dialects; the accessor speaks all of
+            # them and omits a shape it does not recognise rather than inventing a placeholder.
             "document_sources": document_origins(chunks),
         }
 
@@ -306,9 +318,9 @@ class HeartbeatContextBuilder:
     ) -> str:
         """Return wiki entries for this agent as a Markdown string (GH#9021)."""
         try:
-            from ..services.agent_wiki_service import AgentWikiService
+            from ..services.accessors import get_agent_wiki_service
 
-            svc = AgentWikiService()
+            svc = get_agent_wiki_service()
             return await svc.get_wiki_context(session, agent_id, company_id)
         except Exception as e:
             logger.warning("Failed to fetch agent wiki for %s: %s", agent_id, e)

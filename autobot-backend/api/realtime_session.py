@@ -19,10 +19,15 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api.schemas_realtime_session import RealtimeSessionSummary
+from api.user_management.dependencies import get_current_user
+from api.voice_bundle_helpers import voice_bundle_user_id
+from auth_middleware import check_admin_permission
+from autobot_shared.auth.permissions import Role, is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from voice_processing.realtime.base import RealtimeProviderError
@@ -34,7 +39,12 @@ from voice_processing.realtime.registry import (
 )
 
 logger = get_logger(__name__)
-router = APIRouter()
+
+# #16375: every route here spends something on the caller's behalf — an upstream
+# realtime negotiation, a billed token budget, or an MCP tool invocation — so the
+# router authenticates. The browser already sends credentials (useRealtimeVoice.ts
+# calls fetchWithAuth), so this gate adds no client change.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # ── Telemetry endpoint models (Issue #7421) ───────────────────────────────────
@@ -57,22 +67,6 @@ class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     session_id: str | None = None
-
-
-class SessionSummary(BaseModel):
-    session_id: str
-    user_id: str | None
-    model: str
-    started_at: str
-    ended_at: str | None
-    duration_s: float
-    audio_in_s: float
-    audio_out_s: float
-    input_tokens: int
-    output_tokens: int
-    tool_calls: int
-    estimated_cost_usd: float
-    disconnect_reason: str
 
 
 # ── Provider selection models (Issue #9025) ───────────────────────────────────
@@ -162,7 +156,13 @@ async def list_providers() -> dict:
     return {"selected": get_active_provider_id(), "providers": list_realtime_providers()}
 
 
-@router.patch("/providers", response_model=RealtimeProvidersResponse)
+# Admin, not just authenticated: set_active_provider mutates the in-process
+# selection for every session, not the caller's own.
+@router.patch(
+    "/providers",
+    response_model=RealtimeProvidersResponse,
+    dependencies=[Depends(check_admin_permission)],
+)
 async def set_provider(body: SetRealtimeProviderRequest) -> dict:
     """Set the active realtime provider (in-process; doc'd restart limitation).
 
@@ -217,24 +217,42 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 
 @router.post("/tools/call")
-async def call_realtime_tool(body: ToolCallRequest) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343)."""
+async def call_realtime_tool(
+    body: ToolCallRequest, request: Request, current_user: dict = Depends(get_current_user)
+) -> dict:
+    """The one handler for ``POST /api/voice/realtime/tools/call`` (#7343, #18721).
+
+    Only a tool in the caller's active voice bundle may run (403 otherwise), and the call carries the
+    authenticated session, user and company, never the model's (#18430). ``X-Session-Id`` stands in when the
+    body names no session.
+    """
     from services.realtime_mcp_bridge import get_realtime_bridge
 
-    bridge = await get_realtime_bridge()
-    result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
+    role = current_user.get("role") or Role.USER.value
+    user_id = voice_bundle_user_id(current_user)  # the same key the listing endpoint resolves the bundle by
+    bridge = await get_realtime_bridge(is_admin=is_admin_role(role))  # #12717
+    allowed = {t.name for t in await bridge.list_realtime_tools(user_id=user_id, role=role)}
+    if body.name not in allowed:
+        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
+    result = await bridge.call_tool(
+        name=body.name,
+        arguments=body.arguments,
+        session_id=body.session_id or request.headers.get("X-Session-Id"),
+        user_id=user_id,
+        company_id=current_user.get("org_id"),
+    )
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
 
 
-@router.get("/sessions", response_model=list[SessionSummary])
-async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[SessionSummary]:
+@router.get("/sessions", response_model=list[RealtimeSessionSummary])
+async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[RealtimeSessionSummary]:
     """Return recent Realtime sessions for the UsageView (#7421)."""
     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
 
     telemetry = get_voice_realtime_telemetry()
     records = await telemetry.list_recent_sessions(user_id=user_id, limit=limit)
     return [
-        SessionSummary(
+        RealtimeSessionSummary(
             session_id=r.session_id,
             user_id=r.user_id,
             model=r.model,

@@ -15,11 +15,15 @@ import asyncio
 from autobot_shared.workflow import WorkflowTask
 from orchestrator import Orchestrator, TaskComplexity
 
-# ``TaskComplexity.RESEARCH`` / ``INSTALL`` / ``SECURITY_SCAN`` all carry the
-# value "complex", which makes them Enum *aliases* of ``COMPLEX`` rather than
-# distinct members. SIMPLE and COMPLEX are therefore the only two plans that
-# exist; the previous four-element list exercised COMPLEX three times.
-EXPECTED_STEP_COUNT = {TaskComplexity.SIMPLE: 1, TaskComplexity.COMPLEX: 3}
+# Derived from the enum rather than written out: SIMPLE and COMPLEX are the
+# only two members, and a list naming more would be exercising one of them
+# repeatedly without saying so. That is what this file used to do -- it
+# iterated [SIMPLE, RESEARCH, INSTALL, COMPLEX] as four "complexity levels"
+# when RESEARCH and INSTALL were Enum aliases of COMPLEX. The aliases were
+# removed in #13806; keying off ``list(TaskComplexity)`` means a member added
+# later fails here for want of an expected count instead of going untested.
+_STEPS_BY_COMPLEXITY = {"simple": 1, "complex": 3}
+EXPECTED_STEP_COUNT = {m: _STEPS_BY_COMPLEXITY[m.value] for m in TaskComplexity}
 
 
 async def test_plan_workflow_steps_returns_a_real_plan():

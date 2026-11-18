@@ -23,9 +23,14 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
-from models.database import Node, Service, ServiceStatus
+from models.database import Node, Service, SystemdState
+from services.orchestrator_ssh import report_ssh, spawn_ssh, ssh_base_cmd, systemctl_sudo_call, systemctl_user_cmd
+from services.service_upsert import upsert_service
+from services.ssh_utils import ssh_destination_args, ssh_options
+from services.unit_names import loggable_unit_name
 
 logger = logging.getLogger(__name__)
 
@@ -85,16 +90,15 @@ _SERVICE_DEFINITIONS = {
         default_host=os.environ.get("AUTOBOT_BACKEND_HOST", ""),  # noqa: ssot-fallback
         default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
-            "cd /opt/autobot/autobot-backend && "
-            "source venv/bin/activate && "
-            "nohup python backend/main.py > logs/backend.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-backend && "
+            "source venv/bin/activate && nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
         stop_command="pkill -f 'python.*backend/main.py'",
         health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         systemd_service="autobot-backend",  # #13915: was unnamed, so no query could find it
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-backend",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-backend",
         description="FastAPI backend API server",
     ),
     # Frontend (Vue.js on frontend VM, served by nginx on HTTPS 443)
@@ -102,19 +106,19 @@ _SERVICE_DEFINITIONS = {
         name="frontend",
         service_type=AutoBotServiceType.FRONTEND,
         default_host_env="AUTOBOT_FRONTEND_HOST",
-        default_port_env="AUTOBOT_FRONTEND_PORT",
+        default_port_env="AUTOBOT_FRONTEND_TLS_PORT",  # nginx HTTPS; AUTOBOT_FRONTEND_PORT is Vite (#19326)
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=443,  # Production nginx serves HTTPS on 443
+        default_port=config.tls.frontend_tls_port,
         systemd_service="nginx",  # Production uses nginx
         start_command=(
-            "cd /opt/autobot/autobot-slm-frontend && "
-            "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-slm-frontend && "
+            f"nohup npm run dev -- --host 0.0.0.0 --port {config.port.frontend} > /tmp/vite.log 2>&1 &"
         ),
-        stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
+        stop_command=f"pkill -f 'npm.*dev' || pkill -f 'vite.*{config.port.frontend}'",
         health_check_path="/",
         health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-slm-frontend",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-slm-frontend",
         description="Vue.js frontend (nginx+SSL)",
     ),
     # Redis Stack (database VM)
@@ -140,9 +144,8 @@ _SERVICE_DEFINITIONS = {
         default_port=8081,
         systemd_service="autobot-npu-worker",
         start_command=(
-            "cd /opt/autobot/autobot-npu-worker && "
-            "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 "
-            "> logs/npu-worker.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-npu-worker && "
+            "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &"
         ),
         stop_command="pkill -f 'npu.*worker'",
         health_check_path="/health",
@@ -177,13 +180,14 @@ _SERVICE_DEFINITIONS = {
         default_host=os.environ.get("AUTOBOT_BROWSER_SERVICE_HOST", ""),  # noqa: ssot-fallback
         default_port=3000,
         start_command=(
-            "cd /opt/autobot/autobot-browser-worker && " "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-browser-worker && "
+            "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
         health_check_path="/health",
         health_check_type="http",
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-browser-worker",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-browser-worker",
         description="Playwright browser automation service",
     ),
     # SLM Backend (this server)
@@ -254,7 +258,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_CHROMADB_HOST",
         default_port_env="AUTOBOT_CHROMADB_PORT",
         default_host=os.environ.get("AUTOBOT_CHROMADB_HOST", ""),  # noqa: ssot-fallback
-        default_port=8100,  # roles/ai-stack/defaults/main.yml: chromadb_port
+        default_port=config.port.chromadb,  # #19321: the SSOT; ansible chromadb_port is pinned to it
         systemd_service="autobot-chromadb",
         health_check_type="http",
         requires_sudo=True,
@@ -265,9 +269,9 @@ _SERVICE_DEFINITIONS = {
     "tts-worker": ServiceDefinition(
         name="tts-worker",
         service_type=AutoBotServiceType.TTS_WORKER,
-        default_host_env="AUTOBOT_TTS_HOST",
-        default_port_env="AUTOBOT_TTS_PORT",
-        default_host=os.environ.get("AUTOBOT_TTS_HOST", ""),  # noqa: ssot-fallback
+        default_host_env="AUTOBOT_TTS_WORKER_HOST",  # #17782: canonical find-side pair; see
+        default_port_env="AUTOBOT_TTS_WORKER_PORT",  # repo_tests/tts_address_env_names_17782_test
+        default_host=os.environ.get("AUTOBOT_TTS_WORKER_HOST", ""),  # noqa: ssot-fallback
         default_port=8083,  # roles/tts-worker/defaults/main.yml: tts_port
         systemd_service="autobot-tts-worker",
         health_check_type="http",
@@ -304,7 +308,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_PORT",
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=5173,
+        default_port=config.port.frontend,
         systemd_service="autobot-frontend",
         health_check_type="http",
         requires_sudo=True,
@@ -315,7 +319,7 @@ _SERVICE_DEFINITIONS = {
 }
 
 
-class ServiceRegistry:
+class ServiceDefinitionRegistry:
     """
     Registry of known AutoBot services with their configurations.
 
@@ -386,7 +390,7 @@ class ServiceOrchestrator:
     _SSH_MAX_CONCURRENT = 10
 
     def __init__(self):
-        self.registry = ServiceRegistry()
+        self.registry = ServiceDefinitionRegistry()
         self.ssh_key = Path(config.path.ssh_key_path)  # canonical inter-node key (#12429)
         self.ssh_user = "autobot"
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
@@ -471,7 +475,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.RUNNING.value)
 
         return success, message
 
@@ -526,7 +530,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.STOPPED.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.STOPPED.value)
 
         return success, message
 
@@ -580,7 +584,7 @@ class ServiceOrchestrator:
 
         # Update service record if we have a node
         if success and node:
-            await self._update_service_record(db, node.node_id, service_name, ServiceStatus.RUNNING.value)
+            await self._update_service_record(db, node.node_id, service_name, SystemdState.RUNNING.value)
 
         return success, message
 
@@ -779,27 +783,23 @@ class ServiceOrchestrator:
         return result.scalar_one_or_none()
 
     async def _update_service_record(self, db: AsyncSession, node_id: str, service_name: str, status: str) -> None:
-        """Update or create service record in database."""
-        result = await db.execute(
-            select(Service).where(
-                Service.node_id == node_id,
-                Service.service_name == service_name,
-            )
-        )
-        service = result.scalar_one_or_none()
+        """Update or create service record in database via the shared upsert core (#19059)."""
+        now = datetime.now(timezone.utc)
 
-        if service:
-            service.status = status
-            service.last_checked = datetime.now(timezone.utc)
-        else:
-            service = Service(
-                node_id=node_id,
-                service_name=service_name,
-                status=status,
-                last_checked=datetime.now(timezone.utc),
-            )
-            db.add(service)
+        def _update(row: Service) -> None:
+            row.status = status
+            row.last_checked = now
 
+        def _create(category: str) -> Service:
+            return Service(
+                node_id=node_id, service_name=service_name, status=status, last_checked=now, category=category
+            )
+
+        outcome = await upsert_service(db, node_id, service_name, update=_update, create=_create)
+        if outcome is None:
+            logger.warning(
+                "record not written, unit name refused: node=%s name=%s", node_id, loggable_unit_name(service_name)
+            )
         await db.commit()
 
     async def _run_ssh_command(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
@@ -809,56 +809,19 @@ class ServiceOrchestrator:
 
     async def _execute_ssh(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
         """Execute SSH subprocess (#788: split from _run_ssh_command)."""
-        ssh_cmd = [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=10",
-            "-o",
-            "BatchMode=yes",
-            "-i",
-            str(self.ssh_key),
-            f"{self.ssh_user}@{host}",
-        ]
-
         if requires_sudo:
             command = f"sudo -n {command}"
-
-        ssh_cmd.append(command)
-
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
-
-            if process.returncode == 0:
-                output = stdout.decode("utf-8", errors="replace")
-                return True, output or "Command completed successfully"
-            else:
-                error = stderr.decode("utf-8", errors="replace")
-                return False, f"Command failed: {error[:500]}"
-
-        except asyncio.TimeoutError:
-            return False, "SSH command timed out"
-        except Exception as e:
-            logger.exception("SSH command error: %s", e)
-            return False, "SSH command error"
+        return await report_ssh(spawn_ssh([*ssh_base_cmd(self.ssh_user, self.ssh_key, host), command]))
 
     async def _systemctl_action(
         self, host: str, service: str, action: str, requires_sudo: bool = True
     ) -> Tuple[bool, str]:
         """Run a systemctl action on a remote host."""
-        if requires_sudo:
-            command = f"sudo -n systemctl {action} {service}"
-        else:
-            command = f"systemctl --user {action} {service}"
-
-        return await self._run_ssh_command(host, command, requires_sudo=False)
+        if not requires_sudo:
+            return await self._run_ssh_command(host, systemctl_user_cmd(action, service), requires_sudo=False)
+        async with self._ssh_semaphore:
+            base = ssh_base_cmd(self.ssh_user, self.ssh_key, host)
+            return await report_ssh(systemctl_sudo_call(base, action, service))
 
     async def _check_service_health(
         self,
@@ -918,15 +881,10 @@ class ServiceOrchestrator:
         """Check if SSH connection is possible."""
         cmd = [
             "ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=3",
-            "-o",
-            "BatchMode=yes",
+            *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=3", "BatchMode=yes"),
             "-i",
             str(self.ssh_key),
-            f"{self.ssh_user}@{host}",
+            *ssh_destination_args(self.ssh_user, host),
             "echo ok",
         ]
         process = await asyncio.create_subprocess_exec(

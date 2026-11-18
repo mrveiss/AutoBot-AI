@@ -10,9 +10,10 @@ FastAPI router endpoints for advanced workflow operations.
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.workflow_automation.workflow_ownership import caller_id
 
 from .coordinator import WorkflowCoordinator
 
@@ -58,6 +59,7 @@ async def generate_intelligent_workflow(
     request_data: dict,
     request: Request,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """Generate AI-optimized workflow from user request"""
     try:
@@ -70,7 +72,9 @@ async def generate_intelligent_workflow(
         if not user_request or not session_id:
             raise HTTPException(status_code=400, detail="user_request and session_id required")
 
-        workflow_id = await orchestrator.generate_intelligent_workflow(user_request, session_id, context)
+        workflow_id = await orchestrator.generate_intelligent_workflow(
+            user_request, session_id, context, owner_id=caller_id(current_user)
+        )
 
         return {
             "success": True,
@@ -176,6 +180,7 @@ async def execute_workflow_template(
     request_data: dict,
     request: Request,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """Execute a workflow template with customizations"""
     try:
@@ -195,7 +200,10 @@ async def execute_workflow_template(
         user_request = f"Execute {template.name} workflow template"
 
         workflow_id = await orchestrator.generate_intelligent_workflow(
-            user_request, session_id, {"template_id": template_id, **customizations}
+            user_request,
+            session_id,
+            {"template_id": template_id, **customizations},
+            owner_id=caller_id(current_user),
         )
 
         return {

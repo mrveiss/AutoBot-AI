@@ -31,13 +31,14 @@ from api.schemas_code import (
     TemplateValidationRequest,
     TemplateValidationResponse,
 )
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_types import TaskComplexity
 from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
+from services.workflow_automation.workflow_ownership import caller_id
 from utils.advanced_cache_manager import smart_cache
-from workflow_templates import TemplateCategory, workflow_template_manager
+from workflow_templates import WorkflowTemplateCategory, workflow_template_manager
 
 logger = get_logger(__name__)
 
@@ -103,7 +104,7 @@ async def list_workflow_templates(
         category_filter = None
         if category:
             try:
-                category_filter = TemplateCategory(category.lower())
+                category_filter = WorkflowTemplateCategory(category.lower())
             except ValueError:
                 raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
 
@@ -206,7 +207,7 @@ async def list_template_categories():
     """List all available template categories"""
     try:
         categories = []
-        for category in TemplateCategory:
+        for category in WorkflowTemplateCategory:
             # Count templates in each category
             template_count = len(workflow_template_manager.list_templates(category=category))
             categories.append(
@@ -236,7 +237,7 @@ async def get_template_statistics():
 
         # Category statistics
         category_stats = {}
-        for category in TemplateCategory:
+        for category in WorkflowTemplateCategory:
             category_stats[category.value] = len(workflow_template_manager.list_templates(category=category))
 
         # Complexity statistics
@@ -434,7 +435,11 @@ async def create_workflow_from_template(template_id: str, request: TemplateExecu
     operation="execute_template_workflow",
     error_code_prefix="TEMPLATES",
 )
-async def execute_template_workflow(template_id: str, request: TemplateExecutionRequest):
+async def execute_template_workflow(
+    template_id: str,
+    request: TemplateExecutionRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Execute a workflow directly from a template (#1272).
 
     Creates a workflow via WorkflowAutomationManager so it
@@ -463,6 +468,7 @@ async def execute_template_workflow(template_id: str, request: TemplateExecution
             workflow_data,
             wa_steps,
             request,
+            owner_id=caller_id(current_user),
         )
 
         return {
@@ -518,8 +524,14 @@ async def _create_and_start_workflow(
     workflow_data,
     steps,
     request,
+    owner_id: str | None = None,
 ):
-    """Create and auto-start a workflow (#1272)."""
+    """Create and auto-start a workflow (#1272).
+
+    #17014: ``owner_id`` records the administrator who ran the template, so the
+    workflow is scoped to a person rather than to the literal session id
+    ``"template-execution"`` this path passes.
+    """
     from services.workflow_automation.models import AutomationMode
 
     mode = AutomationMode.AUTOMATIC if request.auto_approve else AutomationMode.SEMI_AUTOMATIC
@@ -529,6 +541,7 @@ async def _create_and_start_workflow(
         steps=steps,
         session_id="template-execution",
         automation_mode=mode,
+        owner_id=owner_id,
     )
     started = await manager.start_workflow_execution(workflow_id)
     logger.info(

@@ -73,10 +73,10 @@ _bootstrap_stubs()
 
 # Now we can import the module under test
 from autobot_memory_graph.semantic_search import (  # noqa: E402
+    EntitySearchResult,
     HybridScorer,
     MemoryGraphQueryProcessor,
     QueryIntent,
-    SearchResult,
     ensure_indexes,
 )
 
@@ -319,7 +319,7 @@ class TestProcessQuery:
         results = await proc.process_query("redis bug")
         assert isinstance(results, list)
         for r in results:
-            assert isinstance(r, SearchResult)
+            assert isinstance(r, EntitySearchResult)
 
     @pytest.mark.asyncio
     async def test_process_query_limit_respected(self) -> None:

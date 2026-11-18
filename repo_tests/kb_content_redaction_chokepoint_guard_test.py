@@ -76,7 +76,13 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
+from repo_tests._redaction_placement import (
+    applies_the_version_before_recording_it,
+    redacts_input_data_before_the_extract_loop,
+    redacts_target_version_in_place,
+)
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -187,7 +193,6 @@ def _connector_module_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-content-redaction-chokepoint",
     discover=_connector_module_files,
-    floor=141,
     growth=10,
     skips=0,
     what="non-test files under knowledge/",
@@ -280,7 +285,7 @@ def _chromadb_upsert_writes_documents(name: str | None, keywords: list[ast.keywo
 
 def _sink_call_sites(source: str) -> list[tuple[str, int]]:
     """(enclosing_function_name, line) for every sink call in *source*."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     sites: list[tuple[str, int]] = []
 
     class _Visitor(ast.NodeVisitor):
@@ -442,10 +447,17 @@ def test_create_version_still_only_reachable_with_already_redacted_content():
         "create_version gained or lost a caller -- re-verify every caller passes "
         "already-redacted content, then update this count"
     )
-    assert 'target_version["content"] = redact_content(target_version["content"])' in source, (
-        '_apply_version_to_fact no longer mutates target_version["content"] in place -- '
+    ok, why = redacts_target_version_in_place(source)
+    assert ok, (
+        f'_apply_version_to_fact no longer redacts target_version["content"] in place: {why} -- '
         'revert_to_version\'s later create_version(content=target_version["content"]) call '
         "would read the raw value again (the exact gap this test guards)"
+    )
+
+    ordered, why = applies_the_version_before_recording_it(source)
+    assert ordered, (
+        f"revert_to_version's call order no longer redacts before it records: {why} -- "
+        "the in-place mutation above only helps while it happens first"
     )
 
 
@@ -454,12 +466,22 @@ def test_the_ecl_pipeline_redacts_before_the_extract_stage():
     chokepoint (runner.py's _run_extract_stage) redacts input_data BEFORE
     chunking, which is why _upsert_chunk_batch/_upsert_summary_batch in
     chromadb_loader.py are exempt above rather than redacting themselves --
-    their content already is, several call frames up. Source-text checked
-    for the same reason as the test above: the AST sweep's per-function
-    tracking doesn't follow "redacted N calls ago, N files away".
+    their content already is, several call frames up. The AST sweep's
+    per-function tracking doesn't follow "redacted N calls ago, N files away",
+    so this position is asserted here instead.
+
+    #17033: this was a source-text match on the single literal
+    `input_data = redact_content(input_data)`. It fired on a change that
+    *strengthened* the pipeline -- #17667 replaced that call with
+    `sanitize_fact_content`, which adds an injection pass before the same
+    redaction -- because it could not tell a stronger implementation from a
+    removed one. It also could not have caught the failure its own name
+    describes: a source-text match knows nothing about position, so moving the
+    redaction *after* the extract loop would have left it passing. Asserting
+    the position is both the honest mechanism and a strictly stronger one.
     """
-    source = _read("autobot-backend/knowledge/pipeline/runner.py")
-    assert "input_data = redact_content(input_data)" in source, (
-        "_run_extract_stage no longer redacts input_data before the extract task loop -- "
+    ok, why = redacts_input_data_before_the_extract_loop(_read("autobot-backend/knowledge/pipeline/runner.py"))
+    assert ok, (
+        f"_run_extract_stage no longer redacts input_data before the extract task loop: {why} -- "
         "every chunk/summary chromadb_loader.py persists downstream would be unredacted again"
     )

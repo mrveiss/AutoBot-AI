@@ -28,10 +28,10 @@ from api.analytics_shared import (  # noqa: F401 – used by history/metrics/sum
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
     CodeReviewCategoryItem,
+    CodeReviewComment,
     CodeReviewPatternItem,
     PatternToggleRequest,
     ReviewCategory,
-    ReviewComment,
     ReviewSeverity,
 )
 from api.schemas_code import (
@@ -48,6 +48,7 @@ from api.schemas_code import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
+from autobot_shared.git_refs import is_safe_range
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.time_utils import parse_utc_iso
@@ -58,9 +59,6 @@ from .analytics_code_review_diff import collect_file_comments, persist_review
 
 logger = get_logger(__name__)
 
-# Allowlist pattern for git commit range arguments (Issue #1733).
-# Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.
-_VALID_GIT_REF_RE = re.compile(r"^[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?$")
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
@@ -272,7 +270,7 @@ def parse_diff(diff_content: str) -> list[dict[str, Any]]:
     return files
 
 
-def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
+def analyze_code(content: str, file_path: str) -> list[CodeReviewComment]:
     """Analyze code content for pattern violations."""
     comments = []
     lines = content.split("\n")
@@ -289,7 +287,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
 
                     comments.append(
-                        ReviewComment(
+                        CodeReviewComment(
                             id=f"{pattern_id}-{line_num}",
                             file_path=file_path,
                             line_number=line_num,
@@ -320,7 +318,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                 func_name = match.group(2)
                 message = f"Function '{func_name}' is {func_length} lines long. Consider refactoring."
                 comments.append(
-                    ReviewComment(
+                    CodeReviewComment(
                         id=f"STYLE002-{func_start}",
                         file_path=file_path,
                         line_number=func_start,
@@ -335,7 +333,7 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     return comments
 
 
-def calculate_review_score(comments: list[ReviewComment]) -> float:
+def calculate_review_score(comments: list[CodeReviewComment]) -> float:
     """Calculate overall code quality score based on findings."""
     if not comments:
         return 100.0
@@ -353,7 +351,7 @@ def calculate_review_score(comments: list[ReviewComment]) -> float:
     return round(score, 1)
 
 
-def generate_summary(comments: list[ReviewComment]) -> dict[str, Any]:
+def generate_summary(comments: list[CodeReviewComment]) -> dict[str, Any]:
     """Generate review summary statistics."""
     by_severity = {}
     by_category = {}
@@ -390,7 +388,7 @@ async def get_git_diff(commit_range: str | None = None) -> str:
         # would run `git git diff` if a later edit ever passed the whole list.
         argv = ["diff"]
         if commit_range:
-            if not _VALID_GIT_REF_RE.match(commit_range):
+            if not is_safe_range(commit_range):
                 logger.warning("Rejected invalid git commit range: %s", commit_range)
                 return ""
             argv.append(commit_range)

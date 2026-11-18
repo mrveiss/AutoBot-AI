@@ -18,6 +18,7 @@ import ast
 import os
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from chat_workflow.models import build_governed_identity
 from chat_workflow.session_role import PINNED_ROLE_CONTEXT_KEY, apply_role
 from orchestration.agent_registry import resolve_forbidden_tools
@@ -92,7 +93,7 @@ def _is_test_file(name: str) -> bool:
     ``"test" in name`` would also skip a production module such as ``attestation.py``,
     and the guard would then pass without having looked at it.
     """
-    return name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
+    return is_test_filename(name, include_js=False)
 
 
 def _production_modules():

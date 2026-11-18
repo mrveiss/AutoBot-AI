@@ -377,12 +377,13 @@ async def test_a_peer_request_is_held_to_the_work_claims_like_any_other(redis_se
     A scope another run holds must refuse a peer's request for it, and the refusal must
     reach the requester over the wire.
     """
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 
-    from agents.base_agent import AgentRequest, AgentResponse, LocalAgent
+    from agents.base_agent import AgentRequest, LocalAgent, StandardizedAgentResponse
     from autobot_shared.coordination import work_claims
 
-    claims = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    claims = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _claims_client(database: str = "main"):
         return claims
@@ -396,8 +397,10 @@ async def test_a_peer_request_is_held_to_the_work_claims_like_any_other(redis_se
         def declared_scopes(self, request: AgentRequest):
             return ["path:shared/file.py"]
 
-        async def process_request(self, request: AgentRequest) -> AgentResponse:
-            return AgentResponse(request_id=request.request_id, agent_type=self.agent_type, status="success", result={})
+        async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
+            return StandardizedAgentResponse(
+                request_id=request.request_id, agent_type=self.agent_type, status="success", result={}
+            )
 
         def get_capabilities(self):
             return []

@@ -62,6 +62,8 @@ ALLOWED_ROOT_FILES: frozenset[str] = frozenset(
     {
         "CHANGELOG.md",
         "CLAUDE.md",
+        # The community profile and newcomers look for it at the front door (#17880).
+        "CODE_OF_CONDUCT.md",
         "CONTRIBUTING.md",
         "CONTRIBUTORS.md",
         "FUNDING.md",

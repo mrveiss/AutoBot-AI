@@ -42,6 +42,11 @@ vi.mock('@/composables/usePreferences', () => ({
 
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 
+// The TTS socket authenticates via the user store (#17004); no Pinia here.
+vi.mock('@/utils/buildAuthenticatedWsUrl', () => ({
+  buildAuthenticatedWsSubprotocols: () => ['bearer', 'test-token'],
+}))
+
 vi.mock('@/config/ssot-config', () => ({
   getApiBase: () => '/api',
   getBackendWsUrl: () => 'ws://test',

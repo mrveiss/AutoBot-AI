@@ -12,7 +12,6 @@ import uuid
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from knowledge_base import KnowledgeBase
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.llm_service import get_llm_service
 from services.workflow_automation import (
@@ -42,7 +41,6 @@ class WorkflowCoordinator:
         self.base_manager = WorkflowAutomationManager()
         self.enhanced_orchestrator = get_orchestrator()
         self.llm_interface = get_llm_service()
-        self.knowledge_base = KnowledgeBase()
 
         # Specialized components (composition pattern)
         self.template_manager = TemplateManager()
@@ -84,8 +82,18 @@ class WorkflowCoordinator:
             risk_mitigation_strategies=(await self.risk_analyzer.generate_risk_mitigation(optimized_steps)),
         )
 
-    async def generate_intelligent_workflow(self, user_request: str, session_id: str, context: Metadata = None) -> str:
-        """Generate AI-optimized workflow from user request"""
+    async def generate_intelligent_workflow(
+        self,
+        user_request: str,
+        session_id: str,
+        context: Metadata = None,
+        owner_id: str | None = None,
+    ) -> str:
+        """Generate AI-optimized workflow from user request.
+
+        #17014: ``owner_id`` is the authenticated caller, recorded on the workflow so
+        the control routes can scope to them instead of admitting any signed-in user.
+        """
         try:
             context = context or {}
             workflow_id = str(uuid.uuid4())
@@ -104,7 +112,7 @@ class WorkflowCoordinator:
             self.workflow_intelligence[workflow_id] = intelligence
 
             # Step 5: Create workflow
-            await self._create_workflow(workflow_id, user_request, optimized_steps, session_id, intelligence)
+            await self._create_workflow(workflow_id, user_request, optimized_steps, session_id, intelligence, owner_id)
 
             # Step 6: Learn from workflow generation
             await self.learning_model.record_workflow_generation(user_request, intent_analysis, optimized_steps)
@@ -126,6 +134,7 @@ class WorkflowCoordinator:
         steps: List[SmartWorkflowStep],
         session_id: str,
         intelligence: WorkflowIntelligence,
+        owner_id: str | None = None,
     ) -> str:
         """Create workflow with AI intelligence."""
         # Convert SmartWorkflowSteps to regular WorkflowSteps for compatibility
@@ -149,6 +158,7 @@ class WorkflowCoordinator:
             steps=regular_steps,
             session_id=session_id,
             automation_mode=AutomationMode.SEMI_AUTOMATIC,
+            owner_id=owner_id,
         )
 
         return created_workflow_id

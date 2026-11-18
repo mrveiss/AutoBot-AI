@@ -357,6 +357,12 @@ def record_request_completion(
 # ConversationRateLimiter handles in-memory payload analysis and statistics;
 # the shared limiter below provides the Redis-backed sliding-window guard for
 # the conversation scope, accessible to async request handlers.
+#
+# NOT ACQUIRED ANYWHERE, ON PURPOSE (owner decision on #16857). On the chat
+# send path the conversation id comes from the request, and the limit would be
+# taken before the endpoint proves the caller owns that conversation, so any
+# user could exhaust another's conversation and lock its owner out with 429s.
+# The per-user limit (api.chat_send_rate_limit) bounds each caller instead.
 conversation_rate_limiter = _SharedRateLimiter(
     scope_prefix="conversation",
     default_tier="authenticated",

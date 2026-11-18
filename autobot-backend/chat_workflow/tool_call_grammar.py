@@ -95,6 +95,66 @@ TOOL_CALL_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Issue #18065 (second root cause): BRACKET SHAPE. Every pattern above hardcodes
+# `<` and `>`. A model that emits SQUARE brackets -- `[TOOL_CALL name=… params=…]`,
+# `[/TOOL_CALL]`, or the mixed `[/TOOL_CALL>` seen live -- matches none of them, so
+# the call is never executed AND the raw markup is never stripped: a square-bracket
+# tag fails `TOOL_CALL_OPENING_RE`, which is the guard `strip_unparsed_tool_tags`
+# returns early on. One unhandled bracket shape therefore loses the action and
+# shows the user the markup.
+#
+# The fix normalises the SHAPE and changes nothing else, which is the same move
+# `TOOL_CALL_OPEN_RE`/`TOOL_CALL_CLOSE_RE` already make for a stray space. Bracket
+# shape is not a security boundary: the angle form already executes and tool
+# authorisation lives elsewhere, so refusing to parse `[` would only drop a call
+# the model meant to make -- a swallowed error wearing a safety costume.
+#
+# ANCHORING IS THE WHOLE DESIGN, because `[` is markdown. Neither pattern matches
+# a bare bracket:
+#   * the close requires the literal `TOOL_CALL` token right after `[/`;
+#   * the open rewrites `[` ONLY when `TOOL_CALL` follows it, and finds the tag's
+#     terminator by anchoring on the closing QUOTE of `params=` -- never on the
+#     first `]`, which would cut `params='{"a":[1,2]}'` in half.
+# `[the docs](url)`, `[a list][1]`, `[THOUGHT]`, `[1,2,3]` and `[toolbox]` are all
+# left untouched, and angle-bracket input is unchanged (the normaliser is
+# idempotent), both of which are asserted in tool_call_grammar_bracket_test.py.
+TOOL_CALL_SQUARE_CLOSE_RE = re.compile(r"\[\s*/\s*tool_?\s*call\b\s*[\]>]?", re.IGNORECASE)
+TOOL_CALL_SQUARE_OPEN_RE = re.compile(r"\[(?=\s*tool_?\s*call\b)", re.IGNORECASE)
+TOOL_CALL_SQUARE_OPEN_TERM_RE = re.compile(
+    r"(<\s*tool_?\s*call\b[^\]>]*?params=([\"'])(?:.+?)\2\s*)\]",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def normalize_tool_call_text(text: str) -> str:
+    """ALL cosmetic tag normalisation, in one place (#332, #380, #18065).
+
+    Was three independent `.sub()` calls at the caller in `chat_workflow.manager`,
+    which is how the bracket case came to be missing from one path and present on
+    another: normalisation that lives at a call site has to be remembered at every
+    other call site. The spelling a tag may take is now decided here, so a new
+    tolerance is added once and every caller inherits it.
+    """
+    if not text:
+        return text
+    text = TOOL_CALL_OPEN_RE.sub("<TOOL_CALL", text)
+    text = TOOL_CALL_CLOSE_RE.sub("</TOOL_CALL>", text)
+    return normalize_tool_call_brackets(text)
+
+
+def normalize_tool_call_brackets(text: str) -> str:
+    """Rewrite square/mixed-bracket TOOL_CALL tags to the angle-bracket spelling.
+
+    Cosmetic in the same sense as the space normalisers: it changes the tag's
+    punctuation so the real parser can see it, and touches nothing else. Safe on
+    text with no tool call, and idempotent on text that already uses `<`/`>`.
+    """
+    if not text:
+        return text
+    text = TOOL_CALL_SQUARE_CLOSE_RE.sub("</TOOL_CALL>", text)
+    text = TOOL_CALL_SQUARE_OPEN_RE.sub("<", text)
+    return TOOL_CALL_SQUARE_OPEN_TERM_RE.sub(r"\1>", text)
+
 
 def strip_unparsed_tool_tags(text: str) -> str:
     """Remove a raw, never-parsed `<TOOL_CALL ...>` fragment from user-visible text.
@@ -105,7 +165,24 @@ def strip_unparsed_tool_tags(text: str) -> str:
     otherwise leak raw markup to the user. Leaves already-parsed tool
     calls (and text with no tag at all) untouched.
     """
+    # Normalise the bracket SHAPE first (#18065). `strip_unparsed_tool_tags` is
+    # called on `llm_response` in `manager._build_final_response_entry`, which
+    # does NOT pass through `manager._normalize_tool_call_text` -- the two are on
+    # different paths, so relying on the caller to have normalised would leave the
+    # leak open on exactly the path a user reads.
+    text = normalize_tool_call_brackets(text)
     if not TOOL_CALL_OPENING_RE.search(text):
+        # A DANGLING CLOSE with no opening tag (#18065). This is the shape actually
+        # reported from a live session -- a bare `[/TOOL_CALL>` sitting in the reply
+        # -- and normalising its brackets alone does not remove it, because this
+        # early return fires first. Returning here was right while the only concern
+        # was an unparsed OPEN tag; it makes a stray close permanently visible.
+        #
+        # Only the full `TOOL_CALL` token is removed, never the bare `</tool` that
+        # `TOOL_CALL_BARE_CLOSE_RE` deliberately refuses to act on alone: that one
+        # occurs in ordinary HTML/XML/JSX prose, and `</TOOL_CALL>` does not.
+        if TOOL_CALL_COMPLETE_RE.search(text):
+            return re.sub(r"\n{3,}", "\n\n", TOOL_CALL_COMPLETE_RE.sub("", text)).strip()
         return text
     if TOOL_CALL_PATTERN.search(text):
         return text

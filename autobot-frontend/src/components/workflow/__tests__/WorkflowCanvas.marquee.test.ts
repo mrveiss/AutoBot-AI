@@ -29,6 +29,7 @@ vi.mock('@/composables/useConfirmDialog', () => ({
 import WorkflowCanvas from '../WorkflowCanvas.vue'
 import type { CanvasNode } from '../canvasNode'
 import { firePointer } from './pointerTestUtils'
+import { waitForLastEmit } from './emitTestUtils'
 
 function step(id: string, x: number, y: number): CanvasNode {
   return {
@@ -90,6 +91,7 @@ describe('a marquee drag on empty canvas selects the nodes it overlaps (#14612)'
     await firePointer(area(w).element, 'pointerup', { clientX: 400, clientY: 200 })
 
     expect(marqueeEl(w).exists()).toBe(false)
+    await waitForLastEmit(w, 'node-selected', [null])
     expect(w.emitted('node-selected')?.at(-1)).toEqual([null]) // 2 selected — no single node to open
   })
 

@@ -146,6 +146,8 @@
 </template>
 
 <script setup lang="ts">
+import { createDateFormatter } from '@/utils/formatHelpers'
+import { saveUrl } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -165,6 +167,9 @@ const HEADER_H = 32
 const ROW_H = 34
 const BAR_H = 20
 const DAY_MS = 86_400_000
+
+const formatMonthTick = createDateFormatter({ kind: 'date', intl: { month: 'short', year: '2-digit' } })
+const formatDayTick = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' } })
 
 const ZOOM_PX_PER_DAY: Record<string, number> = { day: 40, week: 14, month: 5, quarter: 2 }
 
@@ -411,12 +416,8 @@ const axisTicks = computed(() => {
 
   for (let ms = from; ms <= to; ms += step * DAY_MS) {
     const d = new Date(ms)
-    const label =
-      zoom.value === 'quarter'
-        ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
-        : zoom.value === 'month'
-          ? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
-          : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const label = zoom.value === 'quarter' ? `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`
+      : (zoom.value === 'month' ? formatMonthTick : formatDayTick)(d)
     ticks.push({ ms, x: xForMs(ms), label })
   }
   return ticks
@@ -546,10 +547,7 @@ async function exportPng() {
       getComputedStyle(svg).getPropertyValue('--bg-surface').trim() || '#ffffff'
     ctx.fillRect(0, 0, cssW, cssH)
     ctx.drawImage(img, 0, 0, cssW, cssH)
-    const link = document.createElement('a')
-    link.download = `timeline-${selectedProjectId.value}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
+    saveUrl(canvas.toDataURL('image/png'), `timeline-${selectedProjectId.value}.png`)
   } catch (err) {
     logger.error('PNG export failed', err)
   } finally {
@@ -711,7 +709,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: var(--color-primary);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 0.1rem 0.35rem;
   border-radius: var(--radius-md);

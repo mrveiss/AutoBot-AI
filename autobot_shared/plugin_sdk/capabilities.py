@@ -3,9 +3,9 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Plugin Capability System
+Plugin PluginCapability System
 
-Capability-based security for plugins: declaration, enforcement, and audit logging.
+PluginCapability-based security for plugins: declaration, enforcement, and audit logging.
 
 Issue #9049 - Plugin capability manifest system.
 """
@@ -24,7 +24,7 @@ from autobot_shared.redis_client import get_async_redis_client
 logger = get_logger(__name__)
 
 
-class Capability(str, Enum):
+class PluginCapability(str, Enum):
     """Plugin capabilities that must be declared in the manifest.
 
     Each capability grants access to a specific AutoBot subsystem or resource.
@@ -89,7 +89,7 @@ class TrustTier(str, Enum):
 class CapabilityError(Exception):
     """Raised when a plugin attempts an undeclared capability."""
 
-    def __init__(self, plugin_name: str, capability: Capability, message: str = ""):
+    def __init__(self, plugin_name: str, capability: PluginCapability, message: str = ""):
         self.plugin_name = plugin_name
         self.capability = capability
         self.message = message or f"Plugin '{plugin_name}' lacks capability '{capability.value}'"
@@ -101,7 +101,7 @@ class CapabilityContext:
     """Context for capability usage (passed to audit log)."""
 
     plugin_name: str
-    capability: Capability
+    capability: PluginCapability
     granted: bool
     timestamp: datetime
     operation: str  # e.g. "kb_query", "http_get", "llm_chat"
@@ -128,7 +128,7 @@ class CapabilityChecker:
             logger_for_instance = get_logger(__name__)
             with cls._instance_lock:
                 if cls._instance is None:
-                    cls._granted_capabilities: Dict[str, List[Capability]] = {}
+                    cls._granted_capabilities: Dict[str, List[PluginCapability]] = {}
                     cls._logger = logger_for_instance
                     cls._instance = super().__new__(cls)
         return cls._instance
@@ -136,7 +136,7 @@ class CapabilityChecker:
     def grant_capabilities(
         self,
         plugin_name: str,
-        capabilities: List[Capability],
+        capabilities: List[PluginCapability],
     ) -> None:
         """Grant capabilities to a plugin after operator approval.
 
@@ -164,7 +164,7 @@ class CapabilityChecker:
     async def check(
         self,
         plugin_name: str,
-        capability: Capability,
+        capability: PluginCapability,
         operation: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -204,7 +204,7 @@ class CapabilityChecker:
         Each entry includes: timestamp, plugin, capability, granted, operation, metadata.
 
         Args:
-            context: Capability usage context
+            context: PluginCapability usage context
         """
         try:
             redis = await get_async_redis_client(database="main")
@@ -229,7 +229,7 @@ class CapabilityChecker:
 
             if not context.granted:
                 self._logger.warning(
-                    "Capability violation: plugin '%s' attempted '%s' without permission",
+                    "PluginCapability violation: plugin '%s' attempted '%s' without permission",
                     context.plugin_name,
                     context.capability.value,
                 )
@@ -240,7 +240,7 @@ class CapabilityChecker:
                 exc_info=True,
             )
 
-    def get_granted_capabilities(self, plugin_name: str) -> List[Capability]:
+    def get_granted_capabilities(self, plugin_name: str) -> List[PluginCapability]:
         """Get all capabilities granted to a plugin.
 
         Args:

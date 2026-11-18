@@ -21,7 +21,7 @@ no further changes needed here.
 import importlib.util
 from pathlib import Path
 
-from constants.threshold_constants import CategoryDefaults
+from autobot_shared.ssot_constants import CategoryDefaults
 
 _MODULE_PATH = Path(__file__).parent / "manage_system_knowledge.py"
 

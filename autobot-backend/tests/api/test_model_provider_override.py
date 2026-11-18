@@ -171,5 +171,5 @@ class TestGetSelectedModelOverride:
         config = MagicMock()
         config.get_default_llm_model.return_value = "default-model"
         config.get_nested.return_value = "global-model"
-        with patch("chat_workflow.llm_handler.get_config", return_value=config):
+        with patch("chat_workflow.llm_handler.provide_config_manager", return_value=config):
             assert _Stub()._get_selected_model(None) == "global-model"

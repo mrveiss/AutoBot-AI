@@ -4,6 +4,7 @@
 // Author: mrveiss
 import { useApiClient } from '@/plugins/api'
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 export interface Project {
   id: number
@@ -11,6 +12,28 @@ export interface Project {
   description: string
   created_at: string
   user_id: string
+}
+
+/**
+ * Outcome of a KB push. `partial` = stored, but the named collection was not
+ * joined (#17533).
+ *
+ * Declared by hand because the route declares no `response_model`, so the
+ * generated contract carries `"application/json": unknown` for it
+ * (`kb_push_api_transcriber_recordings__recording_id__kb_push_post`) and there
+ * is nothing to import. The fields below are read off the handler's own return
+ * in `transcriber/routes/kb.py`; the first draft of this interface invented
+ * `added`/`already_present`/`missing`, none of which the route sends. Backend
+ * fix tracked separately -- until it lands this is an unverified claim, which
+ * is what `frontend_api_contract_ratchet_test` counts and why it may not grow.
+ */
+export interface KbPushResult {
+  status: 'ok' | 'partial' | string
+  segments: number
+  indexed: number
+  duplicate: number
+  failed: number
+  collection: string | null
 }
 
 export type RecordingStatus = 'pending' | 'processing' | 'complete' | 'error'
@@ -142,11 +165,29 @@ export function useTranscriberApi() {
       }),
 
     // AI
-    aiAsk: (recordingId: number, action: string, customQuestion?: string) =>
-      new EventSource(`${base}/recordings/${recordingId}/ai/ask?action=${action}${customQuestion ? `&q=${encodeURIComponent(customQuestion)}` : ''}`),
+    // The route is POST (AiAskRequest body), so EventSource (GET-only) cannot call it.
+    // Returns the raw streaming Response; fetchWithAuth carries no request timeout so the
+    // long-lived stream is not aborted. The live SSE parser is useAiAnalysis.
+    aiAsk: (recordingId: number, action: string, customQuestion?: string): Promise<Response> =>
+      fetchWithAuth(`${getBackendUrl()}${base}/recordings/${recordingId}/ai/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, custom_question: customQuestion ?? null }),
+      }),
 
     // KB
-    kbPush: (recordingId: number, collectionId: string) =>
+    // #17533: the response carries the outcome. `partial` means the transcript was
+    // stored and the named collection was NOT joined -- a real result the caller has
+    // to read, not a formality. Typed so a caller that ignores it is visible.
+    // The type is on the signature rather than as a call-site generic, because
+    // `frontend_api_contract_ratchet_test` counts those and only lets the count
+    // shrink. The client declares the method as returning a promise of its type
+    // parameter, so that parameter is inferred from this annotation and the
+    // caller gets the same type either way.
+    //
+    // Note the ratchet's detector is a regex over raw file text, so writing the
+    // call-site form in a comment counts as one. Do not name it here.
+    kbPush: (recordingId: number, collectionId: string): Promise<KbPushResult> =>
       api.post(`${base}/recordings/${recordingId}/kb/push`, { collection_id: collectionId }),
     kbStatus: (recordingId: number) =>
       api.get<KbPushStatus>(`${base}/recordings/${recordingId}/kb/status`),

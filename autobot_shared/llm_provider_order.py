@@ -44,6 +44,7 @@ from typing import Iterable, Sequence
 
 from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import LLMProvider
 
 logger = get_logger(__name__)
 
@@ -71,11 +72,10 @@ class OrderedChain:
     excluded: tuple[str, ...]
 
     #: Named in the order, but no provider registered under that name -- its
-    #: credentials are absent, or the name is a typo.  This module does not
-    #: say which, because it cannot: ``LLMProvider`` is not the set of
-    #: registrable names (``nous`` and ``custom_openai`` are bare strings
-    #: outside it, see #17504), so there is nothing to spell-check against
-    #: short of a second list that would drift from the providers themselves.
+    #: credentials are absent, or the name is a typo.  ``LLMProvider`` is now
+    #: the set of registrable names (#17504), so ``apply_configured_order``
+    #: splits this list: a name in ``LLMProvider`` is "absent credentials", one
+    #: outside it is "unrecognised" (or a user-chosen custom instance name).
     unmatched: tuple[str, ...]
 
 
@@ -137,17 +137,31 @@ def provider_is_permitted(name: str, order: Sequence[str] | None = None) -> bool
     return REST in tokens or name.lower() in tokens
 
 
+def _log_unmatched(unmatched: Sequence[str]) -> None:
+    """Log names the order holds that no provider registered, split by cause (#17504)."""
+    known = {member.value for member in LLMProvider}
+    absent = [name for name in unmatched if name in known]
+    unrecognised = [name for name in unmatched if name not in known]
+    if absent:
+        logger.info(
+            "%s names %s, which matched no registered provider — absent credentials",
+            ORDER_ENV_VAR,
+            ", ".join(absent),
+        )
+    if unrecognised:
+        logger.info(
+            "%s names %s, which is not a known provider name (or a custom instance name)",
+            ORDER_ENV_VAR,
+            ", ".join(unrecognised),
+        )
+
+
 def apply_configured_order(registered: Sequence[str]) -> list[str]:
     """Order *registered* by configuration and log what the order decided."""
     order = configured_order()
     result = order_providers(registered, order)
 
-    if result.unmatched:
-        logger.info(
-            "%s names %s, which matched no registered provider — absent " "credentials or an unrecognised name",
-            ORDER_ENV_VAR,
-            ", ".join(result.unmatched),
-        )
+    _log_unmatched(result.unmatched)
     if result.excluded:
         logger.info(
             "%s=%r is exhaustive, so %s stay out of the fallback chain; they "

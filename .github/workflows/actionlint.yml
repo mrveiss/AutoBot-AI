@@ -3,9 +3,20 @@ name: actionlint
 on:
   push:
     branches: [release, main]
-    paths: [".github/workflows/**"]
+    # #21713: the promotion-base wiring guard below also reads its own file and the action it checks for.
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/release-promotion-base/**"  # #21713
+      - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
   pull_request:
-    paths: [".github/workflows/**"]
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/release-promotion-base/**"  # #21713
+      - "repo_tests/release_promotion_base_wiring_21713_test.py"  # #21713
 
 # Least privilege (#15331). Lints workflow files; no token writes.
 permissions:
@@ -17,7 +28,42 @@ concurrency:
 
 jobs:
   lint:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
+
+  # #21713: every job a PR into release runs that runs a base-reading guard must take the #19466 base.
+  # The guard reads every workflow file, so it runs here, on every workflow change, rather than
+  # spending the python suite on each one (GLOB_RUN_BY_A_DEDICATED_WORKFLOW in
+  # repo_tests/_glob_declared_uncovered.py). It reads the ratchet base itself, so it takes the same two
+  # steps it requires of every other job.
+  promotion-base-wiring:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: Base-reading jobs take the release-promotion base
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2  # #21713: the HEAD^1 fallback of repo_tests/_ratchet_base.py needs the parent
+
+      - uses: ./.github/actions/release-promotion-base  # #21713
+        id: release-base
+      - name: Ratchet base (#19283)  # #21713
+        env:
+          EVENT_BASE: ${{ steps.release-base.outputs.base-sha || github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+        run: |
+          if [ -n "${EVENT_BASE//0/}" ]; then
+            git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+            echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+          fi
+
+      # #21713: the same interpreter action and packages docs-liquid-tags.yml uses for a repo_tests guard.
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          extra-packages: pyyaml pytest pytest-asyncio
+
+      - name: Every base-reading job takes the release-promotion base
+        run: python3 -m pytest repo_tests/release_promotion_base_wiring_21713_test.py -q

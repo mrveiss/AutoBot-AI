@@ -49,7 +49,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Set
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
+from utils.validators import validate_uuid
 
 logger = get_logger(__name__)
 
@@ -62,8 +63,6 @@ _AGENT_TITLE = re.compile(
     r"^(?P<role>[^\W\d_][\w .\-]*)\s+·\s+(?P<company_id>[0-9a-fA-F-]{8,})$",
     re.UNICODE,
 )
-
-_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
 
 @dataclass
@@ -120,7 +119,12 @@ def classify(session: Dict[str, Any], known_company_ids: Set[str]) -> Candidate:
         return candidate
 
     parsed = match.group("company_id").lower()
-    if not _UUID.match(parsed):
+    # #18093: was a local `_UUID` identical to the canonical pattern but spelled with
+    # `re.I` instead of lowering first. The value is already lowered here, so the two
+    # agreed -- which is exactly how a copy survives until it quietly stops agreeing.
+    try:
+        validate_uuid(parsed)
+    except ValueError:
         candidate.reason = "the id in the title is not a company id"
         return candidate
     if parsed not in known_company_ids:
@@ -267,4 +271,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     main()

@@ -32,10 +32,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:
     fakeredis_async = None  # type: ignore[assignment]
-
+    fakeredis = None  # type: ignore[assignment]
 # ---------------------------------------------------------------------------
 # Redis-backed tests
 # ---------------------------------------------------------------------------
@@ -44,7 +45,7 @@ except ImportError:
 @pytest.mark.asyncio
 async def test_mark_then_is_degraded_redis(_require_fakeredis, _make_store_with_fake_server):
     """mark_degraded → is_degraded returns True within TTL (Redis path)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.mark_degraded("openai", "gpt-4o")
@@ -55,7 +56,7 @@ async def test_mark_then_is_degraded_redis(_require_fakeredis, _make_store_with_
 @pytest.mark.asyncio
 async def test_not_degraded_without_mark_redis(_require_fakeredis, _make_store_with_fake_server):
     """is_degraded returns False when no mark has been set."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     assert await store.is_degraded("anthropic", "claude-opus-4") is False
@@ -64,7 +65,7 @@ async def test_not_degraded_without_mark_redis(_require_fakeredis, _make_store_w
 @pytest.mark.asyncio
 async def test_provider_only_key_redis(_require_fakeredis, _make_store_with_fake_server):
     """Provider-only mark (no model) is correctly stored and retrieved."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.mark_degraded("groq")
@@ -77,7 +78,7 @@ async def test_provider_only_key_redis(_require_fakeredis, _make_store_with_fake
 @pytest.mark.asyncio
 async def test_cross_worker_mark_visible_to_second_store(_require_fakeredis, _make_store_with_fake_server):
     """Two stores sharing a FakeServer (simulating two workers) share state."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     worker_a = _make_store_with_fake_server(server)
     worker_b = _make_store_with_fake_server(server)
 
@@ -90,7 +91,7 @@ async def test_cross_worker_mark_visible_to_second_store(_require_fakeredis, _ma
 @pytest.mark.asyncio
 async def test_ttl_expiry_restores_provider(_require_fakeredis, _make_store_with_fake_server):
     """After TTL expiry (simulated by deleting the key), is_degraded returns False."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.mark_degraded("openai", "gpt-4o")
@@ -106,7 +107,7 @@ async def test_ttl_expiry_restores_provider(_require_fakeredis, _make_store_with
 @pytest.mark.asyncio
 async def test_degraded_entries_returns_marked_keys(_require_fakeredis, _make_store_with_fake_server):
     """degraded_entries() lists all currently-marked keys."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.mark_degraded("openai", "gpt-4o")
@@ -189,7 +190,7 @@ async def test_coordinator_marks_degraded_on_rate_limit(
     _inject_globals,
 ):
     """execute_with_fallback marks a provider degraded when rate-limited."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
@@ -251,7 +252,7 @@ async def test_coordinator_marks_degraded_on_rate_limit(
 @pytest.mark.asyncio
 async def test_registry_skips_degraded_provider(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """get_provider_for_request skips a degraded provider and picks the next."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
     # Mark openai degraded from another "worker".
@@ -288,7 +289,7 @@ async def test_registry_skips_degraded_provider(_require_fakeredis, _make_store_
 @pytest.mark.asyncio
 async def test_registry_all_degraded_proceeds(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """When all providers are degraded, the registry still returns one (no hard fail)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
     await store_a.mark_degraded("openai")
@@ -329,7 +330,7 @@ async def test_coordinator_marks_final_provider_on_exhaustion(
     _inject_globals,
 ):
     """The provider failing on the LAST attempt is marked too (mark before break)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
@@ -385,7 +386,7 @@ async def test_coordinator_marks_registry_resolved_provider_when_request_has_non
     _inject_globals,
 ):
     """A request without a provider still produces a matchable mark via selected_provider."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.fallback_chain import FallbackChainManager
@@ -439,7 +440,7 @@ async def test_registry_stamps_selected_provider_and_skips_model_scoped_mark(
     _inject_globals,
 ):
     """End-to-end: a model-scoped coordinator mark is honored by registry selection."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_a = _make_store_with_fake_server(server)
 
     # Coordinator-style mark from another worker: provider:model scoped.

@@ -41,18 +41,24 @@ from typing import Any
 
 # EAGER — Celery task registration depends on these two lines (GH#12318).
 # Do not convert them to lazy attributes; see the module docstring.
+from .attachment_file_sweep import run_attachment_file_sweep
 from .project_disposal_sweep import run_disposal_sweep
 from .sprint_autoclose import run_daily_check
 from .stalled_run_sweep import run_stalled_run_sweep
+from .trigger_secret_audit import run_trigger_secret_audit
+from .workspace_lease_sweep import run_workspace_lease_sweep
 
 __all__ = [
     "PollLoopScheduler",
     "BudgetWatchdog",
     "LivenessMonitor",
     "SessionCheckpointer",
+    "run_attachment_file_sweep",
     "run_disposal_sweep",
     "run_stalled_run_sweep",
     "run_daily_check",
+    "run_workspace_lease_sweep",
+    "run_trigger_secret_audit",
 ]
 
 # name -> submodule it lives in, so __getattr__ imports exactly one module.

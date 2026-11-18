@@ -18,7 +18,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { KnowledgeRepository } from '../KnowledgeRepository'
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendUrl: () => ''
 }))
 
 const fetchWithAuth = vi.fn()

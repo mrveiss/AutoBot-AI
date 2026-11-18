@@ -27,20 +27,22 @@ from autobot_shared.coordination.dev_loop_actions import (
     build_action,
     last_refusal,
     recent,
-    record,
+    record_dev_loop_action,
 )
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:  # pragma: no cover - environment without the extra
     fakeredis_async = None
+    fakeredis = None  # type: ignore[assignment]
 
 
 @pytest_asyncio.fixture
 async def redis(monkeypatch):
     if fakeredis_async is None:
         pytest.skip("fakeredis not installed")
-    client = fakeredis_async.FakeRedis(server=fakeredis_async.FakeServer(), decode_responses=True)
+    client = fakeredis_async.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
 
     async def _client(database: str = "main"):
         return client
@@ -71,7 +73,10 @@ class TestBuildAction:
 class TestRecordAndRead:
     @pytest.mark.asyncio
     async def test_a_recorded_action_reads_back(self, redis):
-        assert await record(build_action(17091, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=5)) is True
+        assert (
+            await record_dev_loop_action(build_action(17091, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=5))
+            is True
+        )
 
         entries = await recent(17091)
         assert [(e.issue, e.outcome, e.estimated_tokens) for e in entries] == [(17091, OUTCOME_RAN, 5)]
@@ -100,7 +105,10 @@ class TestRecordAndRead:
 
         monkeypatch.setattr(dev_loop_actions, "get_async_redis_client", _none)
 
-        assert await record(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1)) is False
+        assert (
+            await record_dev_loop_action(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1))
+            is False
+        )
 
     @pytest.mark.asyncio
     async def test_a_broken_client_does_not_raise_into_the_action(self, monkeypatch, redis):
@@ -115,32 +123,35 @@ class TestRecordAndRead:
 
         monkeypatch.setattr(dev_loop_actions, "get_async_redis_client", _broken)
 
-        assert await record(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1)) is False
+        assert (
+            await record_dev_loop_action(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1))
+            is False
+        )
 
     @pytest.mark.asyncio
     async def test_the_newest_entry_comes_first(self, redis):
-        await record(build_action(17091, intent="first", outcome=OUTCOME_RAN, estimated_tokens=1))
-        await record(build_action(17091, intent="second", outcome=OUTCOME_RAN, estimated_tokens=2))
+        await record_dev_loop_action(build_action(17091, intent="first", outcome=OUTCOME_RAN, estimated_tokens=1))
+        await record_dev_loop_action(build_action(17091, intent="second", outcome=OUTCOME_RAN, estimated_tokens=2))
 
         assert [e.intent for e in await recent(17091)] == ["second", "first"]
 
     @pytest.mark.asyncio
     async def test_the_history_is_trimmed_to_its_ceiling(self, redis):
         for n in range(ACTION_LOG_MAX + 5):
-            await record(build_action(17091, intent=f"a{n}", outcome=OUTCOME_RAN, estimated_tokens=1))
+            await record_dev_loop_action(build_action(17091, intent=f"a{n}", outcome=OUTCOME_RAN, estimated_tokens=1))
 
         assert await redis.llen("work_claims:actions:issue:17091") == ACTION_LOG_MAX
 
     @pytest.mark.asyncio
     async def test_the_history_carries_a_ttl_so_it_cannot_accumulate_forever(self, redis):
-        await record(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1))
+        await record_dev_loop_action(build_action(17091, intent="v", outcome=OUTCOME_RAN, estimated_tokens=1))
 
         assert await redis.ttl("work_claims:actions:issue:17091") > 0
 
     @pytest.mark.asyncio
     async def test_each_issue_keeps_its_own_history(self, redis):
-        await record(build_action(17091, intent="a", outcome=OUTCOME_RAN, estimated_tokens=1))
-        await record(build_action(17092, intent="b", outcome=OUTCOME_RAN, estimated_tokens=1))
+        await record_dev_loop_action(build_action(17091, intent="a", outcome=OUTCOME_RAN, estimated_tokens=1))
+        await record_dev_loop_action(build_action(17092, intent="b", outcome=OUTCOME_RAN, estimated_tokens=1))
 
         assert [e.intent for e in await recent(17091)] == ["a"]
         assert [e.intent for e in await recent(17092)] == ["b"]
@@ -167,19 +178,22 @@ class TestTheHistoryWriteIsAtomic:
     """`LPUSH`, `LTRIM` and `EXPIRE` go in one transaction (#17380 review).
 
     Sent separately, a failure after `LPUSH` succeeded left the history key with
-    no TTL -- bounded only by the next `LTRIM` that happens to run. `record`
+    no TTL -- bounded only by the next `LTRIM` that happens to run. `record_dev_loop_action`
     returns `False` and `_record` logs it, but neither caller repairs the
     partial write, so the bounded-history contract broke quietly.
 
     Same shape and same fix as `token_budget._increment` on this PR. Asserting
-    the TTL rather than the command list, because `record` goes through the real
+    the TTL rather than the command list, because `record_dev_loop_action` goes through the real
     client here: an immortal key is the property that matters, and it stays the
     property to assert if this ever moves to a Lua script.
     """
 
     @pytest.mark.asyncio
     async def test_the_history_key_always_carries_a_ttl(self, redis):
-        assert await record(build_action(17380, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1)) is True
+        assert (
+            await record_dev_loop_action(build_action(17380, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1))
+            is True
+        )
 
         keys = [k for k in await redis.keys("*") if "17380" in k]
         assert keys, "nothing was written, so this asserts nothing"
@@ -192,7 +206,7 @@ class TestTheHistoryWriteIsAtomic:
         the FIRST one -- the one that creates the key. This pins that the
         transaction covers it and that a later append does not clear it."""
         for _ in range(2):
-            await record(build_action(17381, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1))
+            await record_dev_loop_action(build_action(17381, intent="verify", outcome=OUTCOME_RAN, estimated_tokens=1))
 
         keys = [k for k in await redis.keys("*") if "17381" in k]
         assert keys

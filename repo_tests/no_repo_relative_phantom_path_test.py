@@ -67,6 +67,8 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
 
 REPO_ROOT = repo_root()
 
@@ -219,7 +221,7 @@ def _joined_bare_names(tree: ast.AST) -> Iterator[ast.Constant]:
 def _python_offenders(name: str, text: str) -> List[Offender]:
     """Offending non-docstring string literals in the Python source *text*."""
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except SyntaxError:  # pragma: no cover - a tracked file that will not parse
         return []
     skip = _docstring_ids(tree)
@@ -240,9 +242,7 @@ def _python_offenders(name: str, text: str) -> List[Offender]:
 def _shell_offenders(name: str, text: str) -> List[Offender]:
     """Offending tokens on non-comment lines of the shell source *text*."""
     found: List[Offender] = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        if line.lstrip().startswith("#"):
-            continue
+    for number, line in code_lines(text):
         for token in phantom_references(line):
             found.append((name, number, token))
     return found

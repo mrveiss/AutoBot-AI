@@ -33,6 +33,8 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 REPO_ROOT = repo_root()
 SCRIPT = REPO_ROOT / "autobot-infrastructure" / "shared" / "scripts" / "deployment" / "validate_access_control.sh"
 
@@ -196,11 +198,7 @@ def test_an_unknown_option_prints_usage_instead_of_dying_on_a_missing_function(t
 def test_the_script_carries_neither_abort_shape(shape, why):
     """Static floor: the two shapes that made a failure look like a finished run."""
     source = SCRIPT.read_text(encoding="utf-8")
-    offenders = [
-        f"{n}: {line.strip()}"
-        for n, line in enumerate(source.splitlines(), 1)
-        if re.search(shape, line) and not line.lstrip().startswith("#")
-    ]
+    offenders = [f"{n}: {line.strip()}" for n, line in code_lines(source) if re.search(shape, line)]
     assert not offenders, f"{why}:\n" + "\n".join(offenders)
 
 

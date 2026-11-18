@@ -17,7 +17,7 @@ import os
 from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.providers import TranscriptSegment
+from voice_processing.providers import TranscriptSegment, failures_as_provider_failed
 from voice_processing.providers.cloud.base import CloudSpeechProvider
 
 logger = get_logger(__name__)
@@ -55,19 +55,11 @@ class GoogleSpeechProvider(CloudSpeechProvider):
 
     async def transcribe(self, audio_path: str, language: Optional[str] = None) -> List[TranscriptSegment]:
         """Transcribe audio via Google Cloud STT v2 in a thread pool."""
-        if not self.is_configured:
-            logger.error("GoogleSpeechProvider: not configured (lib absent or credentials missing)")
-            return []
-        if not os.path.exists(audio_path):
-            logger.error("GoogleSpeechProvider: audio file not found: %s", audio_path)
-            return []
-        try:
+        self._require_ready(audio_path)
+        with failures_as_provider_failed(self.provider_name):
             import asyncio
 
             return await asyncio.get_event_loop().run_in_executor(None, self._sync_transcribe, audio_path, language)
-        except Exception as exc:
-            logger.error("GoogleSpeechProvider: transcription failed: %s", exc)
-            return []
 
     def _sync_transcribe(self, audio_path: str, language: Optional[str]) -> List[TranscriptSegment]:
         """Blocking Google STT call (run in thread pool)."""
@@ -94,28 +86,25 @@ class GoogleSpeechProvider(CloudSpeechProvider):
     def _parse(self, response: object, language: Optional[str]) -> List[TranscriptSegment]:
         """Map Google STT response words to TranscriptSegments."""
         segments: List[TranscriptSegment] = []
-        try:
-            results = getattr(response, "results", [])
-            if not results:
-                return segments
-            # The last result contains full diarization info
-            words = results[-1].alternatives[0].words
-            for w in words:
-                speaker = f"SPEAKER_{int(getattr(w, 'speaker_tag', 0)):02d}"
-                start = w.start_time.total_seconds() if hasattr(w.start_time, "total_seconds") else 0.0
-                end = w.end_time.total_seconds() if hasattr(w.end_time, "total_seconds") else 0.0
-                segments.append(
-                    TranscriptSegment(
-                        text=w.word,
-                        start_time=float(start),
-                        end_time=float(end),
-                        confidence=float(getattr(w, "confidence", 0.0)),
-                        language=language,
-                        speaker=speaker,
-                    )
+        results = getattr(response, "results", [])
+        if not results:
+            return segments
+        # The last result contains full diarization info
+        words = results[-1].alternatives[0].words
+        for w in words:
+            speaker = f"SPEAKER_{int(getattr(w, 'speaker_tag', 0)):02d}"
+            start = w.start_time.total_seconds() if hasattr(w.start_time, "total_seconds") else 0.0
+            end = w.end_time.total_seconds() if hasattr(w.end_time, "total_seconds") else 0.0
+            segments.append(
+                TranscriptSegment(
+                    text=w.word,
+                    start_time=float(start),
+                    end_time=float(end),
+                    confidence=float(getattr(w, "confidence", 0.0)),
+                    language=language,
+                    speaker=speaker,
                 )
-        except Exception as exc:
-            logger.error("GoogleSpeechProvider: parse error: %s", exc)
+            )
         return segments
 
     @property

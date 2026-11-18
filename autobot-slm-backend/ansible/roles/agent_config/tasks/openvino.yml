@@ -18,6 +18,11 @@
     apt_repo_spec: "deb https://apt.repos.intel.com/openvino/{{ openvino_version }} ubuntu22 main"
     apt_repo_filename: "intel-openvino"
     apt_repo_label: "OpenVINO"
+    # #17897: derived from this file's own "Install OpenVINO Runtime" task
+    # (name: "openvino-{{ openvino_version }}"), the only unconditional install
+    # from this repo. `intel-driver-compiler-npu` below is conditional on an
+    # NPU device being present, so its absence is not evidence about the repo.
+    apt_repo_verify_package: "openvino-{{ openvino_version }}"
 
 # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
 - name: agent_config openvino | Refresh apt cache after OpenVINO repo add (best-effort, bounded; #6719)

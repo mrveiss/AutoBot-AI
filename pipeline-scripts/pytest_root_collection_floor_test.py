@@ -30,6 +30,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tools.lint._comment_syntax import code_text
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "marker-tests.yml"
 SCRIPT = Path(__file__).with_name("pytest_root_collection_floor.py")
@@ -183,10 +185,7 @@ class TestRootDerivation:
         was correct. The script it cross-checks never had the bug: it anchors on
         the literal `python -m pytest`, which no comment produces.
         """
-        without_comments = "\n".join(
-            line for line in run.splitlines() if not line.lstrip().startswith("#")
-        )
-        return without_comments.replace("\\\n", " ").split()
+        return code_text(run).replace("\\\n", " ").split()
 
     @staticmethod
     def _invocation_starts(tokens: list[str]) -> list[int]:
@@ -196,9 +195,7 @@ class TestRootDerivation:
         in the dependency step is not an invocation and names no roots.
         """
         return [
-            index + 3
-            for index in range(len(tokens) - 2)
-            if tokens[index : index + 3] == ["python", "-m", "pytest"]
+            index + 3 for index in range(len(tokens) - 2) if tokens[index : index + 3] == ["python", "-m", "pytest"]
         ]
 
     def test_the_derivation_agrees_with_an_independent_yaml_parse(self):
@@ -226,7 +223,7 @@ class TestRootDerivation:
         assert "libs" not in tokens, "comment text survived the strip and can still be read as a root"
         starts = self._invocation_starts(tokens)
         assert starts == [3], f"expected one invocation anchored at the command, got {starts}"
-        assert roots_in(tokens[starts[0]:], REPO_ROOT) == ["repo_tests"]
+        assert roots_in(tokens[starts[0] :], REPO_ROOT) == ["repo_tests"]
 
     def test_a_pip_install_line_is_not_read_as_an_invocation(self):
         """`pip install pytest ...` names packages, not roots."""

@@ -12,7 +12,7 @@
 #
 # This wrapper hardcodes the exact ports and process pattern the platform's
 # own tooling already used before this fix (run_agent.sh,
-# deployment/deploy_hybrid.sh, ansible/fix-backend-deadlock.sh) and takes no
+# deployment/deploy_hybrid.sh) and takes no
 # attacker-influenced argument that reaches lsof/kill/pkill as free text --
 # every subcommand is a fixed literal, validated before use; anything else
 # is refused with a non-zero exit.
@@ -54,7 +54,6 @@ readonly PKILL=/usr/bin/pkill
 
 usage() {
     echo "Usage: $0 kill-port {backend|frontend|backend-tls}" >&2
-    echo "       $0 diagnose-port backend-tls" >&2
     echo "       $0 kill-uvicorn" >&2
     exit 2
 }
@@ -91,13 +90,6 @@ case "$1" in
             # shellcheck disable=SC2086  # $pids is a whitespace-separated PID list
             kill -9 ${pids}
         fi
-        ;;
-    diagnose-port)
-        [ "$#" -eq 2 ] || usage
-        require_valid_port_name "$2"
-        port="$(port_for "$2")"
-        # Read-only; matches ansible/fix-backend-deadlock.sh's SYN_SENT check.
-        "${LSOF}" -i ":${port}" -n 2>/dev/null || true
         ;;
     kill-uvicorn)
         [ "$#" -eq 1 ] || usage

@@ -20,7 +20,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from dependencies import get_config
+from dependencies import provide_config_manager
 from services.tool_output_filter import get_tool_output_filter
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
@@ -55,7 +55,7 @@ class CommandExplanationService:
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config."""
         try:
-            endpoint = get_config().get_ollama_url()
+            endpoint = provide_config_manager().get_ollama_url()
             if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                 endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
             return endpoint
@@ -68,7 +68,7 @@ class CommandExplanationService:
     def _get_model(self) -> str:
         """Get LLM model from config."""
         try:
-            return get_config().get_selected_model()
+            return provide_config_manager().get_selected_model()
         except Exception:
             return DEFAULT_LLM_MODEL
 
