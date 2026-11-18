@@ -75,6 +75,7 @@ def _render(slm_host: str | None, remote: bool = False) -> str:
         frontend_tls_cert="/c.pem",
         frontend_tls_key="/k.pem",
         frontend_dist_dir="/dist",
+        frontend_upstream_backend_port="8443",
     )
     return _env().from_string(TEMPLATE.read_text(encoding="utf-8")).render(**ctx)
 

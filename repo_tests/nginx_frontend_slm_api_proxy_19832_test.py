@@ -47,6 +47,7 @@ def _render(host: str, port: str) -> str:
         frontend_tls_cert="/c.pem",
         frontend_tls_key="/k.pem",
         frontend_dist_dir="/dist",
+        frontend_upstream_backend_port="8443",
         frontend_slm_backend_host=host,
         frontend_slm_backend_port=port,
         frontend_slm_backend_protocol="http",
