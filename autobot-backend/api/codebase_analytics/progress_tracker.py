@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from api.codebase_analytics.run_status import STATUS_FAILED, STATUS_KILLED, RunKilled
 from autobot_shared.async_compat import fire_and_forget, run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -417,7 +418,8 @@ def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> N
 
     Issue #398: Extracted from do_indexing_with_progress.
     """
-    indexing_tasks[task_id]["status"] = "failed"
+    # #21003: a killed worker is "killed", not a generic failure.
+    indexing_tasks[task_id]["status"] = STATUS_KILLED if isinstance(error, RunKilled) else STATUS_FAILED
     indexing_tasks[task_id]["error"] = str(error)
     indexing_tasks[task_id]["failed_at"] = datetime.now(tz=timezone.utc).isoformat()
 

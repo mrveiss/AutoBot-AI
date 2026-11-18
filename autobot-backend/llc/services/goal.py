@@ -9,9 +9,11 @@ import uuid
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import delete, event, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
@@ -67,37 +69,26 @@ def _schedule_after_commit(
     name: str,
     make_coro: Callable[[], Coroutine[Any, Any, None]],
 ) -> None:
-    """Run *make_coro()* once *session*'s transaction has actually committed.
+    """Run *make_coro()* once *session*'s transaction has actually committed, never after a rollback.
 
-    Registration captures a factory rather than a coroutine, so the work is
-    built at fire time and nothing bound to *session* is held across the
-    boundary (#15612) — the row a post-commit hook was told about is detached
-    the moment that session closes, which on this path is immediately after.
-
-    Scheduling goes through ``fire_and_forget``, which keeps a strong reference
-    until the task finishes and logs whatever it raised. The event loop holds
-    only a weak reference, so a bare ``create_task`` whose handle is dropped can
-    be garbage-collected before it runs, taking its exception with it (#15522,
-    converted across the SLM backend in #15524).
+    Rides the one after-commit queue (:func:`~autobot_shared.after_commit.defer_until_commit`, #21107): the
+    work is built at fire time, so nothing bound to *session* is held across the boundary (#15612) - the row
+    a post-commit hook was told about is detached the moment that session closes. The queue keeps a strong
+    reference to the task (``fire_and_forget``) and logs what it raised (#15522).
     """
-    try:
-        sync_sess = session.sync_session
-    except AttributeError:
+    if not isinstance(getattr(session, "sync_session", None), Session):
         return  # Not a real AsyncSession (e.g. test mock); skip registration
+    defer_until_commit(session, lambda: _start(make_coro, name), name)
 
-    @event.listens_for(sync_sess, "after_commit", once=True)
-    def _after_commit(_ss: Any) -> None:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            # Checked before building the coroutine: an un-awaited coroutine
-            # object is a second, noisier failure on top of the first.
-            logger.error("No running event loop after commit — %s was not scheduled", name)
-            return
-        try:
-            fire_and_forget(make_coro(), name=name)
-        except Exception:
-            logger.exception("Could not schedule %s post-commit", name)
+
+def _start(make_coro: Callable[[], Coroutine[Any, Any, None]], name: str) -> None:
+    """Build the coroutine and start it as a retained task; no running loop means nothing is built."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        logger.error("No running event loop after commit - %s was not scheduled", name)
+        return
+    fire_and_forget(make_coro(), name=name)
 
 
 class GoalService(LLCServiceBase):

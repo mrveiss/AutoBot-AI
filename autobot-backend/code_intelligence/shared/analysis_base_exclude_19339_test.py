@@ -51,5 +51,7 @@ def test_a_custom_pattern_with_a_slash_still_matches_the_path_text(tmp_path: Pat
     analyzer = _analyzer()
     analyzer.exclude_patterns = ["*/gen/x.py", "vendored"]
     assert analyzer._should_exclude(tmp_path / "gen" / "x.py", tmp_path)
-    assert analyzer._should_exclude(tmp_path / "vendored_lib" / "y.py", tmp_path)
+    assert analyzer._should_exclude(tmp_path / "vendored" / "y.py", tmp_path)
+    # A plain word matches whole path components, not substrings (#21004).
+    assert not analyzer._should_exclude(tmp_path / "vendored_lib" / "y.py", tmp_path)
     assert not analyzer._should_exclude(tmp_path / "gen" / "y.py", tmp_path)

@@ -28,6 +28,7 @@
         </template>
       </select>
     </label>
+    <p v-if="people.loadFailed.value" class="handoff-error" data-testid="handoff-people-failed">{{ $t('nav.llcPeopleLoadFailed') }}</p>
 
     <label class="handoff-label">
       {{ $t('nav.llcHandoffNotes') }}

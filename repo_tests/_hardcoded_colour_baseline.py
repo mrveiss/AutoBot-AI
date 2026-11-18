@@ -90,6 +90,16 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#ffffff": 3,
 }
 
+#: ``lowercased hex literal -> times written instead of resolved`` in `autobot-slm-frontend/src`
+#: (#17567). Its own table, because the two apps move independently and one combined number hides
+#: that. Measured at ZERO with the same detector: the control plane's script/template colours are
+#: all resolved or absent. Measured with this detector: 0 outside `<style>`, and 14 `<style>` hex in
+#: 2 files (`OrgTreeNode.vue` 12, `UpdateNotification.vue` 2), which `color-no-hex` owns. #17567's
+#: table counted 19 there; the gap between 14 and 19 is unreconciled and unknown. An empty table is not
+#: "unscanned": the reach floor and a control fixture in the ratchet prove
+#: the tree is read. Shrink-only is trivially strict here: any entry is growth.
+SLM_HARDCODED_COLOUR_LITERALS: dict[str, int] = {}
+
 # No hand-maintained totals here (#19283): each entry is compared with this table at the base
 # commit (repo_tests/_ratchet_base.py), so a raised entry still fails and PRs lowering different
 # entries never edit a shared line.
@@ -140,8 +150,15 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
 #: ``--color-primary`` is white in High Contrast Dark and pale in Dark, so a literal white label
 #: on it vanishes there; ``--text-on-primary`` follows the fill. Keyed like IMPORTANT_DECLARATIONS
 #: (the `slm:` prefix marks the control plane). Shrink-only: convert the label, then delete the
-#: entry. The one entry left is held by an open PR that already edits the file; it is converted
-#: when that PR lands.
-WHITE_ON_PRIMARY_LABELS: dict[str, int] = {
-    "views/llc/BacklogView.vue": 1,
-}
+#: entry. Every label now reads the token, so the table is empty and a new literal white label on a
+#: primary fill is a measured entry the pin does not hold.
+WHITE_ON_PRIMARY_LABELS: dict[str, int] = {}
+
+#: ``path -> class strings that pair a bg-autobot-primary* fill with a white text- utility`` (#21543).
+#:
+#: The Tailwind form of WHITE_ON_PRIMARY_LABELS: ``--color-autobot-primary`` is ``--color-primary``, so the
+#: same High Contrast Dark and Dark failure reaches the page through classes. The label reads
+#: ``text-autobot-text-on-primary``. Keyed like WHITE_ON_PRIMARY_LABELS (`slm:` marks the control plane).
+#: Shrink-only and empty: every site is converted, so a new white label on the primary fill is a
+#: measured entry the pin does not hold.
+WHITE_ON_PRIMARY_CLASS_LABELS: dict[str, int] = {}

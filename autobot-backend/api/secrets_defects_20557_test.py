@@ -67,6 +67,13 @@ class _VaultWithDependents(_FakeVault):
         return [SimpleNamespace(dependent_kind=k, dependent_id=i) for k, i in self.dependents]
 
 
+def _digest(dependents) -> str:
+    """The digest a human echoes to confirm the listed (kind, id) dependents."""
+    from api.secrets_guarded_delete import dependents_digest
+
+    return dependents_digest([SimpleNamespace(dependent_kind=k, dependent_id=i) for k, i in dependents])
+
+
 def _with_dependents(client_and_vault, monkeypatch, dependents):  # noqa: F811
     client, _ = client_and_vault()
     vault = _VaultWithDependents(dependents)
@@ -92,7 +99,7 @@ def test_delete_with_dependents_is_refused_and_lists_them(client_and_vault, monk
 def test_a_confirmed_delete_removes_the_secret(client_and_vault, monkeypatch) -> None:  # noqa: F811
     client, vault = _with_dependents(client_and_vault, monkeypatch, [("service", "scheduler")])
 
-    response = client.delete(f"/api/secrets/{_SECRET_ID}?confirm_dependents=true")
+    response = client.delete(f"/api/secrets/{_SECRET_ID}?dependents_digest={_digest([('service', 'scheduler')])}")
 
     assert response.status_code == 200
     assert _VAULT_KEY not in vault.store
@@ -103,7 +110,8 @@ def test_the_internal_key_cannot_confirm_past_dependents(client_and_vault, monke
     monkeypatch.setattr(secrets_system_vault, "verify_internal_api_key", lambda k: k == "svc")
 
     response = client.delete(
-        f"/api/secrets/{_SECRET_ID}?confirm_dependents=true", headers={"X-Internal-API-Key": "svc"}
+        f"/api/secrets/{_SECRET_ID}?dependents_digest={_digest([('service', 'scheduler')])}",
+        headers={"X-Internal-API-Key": "svc"},
     )
 
     assert response.status_code == 403

@@ -8,7 +8,7 @@ Regression tests for Issue #12748 (get_redis_config fork convergence).
 Confirms the re-entry-safe _ConfigStub.get_redis_config() returns the
 identical superset shape/values as the canonical
 config.service_config.ServiceConfigMixin.get_redis_config() (reached via
-unified_config_manager), instead of the pre-fix broken/partial dict that
+config_manager), instead of the pre-fix broken/partial dict that
 referenced nonexistent SSOT attributes.
 """
 
@@ -18,7 +18,7 @@ import config as config_pkg
 def test_config_stub_redis_config_matches_canonical_shape():
     """_ConfigStub.get_redis_config() must return the same keys as canonical."""
     stub_result = config_pkg._ConfigStub().get_redis_config()
-    canonical_result = config_pkg.unified_config_manager.get_redis_config()
+    canonical_result = config_pkg.config_manager.get_redis_config()
 
     assert set(stub_result.keys()) == set(canonical_result.keys())
 
@@ -26,7 +26,7 @@ def test_config_stub_redis_config_matches_canonical_shape():
 def test_config_stub_redis_config_matches_canonical_values():
     """_ConfigStub.get_redis_config() must resolve the same values as canonical."""
     stub_result = config_pkg._ConfigStub().get_redis_config()
-    canonical_result = config_pkg.unified_config_manager.get_redis_config()
+    canonical_result = config_pkg.config_manager.get_redis_config()
 
     assert stub_result == canonical_result
 

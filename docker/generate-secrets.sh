@@ -8,7 +8,7 @@
 # the docker-compose stack (GH#9775, #16275).
 #
 # PASSWORDS (#16275, #17793): this writes every credential compose requires --
-# AUTOBOT_DB_PASSWORD, GRAFANA_ADMIN_PASSWORD, AUTOBOT_ADMIN_PASSWORD and
+# AUTOBOT_DB_PASSWORD, AUTOBOT_REDIS_PASSWORD, GRAFANA_ADMIN_PASSWORD, AUTOBOT_ADMIN_PASSWORD and
 # SLM_ADMIN_PASSWORD (and VNC_PASSWORD for the playwright-vnc stack). Compose has no fallback for any of them and refuses to
 # start, naming the variable, when one is missing. Pass docker/.env.secrets AFTER
 # docker/.env.docker, as shown below, so the generated values win.
@@ -24,6 +24,8 @@
 # value always overrides the auto-generated one. The compose file ships no
 # static fallback for AUTOBOT_JWT_SECRET / SECRET_KEY: a committed shared
 # signing secret allows JWT/session forgery against any default deployment.
+#
+# EXISTING compose stack: rerun this once. It adds the Redis password, and compose refuses to start without it.
 #
 # Everything is written to a gitignored docker/.env.secrets that you then pass
 # to compose. Idempotent: existing values are preserved, never overwritten or
@@ -132,6 +134,12 @@ ensure_secret GRAFANA_ADMIN_PASSWORD
 ensure_secret AUTOBOT_ADMIN_PASSWORD password
 # #17793: the SLM's first admin; compose no longer falls back to 'admin' and refuses to start without it.
 ensure_secret SLM_ADMIN_PASSWORD password
+# #17500: Redis authenticates. Hex: it goes into redis:// URLs and must need no escaping. An existing
+# deployment's Redis holds no password in its volume, so a new one locks nothing out.
+ensure_secret AUTOBOT_REDIS_PASSWORD
+# Rewritten each run, so the ACL file always matches the line above.
+AUTOBOT_REDIS_PASSWORD="$(grep '^AUTOBOT_REDIS_PASSWORD=' "$SECRETS_FILE" | cut -d= -f2-)" \
+    bash "$(dirname "$0")/write-redis-acl.sh"
 # #20629: what the SLM presents to the limited Docker proxy.
 ensure_secret AUTOBOT_DOCKER_PROXY_TOKEN
 # #17500: the playwright-vnc dev stack's VNC password; it no longer falls back to a fixed one.
