@@ -14,6 +14,7 @@ import { useEventBus } from '@/composables/useEventBus'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase, getServiceUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDuration } from '@/utils/formatHelpers'
 
 const logger = createLogger('useCaptchaStatus')
 
@@ -34,6 +35,24 @@ export interface CaptchaEvent {
 // ============================================================================
 // Composable
 // ============================================================================
+
+/** Backend `CaptchaType` wire values -> `research.captcha.types.*` locale keys (#18131). */
+const CAPTCHA_TYPE_KEYS: Record<string, string> = {
+  recaptcha: 'recaptcha',
+  hcaptcha: 'hcaptcha',
+  cloudflare: 'cloudflare',
+  slider: 'slider',
+  image_select: 'imageSelect',
+  text: 'text',
+  text_image: 'text', // recorded before the backend enums were merged
+  math: 'math',
+  unknown: 'unknown',
+}
+
+/** The locale key for a CAPTCHA type; an unrecognised or missing type shows the UNKNOWN label. */
+export function captchaTypeLabelKeyFor(captchaType: string | undefined): string {
+  return `research.captcha.types.${CAPTCHA_TYPE_KEYS[captchaType ?? ''] ?? 'unknown'}`
+}
 
 export function useCaptchaStatus() {
   const activeCaptcha = ref<CaptchaEvent | null>(null)
@@ -107,15 +126,7 @@ export function useCaptchaStatus() {
   // Computed
   // --------------------------------------------------------------------------
 
-  const captchaTypeLabel = computed(() => {
-    const types: Record<string, string> = {
-      recaptcha: 'reCAPTCHA',
-      hcaptcha: 'hCaptcha',
-      cloudflare: 'Cloudflare Challenge',
-      unknown: 'Unknown CAPTCHA'
-    }
-    return types[activeCaptcha.value?.captcha_type || 'unknown'] || 'CAPTCHA'
-  })
+  const captchaTypeLabelKey = computed(() => captchaTypeLabelKeyFor(activeCaptcha.value?.captcha_type))
 
   const truncatedUrl = computed(() => {
     const url = activeCaptcha.value?.url || ''
@@ -134,11 +145,8 @@ export function useCaptchaStatus() {
   // Utilities
   // --------------------------------------------------------------------------
 
-  function formatTime(seconds: number): string {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  /** A countdown as `m:ss`, the kit's clock duration (#19905). */
+  const formatClock = (seconds: number): string => formatDuration(seconds, { style: 'clock' })
 
   /**
    * Open the browser session's VNC view (#17423).
@@ -226,10 +234,10 @@ export function useCaptchaStatus() {
     activeCaptcha,
     timeRemaining,
     isSubmitting,
-    captchaTypeLabel,
+    captchaTypeLabelKey,
     truncatedUrl,
     progressPercentage,
-    formatTime,
+    formatTime: formatClock,
     openVnc,
     markSolved,
     skipCaptcha,

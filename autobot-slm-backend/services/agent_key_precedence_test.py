@@ -183,7 +183,8 @@ def test_the_agent_still_names_its_remedy():
     undiagnosable from the node side — worth failing loudly rather than
     discovering it during the next incident.
     """
-    agent = _ROLE.parent.parent / "files" / "slm" / "agent" / "agent.py"
+    # The role deploys this one source file since #18548 (the Ansible mirror is gone).
+    agent = Path(__file__).resolve().parent.parent / "slm" / "agent" / "agent.py"
     text = agent.read_text(encoding="utf-8")
 
     assert re.search(r"401", text), "the agent no longer reports a 401 on rejected heartbeats"

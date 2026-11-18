@@ -1,5 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+// @vitest-environment node
+// (createServer loads esbuild, whose Uint8Array invariant fails under the kit's default jsdom.)
 // Regression guard (#18240): a string alias on '@autobot/ui' also rewrote the subpath
 // exports ('@autobot/ui/adapter' -> '<index.ts>/adapter') and broke every app build.
 import { existsSync } from 'node:fs'

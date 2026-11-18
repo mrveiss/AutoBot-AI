@@ -85,22 +85,18 @@ def test_an_unknown_role_is_denied(gate):
 # ------------------------------------------- superadmin and case, at the root
 
 
-def test_superadmin_is_a_role_member_that_resolves_to_no_permissions():
-    """#13854 landed the first-class member; the answer it gives is unchanged.
+def test_superadmin_is_a_role_member_that_resolves_to_admins_permissions():
+    """#13854 made it a first-class member; #19125 gave it admin's grants.
 
-    This test used to assert ``Role("superadmin")`` *raises*. That was the
-    defect, not the contract: the empty permission list was produced by a failed
-    enum lookup, so superadmin was indistinguishable from a typo, and
-    ``role_has_permission`` — reading a different source — granted it everything
-    at the same time.
-
-    It is now a member with an explicitly empty ``ROLE_PERMISSIONS`` entry. The
-    resolved answer here is byte-identical to before; what changed is that it is
-    now stated in the canonical mapping rather than inferred from an exception.
+    This test used to assert ``Role("superadmin")`` *raises*, then (#13854) that
+    its entry was explicitly empty. Owner decision 2026-10-21: "Super admin is
+    the highest form of admin" -- the entry is derived from admin's, so the
+    resolved answer here is admin's set.
     """
     assert Role("superadmin") is Role.SUPERADMIN
-    assert ROLE_PERMISSIONS[Role.SUPERADMIN] == []
-    assert canonical_role_permissions("superadmin") == []
+    assert set(ROLE_PERMISSIONS[Role.SUPERADMIN]) >= set(ROLE_PERMISSIONS[Role.ADMIN])
+    assert canonical_role_permissions("superadmin") == canonical_role_permissions("admin")
+    assert canonical_role_permissions("superadmin") != []
 
 
 def test_an_unrecognised_role_is_still_distinguishable_from_superadmin():
@@ -197,22 +193,22 @@ def test_a_role_that_may_run_a_shell_command_is_also_subject_to_approval(gate, r
     assert gate._should_force_approval(HIGH_RISK_COMMAND, role) is True
 
 
-@pytest.mark.parametrize("role", ["superadmin", "user", "readonly", "not-a-role"])
+@pytest.mark.parametrize("role", ["user", "readonly", "not-a-role"])
 def test_a_role_that_may_not_run_a_shell_command_is_denied_at_the_gate(gate, role):
     assert gate.check_permission(role, "allow_shell_execute") is False
 
 
-def test_superadmin_gains_no_permissions_from_this_change(gate):
-    """It is administrative via ``ADMIN_ROLES`` but holds no canonical grants.
+def test_superadmin_holds_admins_permissions_including_shell_execution(gate):
+    """#19125: superadmin is the highest form of admin, so it holds what admin holds.
 
-    Still true after #13854 made it a ``Role`` member: the entry it gained is
-    an explicitly empty one. Mapping it onto admin's set would hand it 54
-    permissions including shell execution — an authorisation expansion, which
-    neither #13820 nor #13854 decided to make.
+    Its entry is derived from admin's set, so shell execution and
+    ``admin.system`` are granted -- and, like admin, shell execution still goes
+    through the approval branch.
     """
-    assert gate.check_permission("superadmin", "allow_shell_execute") is False
-    assert gate.check_permission("superadmin", "admin.system") is False
-    assert canonical_role_permissions("superadmin") == []
+    assert gate.check_permission("superadmin", "allow_shell_execute") is True
+    assert gate.check_permission("superadmin", "admin.system") is True
+    assert gate._should_force_approval(HIGH_RISK_COMMAND, "superadmin") is True
+    assert canonical_role_permissions("superadmin") == canonical_role_permissions("admin")
 
 
 @pytest.mark.parametrize("role", ["god", "root", "superuser"])
@@ -240,16 +236,16 @@ def test_the_gate_never_denies_what_the_canonical_mapping_grants(gate):
 
     Exact equality between the two resolvers cannot hold and asserting it would
     be wrong: the gate expands wildcards (``files.*`` matches ``files.delete``)
-    and ``_get_user_permissions`` returns literal strings. So the direction to
-    pin is one-way — a permission the canonical mapping grants must never be
-    denied by the gate. The reverse (the gate granting more, via a wildcard) is
-    the configured-permissions feature working, not drift.
+    and holds SecurityLayer defaults. So the direction to pin is one-way — a
+    permission the shared evaluator's role grant (#18263) gives must never be
+    denied by the gate. The reverse (the gate granting more, via a default or a
+    wildcard) is the configured-permissions feature working, not drift.
     """
-    from auth_rbac import _get_user_permissions
+    from autobot_shared.auth.permission_evaluator import role_grant
 
     denied_despite_being_granted = []
     for role in Role:
-        held = set(_get_user_permissions(role.value))
+        held = {p.value for p in role_grant({"role": role.value})}
         for permission in Permission:
             if permission.value in held and not gate.check_permission(role.value, permission.value):
                 denied_despite_being_granted.append((role.value, permission.value))
@@ -262,16 +258,17 @@ def test_the_gate_never_denies_what_the_canonical_mapping_grants(gate):
 def test_any_extra_the_gate_grants_comes_from_a_wildcard(gate):
     """Names the excess instead of leaving it as an unexplained difference.
 
-    Every case where the gate grants what the literal union does not must be
-    covered by a wildcard in the configured or default permissions. An extra that
-    is *not* wildcard-explained would mean a fourth source nobody has accounted
-    for.
+    Every case where the gate grants what the role grant does not must be
+    covered by a default or a wildcard in the configured or default permissions.
+    An extra that is explained by neither would mean a source nobody has
+    accounted for.
     """
-    from auth_rbac import _get_user_permissions
+    from autobot_shared.auth.permission_evaluator import role_grant
 
     unexplained = []
     for role in Role:
-        held = set(_get_user_permissions(role.value))
+        defaults = set(gate._get_default_role_permissions(role.value))
+        held = {p.value for p in role_grant({"role": role.value})} | defaults
         wildcards = [p for p in gate._get_default_role_permissions(role.value) if p.endswith("*")]
         prefixes = tuple(w[:-1] for w in wildcards)
         for permission in Permission:

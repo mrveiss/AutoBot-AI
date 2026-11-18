@@ -64,7 +64,7 @@ describe('RoutinesView schedule picker (#18432)', () => {
     await edit.trigger('click')
     await flushPromises()
     expect(wrapper.find('.aui-sched__summary').text()).toContain('Every weekday at 09:00, UTC')
-    expect(wrapper.find('.aui-sched__list').exists()).toBe(true) // advisory runs despite the 404
+    expect(wrapper.find('.aui-sched__list').exists()).toBe(true) // advisory runs, no server preview
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(patch).toHaveBeenCalledTimes(1)
@@ -74,21 +74,24 @@ describe('RoutinesView schedule picker (#18432)', () => {
     expect('schedule_spec' in body).toBe(false) // exactly one field, today's payload
   })
 
-  it('asks the server preview with the picked spec', async () => {
+  it('offers only UTC, the zone the routine scheduler evaluates in', async () => {
+    const wrapper = await mountView()
+    const edit = wrapper.findAll('tbody tr button').find((b) => b.text() === 'Edit')!
+    await edit.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('select[id$="-zone"] option').map((o) => o.text())).toEqual(['UTC'])
+  })
+
+  it('calls no preview endpoint until the backend serves one (#18432 backend half)', async () => {
     const wrapper = await mountView()
     await wrapper.findAll('tbody tr button').find((b) => b.text() === 'Edit')!.trigger('click')
-    await new Promise((r) => setTimeout(r, 400)) // picker debounce
+    await new Promise((r) => setTimeout(r, 400)) // longer than the picker debounce
     await flushPromises()
-    expect(post).toHaveBeenCalledWith('/api/schedules/preview', {
-      spec: { kind: 'cron', timezone: 'UTC', cron: '0 9 * * 1-5' }, count: 3,
-    })
+    expect(post.mock.calls.some(([u]) => String(u).includes('/schedules/'))).toBe(false)
   })
 
   it('a new routine starts from a default schedule and posts a spec', async () => {
-    post.mockImplementation(async (url: string) => {
-      if (url === '/api/schedules/preview') throw new Error('HTTP 404')
-      return ROUTINE
-    })
+    post.mockResolvedValue(ROUTINE)
     const wrapper = await mountView()
     await wrapper.findAll('button').find((b) => b.text() === 'New Routine')!.trigger('click')
     await flushPromises()

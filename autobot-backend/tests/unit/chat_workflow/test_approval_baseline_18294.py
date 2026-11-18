@@ -12,13 +12,13 @@ import pytest
 
 from autobot_shared.tool_catalogue import valid_approval_categories
 from chat_workflow import approval_baseline as ab
-from chat_workflow.tool_dispatch_guards import enforce_work_item_approval
+from tests.unit.chat_workflow.test_ai_line_support import run_guard
 
 _ONE_TOOL_PER_CATEGORY = [
     ("executing code", "run_shell"),
     ("writing files", "create_file"),
     ("writing data", "set_redis_value"),
-    ("browser actions", "navigate"),
+    ("browser actions", "click"),
     ("delegating work", "delegate"),
 ]
 
@@ -35,14 +35,14 @@ def _ctx(categories) -> SimpleNamespace:
 @pytest.mark.parametrize(("category", "tool"), _ONE_TOOL_PER_CATEGORY)
 def test_a_default_run_raises_an_approval_request_for_the_category(category, tool):
     results: list = []
-    msg = enforce_work_item_approval({"name": tool, "params": {}}, _ctx(_baseline_with(None)), results)
-    assert msg is not None and msg.type == "approval_required"
-    assert results[0]["approval_category"] == category and results[0]["status"] == "pending_approval"
+    msg, filed = run_guard({"name": tool, "params": {}}, _ctx([]), results)
+    assert msg is not None and msg.type == "approval_required" and filed == 1
+    assert results[0]["category"] == category and results[0]["status"] == "pending_approval"
 
 
-@pytest.mark.parametrize("tool", ["read_file", "web_search", "list_dir", "sleep"])
+@pytest.mark.parametrize("tool", ["read_file", "web_search", "list_dir", "sleep", "navigate"])
 def test_a_read_tool_raises_no_approval_request(tool):
-    assert enforce_work_item_approval({"name": tool, "params": {}}, _ctx(_baseline_with(None)), []) is None
+    assert run_guard({"name": tool, "params": {}}, _ctx([]), []) == (None, 0)
 
 
 def test_the_baseline_is_every_category_when_nothing_is_relaxed():
@@ -55,13 +55,10 @@ def test_the_slm_setting_relaxes_exactly_the_named_categories():
         baseline = _baseline_with(value)
         assert "browser actions" not in baseline
         assert set(baseline) == valid_approval_categories() - {"browser actions"}
-    results: list = []
-    assert (
-        enforce_work_item_approval(
-            {"name": "navigate", "params": {}}, _ctx(_baseline_with(["browser actions"])), results
-        )
-        is None
-    )
+    # Relaxed by the administrator: the category floor lifts, and an unset click is still a
+    # mutating action, so it is line 2 by the unset default -- never silently line 1.
+    msg, filed = run_guard({"name": "click", "params": {}}, _ctx([]), [], slm_relaxed=["browser actions"])
+    assert msg is not None and filed == 1 and msg.metadata["category"] is None
 
 
 @pytest.mark.parametrize("bad", ["browser actions", 7, {"categories": "browser actions"}, ["no such category"]])
@@ -91,3 +88,27 @@ def test_a_session_or_context_category_extends_the_baseline_without_duplicates()
         == len(set(ctx["requires_approval_before"]))
         == len(valid_approval_categories())
     )
+
+
+def test_navigate_is_always_available_and_a_state_changing_browser_action_is_still_held():
+    """Owner ruling 2026-11-17 (#17237): navigate runs unmanaged; click, fill, select, evaluate keep the category."""
+    assert run_guard({"name": "navigate", "params": {"url": "https://example.test"}}, _ctx([]), []) == (None, 0)
+    for tool in ("click", "fill", "select", "evaluate"):
+        msg, filed = run_guard({"name": tool, "params": {}}, _ctx([]), [])
+        assert msg is not None and msg.type == "approval_required" and filed == 1
+
+
+def test_navigate_keeps_its_role_forbiddance_and_verifier_coverage():
+    """The ruling lifts the AI-line hold only (#17237): a non-executor agent still cannot navigate by default."""
+    from autobot_shared.tool_catalogue import SENSITIVE_TOOLS
+    from orchestration.agent_registry import DEFAULT_FORBIDDEN_TOOLS
+
+    assert "navigate" in SENSITIVE_TOOLS and "navigate" in DEFAULT_FORBIDDEN_TOOLS
+
+
+def test_a_work_item_can_still_ask_for_approval_before_navigating():
+    """The ruling lifts the baseline floor and the unset-line hold, not a work item's own declared gate (#17237)."""
+    msg, filed = run_guard(
+        {"name": "navigate", "params": {"url": "https://example.test"}}, _ctx(["browser actions"]), []
+    )
+    assert msg is not None and msg.type == "approval_required" and filed == 1

@@ -265,3 +265,13 @@ Two lessons worth carrying, both instances of patterns already in our own guidan
   because they were taken from a grep index rather than re-read at write time. For a doc meant
   to stop the next audit re-deriving this, an off-by-six citation is worse than no citation —
   it looks checkable and is not.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #14027 — security(commands): dangerous-command patterns match un-normalized input — homoglyph and ANSI-wrapped commands bypass the gate (closed)
+- #14028 — fix(gateway): inbound channel ingest has no bot-self filter, dedup, or recursion guard — nothing stops the agent answering itself (closed)
+- #14029 — fix(llm): context windows come from a static catalog with a 4096 fallback — no probe, no learning from the provider's own rejection
+- #14030 — feat(skills): distillation reviews one conversation at a time — recurring requests are structurally invisible, so habitual skills can never be proposed
+- #14031 — fix(agent): pre-action verifier and belief state run nowhere — AgentLoop has no production caller

@@ -17,7 +17,7 @@ import asyncio
 import uuid
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from fastapi.responses import Response
 
 from api.desktop_control_lock import (
@@ -34,6 +34,7 @@ from api.schemas_system import (
 from api.vnc_handshake_bridge import authenticate_both_legs, get_vnc_password
 from api.ws_security import enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY, assert_egress_policy
@@ -100,8 +101,8 @@ async def _forward_client_to_vnc(websocket: WebSocket, vnc_ws, vnc_type: str) ->
             data = await websocket.receive()
             if not await _send_client_data_to_vnc(data, vnc_ws, vnc_type):
                 break
-    except WebSocketDisconnect:
-        logger.info("[%s] Frontend disconnected", vnc_type)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_forward_client_to_vnc")
     except Exception as e:
         logger.error("[%s] Error forwarding to VNC: %s", vnc_type, e)
 
@@ -358,6 +359,48 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
+@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_vnc_status",
+    error_code_prefix="VNC_PROXY",
+)
+async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
+    """
+    Check if VNC server is accessible
+
+    Issue #744: Requires authenticated user.
+
+    Args:
+        vnc_type: 'desktop' or 'browser'
+    """
+    if vnc_type not in VNC_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+
+    endpoint = VNC_ENDPOINTS[vnc_type]
+
+    try:
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
+        ) as response:
+            accessible = response.status == 200
+            return {
+                "vnc_type": vnc_type,
+                "endpoint": endpoint,
+                "accessible": accessible,
+                "status": response.status,
+            }
+    except Exception as e:
+        logger.error("Failed to check VNC status for %s: %s", vnc_type, e)
+        return {
+            "vnc_type": vnc_type,
+            "endpoint": endpoint,
+            "accessible": False,
+            "error": "Internal server error",
+        }
+
+
 @router.get("/{vnc_type}/{path:path}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -489,45 +532,3 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         logger.info("VNC WebSocket proxy closed: %s", vnc_type)
         # Record disconnection event for MCP
         await record_observation(vnc_type, "disconnection", {"status": "closed"})
-
-
-@router.get("/{vnc_type}/status", response_model=VncProxyStatusResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_vnc_status",
-    error_code_prefix="VNC_PROXY",
-)
-async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current_user)):
-    """
-    Check if VNC server is accessible
-
-    Issue #744: Requires authenticated user.
-
-    Args:
-        vnc_type: 'desktop' or 'browser'
-    """
-    if vnc_type not in VNC_ENDPOINTS:
-        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
-
-    endpoint = VNC_ENDPOINTS[vnc_type]
-
-    try:
-        http_client = get_http_client()
-        async with await http_client.get(
-            f"{endpoint}/vnc.html", timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
-        ) as response:
-            accessible = response.status == 200
-            return {
-                "vnc_type": vnc_type,
-                "endpoint": endpoint,
-                "accessible": accessible,
-                "status": response.status,
-            }
-    except Exception as e:
-        logger.error("Failed to check VNC status for %s: %s", vnc_type, e)
-        return {
-            "vnc_type": vnc_type,
-            "endpoint": endpoint,
-            "accessible": False,
-            "error": "Internal server error",
-        }

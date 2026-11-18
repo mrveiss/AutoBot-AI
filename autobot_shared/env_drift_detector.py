@@ -23,7 +23,7 @@ Usage — programmatic:
 
     if report.has_drift:
         for item in report.drifted:
-            print(item)
+            logger.warning("%s", item)
 
 Usage — CLI:
     python -m autobot_shared.env_drift_detector
@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
+from autobot_shared.env_file import parse_env_file
 from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
@@ -199,47 +200,6 @@ def _default_as_str(field_info) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _parse_env_file(env_path: Path) -> Dict[str, str]:
-    """Parse a .env file and return {KEY: value} dict.
-
-    Handles:
-    - Blank lines and comment lines (# ...)
-    - KEY=value and KEY="value" and KEY='value'
-    - Inline comments stripped with care (only unquoted)
-    """
-    result: Dict[str, str] = {}
-    try:
-        text = env_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        logger.warning("env_drift_detector: cannot read %s: %s", env_path, exc)
-        return result
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-
-        key, _, raw_val = line.partition("=")
-        key = key.strip()
-        raw_val = raw_val.strip()
-
-        # Strip surrounding quotes
-        if len(raw_val) >= 2 and raw_val[0] in ('"', "'") and raw_val[-1] == raw_val[0]:
-            raw_val = raw_val[1:-1]
-        else:
-            # Strip inline comment (only for unquoted values)
-            comment_idx = raw_val.find(" #")
-            if comment_idx != -1:
-                raw_val = raw_val[:comment_idx].strip()
-
-        if key:
-            result[key] = raw_val
-
-    return result
-
-
 # ---------------------------------------------------------------------------
 # Core comparison logic (small, independently testable functions)
 # ---------------------------------------------------------------------------
@@ -309,7 +269,7 @@ def check_env_drift(env_path: str | None = None) -> DriftReport:
 
     # Parse the .env file
     try:
-        env_values = _parse_env_file(resolved_path)
+        env_values = parse_env_file(resolved_path)
     except Exception as exc:
         report.error = f".env parse error: {exc}"
         logger.warning("env_drift_detector: %s", report.error)
@@ -341,7 +301,7 @@ def _resolve_env_path(env_path: str | None) -> Path:
     #
     # ssot-config-exempt: bootstrap, before config is available.
     # #12782: the `/ ".env"` join used to sit inside a trailing comment, so the
-    # fallback returned the DIRECTORY. _parse_env_file then failed with
+    # fallback returned the DIRECTORY. parse_env_file then failed with
     # IsADirectoryError, swallowed it into an empty dict, and every SSOT key was
     # reported missing -- "194 drifted, (194 SSOT keys, 0 .env keys)" on a host
     # whose .env actually held 93 keys. Keep the join on the return itself.

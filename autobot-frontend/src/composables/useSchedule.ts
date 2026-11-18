@@ -3,23 +3,28 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * App-side glue for the shared schedule picker (#18432): the server preview
- * call, the i18n translator and the derived summary used by every list.
+ * App-side glue for the shared schedule picker (#18432): the i18n translator,
+ * the routine payload and the derived summary used by every list.
  *
  * Contract: ScheduleSpec / PickerRule live in @autobot/ui (libs/autobot-ui/
- * src/schedule). The server (POST /api/schedules/preview, the same code the
- * scheduler runs) is the source of truth; the picker's own preview is advisory.
+ * src/schedule). No server preview is wired: the backend route is the
+ * backend half of #18432, and until it lands the picker shows its advisory
+ * runs and stays cron-only (the kit's gate when no `preview` is passed).
  */
 import { useI18n } from 'vue-i18n'
 import {
   parseSpecToRule,
   summaryText,
-  type PreviewResult,
   type ScheduleSpec,
-  type SchedulePreviewFn,
   type ScheduleTranslate,
 } from '@autobot/ui'
-import { useApiClient } from '@/plugins/api'
+
+/**
+ * Zones a routine can run in: the routine API stores only `cron_schedule` and the
+ * scheduler evaluates it in UTC, so UTC until the zone is persisted end to end
+ * (#18432's backend half).
+ */
+export const ROUTINE_ZONES = ['UTC'] as const
 
 /**
  * Existing routines carry a bare cron string that the scheduler evaluates in
@@ -39,18 +44,6 @@ export function routineSpec(routine: { cron_schedule?: string | null; schedule_s
 export function schedulePayload(spec: ScheduleSpec | null): Record<string, unknown> {
   if (!spec) return {}
   return spec.kind === 'cron' ? { cron_schedule: spec.cron } : { schedule_spec: spec }
-}
-
-/** Server preview. Resolves null when the endpoint is unavailable (404, offline). */
-export function useSchedulePreviewCall(): SchedulePreviewFn {
-  const api = useApiClient()
-  return async (spec, count) => {
-    try {
-      return await api.post<PreviewResult>('/api/schedules/preview', { spec, count })
-    } catch {
-      return null
-    }
-  }
 }
 
 /** Translator + locale bound to the app's i18n, in the shape the kit expects. */

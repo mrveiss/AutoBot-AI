@@ -97,31 +97,29 @@
         </div>
 
     <template #actions>
-        <button class="btn btn-secondary" @click="closeDialog">
+        <BaseButton variant="secondary" @click="closeDialog">
           {{ $t('knowledge.share.cancel') }}
-        </button>
-        <button
-          class="btn btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="saveChanges"
           :disabled="saving || !hasChanges"
         >
           <Icon name="spinner" class="animate-spin" />
           <Icon name="save" />
           {{ saving ? $t('knowledge.share.saving') : $t('knowledge.share.saveChanges') }}
-        </button>
+        </BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
 import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { apiService } from '@/services/api'
-import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -181,17 +179,6 @@ const hasChanges = computed(() => {
   return JSON.stringify(currentAccess.value) !== JSON.stringify(originalAccess.value)
 })
 
-// Initialize access list from props
-watch(
-  () => [props.currentUsers, props.currentGroups, props.isOpen],
-  () => {
-    if (props.isOpen) {
-      initializeAccessList()
-    }
-  },
-  { immediate: true }
-)
-
 // Methods
 const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<string> => {
   const cacheKey = `${type}:${id}`
@@ -204,13 +191,13 @@ const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<stri
   try {
     let displayName = id
     if (type === 'user') {
-      const userData = await apiService.getUserById(id)
+      const userData = await apiClient.call('get', '/api/user-management/users/{user_id}', { path: { user_id: id } })
       if (userData) {
         // #14939: the shared ladder -- no email rung, which put addresses where names go.
         displayName = displayNameOf(userData, id)
       }
     } else {
-      const groupData = await apiService.getGroupById(id)
+      const groupData = await apiClient.call('get', '/api/user-management/teams/{team_id}', { path: { team_id: id } })
       if (groupData) {
         displayName = groupData.name || id
       }
@@ -254,6 +241,19 @@ const initializeAccessList = async () => {
   originalAccess.value = JSON.parse(JSON.stringify(accessList))
 }
 
+// Initialize access list from props. Declared AFTER initializeAccessList: `immediate`
+// runs the callback during setup, and a dialog mounted open used to reach the const
+// before its initialisation (ReferenceError, #18694).
+watch(
+  () => [props.currentUsers, props.currentGroups, props.isOpen],
+  () => {
+    if (props.isOpen) {
+      initializeAccessList()
+    }
+  },
+  { immediate: true }
+)
+
 const handleSearch = async () => {
   const query = searchQuery.value
   if (query.length < 2) {
@@ -269,12 +269,9 @@ const handleSearch = async () => {
   searchResults.value = []
 
   try {
-    const url = `${getApiBase()}/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
-    const response = await apiService.get<{
-      users: ShareEntity[]
-      available: boolean
-      message: string
-    }>(url)
+    const response = (await apiClient.call('get', '/api/user-management/users/search', {
+      query: { q: query, limit: 10 },
+    })) as { users: ShareEntity[]; available: boolean; message?: string }
 
     if (!response.available) {
       searchError.value = response.message || t('knowledge.share.searchUnavailable')
@@ -445,7 +442,7 @@ const closeDialog = async () => {
   background-color: var(--bg-secondary);
 }
 
-.search-result-item i {
+.search-result-item .icon {
   color: var(--text-muted);
 }
 
@@ -499,7 +496,7 @@ const closeDialog = async () => {
   flex: 1;
 }
 
-.access-info i {
+.access-info .icon {
   color: var(--text-muted);
 }
 
@@ -542,41 +539,5 @@ const closeDialog = async () => {
 
 .remove-button:hover {
   background-color: var(--color-error-bg);
-}
-
-.btn {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-200);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-secondary {
-  background-color: var(--bg-card);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-secondary:hover {
-  background-color: var(--bg-secondary);
-}
-
-.btn-primary {
-  background-color: var(--color-electric-500);
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--color-electric-600);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 </style>

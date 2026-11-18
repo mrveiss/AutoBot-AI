@@ -119,12 +119,8 @@ UNCLASSIFIED: frozenset[str] = frozenset(
     {
         "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py",
         "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py",
-        "autobot-infrastructure/shared/scripts/direct_kb_populate.py",
-        "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py",
         "autobot-infrastructure/shared/scripts/identity_config_utility.py",
         "autobot-infrastructure/shared/scripts/kb_dimension_utility.py",
-        "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py",
-        "autobot-infrastructure/shared/scripts/populate_kb_fixed.py",
         "autobot-infrastructure/shared/scripts/populate_knowledge_base.py",
         "autobot-infrastructure/shared/scripts/quick_populate_kb.py",
         "autobot-infrastructure/shared/scripts/reset_kb_dimensions.py",
@@ -132,13 +128,11 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/scripts/security/seed_enforcement_mode.py",
         "autobot-infrastructure/shared/scripts/sync_kb_docs.py",
         "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py",
-        "autobot-infrastructure/shared/scripts/utilities/index_documentation.py",
         "autobot-infrastructure/shared/scripts/utilities/ingest_man_pages.py",
         "autobot-infrastructure/shared/scripts/utilities/integrate_system_knowledge.py",
         "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py",
         "autobot-infrastructure/shared/scripts/utilities/migrate_redis_to_chromadb.py",
         "autobot-infrastructure/shared/scripts/utilities/quick_test_os_context.py",
-        "autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py",
         "autobot-infrastructure/shared/scripts/utilities/test-authentication-security.py",
         "autobot-infrastructure/shared/scripts/utilities/test_man_page_context.py",
         "autobot-infrastructure/shared/scripts/utilities/validate-security-config.py",
@@ -151,7 +145,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/tests/distributed/test_db_initialization.py",
         "autobot-infrastructure/shared/tests/fixtures/mocks.py",
         "autobot-infrastructure/shared/tests/integration/test_architecture_compliance.py",
-        "autobot-infrastructure/shared/tools/index_documentation.py",
     }
 )
 

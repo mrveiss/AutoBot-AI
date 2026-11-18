@@ -47,9 +47,9 @@ from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODE
 from autobot_shared.time_utils import utc_timestamp
 from models.npu_models import (
     LoadBalancingConfig,
-    NPUWorkerConfig,
+    NPUWorkerDefinition,
     NPUWorkerDetails,
-    NPUWorkerMetrics,
+    NPUWorkerLoadMetrics,
     WorkerHeartbeat,
     WorkerTestResult,
 )
@@ -110,7 +110,7 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
 )
 async def add_worker(
     admin_check: bool = Depends(check_admin_permission),
-    worker_config: NPUWorkerConfig = None,
+    worker_config: NPUWorkerDefinition = None,
 ):
     """
     Register a new NPU worker.
@@ -194,7 +194,7 @@ async def get_worker(
 async def update_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
-    worker_config: NPUWorkerConfig = None,
+    worker_config: NPUWorkerDefinition = None,
 ):
     """
     Update existing worker configuration.
@@ -318,7 +318,7 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerMetrics | None)
+@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerLoadMetrics | None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
@@ -1001,7 +1001,7 @@ async def _register_worker_in_backend(
         )
         await manager.update_worker_status_from_heartbeat(heartbeat)
     else:
-        new_config = NPUWorkerConfig(
+        new_config = NPUWorkerDefinition(
             id=worker_id,
             name=worker_name or f"NPU Worker ({platform})",
             url=worker_url,

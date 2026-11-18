@@ -235,3 +235,350 @@ register_env_var(
         range=(60, 2592000),
     )
 )
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_KEY_HYDRATION_TIMEOUT_S",
+        type=int,
+        default=30,
+        description=(
+            "Seconds a process waits for its one-time provider-key vault hydration before treating the "
+            "vault as unreachable (#18094). On timeout every vault-resolved key is refused (fail closed); a "
+            "hydration that finishes later still swaps its result in."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PROVIDER_KEY_REHYDRATE_BACKOFF_S",
+        type=int,
+        default=30,
+        description=(
+            "First delay before a process whose provider-key vault was unreachable tries to hydrate again on a "
+            "later key resolution (#18094). Doubles after each failed retry, capped at 20x this value; a "
+            "successful hydration resets it. Until a retry succeeds, keys stay refused, never served from env."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_GIT_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the Git MCP bridge (/api/git_mcp/*), shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_BROWSER_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the browser automation MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_DATABASE_RATE_LIMIT",
+        type=int,
+        default=60,
+        description=(
+            "Requests per 60-second window accepted by the database MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_HTTP_CLIENT_RATE_LIMIT",
+        type=int,
+        default=120,
+        description=(
+            "Requests per 60-second window accepted by the HTTP client MCP bridge, shared by all workers "
+            "(#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MCP_SERVER_RATE_LIMIT",
+        type=int,
+        default=50,
+        description=(
+            "Requests per 60-second window accepted per token by the AutoBot MCP server (post-auth), shared by all "
+            "workers (#18087). One Redis-backed count across all workers; over it the caller is refused "
+            "(HTTP 429, or JSON-RPC -32029 on the MCP server). Fails open while Redis is unreachable."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RATE_LIMITER_FAIL_OPEN_WARN_INTERVAL",
+        type=float,
+        default=60.0,
+        description=(
+            "Minimum seconds between fail-open warnings per rate-limiter instance (#18617). While Redis is "
+            "unreachable the limiters allow requests; the warning names only the limiter scope and is emitted "
+            "at most once per interval so an outage cannot flood the log."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_JWT_CLOCK_SKEW_LEEWAY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Clock-skew tolerance in seconds for JWT verification (#18792). A backward "
+            "wall-clock step (WSL2) or skew between issuing and verifying hosts otherwise "
+            "rejects a fresh token whose iat is ahead of the verifier's clock. Applies to the iat "
+            "and nbf claims only; exp stays strict. Clamped to 0-60."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_THREAT_INTEL_CACHE_TTL",
+        type=int,
+        default=7200,
+        description=(
+            "Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process "
+            "(#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FEATURE_FLAG_CACHE_TTL_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds this process serves the access-control enforcement mode and per-endpoint "
+            "overrides from memory (#18998). A write in the same process invalidates at once; "
+            "a write from another process is seen within this window. 0 disables the cache. "
+            "Clamped to 0-60."
+        ),
+        component="security",
+        range=(0, 60),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CONFIG_REGISTRY_CACHE_TTL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds the config registry serves a resolved value, and the fact that "
+            "Redis holds nothing for a key, from process memory before asking Redis "
+            "again. A change written by another process is visible within this window. "
+            "Clamped to 0-3600: an hour is the longest a stale config value is tolerable "
+            "without a restart; 0 disables the cache."
+        ),
+        component="redis",
+        range=(0, 3600),
+    )
+)
+
+# --- LLM provider sign-in (#19241) -------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_OAUTH_UNUSABLE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "How long a signed-in LLM provider token whose refresh failed is skipped before "
+            "another refresh is tried (llm_shared/provider_token_refresh.py). While skipped, "
+            "calls fall through to the next credential (the system token, then the API key). "
+            "Floored at 60 so the backoff cannot become a re-POST on every call."
+        ),
+        component="auth",
+        range=(60, None),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS",
+        type=str,
+        default="",
+        description=(
+            "Comma-separated exact origins (scheme://host[:port]) an LLM tracing destination may use "
+            "(#19933), e.g. a self-hosted collector on a private address. Empty: none. A listed origin is "
+            "allowed even when private or loopback; link-local, cloud-metadata and unspecified hosts are "
+            "refused, and an entry with userinfo, a backslash or other non-strict shape never matches. "
+            "SSOT service origins are not trusted for tracing."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL",
+        type=bool,
+        default=False,
+        description=(
+            "Allow an LLM tracing destination on a public address that is not listed in "
+            "AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS (#19933). Off: a tracing key alone never moves prompt "
+            "metadata off the install, and the destination is refused at startup. On: a public destination "
+            "is allowed; private, loopback and link-local ones are still refused."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_INCLUDE_CONTENT",
+        type=bool,
+        default=False,
+        description=(
+            "Send prompt and response text to an enabled LLM tracing destination (#19933). "
+            "Off: only metadata (ids, model, token usage, latency) is sent. "
+            "On: the text is sent after the outbound credential redaction."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_COMPARE_INTERVAL_S",
+        type=int,
+        default=300,
+        description="Seconds between passes that push every linked person's copy to the SLM (#10200). Minimum 30.",
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_REFUSED_RETRY_INTERVAL_S",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds before a person copy the SLM refused as last platform admin is pushed again (#21018). "
+            "Range 60 to 604800."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LAST_ADMIN_RETRY_AFTER_S",
+        type=int,
+        default=1,
+        description=(
+            "Retry-After seconds sent with the 503 for a transient last-platform-admin lock failure (#21018). "
+            "Range 1 to 30."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_TTL_S",
+        type=int,
+        default=60,
+        description=(
+            "Seconds the per-person lock on a copy push is held before it expires; "
+            "the SLM POST timeout is derived from it (#10200)."
+        ),
+        component="backend",
+        range=(10, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_WAIT_S",
+        type=int,
+        default=15,
+        description=(
+            "Seconds a push waits for another worker's lock on the same person " "before it records a failure (#10200)."
+        ),
+        component="backend",
+        range=(1, 120),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PERSON_COPY_LOCK_POLL_MS",
+        type=int,
+        default=200,
+        description="Milliseconds between attempts to take that per-person lock (#10200).",
+        component="backend",
+        range=(20, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBER_EPOCH_WRITE_CONCURRENCY",
+        type=int,
+        default=10,
+        description=(
+            "Members whose token-revocation marker is written at once when an organisation is "
+            "deactivated or deleted (#20443); bounds the store's concurrent writes however large the "
+            "organisation is; read by autobot_shared/user_management/password_epoch.py."
+        ),
+        component="security",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROLE_DENIED_AUDIT_WINDOW_S",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between role_denied audit records for one user on one route (#16333); repeats in "
+            "the window are counted into the next record, so a non-admin cannot flood the audit log; "
+            "read by autobot-backend/auth_rbac.py."
+        ),
+        component="security",
+        range=(1, 86400),
+    )
+)

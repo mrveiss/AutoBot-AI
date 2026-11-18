@@ -32,6 +32,7 @@ Backward Compatibility:
   `from autobot_memory_graph import AutoBotMemoryGraph`
 """
 
+from .conversation_entities import ConversationEntityMixin
 from .core import (  # noqa: F401 - re-exports for package API
     CORE_RELATION_TYPES,
     ENTITY_TYPES,
@@ -46,9 +47,17 @@ from .core import (  # noqa: F401 - re-exports for package API
     config,
 )
 from .entities import EntityOperationsMixin
+from .owner_scope import (  # noqa: F401  # Issue #18825
+    SHARED_OWNER_ID,
+    SYSTEM_OWNER_ID,
+    UNSCOPED_ALL_USERS,
+    OwnerScope,
+    OwnerScopeRequired,
+)
 from .property_graph import PropertyGraph  # noqa: F401  # Issue #3230
 from .property_graph_mixin import PropertyGraphMixin  # noqa: F401  # Issue #3230
 from .queries import QueryOperationsMixin
+from .relation_traversal import RelationTraversalMixin
 from .relations import RelationOperationsMixin
 from .secrets import SecretManagementMixin
 from .semantic_search import (  # noqa: F401
@@ -64,7 +73,9 @@ from .user_session import UserSessionMixin
 class AutoBotMemoryGraph(
     PropertyGraphMixin,
     EntityOperationsMixin,
+    ConversationEntityMixin,
     RelationOperationsMixin,
+    RelationTraversalMixin,
     QueryOperationsMixin,
     UserSessionMixin,
     SecretManagementMixin,
@@ -96,14 +107,16 @@ class AutoBotMemoryGraph(
         await memory.initialize()
 
         # Create entity
+        owner = OwnerScope.for_user(user_id, org_id)  # #18825: every write/read is owner-scoped
         entity = await memory.create_entity(
             entity_type="task",
             name="Implement feature X",
-            observations=["Started implementation"]
+            observations=["Started implementation"],
+            owner=owner,
         )
 
         # Search entities
-        results = await memory.search_entities("feature")
+        results = await memory.search_entities("feature", owner=owner)
 
         # Create relations
         await memory.create_relation(
@@ -141,9 +154,17 @@ __all__ = [
     "INCOMING_DIRECTIONS",
     # Helpers
     "canonical_relation_type",
+    # Owner scoping (#18825)
+    "OwnerScope",
+    "OwnerScopeRequired",
+    "UNSCOPED_ALL_USERS",
+    "SHARED_OWNER_ID",
+    "SYSTEM_OWNER_ID",
     # Mixins (for extension)
     "EntityOperationsMixin",
     "RelationOperationsMixin",
+    "RelationTraversalMixin",
+    "ConversationEntityMixin",
     "QueryOperationsMixin",
     "UserSessionMixin",
     "SecretManagementMixin",

@@ -269,6 +269,13 @@ def test_all_vars_present():
     assert "network_gateway" in vars_
 
 
+def test_backend_port_is_carried_from_the_ssot():
+    """#21400: a play that reads backend_port before vars/backend-env.yml loads must not fail on templating."""
+    from autobot_shared.ssot_config import config
+
+    assert _build([])["all"]["vars"]["backend_port"] == config.port.backend
+
+
 # ---------------------------------------------------------------------------
 # validate_inventory
 # ---------------------------------------------------------------------------

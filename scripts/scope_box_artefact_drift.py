@@ -110,7 +110,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
@@ -129,6 +128,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline-script
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ci_dispatch_watchdog import GitHubApi  # noqa: E402
+from drift_cli import base_parser, configure_cli_logging, resolve_credentials  # noqa: E402
 
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
@@ -558,21 +558,18 @@ EXIT_READ_FAILED = 3
 
 
 def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
+    parser = base_parser(__doc__)
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parent.parent))
-    parser.add_argument("--json", action="store_true", help="emit machine-readable output instead of a report")
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Report only. This tool never writes to an issue -- see the module docstring."""
     args = _parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
+    configure_cli_logging()
 
-    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-    if not token or not args.repo:
-        logger.error("GH_TOKEN and --repo (or GITHUB_REPOSITORY) are required")
+    token = resolve_credentials(args.repo)
+    if token is None:
         return EXIT_USAGE
 
     api = GitHubApi(token=token, repository=args.repo)

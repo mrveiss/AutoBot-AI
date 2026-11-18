@@ -34,7 +34,7 @@ function windowFields(minutes: Ref<Of<'minutes'> | null>) {
   })
   const hourOf = (key: 'from' | 'to'): number => {
     const w = minutes.value?.window
-    return w ? ((splitTime(w[key]) ?? [0])[0] || (key === 'to' ? 24 : 0)) : 0
+    return w ? ((splitTime(w[key], key === 'to') ?? [0])[0] || (key === 'to' ? 24 : 0)) : 0
   }
   const setHour = (key: 'from' | 'to', hour: number): void => {
     const w = minutes.value?.window

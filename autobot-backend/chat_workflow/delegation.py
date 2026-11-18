@@ -58,6 +58,7 @@ Check all items before flipping ``AUTOBOT_DELEGATION_ENABLED=true`` in productio
 from typing import Any, Awaitable, Callable, Dict, List
 
 from autobot_shared import tool_catalogue as _tc
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.run_authority import NO_INHERITANCE, Inheritance, gated_tools
@@ -94,6 +95,13 @@ def _claude_tool_for(token: str) -> "str | None":
     if token in _FILE_TOOL_FOR:
         return _FILE_TOOL_FOR[token]
     return "Bash" if token in _BASH_TOKENS else None
+
+
+def _declared_for_child(own_categories: "List[str] | set[str]", inherited: Inheritance) -> Dict[str, List[str]]:
+    """The child's declared-categories stamp: its own plus its parent's; nothing when the parent had none (#19957)."""
+    if inherited.declared_categories is None:
+        return {}
+    return {DECLARED_CATEGORIES_KEY: sorted(set(own_categories) | set(inherited.declared_categories))}
 
 
 def forbidden_to_claude_tools(forbidden: "frozenset[str] | list[str]") -> List[str]:
@@ -134,6 +142,8 @@ async def _run_claude_code_subagent(
     from services.execution.base_backend import ExecutionTask
     from services.execution.claude_code_backend import build_claude_code_backend
 
+    if inherited.approve_every_call:  # #20195: an out-of-process engine cannot ask per call, so it does not run
+        raise ValueError("a claude_code subagent cannot run on a turn with attached files: it cannot ask per call")
     parent = inherited.authority
     held = parent.forbidden_tools | gated_tools(parent.approval_gates)
     disallowed = claude_tools_refusing(resolve_forbidden_tools(agent_type), held)
@@ -161,6 +171,7 @@ async def _run_internal_subagent(
     enforcement. ``delegation_depth`` is placed on the ctx so an in-loop ``delegate``
     call is depth-bounded. No DB/session is created — the loop runs on the bare ctx.
     """
+    from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY
     from autobot_shared.ssot_config import config
     from chat_workflow import get_chat_workflow_manager
     from chat_workflow.models import LLMIterationContext, build_governed_identity
@@ -183,7 +194,12 @@ async def _run_internal_subagent(
         work_item_id=inherited.work_item_id or work_item_id,
         requires_approval_before=sorted(set(approval_categories) | inherited.authority.approval_gates),
         authority=inherited.authority,
-        context={"delegation_depth": depth + 1},
+        context={
+            "delegation_depth": depth + 1,
+            **({ATTACHMENT_TURN_KEY: True} if inherited.approve_every_call else {}),
+            # #19957: the child declares what its parent declared, so it holds exactly what the parent holds.
+            **_declared_for_child(approval_categories, inherited),
+        },
         # #13821: a subagent acts for the same authenticated user, so it inherits
         # their role rather than silently dropping to the default. Leaving it
         # unset would reproduce the pre-#13821 bug (an admin denied the tools

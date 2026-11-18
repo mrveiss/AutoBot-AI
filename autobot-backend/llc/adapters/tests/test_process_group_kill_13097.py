@@ -37,7 +37,7 @@ _requires_posix = pytest.mark.skipif(os.name != "posix", reason="killpg/getpgid 
 
 def _create_time(pid: int) -> float:
     """The real psutil create_time for a just-spawned *pid* (PR#16284 review)."""
-    return psutil.Process(pid).create_time()
+    return psutil.Process(pid)._ident[1]
 
 
 def _pid_alive(pid: int) -> bool:
@@ -113,8 +113,13 @@ class TestTerminatePidRealProcesses:
     """terminate_pid's contract against real processes: already-dead, grace, own-group guard."""
 
     async def test_already_dead_pid_returns_true(self) -> None:
-        proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
+        # The child blocks on stdin until its create_time is read: a child that exits at once can be
+        # reaped before _create_time() looks it up, which raised NoSuchProcess in CI (flake).
+        proc = await asyncio.create_subprocess_exec(
+            "sh", "-c", "read _", stdin=asyncio.subprocess.PIPE, start_new_session=True
+        )
         create_time = _create_time(proc.pid)
+        proc.stdin.close()
         await proc.wait()
         result = await terminate_pid(
             proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
@@ -199,7 +204,7 @@ class TestPidReuseSafety:
             patch("os.kill") as mock_kill,
             patch("os.killpg") as mock_killpg,
         ):
-            mock_cls.return_value.create_time.return_value = create_time + 1.0  # a DIFFERENT process
+            mock_cls.return_value._ident = (0, create_time + 1.0)  # a DIFFERENT process
             result = await terminate_pid(
                 proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time
             )

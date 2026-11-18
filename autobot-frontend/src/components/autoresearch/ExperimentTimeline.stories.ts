@@ -5,7 +5,9 @@
 import type { Meta, StoryObj } from '@storybook/vue3'
 import ExperimentTimeline from './ExperimentTimeline.vue'
 
-const now = Math.floor(Date.now() / 1000)
+// A fixed instant (2026-10-18T00:00:00Z), not the wall clock: the stories are
+// visual-regression subjects and must render the same on every run (#18694).
+const now = 1792281600
 
 const meta = {
   title: 'Components/AutoResearch/ExperimentTimeline',

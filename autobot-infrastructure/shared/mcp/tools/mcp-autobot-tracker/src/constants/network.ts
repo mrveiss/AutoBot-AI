@@ -9,8 +9,15 @@
  *
  * Usage:
  *   import { NetworkConstants, ServiceURLs } from './constants/network';
- *   const redisUrl = `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`;
+ *   const redisHost = NetworkConstants.REDIS_VM_IP;  // the Redis client takes host/port, not a URL
  */
+
+/**
+ * A port override: the canonical AUTOBOT_* name first, then the legacy bare name, then the default.
+ * ``||`` not ``??``: an empty variable falls through, as it did before, instead of parsing to NaN.
+ */
+const port = (canonical: string, legacy: string, fallback: string): number =>
+  parseInt(process.env[canonical] || process.env[legacy] || fallback, 10);
 
 /**
  * Core network configuration constants
@@ -30,16 +37,17 @@ export const NetworkConstants = {
   LOCALHOST_IP: '127.0.0.1',
   LOCALHOST_NAME: 'localhost',
 
-  // Standard ports
-  BACKEND_PORT: parseInt(process.env.BACKEND_PORT || '8001'),
-  FRONTEND_PORT: parseInt(process.env.FRONTEND_PORT || '5173'),
-  REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
-  OLLAMA_PORT: parseInt(process.env.OLLAMA_PORT || '11434'),
-  VNC_PORT: parseInt(process.env.VNC_PORT || '6080'),
-  BROWSER_SERVICE_PORT: parseInt(process.env.BROWSER_SERVICE_PORT || '3000'),
-  AI_STACK_PORT: parseInt(process.env.AI_STACK_PORT || '8080'),
-  NPU_WORKER_PORT: parseInt(process.env.NPU_WORKER_PORT || '8081'), // Linux NPU worker (VM2)
-  NPU_WORKER_WINDOWS_PORT: parseInt(process.env.NPU_WORKER_WINDOWS_PORT || '8082'), // Windows NPU worker (primary)
+  // Standard ports: the SSOT's AUTOBOT_* name (PortConfig alias) first; the bare name is a
+  // deprecated fallback kept for one release (#19489).
+  BACKEND_PORT: port('AUTOBOT_BACKEND_PORT', 'BACKEND_PORT', '8001'),
+  FRONTEND_PORT: port('AUTOBOT_FRONTEND_PORT', 'FRONTEND_PORT', '5173'),
+  REDIS_PORT: port('AUTOBOT_REDIS_PORT', 'REDIS_PORT', '6379'),
+  OLLAMA_PORT: port('AUTOBOT_OLLAMA_PORT', 'OLLAMA_PORT', '11434'),
+  VNC_PORT: port('AUTOBOT_VNC_PORT', 'VNC_PORT', '6080'),
+  BROWSER_SERVICE_PORT: port('AUTOBOT_BROWSER_SERVICE_PORT', 'BROWSER_SERVICE_PORT', '9001'),
+  AI_STACK_PORT: port('AUTOBOT_AI_STACK_PORT', 'AI_STACK_PORT', '8080'),
+  NPU_WORKER_PORT: port('AUTOBOT_NPU_WORKER_PORT', 'NPU_WORKER_PORT', '8081'), // Linux NPU worker (VM2)
+  NPU_WORKER_WINDOWS_PORT: port('AUTOBOT_NPU_WORKER_WINDOWS_PORT', 'NPU_WORKER_WINDOWS_PORT', '8082'), // Windows NPU worker (primary)
 } as const;
 
 /**
@@ -54,9 +62,8 @@ export const ServiceURLs = {
   FRONTEND_VM: `http://${NetworkConstants.FRONTEND_VM_IP}:${NetworkConstants.FRONTEND_PORT}`,
   FRONTEND_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.FRONTEND_PORT}`,
 
-  // Redis URLs
-  REDIS_VM: `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,
-  REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${NetworkConstants.REDIS_PORT}`,
+  // No Redis URLs (#19232): the monitor's Redis check connects with host/port, and a
+  // second Redis URL builder is what #19232 removed everywhere else.
 
   // Ollama LLM URLs
   OLLAMA_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.OLLAMA_PORT}`,
@@ -84,7 +91,7 @@ export const HealthCheckEndpoints = {
   FRONTEND: `${ServiceURLs.FRONTEND_VM}/health`,
   NPU_WORKER: `${ServiceURLs.NPU_WORKER_SERVICE}/health`,
   NPU_WORKER_WINDOWS: `${ServiceURLs.NPU_WORKER_WINDOWS_SERVICE}/health`,
-  REDIS: ServiceURLs.REDIS_VM,
+  REDIS: `${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,  // display only: PING over host/port
   AI_STACK: `${ServiceURLs.AI_STACK_SERVICE}/health`,
   BROWSER: `${ServiceURLs.BROWSER_SERVICE}/health`,
   BACKEND: `${ServiceURLs.BACKEND_API}/api/system/health`,

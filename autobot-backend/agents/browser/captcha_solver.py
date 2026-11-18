@@ -9,10 +9,10 @@ Provides detection, image extraction, local ML inference (ONNX on NPU/CPU),
 and a layered pipeline that falls back from local ML to human-in-the-loop.
 
 Classes:
-    CaptchaType          — enumeration of supported CAPTCHA kinds
+    CaptchaType          — imported from autobot_shared.captcha_types (the one taxonomy)
     CaptchaDetector      — keyword/selector detection + element screenshot extraction
     LocalCaptchaSolver   — ONNX-based OCR running on NPU/CPU; math expression eval
-    SolveResult          — result dataclass returned by the pipeline
+    CaptchaSolveResult   — shared result dataclass (autobot_shared.captcha_types)
     CaptchaSolverPipeline — orchestrates the full solve attempt
 
 Design decisions:
@@ -36,14 +36,13 @@ from __future__ import annotations
 
 import hashlib
 import io
-import re
 import time
-from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Tuple
 
+from autobot_shared.captcha_types import CaptchaSolveResult, CaptchaType
 from autobot_shared.logging_manager import get_logger
 from services.captcha_human_loop import get_captcha_human_loop
+from services.captcha_math import MATH_EXPR_RE, solve_math_expression
 
 if TYPE_CHECKING:
     pass  # Playwright Page — only needed for type annotations, imported lazily
@@ -72,49 +71,9 @@ _RECAPTCHA_PATTERNS = frozenset({"g-recaptcha", "recaptcha", "grecaptcha", "reca
 _HCAPTCHA_PATTERNS = frozenset({"h-captcha", "hcaptcha", "hcaptcha.com"})
 _SLIDER_PATTERNS = frozenset({"slider", "slide-verify", "slidercaptcha", "drag"})
 
-# Math CAPTCHA: matches expressions like "3 + 4 = ?", "12 - 5 =", "7 × 2"
-# ``x``/``X`` are accepted as multiplication: CAPTCHAs commonly render "4 x 5 = ?".
-# Both cases are required because ``_clean_math_expression`` upper-cases its input
-# before this pattern is applied, while ``CaptchaDetector.detect`` applies it to
-# lower-cased HTML. ``_apply_operator`` normalises the captured operator.
-_MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/×÷xX])\s*(\d+)")
-_TRAILING_EQUALS_RE = re.compile(r"\s*[=?]+\s*$")
-
 # ---------------------------------------------------------------------------
 # Enumerations and result types
 # ---------------------------------------------------------------------------
-
-
-class CaptchaType(Enum):
-    """Enumeration of CAPTCHA types that can be detected and solved."""
-
-    TEXT_IMAGE = "text_image"  # Distorted text rendered as an image
-    MATH = "math"  # Simple arithmetic expression
-    SLIDER = "slider"  # Drag-slider challenge
-    RECAPTCHA = "recaptcha"  # Google reCAPTCHA v2 / v3
-    HCAPTCHA = "hcaptcha"  # hCaptcha
-    UNKNOWN = "unknown"  # Could not be classified
-
-
-@dataclass
-class SolveResult:
-    """Outcome of a single CAPTCHA solve attempt.
-
-    Attributes:
-        success:      Whether the CAPTCHA was (or is expected to be) solved.
-        answer:       The answer string, or ``None`` when solving failed.
-        method_used:  Human-readable label: "local_ml", "cache", "human_loop", "math".
-        confidence:   Float in [0, 1]; 1.0 for deterministic results (math, cache).
-        captcha_type: The CaptchaType that was processed.
-        error:        Error description when ``success`` is False.
-    """
-
-    success: bool
-    answer: str | None
-    method_used: str
-    confidence: float
-    captcha_type: CaptchaType
-    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -182,11 +141,11 @@ class CaptchaDetector:
 
         # Math indicator: expression-like content before the CAPTCHA keyword
         if any(kw in lower for kw in _HTML_CAPTCHA_KEYWORDS):
-            if _MATH_EXPR_RE.search(lower):
+            if MATH_EXPR_RE.search(lower):
                 logger.debug("CaptchaDetector: math CAPTCHA pattern found")
                 return CaptchaType.MATH
             logger.debug("CaptchaDetector: generic text-image CAPTCHA keyword found")
-            return CaptchaType.TEXT_IMAGE
+            return CaptchaType.TEXT
 
         logger.debug("CaptchaDetector: no CAPTCHA pattern matched")
         return CaptchaType.UNKNOWN
@@ -289,9 +248,9 @@ class LocalCaptchaSolver:
             captcha_type: The type of CAPTCHA to check.
 
         Returns:
-            True for TEXT_IMAGE and MATH; False for reCAPTCHA, hCaptcha, SLIDER.
+            True for TEXT and MATH; False for reCAPTCHA, hCaptcha, SLIDER.
         """
-        return captcha_type in (CaptchaType.TEXT_IMAGE, CaptchaType.MATH)
+        return captcha_type in (CaptchaType.TEXT, CaptchaType.MATH)
 
     async def solve_text_image(self, image_bytes: bytes) -> str | None:
         """Run ONNX inference on *image_bytes* and return the decoded text.
@@ -347,20 +306,10 @@ class LocalCaptchaSolver:
             String representation of the integer result, or ``None`` when the
             expression cannot be parsed.
         """
-        cleaned = self._clean_math_expression(expression)
-        match = _MATH_EXPR_RE.search(cleaned)
-        if not match:
-            logger.debug("solve_math: no valid expression found in %r", expression)
-            return None
-
-        a_str, op, b_str = match.group(1), match.group(2), match.group(3)
-        a, b = int(a_str), int(b_str)
-        result = self._apply_operator(a, op, b)
+        result = solve_math_expression(expression)
         if result is None:
-            logger.warning("solve_math: could not apply operator %r", op)
+            logger.debug("solve_math: no solvable expression found in %r", expression)
             return None
-
-        logger.debug("solve_math: %d %s %d = %d", a, op, b, result)
         return str(result)
 
     # ------------------------------------------------------------------
@@ -484,58 +433,6 @@ class LocalCaptchaSolver:
         mean_conf = (sum(confidences) / len(confidences)) if confidences else 0.0
         return text, mean_conf
 
-    # ------------------------------------------------------------------
-    # Math helpers
-    # ------------------------------------------------------------------
-
-    _MATH_OPS: Dict[str, Any] = {
-        "+": lambda a, b: a + b,
-        "-": lambda a, b: a - b,
-        "*": lambda a, b: a * b,
-        "×": lambda a, b: a * b,
-        "x": lambda a, b: a * b,
-        "/": lambda a, b: a // b if b != 0 else None,
-        "÷": lambda a, b: a // b if b != 0 else None,
-    }
-
-    def _clean_math_expression(self, expression: str) -> str:
-        """Normalise a raw math expression string for regex matching.
-
-        Args:
-            expression: Raw expression that may include trailing "= ?" markers.
-
-        Returns:
-            Cleaned expression string.
-        """
-        cleaned = expression.upper()
-        cleaned = _TRAILING_EQUALS_RE.sub("", cleaned)
-        # Normalise spelled-out operators
-        for old, new in [
-            ("PLUS", "+"),
-            ("MINUS", "-"),
-            ("TIMES", "*"),
-            ("DIVIDED BY", "/"),
-        ]:
-            cleaned = cleaned.replace(old, new)
-        return cleaned
-
-    def _apply_operator(self, a: int, op: str, b: int) -> int | None:
-        """Apply a binary arithmetic operator.
-
-        Args:
-            a:  Left operand.
-            op: Operator character.
-            b:  Right operand.
-
-        Returns:
-            Integer result, or ``None`` when the operator is unknown or the
-            operation is invalid (e.g. division by zero).
-        """
-        fn = self._MATH_OPS.get(op.lower()) or self._MATH_OPS.get(op)
-        if fn is None:
-            return None
-        return fn(a, b)
-
 
 # ---------------------------------------------------------------------------
 # Pipeline
@@ -574,7 +471,7 @@ class CaptchaSolverPipeline:
         self._solver = solver or LocalCaptchaSolver(model_path=model_path)
         self._detector = detector or CaptchaDetector()
 
-    async def solve(self, page: Any, captcha_type: CaptchaType) -> SolveResult:
+    async def solve(self, page: Any, captcha_type: CaptchaType) -> CaptchaSolveResult:
         """Attempt to solve the CAPTCHA on *page* of type *captcha_type*.
 
         Args:
@@ -582,7 +479,7 @@ class CaptchaSolverPipeline:
             captcha_type: The type of CAPTCHA to solve.
 
         Returns:
-            A ``SolveResult`` describing the outcome.
+            A ``CaptchaSolveResult`` describing the outcome.
         """
         logger.info("CaptchaSolverPipeline.solve: type=%s", captcha_type.value)
         start = time.monotonic()
@@ -611,11 +508,12 @@ class CaptchaSolverPipeline:
                 cached = _answer_cache.get(_image_hash(image_bytes))
                 if cached:
                     logger.info("CaptchaSolverPipeline: cache hit for image hash")
-                    return SolveResult(
+                    return CaptchaSolveResult(
                         success=True,
-                        answer=cached,
+                        requires_human=False,
+                        solution=cached,
                         method_used="cache",
-                        confidence=1.0,
+                        confidence_score=1.0,
                         captcha_type=captcha_type,
                     )
 
@@ -626,7 +524,7 @@ class CaptchaSolverPipeline:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _solve_math_from_page(self, page: Any, captcha_type: CaptchaType) -> SolveResult:
+    async def _solve_math_from_page(self, page: Any, captcha_type: CaptchaType) -> CaptchaSolveResult:
         """Extract page text and attempt math solving.
 
         Args:
@@ -634,28 +532,29 @@ class CaptchaSolverPipeline:
             captcha_type: Should be CaptchaType.MATH.
 
         Returns:
-            SolveResult with method_used="math" on success.
+            CaptchaSolveResult with method_used="math" on success.
         """
         try:
             content: str = await page.content()
             answer = self._solver.solve_math(content)
             if answer is not None:
-                return SolveResult(
+                return CaptchaSolveResult(
                     success=True,
-                    answer=answer,
+                    requires_human=False,
+                    solution=answer,
                     method_used="math",
-                    confidence=1.0,
+                    confidence_score=1.0,
                     captcha_type=captcha_type,
                 )
         except Exception as exc:
             logger.warning("_solve_math_from_page failed: %s", exc)
-        return SolveResult(
+        return CaptchaSolveResult(
             success=False,
-            answer=None,
+            solution=None,
             method_used="math",
-            confidence=0.0,
+            confidence_score=0.0,
             captcha_type=captcha_type,
-            error="Math expression not found in page content",
+            error_message="Math expression not found in page content",
         )
 
     async def _extract_image(self, page: Any, captcha_type: CaptchaType) -> bytes | None:
@@ -682,7 +581,7 @@ class CaptchaSolverPipeline:
             CSS selector string.
         """
         mapping = {
-            CaptchaType.TEXT_IMAGE: CaptchaDetector._TEXT_IMAGE_SELECTORS[0],
+            CaptchaType.TEXT: CaptchaDetector._TEXT_IMAGE_SELECTORS[0],
             CaptchaType.MATH: CaptchaDetector._TEXT_IMAGE_SELECTORS[0],
             CaptchaType.SLIDER: CaptchaDetector._SLIDER_SELECTORS[0],
             CaptchaType.RECAPTCHA: CaptchaDetector._RECAPTCHA_SELECTORS[0],
@@ -690,37 +589,38 @@ class CaptchaSolverPipeline:
         }
         return mapping.get(captcha_type, "#captcha")
 
-    async def _try_local_ml(self, image_bytes: bytes, captcha_type: CaptchaType) -> SolveResult:
-        """Run ONNX inference and return a SolveResult.
+    async def _try_local_ml(self, image_bytes: bytes, captcha_type: CaptchaType) -> CaptchaSolveResult:
+        """Run ONNX inference and return a CaptchaSolveResult.
 
         Args:
             image_bytes:  Raw image bytes.
-            captcha_type: Type being solved (TEXT_IMAGE or MATH).
+            captcha_type: Type being solved (TEXT or MATH).
 
         Returns:
-            SolveResult with method_used="local_ml".
+            CaptchaSolveResult with method_used="local_ml".
         """
         answer = await self._solver.solve_text_image(image_bytes)
         if answer:
             # Store in cache for future reuse within this process
             _answer_cache[_image_hash(image_bytes)] = answer
-            return SolveResult(
+            return CaptchaSolveResult(
                 success=True,
-                answer=answer,
+                requires_human=False,
+                solution=answer,
                 method_used="local_ml",
-                confidence=_MIN_CONFIDENCE,
+                confidence_score=_MIN_CONFIDENCE,
                 captcha_type=captcha_type,
             )
-        return SolveResult(
+        return CaptchaSolveResult(
             success=False,
-            answer=None,
+            solution=None,
             method_used="local_ml",
-            confidence=0.0,
+            confidence_score=0.0,
             captcha_type=captcha_type,
-            error="ONNX inference returned no answer",
+            error_message="ONNX inference returned no answer",
         )
 
-    async def _human_fallback(self, page: Any, captcha_type: CaptchaType) -> SolveResult:
+    async def _human_fallback(self, page: Any, captcha_type: CaptchaType) -> CaptchaSolveResult:
         """Delegate to the human-in-the-loop service.
 
         Args:
@@ -728,7 +628,7 @@ class CaptchaSolverPipeline:
             captcha_type: Type of CAPTCHA for logging/routing.
 
         Returns:
-            SolveResult with method_used="human_loop".
+            CaptchaSolveResult with method_used="human_loop".
         """
         logger.info(
             "CaptchaSolverPipeline: falling back to human-in-the-loop for type=%s",
@@ -742,21 +642,22 @@ class CaptchaSolverPipeline:
                 url=url,
                 captcha_type=captcha_type.value,
             )
-            return SolveResult(
+            return CaptchaSolveResult(
                 success=resolution.success,
-                answer=None,  # Human solves in-browser; no answer text returned
+                requires_human=False,
+                solution=None,  # Human solves in-browser; no answer text returned
                 method_used="human_loop",
-                confidence=1.0 if resolution.success else 0.0,
+                confidence_score=1.0 if resolution.success else 0.0,
                 captcha_type=captcha_type,
-                error=resolution.error_message if not resolution.success else None,
+                error_message=resolution.error_message if not resolution.success else None,
             )
         except Exception as exc:
             logger.error("_human_fallback: human-in-the-loop failed: %s", exc)
-            return SolveResult(
+            return CaptchaSolveResult(
                 success=False,
-                answer=None,
+                solution=None,
                 method_used="human_loop",
-                confidence=0.0,
+                confidence_score=0.0,
                 captcha_type=captcha_type,
-                error=str(exc),
+                error_message=str(exc),
             )
