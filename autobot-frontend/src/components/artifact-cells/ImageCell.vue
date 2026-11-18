@@ -151,10 +151,15 @@ const props = withDefaults(defineProps<ImageCellProps>(), {
   richPayload: null,
 })
 
+// #13424: a data URL must be a png/jpeg/webp base64 image (svg and html can carry script); anything else
+// must be an http(s) or same-origin path. Keep in step with SAFE_DATA_IMAGE_RE in browser_tool_handler.py.
+const RENDERABLE_IMAGE_URL = /^(?:data:image\/(?:png|jpeg|webp);base64,|https?:\/\/|\/(?!\/))/i
+const isRenderableImageUrl = (url?: string): boolean => !!url && RENDERABLE_IMAGE_URL.test(url)
+
 // Derived data from richPayload
 const images = computed<GeneratedImage[]>(() => {
   const raw = (props.richPayload?.images as GeneratedImage[] | undefined) ?? []
-  return raw.filter((img) => img?.url)
+  return raw.filter((img) => isRenderableImageUrl(img?.url))
 })
 
 const provider = computed<string>(() => (props.richPayload?.provider as string) ?? '')

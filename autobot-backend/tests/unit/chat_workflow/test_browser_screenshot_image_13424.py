@@ -72,3 +72,18 @@ def test_the_persisted_execution_summary_drops_raw_screenshots_but_the_live_one_
     assert "base64_image" not in batch[0]["metadata"]["execution_results"][0]
     assert batch[0]["metadata"]["execution_results"][0]["tool"] == "screenshot"
     assert summary.metadata["execution_results"][0]["base64_image"] == _PNG  # the vision loop still reads it
+
+
+def test_only_png_jpeg_webp_data_urls_become_an_image_payload() -> None:
+    for kind in ("png", "jpeg", "webp"):
+        msg = handler.record_browser_success(
+            "screenshot", {}, {"result": {"image": f"data:image/{kind};base64,{_PNG}"}}, []
+        )
+        assert msg.metadata["display_type"] == "image"
+    for url in (f"data:image/svg+xml;base64,{_PNG}", f"data:text/html;base64,{_PNG}", "data:image/png,raw"):
+        msg = handler.record_browser_success("screenshot", {}, {"result": {"image": url}}, [])
+        assert "image_payload" not in msg.metadata and "display_type" not in msg.metadata
+
+
+def test_a_non_dict_inner_result_does_not_crash_the_image_metadata() -> None:
+    assert handler.persisted_result({"result": "plain string"}, ("image",)) == {"result": "plain string"}

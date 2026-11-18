@@ -22,6 +22,7 @@ runs.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
@@ -226,6 +227,11 @@ def persisted_result(result: dict[str, Any], drop: tuple[str, ...]) -> dict[str,
     return {**result, "result": stripped_inner} if "result" in result else stripped_inner
 
 
+#: The only data URLs the chat view is handed as an image (#13424); svg and html can carry script.
+#: ImageCell holds the same list.
+SAFE_DATA_IMAGE_RE = re.compile(r"^data:image/(png|jpeg|webp);base64,")
+
+
 def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[str, Any]:
     """Metadata that makes a screenshot render in chat through ImageCell (#13424).
 
@@ -234,6 +240,9 @@ def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[st
     the ``result`` copy so the history does not store the screenshot twice.
     """
     url = base64_image if base64_image.startswith("data:") else f"data:image/png;base64,{base64_image}"
+    if not SAFE_DATA_IMAGE_RE.match(url):
+        logger.warning("[#13424] browser result image is not an allowed data URL; it is not rendered")
+        return {}
     return {
         "display_type": "image",
         "image_payload": {"images": [{"url": url}], "provider": "browser"},
