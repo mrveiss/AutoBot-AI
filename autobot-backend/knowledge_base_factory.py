@@ -12,7 +12,7 @@ This module used to own a THIRD independent `KnowledgeBase` store. There were th
 
 Two of those module names differ by one word, and two of the globals had the identical
 name in different modules. #13026 was the direct consequence: a caller reached the wrong
-`get_knowledge_base` and every request raised `TypeError` on a `config_manager` kwarg
+`get_knowledge_base_or_none` and every request raised `TypeError` on a `config_manager` kwarg
 the other one does not accept.
 
 `autobot_shared.store_authority` forbids this shape — one store is the system of record
@@ -22,11 +22,11 @@ embedding cache and ownership manager.
 
 So every name here is kept and wired, and none of them holds state any more: they all
 resolve `knowledge_factory`'s app-free singleton. Nothing is deleted, because the names
-are the module's contract and `get_knowledge_base` has live callers; what is removed is
+are the module's contract and `get_knowledge_base_or_none` has live callers; what is removed is
 the second store behind them.
 
 Measured before rewriting: of the seven exports, exactly ONE is consumed —
-`get_knowledge_base`, at five call sites, every one of them zero-argument
+`get_knowledge_base_or_none`, at five call sites, every one of them zero-argument
 (`ai_hardware_accelerator.py:822`, `async_chat_workflow.py:224`,
 `services/codebase_indexing_service.py:875,949`,
 `services/research/orchestrator.py:329`). So the `force_reinit` and `timeout`
@@ -39,9 +39,9 @@ dropped: `knowledge_factory.get_knowledge_base_async` holds an `asyncio.Lock` ac
 create-and-initialize window and double-checks the global after acquiring it.
 
 Usage:
-    from knowledge_base_factory import get_knowledge_base
+    from knowledge_base_factory import get_knowledge_base_or_none
 
-    kb = await get_knowledge_base()
+    kb = await get_knowledge_base_or_none()
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ class KnowledgeBaseInitializer:
         }
 
 
-async def get_knowledge_base(
+async def get_knowledge_base_or_none(
     force_reinit: bool = False, timeout: float = TimingConstants.SHORT_TIMEOUT
 ) -> "KnowledgeBase" | None:
     """Get the knowledge base, initializing it if needed. None when unavailable.
@@ -145,7 +145,7 @@ def get_knowledge_base_sync() -> "KnowledgeBase" | None:
     """The existing instance only — never initializes. None when there is none."""
     instance = peek_knowledge_base()
     if instance is None:
-        logger.warning("Knowledge base not initialized - use async get_knowledge_base() for initialization")
+        logger.warning("Knowledge base not initialized - use async get_knowledge_base_or_none() for initialization")
     return instance
 
 
@@ -154,7 +154,7 @@ async def knowledge_base_context(timeout: float = TimingConstants.SHORT_TIMEOUT)
     """Async context manager yielding the knowledge base; raises if unavailable."""
     kb = None
     try:
-        kb = await get_knowledge_base(timeout=timeout)
+        kb = await get_knowledge_base_or_none(timeout=timeout)
         if kb is None:
             raise RuntimeError("Failed to initialize knowledge base")
         yield kb
@@ -170,7 +170,7 @@ async def initialize_knowledge_base_background():
     """Warm the canonical singleton without blocking the caller's result."""
     try:
         logger.info("Starting background knowledge base initialization...")
-        await get_knowledge_base()
+        await get_knowledge_base_or_none()
         logger.info("Background knowledge base initialization completed")
     except Exception as e:
         logger.error("Background knowledge base initialization failed: %s", e)
@@ -211,7 +211,7 @@ async def health_check() -> Dict[str, Any]:
 
 
 __all__ = [
-    "get_knowledge_base",
+    "get_knowledge_base_or_none",
     "get_knowledge_base_sync",
     "knowledge_base_context",
     "initialize_knowledge_base_background",

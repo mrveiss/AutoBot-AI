@@ -130,7 +130,7 @@ class PhaseValidationCriteria:
                 "Handle LLM timeout and error scenarios",
             ],
             "files": [
-                "autobot-backend/llm_multi_provider.py",
+                "autobot-backend/services/llm_service.py",
                 "autobot-backend/prompt_manager.py",
             ],
             "directories": ["autobot-backend/llm_shared/"],  # renamed from llm_interface_pkg in #6941
@@ -157,7 +157,7 @@ class PhaseValidationCriteria:
             ],
             "files": [
                 "autobot-backend/security_layer.py",
-                ".github/workflows/security.yml",
+                ".github/workflows/_gate-security.yml",
                 ".bandit",
             ],
             "endpoints": ["/api/security/status"],
@@ -227,7 +227,7 @@ class PhaseValidationCriteria:
             # links to them instead of this phase claiming a UI verdict of its
             # own. A file-presence sweep has no business reporting on UX.
             "authoritative_gates": [
-                ".github/workflows/frontend-test.yml",
+                ".github/workflows/_gate-frontend-test.yml",
                 ".github/workflows/visual-regression.yml",
                 ".github/workflows/stylelint-tokens.yml",
                 ".github/workflows/frontend-typecheck-regression.yml",
@@ -820,7 +820,7 @@ class PhaseValidator:
         """
         root = self.project_root
         return {
-            "dependency_scanning": lambda: (root / ".github/workflows/security.yml").exists(),
+            "dependency_scanning": lambda: (root / ".github/workflows/_gate-security.yml").exists(),
             "sast_analysis": lambda: (root / ".bandit").exists(),
             "container_security": lambda: any((root / _SHARED_SCRIPTS).glob("*security*")),
             "system_metrics": lambda: (root / _SHARED_SCRIPTS / "monitoring_system.py").exists(),

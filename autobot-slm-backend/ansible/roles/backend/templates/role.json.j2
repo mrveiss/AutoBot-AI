@@ -4,7 +4,7 @@
   "deploy_path": "{{ backend_install_dir }}",
   "pythonpath": "{{ backend_install_dir }}",
   "service": "autobot-backend",
-  "ansible_playbook": "deploy-backend.yml",
+  "ansible_playbook": "playbooks/deploy_role.yml",
   "build_steps": [
     "pip install -r requirements.txt",
     "alembic upgrade head"

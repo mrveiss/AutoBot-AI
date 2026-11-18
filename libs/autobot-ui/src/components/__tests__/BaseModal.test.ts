@@ -71,6 +71,29 @@ describe('BaseModal', () => {
     })
   })
 
+  describe('role', () => {
+    it('is a dialog by default', async () => {
+      // fails if the default of the `role` prop changes
+      const wrapper = mountModal()
+      await flushPromises()
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('renders an alertdialog when asked, labelled and modal as before', async () => {
+      // fails if `role` is not bound on the dialog element (the old literal ignored it)
+      const wrapper = mountModal({ role: 'alertdialog' })
+      await flushPromises()
+      const dialog = wrapper.find('[role="alertdialog"]')
+      expect(dialog.exists()).toBe(true)
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+      expect(dialog.attributes('aria-modal')).toBe('true')
+      expect(wrapper.find('h3').attributes('id')).toBe(dialog.attributes('aria-labelledby'))
+      wrapper.unmount()
+    })
+  })
+
   describe('aria labelling', () => {
     it('wires aria-labelledby/aria-describedby to the actual header/content element ids', async () => {
       // fails if titleId/descriptionId stop being applied to the h3 / content
@@ -264,6 +287,15 @@ describe('BaseModal', () => {
       wrapper.unmount()
     })
 
+    it('does NOT close on Escape when closeOnEsc=false', async () => {
+      // fails if a must-answer dialog (a secret shown once, #14777) can still be dismissed with Escape
+      const wrapper = mountModal({ closeOnEsc: false })
+      await wrapper.find('.aui-dialog-overlay').trigger('keydown', { key: 'Escape' })
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+      expect(wrapper.emitted('close')).toBeUndefined()
+      wrapper.unmount()
+    })
+
     it('does NOT close on overlay click when closeOnOverlay=false', async () => {
       // fails if handleOverlayClick stops checking props.closeOnOverlay and
       // closes unconditionally regardless of the prop
@@ -310,6 +342,23 @@ const getFocusables = (root: Element) =>
       'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
     )
   )
+
+describe('BaseModal attribute forwarding', () => {
+  it('forwards consumer attributes to the dialog element, not the Teleport root', () => {
+    const wrapper = mount(BaseModal, {
+      props: { modelValue: true, title: 'Dialog title' },
+      slots: DEFAULT_SLOTS,
+      attrs: { 'data-testid': 'confirm-dialog', class: 'consumer' },
+      global: { stubs: { Teleport: true, Transition: false } },
+      attachTo: document.body,
+    })
+    const dialog = wrapper.find('[role="dialog"]')
+    expect(dialog.attributes('data-testid')).toBe('confirm-dialog')
+    expect(dialog.classes()).toContain('consumer')
+    expect(wrapper.findAll('[data-testid="confirm-dialog"]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
 
 describe('BaseModal focus trap (#5016)', () => {
   beforeEach(() => {
@@ -394,5 +443,105 @@ describe('BaseModal focus trap (#5016)', () => {
     expect(document.activeElement).toBe(outside)
     wrapper.unmount()
     outside.remove()
+  })
+
+  describe('locked', () => {
+    it('turns off overlay click, Escape and the close button together', async () => {
+      // fails if a must-answer dialog keeps any exit, whatever the individual props say
+      const wrapper = mountModal({ locked: true, closeOnOverlay: true, closeOnEsc: true, showClose: true })
+      await flushPromises()
+      await wrapper.find('.aui-dialog-overlay').trigger('click')
+      await wrapper.find('.aui-dialog-overlay').trigger('keydown', { key: 'Escape' })
+      expect(wrapper.find('.aui-dialog-close').exists()).toBe(false)
+      expect(wrapper.emitted('close')).toBeUndefined()
+      wrapper.unmount()
+    })
+
+    it('ignores Escape pressed inside the dialog and keeps focus inside', async () => {
+      // fails if a locked dialog closes, or lets focus escape, on Escape from a focused control
+      const wrapper = mountModal({ locked: true }, FOCUS_SLOTS)
+      await flushPromises()
+      const inner = wrapper.find('.body-btn')
+      ;(inner.element as HTMLElement).focus()
+      await inner.trigger('keydown', { key: 'Escape' })
+      await flushPromises()
+      expect(wrapper.emitted('close')).toBeUndefined()
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      expect(wrapper.find('[role="dialog"]').element.contains(document.activeElement)).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('leaves every exit on when not locked', async () => {
+      // contrast case: fails if locked defaults to true or leaks into ordinary dialogs
+      const wrapper = mountModal()
+      expect(wrapper.find('.aui-dialog-close').exists()).toBe(true)
+      await wrapper.find('.aui-dialog-overlay').trigger('keydown', { key: 'Escape' })
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      wrapper.unmount()
+    })
+  })
+
+  describe('subtitle slot', () => {
+    it('renders block content under the title, outside the <h3>', () => {
+      // fails if a subtitle has to go inside the title slot, i.e. a <p> inside an <h3> (#14777)
+      const wrapper = mountModal({}, { ...DEFAULT_SLOTS, subtitle: '<p class="sub">node-01</p>' })
+      const sub = wrapper.find('.aui-dialog-subtitle .sub')
+      expect(sub.exists()).toBe(true)
+      expect(wrapper.find('h3 .sub').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('renders no subtitle wrapper when the slot is absent', () => {
+      // contrast case: fails if an empty subtitle box is always rendered
+      const wrapper = mountModal()
+      expect(wrapper.find('.aui-dialog-subtitle').exists()).toBe(false)
+      wrapper.unmount()
+    })
+  })
+})
+
+describe('BaseModal focus restore (#14777)', () => {
+  beforeEach(() => {
+    document.body.replaceChildren()
+  })
+
+  function addOpener(): HTMLButtonElement {
+    const opener = document.createElement('button')
+    opener.textContent = 'Open'
+    document.body.appendChild(opener)
+    opener.focus()
+    return opener
+  }
+
+  it('returns focus to the element that opened it when modelValue goes false', async () => {
+    // fails if useFocusRestore is unwired from BaseModal or saves after focus has moved inside
+    const opener = addOpener()
+    const wrapper = mountModal({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    const inner = wrapper.find('.body-btn').element as HTMLElement
+    inner.focus()
+    expect(document.activeElement).toBe(inner)
+
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    expect(document.activeElement).toBe(opener)
+    wrapper.unmount()
+  })
+
+  it('returns focus to the opener after Escape closes it through v-model', async () => {
+    const opener = addOpener()
+    // safe: the handler only runs on Escape, long after mount() has assigned `wrapper`
+    const wrapper = mountModal({ modelValue: false, 'onUpdate:modelValue': (v: boolean) => wrapper.setProps({ modelValue: v }) })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    const inner = wrapper.find('.body-btn')
+    ;(inner.element as HTMLElement).focus()
+    await inner.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(opener)
+    wrapper.unmount()
   })
 })

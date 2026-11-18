@@ -19,6 +19,7 @@ import json
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_24_HOURS
+from media.document.html_extraction import EXTRACTOR_VERSION
 
 logger = get_logger(__name__)
 
@@ -68,24 +69,31 @@ def _resolve_max_bytes() -> int:
 WEB_FETCH_MAX_BYTES: int = _resolve_max_bytes()
 
 
-def _content_cache_key(url: str, render_mode: str) -> str:
-    """Build Redis cache key: sha256(url + render_mode)."""
-    raw = f"{url}|{render_mode}"
+def _content_cache_key(url: str, render_mode: str, profile: str) -> str:
+    """Build the Redis cache key: sha256 of url, render mode, ingest profile and extractor version.
+
+    The profile and :data:`EXTRACTOR_VERSION` are part of the key (#18826): a result
+    extracted under one profile, or by an older extractor, is never served for another.
+    Entries under the old ``url|render_mode`` key are simply never read again and
+    expire on their TTL.
+    """
+    raw = f"{url}|{render_mode}|{profile}|{EXTRACTOR_VERSION}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return f"web_fetch:content:{digest}"
 
 
-async def get_cached_result(url: str, render_mode: str, redis_client) -> dict | None:
+async def get_cached_result(url: str, render_mode: str, profile: str, redis_client) -> dict | None:
     """Return cached FetchResult payload dict or None on cache miss.
 
     Args:
         url: The URL to look up.
         render_mode: Render mode string (e.g. ``"auto"``).
+        profile: Ingest profile string (e.g. ``"document"``).
         redis_client: Async Redis client from get_async_redis_client().
     """
     if redis_client is None:
         return None
-    key = _content_cache_key(url, render_mode)
+    key = _content_cache_key(url, render_mode, profile)
     try:
         raw = await redis_client.get(key)
         if raw is None:
@@ -96,18 +104,19 @@ async def get_cached_result(url: str, render_mode: str, redis_client) -> dict | 
         return None
 
 
-async def set_cached_result(url: str, render_mode: str, payload: dict, redis_client) -> None:
+async def set_cached_result(url: str, render_mode: str, profile: str, payload: dict, redis_client) -> None:
     """Store FetchResult payload dict in Redis with configured TTL.
 
     Args:
         url: The URL that was fetched.
         render_mode: Render mode string.
+        profile: Ingest profile string.
         payload: Serialisable dict (FetchResult fields).
         redis_client: Async Redis client from get_async_redis_client().
     """
     if redis_client is None:
         return
-    key = _content_cache_key(url, render_mode)
+    key = _content_cache_key(url, render_mode, profile)
     try:
         serialized = json.dumps(payload, ensure_ascii=False)
         await redis_client.setex(key, _WEB_FETCH_CACHE_TTL, serialized)

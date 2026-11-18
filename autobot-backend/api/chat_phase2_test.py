@@ -185,7 +185,7 @@ class TestDiskWriteBeforeRedis:
         mgr = _StubManager()
         call_order: list[str] = []
 
-        async def _fake_write(chat_file, chat_data):
+        async def _fake_write(chat_file, chat_data, before_replace=None):
             call_order.append("disk")
 
         async def _fake_cache(session_id, chat_data):

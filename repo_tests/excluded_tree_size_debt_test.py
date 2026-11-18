@@ -56,7 +56,7 @@ _SOURCE_TREES = ("autobot-infrastructure/", "autobot-backend/code_analysis/")
 #: Lower it by splitting a file, or by bringing its tree into
 #: `EXCLUDED_PREFIXES`' scope — which is a decision for whoever also updates
 #: `.pre-commit-config.yaml`, not something to do incidentally here.
-EXCLUDED_TREE_DEBT = 45
+EXCLUDED_TREE_DEBT = 43  # #19232: an excluded-tree file dropped under 600 lines
 
 
 def _hook():
@@ -97,7 +97,6 @@ def _source_tree_files(root: Path) -> list[str]:
 REACH = declare(
     "excluded-tree-size-debt",
     discover=_source_tree_files,
-    floor=300,
     what="tracked python files in excluded source trees",
     growth=100,
 )

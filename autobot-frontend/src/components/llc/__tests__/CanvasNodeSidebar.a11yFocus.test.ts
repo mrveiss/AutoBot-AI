@@ -11,7 +11,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { defineComponent, h } from 'vue'
+import { defineComponent, nextTick, ref } from 'vue'
+import { BaseDrawer } from '@autobot/ui'
 import en from '@/i18n/locales/en.json'
 
 const get = vi.fn()
@@ -41,12 +42,33 @@ const AGENT_NODE = {
   children: [],
 }
 
-function mountSidebar() {
-  return mount(CanvasNodeSidebar, {
-    props: { node: AGENT_NODE, companyId: 'c1', terminating: false },
-    global: { plugins: [i18n], stubs: { HandoffModal: true } },
+// The node sidebar renders inside OrgChart's kit BaseDrawer (#14780), which owns the dialog
+// semantics #14609 asked for. This mounts that exact composition (drawer + the real sidebar,
+// opened from a trigger) so the guarantees stay pinned to the node sidebar itself.
+const Host = defineComponent({
+  components: { BaseDrawer, CanvasNodeSidebar },
+  setup() {
+    const open = ref(false)
+    return { open, node: AGENT_NODE }
+  },
+  template: `<button id="origin-node" @click="open = true">origin canvas node</button>
+    <BaseDrawer v-model="open" title="Agent detail" width="24rem" flush close-label="Close">
+      <CanvasNodeSidebar :node="node" company-id="c1" :terminating="false" />
+    </BaseDrawer>`,
+})
+
+async function openDrawer() {
+  const wrapper = mount(Host, {
+    global: { plugins: [i18n], stubs: { HandoffModal: true, Teleport: true } },
     attachTo: document.body,
   })
+  const origin = document.getElementById('origin-node') as HTMLElement
+  origin.focus()
+  await wrapper.find('#origin-node').trigger('click')
+  await flushPromises()
+  // the drawer's Transition calls focusFirst on after-enter; jsdom has no animation, so run it
+  ;(wrapper.find('[role="dialog"]').element as HTMLElement).querySelector<HTMLElement>('button')?.focus()
+  return { wrapper, origin, panel: wrapper.find('[role="dialog"]').element as HTMLElement }
 }
 
 const getFocusables = (root: Element) =>
@@ -64,92 +86,45 @@ const dispatchTab = (el: Element, shiftKey = false) => {
 
 beforeEach(() => {
   get.mockReset()
+  get.mockResolvedValue([])
   document.body.replaceChildren()
 })
 
-describe('CanvasNodeSidebar focus management (#14609)', () => {
-  it('moves focus to the first focusable element (the close button) on mount', async () => {
-    const wrapper = mountSidebar()
-    await flushPromises()
-
-    const panel = wrapper.get('[data-testid="node-sidebar"]').element as HTMLElement
-    const first = getFocusables(panel)[0]
-    expect(document.activeElement).toBe(first)
+describe('CanvasNodeSidebar in its drawer: focus management (#14609, #14780)', () => {
+  it('is a labelled modal dialog that contains the node sidebar', async () => {
+    const { wrapper, panel } = await openDrawer()
+    expect(panel.getAttribute('aria-modal')).toBe('true')
+    expect(document.getElementById(panel.getAttribute('aria-labelledby')!)?.textContent).toContain('Agent detail')
+    expect(panel.querySelector('[data-testid="node-sidebar"]')).not.toBeNull()
     wrapper.unmount()
   })
 
-  it('Tab on the last focusable wraps to the first', async () => {
-    const wrapper = mountSidebar()
-    await flushPromises()
-    const panel = wrapper.get('[data-testid="node-sidebar"]').element as HTMLElement
+  it('the sidebar itself is no longer a second dialog', async () => {
+    const { wrapper, panel } = await openDrawer()
+    expect(panel.querySelectorAll('[role="dialog"]').length).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('Tab on the last focusable wraps to the first, Shift+Tab on the first to the last', async () => {
+    const { wrapper, panel } = await openDrawer()
     const focusables = getFocusables(panel)
     const first = focusables[0]
     const last = focusables[focusables.length - 1]
     last.focus()
-
-    const event = dispatchTab(panel, false)
-
-    expect(event.defaultPrevented).toBe(true)
+    expect(dispatchTab(panel).defaultPrevented).toBe(true)
     expect(document.activeElement).toBe(first)
-    wrapper.unmount()
-  })
-
-  it('Shift+Tab on the first focusable wraps to the last', async () => {
-    const wrapper = mountSidebar()
-    await flushPromises()
-    const panel = wrapper.get('[data-testid="node-sidebar"]').element as HTMLElement
-    const focusables = getFocusables(panel)
-    const first = focusables[0]
-    const last = focusables[focusables.length - 1]
     first.focus()
-
-    const event = dispatchTab(panel, true)
-
-    expect(event.defaultPrevented).toBe(true)
+    expect(dispatchTab(panel, true).defaultPrevented).toBe(true)
     expect(document.activeElement).toBe(last)
     wrapper.unmount()
   })
 
-  it('emits close on Escape', async () => {
-    const wrapper = mountSidebar()
+  it('Escape closes it and focus returns to the triggering node', async () => {
+    const { wrapper, origin } = await openDrawer()
+    await wrapper.find('.aui-drawer-overlay').trigger('keydown', { key: 'Escape' })
+    await nextTick()
     await flushPromises()
-
-    await wrapper.get('[data-testid="node-sidebar"]').trigger('keydown', { key: 'Escape' })
-
-    expect(wrapper.emitted('close')).toBeTruthy()
-    wrapper.unmount()
-  })
-
-  it('restores focus to the triggering element once the parent unmounts it (v-if close, per OrgChart.vue)', async () => {
-    // Mirrors OrgChart.vue's own gate: `v-if="drawerOpen && selectedNode"`.
-    const Host = defineComponent({
-      props: { show: { type: Boolean, required: true } },
-      setup(props) {
-        return () =>
-          h('div', [
-            h('button', { id: 'origin-node' }, 'origin canvas node'),
-            props.show
-              ? h(CanvasNodeSidebar, { node: AGENT_NODE, companyId: 'c1', terminating: false })
-              : null,
-          ])
-      },
-    })
-    const wrapper = mount(Host, {
-      props: { show: false },
-      global: { plugins: [i18n], stubs: { HandoffModal: true } },
-      attachTo: document.body,
-    })
-    const origin = wrapper.get('#origin-node').element as HTMLElement
-    origin.focus()
-    expect(document.activeElement).toBe(origin)
-
-    await wrapper.setProps({ show: true })
-    await flushPromises()
-    expect(document.activeElement).not.toBe(origin)
-
-    await wrapper.setProps({ show: false })
-    await flushPromises()
-
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(document.activeElement).toBe(origin)
     wrapper.unmount()
   })

@@ -222,7 +222,6 @@ def test_every_registry_caller_handles_the_typed_error():
 
     root = pathlib.Path(__file__).resolve().parents[2]
     callers = [
-        "llm_multi_provider.py",
         "api/openai_compat.py",  # also serves api/anthropic_compat.py, which imports the helper
         "api/chat_compare.py",
         "llm_shared/model_fallback_coordinator.py",

@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, isolated_git_env, make_repo
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GUARD_REL = "pipeline-scripts/check_baseline_no_growth.sh"
@@ -36,19 +35,17 @@ LIBS = ("scripts/lib/git-scope.sh", "scripts/lib/hardcoded-value-rules.sh")
 def _test_git_env() -> dict[str, str]:
     """#15246: env for every git subprocess this suite spawns.
 
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
+    Isolated (#18940) rather than os.environ: the pre-push hook runs this suite with
     GIT_DIR pointing at the worktree it is pushing (every checkout here is
     one), and an unscrubbed `git init`/`git add`/`git commit` here would
     then operate on THAT repository instead of tmp_path's. See
     autobot_shared/paths_test.py and #15246 for the reproduced incident.
     """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+    return isolated_git_env()
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=_test_git_env()
-    )
+    return git(repo, *args)
 
 
 SETTLED_REL = "autobot-backend/settled.py"
@@ -75,9 +72,7 @@ def repo(tmp_path: Path) -> tuple[Path, str]:
     settled = root / SETTLED_REL
     settled.parent.mkdir(parents=True, exist_ok=True)
     settled.write_text(f'HOST = "{SETTLED_VALUE}"\n', encoding="utf-8")
-    _git(root.parent, "init", "--quiet", "-b", "main", str(root))
-    _git(root, "config", "user.email", "t@example.invalid")
-    _git(root, "config", "user.name", "t")
+    make_repo(root, default_branch="main")
     _git(root, "add", "-A")
     _git(root, "commit", "--quiet", "-m", "base")
     return root, _git(root, "rev-parse", "HEAD").stdout.strip()
@@ -272,9 +267,7 @@ def test_a_justified_addition_in_a_file_this_change_touches_fails(repo) -> None:
     buy it, or the route IS the bypass.
     """
     root, _ = repo
-    (root / SETTLED_REL).write_text(
-        f'HOST = "{SETTLED_VALUE}"\nOTHER = "10.0.0.1"\n', encoding="utf-8"
-    )
+    (root / SETTLED_REL).write_text(f'HOST = "{SETTLED_VALUE}"\nOTHER = "10.0.0.1"\n', encoding="utf-8")
     _append(root, MARKER, f"1|{SETTLED_KEY}")
     result = _run(repo)
     assert result.returncode == 1, result.stdout + result.stderr
@@ -408,7 +401,7 @@ def test_a_growth_line_the_parser_drops_is_fatal_not_a_pass(repo) -> None:
 
 
 def test_a_growth_verdict_with_no_entries_is_fatal_not_a_pass(repo) -> None:
-    """"The baseline grew" with nothing to show for it is unreadable, not clean."""
+    """ "The baseline grew" with nothing to show for it is unreadable, not clean."""
     root, _ = repo
     _stub_growth(root, "    :")
     result = _run(repo)

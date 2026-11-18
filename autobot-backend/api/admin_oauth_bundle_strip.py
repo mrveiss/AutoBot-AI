@@ -23,8 +23,7 @@ from api.schemas_oauth_bundle_strip import (
     OAuthBundleStripRequestResponse,
 )
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_middleware import check_admin_permission, get_current_user
 from models.approval import ApprovalType
 from services import oauth_bundle_strip
 from services.approval_gate_service import ApprovalGateService
@@ -32,7 +31,7 @@ from services.oauth_bundle_strip_action import ACTION as OAUTH_BUNDLE_STRIP
 from services.oauth_bundle_strip_action import register_strip_action
 from services.secrets_service import get_secrets_service
 
-router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
 # Registered at this router's import time so the executor exists before any approve().
 register_strip_action()

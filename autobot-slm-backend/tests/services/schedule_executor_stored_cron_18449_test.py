@@ -11,6 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _PATH = Path(__file__).resolve().parents[2] / "services" / "schedule_executor.py"
 
 
@@ -29,25 +31,10 @@ def _schedule(sid, expr):
     return SimpleNamespace(id=sid, cron_expression=expr, last_run_status=None, last_run_message=None)
 
 
-class _Session:
-    def __init__(self, rows):
-        self._rows = rows
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def execute(self, _stmt):
-        rows = self._rows
-        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
-
-
 @pytest.mark.asyncio
 async def test_startup_scan_warns_per_invalid_schedule_and_changes_nothing(executor, monkeypatch, caplog):
     rows = [_schedule("s-six", "* * * * * *"), _schedule("s-ok", "*/5 * * * *"), _schedule("s-range", "0 0 * 0-7 *")]
-    monkeypatch.setattr(executor, "db_service", SimpleNamespace(session=lambda: _Session(rows)))
+    monkeypatch.setattr(executor, "db_service", SimpleNamespace(session=lambda: FakeAsyncSession(default_result=rows)))
     monkeypatch.setattr(executor, "select", lambda *_a: object())  # models.database is stubbed in this harness
     with caplog.at_level(logging.WARNING, logger=executor.logger.name):
         assert await executor.report_stored_schedules() == 2

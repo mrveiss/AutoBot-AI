@@ -19,7 +19,12 @@ import json
 import os
 from typing import List, Optional
 
-from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import (
+    DECLARED_CATEGORIES_KEY,
+    VERIFIED_ATTACHMENT_ACCESS_KEY,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+)
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -30,10 +35,17 @@ logger = get_logger(__name__)
 # TTL for a session's role binding — env-tunable, never hard-coded.
 SESSION_ROLE_TTL_SECONDS: int = env_int("AUTOBOT_SESSION_ROLE_TTL_SECONDS", 24 * 3600)
 
-# GH#11202: master switch for the chat approval gate. OFF by default — the gate
-# routes tool calls through the LangGraph approval interrupt, which the frontend
-# must render/resolve, so it stays disabled until that path is verified end-to-end.
-CHAT_APPROVAL_GATE_ENABLED: bool = os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE", "").lower() in ("1", "true", "yes")
+
+# GH#11202, #19957: master switch for the chat approval gate. ON by default: the gate routes tool calls through
+# the LangGraph approval interrupt, which the chat UI renders and resolves through ``POST /chats/{id}/resume``.
+# It is the one path on which a held call can be approved and run; the inline path can only end the turn.
+# ``AUTOBOT_CHAT_APPROVAL_GATE=0`` turns it off.
+def approval_gate_enabled(raw: Optional[str]) -> bool:
+    """The gate's setting from ``AUTOBOT_CHAT_APPROVAL_GATE``: unset means on, only 1/true/yes is on otherwise."""
+    return (raw if raw is not None else "1").strip().lower() in ("1", "true", "yes")
+
+
+CHAT_APPROVAL_GATE_ENABLED: bool = approval_gate_enabled(os.environ.get("AUTOBOT_CHAT_APPROVAL_GATE"))
 
 _KEY = "autobot:session:{session_id}:role"
 _APPROVAL_KEY = "autobot:session:{session_id}:approval_categories"
@@ -62,6 +74,30 @@ AUTH_ROLE_CONTEXT_KEY = "auth_role"
 DEFAULT_AUTH_ROLE = "user"
 
 
+def _identity_pairs(scope: "dict | None") -> tuple:
+    """The verified-context keys paired with the authenticated principal's values (#18430)."""
+    return (
+        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
+        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
+    )
+
+
+def overlay_verified_identity(context: "dict | None", scope: "dict | None") -> dict:
+    """Return *context* with the verified principal REPLACED by *scope*'s (#18430, #20709).
+
+    The one overlay for a new turn (``apply_auth_role``) and a resumed one (``resume_context``). Fail closed: a
+    present value overwrites the old one, an absent value removes the key, so a previous or client-supplied
+    identity never survives into the tool seam and the audit row falls to ``system``, never to another user.
+    """
+    merged = {**(context or {})}
+    for key, value in _identity_pairs(scope):
+        if value:
+            merged[key] = str(value)
+        else:
+            merged.pop(key, None)
+    return merged
+
+
 def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | None" = None) -> "dict | None":
     """Overlay the trusted authenticated *role* onto *context* (#13821).
 
@@ -77,20 +113,28 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
     ``verified_company_id`` / ``verified_user_id``, the scope the AI lines are decided for. The request's own
     ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
-    merged = {**(context or {})}
-    for key, value in (
-        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
-        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
-    ):
-        if value:
-            merged[key] = str(value)
-        else:
-            merged.pop(key, None)
+    merged = overlay_verified_identity(context, scope)
+    if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
+        merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
+    else:
+        merged.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
     if role:
         merged[AUTH_ROLE_CONTEXT_KEY] = role
     else:
         merged.pop(AUTH_ROLE_CONTEXT_KEY, None)
     return merged
+
+
+def stamp_verified_identity(metadata: dict, context: "dict | None") -> None:
+    """Record the AUTHENTICATED principal on session *metadata*, replacing whatever a prior turn left (#18825).
+
+    ``metadata["user_id"]`` / ``["org_id"]`` bound the memory-graph owner scope (L2 context, trajectory reads), so
+    they come from the verified keys ``apply_auth_role`` overlaid -- never the request's own ``user_id`` /
+    ``org_id``. A turn with no verified principal (or no context) writes ``""``: the scope fails closed rather
+    than inheriting the previous turn's identity.
+    """
+    metadata["user_id"] = (context or {}).get(VERIFIED_USER_KEY) or ""
+    metadata["org_id"] = (context or {}).get(VERIFIED_COMPANY_KEY) or ""
 
 
 def resolve_auth_role(context: "dict | None") -> str:
@@ -178,14 +222,18 @@ class SessionRoleService(AsyncRedisClientMixin):
         )
         logger.info("session_role.set_approval session=%s categories=%s", session_id, categories)
 
+    async def read_approval_categories(self, session_id: str) -> List[str]:
+        """The session's declared approval categories; raises when they cannot be read (#19957)."""
+        redis = await self._get_redis()
+        raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
+        if not raw:
+            return []
+        return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+
     async def get_approval_categories(self, session_id: str) -> List[str]:
         """Return the session's declared approval categories (never raises into chat)."""
         try:
-            redis = await self._get_redis()
-            raw = await redis.get(_APPROVAL_KEY.format(session_id=session_id))
-            if not raw:
-                return []
-            return list(json.loads(raw.decode() if isinstance(raw, bytes) else raw))
+            return await self.read_approval_categories(session_id)
         except Exception as exc:  # defensive; must never break chat
             logger.warning("session_role.get_approval failed for session=%s: %s", session_id, exc)
             return []
@@ -194,3 +242,41 @@ class SessionRoleService(AsyncRedisClientMixin):
         """Remove the session's approval-category declaration."""
         redis = await self._get_redis()
         await redis.delete(_APPROVAL_KEY.format(session_id=session_id))
+
+
+async def apply_session_governance(
+    session_id: str, context: "dict | None", auth_role: Optional[str] = None, scope: "dict | None" = None
+) -> "dict | None":
+    """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202/#20195).
+
+    A server-set session role overrides any client-supplied ``agent_id`` so the pinned agent's ``forbidden_work``
+    is enforced at the tool seam and cannot be lifted by the caller. When the approval gate flag is on, the
+    baseline and the session's approval categories are overlaid as ``requires_approval_before``. #20195: the
+    attachment floor (this chat used a file; an admin may waive it) is written from server state, never the client.
+    """
+    from chat_workflow.approval_baseline import stamp_declared_categories, with_baseline_categories
+    from chat_workflow.attachment_floor import stamp_attachment_floor
+    from chat_workflow.session_work_item import SessionWorkItemService, apply_work_item
+
+    svc = SessionRoleService()
+    # #13821: the authenticated caller's RBAC role, applied unconditionally (it strips a missing one).
+    context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
+    context = apply_role(context, await svc.get_role(session_id))
+    # #13704: a server-set work-item binding overrides any client-supplied work_item_id (#13687).
+    context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
+    context = await stamp_attachment_floor(context, session_id)
+    session_categories: "List[str] | None" = []
+    if CHAT_APPROVAL_GATE_ENABLED:
+        try:
+            session_categories = await svc.read_approval_categories(session_id)
+        except Exception as exc:  # noqa: BLE001 - fail closed (#19957): an unread declaration must not lift a gate
+            logger.error(
+                "Session approval categories unreadable for %s (%s); every category stays gated", session_id, exc
+            )
+            session_categories = None
+    # #19957: stamped before the overlay mixes the baseline in; None (unreadable) stamps every category as declared.
+    context = stamp_declared_categories(context, session_categories)
+    if CHAT_APPROVAL_GATE_ENABLED:
+        # #18294: all categories gated by default; only the SLM setting relaxes one.
+        context = await with_baseline_categories(context, context[DECLARED_CATEGORIES_KEY])  # declared stays gated
+    return context

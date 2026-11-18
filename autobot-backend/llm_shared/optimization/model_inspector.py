@@ -42,14 +42,14 @@ logger = get_logger(__name__)
 #: Bytes per float32 parameter (used for size estimation).
 _BYTES_PER_FP32: int = 4
 
-#: TTL for cached ModelInfo entries (seconds).
+#: TTL for cached ModelArchitectureInfo entries (seconds).
 _CACHE_TTL_SECONDS: int = TTL_1_HOUR
 
 # ---------------------------------------------------------------------------
 # Cache
 # ---------------------------------------------------------------------------
 
-#: Module-level cache: model_name -> (ModelInfo, expiry_timestamp)
+#: Module-level cache: model_name -> (ModelArchitectureInfo, expiry_timestamp)
 _cache: Dict[str, tuple] = {}
 
 
@@ -59,7 +59,7 @@ _cache: Dict[str, tuple] = {}
 
 
 @dataclass
-class ModelInfo:
+class ModelArchitectureInfo:
     """
     Architecture metadata extracted from a model config at zero memory cost.
 
@@ -100,8 +100,8 @@ def _import_transformers() -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _cache_get(model_name: str) -> ModelInfo | None:
-    """Return cached ModelInfo if present and unexpired, else None."""
+def _cache_get(model_name: str) -> ModelArchitectureInfo | None:
+    """Return cached ModelArchitectureInfo if present and unexpired, else None."""
     entry = _cache.get(model_name)
     if entry is None:
         return None
@@ -112,8 +112,8 @@ def _cache_get(model_name: str) -> ModelInfo | None:
     return info
 
 
-def _cache_put(model_name: str, info: ModelInfo) -> None:
-    """Store ModelInfo in cache with TTL."""
+def _cache_put(model_name: str, info: ModelArchitectureInfo) -> None:
+    """Store ModelArchitectureInfo in cache with TTL."""
     _cache[model_name] = (info, time.monotonic() + _CACHE_TTL_SECONDS)
 
 
@@ -122,9 +122,9 @@ def _cache_put(model_name: str, info: ModelInfo) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_from_config(cfg: Any, param_count_override: int | None = None) -> ModelInfo:
+def _extract_from_config(cfg: Any, param_count_override: int | None = None) -> ModelArchitectureInfo:
     """
-    Build a ModelInfo from a transformers PretrainedConfig object.
+    Build a ModelArchitectureInfo from a transformers PretrainedConfig object.
 
     Handles the two common attribute layouts (decoder-only and encoder-decoder).
 
@@ -151,7 +151,7 @@ def _extract_from_config(cfg: Any, param_count_override: int | None = None) -> M
         param_count = _estimate_param_count(num_layers, hidden_size, vocab_size)
     estimated_size_gb = (param_count * _BYTES_PER_FP32) / (1024**3)
 
-    return ModelInfo(
+    return ModelArchitectureInfo(
         num_layers=num_layers,
         hidden_size=hidden_size,
         num_attention_heads=num_attention_heads,
@@ -208,7 +208,7 @@ def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> 
 # ---------------------------------------------------------------------------
 
 
-def inspect_model(model_name: str) -> ModelInfo | None:
+def inspect_model(model_name: str) -> ModelArchitectureInfo | None:
     """
     Inspect a model's architecture at zero memory cost.
 
@@ -223,7 +223,7 @@ def inspect_model(model_name: str) -> ModelInfo | None:
         model_name: HuggingFace model ID or local path.
 
     Returns:
-        ModelInfo with architecture details, or None on any failure.
+        ModelArchitectureInfo with architecture details, or None on any failure.
     """
     cached = _cache_get(model_name)
     if cached is not None:
@@ -236,9 +236,9 @@ def inspect_model(model_name: str) -> ModelInfo | None:
     return info
 
 
-def _inspect_via_config(model_name: str) -> ModelInfo | None:
+def _inspect_via_config(model_name: str) -> ModelArchitectureInfo | None:
     """
-    Fetch model config, build an empty-weight skeleton, and return ModelInfo.
+    Fetch model config, build an empty-weight skeleton, and return ModelArchitectureInfo.
 
     Separating this from ``inspect_model`` keeps the public function's
     caching logic and this function each under 30 lines.
@@ -287,7 +287,7 @@ def clear_cache() -> None:
 
 
 __all__ = [
-    "ModelInfo",
+    "ModelArchitectureInfo",
     "inspect_model",
     "clear_cache",
 ]

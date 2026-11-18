@@ -16,7 +16,6 @@ AdvancedRAGOptimizer can apply a retrieval score boost.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -27,6 +26,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
+from knowledge.chunk_identity import seed_chunk_id, stamp_chunk_id
 from utils.text_chunking import chunk_text
 
 if TYPE_CHECKING:
@@ -113,10 +113,7 @@ def _load_manifest(manifest_path: str) -> SeedManifest:
     return SeedManifest(collections=collections)
 
 
-def _chunk_id(collection: str, rel_path: str, chunk_index: int) -> str:
-    """Stable deterministic ID for a seed chunk."""
-    key = f"seed:{collection}:{rel_path}:{chunk_index}"
-    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:16]
+_chunk_id = seed_chunk_id  # the one definition lives in knowledge.chunk_identity (#18142)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +195,7 @@ class CognitionSeeder:
             ids=[chunk_id],
             embeddings=[embedding],
             documents=[content],
-            metadatas=[metadata],
+            metadatas=[stamp_chunk_id(metadata, chunk_id)],  # #18142
         )
 
     async def _seed_file(

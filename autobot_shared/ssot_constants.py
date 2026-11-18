@@ -8,7 +8,6 @@ Consolidated Constants - Single Source of Truth
 ================================================
 
 All AutoBot constants consolidated from 12 domain-specific files.
-
 This module replaces:
   - autobot-backend/constants/api_constants.py
   - autobot-backend/constants/error_constants.py
@@ -66,11 +65,11 @@ ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message s
 # MODEL CONSTANTS (imported from ssot_config)
 # ============================================================================
 
+from autobot_shared.category_defaults import CategoryDefaults  # noqa: F401 -- split out (#19335)
+from autobot_shared.log_dir import resolve_logs_dir
+from autobot_shared.paths import infrastructure_dir  # #20578
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
-from autobot_shared.ssot_config import (
-    DEFAULT_EMBEDDING_MODEL,
-    DEFAULT_LLM_MODEL,
-)
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
 from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
 from autobot_shared.ssot_config import PROJECT_ROOT as CANONICAL_PROJECT_ROOT
@@ -330,9 +329,9 @@ class PathConstants:
     """Centralized path constants"""
 
     PROJECT_ROOT: Path = CANONICAL_PROJECT_ROOT  # #13149: was Path(__file__).parent.parent
-    CONFIG_DIR: Path = PROJECT_ROOT / "autobot-infrastructure" / "shared" / "config"  # #14892: was "infrastructure"
+    CONFIG_DIR: Path = infrastructure_dir(fallback_root=CANONICAL_PROJECT_ROOT) / "shared" / "config"  # #20578
     DATA_DIR: Path = PROJECT_ROOT / "data"
-    LOGS_DIR: Path = PROJECT_ROOT / "logs"
+    LOGS_DIR: Path = resolve_logs_dir()  # #20894: never inside the source tree
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
     BACKEND_DIR: Path = PROJECT_ROOT / "autobot-backend"
     STATIC_DIR: Path = PROJECT_ROOT / "autobot-backend" / "static"
@@ -558,8 +557,8 @@ class VoiceRecognitionConfig:
     PHRASE_THRESHOLD = 0.3
 
 
-class CacheConfig:
-    """Cache configuration constants."""
+class CacheSizeDefaults:
+    """Embedding/database cache size and TTL defaults (not the SSOT settings model ssot_config.CacheConfig)."""
 
     EMBEDDING_CACHE_MAX_SIZE = 1000
     EMBEDDING_CACHE_TTL_SECONDS = 3600
@@ -642,7 +641,7 @@ class LLMDefaults:
     LONG_MAX_TOKENS = 2048
     VERY_LONG_MAX_TOKENS = 4000
     KNOWLEDGE_MAX_TOKENS = 2048
-    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TEMPERATURE = ModelConfig.DEFAULT_TEMPERATURE  # one value, two names (#19730)
     DEFAULT_TOP_P = 0.9
     DEFAULT_CONCURRENT_WORKERS = 3
 
@@ -769,42 +768,6 @@ class QueryDefaults:
     RAG_DEFAULT_RESULTS: int = ModelConfig.RAG_DEFAULT_MAX_RESULTS  # alias of the canonical (#18094)
     RAG_MAX_RESULTS: int = 20
     KNOWLEDGE_DEFAULT_LIMIT: int = 100
-
-
-class CategoryDefaults:
-    """Default category and type values for classification."""
-
-    GENERAL: str = "general"
-    IMPORTED: str = "imported"
-    UNKNOWN: str = "unknown"
-    SEARCH_MODE_HYBRID: str = "hybrid"
-    SEARCH_MODE_SEMANTIC: str = "semantic"
-    SEARCH_MODE_KEYWORD: str = "keyword"
-    QUERY_TYPE_GENERAL: str = "general"
-    QUERY_TYPE_TECHNICAL: str = "technical"
-    QUERY_TYPE_CODE: str = "code"
-    CONTEXT_TYPE_GENERAL: str = "general"
-    CONTEXT_TYPE_SECURITY: str = "security"
-    CONTEXT_TYPE_RESEARCH: str = "research"
-    # CHAT MESSAGE authorship — who wrote a message. NOT an authorization role.
-    #
-    # Two other vocabularies use the word "role" and share values with this one
-    # (#14024): ``autobot_shared.auth.permissions.Role`` (platform RBAC) and
-    # ``llc.models.enums.MembershipRole`` (company membership). ``ROLE_USER``
-    # holds the same string as ``Role.USER``, and this class is a bare string
-    # constant holder, so a value from here satisfies an RBAC parameter with no
-    # type error and no test failure.
-    #
-    # ``tools/tool_registry`` came within one applied lint suggestion of tying an
-    # authorization decision to ``ROLE_USER`` (#13934). If a field is consumed by
-    # a permission check, it wants ``auth.permissions.Role`` — not these. The
-    # overlap is asserted in ``security/roles_do_not_collide_test.py``.
-    ROLE_USER: str = "user"
-    ROLE_ASSISTANT: str = "assistant"
-    ROLE_SYSTEM: str = "system"
-    MODE_DEVELOPMENT: str = "development"
-    MODE_PRODUCTION: str = "production"
-    MODE_TESTING: str = "testing"
 
 
 class WorkStealingConfig:

@@ -15,7 +15,9 @@ Public surface
 
 Returns a per-store count of records whose ownership was rewritten.  Errors
 from individual stores are caught, logged, and counted as 0 — partial
-reassignment must not abort account deletion.
+reassignment must not abort account deletion.  The one exception is a failed
+KB access-control epoch bump (``AclEpochBumpError``): KB records were rewritten
+but the per-principal RAG caches still serve the old ownership, so it propagates.
 
 Store coverage
 --------------
@@ -40,6 +42,7 @@ import json
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.acl_epoch import ACL_EPOCH_DATABASE, AclEpochBumpError, bump_acl_epoch_async
 from memory._redis_util import redis_scan as _redis_scan
 from memory.working_memory import is_working_memory_key
 
@@ -233,6 +236,19 @@ async def _move_redis_facts_index(redis: Any, old_key: str, new_key: str) -> Non
     await redis.delete(old_key)
 
 
+async def _bump_kb_acl_epoch() -> None:
+    """Orphan the per-principal RAG caches after a KB ownership rewrite (#16664).
+
+    Raises ``AclEpochBumpError`` -- never logged and dropped: the caches would keep serving
+    results filtered by the old ownership.
+    """
+    try:
+        client = await get_async_redis_client(database=ACL_EPOCH_DATABASE)
+    except Exception as exc:
+        raise AclEpochBumpError(f"KB access-control epoch not bumped: {exc}") from exc
+    await bump_acl_epoch_async(client)
+
+
 async def _reassign_kb_facts(old_id: str, new_id: str) -> int:
     """Reassign KB facts ChromaDB collection metadata and Redis ownership indexes.
 
@@ -246,7 +262,8 @@ async def _reassign_kb_facts(old_id: str, new_id: str) -> int:
         written by ``facts.py:572`` when ownership manager is absent)
 
     Returns the total count of ChromaDB records reassigned across both fields.
-    If the KB is unavailable this returns 0 and never raises.
+    If the KB is unavailable this returns 0. Once any record was rewritten the ACL
+    epoch is bumped, and a failed bump raises ``AclEpochBumpError``.
     """
     total = 0
 
@@ -275,6 +292,7 @@ async def _reassign_kb_facts(old_id: str, new_id: str) -> int:
         logger.warning("ownership_reassign: kb_facts Redis index pass error: %s", exc)
 
     if total:
+        await _bump_kb_acl_epoch()  # after every write: a cached result keyed on the old epoch is stale
         logger.info(
             "ownership_reassign: kb_facts — total %d ChromaDB record(s) reassigned %s→%s", total, old_id, new_id
         )
@@ -301,6 +319,10 @@ async def reassign_user_memory(old_user_id: str, new_owner_id: str) -> Dict[str,
         A dict mapping store name to the number of records reassigned, e.g.::
 
             {"verbatim": 3, "trajectory": 0, "working_memory": 1, "graph": 2, "kb_facts": 4}
+
+    Raises:
+        AclEpochBumpError: KB facts were rewritten but the ACL epoch bump failed; a hard
+            delete aborts on it (``_reassign_before_delete`` is fail-closed).
     """
     counts: Dict[str, int] = {
         "verbatim": 0,
@@ -331,6 +353,8 @@ async def reassign_user_memory(old_user_id: str, new_owner_id: str) -> Dict[str,
     ]:
         try:
             counts[store_name] = await coro_fn()
+        except AclEpochBumpError:
+            raise  # records were rewritten but the RAG caches were not invalidated: report failure
         except Exception as exc:
             logger.warning("ownership_reassign: store=%s raised unexpectedly: %s", store_name, exc)
             counts[store_name] = 0
