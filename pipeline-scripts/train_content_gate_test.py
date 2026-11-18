@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import train_content_gate as gate
 
@@ -28,6 +30,7 @@ def run(*args: str) -> str:
 
 
 def write(path: str, text: str) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(text)
 
@@ -177,10 +180,18 @@ def test_only_the_title_s_member_list_counts(train):
 
 
 def test_a_recomputed_file_is_skipped(train):
-    head = member("one", {"size_known_large.py": LONG.format(1)})
+    head = member("one", {"size_baseline.py": LONG.format(1)})
     board(1, head, "-s", "ours")
     report = gate.check_range("main..train")
     assert report.findings == [] and report.files == 0
+
+
+def test_a_size_table_is_no_longer_recomputed_so_it_is_measured(train):
+    """#19673: trains no longer edit the size ceilings; they are down-only bounds gated against the merge base."""
+    head = member("one", {"size_known_large.py": LONG.format(1)})
+    board(1, head, "-s", "ours")
+    report = gate.check_range("main..train")
+    assert report.files == 1 and report.findings, "the table was measured and its loss reported"
 
 
 def test_a_range_with_no_member_merge_is_a_failure_not_a_pass(train):
@@ -236,6 +247,59 @@ def test_a_merge_the_gate_cannot_account_for_fails(train):
     assert "cannot account for" in gate.check_range("main..train").findings[0]
 
 
+def passenger(pr: int, head: str, *strategy: str, suffix: str = " (passenger)") -> None:
+    message = f"Merge the #{pr} research doc @ {head[:10]} into the merge train{suffix}"
+    run("merge", "-q", "--no-ff", *strategy, "-m", message, head)
+
+
+def test_a_passenger_merge_is_accepted_and_its_content_checked(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    report = gate.check_range("main..train", "chore(merge-train): #1")
+    assert report.findings == [] and (report.members, report.files, report.lines) == (2, 2, 2)
+    assert any(note.startswith("passenger #7: merged at") for note in report.notes)
+    assert "#7 is declared" in gate.check_range("main..train", "chore(merge-train): #1 #7").findings[0]
+
+
+def test_a_passenger_that_lost_its_file_is_reported(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 docs/seven.md: missing" in findings[0]
+
+
+def test_a_passenger_merged_twice_is_a_finding_not_an_overwrite(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "passenger #7 merged more than once" in findings[0]
+    assert "merge each passenger once" in findings[0]
+    assert gate.check_range("main..train").files == 3
+
+
+def test_the_older_of_two_same_numbered_passenger_merges_is_measured_too(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), "-s", "ours")
+    passenger(7, member("seven-b", {"docs/seven-b.md": LONG.format("7b")}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 2 and "merged more than once" in findings[0]
+    assert "passenger #7 (" in findings[1] and " docs/seven.md: missing" in findings[1]
+
+
+def test_a_range_with_only_a_passenger_merge_measures_nothing(train):
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "nothing was measured" in findings[0]
+
+
+def test_a_passenger_like_merge_without_the_suffix_is_unaccounted(train):
+    board(1, member("one", {"one.txt": LONG.format(1)}))
+    passenger(7, member("seven", {"docs/seven.md": LONG.format(7)}), suffix="")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "cannot account for" in findings[0]
+
+
 def test_merging_main_into_the_train_adds_no_member(train):
     board(1, member("one", {"one.txt": LONG.format(1)}))
     run("switch", "-q", "main")
@@ -269,3 +333,45 @@ def test_a_path_git_would_quote_is_read_exactly(train):
 def test_an_unreadable_history_is_unmeasured_not_a_pass(train, capsys):
     assert gate.main(["--landed", "not-a-commit"]) == 2
     assert "UNMEASURED" in capsys.readouterr().out
+
+
+HEADER = "# Copyright 2025-2026 mrveiss\n# SPDX-License-Identifier: Apache-2.0\n"
+
+
+def test_an_added_source_file_without_the_license_header_fails(train):
+    """#21535: the CI fixer hook inserts the header in its own checkout, so only the committed text tells."""
+    board(1, member("one", {"pkg/new_test.py": LONG.format(1)}))
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "#1 pkg/new_test.py: added without the SPDX/Apache-2.0 license header" in findings[0]
+
+
+def test_an_added_source_file_with_the_header_passes(train):
+    board(1, member("one", {"pkg/new_test.py": HEADER + LONG.format(1)}))
+    assert gate.check_range("main..train").findings == []
+
+
+def test_a_path_outside_the_header_scope_needs_no_header(train):
+    """Not a header-bearing extension, a generated directory, a workflow: the check's own scope decides."""
+    files = {"notes.txt": LONG.format(1), "pkg/fixtures/x.py": LONG.format(2), ".github/workflows/w.sh": LONG.format(3)}
+    board(1, member("one", files))
+    assert gate.check_range("main..train").findings == []
+
+
+def test_a_modified_file_without_the_header_is_not_this_gates_finding(train):
+    """Only an ADDED file is judged: a pre-existing header-less file is the header step's, not the member's."""
+    run("switch", "-q", "main")
+    write("old.py", LONG.format("old"))
+    commit("old file without a header")
+    run("switch", "-q", "train")
+    run("merge", "-q", "--no-ff", "main", "-m", "Merge main into train")
+    board(1, member("one", {"old.py": LONG.format("old") + LONG.format(1)}))
+    assert gate.check_range("main..train").findings == []
+
+
+def test_a_missing_header_and_lost_lines_on_one_file_are_reported_together(train):
+    head = member("one", {"pkg/new_test.py": LONG.format(1) + LONG.format(2)})
+    write("pkg/new_test.py", LONG.format(9))
+    commit("other content arrived at the same path first")
+    board(1, head, "-s", "ours")
+    findings = gate.check_range("main..train").findings
+    assert len(findings) == 1 and "license header; only 0/2 added lines present" in findings[0]

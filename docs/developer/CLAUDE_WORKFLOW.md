@@ -20,7 +20,7 @@
   `gh api -X POST repos/$REPO/issues/$UMBRELLA/sub_issues -F sub_issue_id=$(gh api repos/$REPO/issues/$NEW -q .id)`
   and every `Depends on:` with `.../issues/$NEW/dependencies/blocked_by -F issue_id=…`, at filing
   time. The `- [ ]` checklist stays — it carries wave grouping and PR refs the native view cannot.
-  Full commands in the `issue` skill, Step 4. Issue *types* are org-only and unavailable here
+  Full commands in `/autobot-dev-skills:lifecycle issue` (Step 4). Issue *types* are org-only and unavailable here
 - For large features (backend + frontend), complete and commit backend fully first
 - Commit completed work incrementally
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
@@ -41,6 +41,7 @@ cannot do something, fix that gap (issue + PR) rather than routing around it. Th
 paths here are for *reading and changing* the deployment, not for running it.
 
 - **Code flow:** GitHub repo → SLM Manager pulls latest → Ansible deploys to fleet nodes
+- **Going back:** a chosen earlier commit of `main` is deployed through the same updater (Code Sync > Roll back to an earlier version), never by hand — see `docs/runbooks/CODE_UPDATE.md`
 - **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml`
 - **Node enrollment:** `autobot-slm-backend/ansible/playbooks/enroll-node.yml`
 - **NPU worker role:** `autobot-slm-backend/ansible/roles/npu-worker/`
@@ -88,40 +89,27 @@ only when dispatching agents or starting batch work.
 
 ## Session Lifecycle
 
-Sessions can terminate before their PRs merge. **Each session leaves a machine-readable handoff at end and never sweeps another's worktrees** ([OWNER_RULES.md](OWNER_RULES.md) rules 8, 9). Full
-protocol lives in the `session-lifecycle` skill, which also carries the handoff
-schema. **`.session/` is gitignored (#17479)** — handoffs are local working notes,
-never committed, because they name branches, worktrees and PR state that is false
-the moment the work moves.
+Sessions can terminate before their PRs merge. **Each session leaves a handoff note in `.notes/` (main checkout root, never a worktree) at end and never sweeps another's worktrees** ([OWNER_RULES.md](OWNER_RULES.md) rules 8, 9). `.notes/` is the ONE handoff mechanism (the `.session/HANDOFF-<branch>.md` handoff is retired, owner decision 2026-11-16); procedure in [`SESSION_END.md`](SESSION_END.md). `.notes/` is gitignored — local working notes, never committed.
 
 **Start of session** (before any task work):
 1. `git fetch --prune`, then inventory worktrees (`git worktree list`, `ledger who worktree`). Never sweep: dispose only of a worktree you own whose PR shows MERGED. An orphan (owner session gone) is taken over: finish its work, then reuse it.
 2. If step 1 took over an orphan, skip this step and continue in its worktree. Otherwise create your **own** isolated worktree — never two sessions in one checkout:
    `git worktree add .worktrees/issue-XXXX -b issue-XXXX origin/main`.
-3. Read predecessor handoffs in `.session/` **on this machine** — they are
-   local-only and will not be present in a fresh clone. If a branch is unmerged,
-   decide to continue it (merge base first) or start fresh — never
-   duplicate its work blind. Step 1's sweep reaps handoffs whose branch is gone
-   (#13848), so every file still there names a live branch. A handoff the sweep
-   reports as `STRANDED` is unlanded work with no branch left: **file an issue
-   for it**, which is now the only durable record, since the file itself is not
-   committed.
+3. Read the main checkout's `.notes/INDEX.md` if it exists ([`SESSION_END.md`](SESSION_END.md)). If a listed branch is unmerged, decide to continue it (merge base first) or start fresh — never duplicate its work blind.
 
 **End of session** (mandatory — also when blocked):
 1. Leave nothing uncommitted; WIP gets a `wip:` commit and a handoff note.
 2. Merge latest base, re-run the relevant gates, grep for conflict
    markers (`^<<<<<<< `) before the final push.
 3. Push and open/update the PR.
-4. Write `.session/HANDOFF-<branch>.md` (see schema). **Do not commit it** —
-   the path is gitignored. Anything a future reader must not lose belongs in the
-   issue or the PR body, not in a local note.
-5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) only when all work is pushed **and** has landed (PR merged, content in base) (rule 9). A pushed but unmerged branch keeps its worktree; a tree that refuses to go is reported and left.
+4. Before removing any worktree, write or update the main-checkout `.notes/` note and `INDEX.md` ([`SESSION_END.md`](SESSION_END.md)). Do not commit it; anything a future reader must not lose belongs in the issue or the PR body.
+5. Release your ledger claims (`ledger release worktree <dir>`) and remove your worktrees with plain `git worktree remove` (never `--force`) once all work is pushed, landed or not (rule 9). The pushed branch is the takeover point; the worktree is disposable. A tree that refuses to go is reported and left.
 
 **Who disposes of a worktree:** whoever observes the merge. If your PR merges while you are
 still running, clean up in the same breath as the merge (worktree, local branch, remote
 branch) — a merged PR whose worktree still exists is an unfinished merge. If the session ends
-first, an orphan is taken over by the next session, which finishes its work and then disposes of it. Nobody removes a worktree
-whose work has not landed (pushed is not landed), and nobody touches another live session's tree.
+first, it pushes and releases its worktrees; the next session takes over from the pushed branch. An orphan worktree (session gone without ending) is taken over, its work finished, then disposed of. Nobody removes a worktree
+whose work is not pushed, and nobody touches another live session's tree.
 
 LICENSE/NOTICE/SPDX headers are read-only during a session — flag concerns,
 never edit.
@@ -172,16 +160,18 @@ single deterministic command, run it inline. Delegate mechanical work only when 
 fan out in parallel), or **high-discard** (most of what is read is thrown away).
 
 **Tiers — pick by output type, not task difficulty.** This is the in-repo copy; the extended
-routing table and the never-hand-to-Haiku list live in the global model-tiers doc.
+routing table and the never-hand-to-Haiku list live in the global model-tiers doc. The tiers are
+named by alias; the pinned ID for each alias is written only in
+[`autobot_shared/ssot_claude_models.py`](../../autobot_shared/ssot_claude_models.py) (`CLAUDE_TIER_MODELS`).
 
 | Tier | Model | Use for |
 |---|---|---|
-| Haiku | `claude-haiku-4-5-20251001` | mechanical work — sweeps, status checks, inventories, capture |
-| Fable | `claude-fable-5` | plans and design documents — PRDs, architecture proposals |
-| Sonnet | `claude-sonnet-5` | deliverables — code, reviews, acceptance criteria, approvals |
+| Haiku | `haiku` | mechanical work — sweeps, status checks, inventories, capture |
+| Fable | `fable` | plans and design documents — PRDs, architecture proposals |
+| Sonnet | `sonnet` | deliverables — code, reviews, acceptance criteria, approvals |
 
 Never hand Haiku a deliverable or a judgement that ships. Each agent declares its own tier in
-its `.claude/agents/` definition; an agent with no `model:` inherits the caller's model, which
+its plugin definition (`autobot-dev-skills` agents); an agent with no `model:` inherits the caller's model, which
 is a bug rather than a default.
 
 **Verify what comes back.** A subagent's report is an assertion, not evidence — more so the
@@ -205,10 +195,14 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 **Subagent Bash Permission Constraint:**
 Subagents cannot autonomously acquire Bash permission. Run batch file-manipulation and git work in the main session.
 
-**Available Agents:**
-- Implementation: `senior-backend-engineer`, `frontend-engineer`, `database-engineer`, `devops-engineer`, `testing-engineer`, `code-reviewer` (MANDATORY), `documentation-engineer`
-- Analysis: `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
-- Planning: `project-task-planner`, `project-manager`
+**Available Agents** (plugin `autobot-dev-skills`, invoked as `autobot-dev-skills:<role>`; each role loads its lens through `/autobot-dev-skills:engineering <lens>` or `/autobot-dev-skills:review <lens>`):
+- `senior-developer` — backend, frontend, database, devops, testing, performance, ai-ml, multimodal, refactoring
+- `reviewer` — `/autobot-dev-skills:review code-reviewer` (MANDATORY on every PR), `/autobot-dev-skills:review code-skeptic`, `/autobot-dev-skills:review security-auditor`
+- `planner` — `/autobot-dev-skills:engineering systems-architect`, `/autobot-dev-skills:engineering project-manager`, `/autobot-dev-skills:engineering project-task-planner`, `/autobot-dev-skills:engineering prd-writer`, `/autobot-dev-skills:engineering frontend-designer`
+- `researcher` — `/autobot-dev-skills:lifecycle research-to-issues`, research, adopt hand-off
+- `writer` — `/autobot-dev-skills:engineering documentation-engineer`, `/autobot-dev-skills:engineering content-writer`
+- `sweeper` — `/autobot-dev-skills:engineering repo-sweeper`, `/autobot-dev-skills:engineering conversation-compacter` (read-only)
+- `memory` — `/autobot-dev-skills:engineering memory-monitor`, `/autobot-dev-skills:engineering memory-curator`
 
 ---
 
@@ -346,7 +340,7 @@ is clear to merge. Run before a push, its verdict would be correct, complete, an
 commit the push is replacing — and `never-reported`, which it blocks on deliberately, is the
 normal state seconds after a push.
 
-It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
+It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `_gate-code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
 
 It also runs (or explains why it did not) each of the required status checks branch protection gates `main` on (11 contexts, read with `gh api repos/{owner}/{repo}/branches/main/protection --jq '.required_status_checks.contexts'`; the `Main` ruleset itself holds only deletion and non-fast-forward rules). Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 

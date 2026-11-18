@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import get_session, require_board_role
 
@@ -38,6 +39,7 @@ from ..scheduler.schedule_entry import schedule_heartbeat
 from ..services.company import CompanyNotFoundError
 from ..services.controls_service import (
     AgentNotFoundError,
+    AgentNotPausableError,
     AgentNotSchedulableError,
     ControlsService,
     SprintNotFoundError,
@@ -121,6 +123,8 @@ async def pause_agent(
         return result
     except AgentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    except AgentNotPausableError as exc:
+        raise http_refusal(409, exc, scope="controls.pause_agent") from None
 
 
 @router.post("/companies/{company_id}/controls/agents/{agent_id}/resume")
@@ -180,7 +184,7 @@ async def set_agent_heartbeat(
     except AgentNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     except AgentNotSchedulableError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
+        raise http_refusal(409, exc, scope="controls.set_agent_heartbeat") from None
     await session.commit()
     # After the commit: the poll loop re-reads the row, and must see it enabled.
     result["scheduled"] = bool(body.heartbeat_enabled) and await schedule_heartbeat(agent_id, result["heartbeat_cron"])

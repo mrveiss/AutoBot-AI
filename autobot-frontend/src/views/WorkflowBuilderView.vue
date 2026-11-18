@@ -299,7 +299,7 @@
       </header>
 
       <!-- Steps waiting for approval: every tab; the runner tab shows them inline (#17677) -->
-      <StepApprovalCard v-for="s in activeSection === 'runner' ? [] : stepsAwaitingApproval" :key="s.step_id" :step="s"
+      <StepApprovalList :steps="activeSection === 'runner' ? [] : stepsAwaitingApproval"
         :workflow-id="currentWorkflow?.workflow_id ?? ''" :approve="handleApproveStep" :skip="handleSkipStep" />
 
       <!-- Loading State -->
@@ -506,6 +506,7 @@
               :title="$t('workflow.views.planAwaitingApproval')"
               :approve-label="$t('workflow.views.approveAndRun')"
               :reject-label="$t('workflow.views.reject')"
+              :deciding="deciding"
               @approve="handleApprovePlan"
               @reject="handleRejectPlan"
             >
@@ -548,6 +549,7 @@
             @cancel-workflow="handleCancelWorkflow"
             :approve-step="handleApproveStep"
             :skip-step="handleSkipStep"
+            @select-workflow="selectWorkflow"
             @refresh="loadActiveWorkflows"
           />
         </section>
@@ -701,11 +703,13 @@ import {
 } from '@/composables/useWorkflowBuilder';
 import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
+import { useRunnerSelection } from '@/composables/workflow/useRunnerSelection';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import ApprovalEnvelope from '@/components/approvals/ApprovalEnvelope.vue';
-import StepApprovalCard from '@/components/workflow/StepApprovalCard.vue';
+import StepApprovalList from '@/components/workflow/StepApprovalList.vue';
+import { usePlanDecision } from '@/composables/usePlanDecision';
 import { useStepAnswerToast } from '@/composables/useStepAnswerToast';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
@@ -718,10 +722,8 @@ import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
 import MediaGallery from '@/components/vision/MediaGallery.vue';
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-} from '@/utils/VisionMultimodalApiClient';
+import { getVisionHealth, getAutomationOpportunities } from '@/composables/useVisionApi';
+import type { AutomationOpportunity } from '@/types/visionMultimodal';
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
@@ -821,6 +823,10 @@ const {
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
+const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
+  t, showToast, navigateToRunner: () => navigateTo('runner'),
+  activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+});
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -857,12 +863,8 @@ function onVisionNavClick(event: MouseEvent): void {
 
 async function checkVisionHealth(): Promise<void> {
   try {
-    const res = await visionMultimodalApiClient.getVisionHealth();
-    if (res.success && res.data) {
-      visionHealthStatus.value = res.data.status === 'healthy' ? 'healthy' : 'degraded';
-    } else {
-      visionHealthStatus.value = 'offline';
-    }
+    const res = await getVisionHealth();
+    visionHealthStatus.value = res.status === 'healthy' ? 'healthy' : 'degraded';
   } catch {
     visionHealthStatus.value = 'offline';
   }
@@ -871,10 +873,8 @@ async function checkVisionHealth(): Promise<void> {
 async function loadGuiAutomationOpportunities(): Promise<void> {
   guiAutomationLoading.value = true;
   try {
-    const res = await visionMultimodalApiClient.getAutomationOpportunities();
-    if (res.success && res.data) {
-      guiAutomationOpportunities.value = res.data.opportunities || [];
-    }
+    const res = await getAutomationOpportunities();
+    guiAutomationOpportunities.value = (res.opportunities || []) as AutomationOpportunity[];
   } catch (e) {
     logger.warn('Failed to load automation opportunities:', e);
   } finally {
@@ -1027,27 +1027,16 @@ async function createFromNaturalLanguage(): Promise<void> {
   }
 }
 
-async function handleApprovePlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await approvePlan(pendingApproval.value.workflow_id);
-  if (success) {
-    showToast(t('workflow.builder.planApproved'), 'success');
+const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
+  pendingApproval,
+  approvePlan,
+  rejectPlan,
+  notify: (key, kind) => showToast(t(key), kind),
+  onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
-  } else {
-    showToast(t('workflow.builder.planApproveFailed'), 'error');
-  }
-}
-
-async function handleRejectPlan(): Promise<void> {
-  if (!pendingApproval.value) return;
-
-  const success = await rejectPlan(pendingApproval.value.workflow_id, 'User rejected');
-  if (success) {
-    showToast(t('workflow.builder.planRejected'), 'info');
-  }
-}
+  },
+});
 
 function handleNodeAdded(node: WorkflowNode): void {
   addNode(node);
@@ -1105,8 +1094,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   };
   const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
   if (workflowId) {
-    showToast(t('workflow.builder.saved', { name }), 'success');
-    navigateTo('runner');
+    if (await handleViewWorkflow(workflowId)) showToast(t('workflow.builder.saved', { name }), 'success');
   } else {
     showToast(t('workflow.builder.saveFailed'), 'error');
   }
@@ -1146,13 +1134,6 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
     await loadActiveWorkflows();
   } else {
     showToast(result?.error || t('workflow.builder.templateRunFailed', { name: template.name }), 'error');
-  }
-}
-
-async function handleStartWorkflow(workflowId: string): Promise<void> {
-  const success = await startWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.started'), 'success');
   }
 }
 
@@ -1196,19 +1177,6 @@ async function openWorkflowFromQuery(): Promise<void> {
   const workflowId = workflowIdFromQuery(route.query);
   if (!workflowId) return;
   await handleViewWorkflow(workflowId);
-}
-
-async function handleViewWorkflow(workflowId: string): Promise<void> {
-  // Issue #1367: Load the selected workflow before switching to runner
-  navigateTo('runner');
-  const local = activeWorkflows.value.find(
-    (wf) => wf.workflow_id === workflowId,
-  );
-  if (local) {
-    currentWorkflow.value = local;
-  } else {
-    await getWorkflowStatus(workflowId);
-  }
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {

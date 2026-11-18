@@ -1,12 +1,14 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ApiClientBase, httpErrorFrom, type RawRequestOptions, type TransportRequestOptions } from '@autobot/ui'
+import type { paths } from '@/types/generated/api';
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
 import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
+import { monitorApiCall } from '@/utils/apiCallMonitor';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -74,7 +76,7 @@ export interface ChatMessageResponse {
 export type { ApiRequestOptions as RequestOptions };
 type RequestOptions = ApiRequestOptions;
 
-export class ApiClient extends ApiClientBase<RequestOptions> {
+export class ApiClient extends ApiClientBase<RequestOptions, paths> {
   private baseUrl: string;
   private baseUrlPromise: Promise<string> | null;
   private settings: Record<string, unknown>;
@@ -218,6 +220,14 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
     return readStoredAuthToken();
   }
 
+  // Contract keys carry the literal `/api` prefix; `VITE_API_BASE_PATH` may relocate it (a path or an absolute URL).
+  // Apply the configured base to `call`/`callRaw` so they reach the route hand-built `${getApiBase()}/x` callers
+  // do, and so `isAuthEndpoint` sees the same prefix (#12363). Keys outside `/api` (`/v1/...`) are sent as written.
+  protected contractPath(path: string): string {
+    const base = getApiBase();
+    return path.startsWith('/api/') && base !== '/api' ? `${base}${path.slice('/api'.length)}` : path;
+  }
+
   protected isAuthEndpoint(endpoint: string): boolean {
     return endpoint.includes(`${getApiBase()}/auth/`);
   }
@@ -279,8 +289,12 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   // Raw Response access (streaming, blobs); `circuitBreaker` opts in to fail-fast (#11682).
   async rawRequest(endpoint: string, options: RawRequestOptions<RequestOptions> = {}): Promise<Response> {
     const key = options.circuitBreaker;
-    if (!key) return super.rawRequest(endpoint, options);
-    return runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options));
+    const send = () => (key
+      ? runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options))
+      : super.rawRequest(endpoint, options));
+    // Every kit-client fetch verb funnels through here, so this is the one place a call is timed for RUM (#21583).
+    // XHR uploads (uploadFile/wireUpload) and direct fetch users bypass it.
+    return monitorApiCall(options.method ?? 'GET', endpoint, send);
   }
 
   // ==================================================================================

@@ -15,10 +15,11 @@ from datetime import timedelta
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import beat_init, worker_process_init
+from celery.signals import beat_init, celeryd_init, worker_process_init, worker_process_shutdown
 from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
+from autobot_shared.logging_manager import setup_logging
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -132,11 +133,12 @@ celery_app.conf.update(
         # Issue #12365: anti-pattern background analysis + daily cache population
         "analytics.run_anti_pattern_analysis": {"queue": "analytics"},
         "analytics.populate_all_caches": {"queue": "analytics"},
+        "analytics.record_latest_task": {"queue": "analytics"},
         # GH#11262: priority tiers on the shared default queue (audit > maintenance).
         **_PRIORITY_TASK_ROUTES,
     },
     # Worker configuration for long-running Ansible playbooks
-    # Uses centralized config from unified_config_manager
+    # Uses centralized config from config_manager
     worker_prefetch_multiplier=_worker_prefetch,
     worker_max_tasks_per_child=_worker_max_tasks,
     # Redis visibility timeout for long-running deployments
@@ -363,6 +365,17 @@ def _assert_beat_tasks_registered() -> None:
 _assert_beat_tasks_registered()
 
 
+@celeryd_init.connect
+@beat_init.connect
+def _start_file_logging(**_kwargs: object) -> None:
+    """Worker and beat startup turn file logging on (#20894); forked pool children inherit it.
+
+    A signal, not a module-level call: API modules import this app to enqueue tasks, and importing
+    must write no file. Connected before the beat reconciliation below, so its records reach the file.
+    """
+    setup_logging()
+
+
 # GH#12354: complement to _assert_beat_tasks_registered() (#12353, which guards
 # the forward direction — every scheduled task is registered). This guards the
 # reverse: prune any entry the on-disk PersistentScheduler store is still
@@ -432,6 +445,32 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
             "worker_process_init: async Redis pool reset failed (worker will still start)",
             exc_info=True,
         )
+
+
+# #20887: one persistent event loop per worker process. Every task drives its coroutine through
+# autobot_shared.worker_loop.run_in_worker_loop, so the engine, session factory and async Redis
+# pools are created once on this loop and never see a closed one. The inherited engine is dropped
+# first (synchronously: the parent's connections belong to the parent), then the loop is started.
+# Prefork pool only: these hooks fire per child process only under prefork (solo sends init once
+# and never shutdown; threads sends neither), so other pools get no fork reset or disposal.
+@worker_process_init.connect
+def _start_worker_loop_on_worker_init(sender=None, **kwargs):
+    """Drop fork-inherited async state and start this worker's event loop."""
+    from autobot_shared.worker_loop import start_worker_loop
+    from user_management.database import reset_after_fork
+
+    reset_after_fork()
+    start_worker_loop()
+    logger.info("worker_process_init: persistent worker event loop started (#20887)")
+
+
+@worker_process_shutdown.connect
+def _stop_worker_loop_on_worker_shutdown(sender=None, **kwargs):
+    """Dispose the engine and Redis pools on the worker loop, then stop it."""
+    from autobot_shared.worker_loop import stop_worker_loop
+
+    stop_worker_loop()
+    logger.info("worker_process_shutdown: worker event loop stopped (#20887)")
 
 
 # #18094: a worker resolves provider keys (knowledge tasks build a KnowledgeBase, whose LLM and
