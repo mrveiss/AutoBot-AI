@@ -31,6 +31,10 @@ from repo_tests._paths import repo_root
 REPO_ROOT = repo_root()
 CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
+CI_TEST_REQUIREMENTS = REPO_ROOT / "requirements-ci-test.txt"
+
+#: The formatters the python suite installs from ``requirements-ci-test.txt`` (#16796).
+SUITE_FORMATTERS = ("black", "isort")
 
 #: pre-commit repo slug -> the distribution name the CI workflow pip-installs.
 #: Only tools pinned in both places belong here; anything else is not a parity
@@ -52,6 +56,12 @@ _PINNED = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][A-Za-
 def _ci_pins() -> dict[str, str]:
     """Exact versions ``_gate-code-quality.yml`` pip-installs, keyed by distribution."""
     text = CODE_QUALITY.read_text(encoding="utf-8")
+    return {name.lower(): version for name, version in _PINNED.findall(text)}
+
+
+def _suite_pins() -> dict[str, str]:
+    """Exact versions ``requirements-ci-test.txt`` pins, keyed by distribution."""
+    text = CI_TEST_REQUIREMENTS.read_text(encoding="utf-8")
     return {name.lower(): version for name, version in _PINNED.findall(text)}
 
 
@@ -148,3 +158,14 @@ def test_every_mypy_hook_gets_the_stubs_ci_installs():
             f"mypy hook #{index} installs {sorted(hook_stubs)} while "
             f"{CODE_QUALITY.name} installs {sorted(ci_stubs)}"
         )
+
+
+@pytest.mark.parametrize("tool", SUITE_FORMATTERS)
+def test_the_suite_requirements_pin_the_formatter_the_hook_runs(tool):
+    """An unpinned formatter in the suite install floats away from the hook (#16796)."""
+    suite = _suite_pins()
+    assert tool in suite, f"{CI_TEST_REQUIREMENTS.name} does not pin {tool} exactly (==)"
+    assert suite[tool] == PRE_COMMIT_PINS[tool], (
+        f"{tool} is pinned to {suite[tool]} in {CI_TEST_REQUIREMENTS.name} but "
+        f"{PRE_COMMIT_PINS[tool]} in {PRE_COMMIT.name}. Bump both, or neither."
+    )
