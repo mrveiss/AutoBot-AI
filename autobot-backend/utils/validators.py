@@ -543,7 +543,7 @@ def validate_email(value: str, field_name: str = "Email") -> str:
     return value
 
 
-def validate_url(value: str, field_name: str = "URL", require_https: bool = False) -> str:
+def validate_url_format(value: str, field_name: str = "URL", require_https: bool = False) -> str:
     """
     Validate URL format.
 
@@ -559,10 +559,10 @@ def validate_url(value: str, field_name: str = "URL", require_https: bool = Fals
         ValueError: If URL format invalid
 
     Examples:
-        >>> validate_url("https://example.com")
+        >>> validate_url_format("https://example.com")
         'https://example.com'
 
-        >>> validate_url("http://example.com", require_https=True)
+        >>> validate_url_format("http://example.com", require_https=True)
         ValueError: URL must use HTTPS
     """
     try:

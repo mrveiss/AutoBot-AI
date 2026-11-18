@@ -44,7 +44,7 @@ class PolicyType(Enum):
     INCIDENT_RESPONSE = "incident_response"
 
 
-class PolicyStatus(Enum):
+class PolicyState(Enum):
     """Policy status values"""
 
     ACTIVE = "active"
@@ -53,7 +53,7 @@ class PolicyStatus(Enum):
     DEPRECATED = "deprecated"
 
 
-class EnforcementMode(Enum):
+class PolicyEnforcementMode(Enum):
     """Policy enforcement modes"""
 
     ENFORCE = "enforce"  # Block non-compliant actions
@@ -70,8 +70,8 @@ class SecurityPolicy:
     name: str
     description: str
     policy_type: PolicyType
-    status: PolicyStatus
-    enforcement_mode: EnforcementMode
+    status: PolicyState
+    enforcement_mode: PolicyEnforcementMode
     rules: List[Dict]
     metadata: Dict
     created_at: datetime
@@ -209,8 +209,8 @@ class SecurityPolicyManager:
 
                 # Convert enums
                 policy_data["policy_type"] = PolicyType(policy_data["policy_type"])
-                policy_data["status"] = PolicyStatus(policy_data["status"])
-                policy_data["enforcement_mode"] = EnforcementMode(policy_data["enforcement_mode"])
+                policy_data["status"] = PolicyState(policy_data["status"])
+                policy_data["enforcement_mode"] = PolicyEnforcementMode(policy_data["enforcement_mode"])
 
                 policy = SecurityPolicy(**policy_data)
                 self.policies[policy.policy_id] = policy
@@ -478,7 +478,7 @@ class SecurityPolicyManager:
         policy_type: PolicyType,
         rules: List[Dict],
         author: str,
-        enforcement_mode: EnforcementMode = EnforcementMode.ENFORCE,
+        enforcement_mode: PolicyEnforcementMode = PolicyEnforcementMode.ENFORCE,
         effective_date: datetime | None = None,
         expiry_date: datetime | None = None,
         metadata: Dict | None = None,
@@ -492,7 +492,7 @@ class SecurityPolicyManager:
             name=name,
             description=description,
             policy_type=policy_type,
-            status=PolicyStatus.DRAFT,
+            status=PolicyState.DRAFT,
             enforcement_mode=enforcement_mode,
             rules=rules,
             metadata=metadata or {},
@@ -545,7 +545,7 @@ class SecurityPolicyManager:
 
         # Reset approval if significant changes
         if any(key in updates for key in MAJOR_VERSION_UPDATE_KEYS):
-            policy.status = PolicyStatus.DRAFT
+            policy.status = PolicyState.DRAFT
             policy.approved_by = None
             policy.approved_at = None
 
@@ -564,7 +564,7 @@ class SecurityPolicyManager:
 
         policy = self.policies[policy_id]
 
-        policy.status = PolicyStatus.ACTIVE
+        policy.status = PolicyState.ACTIVE
         policy.approved_by = approver
         policy.approved_at = datetime.now(tz=timezone.utc)
 
@@ -585,7 +585,7 @@ class SecurityPolicyManager:
             return False
 
         policy = self.policies[policy_id]
-        policy.status = PolicyStatus.INACTIVE
+        policy.status = PolicyState.INACTIVE
         policy.updated_at = datetime.now(tz=timezone.utc)
 
         self._save_policy(policy)
@@ -616,12 +616,12 @@ class SecurityPolicyManager:
     ):
         """Apply enforcement mode to result (Issue #315 - extracted helper)."""
         mode_actions = {
-            EnforcementMode.ENFORCE: lambda: (
+            PolicyEnforcementMode.ENFORCE: lambda: (
                 enforcement_result.update({"allowed": False}),
                 enforcement_result["violations"].append(violation),
             ),
-            EnforcementMode.WARN: lambda: enforcement_result["warnings"].append(violation),
-            EnforcementMode.MONITOR: lambda: None,  # Log only, no action
+            PolicyEnforcementMode.WARN: lambda: enforcement_result["warnings"].append(violation),
+            PolicyEnforcementMode.MONITOR: lambda: None,  # Log only, no action
         }
         action = mode_actions.get(policy.enforcement_mode)
         if action:
@@ -637,7 +637,7 @@ class SecurityPolicyManager:
         }
 
         active_policies = [
-            p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
+            p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyState.ACTIVE
         ]
 
         for policy in active_policies:
@@ -832,7 +832,7 @@ class SecurityPolicyManager:
     def list_policies(
         self,
         policy_type: PolicyType | None = None,
-        status: PolicyStatus | None = None,
+        status: PolicyState | None = None,
     ) -> List[SecurityPolicy]:
         """List policies with optional filtering"""
 
@@ -856,7 +856,7 @@ class SecurityPolicyManager:
         for policy_type_str, controls in framework_mappings.items():
             policy_type = PolicyType(policy_type_str)
             active_policies = [
-                p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyStatus.ACTIVE
+                p for p in self.policies.values() if p.policy_type == policy_type and p.status == PolicyState.ACTIVE
             ]
             coverage[policy_type_str] = {
                 "required_controls": controls,
@@ -912,7 +912,7 @@ class SecurityPolicyManager:
     def _update_policy_statistics(self):
         """Update policy statistics"""
         self.stats["total_policies"] = len(self.policies)
-        self.stats["active_policies"] = len([p for p in self.policies.values() if p.status == PolicyStatus.ACTIVE])
+        self.stats["active_policies"] = len([p for p in self.policies.values() if p.status == PolicyState.ACTIVE])
         self.stats["last_policy_update"] = utc_timestamp()
 
         # Calculate compliance score
@@ -930,7 +930,7 @@ class SecurityPolicyManager:
                 for policy_type in PolicyType
             },
             "policies_by_status": {
-                status.value: len([p for p in self.policies.values() if p.status == status]) for status in PolicyStatus
+                status.value: len([p for p in self.policies.values() if p.status == status]) for status in PolicyState
             },
             "recent_violations": len(
                 [v for v in self.policy_violations if (datetime.now(tz=timezone.utc) - v.timestamp).days <= 30]

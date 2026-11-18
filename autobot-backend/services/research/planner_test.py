@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from autobot_shared.ssot_config import config
+from knowledge.ownership import KnowledgeOwnership
 from services.research.planner import (
     SkippedSubQuestion,
     SubQuestion,
@@ -88,10 +89,16 @@ class TestFilterSkipKnown:
     async def test_high_confidence_kb_fact_skips_the_subquestion(self, monkeypatch):
         monkeypatch.setattr(config, "research_planner_skip_known_confidence_threshold", 0.7)
         kb = AsyncMock()
+        kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
         kb.search = AsyncMock(
-            return_value=[{"metadata": {"fact_id": "fact-9", "confidence": 0.9}, "node_id": "fact-9"}]
+            return_value=[
+                {
+                    "metadata": {"fact_id": "fact-9", "confidence": 0.9, "owner_id": "alice", "visibility": "private"},
+                    "node_id": "fact-9",
+                }
+            ]
         )
-        to_search, skipped = await filter_skip_known(kb, [SubQuestion("known?", 1.0)])
+        to_search, skipped = await filter_skip_known(kb, [SubQuestion("known?", 1.0)], "alice")
         assert to_search == []
         assert skipped == [SkippedSubQuestion(text="known?", fact_id="fact-9", confidence=0.9)]
 

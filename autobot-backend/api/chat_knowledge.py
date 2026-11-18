@@ -73,7 +73,10 @@ from api.schemas_knowledge import (
 from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.summarization_prompt import SummarizationFailed
 from constants.threshold_constants import CategoryDefaults
+from knowledge.search_filters import scoped_reader
+from security.upload_filename_policy import require_safe_upload
 
 # Import existing components
 
@@ -181,6 +184,7 @@ async def upload_file_to_chat(
 ):
     """Upload a file and associate it with a chat"""
     try:
+        require_safe_upload(file.filename)  # #19088: type gate before anything is stored
         manager = await get_chat_knowledge_manager_instance(request)
 
         # Save uploaded file (#1721)
@@ -322,6 +326,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     except TranscriptRefused as e:
         # #15700: a refused transcript is the user's to fix, not a server fault.
         raise HTTPException(status_code=422, detail=str(e))
+    except SummarizationFailed as e:
+        logger.error("Chat summarisation failed (#20852): %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -333,7 +340,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def search_chat_knowledge(request_data: ChatKnowledgeSearchRequest, request: Request):
+async def search_chat_knowledge(
+    request_data: ChatKnowledgeSearchRequest, request: Request, current_user=Depends(get_current_user)
+):
     """Search knowledge across chats or within specific chat"""
     try:
         manager = await get_chat_knowledge_manager_instance(request)
@@ -341,6 +350,7 @@ async def search_chat_knowledge(request_data: ChatKnowledgeSearchRequest, reques
             query=request_data.query,
             chat_id=request_data.chat_id,
             include_temporary=request_data.include_temporary,
+            user_id=scoped_reader(current_user),  # #16665
         )
 
         return {"success": True, "data": {"success": True, "results": results, "count": len(results)}}

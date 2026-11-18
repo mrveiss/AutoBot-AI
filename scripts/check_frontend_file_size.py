@@ -23,12 +23,12 @@ The ratchet has the same three-way semantics as the other two gates, and turns
 one way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-"Below its ceiling -> fail" is the part that looks wrong and is not: an
-unlowered ceiling re-licenses the lines just cut, so a shrink that is not
-recorded is a shrink that can be spent again.
+"Below its ceiling -> pass" (#19673): a ceiling above the measured size is harmless, because the
+ratchet test also bounds the file by its length at the merge base, so the lines just cut cannot
+be spent again.
 
 A file that cannot be read is a violation, not a skip. `count_lines` returns
 None for missing, unreadable, not-a-file and not-UTF-8 alike, and None means
@@ -53,8 +53,6 @@ growing while that happens.
 
 from __future__ import annotations
 
-import argparse
-import importlib.util
 import logging
 import pathlib
 import sys
@@ -64,24 +62,25 @@ import sys
 # into that path — the same trade `check_python_file_size.py` takes.
 logger = logging.getLogger(__name__)
 
-# scripts/ is not a package; put the repo root on the path so the shared
-# ratchet engine is importable when this runs as a bare hook.
+# scripts/ is not a package; put the repo root on the path so the canonical
+# git-env scrub is importable when this runs as a bare hook.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from tools.lint import file_size_engine as engine  # noqa: E402
+from autobot_shared.paths import project_root as repo_root  # noqa: E402, F401  # read via GUARD (live namespace)
+from tools.lint._file_size_guard import (  # noqa: E402, F401  # names read via GUARD (live namespace)
+    FileSizeGuard,
+    count_lines,
+    git_tracked,
+    load_known_large,
+    normalise,
+    unmeasured,
+)
 from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
 
 #: Repo-relative path of this hook, quoted in every message that asks for an edit.
 SELF_REL = "scripts/check_frontend_file_size.py"
-
-#: The DATA module holding RATCHET_BASELINE, the second copy of these numbers.
-#: A ceiling lowered in one file alone leaves the other holding the old size,
-#: and the gap between them is spendable (#14498). Names the data module, not a
-#: test that re-exports it: a developer told to lower "the matching
-#: RATCHET_BASELINE entry" must open a file with entries in it (#17872).
-RATCHET_REL = "repo_tests/frontend_file_size_ratchet_baseline.py"
 
 #: Repo-relative path prefixes this gate does not cover, mirrored from its own
 #: `exclude:` in `.pre-commit-config.yaml`. The tree walk runs independently of
@@ -112,105 +111,42 @@ TRACKED_GLOBS = ("*.ts", "*.vue")
 MIN_TRACKED_FRONTEND_FILES = 1500
 
 
-def _load_known_large() -> dict[str, int]:
-    """Load KNOWN_LARGE from its sibling data module, by path.
-
-    Loaded by path rather than a plain ``import`` so this still resolves when
-    the hook itself is loaded via ``importlib.util`` (as the ratchet and parity
-    tests do), not only when it is run directly.
-    """
-    path = pathlib.Path(__file__).resolve().parent / "frontend_file_size_known_large.py"
-    spec = importlib.util.spec_from_file_location("_frontend_file_size_known_large", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.KNOWN_LARGE
-
-
 #: Grandfathered files: over MAX_LINES when this gate landed, mapped to the
 #: line count measured for each. THIS MAPPING ONLY SHRINKS. Never add an entry
-#: to make a new file pass — split the file. Mirrored in RATCHET_REL; lower an
-#: entry in both in the same commit.
-KNOWN_LARGE: dict[str, int] = _load_known_large()
+#: to make a new file pass — split the file. The only copy
+#: (#19544): the ratchet test checks it against the base commit's.
+KNOWN_LARGE: dict[str, int] = load_known_large(__file__, "frontend_file_size_known_large.py")
+#: The file ``--repin-ceilings`` rewrites (#19673).
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve().with_name("frontend_file_size_known_large.py")
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[1]
-
-
-def _config() -> engine.GateConfig:
-    """This gate's configuration, read from the module globals AT CALL TIME (#17377)."""
-    return engine.GateConfig(
-        label="frontend-file-size",
-        max_lines=MAX_LINES,
-        self_rel=SELF_REL,
-        ratchet_rel=RATCHET_REL,
-        excluded_prefixes=EXCLUDED_PREFIXES,
-        min_tracked_files=MIN_TRACKED_FRONTEND_FILES,
-        known_large=KNOWN_LARGE,
-        globs=TRACKED_GLOBS,
-        summary_noun="file(s)",
-        commit_skips_excluded=True,
-    )
-
-
-# Thin delegations. Each exists because the ratchet and parity tests, or `main`, call it by
-# this name; the behaviour is the engine's, shared with the Python and shell gates.
-def normalise(path: str) -> str:
-    return engine.normalise(path)
-
-
-def count_lines(path: pathlib.Path) -> int | None:
-    return engine.count_lines(path)
-
-
+#: In-scope, git-tracked ``*.ts``/``*.vue`` paths under *root*, relative to it.
 def tracked_frontend_files(root: pathlib.Path) -> list[str]:
-    return engine.tracked_files(_config(), root)
+    """In-scope tracked paths under *root*; EXCLUDED_PREFIXES is read at call time, not bound at import."""
+    return git_tracked(root, TRACKED_GLOBS, EXCLUDED_PREFIXES)
 
 
-def verdict(rel: str, line_count: int) -> str | None:
-    return engine.verdict(_config(), rel, line_count)
-
-
-def unmeasured(rel: str) -> str:
-    return engine.unmeasured(rel)
-
-
-def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
-    return engine.vanished_entry_problem(_config(), rel, root)
-
-
-def _reach_breach_problem(reached: int) -> str:
-    return engine.reach_breach_problem(_config(), reached)
-
-
-def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> engine.ScanResult:
-    return engine.scan_tracked_files(_config(), root, tracked)
-
-
-def audit_ceilings() -> tuple[int, list[str]]:
-    return engine.audit_ceilings(_config(), repo_root(), tracked_frontend_files, _scan_tracked_files)
-
-
-def run_audit() -> int:
-    return engine.run_audit(_config(), logger, audit_ceilings)
-
-
-def check_paths(paths: list[str]) -> int:
-    """The commit path: rule on the staged files pre-commit passed in."""
-    return engine.check_paths(_config(), repo_root(), paths, logger)
+GUARD = FileSizeGuard(
+    globals(),
+    floor_name="MIN_TRACKED_FRONTEND_FILES",
+    tracked_name="tracked_frontend_files",
+    summary="frontend-file-size ceilings: %d file(s) scanned, %d grandfathered, all live and at size.",
+)
+_grandfathered_verdict = GUARD.grandfathered_verdict
+verdict = GUARD.verdict
+_vanished_entry_problem = GUARD.vanished_entry_problem
+_report_unmeasured = GUARD.report_unmeasured
+_scan_tracked_files = GUARD.scan_tracked_files
+audit_ceilings = GUARD.audit_ceilings
+_reach_breach_problem = GUARD.reach_breach_problem
+run_audit = GUARD.run_audit
+check_paths = GUARD.check_paths
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for both the hook path and ``--audit-ceilings``."""
+    """Entry point for the hook path, ``--audit-ceilings`` and ``--repin-ceilings``."""
     configure_logging(logger)
-    parser = argparse.ArgumentParser(description="Reject oversized .ts/.vue files (#17885).")
-    parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .ts/.vue file")
-    parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
-    args = parser.parse_args(argv)
-    if args.audit_ceilings:
-        return run_audit()
-    return check_paths(args.paths)
+    return GUARD.cli(argv, "Reject oversized .ts/.vue files (#17885).", "walk every tracked .ts/.vue file")
 
 
 if __name__ == "__main__":

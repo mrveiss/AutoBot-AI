@@ -75,7 +75,7 @@ async def handle_chat_completion(session_id: str, model: str, messages: list[dic
 
 ---
 
-## LLC Agent Support
+## Company OS Agent Support
 
 Compress between tool-call batches:
 

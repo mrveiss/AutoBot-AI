@@ -1,24 +1,36 @@
 <template>
-  <div class="z-10 flex border-b border-autobot-border bg-autobot-bg-card shrink-0 overflow-x-auto">
+  <div
+    ref="tablistRef"
+    role="tablist"
+    :aria-label="t('chat.tabs.ariaLabel')"
+    class="z-10 flex border-b border-autobot-border bg-autobot-bg-card shrink-0 overflow-x-auto"
+    @keydown="onKeydown"
+  >
     <button
       v-for="tab in visibleTabs"
+      :id="`tab-${tab.key}`"
       :key="tab.key"
+      type="button"
+      role="tab"
+      :aria-selected="activeTab === tab.key"
+      :aria-controls="activeTab === tab.key ? `tabpanel-${tab.key}` : undefined"
+      :tabindex="activeTab === tab.key ? 0 : -1"
       @click="$emit('tab-change', tab.key)"
       :class="[
-        'px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap',
+        'px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-autobot-primary',
         activeTab === tab.key
-          ? 'border-b-2 border-electric-500 text-electric-600 bg-electric-50'
+          ? 'border-b-2 border-autobot-primary text-autobot-primary bg-autobot-primary-bg'
           : 'text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-secondary'
       ]"
     >
-      <i :class="`${tab.icon} mr-2`"></i>
+      <i :class="`${tab.icon} mr-2`" aria-hidden="true"></i>
       {{ tab.label }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePermissions } from '@/composables/usePermissions'
 
@@ -44,8 +56,9 @@ const { holdsPermission } = usePermissions()
 /**
  * The permission the desktop socket itself asks for (#17054). Read through
  * `holdsPermission` -- the role table, no administrative override -- because
- * `hasPermission` short-circuits on `isAdmin` and would offer the tab to a
- * superadmin, whose table entry is empty and whom the socket refuses (#17370).
+ * `hasPermission` short-circuits on `isAdmin`, which is not what the socket
+ * asks. Superadmin holds it through admin's derived table entry (#19125), so
+ * the two agree (#17370).
  */
 const DESKTOP_PERMISSION = 'mcp.desktop.control'
 
@@ -66,9 +79,32 @@ const visibleTabs = computed<TabItem[]>(() => {
   return all.filter((tab) => tab.key !== 'novnc')
 })
 
-defineEmits<Emits>()
-</script>
+const emit = defineEmits<Emits>()
 
-<style scoped>
-/* Tabs are styled via Tailwind classes in template */
-</style>
+const tablistRef = ref<HTMLElement | null>(null)
+
+/** Index the key moves to, or null for a key the tablist ignores. */
+function targetIndex(key: string, from: number, count: number): number | null {
+  if (key === 'ArrowRight') return (from + 1) % count
+  if (key === 'ArrowLeft') return (from - 1 + count) % count
+  if (key === 'Home') return 0
+  if (key === 'End') return count - 1
+  return null
+}
+
+/**
+ * WAI-ARIA tablist keys (automatic activation). Kept local rather than
+ * `useTabs` because the visible set here is permission-filtered and the
+ * active tab is owned by the parent route, not by the composable.
+ */
+async function onKeydown(event: KeyboardEvent): Promise<void> {
+  const list = visibleTabs.value
+  const current = list.findIndex((tab) => tab.key === props.activeTab)
+  const next = targetIndex(event.key, Math.max(current, 0), list.length)
+  if (next === null || list.length === 0) return
+  event.preventDefault()
+  emit('tab-change', list[next].key)
+  await nextTick()
+  tablistRef.value?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus()
+}
+</script>

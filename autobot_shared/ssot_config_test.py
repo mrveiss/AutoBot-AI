@@ -131,7 +131,7 @@ class TestTimeoutConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = TimeoutConfig(_env_file=None)
-            assert config.api == 10000
+            assert config.api == 60000
             assert config.llm == 30.0
             assert config.health_check == 3.0
 
@@ -149,17 +149,11 @@ class TestTimeoutConfig:
 class TestRedisConfig:
     """Tests for RedisConfig class."""
 
-    def test_default_redis_databases(self) -> None:
-        """Test that default Redis database assignments are correct."""
+    def test_redis_config_holds_no_database_numbers(self) -> None:
+        """#19232: database numbers live in one table (redis-databases.yaml + overrides), not here."""
         from autobot_shared.ssot_config import RedisConfig
 
-        with patch.dict(os.environ, {}, clear=True):
-            config = RedisConfig(_env_file=None)
-            assert config.db_main == 0
-            assert config.db_knowledge == 1
-            assert config.db_prompts == 2
-            assert config.db_cache == 5
-            assert config.db_testing == 13  # Changed from 15 in redis-databases.yaml SSOT
+        assert not [name for name in RedisConfig.model_fields if name.startswith("db_")]
 
     def test_redis_password_optional(self) -> None:
         """Test that Redis password can be None or a string."""
@@ -181,7 +175,7 @@ class TestAutoBotConfig:
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig(_env_file=None)
             # Test that values are valid types/formats
-            assert config.deployment_mode in ("distributed", "hybrid", "local")
+            assert config.deployment_mode == ""  # unset = auto-detect (owner, #19315)
             assert isinstance(config.debug, bool)
             assert config.log_level in ("DEBUG", "INFO", "WARNING", "ERROR")
 
@@ -660,16 +654,16 @@ class TestAuditLogFileLazyDefault:
     default here was never falsy.
     """
 
-    def test_resolves_under_the_checkout_when_unset(self, monkeypatch) -> None:
+    def test_resolves_in_the_logs_dir_when_unset(self, monkeypatch, tmp_path) -> None:
+        """#20894: the default follows the one log-dir resolver, never the checkout's logs/."""
         from autobot_shared.paths import project_root
         from autobot_shared.ssot_config import MiscConfig
 
         monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
-
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
         cfg = MiscConfig(_env_file=None)
-
-        assert cfg.audit_log_file == str(project_root() / "logs" / "audit.log")
-        assert not cfg.audit_log_file.startswith("/opt/autobot")
+        assert cfg.audit_log_file == str(tmp_path / "logs" / "audit.log")
+        assert not Path(cfg.audit_log_file).is_relative_to(project_root())
 
     def test_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
         from autobot_shared.ssot_config import MiscConfig

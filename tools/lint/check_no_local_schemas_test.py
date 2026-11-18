@@ -12,12 +12,14 @@ API endpoint files (autobot-backend/api/*.py, excluding schemas_*.py).
 from __future__ import annotations
 
 import importlib.util
+import logging
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _HOOK_PATH = Path(__file__).parent / "check_no_local_schemas.py"
 _spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK_PATH)
@@ -288,7 +290,7 @@ def test_main_returns_0_for_empty_argv(tmp_path: Path) -> None:
 # pass whatever the hunk parser did.
 # ---------------------------------------------------------------------------
 
-E = scrubbed_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
+E = isolated_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
 
 LEGACY = """\
 from pydantic import BaseModel
@@ -301,6 +303,13 @@ class LegacyRequest(BaseModel):
 def handler():
     return 1
 """
+
+
+@pytest.fixture(autouse=True)
+def _outside_pre_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run()`` resolves its base like ``main`` does, so an ambient pre-commit range must not leak in."""
+    monkeypatch.delenv("PRE_COMMIT", raising=False)
+    monkeypatch.delenv("PRE_COMMIT_FROM_REF", raising=False)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -319,7 +328,7 @@ def _repo_with_legacy_model(tmp_path: Path) -> tuple[Path, Path]:
     return repo, path
 
 
-def test_an_unrelated_staged_edit_is_not_blamed_for_a_preexisting_model(tmp_path: Path, capsys) -> None:
+def test_an_unrelated_staged_edit_is_not_blamed_for_a_preexisting_model(tmp_path: Path, caplog) -> None:
     """AC4, pre-commit stage -- the #15757 case.
 
     One unrelated line changes in a file that already carries a local model. The
@@ -329,8 +338,10 @@ def test_an_unrelated_staged_edit_is_not_blamed_for_a_preexisting_model(tmp_path
     path.write_text(LEGACY.replace("return 1", "return 2"), encoding="utf-8")
     _git(repo, "add", str(path))
 
-    assert hook.run([path], repo, changed_only=True, base=None) == 0
-    assert "not counted" in capsys.readouterr().err, "a pre-existing model is listed, not hidden"
+    with caplog.at_level(logging.ERROR):
+        rc = hook.run([path], repo, changed_only=True, base=None)
+    assert rc == 0
+    assert "not counted" in caplog.text, "a pre-existing model is listed, not hidden"
 
 
 def test_a_newly_added_model_still_fails_when_scoped(tmp_path: Path) -> None:
@@ -390,7 +401,7 @@ def test_a_rename_in_a_committed_range_is_followed_too(tmp_path: Path) -> None:
     assert hook.run([moved], repo, changed_only=True, base=base) == 0
 
 
-def test_an_unstaged_file_has_no_change_to_scope_to_and_is_judged_whole(tmp_path: Path, capsys) -> None:
+def test_an_unstaged_file_has_no_change_to_scope_to_and_is_judged_whole(tmp_path: Path, caplog) -> None:
     """``pre-commit run --all-files`` hands over files that nothing staged.
 
     An empty staged diff there does not mean "this change added no model": there is
@@ -398,8 +409,10 @@ def test_an_unstaged_file_has_no_change_to_scope_to_and_is_judged_whole(tmp_path
     """
     repo, path = _repo_with_legacy_model(tmp_path)
 
-    assert hook.run([path], repo, changed_only=True, base=None) == 1
-    assert "no change to scope to" in capsys.readouterr().err
+    with caplog.at_level(logging.ERROR):
+        rc = hook.run([path], repo, changed_only=True, base=None)
+    assert rc == 1
+    assert "no change to scope to" in caplog.text
 
 
 def test_pre_commit_from_ref_becomes_the_base(monkeypatch) -> None:
@@ -426,11 +439,13 @@ def test_an_unscoped_run_still_reads_the_whole_file(tmp_path: Path) -> None:
     assert hook.run([path], repo, changed_only=False, base=None) == 1
 
 
-def test_a_git_failure_fails_closed_instead_of_reading_as_nothing_added(tmp_path: Path, capsys) -> None:
+def test_a_git_failure_fails_closed_instead_of_reading_as_nothing_added(tmp_path: Path, caplog) -> None:
     """No repository at all: "this change added nothing" would be an unearned clean verdict."""
     path, repo = _write_api(tmp_path, "legacy.py", LEGACY)
-    assert hook.run([path], repo, changed_only=True, base=None) == 1
-    assert "refusing to report clean" in capsys.readouterr().err
+    with caplog.at_level(logging.ERROR):
+        rc = hook.run([path], repo, changed_only=True, base=None)
+    assert rc == 1
+    assert "refusing to report clean" in caplog.text
 
 
 def test_base_without_scoping_is_rejected() -> None:
@@ -473,3 +488,51 @@ def test_the_guide_offers_headroom_and_marks_frozen_modules(tmp_path: Path) -> N
 def test_the_guide_says_so_when_it_cannot_read_the_ceilings(tmp_path: Path) -> None:
     """Advice without numbers beats invented numbers, and the verdict is unaffected."""
     assert "headroom unavailable" in hook._destination_guide(_api_root(tmp_path))
+
+
+def test_an_empty_explicit_file_list_checks_nothing_and_is_not_a_full_sweep(tmp_path: Path) -> None:
+    """``run([])`` was 0 before the harness; read as an empty argv it became a full-repo sweep (exit 2)."""
+    repo, _path = _repo_with_legacy_model(tmp_path)
+
+    assert hook.run([], repo, changed_only=False, base=None) == 0
+    assert hook.run([], repo, changed_only=True, base=None) == 0
+
+
+def _main_rooted_at(monkeypatch: pytest.MonkeyPatch, repo: Path, *args: str) -> int:
+    """``main`` itself, with its anchor resolving to the fixture repository."""
+    harness = sys.modules["_check_harness"]
+    monkeypatch.setattr(harness, "resolve_root", lambda _anchor: repo)
+    return hook.main(["hook", *args])
+
+
+def test_main_scopes_to_the_staged_diff_a_new_model_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--changed-lines-only`` through ``main`` -- the path pre-commit takes, not just ``run()``."""
+    repo, path = _repo_with_legacy_model(tmp_path)
+    path.write_text(LEGACY + "\n\nclass NewResponse(BaseModel):\n    ok: bool\n", encoding="utf-8")
+    _git(repo, "add", str(path))
+
+    assert _main_rooted_at(monkeypatch, repo, "--changed-lines-only", str(path)) == 1
+
+
+def test_main_scopes_to_the_staged_diff_an_unrelated_edit_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, path = _repo_with_legacy_model(tmp_path)
+    path.write_text(LEGACY.replace("return 1", "return 2"), encoding="utf-8")
+    _git(repo, "add", str(path))
+
+    assert _main_rooted_at(monkeypatch, repo, "--changed-lines-only", str(path)) == 0
+
+
+def test_mode_follows_the_named_files_not_the_argv_length() -> None:
+    """A named file scopes the run; no file is a sweep -- whatever else is on argv (#14896)."""
+    assert hook._is_full_repo([]) is True
+    assert hook._is_full_repo(["a.py"]) is False
+    assert hook._is_full_repo(["--changed-lines-only", "a.py"]) is False
+
+
+def test_changed_lines_only_with_no_files_is_refused_not_scoped() -> None:
+    """The call shape never reaches the harness as a scoped run: the parser rejects it with exit 2."""
+    with pytest.raises(SystemExit) as exc:
+        hook._collect(["--changed-lines-only"], Path("."))
+    assert exc.value.code == 2

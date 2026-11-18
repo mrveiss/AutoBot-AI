@@ -13,9 +13,10 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.db_session import session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -24,7 +25,7 @@ from user_management.database import db_session_context
 
 logger = get_logger(__name__)
 
-router = APIRouter(tags=["ml-models"])
+router = APIRouter(tags=["ml-models"], dependencies=[Depends(get_current_user)])
 
 # _sync_session_lock guards the one-time creation of the sync session factory
 # used only by _train_background, which runs in a thread (not the event loop).
@@ -76,7 +77,7 @@ _model_lock = threading.Lock()
 # =============================================================================
 
 
-class TrainRequest(BaseModel):
+class ModelTrainingRequest(BaseModel):
     """Request to trigger model training."""
 
     language: str | None = Field(None, description="Filter training data by language")
@@ -86,7 +87,7 @@ class TrainRequest(BaseModel):
     notes: str | None = Field(None, description="Training notes")
 
 
-class TrainResponse(BaseModel):
+class ModelTrainingResponse(BaseModel):
     """Response from training trigger."""
 
     status: str
@@ -189,8 +190,10 @@ def _train_background(request):
         logger.error("Training failed: %s", e, exc_info=True)
 
 
-@router.post("/train", response_model=TrainResponse)
-async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
+@router.post("/train", response_model=ModelTrainingResponse)
+async def train_model(
+    request: ModelTrainingRequest, background_tasks: BackgroundTasks, _: bool = Depends(check_admin_permission)
+):
     """
     Trigger model training in background.
 
@@ -200,7 +203,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
     - **batch_size**: Training batch size
     """
     background_tasks.add_task(_train_background, request)
-    return TrainResponse(
+    return ModelTrainingResponse(
         status="success",
         message="Training started in background",
         training_started=True,
@@ -273,7 +276,7 @@ async def get_model(version: str):
 
 
 @router.post("/models/{version}/activate")
-async def activate_model(version: str):
+async def activate_model(version: str, _: bool = Depends(check_admin_permission)):
     """
     Set a model as active for serving predictions.
 

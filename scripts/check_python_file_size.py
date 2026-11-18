@@ -21,11 +21,14 @@ lives only in a comment is not an assertion.
 The ratchet turns one way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-Every lowering is mirrored in ``RATCHET_BASELINE`` in the ratchet test, so the
-shrink is locked in rather than left as headroom to regrow into (#14498).
+A shrink is locked in by the merge base, not by editing this table (#19673): the ratchet test
+requires ``lines(F@HEAD) <= min(ceiling, lines(F@base))``, so the lines a PR cut cannot be spent
+back. Nothing else needs to change for a file to shrink. ``--repin-ceilings`` is a manual tidy
+that rewrites the recorded ints to the files' current lengths (and drops entries at or under the
+limit); nothing runs it automatically. Locked in rather than left as headroom (#14498).
 
 A file the hook cannot open is a violation too, not a skip (#14975). ``None``
 from ``count_lines`` means "never measured", which is a different thing from
@@ -57,7 +60,6 @@ campaign. This hook only stops them growing while it happens.
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import pathlib
 import sys
@@ -70,24 +72,24 @@ import sys
 logger = logging.getLogger(__name__)
 
 # scripts/ is not a Python package; put the repository root on the path so
-# the shared ratchet engine is importable when this runs as a bare hook.
+# the canonical git-env scrub is importable when this runs as a bare hook.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from tools.lint import file_size_engine as engine  # noqa: E402
+from autobot_shared.paths import project_root as repo_root  # noqa: E402, F401  # read via GUARD (live namespace)
+from tools.lint._file_size_guard import (  # noqa: E402, F401  # names read via GUARD (live namespace)
+    FileSizeGuard,
+    count_lines,
+    git_tracked,
+    load_known_large,
+    normalise,
+    unmeasured,
+)
 from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
 
 #: Repo-relative path of this hook, quoted in the messages that ask for an edit.
 SELF_REL = "scripts/check_python_file_size.py"
-
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: Every message that asks for an edit here names it too: a ceiling lowered in
-#: one file alone leaves the other holding the old size (#14498).
-RATCHET_REL = "repo_tests/python_file_size_ratchet_baseline.py"  # the DATA module, not the
-#: test that re-exports it (#17377): a developer told to lower "the matching RATCHET_BASELINE
-#: entry" in the test file opens a file whose RATCHET_BASELINE is one re-export line, with no
-#: entries to edit -- the wrong-copy failure #17872 exists to prevent, emitted by the gate.
 
 #: Repo-relative path prefixes the guard does not cover, mirrored from this
 #: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``,
@@ -112,115 +114,49 @@ EXCLUDED_PREFIXES = (
 MIN_TRACKED_PY_FILES = 3000
 
 
-def _load_known_large() -> dict[str, int]:
-    """Load KNOWN_LARGE from its sibling data module, by path.
-
-    Loaded by path rather than a plain ``import`` so this still resolves when
-    the hook itself is loaded via ``importlib.util`` (as the ratchet test
-    does), not only when it is run directly as
-    ``python3 scripts/check_python_file_size.py``.
-    """
-    path = pathlib.Path(__file__).resolve().parent / "python_file_size_known_large.py"
-    spec = importlib.util.spec_from_file_location("_python_file_size_known_large", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.KNOWN_LARGE
-
-
 # Grandfathered files: over MAX_LINES with no active decomposition under way,
 # mapped to the line count recorded for each. THIS MAPPING ONLY SHRINKS —
 # entries leave when the file reaches MAX_LINES, and a ceiling may be lowered
 # but never raised. Never add an entry to make a new file pass; split the
-# file instead. See ``python_file_size_known_large.py`` for the full dict and
-# ``repo_tests/python_file_size_ratchet_baseline.py`` for its mirror: lower
-# an entry in both in the same commit (#14498), or the lines just cut stay
-# spendable in the gap between the two.
-KNOWN_LARGE: dict[str, int] = _load_known_large()
+# file instead. See ``python_file_size_known_large.py`` for the full dict, the ONE
+# place a ceiling is recorded (#19544): ``python_file_size_ratchet_test.py`` checks it
+# against the same table at the base commit, so no second copy is kept.
+KNOWN_LARGE: dict[str, int] = load_known_large(__file__, "python_file_size_known_large.py")
+#: The file ``--repin-ceilings`` rewrites (#19673).
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve().with_name("python_file_size_known_large.py")
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd.
-
-    A cwd-relative walk answers confidently and wrongly when the hook is run
-    from a subdirectory.
-    """
-    return pathlib.Path(__file__).resolve().parents[1]
-
-
-def _config() -> engine.GateConfig:
-    """This gate's configuration, read from the module globals AT CALL TIME (#17377).
-
-    Built per call rather than once at import: the ratchet tests point the gate at a
-    synthetic tree by patching ``KNOWN_LARGE`` and friends, and a config bound at import
-    would ignore those patches while the tests went on asserting against the real tree.
-    """
-    return engine.GateConfig(
-        label="python-file-size",
-        max_lines=MAX_LINES,
-        self_rel=SELF_REL,
-        ratchet_rel=RATCHET_REL,
-        excluded_prefixes=EXCLUDED_PREFIXES,
-        min_tracked_files=MIN_TRACKED_PY_FILES,
-        known_large=KNOWN_LARGE,
-        globs=("*.py",),
-        summary_noun="files",
-        commit_skips_excluded=False,
-    )
-
-
-# Thin delegations. Each exists because the ratchet and parity tests, or `main`, call it by
-# this name; the behaviour is the engine's, shared with the shell and frontend gates.
-def normalise(path: str) -> str:
-    return engine.normalise(path)
-
-
-def count_lines(path: pathlib.Path) -> int | None:
-    return engine.count_lines(path)
-
-
+#: In-scope, git-tracked ``*.py`` paths under *root*, relative to it.
 def tracked_python_files(root: pathlib.Path) -> list[str]:
-    return engine.tracked_files(_config(), root)
+    """In-scope tracked paths under *root*; EXCLUDED_PREFIXES is read at call time, not bound at import."""
+    return git_tracked(root, ("*.py",), EXCLUDED_PREFIXES)
 
 
-def verdict(rel: str, line_count: int) -> str | None:
-    return engine.verdict(_config(), rel, line_count)
-
-
-def unmeasured(rel: str) -> str:
-    return engine.unmeasured(rel)
-
-
-def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
-    return engine.vanished_entry_problem(_config(), rel, root)
-
-
-def _reach_breach_problem(reached: int) -> str:
-    return engine.reach_breach_problem(_config(), reached)
-
-
-def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> engine.ScanResult:
-    return engine.scan_tracked_files(_config(), root, tracked)
-
-
-def audit_ceilings() -> tuple[int, list[str]]:
-    return engine.audit_ceilings(_config(), repo_root(), tracked_python_files, _scan_tracked_files)
-
-
-def run_audit() -> int:
-    return engine.run_audit(_config(), logger, audit_ceilings)
+GUARD = FileSizeGuard(
+    globals(),
+    floor_name="MIN_TRACKED_PY_FILES",
+    tracked_name="tracked_python_files",
+    summary="python-file-size ceilings: %d files scanned, %d grandfathered, all live and at size.",
+)
+_grandfathered_verdict = GUARD.grandfathered_verdict
+verdict = GUARD.verdict
+_vanished_entry_problem = GUARD.vanished_entry_problem
+_report_unmeasured = GUARD.report_unmeasured
+_scan_tracked_files = GUARD.scan_tracked_files
+audit_ceilings = GUARD.audit_ceilings
+_reach_breach_problem = GUARD.reach_breach_problem
+run_audit = GUARD.run_audit
 
 
 def main(argv: list[str]) -> int:
-    """Audit the tree with ``--audit-ceilings``, otherwise rule on the paths given.
-
-    Paths resolve against the caller's cwd (``pathlib.Path()``), as they always have here --
-    the shell and frontend gates resolve against ``repo_root()``. Under pre-commit, which runs
-    from the repo root, the two agree; the engine keeps each gate's choice.
-    """
+    """Entry point: ``--audit-ceilings`` anywhere in *argv*, else rule on each path as given."""
     configure_logging(logger)
+    if "--repin-ceilings" in argv:
+        return GUARD.repin_ceilings()
     if "--audit-ceilings" in argv:
         return run_audit()
-    return engine.check_paths(_config(), pathlib.Path(), argv, logger)
+    findings = [GUARD.rule_on(normalise(arg), pathlib.Path(arg)) for arg in argv]
+    return GUARD.emit([message for message in findings if message is not None])
 
 
 if __name__ == "__main__":

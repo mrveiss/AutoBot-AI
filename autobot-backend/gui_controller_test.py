@@ -183,7 +183,7 @@ class TestReadTextFromRegionPreserved:
 
 class TestGUIControllerHandlerParity:
     """Issue #11970: real GUIController must implement the same public
-    method surface as gui_controller_dummy.GUIController, since flipping the
+    method surface as gui_controller_dummy.DummyGUIController, since flipping the
     platform gate now routes task_handlers/gui_handlers.py's calls to the
     real controller on Linux.
     """

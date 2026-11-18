@@ -21,6 +21,7 @@ from api.chat_shared_links import router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.time_utils import now_utc
+from testkit.canonical_gate import real_admin_gate
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
@@ -33,16 +34,14 @@ _CURRENT: dict = {"user": None}
 
 @pytest.fixture(autouse=True)
 def _patch_auth_middleware():
-    """Make require_role() (#12704) see the injected test user.
-
-    The admin cross-user route uses ``require_role("admin", "superadmin")``,
-    which reads the user via ``auth_rbac.get_auth_middleware()``.
-    """
+    """Make the one admin gate, ``check_admin_permission`` (#16333), run for real and see the injected user."""
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+    with real_admin_gate(mw) as wire:
+        _CURRENT["wire"] = wire
         yield
     _CURRENT["user"] = None
+    _CURRENT.pop("wire", None)
 
 
 def _make_link(*, owner: str, session_id: str, has_password: bool = False, expired: bool = False):
@@ -63,8 +62,8 @@ def _make_link(*, owner: str, session_id: str, has_password: bool = False, expir
 def _make_client(user: dict, links: list) -> TestClient:
     """Create a TestClient overriding auth + DB session.
 
-    The admin cross-user route uses ``require_role("admin", "superadmin")``
-    (#12704), fed by the autouse middleware patch; ``get_current_user`` (the
+    The admin cross-user route uses the one admin gate (#16333), run for real by
+    the autouse fixture; ``get_current_user`` (the
     owner-scoped routes) is overridden so admin routes 200 for admin/superadmin
     and 403 for others.
     """
@@ -86,7 +85,7 @@ def _make_client(user: dict, links: list) -> TestClient:
 
     app.dependency_overrides[get_current_user] = _override_user
     app.dependency_overrides[get_db_session] = _override_db
-    return TestClient(app)
+    return _CURRENT["wire"](TestClient(app))
 
 
 class TestAdminListAllSharedLinks:

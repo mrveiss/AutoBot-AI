@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from knowledge.search_filters import SYSTEM_SCOPE
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -33,7 +35,8 @@ def _chroma_results(docs):
     """Build a ChromaDB-style results dict with the given document strings."""
     if not docs:
         return {"ids": [[]], "documents": [[]]}
-    return {"ids": [list(range(len(docs)))], "documents": [list(docs)]}
+    metas = [{"visibility": "system"} for _ in docs]  # the platform-docs grant (#18944)
+    return {"ids": [list(range(len(docs)))], "documents": [list(docs)], "metadatas": [metas]}
 
 
 def _mock_collection(docs):
@@ -71,7 +74,7 @@ class TestGetKbSynthesisContext:
             new_callable=AsyncMock,
             side_effect=ConnectionError("chroma down"),
         ):
-            result = await svc._get_kb_synthesis_context("any query")
+            result = await svc._get_kb_synthesis_context("any query", SYSTEM_SCOPE)
 
         assert result == ""
 
@@ -93,7 +96,7 @@ class TestGetKbSynthesisContext:
                 side_effect=FileNotFoundError("no schema"),
             ),
         ):
-            result = await svc._get_kb_synthesis_context("test query")
+            result = await svc._get_kb_synthesis_context("test query", SYSTEM_SCOPE)
 
         assert result.startswith("KB synthesis summaries:")
         assert "Summary A" in result
@@ -143,7 +146,7 @@ class TestGetKbSynthesisContext:
                 return_value=schema,
             ),
         ):
-            result = await svc._get_kb_synthesis_context("multi query")
+            result = await svc._get_kb_synthesis_context("multi query", SYSTEM_SCOPE)
 
         assert "Default doc" in result
         assert "Extra doc" in result
@@ -190,7 +193,7 @@ class TestGetKbSynthesisContext:
                 return_value=schema,
             ),
         ):
-            result = await svc._get_kb_synthesis_context("query")
+            result = await svc._get_kb_synthesis_context("query", SYSTEM_SCOPE)
 
         # First collection failed but result from second collection must be present
         assert "Surviving doc" in result
@@ -219,6 +222,6 @@ class TestGetKbSynthesisContext:
                 side_effect=FileNotFoundError("no schema"),
             ),
         ):
-            result = await svc._get_kb_synthesis_context("nothing here")
+            result = await svc._get_kb_synthesis_context("nothing here", SYSTEM_SCOPE)
 
         assert result == ""
