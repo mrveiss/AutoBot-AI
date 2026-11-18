@@ -33,6 +33,7 @@ from typing import Annotated
 from fastapi import HTTPException, Query
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 
@@ -134,6 +135,53 @@ def source_scoped_prefix(prefix: str, source_id: "str | None") -> str:
     return scoped_prefix(prefix, require_source_id(source_id, "task-result prefix"), "source_id")
 
 
+async def _predates_last_sync(source_id: str, completed_at: "str | None") -> bool:
+    """Whether the source was re-synced after a stored result completed (#17982).
+
+    ``completed_at`` is written by ``tasks/analytics_tasks._wrap`` and ``last_synced`` by
+    ``endpoints/sources.py`` (``CodeSource.last_synced``), both as ISO-8601 UTC strings;
+    ``parse_utc_iso`` reads a naive one as UTC so the two always compare.
+
+    Unknown is "not stale": either timestamp missing or unparsable, no such source, or a
+    registry that cannot be read (any failure: a connection error, a record that does not
+    validate).  Only a staleness that can be shown is claimed, and a flag that is decoration
+    must not fail a ``*/cached`` route that worked before it existed.
+
+    What the flag means, exactly:
+
+    * it fires on every ``last_synced``, including a sync that changed nothing;
+    * a scan that started before the sync but completed after it is not flagged;
+    * ``stale`` overrides a key of the same name in the stored result payload.
+    """
+    if not completed_at:
+        return False
+    try:
+        from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable
+
+        source = await get_source_or_none_if_unreadable(source_id)
+        if source is None or not source.last_synced:
+            return False
+        return parse_utc_iso(source.last_synced) > parse_utc_iso(completed_at)
+    except Exception as exc:
+        logger.warning("source %s: stale check skipped (%s)", source_id, type(exc).__name__)
+        return False
+
+
+def _refuse_a_failed_scan(prefix: str, source_id: str, error: str):
+    """HTTP 409 for a latest scan that failed (#17982), without echoing the reason.
+
+    HTTP 200 with an error payload is what let a consumer that checks only the status
+    code render a refused scan as "no duplicates".  The reason is logged and served by
+    ``*/status/{task_id}``; it is not echoed here, because a task's exception text is
+    not safe to return (CWE-209).
+    """
+    logger.warning("latest %s task failed for source %s: %s", prefix, source_id, error)
+    raise HTTPException(
+        status_code=409,
+        detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
+    )
+
+
 async def cached_task_result(prefix: str, source_id: str) -> dict:
     """The ``*/cached`` response for ONE source, or ``no_data`` (#17758).
 
@@ -147,20 +195,15 @@ async def cached_task_result(prefix: str, source_id: str) -> dict:
 
     cached = await get_latest_task_result(source_scoped_prefix(prefix, source_id))
     if cached and cached.get("error"):
-        # #17982: HTTP 200 with an error payload is what let a consumer that
-        # checks only the status code render a refused scan as "no duplicates".
-        # The reason is logged and served by ``*/status/{task_id}``; it is not
-        # echoed here, because a task's exception text is not safe to return (CWE-209).
-        logger.warning("latest %s task failed for source %s: %s", prefix, source_id, cached["error"])
-        raise HTTPException(
-            status_code=409,
-            detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
-        )
+        _refuse_a_failed_scan(prefix, source_id, cached["error"])
     if cached and cached.get("result"):
+        # #17982: a result older than the source's last sync is served, flagged, not hidden.
+        stale = await _predates_last_sync(source_id, cached.get("completed_at"))
         return {
             "status": "success",
             "from_cache": True,
             "completed_at": cached.get("completed_at"),
             **cached["result"],
+            "stale": stale,
         }
     return {"status": "no_data"}

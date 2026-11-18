@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Registry for AUTOBOT_* environment variables.
 
-Discovery and type-safe access; ``check_env_var_registry`` requires every var
-to be registered. A NEW one goes in an ``env_registry_<component>.py`` sibling
-imported below -- this file is at its ceiling and may not grow (#14236). Closes GH#7081.
+Discovery and type-safe access; ``check_env_var_registry`` requires every var to be registered. New vars go in an
+``env_registry_<component>.py`` sibling imported below; this file is at its ceiling (#14236). Closes GH#7081.
 """
 
 from __future__ import annotations
@@ -60,7 +59,11 @@ from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
+from autobot_shared import env_registry_llc  # noqa: E402,F401
+from autobot_shared import env_registry_logging  # noqa: E402,F401
+from autobot_shared import env_registry_memory  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_admin_files,
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
@@ -70,10 +73,8 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_chat_history,
     env_registry_chat_lease,
     env_registry_gateway,
+    env_registry_kb_graph,
     env_registry_ledger,
-    env_registry_llc,
-    env_registry_logging,
-    env_registry_memory,
     env_registry_mesh_reembed,
     env_registry_npu,
     env_registry_postgres,
@@ -436,7 +437,6 @@ register_env_var(
 )
 
 # --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
-
 # --- voice / speech-to-text -------------------------------------------------
 
 register_env_var(
