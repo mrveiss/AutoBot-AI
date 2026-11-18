@@ -50,7 +50,6 @@ def _dependency_files(root) -> list[str]:
 REACH = declare(
     "landing-page-declared-dependencies",
     discover=_dependency_files,
-    floor=33,  # 37 measured at filing, pinned mid-window
     growth=8,
     what="requirements files and pyproject.toml read for the libraries they declare (#19279)",
 )

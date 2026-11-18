@@ -95,7 +95,6 @@ _KNOWN_UNSERVED = frozenset(
             "/api/mcp/servers/{param}/stop",
             "/api/monitoring/hardware",
             "/api/npu-workers/{param}/restart",
-            "/api/permissions/rules/{param}",
             "/api/voice/config",
         )
     }

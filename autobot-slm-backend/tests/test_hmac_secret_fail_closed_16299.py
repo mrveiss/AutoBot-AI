@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""API-key pepper: no published default, transparent legacy migration (#16299).
+"""API-key pepper: no published default, PBKDF2 digest only (#16299).
 
 conftest stubs ``config`` and sibling modules, so the real ``api_key_service``
 source is loaded by path against a stand-in ``settings`` and an in-memory
@@ -157,6 +157,10 @@ def _hm(secret: str, key: str) -> str:
     return hmac.new(secret.encode(), key.encode(), hashlib.sha256).hexdigest()
 
 
+def _pb(secret: str, key: str, mod) -> str:
+    return hashlib.pbkdf2_hmac("sha256", key.encode(), secret.encode(), mod.PBKDF2_ITERATIONS).hex()
+
+
 def _service(mod, rows, store):
     """Service whose lookup is an in-memory dict of hash -> row."""
     s = mod.APIKeyService.__new__(mod.APIKeyService)
@@ -221,40 +225,41 @@ def test_neither_set_fails_closed_and_warning_names_the_page(svc, caplog):
 def test_new_hash_never_uses_the_literal(svc):
     mod, *_ = svc
     h = mod.APIKeyService._hash_key("abot_x", "s1")  # pragma: allowlist secret
-    assert h == _hm("s1", "abot_x") and h != _hm(_LITERAL, "abot_x")
+    assert h == _pb("s1", "abot_x", mod) and h != _hm(_LITERAL, "abot_x") and h != _hm("s1", "abot_x")
     with pytest.raises(RuntimeError):
         mod.APIKeyService._hash_key("abot_x", "")
 
 
-def test_literal_hashed_key_verifies_and_is_rehashed(svc):
+def test_new_key_round_trips_and_digest_is_stable(svc):
     mod, _, store, pepper = svc
     store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
     row = _row()
-    row.key_hash = _hm(_LITERAL, "abot_x")
+    row.key_hash = _pb("s1", "abot_x", mod)
     s = _service(mod, {row.key_hash: row}, store)
     assert asyncio.run(s.validate_key("abot_x")) is row
-    assert row.key_hash == _hm("s1", "abot_x")
+    assert mod.APIKeyService._hash_key("abot_x", "s1") == mod.APIKeyService._hash_key("abot_x", "s1")  # nosec
+    assert mod.APIKeyService._hash_key("abot_x", "s1") != mod.APIKeyService._hash_key("abot_x", "s2")  # nosec
 
 
-def test_bare_sha256_key_still_verifies_and_is_rehashed(svc):
+def test_old_format_keys_are_refused_and_left_untouched(svc):
+    """#20611: only the PBKDF2 digest verifies; an old-format row is neither matched nor rewritten."""
     mod, _, store, pepper = svc
     store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
-    row = _row()
-    row.key_hash = hashlib.sha256(b"abot_x").hexdigest()
-    s = _service(mod, {row.key_hash: row}, store)
-    assert asyncio.run(s.validate_key("abot_x")) is row
-    assert row.key_hash == _hm("s1", "abot_x")
+    for old in (_hm("s1", "abot_x"), _hm(_LITERAL, "abot_x"), hashlib.sha256(b"abot_x").hexdigest()):
+        row = _row()
+        row.key_hash = old
+        s = _service(mod, {old: row}, store)
+        assert asyncio.run(s.validate_key("abot_x")) is None
+        assert row.key_hash == old
 
 
-def test_no_pepper_verify_works_warns_and_does_not_rehash(svc, caplog):
+def test_no_pepper_refuses_every_key_and_warns(svc, caplog):
     mod, _, store, pepper = svc
     row = _row()
     row.key_hash = _hm(_LITERAL, "abot_x")
-    old = row.key_hash
-    s = _service(mod, {old: row}, store)
+    s = _service(mod, {row.key_hash: row}, store)
     with caplog.at_level(logging.WARNING):
-        assert asyncio.run(s.validate_key("abot_x")) is row
-    assert row.key_hash == old
+        assert asyncio.run(s.validate_key("abot_x")) is None
     assert pepper.SECRETS_PAGE_PATH in caplog.text and _LITERAL not in caplog.text
 
 
@@ -274,7 +279,7 @@ def test_resolver_uses_the_main_db_session_not_the_callers(svc):
     mod, _, store, pepper = svc
     store.rows[pepper.HMAC_PEPPER_KEY] = "s1"  # pragma: allowlist secret
     row = _row()
-    row.key_hash = _hm(_LITERAL, "abot_x")
+    row.key_hash = _pb("s1", "abot_x", mod)
     s = _service(mod, {row.key_hash: row}, store)  # session = _CallerSession (raises on use)
     assert asyncio.run(s.validate_key("abot_x")) is row
     assert store.sessions_opened == 1
@@ -303,7 +308,7 @@ def test_resolution_is_cached_until_invalidated_and_warns_once(svc, caplog):
     assert _resolve(pepper) == "s1" and store.sessions_opened == 2
 
 
-def test_literal_lives_only_in_the_named_constant():
+def test_no_old_format_verifier_remains_in_the_service():
     src = (_ROOT / "user_management/services/api_key_service.py").read_text(encoding="utf-8")
-    assert src.count(_LITERAL) == 1
-    assert f'_LEGACY_PUBLIC_PEPPER = "{_LITERAL}"' in src
+    assert _LITERAL not in src and "sha256(" not in src and "_hmac_hex" not in src
+    assert "PBKDF2_ITERATIONS = 20000" in src

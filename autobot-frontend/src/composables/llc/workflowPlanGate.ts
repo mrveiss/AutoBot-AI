@@ -52,6 +52,19 @@ export function gateRows(status: PlanStatus, gate: GateResponse): GateRow[] {
   })
 }
 
+const APPROVAL_PRECONDITIONS: readonly string[] = ['G5', 'G6']
+
+/**
+ * The open criteria that make the server refuse approval, as reported by the last gate read. G7
+ * (an owner or admin approved the preview) is the approval act itself, so it is open by design and
+ * never blocks; G5 and G6 must hold first. Only what the server listed counts: a null gate or an
+ * unevaluated rung yields none, so nothing is claimed passed and the server stays the final word.
+ */
+export function approvalBlockers(status: PlanStatus, gate: GateResponse | null): GateRow[] {
+  if (!gate) return []
+  return gateRows(status, gate).filter((r) => r.state === 'open' && APPROVAL_PRECONDITIONS.includes(r.id))
+}
+
 export type ConvertPhase = 'not_ready' | 'needs_preview' | 'previewed' | 'approved' | 'converted'
 
 /** Where the plan is in preview, approve, convert: read from the stored plan, never guessed. */

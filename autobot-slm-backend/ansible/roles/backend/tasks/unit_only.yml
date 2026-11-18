@@ -33,7 +33,10 @@
 # Looped rather than three copied tasks: a fourth unit added to the role should
 # need a list entry, not another block to forget.
 - name: "Backend | Resolve host memory before rendering the unit (#13765)"
-  ansible.builtin.include_tasks: memory_limits.yml
+  ansible.builtin.include_tasks:
+    file: memory_limits.yml
+    apply:
+      tags: [backend, systemd, unit]
   tags: [backend, systemd, unit]
 
 - name: "Backend | Render systemd units from templates (#12777, #13828)"

@@ -16,11 +16,12 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS deps
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+# apt retries, an index failure is fatal at `apt-get update` (#16291), and apt-retry backs off (#21325)
 COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+COPY docker/apt/apt-retry /usr/local/bin/apt-retry
 
 # Install build deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-retry apt-get update && apt-retry apt-get install -y --no-install-recommends \
     build-essential curl \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
@@ -76,8 +77,9 @@ ARG PYTHON_VERSION=3.14
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+# apt retries, an index failure is fatal at `apt-get update` (#16291), and apt-retry backs off (#21325)
 COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+COPY docker/apt/apt-retry /usr/local/bin/apt-retry
 
 # --- claude CLI install (GH#9950) ---
 # Replaces the prior unpinned `curl | bash` supply-chain risk with Anthropic's
@@ -99,7 +101,7 @@ ARG CLAUDE_CLI_VERSION=""
 # redirect / symlink needed); the build-time `--version` checks prove both
 # resolve, so an install regression fails the build instead of silently
 # breaking LLC dispatch.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-retry apt-get update && apt-retry apt-get install -y --no-install-recommends \
     curl ca-certificates \
     && install -m 0755 -d /etc/apt/keyrings \
     # gh — official GitHub signed apt repo
@@ -114,12 +116,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod go+r /etc/apt/keyrings/claude-code.asc \
     && echo "deb [signed-by=/etc/apt/keyrings/claude-code.asc] https://downloads.claude.ai/claude-code/apt/stable stable main" \
        > /etc/apt/sources.list.d/claude-code.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
+    && apt-retry apt-get update \
+    && apt-retry apt-get install -y --no-install-recommends gh \
     && if [ -n "$CLAUDE_CLI_VERSION" ]; then \
-         apt-get install -y --no-install-recommends "claude-code=${CLAUDE_CLI_VERSION}"; \
+         apt-retry apt-get install -y --no-install-recommends "claude-code=${CLAUDE_CLI_VERSION}"; \
        else \
-         apt-get install -y --no-install-recommends claude-code; \
+         apt-retry apt-get install -y --no-install-recommends claude-code; \
        fi \
     && gh --version \
     && claude --version \
@@ -149,7 +151,7 @@ COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-bac
 COPY docker/backend/entrypoint.sh /app/entrypoint.sh
 
 # Create required directories (including /opt/autobot for model storage)
-RUN mkdir -p /app/data /app/logs /app/autobot-backend/data /opt/autobot/data \
+RUN mkdir -p /app/data /app/logs /app/huggingface /app/autobot-backend/data /opt/autobot/data \
     && chown -R autobot:autobot /app /opt/autobot
 
 # Symlink for legacy import compatibility (database only)
@@ -169,6 +171,8 @@ ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 # #19316: no AUTOBOT_DEPLOYMENT_MODE -- unset is auto-detect, docker_local in a container.
 ENV AUTOBOT_BACKEND_PORT=8001
+# #19869: the model cache, a volume in compose, so a recreated container does not download again.
+ENV HF_HOME=/app/huggingface
 
 EXPOSE 8001
 

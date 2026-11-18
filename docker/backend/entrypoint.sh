@@ -38,4 +38,15 @@ run_migrations || {
 }
 echo "Migrations complete."
 
+# #19869, #19738: the pinned speech-to-text and code-embedding models, into the cache volume (HF_HOME).
+# In the background, and never fatal: both are optional at runtime, so a slow link or a host with no
+# internet must not hold up or stop the backend. AUTOBOT_PREFETCH_MODELS=false skips it.
+case "${AUTOBOT_PREFETCH_MODELS:-true}" in
+    false | False | FALSE | 0 | no | off) echo "Model pre-fetch skipped (AUTOBOT_PREFETCH_MODELS=${AUTOBOT_PREFETCH_MODELS})" ;;
+    *)
+        echo "Fetching the pinned models into ${HF_HOME:-the default cache}, in the background..."
+        (python3 -m autobot_shared.model_prefetch || echo "WARNING: a pinned model could not be fetched (see FAILED above). Speech-to-text or code embeddings download it at first use, or fail offline.") &
+        ;;
+esac
+
 exec "$@"

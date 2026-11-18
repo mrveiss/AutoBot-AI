@@ -40,6 +40,23 @@ async def _source_map(kb, document_ids: List[str]) -> Dict[str, Dict[str, Any] |
     return dict(zip(ids, await asyncio.gather(*(one(i) for i in ids))))
 
 
+async def resolve_sources(
+    items: List[dict], kb, document_id_of: Callable[[dict], Any], *, withhold_quarantined_source: bool = False
+) -> List[tuple]:
+    """``(item, source fact metadata)`` for each item whose source fact resolves; the rest are dropped (#16665).
+
+    Fails closed: an unresolvable source drops the item. *withhold_quarantined_source* also drops items whose
+    source fact is research-quarantined.
+    """
+    doc_ids = [str(document_id_of(item) or "") for item in items]
+    sources = await _source_map(kb, doc_ids)
+    return [
+        (item, sources[d])
+        for item, d in zip(items, doc_ids)
+        if sources[d] and not (withhold_quarantined_source and is_quarantined({"metadata": sources[d]}))
+    ]
+
+
 async def visible_by_source(
     items: List[dict],
     kb,
@@ -50,22 +67,23 @@ async def visible_by_source(
 ) -> List[dict]:
     """*items* whose source fact *reader* may read; an unresolvable source drops the item (#16665).
 
-    A summary carries its own quarantine marker (#19163), so only items without one (events) ask the source.
+    *withhold_quarantined_source* also drops items whose source fact is research-quarantined, for an admin too.
     """
-    doc_ids = [str(document_id_of(item) or "") for item in items]
-    sources = await _source_map(kb, doc_ids)
-    candidates = []
-    for item, document_id in zip(items, doc_ids):
-        meta = sources[document_id]
-        if meta and not (withhold_quarantined_source and is_quarantined({"metadata": meta})):
-            candidates.append({"id": item.get("id", ""), "metadata": meta, "item": item})
+    resolved = await resolve_sources(items, kb, document_id_of, withhold_quarantined_source=withhold_quarantined_source)
+    candidates = [{"id": item.get("id", ""), "metadata": meta, "item": item} for item, meta in resolved]
     kept = await filter_for_user_id(candidates, kb, reader)
     return [c["item"] for c in kept]
 
 
 async def visible_summaries(summaries: List[dict], kb, reader: KbReader) -> List[dict]:
-    """*summaries* whose source fact *reader* may read; the rest, and any with no resolvable source, are dropped."""
-    return await visible_by_source(summaries, kb, reader, lambda s: (s.get("metadata") or {}).get("document_id"))
+    """*summaries* whose source fact *reader* may read; the rest, and any with no resolvable source, are dropped.
+
+    The source fact is read for its quarantine state too, so a summary stored before the #19163 marker existed
+    is withheld when its source is quarantined (#20162), for an admin too, as the marker does.
+    """
+    return await visible_by_source(
+        summaries, kb, reader, lambda s: (s.get("metadata") or {}).get("document_id"), withhold_quarantined_source=True
+    )
 
 
 async def visible_events(events: List[dict], kb, reader: KbReader) -> List[dict]:

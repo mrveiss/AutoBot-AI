@@ -36,8 +36,11 @@ from autobot_shared.paths import git_repo_root
 #: Each case is (relative path, the JSDoc/comment lines that must go, the real
 #: call lines that must stay). Taken from the live panel's four findings.
 _CASES = [
-    ("autobot-frontend/src/composables/useFileDownload.ts", [11, 16], []),
-    ("autobot-frontend/src/utils/apiErrorHandler.ts", [222], []),
+    # useFileDownload.ts went with #20770 (one kit save helper); useErrorHandler.ts carries the same
+    # shape -- a JSDoc usage example with a literal path call.
+    ("autobot-frontend/src/composables/useErrorHandler.ts", [35], []),
+    # apiErrorHandler.ts went with #21583 (unloaded error utils); useLoadingState.ts carries the same JSDoc shape.
+    ("autobot-frontend/src/composables/useLoadingState.ts", [17], []),
     ("autobot-frontend/src/views/slm/ThemeManagerView.vue", [], [35]),
 ]
 

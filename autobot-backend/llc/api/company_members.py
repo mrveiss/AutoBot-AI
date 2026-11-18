@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.deps import assert_company_access
 from llc.models.enums import MembershipRole
-from llc.services.activity_log import LLCActivityLogService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.membership_policy import LastOwnerError, authorize_member_change, lock_company_members
 from llc.services.membership_service import MemberAlreadyExistsError, MemberNotFoundError, MembershipService
@@ -42,7 +41,7 @@ class MemberRoleRequest(BaseModel):
 
 
 def _get_membership_service() -> MembershipService:
-    return MembershipService(activity_log=LLCActivityLogService())
+    return MembershipService()
 
 
 async def _refuse(session: AsyncSession, exc: Exception) -> NoReturn:

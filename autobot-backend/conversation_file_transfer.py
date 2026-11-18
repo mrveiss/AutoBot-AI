@@ -17,6 +17,7 @@ from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.scoping import ScopeLevel
 from autobot_shared.security.path_validator import resolve_within_sandbox
 from knowledge_factory import get_knowledge_base_async
 from utils.paths_manager import get_data_path
@@ -59,7 +60,11 @@ async def _to_shared(info: Dict, target_path: str | None) -> Dict[str, str]:
     return {"file_id": info["file_id"], "destination": "shared", "path": str(target.relative_to(SHARED_ROOT))}
 
 
-async def _to_knowledge_base(info: Dict, tags: List[str] | None, user_id: str | None) -> Dict[str, str]:
+async def _to_knowledge_base(
+    info: Dict, tags: List[str] | None, user_id: str | None, owner_id: str | None
+) -> Dict[str, str]:
+    """Ingest as a private fact owned by ``owner_id``: the verified transferring principal in the id the KB read side
+    compares, never the file's ``uploaded_by`` (a request-body ``agent_name`` for agent files) (#20233)."""
     kb = await get_knowledge_base_async()
     if kb is None:
         raise RuntimeError("Knowledge base is not available")
@@ -68,12 +73,17 @@ async def _to_knowledge_base(info: Dict, tags: List[str] | None, user_id: str | 
             text = await handle.read()
     except UnicodeDecodeError:
         raise ValueError("Only text files can be added to the knowledge base")
+    if not owner_id:
+        raise ValueError("The transferring user has no resolvable owner id; it is not added to the knowledge base")
     metadata = {
         "source": info["original_filename"],
         "tags": tags or [],
         "origin": "conversation_file",
         "session_id": info["session_id"],
         "uploaded_by": user_id,
+        # The transferring principal's own, never shared: same shape as knowledge/claude_memory_importer.py (#20233).
+        "owner_id": owner_id,
+        "visibility": ScopeLevel.PRIVATE.value,
     }
     result = await kb.add_document(text, metadata, info["file_id"])
     if result.get("status") != "success":
@@ -82,11 +92,16 @@ async def _to_knowledge_base(info: Dict, tags: List[str] | None, user_id: str | 
 
 
 async def transfer_one(
-    info: Dict, destination: str, target_path: str | None, tags: List[str] | None, user_id: str | None
+    info: Dict,
+    destination: str,
+    target_path: str | None,
+    tags: List[str] | None,
+    user_id: str | None,
+    owner_id: str | None = None,
 ) -> Dict[str, str]:
     """Copy one conversation file to ``destination`` ("kb" or "shared"); raises on any failure."""
     if destination == "shared":
         return await _to_shared(info, target_path)
     if destination == "kb":
-        return await _to_knowledge_base(info, tags, user_id)
+        return await _to_knowledge_base(info, tags, user_id, owner_id)
     raise ValueError(f"Unknown destination '{destination}'")

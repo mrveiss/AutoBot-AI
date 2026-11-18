@@ -203,7 +203,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { HttpError } from '@autobot/ui'
+import { HttpError, RequestTimeoutError, saveUrl } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
@@ -349,7 +349,7 @@ const loadVncUrl = async () => {
     } else if (err.message && err.message.includes('Network Error')) {
       error.value = t('desktop.interface.errorNetworkConnectivity');
       connectionStatus.value = 'Network Error';
-    } else if (err.message && err.message.includes('timeout')) {
+    } else if (err instanceof RequestTimeoutError) { // by class only (#21581): this path makes no request today, so only the client's typed timeout counts
       error.value = t('desktop.interface.errorConfigTimeout');
       connectionStatus.value = 'Timeout';
     } else {
@@ -425,7 +425,7 @@ const checkConnectionFn = async () => {
   // Create controller for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+  // eslint-disable-next-line no-restricted-syntax -- probes the VNC server, a different origin, for vnc.html
   const response = await fetch(`${vncBaseUrl}/vnc.html`, {
     method: 'HEAD',
     signal: controller.signal
@@ -571,10 +571,7 @@ async function pasteFromClipboard() {
 function downloadScreenshot() {
   if (!screenshotData.value) return
 
-  const link = document.createElement('a')
-  link.href = screenshotData.value
-  link.download = `desktop-screenshot-${Date.now()}.png`
-  link.click()
+  saveUrl(screenshotData.value, `desktop-screenshot-${Date.now()}.png`)
 }
 
 onUnmounted(() => {
@@ -759,7 +756,7 @@ onUnmounted(() => {
 .download-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -861,7 +858,7 @@ onUnmounted(() => {
 .type-btn {
   padding: var(--spacing-2) var(--spacing-4);
   background-color: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

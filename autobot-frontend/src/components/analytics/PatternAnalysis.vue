@@ -35,12 +35,18 @@
     </div>
 
     <!-- Error State -->
-    <div v-if="!analyzing && !wasInterrupted && error" class="error-state">
-      <Icon name="exclamation-triangle" /> {{ error }}
-      <button @click="reset" class="retry-btn">
-        <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
-      </button>
-    </div>
+    <EmptyState
+      v-if="!analyzing && !wasInterrupted && error"
+      :title="$t('analytics.patterns.errorTitle')"
+      :description="error"
+    >
+      <template #icon><Icon name="exclamation-triangle" /></template>
+      <template #actions>
+        <button @click="reset" class="retry-btn">
+          <Icon name="redo" /> {{ $t('analytics.patterns.reset') }}
+        </button>
+      </template>
+    </EmptyState>
 
     <!-- Results (shown alongside progress bar when partial results arrive) -->
     <div v-if="hasResults" class="section-content">
@@ -239,17 +245,19 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="!analyzing && !wasInterrupted && !error && !hasResults" class="empty-state">
-      <Icon name="puzzle-piece" />
-      <p>{{ $t('analytics.patterns.noAnalysis') }}</p>
-      <p class="empty-hint">{{ $t('analytics.patterns.emptyHint') }}</p>
-    </div>
+    <EmptyState
+      v-if="!analyzing && !wasInterrupted && !error && !hasResults"
+      :title="$t('analytics.patterns.noAnalysis')"
+      :description="$t('analytics.patterns.emptyHint')"
+    >
+      <template #icon><Icon name="puzzle-piece" /></template>
+    </EmptyState>
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { useShowMore } from '@autobot/ui'
+import { EmptyState, useShowMore } from '@autobot/ui'
 import TruncationNotice from './TruncationNotice.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -261,10 +269,7 @@ const { t } = useI18n()
 const { confirm } = useConfirmDialog()
 
 // Props
-const props = defineProps<{
-  rootPath: string
-  autoLoad?: boolean
-}>()
+const props = defineProps<{ rootPath: string; autoLoad?: boolean; withSourceId: (url: string) => string }>()
 
 // Emits
 const emit = defineEmits<{
@@ -300,7 +305,7 @@ const {
   clearStorage: clearStorageApi,
   reset,
   loadCachedData
-} = usePatternAnalysis()
+} = usePatternAnalysis((url: string) => props.withSourceId(url))
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20
@@ -319,7 +324,7 @@ const sectionsLoaded = reactive({
 const runAnalysis = async () => {
   if (!props.rootPath) return
 
-  const success = await analyzePatterns(props.rootPath, {
+  const success = await analyzePatterns(undefined, {
     enableRegex: true,
     enableComplexity: true,
     enableDuplicates: true,
@@ -387,28 +392,28 @@ watch(error, (newError) => {
 watch(() => isSectionExpanded('duplicates'), async (expanded) => {
   if (expanded && !sectionsLoaded.duplicates && duplicatePatterns.value.length === 0) {
     sectionsLoaded.duplicates = true
-    await getDuplicates(props.rootPath)
+    await getDuplicates()
   }
 })
 
 watch(() => isSectionExpanded('regex'), async (expanded) => {
   if (expanded && !sectionsLoaded.regex && regexOpportunities.value.length === 0) {
     sectionsLoaded.regex = true
-    await getRegexOpportunities(props.rootPath)
+    await getRegexOpportunities()
   }
 })
 
 watch(() => isSectionExpanded('complexity'), async (expanded) => {
   if (expanded && !sectionsLoaded.complexity && complexityHotspots.value.length === 0) {
     sectionsLoaded.complexity = true
-    await getComplexityHotspots(props.rootPath)
+    await getComplexityHotspots()
   }
 })
 
 watch(() => isSectionExpanded('refactoring'), async (expanded) => {
   if (expanded && !sectionsLoaded.refactoring && refactoringSuggestions.value.length === 0) {
     sectionsLoaded.refactoring = true
-    await getRefactoringSuggestions(props.rootPath)
+    await getRefactoringSuggestions()
   }
 })
 
@@ -428,7 +433,7 @@ watch(() => props.rootPath, async (newPath) => {
     sectionsLoaded.regex = false
     sectionsLoaded.complexity = false
     sectionsLoaded.refactoring = false
-    await getSummary(newPath)
+    await getSummary() // not the checkout path: the API takes a relative one
   }
 })
 
@@ -505,9 +510,7 @@ defineExpose({
   cursor: not-allowed;
 }
 
-.loading-state,
-.error-state,
-.empty-state {
+.loading-state {
   padding: var(--spacing-5);
   text-align: center;
   color: var(--text-secondary);
@@ -537,10 +540,6 @@ defineExpose({
 .files-progress {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-}
-
-.error-state {
-  color: var(--color-error);
 }
 
 .interrupted-state {
@@ -927,23 +926,6 @@ defineExpose({
 .analysis-time {
   margin-left: var(--spacing-2);
   color: var(--color-success);
-}
-
-/* Empty State */
-.empty-state {
-  padding: var(--spacing-10) var(--spacing-5);
-}
-
-.empty-state i {
-  font-size: var(--text-4xl);
-  margin-bottom: var(--spacing-4);
-  opacity: 0.5;
-}
-
-.empty-hint {
-  font-size: var(--text-sm);
-  max-width: 400px;
-  margin: var(--spacing-2) auto 0;
 }
 
 /* Responsive */

@@ -27,12 +27,14 @@ from sqlalchemy import bindparam, select, text
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import first_time
 from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 
 from ..models.enums import LLCAgentStatus, RoutineStatus
 from ..models.routine import LLCRoutine
 from ..services.controls_service import NEVER_SCHEDULED_STATUSES
+from .dispatch_gate import agent_pause_flag_key, company_pause_flag_key
 from .heartbeat_scheduler import _SCHEDULE_KEY, _next_fire
 from .schedule_members import ROUTINE_MEMBER_PREFIX
 
@@ -47,8 +49,6 @@ _ROUTINE_PAGE = 1000
 #: code stops the poller waking such an agent, and a reconcile stricter than the poller would
 #: leave a member absent that the poller still fires once it is present.
 _OFF_STATUSES = tuple(sorted(NEVER_SCHEDULED_STATUSES | {LLCAgentStatus.PAUSED.value}))
-_BAD_CRON_CAP = 1000
-_reported_bad_crons: Set[Tuple[str, str]] = set()
 
 
 class _Wanted(NamedTuple):
@@ -63,9 +63,9 @@ class _Wanted(NamedTuple):
 def _pause_keys(agent_id: Any, company_id: Any) -> Tuple[str, ...]:
     keys = []
     if agent_id:
-        keys.append(f"llc:agent:{agent_id}:paused")
+        keys.append(agent_pause_flag_key(agent_id))
     if company_id:
-        keys.append(f"llc:company:{company_id}:paused")
+        keys.append(company_pause_flag_key(company_id))
     return tuple(keys)
 
 
@@ -135,13 +135,9 @@ def _next_or_report(item: _Wanted) -> float | None:
     try:
         return _next_fire(item.cron, datetime.now(tz=timezone.utc).timestamp())
     except Exception as exc:  # croniter raises several unrelated types for a bad cron
-        seen = (item.member, item.cron)
-        if seen in _reported_bad_crons:
+        if not first_time(__name__, f"bad_cron:{item.member}:{item.cron}"):
             logger.debug("Schedule reconcile: %s %s still has an unusable cron", item.kind, item.member)
         else:
-            if len(_reported_bad_crons) >= _BAD_CRON_CAP:
-                _reported_bad_crons.clear()
-            _reported_bad_crons.add(seen)
             logger.error("Schedule reconcile could not restore %s %s: %s", item.kind, item.member, exc)
         return None
 
@@ -165,8 +161,13 @@ async def restore_lost_schedule_members(redis: Any) -> List[str]:
 
 
 async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) -> None:
-    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop."""
+    """Reconcile every *interval* seconds until cancelled; one failed pass does not end the loop.
+
+    The first pass waits one interval: the loop starts while the schedulers are still seeding the
+    set, and a pass that beat them would log their own seeding as a restoration (#20232).
+    """
     while True:
+        await asyncio.sleep(interval)
         try:
             redis = await get_async_redis_client()
             if redis is None:
@@ -175,4 +176,3 @@ async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) 
                 await restore_lost_schedule_members(redis)
         except Exception:
             logger.exception("Schedule reconcile pass failed")
-        await asyncio.sleep(interval)

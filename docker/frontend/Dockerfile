@@ -26,6 +26,9 @@ ARG NPM_FETCH_RETRY_MAXTIMEOUT
 ENV NPM_CONFIG_FETCH_RETRIES=$NPM_FETCH_RETRIES \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=$NPM_FETCH_RETRY_MINTIMEOUT \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=$NPM_FETCH_RETRY_MAXTIMEOUT
+# #21692 (#13410 class): this image never runs Cypress, so `npm ci` and the
+# `prepare` script's `cypress install` skip the ~100MB binary download.
+ENV CYPRESS_INSTALL_BINARY=0
 
 WORKDIR /app
 
@@ -63,6 +66,9 @@ ARG NPM_FETCH_RETRY_MAXTIMEOUT
 ENV NPM_CONFIG_FETCH_RETRIES=$NPM_FETCH_RETRIES \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=$NPM_FETCH_RETRY_MINTIMEOUT \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=$NPM_FETCH_RETRY_MAXTIMEOUT
+# #21692 (#13410 class): this image never runs Cypress, so `npm ci` and the
+# `prepare` script's `cypress install` skip the ~100MB binary download.
+ENV CYPRESS_INSTALL_BINARY=0
 
 WORKDIR /app
 
@@ -92,16 +98,18 @@ FROM ubuntu:22.04 AS nginx-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# apt retries, and an index failure is fatal at `apt-get update` (#16291)
+# apt retries, an index failure is fatal at `apt-get update` (#16291), and apt-retry backs off (#21325)
 COPY docker/apt/80-autobot-resilience /etc/apt/apt.conf.d/80-autobot-resilience
+COPY docker/apt/apt-retry /usr/local/bin/apt-retry
 
 # Install nginx
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-retry apt-get update && apt-retry apt-get install -y --no-install-recommends \
     nginx wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Shared nginx includes: http-block settings + SLM upstream, and the SLM routes
 COPY docker/nginx/nginx-common.conf /etc/nginx/nginx-common.conf
+COPY autobot-slm-backend/ansible/_shared/files/upload-cap.conf /etc/nginx/upload-cap.conf
 COPY docker/nginx/nginx-slm-locations.conf /etc/nginx/nginx-slm-locations.conf
 # TLS settings and the port-80 redirect server, shared by both TLS configs (#18593)
 COPY docker/nginx/nginx-tls.conf /etc/nginx/nginx-tls.conf

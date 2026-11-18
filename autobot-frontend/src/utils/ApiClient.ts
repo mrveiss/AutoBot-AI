@@ -1,12 +1,14 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { ApiClientBase, httpErrorFrom, type RawRequestOptions, type TransportRequestOptions } from '@autobot/ui'
+import type { paths } from '@/types/generated/api';
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase } from '@/config/ssot-config';
+import { getApiBase, getBackendUrl } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
 import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
+import { monitorApiCall } from '@/utils/apiCallMonitor';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -74,7 +76,7 @@ export interface ChatMessageResponse {
 export type { ApiRequestOptions as RequestOptions };
 type RequestOptions = ApiRequestOptions;
 
-export class ApiClient extends ApiClientBase<RequestOptions> {
+export class ApiClient extends ApiClientBase<RequestOptions, paths> {
   private baseUrl: string;
   private baseUrlPromise: Promise<string> | null;
   private settings: Record<string, unknown>;
@@ -163,22 +165,15 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   }
 
   private _detectBaseUrl(): string {
-    const backendHost = import.meta.env.VITE_BACKEND_HOST;
-    const backendPort = import.meta.env.VITE_BACKEND_PORT;
-    const protocol = import.meta.env.VITE_HTTP_PROTOCOL;
-
     // Proxy mode: Vite dev server uses empty baseUrl for proxy
     const isViteDevServer = typeof window !== 'undefined' && window.location.port === '5173';
     if (isViteDevServer && import.meta.env.DEV) {
       return '';
     }
 
-    if (backendHost && backendPort && protocol) {
-      return `${protocol}://${backendHost}:${backendPort}`;
-    }
-
-    // Default to proxy mode (empty = relative URLs via nginx) (#919)
-    return '';
+    // #19821: the one backend-origin rule (ssot-config getBackendUrl): an explicit
+    // VITE_API_BASE_URL, otherwise proxy mode (empty = relative URLs via nginx, #919, #12339).
+    return getBackendUrl();
   }
 
   private async ensureBaseUrl(): Promise<string> {
@@ -223,6 +218,14 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   // JWT from localStorage (#827)
   protected getAuthToken(): string | null {
     return readStoredAuthToken();
+  }
+
+  // Contract keys carry the literal `/api` prefix; `VITE_API_BASE_PATH` may relocate it (a path or an absolute URL).
+  // Apply the configured base to `call`/`callRaw` so they reach the route hand-built `${getApiBase()}/x` callers
+  // do, and so `isAuthEndpoint` sees the same prefix (#12363). Keys outside `/api` (`/v1/...`) are sent as written.
+  protected contractPath(path: string): string {
+    const base = getApiBase();
+    return path.startsWith('/api/') && base !== '/api' ? `${base}${path.slice('/api'.length)}` : path;
   }
 
   protected isAuthEndpoint(endpoint: string): boolean {
@@ -276,7 +279,7 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   }
 
   // Uploads go through XHR, which has no shared header path. The routes the main app uploads to
-  // (e.g. /conversation-files/.../upload, gated by check_admin_permission) accept only an
+  // (e.g. /conversation-files/.../upload, gated by ownership in _authorize_file_operation, #20133) accept only an
   // Authorization bearer, X-Session-ID or the internal key, never a cookie, so send the bearer (#19983).
   protected authorizeUpload(xhr: XMLHttpRequest): void {
     const token = this.getAuthToken();
@@ -286,8 +289,12 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   // Raw Response access (streaming, blobs); `circuitBreaker` opts in to fail-fast (#11682).
   async rawRequest(endpoint: string, options: RawRequestOptions<RequestOptions> = {}): Promise<Response> {
     const key = options.circuitBreaker;
-    if (!key) return super.rawRequest(endpoint, options);
-    return runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options));
+    const send = () => (key
+      ? runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options))
+      : super.rawRequest(endpoint, options));
+    // Every kit-client fetch verb funnels through here, so this is the one place a call is timed for RUM (#21583).
+    // XHR uploads (uploadFile/wireUpload) and direct fetch users bypass it.
+    return monitorApiCall(options.method ?? 'GET', endpoint, send);
   }
 
   // ==================================================================================

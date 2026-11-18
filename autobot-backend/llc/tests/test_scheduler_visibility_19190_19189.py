@@ -87,6 +87,8 @@ async def _poll_once(fake: _FakeSortedSet, *, has_work: bool, agent=None, schedu
     with (
         patch(f"{_HBS}.get_async_redis_client", AsyncMock(return_value=fake)),
         patch(f"{_HBS}.get_async_session_factory", _session_factory()),
+        # #19240: the gate fails closed without Redis; these tests are about what follows it.
+        patch(f"{_HBS}.dispatch_block_reason", AsyncMock(return_value=None)),
         patch.object(scheduler, "_get_agent_config", AsyncMock(return_value=agent or _agent())),
         patch.object(scheduler, "_find_rate_limited_run", AsyncMock(return_value=None)),
         patch.object(scheduler, "_create_run", AsyncMock(return_value=MagicMock(id="run-1"))),
@@ -140,6 +142,9 @@ def test_the_configured_logging_path_writes_a_scheduler_record_to_the_backend_lo
     monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path))
     monkeypatch.setattr(lm.LoggingManager, "_loggers", {})
     monkeypatch.setattr(lm.LoggingManager, "_initialized", False)
+    # The scheduler runs in a started service: file logging is on (#20894, setup_logging()).
+    monkeypatch.setattr(lm.LoggingManager, "_file_logging_enabled", True)
+    monkeypatch.setattr(lm.LoggingManager, "_managed", {})
     stdlib = logging.getLogger(name)
     saved = (list(stdlib.handlers), list(stdlib.filters), stdlib.level)
     stdlib.handlers.clear()

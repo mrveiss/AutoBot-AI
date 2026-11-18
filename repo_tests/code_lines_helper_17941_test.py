@@ -212,3 +212,151 @@ def test_a_block_comment_marker_inside_a_string_is_data() -> None:
     text = code_text('const s = "not /* a comment */ really"\nconst c = 3\n', name="x.ts")
     assert "really" in text, "a block marker inside a string literal was treated as a comment"
     assert "const c = 3" in text
+
+
+def test_an_apostrophe_in_a_line_comment_does_not_open_a_string_that_hides_later_globs() -> None:
+    """The #21509 defect: `worker's` in a `//` comment swallowed the `/**/` of every later glob."""
+    source = (
+        "// the worker's stdout, and a stray /* opener\n"
+        "const g = ['src/**/*.spec.ts'] // don't\n"
+        "const after = 1 /* real */\n"
+    )
+    text = code_text(source, name="x.ts", strip_trailing=True)
+    assert "'src/**/*.spec.ts'" in text, f"the glob was eaten: {text!r}"
+    assert "const after = 1" in text and "real" not in text, text
+    assert "worker" not in text and "don't" not in text
+
+
+def test_a_double_slash_inside_a_regex_class_is_not_a_line_comment() -> None:
+    """The regression against the previous scanner: the real block opener after the regex must still be found."""
+    source = "const re = /[//]/; /*\nbanned_token\n*/\nconst z = 1\n"
+    text = code_text(source, name="x.ts")
+    assert "banned_token" not in text, "the regex's `//` hid the block comment that follows it"
+    assert "/[//]/" in text and "const z = 1" in text, "the regex itself must be kept verbatim"
+
+
+def test_a_double_slash_after_a_division_is_still_a_line_comment() -> None:
+    text = code_text("const q = a / b // banned_token\nconst z = 1\n", name="x.ts", strip_trailing=True)
+    assert "banned_token" not in text and "const q = a / b" in text and "const z = 1" in text
+
+
+def test_a_block_comment_between_two_divisions_is_still_stripped() -> None:
+    text = code_text("x = 4 / 2 /* banned_token */ / 1\n", name="x.ts")
+    assert "banned_token" not in text and "x = 4 / 2" in text and "/ 1" in text
+
+
+def test_a_quote_inside_a_regex_does_not_open_a_string() -> None:
+    source = "const q = /'/; /* banned_token */\nconst s = 'x'\n"
+    text = code_text(source, name="x.ts")
+    assert "banned_token" not in text, "the regex's quote opened a string that hid the block comment"
+    assert "/'/" in text and "const s = 'x'" in text
+
+
+def test_a_regex_after_a_keyword_or_at_a_line_start_is_read_as_a_regex() -> None:
+    assert "banned_token" not in code_text("function f() { return /[//]/ } /* banned_token */\n", name="x.ts")
+    assert "banned_token" not in code_text("/[//]/.test(a) /* banned_token */\n", name="x.ts")
+
+
+def test_a_slash_with_no_closing_slash_on_its_line_is_a_plain_character() -> None:
+    text = code_text("const a = /unterminated\nconst b = 2 /* banned_token */\n", name="x.ts")
+    assert "banned_token" not in text and "const b = 2" in text
+
+
+def test_a_url_in_a_string_is_untouched_by_line_comment_handling() -> None:
+    text = code_text("const u = 'http://x/y' /* banned_token */ // tail\nconst v = 1\n", name="x.ts")
+    assert "http://x/y" in text and "banned_token" not in text and "const v = 1" in text
+
+
+@pytest.mark.parametrize("name", ["x.mts", "x.cts"])
+def test_module_typescript_suffixes_get_slash_and_block_comment_handling(name) -> None:
+    source = "// banned_one\n/* banned_two */\nconst live = 1\n"
+    text = code_text(source, name=name)
+    assert "banned" not in text and "const live = 1" in text
+
+
+@pytest.mark.parametrize(
+    "source,kept",
+    [
+        ("const n = i++ / 2; /* banned_token */\n", "const n = i++ / 2;"),
+        ("const n = i++ / 2 + '/'; /* banned_token */\n", "const n = i++ / 2 + '/';"),
+        ("const n = i-- / 2 + '/'; /* banned_token */\n", "const n = i-- / 2 + '/';"),
+        ("<b>x</b> '/' /* banned_token */\n", "<b>x</b> '/'"),
+        ("const w = </b> /* banned_token */\n", "const w = </b>"),
+        ("i++ / 2; // don't\n/* banned_token */\nconst k = 1\n", "i++ / 2;"),
+        ("<div>x</div> // worker's\n/* banned_token */\nconst k = 1\n", "<div>x</div>"),
+        ("x! / 2; // don't\n/* banned_token */\nconst k = 1\n", "x! / 2;"),
+        ("const d = 8 / 2 / 1; /* banned_token */\n", "const d = 8 / 2 / 1;"),
+        ("const n = x! / 2 + '/'; /* banned_token */\n", "const n = x! / 2 + '/';"),
+        ("const of = 8;\nconst n = of / 2 + '/'; /* banned_token */\n", "const n = of / 2 + '/';"),
+        ("<b>x</b> / 2 + '/'; /* banned_token */\n", "<b>x</b> / 2 + '/';"),
+        ("const n = (a) / 2 + '/'; /* banned_token */\n", "const n = (a) / 2 + '/';"),
+    ],
+)
+def test_a_division_is_never_read_as_a_regex_that_swallows_a_comment(source, kept) -> None:
+    text = code_text(source, name="x.vue", strip_trailing=True)
+    assert "banned_token" not in text and "worker" not in text and "don't" not in text, text
+    assert kept in text, f"the code before the comment was damaged: {text!r}"
+
+
+@pytest.mark.parametrize(
+    "source,regex",
+    [
+        ("if (!/'/.test(x)) {} /* banned_token */\n", "!/'/.test(x)"),
+        ("x = /'\\//; /* banned_token */\n", "/'\\//"),
+        ("x = /a\\/\\/b/;  // banned_token\n", "/a\\/\\/b/;"),
+        ("const re = /[//]/; /*\nbanned_token\n*/\n", "/[//]/;"),
+        ("function f() { return /'/ } /* banned_token */\n", "return /'/"),
+        ("const f = (s) => /'/.test(s); /* banned_token */\n", "=> /'/.test(s);"),
+        ("if (a && !/'/.test(x)) {} /* banned_token */\n", "&& !/'/.test(x)"),
+        ("if ((!/'/.test(x))) {} /* banned_token */\n", "(!/'/.test(x))"),
+        ("if (!!/'/.test(x)) {} /* banned_token */\n", "!!/'/.test(x)"),
+        ("function f() { return !/'/.test(x) } /* banned_token */\n", "return !/'/.test(x)"),
+        ("!/'/.test(x); /* banned_token */\n", "!/'/.test(x);"),
+    ],
+)
+def test_a_regex_literal_stays_a_regex_and_the_comment_after_it_is_stripped(source, regex) -> None:
+    text = code_text(source, name="x.ts", strip_trailing=True)
+    assert "banned_token" not in text, text
+    assert regex in text, f"the regex literal was damaged: {text!r}"
+
+
+def test_a_vue_line_with_a_closing_tag_a_html_comment_and_a_line_comment_is_read_as_code() -> None:
+    text = code_text('<a href="/x/y">t</a> <!-- n --> // banned_token\n', name="x.vue", strip_trailing=True)
+    assert 'href="/x/y">t</a>' in text and "banned_token" not in text and "<!-- n -->" in text
+
+
+#: Lines where the scanner and the older quote-only trailing strip must cut at the same place.
+_AGREED = [
+    ("const a = 1 // c", "const a = 1 "),
+    ("const u = 'http://x/y' // c", "const u = 'http://x/y' "),
+    ('const s = "a // b" // c', 'const s = "a // b" '),
+    ("no comment here", "no comment here"),
+    ("const n = i++ / 2; // c", "const n = i++ / 2; "),
+    ("x! / 2; // c", "x! / 2; "),
+    ("<b>x</b> // c", "<b>x</b> "),
+]
+
+#: Lines the quote-only strip cannot read (a regex class, an escaped slash, a template, a division).
+_SCANNER_ONLY = [
+    ("const re = /[//]/; // c", "const re = /[//]/; "),
+    ("x = /a\\/\\/b/; // c", "x = /a\\/\\/b/; "),
+    ("const t = `x // y` // c", "const t = `x // y` "),
+]
+
+
+@pytest.mark.parametrize("line,expected", _AGREED)
+def test_the_trailing_cut_is_the_scanners_and_matches_the_quote_only_strip_where_that_can_read_the_line(
+    line, expected
+) -> None:
+    assert code_text(line + "\n", name="x.ts", strip_trailing=True) == expected
+    assert strip_trailing_comment(line, ("//",)) == expected, "the two stages disagree on a line both can read"
+
+
+@pytest.mark.parametrize("line,expected", _SCANNER_ONLY)
+def test_the_trailing_cut_follows_the_scanner_on_lines_the_quote_only_strip_cannot_read(line, expected) -> None:
+    assert code_text(line + "\n", name="x.ts", strip_trailing=True) == expected
+
+
+def test_a_line_that_is_only_a_comment_is_dropped_and_numbering_survives_the_scanner_cut() -> None:
+    lines = code_lines("// whole\nconst a = 1 // t\n/* b */ const b = /[//]/ // t\n", name="x.ts", strip_trailing=True)
+    assert [(line.lineno, line.text.strip()) for line in lines] == [(2, "const a = 1"), (3, "const b = /[//]/")]

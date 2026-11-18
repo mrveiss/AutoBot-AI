@@ -17,21 +17,24 @@ from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
-from auth_revocation import resolve_human_user_via, token_passes_revocation
+from auth_revocation import resolve_human_user_via, token_passes_revocation, with_session_issue_time
+from auth_service_opt_in import admit_opted_in_service, warn_if_key_without_session
+from autobot_shared.auth.configured_users import failure_reason, verify_configured_user
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
-from autobot_shared.auth.internal_api_key import verify_internal_api_key
+from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401  (re-exported)
 from autobot_shared.auth.jwt_core import (
     decode_jwt_multi,
     encode_jwt,
     hash_password,
     verify_password,
 )
-from autobot_shared.auth.permissions import is_admin_role
+from autobot_shared.auth.permissions import ADMIN_ROLES, is_admin_role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id  # noqa: F401  (re-exported, #13688)
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.user_management.password_epoch import LOGIN_TOKEN_LIFETIME_SECONDS
 from autobot_shared.websocket_subprotocol import resolve_ws_token
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
@@ -49,7 +52,7 @@ class AuthenticationMiddleware:
         self.security_config = config.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", True)
         self.jwt_secret = self._get_jwt_secret()
-        self.jwt_expiry_hours = 24
+        self.jwt_expiry_hours = LOGIN_TOKEN_LIFETIME_SECONDS // 3600  # the epoch marker outlives it (#20443)
         self.session_timeout_minutes = self.security_config.get("session_timeout_minutes", 30)
         self.max_failed_attempts = self.security_config.get("max_failed_attempts", 3)
         self.lockout_duration_minutes = self.security_config.get("lockout_duration_minutes", 15)
@@ -383,13 +386,9 @@ class AuthenticationMiddleware:
             self._handle_locked_account(username, ip_address)
 
         allowed_users = self.security_config.get("allowed_users", {})
-        if username not in allowed_users:
-            self._handle_failed_login(username, ip_address, "user_not_found")
-            return None
-
-        user_config = allowed_users[username]
-        if not self.verify_password(password, user_config.get("password_hash", "")):
-            self._handle_failed_login(username, ip_address, "invalid_password")
+        user_config = verify_configured_user(allowed_users, username, password)
+        if user_config is None:
+            self._handle_failed_login(username, ip_address, failure_reason(allowed_users, username))
             return None
 
         return self._build_successful_auth_response(username, user_config, ip_address)
@@ -623,9 +622,8 @@ class AuthenticationMiddleware:
         if not session or not session.get("user_data"):
             return None
 
-        user_data = session["user_data"].copy()
-        user_data["auth_method"] = "session"
-        return user_data
+        user_data = {**session["user_data"], "auth_method": "session"}
+        return with_session_issue_time(user_data, session)
 
     def _extract_user_from_dev_header(self, request: Request) -> Dict | None:
         """
@@ -706,18 +704,18 @@ class AuthenticationMiddleware:
             from services.device_jwt import validate_device_jwt
 
             claims = await validate_device_jwt(token)
+        except HTTPException:
+            raise  # #20446: the revocation store could not answer -- the shared 503, not a 401
         except Exception:
             return None
 
-        device_id = str(claims.get("device_id", ""))
-        user_id = str(claims.get("user_id", ""))
-        scope = str(claims.get("scope", "read"))
+        device_id, user_id = (str(claims.get(claim, "")) for claim in ("device_id", "user_id"))
         return {
             "username": f"device:{device_id}",
             "user_id": user_id,
             "role": "device",
             "device_id": device_id,
-            "scope": scope,
+            "scope": str(claims.get("scope", "read")),
             "auth_method": "device_jwt",
         }
 
@@ -870,9 +868,9 @@ async def get_current_user(request: Request) -> Dict:
     """
     Dependency for FastAPI endpoints to get current authenticated user.
 
-    Issue #1779: Also accepts X-Internal-API-Key header for
-    service-to-service calls (e.g. SLM frontend via nginx proxy).
-    Returns a synthetic admin user dict when the internal key matches.
+    #16333 (owner ruling b): the internal service key is not a user and not an admin. It is
+    admitted only on a route that names its caller with :func:`service_opt_in`, and then as a
+    non-admin service principal. The SLM frontend's proxied calls carry the admin's own token.
 
     SEC-2 #6473: Also accepts a run-scoped JWT (``Bearer <run-jwt>``) so
     MCP bridge workers and long-running tasks can authenticate without a
@@ -886,9 +884,8 @@ async def get_current_user(request: Request) -> Dict:
 
     Raises HTTPException if authentication fails.
     """
-    # Issue #1779: Allow trusted internal services via API key
-    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
-        return {"username": "service:slm", "role": "admin", "service": True}
+    if (service := await admit_opted_in_service(request)) is not None:
+        return service
 
     middleware = get_auth_middleware()
 
@@ -937,23 +934,18 @@ async def get_current_user(request: Request) -> Dict:
             )
         return device_user
 
+    warn_if_key_without_session(request)  # only once every other credential has failed
     raise_auth_error("AUTH_0002")
 
 
 async def check_admin_permission(request: Request) -> bool:
-    """
-    FastAPI dependency: True for an admin (``Depends(check_admin_permission)``); a revoked JWT is 401 (#18688).
-
-    Raises HTTPException: 401 if not authenticated, 403 if not admin.
-    """
-    # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
-    # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
-    if verify_internal_api_key(request.headers.get("X-Internal-API-Key")):
-        logger.debug("Internal API key auth: granting admin access")
+    """True for an admin; 401 unauthenticated or revoked (#18688); 403 non-admin, audited as role_denied (#16333)."""
+    if await admit_opted_in_service(request) is not None:  # #16333: the key only where a route names it
         return True
 
     user_data = await resolve_human_user(request)  # #12924, #16411: a pre-password-change JWT is 401
     if not user_data:
+        warn_if_key_without_session(request)
         raise_auth_error("AUTH_0002")
 
     # Issue #744: Require explicit role - no guest fallback for security
@@ -961,6 +953,9 @@ async def check_admin_permission(request: Request) -> bool:
     if not user_role:
         raise_auth_error("AUTH_0002", "User role not assigned - access denied")
     if not is_admin_role(user_role):
+        from auth_rbac import audit_role_denied  # noqa: PLC0415  (auth_rbac imports this module)
+
+        audit_role_denied(user_data, sorted(ADMIN_ROLES), role_value(user_role).lower(), request)
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True
