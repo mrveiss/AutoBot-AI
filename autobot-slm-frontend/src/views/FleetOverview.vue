@@ -19,10 +19,11 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
 import type { SLMNode, NodeHealth } from '@/types/slm'
-import { createLogger } from '@/utils/debugUtils'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
+import FleetEmptyState from '@/components/fleet/FleetEmptyState.vue'
+import FleetIncompleteBanner from '@/components/fleet/FleetIncompleteBanner.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
 import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
 import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
@@ -30,7 +31,7 @@ import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 import RoleManagementModal from '@/components/RoleManagementModal.vue'
 import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
-import { BaseModal, BaseDrawer, useToast } from '@autobot/ui'
+import { BaseModal, BaseDrawer, useToast, createLogger } from '@autobot/ui'
 
 const logger = createLogger('FleetOverview')
 const { t } = useI18n()
@@ -515,6 +516,8 @@ const formatLastSeen = formatCompactRelativeTime
     <div v-show="activeTab === 'nodes'" id="tabpanel-nodes" role="tabpanel" :aria-label="$t('fleetOverview.nodesOverviewAria')">
       <FleetSummary class="mb-6" />
 
+      <FleetIncompleteBanner />
+
       <!-- Node Grid -->
       <div v-if="nodes.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" role="list" :aria-label="$t('fleetOverview.fleetNodesAria')">
         <NodeCard
@@ -525,15 +528,7 @@ const formatLastSeen = formatCompactRelativeTime
         />
       </div>
 
-      <!-- Empty State -->
-      <div v-else-if="!isLoading" class="card p-12 text-center">
-        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-        </svg>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('fleetOverview.noNodesRegistered') }}</h3>
-        <p class="text-gray-500 mb-4">{{ $t('fleetOverview.addANodeTo') }}</p>
-        <button @click="openAddNodeModal" class="btn btn-primary">{{ $t('fleetOverview.addFirstNode') }}</button>
-      </div>
+      <FleetEmptyState v-else-if="!isLoading" @add="openAddNodeModal" />
 
       <!-- Loading State -->
       <div v-if="isLoading && nodes.length === 0" class="flex items-center justify-center py-12" role="status" :aria-label="$t('fleetOverview.loadingFleetDataAria')">

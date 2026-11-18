@@ -106,6 +106,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 _REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
@@ -224,7 +225,7 @@ def _defines_target(path: Path) -> List[int]:
     parsed (#15202 item 3). Callers that sweep many files use
     `_scan_for_definitions`, which records the failure instead of dropping it.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(path.read_text(encoding="utf-8"))
 
     lines = []
     for node in ast.walk(tree):
@@ -511,7 +512,7 @@ def test_the_renamed_sibling_no_longer_shares_the_name():
         "end the name collision; keep it renamed."
     )
 
-    tree = ast.parse(renamed_module.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(renamed_module.read_text(encoding="utf-8"))
     defined = {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
     assert "with_default_on_error" in defined, (
         f"{renamed_module.relative_to(_REPO)} lost with_default_on_error — "

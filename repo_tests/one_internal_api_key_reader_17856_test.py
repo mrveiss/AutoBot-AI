@@ -25,6 +25,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _READER = "autobot_shared/node_proxy.py"
@@ -67,7 +68,7 @@ def _is_ssot_read(node: ast.AST) -> bool:
 
 
 def _reads_the_key(source: str) -> bool:
-    return any(_is_env_read(node) or _is_ssot_read(node) for node in ast.walk(ast.parse(source)))
+    return any(_is_env_read(node) or _is_ssot_read(node) for node in ast.walk(parse_cache.parse(source)))
 
 
 @pytest.mark.parametrize(
@@ -107,8 +108,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-internal-api-key-reader-scan",
     discover=_source_population,
-    floor=3253,  # mid-window: population 3403, window (3103, 3403)
-    # Mid-window, from REACH.window(): 3032 measured, growth 300 -> 150 of headroom each way.
     what="non-test python source",
     roots=_ROOTS,
     growth=300,

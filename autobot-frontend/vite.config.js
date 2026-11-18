@@ -73,7 +73,10 @@ export default defineConfig(({ mode }) => {
       // Required for file: workspace packages — see #8482 / MVA-893.
       preserveSymlinks: true,
       // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
-      dedupe: autobotUiResolve().dedupe,
+      // #18550: also pin the xterm packages `@autobot/terminal` imports to this app's
+      // copy -- the plugin directory has no node_modules, so when its in-tree source
+      // is loaded by real path (a worktree test) they would not resolve at all.
+      dedupe: [...autobotUiResolve().dedupe, '@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
       alias: [
         ...autobotUiResolve().alias,
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
@@ -93,7 +96,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api/terminal/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/api/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
-        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, timeout: 300000 },
+        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, ws: true, changeOrigin: true, timeout: 300000 }
       }
     },

@@ -87,6 +87,10 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[encoder-typed-decision-head]] | Encoder-based typed decision head — an open-source non-autoregressive decision engine compared against the `llm_shared/decisions.py` seam; the contract is already ours, gaps are a 0.7 default for unparsable confidence, unrecorded gate outcomes, no ECE/Brier calibration metrics, hand-picked thresholds and no option-order control (#18985–#18990) |
 | [[RES_hosted-knowledge-chat-agent-platform]] | Hosted knowledge-base chat agent platform — source analysis of a commercial no-code SaaS that turns an organisation's content into support, lead-capture and internal-search chat and voice agents (#19794) |
 | [[local-agent-team-desktop-workspace]] | Local agent-team desktop workspace — provider-agnostic persistent agents wrapping existing vendor CLIs, with failover, a mailbox and queues; phase 1 source analysis only |
+| [[ontology-grounded-text-to-sql-context-layer]] | Ontology-grounded text-to-SQL context layer — an open-source service that compiles database metadata into reviewed terms, measures and joins, compared against AutoBot's NL→SQL path; gaps are an answerability gate, a validate-and-repair loop and question-level coverage on KB answers (#20808) |
+| [[physical-modelling-articulatory-voice-synthesis]] | Physical-modelling articulatory voice synthesis — fitness for AutoBot's speech output (not fit as an engine; measurement method adoptable); see #21372 |
+| [[RES_deterministic-code-knowledge-graph]] | Deterministic code knowledge graph with edge provenance — comparison with AutoBot's code indexer and graph retrieval; defects filed as #21316–#21318 |
+| [[RES_agent-governance-guards-budget-audit-loop]] | Agent governance guards — pre-request dollar budget, tier-aware pricing, tamper-evident audit hash chain, cycle-aware loop guard and publish-validated versioned agent spec, compared with AutoBot; adoptable patterns filed as #21635, #21636, #21637, #21638, #21639 |
 
 ## Related Sections
 

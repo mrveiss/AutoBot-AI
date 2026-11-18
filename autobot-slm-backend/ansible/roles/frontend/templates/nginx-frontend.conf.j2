@@ -27,7 +27,7 @@ map $http_upgrade $connection_upgrade {
 
 # Issue #1098: Health-aware upstream with failure tracking
 upstream autobot_backend {
-    server {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
+    server {{ backend_host | default(ansible_host) }}:{{ frontend_upstream_backend_port }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
 }
 
 server {
@@ -163,6 +163,11 @@ server {
         proxy_ssl_verify off;
         proxy_next_upstream error timeout http_502 http_504;
         proxy_next_upstream_timeout 10s;
+    }
+
+    # #20046: service-to-service only; the SLM and the backend call each other directly, never through this edge.
+    location ^~ /api/internal/ {
+        return 404;
     }
 
     # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority.

@@ -34,6 +34,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from autobot_shared.logging_once import log_once
 from autobot_shared.ssot_config import config
 from services.llm_service import get_llm_service
 
@@ -41,9 +42,7 @@ logger = logging.getLogger(__name__)
 
 _WINDOW_LINES = 15  # ±lines around the finding's line number
 
-# Bounded, non-spammy warning throttle (#12618): each distinct degrade reason is
-# logged once per process, never per-call.
-_warned_reasons: set[str] = set()
+# Each distinct degrade reason is logged once per process via log_once, never per-call (#12618).
 
 
 @dataclass(frozen=True)
@@ -62,11 +61,9 @@ def _fail_closed(reason: str) -> FindingVerdict:
     return FindingVerdict(is_real=False, confidence=0.0, rationale=f"unverifiable: {reason}")
 
 
-def _warn_once(message: str) -> None:
-    """Log *message* at warning level at most once per process (#12618)."""
-    if message not in _warned_reasons:
-        _warned_reasons.add(message)
-        logger.warning(message)
+def _warn_degrade_once(reason: str) -> None:
+    """Log a degrade *reason* at warning level at most once per process (#12618)."""
+    log_once(logger, logging.WARNING, reason, reason)
 
 
 def _read_code_window(clone_path: str, file_path: str, line_number: int | None) -> str:
@@ -230,7 +227,9 @@ async def _apply_cross_vendor(prompt: str, verdict_a: FindingVerdict, provider_a
     preference = [p.strip() for p in (config.cross_vendor_verifier_providers or "").split(",") if p.strip()]
     verifier_provider = select_verifier_provider(configured, provider_a, preference)
     if verifier_provider is None:
-        _warn_once(f"cross_vendor: no provider distinct from {provider_a!r} configured — using same-vendor verifier")
+        _warn_degrade_once(
+            f"cross_vendor: no provider distinct from {provider_a!r} configured — using same-vendor verifier"
+        )
         return verdict_a
 
     verdict_b, provider_b = await _run_single_verification(prompt, provider_name=verifier_provider, use_cache=False)
@@ -260,7 +259,7 @@ async def verify_finding(finding: dict, clone_path: str, *, cross_vendor: bool =
     """
     effective_cross_vendor = cross_vendor and config.cross_vendor_review_enabled
     if cross_vendor and not effective_cross_vendor:
-        _warn_once(
+        _warn_degrade_once(
             "cross_vendor requested but AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED is off — using same-vendor verifier"
         )
 

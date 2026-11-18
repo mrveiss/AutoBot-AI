@@ -28,9 +28,10 @@ from autobot_shared.pinned_model_registry import (
     pinned_weight_files,
     verify_cached_model,
 )
+from autobot_shared.ssot_constants import RetryConfig
 from autobot_shared.ssot_hf_models import PREFETCHED_HF_MODELS
 
-DEFAULT_RETRIES = 3
+DEFAULT_RETRIES = RetryConfig.DEFAULT_RETRIES
 DEFAULT_RETRY_DELAY_S = 30.0
 #: Files besides the pinned weights a ``from_pretrained`` call reads.
 _SUPPORT_PATTERNS = ["*.json", "*.txt", "*.model"]

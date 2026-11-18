@@ -133,6 +133,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveUrl } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { computed, nextTick, ref } from 'vue'
 
@@ -209,13 +210,7 @@ const copyImageUrl = async (url: string) => {
 const downloadImage = (url: string, index: number) => {
   const ext = url.startsWith('data:image/') ? url.split(';')[0].split('/')[1] : 'png'
   const filename = `generated-image-${index + 1}.${ext}`
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.rel = 'noopener noreferrer'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  saveUrl(url, filename)
 }
 </script>
 

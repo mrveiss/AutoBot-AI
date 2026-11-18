@@ -28,7 +28,7 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins")
@@ -46,7 +46,7 @@ def _code_only(text: str) -> str:
 
 
 # 30 and 321 measured on bb5f0299e0; 15 and 317 after the first batch.
-PINS = {"local_keyframes_spin": 15, "utility_spin_lines": 315}
+PINS = {"local_keyframes_spin": 15, "utility_spin_lines": 310}  # #20644: the SLM Batch/Vision views left (-4)
 
 
 def _sources(base: Path) -> list[Path]:
@@ -76,7 +76,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "frontend-hand-rolled-spinner-scan",
     discover=_population,
-    floor=614,  # mid-window: population 639, window (589, 639)
     growth=50,
     what="vue and css sources of both frontends and the plugins",
     roots=_ROOTS,
@@ -142,8 +141,8 @@ def test_the_apps_do_not_hand_roll_more_spinners_than_pinned() -> None:
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
-    base = base_table(repo_root(), ("repo_tests/kit_loading_ratchet_19906_test.py",), "PINS")
-    if not base:
+    this = ("repo_tests/kit_loading_ratchet_19906_test.py",)
+    if not base_file_present(repo_root(), this):
         return  # the guard is new at this base; nothing to compare against yet
-    for key, value in PINS.items():
-        assert value <= base[key], f"PINS[{key}] rose from {base[key]} to {value} (#19906); the pin only goes down."
+    raised = raised_known_entries(PINS, base_table(repo_root(), this, "PINS"))
+    assert not raised, f"PINS rose against the base (#19906): {raised}; the pin only goes down."

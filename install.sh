@@ -53,7 +53,7 @@ readonly REPO_SLUG="mrveiss/AutoBot-AI"
 readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
 # #19239: each pinned to its source of truth by a repo test -- autobot-frontend/package.json
-# engines.node, the slm_manager role's slm_backend_port -- since the installer runs before the code exists.
+# engines.node, slm_backend_port in the ansible group_vars/all.yml -- since the installer runs before the code exists.
 readonly NODE_MIN_VERSION="22.22.2" SLM_BACKEND_PORT="8000"
 readonly IP_CACHE_FILE="/run/autobot-install-ip"  # root-only, unlike /tmp, which any user can plant a file in
 readonly DEFAULT_BRANCH="main" PINNED_COMMIT=""  # a release build pins both: tag and its commit (#18666)
@@ -651,11 +651,11 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key autobot_internal_api_key
         autobot_encryption_key=$(if [[ -f "${SECRETS_FILE}" ]]; then grep -oP '^AUTOBOT_ENCRYPTION_KEY=\K.+' "${SECRETS_FILE}" || true; else openssl rand -hex 32; fi)  # #19864: new installs only; a reinstall keeps what it has
         secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
-        # Issue #2758: detect the machine's primary outbound IP so that
-        # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
+        autobot_internal_api_key=$(grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); autobot_internal_api_key=${autobot_internal_api_key:-$(openssl rand -hex 32)}  # #10200: the SLM's canonical key (#20750); a reinstall keeps it
+        # Issue #2758: detect the primary outbound IP so SLM_EXTERNAL_URL is set, not left to the Python fallback.
         local_ip="$(detect_local_ip)"
         detect_network
         (umask 077; cat > "${SECRETS_FILE}") << EOF  # created 0600, never briefly world-readable under the tree's 022
@@ -663,6 +663,7 @@ SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
 AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}
 SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
+AUTOBOT_INTERNAL_API_KEY=${autobot_internal_api_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}
@@ -674,11 +675,9 @@ EOF
         success "  Secrets written to ${SECRETS_FILE}"
     else
         ADMIN_PASSWORD=$(grep -oP 'SLM_ADMIN_PASSWORD=\K.*' "${SECRETS_FILE}" 2>/dev/null || echo "${ADMIN_PASSWORD}")
-        # Refresh IP/network fields even when preserving static secrets (#3266).
-        # Stale IPs remain when the machine's address changes between installs.
+        # Refresh IP/network fields even when preserving static secrets (#3266): a changed address leaves stale IPs.
         info "  Refreshing IP/network fields in preserved secrets file..."
-        local local_ip network_subnet network_gateway
-        local_ip="$(detect_local_ip)"
+        local local_ip network_subnet network_gateway; local_ip="$(detect_local_ip)"
         detect_network
         # Upsert, as plain sed s/// does nothing on a file written before the key existed (#3194).
         _upsert_secrets_key() {
@@ -693,6 +692,7 @@ EOF
         _upsert_secrets_key "SLM_HOST"         "${local_ip}"          "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_SUBNET"   "${network_subnet}"    "${SECRETS_FILE}"
         _upsert_secrets_key "NETWORK_GATEWAY"  "${network_gateway}"   "${SECRETS_FILE}"
+        grep -q '^AUTOBOT_INTERNAL_API_KEY=.' "${SECRETS_FILE}" || _upsert_secrets_key "AUTOBOT_INTERNAL_API_KEY" "$(openssl rand -hex 32)" "${SECRETS_FILE}"  # #10200: only when absent or empty
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
@@ -708,14 +708,14 @@ EOF
 
     info "Running Ansible deployment (this may take several minutes)..."
     # #6600: keep `provision` so backend role applies to the SLM manager node in single-host mode. Skip only
-    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install. #19867: the re-run hint shares this set.
-    local skip_tags="seed"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
+    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install — and `mark-synced`, which register_local_node runs once the node exists (#18663). #19867: the re-run hint shares this set.
+    local skip_tags="seed,mark-synced"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
     cd "${ansible_dir}"
-    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP
-    (umask 077 && PW="${ADMIN_PASSWORD}" jq -n '{slm_admin_password: env.PW}' > "${vars_file}"); set +o pipefail
+    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP. deploy_ref: Play 0 resyncs code_source to the installed branch, not main (#18663)
+    (umask 077 && PW="${ADMIN_PASSWORD}" REF="${GIT_BRANCH:-}" jq -n '{slm_admin_password: env.PW} + (if (env.REF // "") != "" then {deploy_ref: env.REF} else {} end)' > "${vars_file}"); set +o pipefail
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
@@ -873,8 +873,7 @@ register_local_node() {
     # Auto-assign SLM Manager as code source (#2755)
     info "Assigning code source to SLM Manager..."
     local cs_code
-    # #15825: same as above -- capturing the status code means not using -f,
-    # and a transport failure must reach the wildcard arm rather than abort.
+    # #15825: same as above -- the status code is captured, so no -f, and a transport failure reaches the wildcard arm.
     cs_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
         -X POST "${api_url}/api/code-source/assign" \
         -H "Content-Type: application/json" \
@@ -886,8 +885,9 @@ register_local_node() {
         }" 2>/dev/null) || true
 
     case "${cs_code:-000}" in
-        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000} — assign it in SLM UI > Code Sync" ;;
+        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})"
+             bash "${CODE_SOURCE}/scripts/deployment/mark_local_node_synced.sh" "${CODE_SOURCE}" "${SLM_NODE_ID}" "${api_url}" "${INSTALL_TMP:-}/ansible-vars.json" "${LOG_FILE:-}" || warn "Step 'mark synced' did not complete. Check the node's status in Code Sync. See ${LOG_FILE}" ;;
+        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000}, so mark-synced was skipped (#18663) — assign it in SLM UI > Code Sync" ;;
     esac
 }
 

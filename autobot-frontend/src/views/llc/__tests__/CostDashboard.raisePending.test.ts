@@ -66,6 +66,15 @@ describe('raising a budget limit in a company that gates it (#8214)', () => {
     expect(notice.text()).toBe(en.llc.cost.raisePendingApproval)
   })
 
+  it('announces a failed save to assistive technology', async () => {
+    patch.mockRejectedValue(new Error('refused'))
+    const wrapper = await openSettingsModal()
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toBe('refused')
+  })
+
   it('closes the form with no notice when the limit was applied', async () => {
     patch.mockResolvedValue({ agent_id: 'a1', budget_limit: '5.000000' })
     const wrapper = await openSettingsModal()
@@ -86,5 +95,51 @@ describe('limitPatchBody', () => {
     expect(limitPatchBody({ ...base, budget_mode: 'tokens' })).toEqual({
       budget_mode: 'tokens', alert_threshold: 0.8, token_limit: 900,
     })
+  })
+})
+
+describe('token limit floor (#20930)', () => {
+  const TOKENS = { ...BUDGET, budget_mode: 'tokens', token_limit: null }
+
+  async function openTokens(entry: Record<string, unknown>) {
+    get.mockImplementation((url: string) => Promise.resolve(String(url).includes('/budget') ? [entry] : []))
+    const wrapper = mount(CostDashboard, { global: { plugins: [i18n], stubs: { Icon: true } } })
+    await flushPromises()
+    await wrapper.find('.btn-settings').trigger('click')
+    return wrapper
+  }
+
+  beforeEach(() => {
+    get.mockReset()
+    patch.mockReset()
+  })
+
+  it('saves an untouched null row with a null token limit, not 0', async () => {
+    patch.mockResolvedValue({ agent_id: 'a1' })
+    const wrapper = await openTokens(TOKENS)
+    expect(wrapper.find('input[placeholder="e.g. 1000000"]').attributes('min')).toBe('1')
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(patch).toHaveBeenCalledWith('/api/llc/budget/a1/limit', expect.objectContaining({ token_limit: null }))
+  })
+
+  it('opens a legacy stored 0 empty and saves it as null', async () => {
+    patch.mockResolvedValue({ agent_id: 'a1' })
+    const wrapper = await openTokens({ ...TOKENS, token_limit: 0 })
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(patch).toHaveBeenCalledWith('/api/llc/budget/a1/limit', expect.objectContaining({ token_limit: null }))
+  })
+
+  it('refuses a typed 0 before submit with a translated message', async () => {
+    const wrapper = await openTokens(TOKENS)
+    await wrapper.find('input[placeholder="e.g. 1000000"]').setValue('0')
+    await wrapper.find('.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(patch).not.toHaveBeenCalled()
+    expect(wrapper.find('[role="alert"]').text()).toBe(en.llc.cost.tokenLimitMin.replace('{min}', '1'))
   })
 })

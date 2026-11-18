@@ -254,9 +254,11 @@ async def test_a_self_approval_with_two_or_more_admins_is_refused(factory):
     await _add_admin(factory, ADMIN2)
     owner = _client(factory, user=OWNER)
     approval_id = _propose(owner).json()["approval_id"]
-    assert _decide(owner, approval_id).status_code == 200  # the decision is recorded ...
-    assert await _rows(factory, LLCAiLine) == []  # ... the line does not move
-    assert any("did not complete" in c.body for c in await _rows(factory, ApprovalComment))
+    assert _decide(owner, approval_id).status_code == 409
+    assert await _rows(factory, LLCAiLine) == []
+    assert [a.status for a in await _rows(factory, Approval)] == ["pending"]  # still open for the other admin
+    assert _decide(_client(factory, user=ADMIN2), approval_id).status_code == 200
+    assert len(await _rows(factory, LLCAiLine)) == 1
 
 
 @pytest.mark.asyncio
@@ -268,6 +270,15 @@ async def test_a_self_approval_by_the_only_admin_is_allowed_and_flagged(factory,
     assert row.decided_by == str(OWNER)
     assert _outside_world.await_args.kwargs["details"]["self_approval"] is True
     assert any("self-approved" in c.body for c in await _rows(factory, ApprovalComment))
+
+
+@pytest.mark.asyncio
+async def test_a_sole_admins_self_approval_is_flagged_on_the_decision_activity_row(factory):
+    """The flag comes from the action's review on the LLC route, so the company's own activity log carries it."""
+    owner = _client(factory, user=OWNER)
+    assert _decide(owner, _propose(owner).json()["approval_id"]).status_code == 200
+    decided = [a.after_state for a in await _rows(factory, LLCActivityLog) if a.action == "approval.approved"]
+    assert [a["self_approval"] for a in decided] == [True]
 
 
 @pytest.mark.asyncio
@@ -382,11 +393,24 @@ async def test_the_person_can_approve_their_own_personal_change_and_it_is_flagge
 
 
 @pytest.mark.asyncio
+async def test_a_personal_self_approval_on_the_generic_route_passes_the_review_with_no_company(factory):
+    """The decider review runs before the commit too, and a personal scope has no company or second admin to ask."""
+    approval_id = _propose_mine(_me_client(factory, MEMBER)).json()["approval_id"]
+    resp = _approve(_gates_client(factory, MEMBER), approval_id)
+    assert resp.status_code == 200 and resp.json()["status"] == "approved"
+    [row] = await _rows(factory, Approval)
+    assert row.status == "approved" and row.company_id is None
+    assert [c.body for c in await _rows(factory, ApprovalComment)] == [
+        "AI line for 'write_file' is now autonomous (self-approved)."
+    ]
+
+
+@pytest.mark.asyncio
 async def test_nobody_else_can_approve_a_personal_change(factory):
     approval_id = _propose_mine(_me_client(factory, MEMBER)).json()["approval_id"]
-    assert _approve(_gates_client(factory, OWNER), approval_id).status_code == 200  # decision recorded ...
-    assert await _rows(factory, LLCAiLine) == []  # ... the personal line does not move
-    assert any("did not complete" in c.body for c in await _rows(factory, ApprovalComment))
+    assert _approve(_gates_client(factory, OWNER), approval_id).status_code == 400
+    assert await _rows(factory, LLCAiLine) == []
+    assert [a.status for a in await _rows(factory, Approval)] == ["pending"]  # the person it belongs to still can
 
 
 @pytest.mark.asyncio
@@ -447,9 +471,11 @@ async def test_a_decision_on_an_approval_with_no_parseable_requester_is_refused(
         session.add(row)
         await session.commit()
         approval_id = str(row.id)
-    assert _decide(_client(factory, user=ADMIN2), approval_id).status_code == 200  # recorded ...
-    assert await _rows(factory, LLCAiLine) == []  # ... but the line did not move
-    assert any("did not complete" in c.body for c in await _rows(factory, ApprovalComment))
+    assert _decide(_client(factory, user=ADMIN2), approval_id).status_code == 409
+    assert await _rows(factory, LLCAiLine) == []
+    assert [a.status for a in await _rows(factory, Approval)] == ["pending"]
+    assert _decide(_client(factory, user=ADMIN2), approval_id, "rejected").status_code == 200
+    assert [a.status for a in await _rows(factory, Approval)] == ["rejected"]
 
 
 @pytest.mark.asyncio
@@ -480,7 +506,8 @@ async def test_a_username_that_spells_another_users_id_does_not_decide_that_user
     victim = uuid.uuid4()
     approval_id = _propose_mine(_me_client(factory, victim)).json()["approval_id"]
     attacker = _gates_client(factory, AGENT_USER, username=victim.hex)
-    assert _approve(attacker, approval_id).status_code == 200  # decision recorded ...
-    assert await _rows(factory, LLCAiLine) == []  # ... the victim's line does not move
+    assert _approve(attacker, approval_id).status_code == 400
+    assert await _rows(factory, LLCAiLine) == []  # the victim's line does not move
     # Contrast: the victim themself, whatever their username, can decide it.
-    assert _approve(_gates_client(factory, victim, username="victim-name"), approval_id).status_code in (200, 400)
+    assert _approve(_gates_client(factory, victim, username="victim-name"), approval_id).status_code == 200
+    assert len(await _rows(factory, LLCAiLine)) == 1

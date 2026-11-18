@@ -124,6 +124,9 @@ def test_turns_split_on_user_messages_and_malformed_entries_are_skipped():
         "password=%s",  # pragma: allowlist secret
         "-----BEGIN " + "PRIVATE KEY-----\n%s\n-----END " + "PRIVATE KEY-----",
     ],
+    # Named ids: a secret-shaped value as the node id lands in .test_durations,
+    # where the tracked-key-material guard rightly flags it.
+    ids=["dsn", "json-password", "kv-password", "pem"],
 )
 def test_each_secret_shape_leaves_neither_output_nor_a_command_param(leak):
     secret = "hunter2-very-secret"  # pragma: allowlist secret
