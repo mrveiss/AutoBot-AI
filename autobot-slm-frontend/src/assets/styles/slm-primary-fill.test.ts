@@ -16,11 +16,14 @@ const MAIN = readFileSync(resolve(here, './main.css'), 'utf-8')
 
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '')
 
+/** A rule's prelude without the `@import ...;` statements that precede it (they end in `;`, a selector never does). */
+const selectorOf = (prelude: string) => prelude.slice(prelude.lastIndexOf(';') + 1).trim()
+
 /** Declarations of the top-level block whose selector (comments removed) is exactly *selector*. */
 function block(css: string, selector: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [, sel, body] of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (sel.trim() !== selector) continue
+    if (selectorOf(sel) !== selector) continue
     for (const [, k, v] of body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) out[k] = v.trim()
   }
   return out
@@ -120,7 +123,7 @@ function cascade(prop: string, attrs: Attrs): string | undefined {
         if (name !== prop) continue
         const imp = /!important\s*$/.test(raw) ? 1 : 0
         const value = raw.replace(/\s*!important\s*$/, '').trim()
-        for (const sel of sels.split(',').map((x) => x.trim())) {
+        for (const sel of selectorOf(sels).split(',').map((x) => x.trim())) {
           if (!matches(sel, attrs)) {
             if (TARGETS_ROOT.test(sel) && !EVALUABLE.test(sel)) throw new Error(`cannot evaluate "${sel}" which sets ${prop}`)
             continue
