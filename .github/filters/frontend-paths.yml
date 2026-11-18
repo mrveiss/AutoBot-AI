@@ -24,6 +24,9 @@ frontend:
   # kit-only change would take this workflow's REQUIRED context green while
   # its own tests never executed.
   - 'libs/autobot-ui/**'
+  # #19834: the SLM contract package (generated API types) is consumed by the frontends; a
+  # contract-only change must still run this suite.
+  - 'libs/slm-contract/**'
   - '.github/filters/frontend-paths.yml'
   # Canonical source for the cross-language parity guard (#13073, #13074):
   # a port/enum edit here with no frontend edit must still run the suite.

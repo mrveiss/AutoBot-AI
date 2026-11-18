@@ -41,6 +41,8 @@ const res = await apiClient.callRaw('post', '/api/chat/stream', { body })
 | The SLM admin backend (separate origin, separate token) | `SlmClient` (`utils/slmClient.ts`), an `ApiClientBase` subclass bound to `getSLMUrl()` and its own token | Must not receive the main-app JWT; a 401 from it never ends the main session (`defaultKeepSessionOn401`). |
 | The SLM control plane under `/slm/api` with the main-app session (fleet, provisioning; ADR 011, #19834) | `slmApi` (`utils/slmApi/`) | One dedicated `ApiClient` instance on the page origin, so the main session token, 401 handling and 503 retry apply. Path, method and response are typed by `@autobot/slm-contract/generated`; a route whose 200 body the contract leaves undeclared is typed once, at the adapter (`slmRequestAs`). Never reads `slm_access_token`. |
 
+`autobot-slm-frontend/src/types/generated/api.ts` is a re-export stub of `@autobot/slm-contract/generated` (#19834); delete it once no file imports `@/types/generated/api`.
+
 Raw `fetch(` that is none of the above is banned by eslint (`no-restricted-syntax`, the same selectors the SLM
 app uses). A legitimate one (bootstrap before any client exists, another origin, a worker, telemetry that must
 never throw) carries, directly above the call, a comment giving the reason and
