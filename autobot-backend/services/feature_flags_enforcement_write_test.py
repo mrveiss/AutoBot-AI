@@ -30,56 +30,12 @@ from services.feature_flags import (
     EnforcementMode,
     FeatureFlags,
 )
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # Bookkeeping the fakes need to be observable at all. Everything outside this
 # set has to exist on the real client -- see the surface guards at the bottom.
-_TEST_ONLY_ATTRIBUTES = frozenset({"store", "lists", "dispatch_error", "command_error", "commands"})
-
-
-class _FakePipeline:
-    """A MULTI buffer: commands queue, and ``execute`` applies them or none."""
-
-    def __init__(self, client: "_FakeAsyncRedis") -> None:
-        self._client = client
-        self.commands: list[tuple] = []
-
-    def set(self, key, value, **kwargs):
-        self.commands.append(("set", key, value))
-        return self
-
-    def get(self, key):
-        self.commands.append(("get", key))
-        return self
-
-    def lpush(self, key, value):
-        self.commands.append(("lpush", key, value))
-        return self
-
-    def ltrim(self, key, start, stop):
-        self.commands.append(("ltrim", key, start, stop))
-        return self
-
-    async def execute(self, raise_on_error: bool = True):
-        """Apply the queued commands.
-
-        ``dispatch_error`` models the connection dying before ``EXEC``: nothing
-        is applied, which is what makes a ``False`` answer truthful.
-        ``command_error`` models one command erroring *inside* ``EXEC``, which
-        Redis does not roll back -- the rest of the transaction still applies.
-        """
-        if self._client.dispatch_error is not None:
-            raise self._client.dispatch_error
-
-        results = []
-        for command in self.commands:
-            error = self._client.command_error.get(command[0]) if self._client.command_error else None
-            if error is not None:
-                if raise_on_error:
-                    raise error
-                results.append(error)
-                continue
-            results.append(self._client.apply(command))
-        return results
+# `commands` and `executed` are the canonical pipeline's recording (testkit.fake_redis_pipeline, #18991).
+_TEST_ONLY_ATTRIBUTES = frozenset({"store", "lists", "dispatch_error", "command_error", "commands", "executed"})
 
 
 class _FakeAsyncRedis:
@@ -110,7 +66,12 @@ class _FakeAsyncRedis:
         raise AssertionError(f"unmodelled command {name}")
 
     def pipeline(self, transaction: bool = True):
-        return _FakePipeline(self)
+        """MULTI buffer. ``dispatch_error`` models the connection dying before ``EXEC`` (nothing is applied,
+        which is what makes a ``False`` answer truthful); ``command_error`` models one command erroring
+        *inside* ``EXEC``, which Redis does not roll back -- the rest of the transaction still applies."""
+        return FakeAsyncPipeline(
+            self, transaction=transaction, execute_error=self.dispatch_error, command_errors=self.command_error
+        )
 
     async def get(self, key):
         return self.store.get(key)
@@ -299,7 +260,7 @@ class TestTheFakesCannotAnswerWhatTheRealClientCannot:
 
     def test_the_fake_pipeline_exposes_nothing_the_real_pipeline_lacks(self):
         real = async_redis.client.Pipeline
-        surface = {name for name in dir(_FakePipeline(_FakeAsyncRedis())) if not name.startswith("_")}
+        surface = {name for name in dir(_FakeAsyncRedis().pipeline()) if not name.startswith("_")}
         checked = sorted(surface - _TEST_ONLY_ATTRIBUTES)
         assert checked, "an empty surface would assert nothing at all"
 

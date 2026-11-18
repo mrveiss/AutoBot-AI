@@ -11,9 +11,11 @@
  * multi-select, upgrade selected/all, job tracking.
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, usePollingJob } from '@autobot/ui'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useSystemUpdates,
   type UpdatePackage,
@@ -26,8 +28,10 @@ const selectedNodeFilter = ref<string>('')
 const selectedPackages = ref<Set<string>>(new Set())
 const cancellingJobId = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
-let discoverPollTimer: ReturnType<typeof setInterval> | null = null
-let jobPollTimer: ReturnType<typeof setInterval> | null = null
+const { t } = useI18n()
+
+const DISCOVER_POLL_INTERVAL_MS = 3000
+const JOB_POLL_INTERVAL_MS = 10_000
 
 // Computed
 const filteredPackages = computed(() => {
@@ -79,36 +83,45 @@ async function handleCheckForUpdates(): Promise<void> {
   }
 }
 
-function startDiscoverPolling(jobId: string): void {
-  stopDiscoverPolling()
-  discoverPollTimer = setInterval(async () => {
-    const status = await systemUpdates.pollDiscoverStatus(jobId)
-    if (
-      status &&
-      (status.status === 'completed' || status.status === 'failed')
-    ) {
-      stopDiscoverPolling()
-      // Refresh data after discovery completes
-      await Promise.all([
-        systemUpdates.fetchPackages(),
-        systemUpdates.fetchSummary(),
-        systemUpdates.fetchJobs(),
-      ])
-      if (status.status === 'completed') {
-        successMessage.value = status.message || 'Discovery completed'
-        setTimeout(() => {
-          successMessage.value = null
-        }, 5000)
-      }
-    }
-  }, 3000)
+type DiscoverStatus = Awaited<ReturnType<typeof systemUpdates.pollDiscoverStatus>>
+
+/** Refresh the tab once discovery finishes, and say so when it succeeded. */
+async function onDiscoverDone(status: DiscoverStatus): Promise<void> {
+  await Promise.all([
+    systemUpdates.fetchPackages(),
+    systemUpdates.fetchSummary(),
+    systemUpdates.fetchJobs(),
+  ]).catch(() => undefined) // each fetch reports its own failure; never unhandled out of onDone
+  if (status?.status === 'completed') {
+    successMessage.value = status.message || t('systemUpdatesTab.discoveryCompleted')
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+  }
 }
 
-function stopDiscoverPolling(): void {
-  if (discoverPollTimer) {
-    clearInterval(discoverPollTimer)
-    discoverPollTimer = null
-  }
+// Both pollers stop with the component's scope (#19482). pollDiscoverStatus returns
+// null on a failed read rather than throwing, so discovery keeps polling through
+// transient failures, as it did before.
+const discoverPoller = usePollingJob((jobId) => systemUpdates.pollDiscoverStatus(jobId), {
+  intervalMs: DISCOVER_POLL_INTERVAL_MS,
+  maxAttempts: Infinity,
+  isComplete: (status) => status?.status === 'completed' || status?.status === 'failed',
+  onDone: (status) => void onDiscoverDone(status),
+})
+
+const jobPoller = usePollingJob(() => systemUpdates.fetchJobs(), {
+  intervalMs: JOB_POLL_INTERVAL_MS,
+  maxAttempts: Infinity,
+})
+
+function startDiscoverPolling(jobId: string): void {
+  discoverPoller.start(jobId)
+}
+
+/** One job poller, whoever asks first: the watch and onMounted can both see running jobs. */
+function ensureJobPolling(): void {
+  if (!jobPoller.isPolling.value) jobPoller.start('')
 }
 
 function toggleSelectAll(): void {
@@ -143,17 +156,17 @@ async function handleUpgradeSelected(): Promise<void> {
     await systemUpdates.applyUpdates(nodeId, updateIds)
   }
   selectedPackages.value.clear()
-  successMessage.value = 'Upgrade jobs started'
+  successMessage.value = t('systemUpdatesTab.upgradeJobsStarted')
   setTimeout(() => {
     successMessage.value = null
   }, 3000)
 }
 
 async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
-  if (!confirm(`Upgrade ALL packages on ${nodeId}?`)) return
+  if (!confirm(t('systemUpdatesTab.confirmUpgradeAllOnNode', { nodeId }))) return
   const ok = await systemUpdates.upgradeAll(nodeId)
   if (ok) {
-    successMessage.value = `Upgrade all started for ${nodeId}`
+    successMessage.value = t('systemUpdatesTab.upgradeAllStartedOnNode', { nodeId })
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -161,11 +174,11 @@ async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
 }
 
 async function handleCancelJob(jobId: string): Promise<void> {
-  if (!confirm('Cancel this update job?')) return
+  if (!confirm(t('systemUpdatesTab.confirmCancelJob'))) return
   cancellingJobId.value = jobId
   const ok = await systemUpdates.cancelJob(jobId)
   if (ok) {
-    successMessage.value = 'Job cancelled'
+    successMessage.value = t('systemUpdatesTab.jobCancelled')
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -193,22 +206,14 @@ function getSeverityBadge(severity: string): string {
   return map[severity] || 'bg-gray-100 text-gray-600'
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return '-'
-  return formatDateTime(d)
-}
-
 // Watch for running jobs to start polling
 watch(
   () => systemUpdates.hasRunningJobs.value,
   (hasRunning) => {
-    if (hasRunning && !jobPollTimer) {
-      jobPollTimer = setInterval(() => {
-        systemUpdates.fetchJobs()
-      }, 10000)
-    } else if (!hasRunning && jobPollTimer) {
-      clearInterval(jobPollTimer)
-      jobPollTimer = null
+    if (hasRunning) {
+      ensureJobPolling()
+    } else if (jobPoller.isPolling.value) {
+      jobPoller.stop()
       // Refresh packages when jobs finish
       systemUpdates.fetchPackages()
       systemUpdates.fetchSummary()
@@ -224,20 +229,8 @@ onMounted(async () => {
     systemUpdates.fetchSummary(),
     fleetStore.fetchNodes(),
   ])
-  // Start job polling if there are running jobs
-  if (systemUpdates.hasRunningJobs.value) {
-    jobPollTimer = setInterval(() => {
-      systemUpdates.fetchJobs()
-    }, 10000)
-  }
-})
-
-onUnmounted(() => {
-  stopDiscoverPolling()
-  if (jobPollTimer) {
-    clearInterval(jobPollTimer)
-    jobPollTimer = null
-  }
+  // Start job polling if there are running jobs (a no-op when the watch already did)
+  if (systemUpdates.hasRunningJobs.value) ensureJobPolling()
 })
 </script>
 
@@ -309,26 +302,16 @@ onUnmounted(() => {
     </div>
 
     <!-- Alerts -->
-    <div
+    <BaseAlert
       v-if="systemUpdates.error.value"
-      class="mb-4 p-3 bg-red-50 border border-red-200
-             rounded-lg text-red-700 text-sm"
-    >
-      {{ systemUpdates.error.value }}
-      <button
-        @click="systemUpdates.clearError()"
-        class="ml-2 underline"
-      >
-        {{ $t('systemUpdatesTab.dismiss') }}
-      </button>
-    </div>
-    <div
-      v-if="successMessage"
-      class="mb-4 p-3 bg-green-50 border border-green-200
-             rounded-lg text-green-700 text-sm"
-    >
-      {{ successMessage }}
-    </div>
+      variant="error"
+      class="mb-4"
+      :message="systemUpdates.error.value"
+      dismissible
+      :dismiss-label="$t('systemUpdatesTab.dismiss')"
+      @dismiss="systemUpdates.clearError()"
+    />
+    <BaseAlert v-if="successMessage" variant="success" size="compact" class="mb-4" :message="successMessage" />
 
     <!-- Discovery Progress -->
     <div
@@ -378,7 +361,7 @@ onUnmounted(() => {
       <div class="bg-white rounded-lg border p-4">
         <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.lastChecked') }}</p>
         <p class="text-sm font-medium mt-1">
-          {{ formatDate(systemUpdates.lastChecked.value) }}
+          {{ formatFleetDateTime(systemUpdates.lastChecked.value, '-') }}
         </p>
       </div>
     </div>
@@ -605,7 +588,7 @@ onUnmounted(() => {
               </div>
             </td>
             <td class="px-4 py-3 text-sm text-gray-500">
-              {{ formatDate(job.started_at) }}
+              {{ formatFleetDateTime(job.started_at, '-') }}
             </td>
             <td class="px-4 py-3 text-right">
               <button

@@ -11,17 +11,17 @@
  * The code-source POST is migrated onto the canonical `slmApiClient` (#12420
  * Phase 2): it resolves the base URL via `getSlmApiBase()`, injects the SLM
  * bearer token, and centrally handles 401 — replacing the local axios instance
- * and request interceptor. Node loading still flows through `useSlmApi`.
+ * and request interceptor. Node loading flows through the fleet store.
  */
 
 import { ref, onMounted } from 'vue'
-import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
+import { BaseModal, createLogger } from '@autobot/ui'
+import { useFleetStore } from '@/stores/fleet'
 import slmApiClient from '@/utils/ApiClient'
 import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
-const slmApi = useSlmApi()
+const fleetStore = useFleetStore()
 
 const props = defineProps<{
   currentNodeId?: string
@@ -46,8 +46,9 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    // Reuse existing API composable (Issue #860)
-    nodes.value = await slmApi.getNodes()
+    // The one node-list fetch, through the fleet store (Issue #860, #21584)
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
+    nodes.value = fleetStore.nodeList
   } catch (e: unknown) {
     // Show actual error for debugging (Issue #860)
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -81,64 +82,61 @@ async function handleAssign(): Promise<void> {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    @click.self="emit('close')"
+  <BaseModal
+    :model-value="true"
+    :title="isEditing ? $t('codeSourceModal.editCodeSource') : $t('codeSourceModal.assignCodeSource')"
+    size="sm"
+    :close-label="$t('ui.modal.closeDialog')"
+    @close="emit('close')"
   >
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">
-        {{ isEditing ? $t('codeSourceModal.editCodeSource') : $t('codeSourceModal.assignCodeSource') }}
-      </h3>
+    <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
 
-      <div v-if="isLoading" class="text-gray-500">{{ $t('codeSourceModal.loadingNodes') }}</div>
-
-      <div v-else class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.node') }}</label>
-          <select
-            v-model="selectedNodeId"
-            class="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
-          >
-            <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
-            <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-              {{ node.hostname }} ({{ node.ip_address }})
-            </option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
-          <input
-            v-model="repoPath"
-            type="text"
-            class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.branch') }}</label>
-          <input
-            v-model="branch"
-            type="text"
-            class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
-          />
-        </div>
-
-        <div v-if="error" class="text-red-600 text-sm">{{ error }}</div>
-      </div>
-
-      <div class="flex justify-end gap-3 mt-6">
-        <button @click="emit('close')" class="btn btn-secondary">
-          {{ $t('codeSourceModal.cancel') }}
-        </button>
-        <button
-          @click="handleAssign"
-          :disabled="!selectedNodeId || isSaving"
-          class="btn btn-primary"
+    <div v-else class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.node') }}</label>
+        <select
+          v-model="selectedNodeId"
+          class="w-full border border-gray-300 rounded-md p-2 bg-white text-gray-900"
         >
-          {{ isSaving ? $t('codeSourceModal.saving') : (isEditing ? $t('codeSourceModal.update') : $t('codeSourceModal.assign')) }}
-        </button>
+          <option value="">{{ $t('codeSourceModal.selectANode') }}</option>
+          <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
+            {{ node.hostname }} ({{ node.ip_address }})
+          </option>
+        </select>
       </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.repositoryPath') }}</label>
+        <input
+          v-model="repoPath"
+          type="text"
+          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+        />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('codeSourceModal.branch') }}</label>
+        <input
+          v-model="branch"
+          type="text"
+          class="w-full border border-gray-300 rounded-md p-2 text-gray-900"
+        />
+      </div>
+
+      <div v-if="error" class="text-red-600 text-sm">{{ error }}</div>
     </div>
-  </div>
+
+    <template #actions>
+      <button @click="emit('close')" class="btn btn-secondary">
+        {{ $t('codeSourceModal.cancel') }}
+      </button>
+      <button
+        @click="handleAssign"
+        :disabled="!selectedNodeId || isSaving"
+        class="btn btn-primary"
+      >
+        {{ isSaving ? $t('codeSourceModal.saving') : (isEditing ? $t('codeSourceModal.update') : $t('codeSourceModal.assign')) }}
+      </button>
+    </template>
+  </BaseModal>
 </template>

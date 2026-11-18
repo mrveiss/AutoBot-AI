@@ -15,9 +15,13 @@ Tests:
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _real_audit_actions import load_real_audit_actions  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Isolate the module-under-test: import api/sso.py without a real DB engine
@@ -46,6 +50,7 @@ def _load_sso_module():
         "sqlalchemy.func": MagicMock(),
         "sqlalchemy.select": MagicMock(),
         "autobot_shared": MagicMock(),
+        "autobot_shared.audit_actions": load_real_audit_actions(),  # #18716: real, stdlib-only
         "autobot_shared.auth": MagicMock(),
         "autobot_shared.auth.permissions": MagicMock(),
         "models": MagicMock(),

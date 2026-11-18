@@ -11,6 +11,7 @@
  */
 
 import { ref } from 'vue'
+import { HttpError } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -88,7 +89,7 @@ export function useFileBrowser() {
         method: 'POST',
         body: formData,
       })
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      if (!response.ok) throw new HttpError(response.status, response.statusText)
     },
     {
       logErrors: true,
@@ -138,7 +139,7 @@ export function useFileBrowser() {
         method: 'POST',
         body: formData,
       })
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      if (!response.ok) throw new HttpError(response.status, response.statusText)
     },
     {
       logErrors: true,
@@ -156,7 +157,7 @@ export function useFileBrowser() {
         method: 'POST',
         body: formData,
       })
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      if (!response.ok) throw new HttpError(response.status, response.statusText)
     },
     {
       logErrors: true,

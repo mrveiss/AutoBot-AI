@@ -100,19 +100,67 @@ def _without_duplicate_units(restarts: Sequence[_ActionT]) -> List[_ActionT]:
     return kept
 
 
+#: Restart precedence by systemd unit name (#17455, owner decision 2026-10-10).
+#: ``autobot-chromadb`` must be running before ``autobot-ai-stack`` comes up and
+#: connects to it. Names are the units the ai-stack role installs (code_sync's
+#: ``_COMPONENT_SERVICES["autobot-ai-stack"]``; ``roles/ai-stack/handlers``
+#: restarts chromadb first). A unit not listed keeps its incoming position.
+_RESTART_PRECEDENCE = ("autobot-chromadb", "autobot-ai-stack")
+
+#: Units that go LAST, after every other action (#17455, #11496). Restarting
+#: the SLM backend kills the process running the sync, so anything scheduled
+#: after it would never run. Mirrors ``code_sync._SELF_SERVICE_NAME``.
+_RESTART_LAST_UNITS = ("autobot-slm-backend",)
+
+
+def _precedence(action: _ActionT) -> int:
+    ranks = [_RESTART_PRECEDENCE.index(u) for u in _units(action) if u in _RESTART_PRECEDENCE]
+    return min(ranks) if ranks else 0
+
+
+def _is_last(action: _ActionT) -> bool:
+    return any(unit in _RESTART_LAST_UNITS for unit in _units(action))
+
+
+def _split_last_units(action: _ActionT) -> List[_ActionT]:
+    """A restart naming both ordinary and last units becomes two actions."""
+    units = _units(action)
+    tail = [u for u in units if u in _RESTART_LAST_UNITS]
+    head = [u for u in units if u not in _RESTART_LAST_UNITS]
+    if not tail or not head or _rank(action) != _CATEGORY_RANK["restart"]:
+        return [action]
+    return [_with_units(action, head), _with_units(action, tail)]
+
+
+def _with_units(action: _ActionT, units: List[str]) -> _ActionT:
+    return action.model_copy(update={"systemd_service": " ".join(units), "label": f"Restart {' '.join(units)}"})
+
+
 def ordered_post_sync_plan(actions: Iterable[_ActionT]) -> List[_ActionT]:
     """*actions* in an order a reader can execute top to bottom.
 
     Stable within a category: two roles' installs keep the order the caller
-    produced them in, so the output changes only when the roles do.
+    produced them in, so the output changes only when the roles do. Actions
+    touching ``_RESTART_LAST_UNITS`` go after everything else whatever their
+    category; chromadb restarts before ai-stack's (#17455).
     """
-    incoming = list(actions)
-    restarts = [a for a in incoming if _rank(a) == _CATEGORY_RANK["restart"]]
-    others = [a for a in incoming if _rank(a) != _CATEGORY_RANK["restart"]]
+    incoming = [piece for a in actions for piece in _split_last_units(a)]
+    last = [a for a in incoming if _is_last(a)]
+    rest = [a for a in incoming if not _is_last(a)]
+    restarts = [a for a in rest if _rank(a) == _CATEGORY_RANK["restart"]]
+    others = [a for a in rest if _rank(a) != _CATEGORY_RANK["restart"]]
 
     ordered = sorted(others, key=_rank)
-    ordered.extend(_without_duplicate_units(restarts))
+    ordered.extend(sorted(_without_duplicate_units(restarts), key=_precedence))
+    ordered.extend(_last_group(last))
     return ordered
+
+
+def _last_group(last: List[_ActionT]) -> List[_ActionT]:
+    """The self-killing unit's actions: non-restarts first, its restart at the very end."""
+    restart = _CATEGORY_RANK["restart"]
+    before = sorted((a for a in last if _rank(a) != restart), key=_rank)
+    return before + _without_duplicate_units([a for a in last if _rank(a) == restart])
 
 
 __all__ = ["ordered_post_sync_plan"]

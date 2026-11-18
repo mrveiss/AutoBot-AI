@@ -20,25 +20,25 @@ from .types import (
     CommandBreakdownPart,
     CommandExplanation,
     OutputExplanation,
+    OverseerStepStatus,
+    OverseerTaskStatus,
     OverseerUpdate,
-    StepResult,
-    StepStatus,
-    StreamChunk,
+    StepChunk,
+    StepRunResult,
     TaskPlan,
-    TaskStatus,
 )
 
 __all__ = [
     # Types
-    "TaskStatus",
-    "StepStatus",
+    "OverseerTaskStatus",
+    "OverseerStepStatus",
     "CommandBreakdownPart",
     "CommandExplanation",
     "OutputExplanation",
     "AgentTask",
     "TaskPlan",
-    "StepResult",
-    "StreamChunk",
+    "StepRunResult",
+    "StepChunk",
     "OverseerUpdate",
     # Agents
     "OverseerAgent",

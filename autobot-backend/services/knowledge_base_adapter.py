@@ -12,6 +12,7 @@ providing a consistent interface for the RAG service layer.
 
 from typing import Any, List, Protocol
 
+from autobot_shared.category_defaults import CategoryDefaults
 from autobot_shared.logging_manager import get_llm_logger
 from type_defs.common import Metadata
 
@@ -61,7 +62,7 @@ class KnowledgeBaseAdapter:
         self,
         query: str,
         top_k: int = 10,
-        mode: str = "auto",
+        mode: str = CategoryDefaults.SEARCH_MODE_AUTO,
         **kwargs,
     ) -> List[Metadata]:
         """

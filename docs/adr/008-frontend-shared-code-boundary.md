@@ -213,6 +213,15 @@ timeout — while every other SLM admin tool went through `useAutobotApi`. Under
 rule 3 the endpoints and payload types moved onto `useAutobotApi` and the tool
 calls it, which also removed that auth divergence.
 
+**Amended (#17856 row 8):** `useAutobotApi` has since dropped its own
+`autobot_access_token` fallback and 401 cleanup — nothing ever wrote that key —
+so every SLM transport now sends `authStore.token` alone. Each app has one
+token reader: `autobot-frontend/src/utils/authToken.ts` (`readStoredAuthToken`,
+which also rejects and clears an expired token) and
+`autobot-slm-frontend/src/utils/authStorage.ts` (`readSlmToken`). Writers are
+the stores: `useUserStore` in the main app, `stores/auth.ts` (`adoptToken` for
+LDAP/SSO) in the SLM.
+
 ## Related ADRs
 
 - [ADR-005](005-single-frontend-mandate.md) - Single frontend server mandate (deployment topology; this ADR covers source-code sharing).

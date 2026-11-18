@@ -24,7 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
-from models.database import Backup, BackupStatus, Node
+from models.database import Backup, BackupServiceType, BackupStatus, Node
+from services.backup_ssh import (
+    run_command,
+    scp_download_command,
+    scp_upload_command,
+    ssh_base_command,
+    systemctl_redis,
+)
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.role_units import REDIS_UNIT
 
@@ -248,8 +255,7 @@ class BackupService:
     async def _stop_redis_for_restore(self, host: str, ssh_user: str, ssh_port: int) -> None:
         """Stop Redis on the target node; raise if it will not stop (#665, #16060)."""
         logger.info("Stopping %s on %s for restore", REDIS_UNIT, host)
-        cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl stop {REDIS_UNIT}")
-        ok, out = await self._run_command(cmd, timeout=30)
+        ok, out = await systemctl_redis(ssh_base_command(host, ssh_user, ssh_port), "stop")
         if not ok:  # #16060: discarded before -- see services/role_units.py
             raise RuntimeError(f"cannot restore: stop {REDIS_UNIT} on {host}: {out.strip()}")
 
@@ -265,15 +271,7 @@ class BackupService:
         backup_path = backup.backup_path
 
         # Copy from SLM storage to temporary location
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-P",
-            str(ssh_port),
-            backup_path,
-            f"{ssh_user}@{host}:/tmp/restore.rdb",
-        ]
+        scp_cmd = scp_upload_command(host, ssh_user, ssh_port, backup_path, "/tmp/restore.rdb")
         success, _ = await self._run_command(scp_cmd, timeout=300)
         if not success:
             return False, "Failed to copy backup to target"
@@ -316,8 +314,7 @@ class BackupService:
         """
         # Start Redis
         logger.info("Starting Redis on %s after restore", host)
-        start_cmd = self._build_ssh_command(host, ssh_user, ssh_port, f"sudo systemctl start {REDIS_UNIT}")
-        success, output = await self._run_command(start_cmd, timeout=30)
+        success, output = await systemctl_redis(ssh_base_command(host, ssh_user, ssh_port), "start")
         if not success:
             return False, f"Failed to start Redis: {output}"
 
@@ -331,13 +328,8 @@ class BackupService:
 
         return True, verify_output
 
-    async def execute_restore(
-        self,
-        db: AsyncSession,
-        backup_id: str,
-        target_node: Node,
-    ) -> Tuple[bool, str]:
-        """Restore a Redis backup to a target node.
+    async def execute_restore(self, db: AsyncSession, backup_id: str, target_node: Node) -> Tuple[bool, str]:
+        """Restore a Redis backup to a target node; any other type is refused before Redis is touched (#19455).
 
         Returns (success, message).
         """
@@ -348,6 +340,8 @@ class BackupService:
 
         if backup.status != BackupStatus.COMPLETED.value:
             return False, f"Cannot restore backup in status: {backup.status}"
+        if not BackupServiceType.is_restorable(backup.service_type):
+            return False, f"A {backup.service_type} backup cannot be restored over Redis"
 
         host = target_node.ip_address
         ssh_user = target_node.ssh_user or "autobot"
@@ -469,37 +463,11 @@ class BackupService:
 
     def _build_ssh_command(self, host: str, user: str, port: int, command: str) -> list:
         """Build SSH command list."""
-        return [
-            "/usr/bin/ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=15",
-            "-o",
-            "BatchMode=yes",
-            "-p",
-            str(port),
-            f"{user}@{host}",
-            command,
-        ]
+        return [*ssh_base_command(host, user, port), command]
 
     async def _run_command(self, cmd: list, timeout: int = 60, stdin: bytes | None = None) -> Tuple[bool, str]:
         """Run a command and return (success, output); *stdin* is written to its standard input."""
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE if stdin is not None else None,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            stdout, _ = await asyncio.wait_for(process.communicate(input=stdin), timeout=timeout)
-            output = stdout.decode("utf-8", errors="replace")
-            return process.returncode == 0, output
-        except asyncio.TimeoutError:
-            return False, "Command timed out"
-        except Exception as e:
-            logger.error("SSH command execution error: %s", e)
-            return False, "Command execution failed"
+        return await run_command(cmd, timeout, stdin)
 
     async def _calculate_checksum(self, path: Path) -> str | None:
         """Calculate SHA256 checksum of a file."""
@@ -612,17 +580,7 @@ class BackupService:
         backup_filename = f"{backup_id}_{timestamp}{suffix}"
         backup_path = BACKUP_STORAGE_DIR / backup_filename
 
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=30",
-            "-P",
-            str(ssh_port),
-            f"{ssh_user}@{host}:{rdb_path}",
-            str(backup_path),
-        ]
+        scp_cmd = scp_download_command(host, ssh_user, ssh_port, rdb_path, str(backup_path))
         success, scp_output = await self._run_command(scp_cmd, timeout=300)
         return success, backup_path, scp_output
 

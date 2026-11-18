@@ -14,7 +14,7 @@ This file stays as the import path every call site already uses, matching the sh
 already used for `base_service`, `organization_service` and `team_service`.
 
 `rbac_middleware` and `_permission_cache` are re-exported deliberately: call sites import
-both (`api/secrets.py`, `api/envelope_secrets.py`, `user_management/services/user_service.py`),
+both (`api/secrets.py`, `api/envelope_secrets.py`),
 and `_permission_cache` crosses the module boundary despite the underscore. Re-exporting the
 singleton keeps one instance per process, which is what the cache invalidation depends on.
 """

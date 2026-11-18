@@ -45,13 +45,15 @@ remain in place; only new code must use the canonical prefix.
 ## Shared Role-Active Facts
 
 New gate conditions must use the `role_X_active` boolean facts rather than
-raw `node_roles` string checks. These facts are defined in two places (kept
-in sync for temp-inventory compatibility — see #7050 / #7051):
+raw `node_roles` string checks. These facts have exactly ONE definition (#14678):
 
 - `autobot-slm-backend/ansible/inventory/group_vars/all.yml`
-  (loaded automatically for static inventories)
-- `autobot-slm-backend/ansible/playbooks/vars/role_active_facts.yml`
-  (loaded explicitly via `vars_files:` for temp inventories)
+  (loaded automatically wherever a `group_vars/` directory sits beside the
+  inventory; `deploy.yml` loads the same file explicitly via `vars_files:`
+  because its callers pass a bare `-i "<host>,"` string)
+
+Never copy it: `tools/lint/check_role_facts_single_source.py` fails CI on a
+second tracked definition.
 
 Available facts:
 
@@ -85,8 +87,7 @@ when: "'autobot-backend' in node_roles"
 when: role_backend_active
 ```
 
-Files in the backward-compat allowlist (`group_vars/all.yml`,
-`vars/role_active_facts.yml`) are excluded from this check because they
+The backward-compat allowlist file (`group_vars/all.yml`) is excluded from this check because it
 must maintain the OR-chains for existing hosts.
 
 ## Adding a New Role
@@ -96,9 +97,8 @@ When adding a new role, update **all** of the following:
 1. Choose a canonical name: `autobot-<service-name>` (or a bare name if
    the role has no `autobot-` equivalent by convention, like `vnc`/`llm`).
 2. Add the canonical name to the table in this document.
-3. Add a `role_<name>_active` fact to **both**:
-   - `inventory/group_vars/all.yml` (under SHARED ROLE-ACTIVE FACTS)
-   - `playbooks/vars/role_active_facts.yml`
+3. Add a `role_<name>_active` fact to the single definition,
+   `inventory/group_vars/all.yml`.
 4. If the role has a deprecated short-form alias, add it to the
    `_role_aliases` dict in `group_vars/all.yml` and to
    `DEPRECATED_SHORT_FORMS` in `tools/lint/check_canonical_role_names.py`.

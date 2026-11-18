@@ -61,9 +61,15 @@ describe('useUserStore.isAdmin (#14937)', () => {
     expect(store.isAdmin).toBe(false)
   })
 
-  it('does not grant hasServiceManagement to superadmin — its ROLE_PERMISSIONS entry is empty by backend design', () => {
+  it('grants hasServiceManagement to superadmin -- derived from the generated map, which inherits admin (#19125)', () => {
     const store = useUserStore()
     store.currentUser = mockUser('superadmin')
+    expect(store.hasServiceManagement).toBe(true)
+  })
+
+  it('withholds hasServiceManagement from a role the map does not grant it', () => {
+    const store = useUserStore()
+    store.currentUser = mockUser('user')
     expect(store.hasServiceManagement).toBe(false)
   })
 })

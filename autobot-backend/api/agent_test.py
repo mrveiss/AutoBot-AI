@@ -33,7 +33,7 @@ async def test_enhance_context_with_kb_applies_quarantine_filter():
     mock_kb = AsyncMock()
     mock_kb.search.return_value = [{"content": "fact"}]
 
-    await _enhance_context_with_kb(_Payload(goal="what is autobot"), mock_kb)
+    await _enhance_context_with_kb(_Payload(goal="what is autobot"), mock_kb, "test-user")
 
     mock_kb.search.assert_called_once_with(query="what is autobot", top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
 
