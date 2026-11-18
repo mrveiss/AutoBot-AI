@@ -11,6 +11,7 @@ export function clearNodeCache(ctx: FleetCtx, nodeId: string): void {
   ctx.state.certificateStatus.value.delete(nodeId)
   ctx.state.nodeUpdates.value.delete(nodeId)
   ctx.state.npuCapabilities.value.delete(nodeId)
+  ctx.state.npuWorkerConfigs.value.delete(nodeId)
 }
 
 /** Clear the events, certificate and update caches. */

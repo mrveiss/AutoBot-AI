@@ -86,6 +86,23 @@ describe('slmApi (#19834)', () => {
       expect(lastCall(fetchMock).url).toBe(`${origin}/slm/api/nodes/a%2Fb%20c`)
     })
 
+    it('rejects a missing, empty or dot-segment path parameter before dispatch', async () => {
+      for (const id of ['', '.', '..']) {
+        await expect(slmApi.getNode(id)).rejects.toThrow('path parameter')
+      }
+      expect(() => slmUrl('/api/nodes/{node_id}', {})).toThrow('"node_id" is required')
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('reads a finished NPU detection as detected in the status read, keeping pending and failed', async () => {
+      const wire = { node_id: 'n1', capabilities: null, loadedModels: [], queueDepth: 0, lastHealthCheck: null }
+      fetchMock.mockResolvedValue(json({ ...wire, detectionStatus: 'completed' }))
+      await expect(slmApi.getNpuStatus('n1')).resolves.toMatchObject({ detectionStatus: 'detected' })
+      fetchMock.mockResolvedValue(json({ nodes: [{ ...wire, detectionStatus: 'completed' }, { ...wire, node_id: 'n2', detectionStatus: 'pending' }] }))
+      const nodes = await slmApi.getNpuNodes()
+      expect(nodes.map((n) => n.detectionStatus)).toEqual(['detected', 'pending'])
+    })
+
     it('sends query values that are set and drops those that are not', async () => {
       fetchMock.mockResolvedValue(json({ events: [], total: 0 }))
       await slmApi.getNodeEvents('n1', { limit: 5, severity: 'error' })
@@ -158,11 +175,14 @@ describe('slmApi (#19834)', () => {
     it('a 401 on an SLM auth endpoint is a credential failure, not a rejected session', async () => {
       // `isAuthEndpoint` matches `${getApiBase()}/auth/`, a substring of `/slm/api/auth/...`.
       // The stores never call one; this pins that an SLM auth route would not end the session.
+      // The match is on the configured base, so the base is pinned to the default here.
+      vi.stubEnv('VITE_API_BASE_PATH', '/api')
       fetchMock.mockResolvedValue(json({ detail: 'bad credentials' }, 401))
       const response = await slmClient().rawRequest('/slm/api/auth/login', { method: 'POST', body: {} })
       expect(response.status).toBe(401)
       expect(clearStoredAuth).not.toHaveBeenCalled()
       expect(window.location.href).toBe('')
+      vi.unstubAllEnvs()
     })
   })
 
@@ -194,10 +214,10 @@ describe('slmApi (#19834)', () => {
       expect(lastCall(fetchMock).url).toBe(`${origin}/slm/api/nodes/n1/enroll`)
     })
 
-    it('apply updates posts update_ids and returns applied/failed', async () => {
+    it('apply updates posts the update IDs as a JSON array and returns applied/failed', async () => {
       fetchMock.mockResolvedValue(json({ applied_updates: ['u1'], failed_updates: [] }))
       await expect(slmApi.applyUpdates('n1', ['u1'])).resolves.toEqual({ applied_updates: ['u1'], failed_updates: [] })
-      expect(JSON.parse(lastCall(fetchMock).init.body as string)).toEqual({ update_ids: ['u1'] })
+      expect(JSON.parse(lastCall(fetchMock).init.body as string)).toEqual(['u1']) // the route's body is the bare array
       expect(lastCall(fetchMock).url).toBe(`${origin}/slm/api/nodes/n1/updates/apply`)
     })
 

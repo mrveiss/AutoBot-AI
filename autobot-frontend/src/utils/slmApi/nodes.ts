@@ -169,7 +169,7 @@ export async function applyUpdates(nodeId: string, updateIds: string[]): Promise
   return slmRequestAs<ApplyUpdatesResult, '/api/nodes/{node_id}/updates/apply', 'post'>(
     'post',
     '/api/nodes/{node_id}/updates/apply',
-    { params: { node_id: nodeId }, body: { update_ids: updateIds } },
+    { params: { node_id: nodeId }, body: updateIds },
   )
 }
 

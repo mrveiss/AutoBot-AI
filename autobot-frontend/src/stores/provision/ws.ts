@@ -62,6 +62,7 @@ function handlePhaseLog(ctx: ProvisionCtx, msg: WsMessage): void {
 
 function handleLogMessage(ctx: ProvisionCtx, msg: WsMessage): void {
   const { state } = ctx
+  ctx.runtime.revision++
   if (msg.log_type === 'heartbeat') {
     state.currentTask.value = msg.message
   } else if (msg.log_type === 'phase') {
@@ -93,6 +94,7 @@ function handleFailed(ctx: ProvisionCtx, msg: WsMessage): void {
 
 function handleStatusMessage(ctx: ProvisionCtx, msg: WsMessage): void {
   const { state } = ctx
+  ctx.runtime.revision++
   state.stage.value = msg.stage || ''
   state.elapsedSeconds.value = Math.round(msg.elapsed_seconds || 0)
   if (msg.status === 'completed') {
@@ -131,9 +133,12 @@ function wireSocket(ctx: ProvisionCtx, ws: WebSocket): void {
   }
   ws.onmessage = (event) => handleWsMessage(ctx, event)
   ws.onclose = () => {
+    // A replaced socket can still fire its close event: it must not touch the replacement's state.
+    if (runtime.ws !== ws) return
     logger.debug('Provision WebSocket closed')
     runtime.ws = null
     state.wsConnected.value = false
+    state.currentTask.value = '' // the last heartbeat is stale once the socket that sent it is gone
     stopStaleTaskWatcher(ctx)
     // Fall back to polling if provision is still running
     if (state.status.value === 'running') startPolling(ctx)
@@ -152,7 +157,9 @@ export function connectWs(ctx: ProvisionCtx): void {
     runtime.ws = new WebSocket(slmWsUrl('/ws/provision'))
   } catch (e) {
     logger.error('Failed to open provision WebSocket', e)
-    startPolling(ctx) // fall back to polling immediately
+    // Fall back to polling immediately, but only for a run still in progress: a finished run
+    // that cannot open its final socket must not restart a poll that reports it finished again.
+    if (ctx.state.status.value === 'running') startPolling(ctx)
     return
   }
   wireSocket(ctx, runtime.ws)

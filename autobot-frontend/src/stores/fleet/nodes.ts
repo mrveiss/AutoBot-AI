@@ -4,36 +4,42 @@
 // Author: mrveiss
 /** Fleet store node slice (#19834): fetching, selection, local state and CRUD. */
 import type { NodeCreate, NodeHealth, NodeRole, NodeUpdate, SLMNode } from '@autobot/slm-contract'
-import { reportError, type FleetCtx } from './context'
+import { reportError, storeNode, type FleetCtx } from './context'
 
 // ── Fetching ────────────────────────────────────────────────────────────────
 
-/** Fetch all nodes from the API. */
+/** The newest `fetchNodes` call per store: only it may publish the list, the timestamp, the error and the loading flag. */
+const latestFetch = new WeakMap<FleetCtx, number>()
+
+/** Fetch all nodes from the API. A call that a newer one has overtaken publishes nothing. */
 export async function fetchNodes(ctx: FleetCtx): Promise<void> {
   const { state } = ctx
+  const token = (latestFetch.get(ctx) ?? 0) + 1
+  latestFetch.set(ctx, token)
+  const isLatest = () => latestFetch.get(ctx) === token
   state.isLoading.value = true
   state.error.value = null
   try {
     const nodeArray = await ctx.api.getNodes()
+    if (!isLatest()) return
     state.nodes.value.clear()
     for (const node of nodeArray) {
       state.nodes.value.set(node.node_id, node)
     }
+    resolveSelection(ctx)
     state.lastRefresh.value = new Date()
   } catch (err) {
-    reportError(ctx, err, 'Failed to fetch nodes')
+    if (isLatest()) reportError(ctx, err, 'Failed to fetch nodes')
     throw err
   } finally {
-    state.isLoading.value = false
+    if (isLatest()) state.isLoading.value = false
   }
 }
 
-/** Store a node, and keep the selected node in step when it is the one that changed. */
-function storeNode(ctx: FleetCtx, nodeId: string, node: SLMNode): void {
-  ctx.state.nodes.value.set(node.node_id, node)
-  if (ctx.state.selectedNode.value?.node_id === nodeId) {
-    ctx.state.selectedNode.value = node
-  }
+/** Point the selection at the current entry of the selected node; a node no longer in the fleet clears it. */
+function resolveSelection(ctx: FleetCtx): void {
+  const selected = ctx.state.selectedNode.value
+  if (selected) ctx.state.selectedNode.value = ctx.state.nodes.value.get(selected.node_id) ?? null
 }
 
 /** Refresh a single node from the API. */
@@ -61,7 +67,7 @@ export function selectNode(ctx: FleetCtx, nodeId: string | null): void {
 
 /** Update a node in local state (no API call). */
 export function setNodeLocal(ctx: FleetCtx, node: SLMNode): void {
-  ctx.state.nodes.value.set(node.node_id, node)
+  storeNode(ctx, node.node_id, node)
 }
 
 /** Update node health in local state; the node's status follows its health. */
@@ -100,6 +106,8 @@ export function removeNodeLocal(ctx: FleetCtx, nodeId: string): void {
   state.nodeEvents.value.delete(nodeId)
   state.certificateStatus.value.delete(nodeId)
   state.nodeUpdates.value.delete(nodeId)
+  state.npuCapabilities.value.delete(nodeId)
+  state.npuWorkerConfigs.value.delete(nodeId)
 }
 
 // ── CRUD (API calls) ────────────────────────────────────────────────────────

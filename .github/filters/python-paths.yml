@@ -119,6 +119,9 @@ python:
   # TOTAL (#17970), which a hook run against the diff cannot check.
   - 'autobot-frontend/src/**'
   - 'autobot-slm-frontend/src/**'
+  # The SLM contract package (#19834) is scanned by the duplicate-name and frontend-API-contract
+  # ratchets (repo_tests/duplicate_names_ratchet_14908_test.py, frontend_api_contract_ratchet_test.py).
+  - 'libs/slm-contract/**'
   # Read by repo_tests/npm_audit_covers_its_workspaces_test.py, which asserts the
   # audit's workspace set against the tracked tree (#16131). Without this, a change
   # confined to _gate-security.yml takes the python-suite gate's "not affected" green

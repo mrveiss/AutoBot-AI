@@ -189,7 +189,13 @@ describe('provision store (#19834)', () => {
 
   describe('polling fallback', () => {
     it('a socket that closes mid-run falls back to polling, which reads from the line cursor', async () => {
-      api.getProvisionStatus.mockResolvedValue({ status: 'running', lines: ['a', 'b'], total_lines: 2, error: null })
+      const all = ['a', 'b']
+      api.getProvisionStatus.mockImplementation(async (sinceLine: number) => ({
+        status: 'running',
+        lines: all.slice(sinceLine),
+        total_lines: all.length,
+        error: null,
+      }))
       const store = useProvisionStore()
       store.start()
       const socket = FakeSocket.instances[0]
@@ -203,9 +209,10 @@ describe('provision store (#19834)', () => {
 
       await vi.advanceTimersByTimeAsync(3000)
       expect(api.getProvisionStatus).toHaveBeenLastCalledWith(2)
+      expect(store.logs.map((l) => l.message)).toEqual(['a', 'b'])
     })
 
-    it('a completed poll stops polling and reconnects for final messages', async () => {
+    it('a completed poll stops polling and opens no socket: the server sends no terminal frame to a late one', async () => {
       api.getProvisionStatus.mockResolvedValue({ status: 'completed', lines: [], total_lines: 0, error: null })
       const store = useProvisionStore()
       store.start()
@@ -215,7 +222,7 @@ describe('provision store (#19834)', () => {
 
       await vi.advanceTimersByTimeAsync(3000)
       expect(store.isComplete).toBe(true)
-      expect(FakeSocket.instances).toHaveLength(2)
+      expect(FakeSocket.instances).toHaveLength(1)
       const calls = api.getProvisionStatus.mock.calls.length
       await vi.advanceTimersByTimeAsync(9000)
       expect(api.getProvisionStatus.mock.calls.length).toBe(calls)
@@ -241,6 +248,63 @@ describe('provision store (#19834)', () => {
       expect(api.getProvisionStatus.mock.calls.length).toBeGreaterThan(calls)
     })
 
+    it('an idle poll means the backend lost the run: tracking stops and the store goes idle', async () => {
+      api.getProvisionStatus.mockResolvedValue({ status: 'idle', lines: [], total_lines: 0, error: null })
+      const store = useProvisionStore()
+      store.start()
+      FakeSocket.instances[0].open()
+      FakeSocket.instances[0].onclose?.()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.status).toBe('idle')
+      const calls = api.getProvisionStatus.mock.calls.length
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(api.getProvisionStatus.mock.calls.length).toBe(calls)
+    })
+
+    it('a read that resolves after reset is dropped, and a slow read is not overlapped by the next tick', async () => {
+      let resolveRead: (value: unknown) => void = () => {}
+      api.getProvisionStatus.mockImplementation(() => new Promise((resolve) => { resolveRead = resolve }))
+      const store = useProvisionStore()
+      store.start()
+      FakeSocket.instances[0].open()
+      FakeSocket.instances[0].onclose?.()
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(api.getProvisionStatus).toHaveBeenCalledTimes(1) // one read in flight per run
+      store.reset()
+      resolveRead({ status: 'completed', lines: ['late'], total_lines: 1, error: null })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.status).toBe('idle')
+      expect(store.logs).toEqual([])
+    })
+
+    it('retryPolling does nothing while the socket is connected', async () => {
+      api.getProvisionStatus.mockResolvedValue({ status: 'running', lines: [], total_lines: 0, error: null })
+      const store = useProvisionStore()
+      store.start()
+      FakeSocket.instances[0].open()
+      store.retryPolling()
+      await vi.advanceTimersByTimeAsync(9000)
+      expect(api.getProvisionStatus).not.toHaveBeenCalled()
+    })
+
+    it('the close event of a replaced socket leaves the replacement alone; the active socket closing clears the heartbeat', () => {
+      const store = useProvisionStore()
+      store.start()
+      const first = FakeSocket.instances[0]
+      first.open()
+      first.emit({ type: 'log', log_type: 'heartbeat', message: 'Still running' })
+      first.readyState = 2 // CLOSING: connectWs may now install a replacement
+      store.connectWs()
+      const second = FakeSocket.instances[1]
+      second.open()
+      first.onclose?.()
+      expect(store.wsConnected).toBe(true)
+      expect(store.currentTask).toBe('Still running')
+      second.onclose?.()
+      expect(store.currentTask).toBe('')
+    })
+
     it('a socket that cannot be opened falls back to polling at once', async () => {
       class Broken {
         static OPEN = 1
@@ -255,6 +319,49 @@ describe('provision store (#19834)', () => {
       store.start()
       await vi.advanceTimersByTimeAsync(3000)
       expect(api.getProvisionStatus).toHaveBeenCalled()
+    })
+  })
+
+  describe('restore', () => {
+    it('a snapshot overtaken by a socket frame is dropped', async () => {
+      let resolveRead: (value: unknown) => void = () => {}
+      api.getProvisionStatus.mockImplementation(() => new Promise((resolve) => { resolveRead = resolve }))
+      const store = useProvisionStore()
+      store.start()
+      const socket = FakeSocket.instances[0]
+      socket.open()
+      const restoring = store.restoreFromBackend()
+      socket.emit({ type: 'status', status: 'completed', elapsed_seconds: 3 })
+      resolveRead({ status: 'running', lines: ['x'], total_lines: 1, error: null })
+      await restoring
+      expect(store.isComplete).toBe(true)
+    })
+
+    it('an idle snapshot resets a run the backend no longer tracks', async () => {
+      const store = useProvisionStore()
+      store.start()
+      api.getProvisionStatus.mockResolvedValue({ status: 'idle', lines: [], total_lines: 0, error: null })
+      await store.restoreFromBackend()
+      expect(store.status).toBe('idle')
+      expect(store.startedAt).toBeNull()
+    })
+
+    it('a terminal snapshot releases the socket and the heartbeat watcher', async () => {
+      const store = useProvisionStore()
+      store.start()
+      FakeSocket.instances[0].open()
+      api.getProvisionStatus.mockResolvedValue({ status: 'failed', lines: [], total_lines: 0, error: 'boom' })
+      await store.restoreFromBackend()
+      expect(store.isFailed).toBe(true)
+      expect(store.wsConnected).toBe(false)
+    })
+
+    it('disposing the store closes its socket', () => {
+      const store = useProvisionStore()
+      store.start()
+      FakeSocket.instances[0].open()
+      store.$dispose()
+      expect(FakeSocket.instances[0].readyState).toBe(3)
     })
   })
 

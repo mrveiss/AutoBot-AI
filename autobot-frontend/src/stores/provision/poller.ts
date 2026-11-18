@@ -31,16 +31,20 @@ function poller(ctx: ProvisionCtx) {
 export function startPolling(ctx: ProvisionCtx): void {
   if (poller(ctx).isPolling.value) return
   logger.info('Starting provision polling fallback')
+  ctx.runtime.pollGeneration++
   poller(ctx).start('')
 }
 
 export function stopPolling(ctx: ProvisionCtx): void {
+  ctx.runtime.pollGeneration++ // a read still in flight belongs to the run that just ended
   poller(ctx).stop()
 }
 
-/** Retry after the poller paused on repeated failures. */
+/** Retry after the poller paused on repeated failures; a connected socket already delivers the run. */
 export function retryPolling(ctx: ProvisionCtx): void {
+  if (ctx.state.wsConnected.value || poller(ctx).isPolling.value) return
   logger.info('Restarting provision polling after a pause')
+  ctx.runtime.pollGeneration++
   poller(ctx).start('')
 }
 

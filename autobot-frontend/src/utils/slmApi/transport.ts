@@ -15,6 +15,7 @@
  * host, which in direct mode does not serve `/slm/api`. Nothing here reads `slm_access_token`.
  */
 import type { paths } from '@autobot/slm-contract/generated'
+import type { MethodsOf } from '@autobot/ui'
 import { ApiClient } from '@/utils/ApiClient'
 
 /** Where nginx serves the SLM API on the page origin. The contract's own prefix is `/api`. */
@@ -56,9 +57,21 @@ export function slmClient(): ApiClient {
   return client
 }
 
-/** Fills `{name}` placeholders of a declared path; every value is URL-encoded. */
+/** `encodeURIComponent` leaves these unchanged and the browser then normalises them out of the path. */
+const DOT_SEGMENTS = new Set(['.', '..'])
+
+/**
+ * Fills `{name}` placeholders of a declared path; every value is URL-encoded. A missing or empty
+ * value, or one that is a URL dot segment, is rejected before dispatch: sent, it would name a
+ * different resource than the caller meant.
+ */
 export function fillPath(template: string, params: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_, name: string) => encodeURIComponent(params[name] ?? ''))
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => {
+    const value = params[name]
+    if (value === undefined || value === '') throw new Error(`SLM request path parameter "${name}" is required`)
+    if (DOT_SEGMENTS.has(value)) throw new Error(`SLM request path parameter "${name}" cannot be "${value}"`)
+    return encodeURIComponent(value)
+  })
 }
 
 /** `/api/nodes/{node_id}` in the contract is `/slm/api/nodes/<id>` on the wire. */
@@ -86,7 +99,7 @@ function send(verb: Verb, url: string, init: SlmRequestInit): Promise<unknown> {
 }
 
 /** A call whose path, method and response all come from the contract. The one cast is here. */
-export async function slmRequest<P extends SlmPath, V extends Verb & keyof paths[P]>(
+export async function slmRequest<P extends SlmPath, V extends Verb & MethodsOf<paths, P>>(
   verb: V & Verb,
   path: P,
   init: SlmRequestInit = {},
@@ -98,13 +111,14 @@ export async function slmRequest<P extends SlmPath, V extends Verb & keyof paths
 /**
  * A call to a route whose 200 body the contract leaves undeclared (`unknown`, or a bare
  * `{[key]: unknown}`): the adapter states the shape, here, once. For a route with a declared
- * body the return type is `never`, so the declared body cannot be overridden by accident.
+ * body the arguments are `never`, so the call does not compile and the declared body cannot be
+ * overridden.
  */
-export async function slmRequestAs<T, P extends SlmPath, V extends Verb & keyof paths[P]>(
-  verb: V & Verb,
+export async function slmRequestAs<T, P extends SlmPath, V extends Verb & MethodsOf<paths, P>>(
+  verb: Undeclared<SlmResponse<P, V & Verb>> extends true ? V & Verb : never,
   path: P,
   init: SlmRequestInit = {},
-): Promise<Undeclared<SlmResponse<P, V & Verb>> extends true ? T : never> {
+): Promise<T> {
   const data = await send(verb, slmUrl(path, init.params), init)
-  return data as Undeclared<SlmResponse<P, V & Verb>> extends true ? T : never
+  return data as T
 }

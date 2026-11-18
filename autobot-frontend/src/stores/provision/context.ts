@@ -43,6 +43,15 @@ export interface ProvisionRuntime {
   ws: WebSocket | null
   linesSeen: number
   lastWsMessageAt: number
+  /**
+   * Which polling run is current: bumped whenever polling starts or stops, so a read that began in
+   * an earlier run (before a reset, or a socket taking over) is dropped when it resolves.
+   */
+  pollGeneration: number
+  /** The run whose status read is in flight, or null: at most one read per run, from one cursor. */
+  pollInFlight: number | null
+  /** Bumped whenever the run's tracked data changes (a log or status frame, a poll result, reset, start). */
+  revision: number
   staleTaskTimer: number | null
   /** Set by the store's setup, which owns the poller's effect scope. */
   poller: UsePollingJobReturn<void> | null
@@ -71,7 +80,16 @@ export function createProvisionState(): ProvisionState {
 }
 
 export function createProvisionContext(api: SlmApi = slmApi): ProvisionCtx {
-  const runtime: ProvisionRuntime = { ws: null, linesSeen: 0, lastWsMessageAt: 0, staleTaskTimer: null, poller: null }
+  const runtime: ProvisionRuntime = {
+    ws: null,
+    linesSeen: 0,
+    lastWsMessageAt: 0,
+    pollGeneration: 0,
+    pollInFlight: null,
+    revision: 0,
+    staleTaskTimer: null,
+    poller: null,
+  }
   return { api, state: createProvisionState(), runtime }
 }
 

@@ -15,13 +15,16 @@ import type { FleetState } from './context'
 
 type NodeStatusCounts = Omit<FleetSummary, 'total_nodes'>
 
-/** Buckets node statuses the way the dashboard counts them; unknown statuses count as offline. */
+/**
+ * Buckets node statuses the way the dashboard counts them; unknown statuses count as offline.
+ * The store writes `error` (from health) and `unhealthy` (a failed enrollment), both unhealthy.
+ */
 function countStatuses(nodes: Iterable<SLMNode>): NodeStatusCounts {
   const counts: NodeStatusCounts = { healthy_nodes: 0, degraded_nodes: 0, unhealthy_nodes: 0, offline_nodes: 0 }
   for (const node of nodes) {
     if (node.status === 'online') counts.healthy_nodes++
     else if (node.status === 'degraded') counts.degraded_nodes++
-    else if (node.status === 'error') counts.unhealthy_nodes++
+    else if (node.status === 'error' || (node.status as string) === 'unhealthy') counts.unhealthy_nodes++
     else counts.offline_nodes++
   }
   return counts

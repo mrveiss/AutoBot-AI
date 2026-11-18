@@ -79,3 +79,11 @@ export function createFleetContext(api: SlmApi = slmApi): FleetCtx {
 export function reportError(ctx: FleetCtx, err: unknown, fallback: string): void {
   ctx.state.error.value = err instanceof Error ? err.message : fallback
 }
+
+/** Store a node, and keep the selected node in step when it is the one that changed. */
+export function storeNode(ctx: FleetCtx, nodeId: string, node: SLMNode): void {
+  ctx.state.nodes.value.set(node.node_id, node)
+  if (ctx.state.selectedNode.value?.node_id === nodeId) {
+    ctx.state.selectedNode.value = node
+  }
+}

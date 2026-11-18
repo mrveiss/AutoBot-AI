@@ -27,10 +27,15 @@ function noteElapsed(ctx: ProvisionCtx, result: ProvisionStatusResult): void {
   }
 }
 
-/** One poll tick; a failed read throws so the poller counts it. */
-export async function pollProvisionStatus(ctx: ProvisionCtx): Promise<void> {
+/** Apply one polled snapshot of a run that is still the current one. */
+function applyPolled(ctx: ProvisionCtx, result: ProvisionStatusResult): void {
   const { state, runtime } = ctx
-  const result = await ctx.api.getProvisionStatus(runtime.linesSeen)
+  runtime.revision++
+  if (result.status === 'idle') {
+    // The backend no longer tracks the run (it restarted): the local run is lost, not running.
+    reset(ctx)
+    return
+  }
   if (result.lines.length > 0) {
     appendLines(ctx, result.lines)
     runtime.linesSeen = result.total_lines
@@ -39,13 +44,31 @@ export async function pollProvisionStatus(ctx: ProvisionCtx): Promise<void> {
   if (result.status === 'completed') {
     state.status.value = 'completed'
     state.finishedAt.value = Date.now()
-    stopPolling(ctx)
-    connectWs(ctx) // try reconnecting the socket for any final messages
+    stopPolling(ctx) // the server sends no terminal frame to a late socket, so none is opened
   } else if (result.status === 'failed') {
     state.status.value = 'failed'
     state.error.value = result.error || 'Provisioning failed'
     state.finishedAt.value = Date.now()
     stopPolling(ctx)
+  }
+}
+
+/**
+ * One poll tick; a failed read throws so the poller counts it. At most one read is in flight per
+ * polling run, so every read starts from the cursor the previous one committed, and a read that
+ * resolves after its run was stopped (a reset, or a socket taking over) is dropped.
+ */
+export async function pollProvisionStatus(ctx: ProvisionCtx): Promise<void> {
+  const { runtime } = ctx
+  const generation = runtime.pollGeneration
+  if (runtime.pollInFlight === generation) return
+  runtime.pollInFlight = generation
+  try {
+    const result = await ctx.api.getProvisionStatus(runtime.linesSeen)
+    if (generation !== runtime.pollGeneration) return
+    applyPolled(ctx, result)
+  } finally {
+    if (runtime.pollInFlight === generation) runtime.pollInFlight = null
   }
 }
 
@@ -55,27 +78,33 @@ function applyRestored(ctx: ProvisionCtx, result: ProvisionStatusResult): void {
     state.status.value = 'running'
     state.startedAt.value = state.startedAt.value ?? Date.now()
     connectWs(ctx) // reconnect for live updates
-  } else if (result.status === 'completed') {
-    state.status.value = 'completed'
-    state.finishedAt.value = Date.now()
-  } else if (result.status === 'failed') {
-    state.status.value = 'failed'
-    state.error.value = result.error || 'Provisioning failed'
-    state.finishedAt.value = Date.now()
+    return
   }
+  if (result.status !== 'completed' && result.status !== 'failed') return
+  state.status.value = result.status
+  if (result.status === 'failed') state.error.value = result.error || 'Provisioning failed'
+  state.finishedAt.value = Date.now()
+  disconnectWs(ctx) // a finished run needs neither a socket, its heartbeat watcher nor polling
 }
 
 /**
  * Resync provision state from the backend. Call from any view's onMounted (or app-level setup)
- * to recover state after navigation, tab refresh, or backend restart.
+ * to recover state after navigation, tab refresh, or backend restart. A snapshot that newer
+ * tracking data (a socket frame, a poll result, a reset) overtook while it was in flight is dropped.
  */
 export async function restoreFromBackend(ctx: ProvisionCtx): Promise<void> {
+  const revision = ctx.runtime.revision
   try {
     const result = await ctx.api.getProvisionStatus(0)
-    // 'idle' means no provision has run on this server, or a previous run was reset.
-    if (!result.status || result.status === 'idle') {
+    if (revision !== ctx.runtime.revision) return
+    if (!result.status) return
+    // 'idle' is authoritative: no provision has run on this server, a previous run was reset, or
+    // the backend restarted and lost the run the store still shows.
+    if (result.status === 'idle') {
+      reset(ctx)
       return
     }
+    ctx.runtime.revision++
     ctx.state.logs.value = result.lines.map((line) => ({ type: 'info' as const, message: line }))
     ctx.runtime.linesSeen = result.total_lines
     noteElapsed(ctx, result)
@@ -89,6 +118,7 @@ export async function restoreFromBackend(ctx: ProvisionCtx): Promise<void> {
 export function reset(ctx: ProvisionCtx): void {
   const { state, runtime } = ctx
   disconnectWs(ctx)
+  runtime.revision++
   state.status.value = 'idle'
   state.stage.value = ''
   state.elapsedSeconds.value = 0

@@ -186,6 +186,48 @@ describe('fleet store (#19834)', () => {
       expect(store.nodeEvents.has('a')).toBe(false)
     })
 
+    it('deleteNode also drops the NPU status and worker config of the node', async () => {
+      const store = await loaded(node('a'), node('b'))
+      store.npuCapabilities.set('a', {} as never)
+      store.npuWorkerConfigs.set('a', {} as never)
+      store.npuCapabilities.set('b', {} as never)
+      api.deleteNode.mockResolvedValue(undefined)
+      await store.deleteNode('a')
+      expect(store.getNpuStatus('a')).toBeUndefined()
+      expect(store.npuWorkerConfigs.has('a')).toBe(false)
+      expect(store.getNpuStatus('b')).toBeDefined()
+    })
+
+    it('a refresh re-resolves the selection against the new list, and clears it for a node that is gone', async () => {
+      const store = await loaded(node('a'), node('b'))
+      store.selectNode('a')
+      api.getNodes.mockResolvedValue([node('a', { hostname: 'renamed' })])
+      await store.fetchNodes()
+      expect(store.selectedNode?.hostname).toBe('renamed')
+      api.getNodes.mockResolvedValue([node('b')])
+      await store.fetchNodes()
+      expect(store.selectedNode).toBeNull()
+    })
+
+    it('only the newest fetchNodes publishes the list and clears the loading flag', async () => {
+      const store = useFleetStore()
+      const resolvers: Array<(nodes: SLMNode[]) => void> = []
+      api.getNodes.mockImplementation(() => new Promise<SLMNode[]>((resolve) => resolvers.push(resolve)))
+      const first = store.fetchNodes()
+      const second = store.fetchNodes()
+      resolvers[1]([node('new')])
+      await second
+      resolvers[0]([node('stale')])
+      await first
+      expect(store.nodeList.map((n) => n.node_id)).toEqual(['new'])
+      expect(store.isLoading).toBe(false)
+    })
+
+    it('counts an enrollment-failure `unhealthy` node as unhealthy, not offline', async () => {
+      const store = await loaded(node('a', { status: 'unhealthy' as never }), node('b', { status: 'offline' }))
+      expect(store.fleetSummary).toMatchObject({ unhealthy_nodes: 1, offline_nodes: 1 })
+    })
+
     it('a failed deleteNode keeps the node', async () => {
       const store = await loaded(node('a'))
       api.deleteNode.mockRejectedValue(new Error('HTTP 403'))
@@ -414,13 +456,23 @@ describe('fleet store (#19834)', () => {
       store.certificateStatus.set('a', {} as never)
       store.nodeUpdates.set('a', [])
       store.npuCapabilities.set('a', {} as never)
+      store.npuWorkerConfigs.set('a', {} as never)
+      store.npuWorkerConfigs.set('b', {} as never)
       store.clearNodeCache('a')
+      expect(store.npuWorkerConfigs.has('a')).toBe(false)
+      expect(store.npuWorkerConfigs.has('b')).toBe(true)
       expect(store.npuCapabilities.has('a')).toBe(false)
       expect(store.nodeEvents.has('a')).toBe(false)
 
+      store.nodeEvents.set('a', [])
+      store.certificateStatus.set('a', {} as never)
+      store.nodeUpdates.set('a', [])
       store.npuCapabilities.set('a', {} as never)
       store.availableRoles = [{ name: 'redis' } as never]
       store.$reset()
+      expect(store.nodeEvents.size).toBe(0)
+      expect(store.certificateStatus.size).toBe(0)
+      expect(store.nodeUpdates.size).toBe(0)
       expect(store.nodeList).toEqual([])
       expect(store.selectedNode).toBeNull()
       expect(store.lastRefresh).toBeNull()

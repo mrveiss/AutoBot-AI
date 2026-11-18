@@ -10,7 +10,7 @@
  * polling). Short setup over slices: `ws.ts` (live updates), `poller.ts` (fallback),
  * `status.ts` (the poll tick, resync, start/reset).
  */
-import { computed } from 'vue'
+import { computed, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { bindSlice } from '../bindSlice'
 import { createProvisionContext, formatElapsed } from './context'
@@ -24,6 +24,8 @@ export const useProvisionStore = defineStore('provision', () => {
   const ctx = createProvisionContext()
   ctx.runtime.poller = createStatusPoller(() => pollProvisionStatus(ctx))
   const { status, elapsedSeconds } = ctx.state
+  // The poller stops with the store's scope; the socket and its heartbeat interval must too.
+  onScopeDispose(() => disconnectWs(ctx))
 
   const isRunning = computed(() => status.value === 'running')
   const isComplete = computed(() => status.value === 'completed')

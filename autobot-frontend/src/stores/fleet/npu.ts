@@ -12,7 +12,7 @@ import type {
   NPUWorkerMetrics,
   SLMNode,
 } from '@autobot/slm-contract'
-import { reportError, type FleetCtx } from './context'
+import { reportError, storeNode, type FleetCtx } from './context'
 
 /** Fetch every NPU node with its status; the cache is replaced. A failure yields []. */
 export async function fetchNpuNodes(ctx: FleetCtx): Promise<NPUNodeStatus[]> {
@@ -89,8 +89,11 @@ export async function assignNpuRole(ctx: FleetCtx, nodeId: string): Promise<SLMN
     if (!result.success) {
       throw new Error(result.message)
     }
-    const updatedNode: SLMNode = { ...node, roles: [...node.roles, 'npu-worker'] as NodeRole[] }
-    ctx.state.nodes.value.set(nodeId, updatedNode)
+    // Patch the entry as it is now: a refresh may have replaced it, a delete may have removed it.
+    const current = ctx.state.nodes.value.get(nodeId)
+    const base = current ?? node
+    const updatedNode: SLMNode = { ...base, roles: [...base.roles.filter((r) => r !== 'npu-worker'), 'npu-worker'] as NodeRole[] }
+    if (current) storeNode(ctx, nodeId, updatedNode)
     if (result.detection_triggered) {
       await fetchNpuStatus(ctx, nodeId)
     }
@@ -109,8 +112,10 @@ export async function removeNpuRole(ctx: FleetCtx, nodeId: string): Promise<SLMN
     if (!result.success) {
       throw new Error(result.message)
     }
-    const updatedNode: SLMNode = { ...node, roles: node.roles.filter((r) => r !== 'npu-worker') as NodeRole[] }
-    ctx.state.nodes.value.set(nodeId, updatedNode)
+    const current = ctx.state.nodes.value.get(nodeId)
+    const base = current ?? node
+    const updatedNode: SLMNode = { ...base, roles: base.roles.filter((r) => r !== 'npu-worker') as NodeRole[] }
+    if (current) storeNode(ctx, nodeId, updatedNode)
     ctx.state.npuCapabilities.value.delete(nodeId)
     return updatedNode
   } catch (err) {

@@ -16,6 +16,7 @@ import type {
   NPUWorkerConfig,
   NPUWorkerMetrics,
 } from '@autobot/slm-contract'
+import type { components } from '@autobot/slm-contract/generated'
 import { slmRequest, slmRequestAs } from './transport'
 
 /** What the SLM backend answers when an NPU role is assigned (`NPURoleAssignResponse`). */
@@ -45,15 +46,25 @@ export interface NpuConfigResult {
   config: NPUWorkerConfig
 }
 
+/**
+ * The backend persists a finished detection as `completed` (api/npu.py:201); the UI type calls it
+ * `detected`. Both reads go through this one mapper; `pending`, `failed` and any other value pass
+ * through unchanged.
+ */
+function mapNpuStatus(raw: components['schemas']['NPUNodeStatusResponse']): NPUNodeStatus {
+  const detectionStatus = raw.detectionStatus === 'completed' ? 'detected' : raw.detectionStatus
+  return { ...raw, detectionStatus } as NPUNodeStatus
+}
+
 const nodeParams = (nodeId: string) => ({ params: { node_id: nodeId } })
 
 export async function getNpuNodes(): Promise<NPUNodeStatus[]> {
   const body = await slmRequest('get', '/api/npu/nodes')
-  return body.nodes as NPUNodeStatus[]
+  return body.nodes.map(mapNpuStatus)
 }
 
 export async function getNpuStatus(nodeId: string): Promise<NPUNodeStatus> {
-  return (await slmRequest('get', '/api/npu/nodes/{node_id}/status', nodeParams(nodeId))) as NPUNodeStatus
+  return mapNpuStatus(await slmRequest('get', '/api/npu/nodes/{node_id}/status', nodeParams(nodeId)))
 }
 
 export async function triggerNpuDetection(nodeId: string, force: boolean = false): Promise<NpuDetectionResult> {
