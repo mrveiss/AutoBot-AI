@@ -125,6 +125,7 @@ def _install_stubs(monkeypatch, vault: SimpleNamespace) -> None:
     _module(monkeypatch, "services.auth", require_permission=lambda _permission: _allow)
     _module(monkeypatch, "services.database", get_db=_no_db)
     _module(monkeypatch, "services.encryption", encrypt_data=lambda v: f"ENC[{v}]", decrypt_data=lambda v: v)
+    _load(monkeypatch, "services.llm_default_models", "services/llm_default_models.py")
     _module(monkeypatch, "services.playbook_executor", get_playbook_executor=lambda: None)
     _module(monkeypatch, "autobot_shared")
     _module(monkeypatch, "autobot_shared.auth")

@@ -7,7 +7,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from agents.kb_librarian_agent import KBLibrarianAgent
@@ -50,10 +50,12 @@ async def test_a_non_admin_is_scoped_and_never_audited_as_admin(audit):
 
 
 @pytest.mark.asyncio
-async def test_an_admin_read_is_withheld_when_the_audit_trail_cannot_record_it():
+async def test_an_admin_read_is_refused_with_503_when_the_audit_trail_cannot_record_it():
     kb = FakeKB()
     with patch("services.audit_logger.audit_log", new=AsyncMock(side_effect=RuntimeError("down"))):
-        assert await filter_for_caller(await kb.search(), kb, ADMIN) == []
+        with pytest.raises(HTTPException) as refused:
+            await filter_for_caller(await kb.search(), kb, ADMIN)
+    assert refused.value.status_code == 503  # not an empty 200 that reads as "no facts" (#19860)
 
 
 @pytest.mark.asyncio

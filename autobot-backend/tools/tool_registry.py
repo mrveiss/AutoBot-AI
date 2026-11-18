@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from tools.code_interpreter import execute_code
 from tools.kb_read_tools import KnowledgeReadToolsMixin
+from tools.kb_write_tools import KnowledgeWriteToolsMixin
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
@@ -37,7 +38,7 @@ GET_PROCESS_INFO_VARIANTS = {"getprocessinfo", "systemgetprocessinfo"}
 TERMINATE_PROCESS_VARIANTS = {"terminateprocess", "systemterminateprocess"}
 
 
-class ToolRegistry(KnowledgeReadToolsMixin):
+class ToolRegistry(KnowledgeReadToolsMixin, KnowledgeWriteToolsMixin):
     """
     Unified tool registry that provides standardized tool implementations
     for both orchestrator types, eliminating code duplication.
@@ -396,73 +397,7 @@ class ToolRegistry(KnowledgeReadToolsMixin):
                 "status": "error",
             }
 
-    # Knowledge Base Tools
-
-    async def add_file_to_knowledge_base(
-        self, file_path: str, file_type: str, metadata: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
-        """Add a file to the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {"file_path": file_path, "file_type": file_type},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            result = await kb.add_file(file_path, file_type, metadata or {})
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {
-                    "file_path": file_path,
-                    "file_type": file_type,
-                    "metadata": metadata,
-                },
-                "result": result.get("message", f"File {file_path} added to knowledge base"),
-                "status": result.get("status", "success"),
-            }
-        except Exception as e:
-            self.logger.error("Error adding file to knowledge base: %s", e)
-            return {
-                "tool_name": "add_file_to_knowledge_base",
-                "tool_args": {
-                    "file_path": file_path,
-                    "file_type": file_type,
-                    "metadata": metadata,
-                },
-                "result": f"Error adding file to knowledge base: {e}",
-                "status": "error",
-            }
-
-    async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        """Store a fact in the knowledge base."""
-        kb = await self._resolve_knowledge_base()
-        if not kb:
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": "Knowledge base is not available",
-                "status": "error",
-            }
-
-        try:
-            result = await kb.store_fact(content, {**(metadata or {}), "ingest_route": "agent_tool"})
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": result.get("message", "Fact stored successfully"),
-                "status": result.get("status", "success"),
-            }
-        except Exception as e:
-            self.logger.error("Error storing fact: %s", e)
-            return {
-                "tool_name": "store_fact",
-                "tool_args": {"content": content, "metadata": metadata},
-                "result": f"Error storing fact: {e}",
-                "status": "error",
-            }
+    # Knowledge Base write tools: tools/kb_write_tools.py (#19517)
 
     # GUI Automation Tools
 

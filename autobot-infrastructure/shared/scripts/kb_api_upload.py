@@ -5,7 +5,7 @@
 # Author: mrveiss
 """The ONE uploader that adds documents to a running backend's knowledge base (#19339).
 
-``simple_populate.py`` and ``search_index_utility.py`` each carried a copy of this -- the same
+``simple_populate.py`` and the since-retired ``search_index_utility.py`` (#19700) each carried a copy of this -- the same
 ``add_text`` POST, thread pool and result type, one with a hardcoded backend port, one with
 ``ServiceURLs.BACKEND_LOCAL`` (also ``localhost``) -- and ``upload_docs.py`` was a third (multipart
 ``add_file``). All now post to the SSOT ``config.backend_url``. They now call :func:`upload_docs`; the in-process route (no

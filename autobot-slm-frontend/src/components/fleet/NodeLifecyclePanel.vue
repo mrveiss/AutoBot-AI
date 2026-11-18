@@ -15,14 +15,13 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseButton, PollingPausedAlert } from '@autobot/ui'
+import { BaseButton, PollingPausedAlert, formatDuration, createLogger, createDateFormatter } from '@autobot/ui'
+import { getTimezoneOption } from '@/composables/useTimezone'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatDuration } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
 
@@ -272,18 +271,17 @@ function formatEventType(eventType: string): string {
 
 
 
-function formatFullTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  return (
-    date.toLocaleDateString() +
-    ' ' +
-    date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  )
-}
+const formatFullTime = createDateFormatter({
+  intl: () => ({
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    ...getTimezoneOption(),
+  }),
+})
 
 const DURATION_OPTIONS = { style: 'msSecondsMinutes' } as const
 
@@ -858,7 +856,7 @@ onUnmounted(() => {
             <!-- Time -->
             <td class="px-4 py-3">
               <div class="text-sm text-gray-900">{{ formatFullTime(event.timestamp) }}</div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </td>
 
             <!-- Event Type -->
@@ -928,7 +926,7 @@ onUnmounted(() => {
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
-      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
+      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
     </div>
   </div>
 </template>

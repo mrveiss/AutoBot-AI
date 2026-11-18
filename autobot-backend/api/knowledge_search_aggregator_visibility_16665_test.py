@@ -60,7 +60,10 @@ async def test_multi_source_search_lets_an_admin_read_another_users_private_fact
     }
     kb = _make_kb([others_private])
 
-    with patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)):
+    with (
+        patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):  # the admin read is audited and committed before it returns (#19860)
         result = await search(
             MagicMock(),
             SearchRequest(query="test", include_sources=["facts"]),
@@ -96,7 +99,7 @@ async def test_get_facts_for_graph_with_category_filter_returns_the_owners_own_f
     must still see their own fact through that path."""
     import json
 
-    from api.knowledge_search_aggregator import _get_facts_for_graph
+    from api.knowledge_graph_facts import visible_facts_page
 
     raw_fact = {
         "id": "f1",
@@ -107,8 +110,6 @@ async def test_get_facts_for_graph_with_category_filter_returns_the_owners_own_f
     kb.ownership_manager = KnowledgeOwnership(redis_client=object())
     kb.get_facts_in_category = AsyncMock(return_value={"success": True, "facts": [raw_fact]})
 
-    facts = await _get_facts_for_graph(
-        kb, category_filter="cat1", max_facts=10, user_id="u1", user_org_id=None, user_group_ids=[], is_admin=False
-    )
+    facts = (await visible_facts_page(kb, "cat1", 10, 0, "u1", None, [], False)).facts
 
     assert [f["id"] for f in facts] == ["f1"], f"owner u1 must see their own fact: {facts}"

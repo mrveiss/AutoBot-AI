@@ -163,7 +163,7 @@ function updateEffort() {
 }
 
 .settings-header h3 {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -207,7 +207,7 @@ function updateEffort() {
 }
 
 .setting-description {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-bottom: 0.75rem;
 }
@@ -219,7 +219,7 @@ function updateEffort() {
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -245,7 +245,7 @@ function updateEffort() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
 }

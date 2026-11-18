@@ -27,6 +27,13 @@ import { getConfig, getServiceUrl, getVmIp } from '../config/ssot-config';
 const config = getConfig();
 
 /**
+ * Protocol of the internal services the GUI addresses directly (VNC, NPU worker, Ollama, the
+ * browser worker): plain HTTP on the service network. The backend's own protocol is
+ * `getConfig().httpProtocol` in `config/ssot-config.ts`, which follows the page (#19821).
+ */
+export const INTERNAL_SERVICE_PROTOCOL = 'http' as const
+
+/**
  * Core network constants for AutoBot's distributed infrastructure
  * CRITICAL: All values read from SSOT config (which reads from environment)
  *
@@ -55,7 +62,7 @@ export const NetworkConstants = Object.freeze({
 
   // Standard ports - from SSOT config
   BACKEND_PORT: config.port.backend,
-  FRONTEND_PORT: config.port.frontend,
+  FRONTEND_PORT: config.port.frontendServed,
   REDIS_PORT: config.port.redis,
   OLLAMA_PORT: config.port.ollama,
   VNC_PORT: config.port.vnc,
@@ -80,7 +87,7 @@ export const ServiceURLs = Object.freeze({
 
   // Frontend URLs
   FRONTEND_VM: config.frontendUrl,
-  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontend}`,
+  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontendServed}`,
 
   // Ollama LLM URLs
   OLLAMA_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.ollama}`,

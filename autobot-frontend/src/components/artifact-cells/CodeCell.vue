@@ -245,7 +245,8 @@ onMounted(() => {
 }
 
 .placeholder-content .icon {
-  font-size: 48px;
+  width: 48px;
+  height: 48px;
   color: var(--text-tertiary);
 }
 
@@ -298,7 +299,8 @@ onMounted(() => {
 }
 
 .copy-button .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .code-container {

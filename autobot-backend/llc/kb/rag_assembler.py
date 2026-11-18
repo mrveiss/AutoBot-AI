@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
-from .collections import agent_collection, company_collection, kb_chroma_client, project_collection
+from .collections import company_collection, kb_chroma_client, project_collection
 
 logger = get_logger(__name__)
 
@@ -49,13 +49,15 @@ class LLCContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def _collections_for(company_id: str, project_id: Optional[str], agent_id: Optional[str]) -> List[str]:
-    """Collection names one assemble() call queries: project, agent, company."""
+def _collections_for(company_id: str, project_id: Optional[str]) -> List[str]:
+    """Collection names one assemble() call queries: project, company.
+
+    No agent leg: nothing writes ``agent:<id>``, and agent knowledge arrives with
+    the #19512 buckets (#19579).
+    """
     names = []
     if project_id:
         names.append(project_collection(project_id))
-    if agent_id:
-        names.append(agent_collection(agent_id))
     names.append(company_collection(company_id))
     return names
 
@@ -78,14 +80,14 @@ class LLCRAGAssembler:
     ) -> LLCContext:
         """Run parallel ChromaDB queries and return merged context (GH#8236).
 
-        Queries ChromaDB collections scoped by company, project, and agent.
+        Queries ChromaDB collections scoped by company and project.
         Each query has a ≤800ms timeout target (4 parallel queries → P95 ≤ 2s).
 
         Args:
             company_id: Tenant company identifier.
             profile: Which query profile to use (HEARTBEAT, HANDOFF, SUGGESTION).
             project_id: Optional project scope filter.
-            agent_id: Optional agent scope filter.
+            agent_id: Optional agent; it sets the result count, not which collections are read.
             work_item_id: Optional work item context for relevance ranking.
             query_text: Query text for similarity search (e.g., work item title + description).
 
@@ -99,7 +101,7 @@ class LLCRAGAssembler:
 
             # Determine query parameters based on profile
             query_params = self._get_query_params(profile, project_id, agent_id, query_text)
-            collections_to_query = _collections_for(company_id, project_id, agent_id)
+            collections_to_query = _collections_for(company_id, project_id)
 
             # Query all collections in parallel (each ≤ 800ms target)
             tasks = [

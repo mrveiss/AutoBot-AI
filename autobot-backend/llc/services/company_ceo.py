@@ -31,6 +31,7 @@ from ..models.company_ceo import LLCCompanyCEO
 from ..models.enums import LLCAgentStatus, RoleHolderType
 from ..models.membership import LLCCompanyMembership
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 
 #: The holders a company may designate. Mirrors ``_PLACEABLE`` in
 #: :mod:`llc.services.reporting_line`: a contact is not a member of the
@@ -153,7 +154,7 @@ class CompanyCEOService(LLCServiceBase):
                 )
             )
         if result.scalars().first() is None:
-            raise ValueError(f"{holder_type} {holder_id} is not part of company {company_id}")
+            raise CompanyOsError(f"{holder_type} {holder_id} is not part of company {company_id}")
 
     async def set_ceo(
         self, session: AsyncSession, company_id: uuid.UUID, holder_type: str, holder_id: uuid.UUID
@@ -164,7 +165,7 @@ class CompanyCEOService(LLCServiceBase):
         unique constraint on ``company_id`` would reject a second row anyway.
         """
         if holder_type not in _DESIGNABLE:
-            raise ValueError(f"a {holder_type} cannot hold the CEO position")
+            raise CompanyOsError(f"a {holder_type} cannot hold the CEO position")
         await self._require_in_company(session, company_id, holder_type, holder_id)
 
         row = await self.designation(session, company_id)
@@ -262,6 +263,8 @@ class CompanyCEOService(LLCServiceBase):
                 agent.pause_reason = None
             return agent
 
+        # Exempt from require_approval_for_hires (#8214) on purpose: a company needs its first agent, and no
+        # board exists to approve it until it has one. Only the default CEO is created here, once per company.
         try:
             async with session.begin_nested():
                 agent = AgentOrgNode(

@@ -14,7 +14,7 @@ import { BaseAlert } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type PromptTemplate } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const { t } = useI18n()
 const api = useAutobotApi()
@@ -317,7 +317,7 @@ onMounted(() => {
               <div class="col-span-2">
                 <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.lastModified') }}</span>
                 <span class="ml-2 font-medium text-gray-900">
-                  {{ formatDateTime(selectedPrompt.modified_at ?? null) }}
+                  {{ formatFleetDateTime(selectedPrompt.modified_at ?? null) }}
                 </span>
               </div>
             </div>

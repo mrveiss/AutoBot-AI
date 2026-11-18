@@ -3,8 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
-import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 
 const logger = createLogger('AgentsTool')
 const REFRESH_INTERVAL_MS = 30000
@@ -19,7 +18,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -91,10 +90,6 @@ function getStatusDot(status: string): string {
     case 'stopped': return 'bg-gray-500'
     default: return 'bg-gray-500'
   }
-}
-
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
 }
 
 async function loadAgents(): Promise<void> {
@@ -347,7 +342,7 @@ onMounted(() => refreshPoller.start(''))
 
         <!-- Last Activity -->
         <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDate(agent.last_activity) }) }}</span>
+          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatFleetDateTime(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->

@@ -23,6 +23,7 @@ import llc.api.company_os_plans as plans_api
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.api.company_os_plans import router as plans_router
 from llc.deps import get_session
+from llc.models.activity import LLCActivityLog
 from llc.models.company_os_plan import CompanyOsWorkflowPlan
 from llc.models.enums import MembershipRole
 from llc.models.goal import LLCGoal
@@ -41,6 +42,7 @@ COMPANY_A, COMPANY_B = uuid.uuid4(), uuid.uuid4()
 ADMIN_A, ADMIN_B, MEMBER_A, MEMBER_B = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 PREFIX = "/api/llc/company-os/workflow-plans"
 _TABLES = [
+    LLCActivityLog.__table__,
     Role.__table__,
     LLCCompanyMembership.__table__,
     LLCRoleAssignment.__table__,
@@ -88,7 +90,11 @@ def _client(maker, company: uuid.UUID, user: uuid.UUID) -> httpx.AsyncClient:
             yield s
 
     app.dependency_overrides[get_session] = _session
-    app.dependency_overrides[get_current_user] = lambda: {"id": str(user)}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": str(user),
+        "auth_method": "session",
+        "username": "person",
+    }
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=company, user_id=user, is_platform_admin=False
     )
@@ -436,7 +442,9 @@ async def test_unlabelled_proposed_sub_step_blocks_labeled_then_labels_earn_it(c
     assert gate_now["status"] == "measured" and gate_now["next_status"] == "labeled"
     assert {m["gate"] for m in gate_now["missing"]} == {"G4"}
     assert (await _label(admin))["status"] == "labeled"
-    assert (await admin.get(f"{PREFIX}/intake/gate")).json()["missing"] == []
+    gate_after = (await admin.get(f"{PREFIX}/intake/gate")).json()
+    # labeled is no longer the top (#19936): what is left is the next rung's G5-G7, never G1-G4
+    assert gate_after["next_status"] == "approved" and {m["gate"] for m in gate_after["missing"]} == {"G5", "G6", "G7"}
 
 
 async def test_a_current_sub_step_takes_no_label(ctx):
@@ -551,13 +559,11 @@ async def test_approval_is_cleared_by_any_edit_but_not_by_the_acknowledgement(ct
     assert edited["approved_at"] is None and edited["approved_by"] is None
 
 
-def test_the_ladder_is_ordered_and_leaves_room_for_approved_and_converted():
+def test_the_ladder_is_ordered_and_climbs_to_converted():
     order = list(WorkflowPlanStatus)
     earned = [status for status, _ in STATUS_LADDER]
     assert earned == sorted(earned, key=order.index)
-    assert WorkflowPlanStatus.APPROVED not in earned and order.index(WorkflowPlanStatus.APPROVED) > order.index(
-        earned[-1]
-    )
+    assert earned[-2:] == [WorkflowPlanStatus.APPROVED, WorkflowPlanStatus.CONVERTED]
 
 
 # ------------------------------------------------------------- tenancy, list, delete

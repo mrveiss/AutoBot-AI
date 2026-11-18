@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseButton, createDateFormatter } from '@autobot/ui'
 /**
  * SecretsSettings - System Secrets Management (#1417)
  *
@@ -195,9 +195,7 @@ function cancelEdit(): void {
   editValue.value = ''
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 function categoryLabel(value: string): string {
   return categories.find((c) => c.value === value)?.label || value

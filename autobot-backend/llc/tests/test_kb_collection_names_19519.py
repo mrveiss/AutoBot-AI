@@ -38,13 +38,24 @@ def test_create_and_query_build_the_same_names() -> None:
     created = {
         KbCollectionManager.collection_name(KbCollectionManager.COMPANY_PREFIX, cid),
         KbCollectionManager.collection_name(KbCollectionManager.PROJECT_PREFIX, pid),
-        KbCollectionManager.collection_name(KbCollectionManager.AGENT_PREFIX, aid),
     }
-    queried = set(_collections_for(cid, pid, aid))
+    queried = set(_collections_for(cid, pid))
     assert queried == created
+    assert KbCollectionManager.collection_name(KbCollectionManager.AGENT_PREFIX, aid) == agent_collection(aid)
     assert company_collection(cid) == f"company:{cid}"
     assert project_collection(pid) == f"project:{pid}"
     assert agent_collection(aid) == f"agent:{aid}"
+
+
+@pytest.mark.asyncio
+async def test_assemble_never_queries_the_unwritten_agent_collection_19579() -> None:
+    cid, aid = str(uuid.uuid4()), str(uuid.uuid4())
+    client = AsyncMock()
+    client.get_collection_or_none = AsyncMock(return_value=None)
+    with patch("llc.kb.rag_assembler.kb_chroma_client", new=AsyncMock(return_value=client)):
+        await LLCRAGAssembler().assemble(company_id=cid, profile=AssemblerProfile.HEARTBEAT, agent_id=aid)
+    asked = [call.args[0] for call in client.get_collection_or_none.await_args_list]
+    assert asked == [company_collection(cid)]
 
 
 def test_company_id_parses_back_from_every_company_name() -> None:

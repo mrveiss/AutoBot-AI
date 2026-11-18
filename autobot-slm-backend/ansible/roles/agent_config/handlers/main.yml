@@ -6,8 +6,8 @@
 # Handlers for agent_config role
 
 - name: restart autobot-agent
-  systemd:
-    name: autobot-agent
-    state: restarted
-    daemon_reload: true
   when: create_systemd_service
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-agent
+    restart_unit_daemon_reload: true

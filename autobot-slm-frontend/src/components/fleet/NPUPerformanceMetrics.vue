@@ -12,11 +12,11 @@
  * Issue #590 - NPU Dashboard Improvements.
  */
 
+import { formatFleetTime } from '@/composables/useTimezone'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, BaseSkeleton, formatUptime } from '@autobot/ui'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
-import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 
@@ -123,12 +123,9 @@ onMounted(() => metricsPoller.start(''))
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div class="animate-pulse flex items-center gap-3">
-            <div class="w-10 h-10 bg-gray-200 rounded-lg" />
-            <div class="flex-1 space-y-2">
-              <div class="h-5 bg-gray-200 rounded-sm w-16" />
-              <div class="h-3 bg-gray-200 rounded-sm w-24" />
-            </div>
+          <div class="flex items-center gap-3" role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')">
+            <div class="w-10 shrink-0"><BaseSkeleton shape="block" height="2.5rem" /></div>
+            <div class="flex-1"><BaseSkeleton :lines="2" /></div>
           </div>
         </div>
       </div>
@@ -140,14 +137,7 @@ onMounted(() => metricsPoller.start(''))
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div class="animate-pulse space-y-3">
-            <div class="flex justify-between">
-              <div class="h-4 bg-gray-200 rounded-sm w-32" />
-              <div class="h-4 bg-gray-200 rounded-sm w-16" />
-            </div>
-            <div class="h-2 bg-gray-200 rounded-sm w-full" />
-            <div class="h-2 bg-gray-200 rounded-sm w-3/4" />
-          </div>
+          <div role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')"><BaseSkeleton :lines="3" /></div>
         </div>
       </div>
     </template>
@@ -397,7 +387,7 @@ onMounted(() => metricsPoller.start(''))
               <!-- Last Report -->
               <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
-                  {{ node.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A' }}
+                  {{ node.timestamp ? formatFleetTime(node.timestamp) : 'N/A' }}
                 </p>
                 <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.lastReport') }}</p>
               </div>

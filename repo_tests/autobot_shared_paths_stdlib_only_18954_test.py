@@ -17,6 +17,8 @@ import sys
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _PATHS = repo_root() / "autobot_shared" / "paths.py"
 
 
@@ -31,12 +33,12 @@ def _imported_top_levels(tree: ast.AST) -> set[str]:
 
 
 def test_paths_imports_only_the_standard_library():
-    tree = ast.parse(_PATHS.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_PATHS.read_text(encoding="utf-8"))
     foreign = sorted(_imported_top_levels(tree) - set(sys.stdlib_module_names) - {"__future__"})
     assert foreign == [], f"autobot_shared/paths.py imports non-stdlib modules: {foreign}"
 
 
 def test_the_stdlib_scan_flags_a_third_party_import():
     """Contrast: the same scan over a synthetic module that imports yaml reports it."""
-    tree = ast.parse("import os\nfrom yaml import safe_load\n")
+    tree = parse_cache.parse("import os\nfrom yaml import safe_load\n")
     assert _imported_top_levels(tree) - set(sys.stdlib_module_names) == {"yaml"}

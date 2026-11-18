@@ -143,7 +143,8 @@ defineEmits<Emits>()
 
 .not-integrated .icon {
   color: var(--color-info);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-state {
@@ -152,7 +153,8 @@ defineEmits<Emits>()
 
 .error-state .icon {
   color: var(--color-error);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .integration-stats {
@@ -209,7 +211,7 @@ defineEmits<Emits>()
 
 .command-tag {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-2xl);
   font-size: 0.8rem;
@@ -227,6 +229,7 @@ defineEmits<Emits>()
 }
 
 .loading .icon {
-  font-size: 1.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
 }
 </style>

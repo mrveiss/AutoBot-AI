@@ -360,15 +360,12 @@
                      change it. `.stop` keeps the click from also selecting the
                      node, which would navigate to the workflow builder — the
                      mutation itself is OrgChart.vue's job, reached by event. -->
-                <button
-                  type="button"
-                  class="process-detach-btn"
-                  data-testid="process-detach-btn"
-                  :aria-label="processDetachLabel(node)"
+                <CanvasDetachButton
+                  v-if="detachable"
+                  kind="process"
+                  :label="processDetachLabel(node)"
                   @click.stop="emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id'))"
-                >
-                  <Icon name="times" />
-                </button>
+                />
               </div>
             </template>
             <!-- #14597: a tool one or more roles carry. `roles` is empty
@@ -388,15 +385,12 @@
                   <span class="tool-role-name">{{ role.role_name }}</span>
                   <!-- #14597: mirrors the org-process detach control — `.stop`
                        keeps the click from also selecting the tool node. -->
-                  <button
-                    type="button"
-                    class="tool-detach-btn"
-                    data-testid="tool-detach-btn"
-                    :aria-label="toolDetachLabel(node, role)"
+                  <CanvasDetachButton
+                    v-if="detachable"
+                    kind="tool"
+                    :label="toolDetachLabel(node, role)"
                     @click.stop="emit('tool-detached', role.role_id, nodeText(node, 'tool_name'))"
-                  >
-                    <Icon name="times" />
-                  </button>
+                  />
                 </li>
               </ul>
             </template>
@@ -557,6 +551,7 @@
 
 <script setup lang="ts">
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import CanvasDetachButton from './CanvasDetachButton.vue'
 import { ref, reactive, computed, nextTick, useId, watch, toRaw } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -607,8 +602,10 @@ const props = withDefaults(
     // actually exists in `nodes`. Optional and defaulted to null so every
     // existing mount (WorkflowBuilderView included) is unaffected.
     focusNodeId?: string | null;
+    // #20682: whether the viewer may detach an org attachment (the server 403s all but owner/admin).
+    detachable?: boolean;
   }>(),
-  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null },
+  { readonly: false, tabs: () => [], activeTabId: null, focusNodeId: null, detachable: true },
 );
 const emit = defineEmits<{
   (e: 'node-added', node: WorkflowNode): void;
@@ -2496,14 +2493,14 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
     });
   }
 
-  if (node.type === 'org-process') {
+  if (!props.readonly && props.detachable && node.type === 'org-process') {
     actions.push({
       id: 'detach-process',
       label: processDetachLabel(node),
       run: () => emit('process-detached', nodeText(node, 'role_id'), nodeText(node, 'workflow_id')),
     });
   }
-  if (node.type === 'org-tool') {
+  if (!props.readonly && props.detachable && node.type === 'org-tool') {
     for (const role of toolRoles(node)) {
       actions.push({
         id: `detach-tool-${role.role_id}`,
@@ -2757,7 +2754,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 }
 
 .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: var(--spacing-10); }
-.empty-state .icon { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
+.empty-state > .icon { width: var(--text-5xl); height: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
@@ -2779,24 +2776,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-family: var(--font-family-mono, monospace);
-}
-.process-detach-btn {
-  margin-inline-start: auto;
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.process-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.process-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 /* #14597: a tool node must not read as "another process node" — colour is
    never the only signal (#13941), so the header background AND the border
@@ -2830,23 +2809,6 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .tool-role-name {
   flex: 1;
   font-family: var(--font-family-mono, monospace);
-}
-.tool-detach-btn {
-  padding: var(--spacing-1);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-default);
-  line-height: 1;
-}
-.tool-detach-btn:hover {
-  color: var(--color-error);
-  background: var(--bg-hover);
-}
-.tool-detach-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 /* #14612: multi-select status chip — mirrors `.rule-mode`'s existing

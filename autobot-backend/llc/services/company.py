@@ -24,10 +24,11 @@ from llc.models.contact import LLCContact
 from llc.models.enums import LLCCompanyStatus
 from user_management.models.organization import Organization
 
-from .authz import NotAuthorisedError, may_attach_under, require_company_admin
+from .authz import NotAuthorisedError, may_attach_under, require_company_admin, require_company_admin_unless_platform
 from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
 from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
+from .company_os.errors import CompanyOsError
 
 logger = get_logger(__name__)
 
@@ -100,6 +101,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
             budget_monthly_cents=data.budget_monthly_cents,
             brand_color=data.brand_color,
             require_approval_for_hires=data.require_approval_for_hires,
+            require_approval_for_budget_raises=data.require_approval_for_budget_raises,
             llc_status=data.llc_status.value,
         )
         self.session.add(org)
@@ -141,6 +143,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         Every other field keeps "``None`` means unchanged".
         """
         org = await self._apply_parent_change(await self._get_or_404(company_id), data, actor_user_id, platform_admin)
+        await self._require_gate_admin(org, data, actor_user_id, platform_admin)
         await self._assert_fields_fit(org, data)
         for field, value in data.model_dump(exclude_none=True, exclude={"parent_org_id"}).items():
             setattr(org, field, value.value if isinstance(value, LLCCompanyStatus) else value)
@@ -161,6 +164,25 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         if "parent_org_id" not in data.model_fields_set or data.parent_org_id == org.parent_org_id:
             return org
         return await self.move(org.id, data.parent_org_id, actor_user_id=actor_user_id, platform_admin=platform_admin)
+
+    async def _require_gate_admin(
+        self, org: Organization, data: CompanyUpdate, actor_user_id: Optional[uuid.UUID], platform_admin: bool
+    ) -> None:
+        """Changing a ``require_approval_for_*`` gate is the board's call, not any member's (#8214).
+
+        A member who could switch the gate off could then hire without approval. A value equal to the
+        current one changes nothing, so a form that re-sends it does not make a member's edit a 403.
+        """
+        changed = any(
+            wanted is not None and wanted != getattr(org, field)
+            for field, wanted in (
+                ("require_approval_for_hires", data.require_approval_for_hires),
+                ("require_approval_for_budget_raises", data.require_approval_for_budget_raises),
+            )
+        )
+        if not changed:
+            return
+        await require_company_admin_unless_platform(self.session, org.id, actor_user_id, platform_admin=platform_admin)
 
     async def _assert_fields_fit(self, org: Organization, data: CompanyUpdate) -> None:
         """Prefix uniqueness, and the budget against the parent the org now has (after any move)."""
@@ -372,7 +394,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         """
         org = await self._get_or_404(company_id)
         if org.llc_status not in allowed_from:
-            raise ValueError(
+            raise CompanyOsError(
                 f"Cannot {verb} company in '{org.llc_status}' state "
                 f"(allowed from: {', '.join(sorted(allowed_from))})"
             )

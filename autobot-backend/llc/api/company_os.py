@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import get_session
 from llc.models.company_os_enums import WorkflowKind
 from llc.services.authz import NotAuthorisedError
@@ -58,17 +59,17 @@ _graphs = GraphService()
 
 
 def http_error(exc: Exception) -> HTTPException:
-    """Map a service error to its status: 404 / 409 / 422 / 403 / 400."""
+    """Map a service error to its status: 404 / 409 / 422 / 403 / 400; text only via ``public_detail`` (#21579)."""
     if isinstance(exc, NotAuthorisedError):
-        return HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc))
+        return http_refusal(status.HTTP_403_FORBIDDEN, exc, scope="company_os.http_error")
     if isinstance(exc, CompanyOsNotFound):
-        return HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc))
+        return http_refusal(status.HTTP_404_NOT_FOUND, exc, scope="company_os.http_error")
     if isinstance(exc, CompanyOsConflict):
-        return HTTPException(status.HTTP_409_CONFLICT, detail=str(exc))
+        return http_refusal(status.HTTP_409_CONFLICT, exc, scope="company_os.http_error")
     if isinstance(exc, GraphInvalid):
         return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": exc.errors})
     if isinstance(exc, CompanyOsError):
-        return HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return http_refusal(status.HTTP_400_BAD_REQUEST, exc, scope="company_os.http_error")
     raise exc
 
 

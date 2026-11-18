@@ -13,7 +13,7 @@
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
 import { getSlmApiBase } from '@/config/ssot-config'
 import {
@@ -32,6 +32,7 @@ import {
 } from '@/composables/useSsoApi'
 import PasswordChangeForm from '@shared/components/PasswordChangeForm.vue'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import PersonPushFailuresAlert from './PersonPushFailuresAlert.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -454,11 +455,6 @@ async function refreshActiveTab(): Promise<void> {
   else await loadTeams()
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never'
-  return formatDateTime(dateStr)
-}
-
 // ===========================================================================
 // Lifecycle
 // ===========================================================================
@@ -481,11 +477,10 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
 <template>
   <div class="p-6 space-y-6">
-    <!-- Messages -->
+    <PersonPushFailuresAlert />
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.userManagementSettings.dismissError')" @dismiss="error = null" />
 
     <BaseAlert v-if="success" variant="success" :message="success" />
-
     <!-- Authentication Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.authenticationStatus') }}</h2>
@@ -638,7 +633,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -705,7 +700,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -758,7 +753,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <tr v-for="team in teams" :key="team.id" class="border-b border-gray-100 hover:bg-gray-50">
                 <td class="py-3 px-4 text-sm font-medium text-gray-900">{{ team.name }}</td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ team.description || '-' }}</td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(team.created_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(team.created_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <button @click="deleteTeam(team.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -814,7 +809,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ provider.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
                     <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">

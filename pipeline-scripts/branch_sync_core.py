@@ -58,6 +58,11 @@ _ISSUE_REF = re.compile(r"#\d+")
 SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workflow-push-refused"
 HEAD_MOVED, FORK, ERROR, UNREACHABLE = "head-moved", "fork-skipped", "error", "unreachable"
 OTHER_BASE, POLICY = "other-base", "excluded-by-policy"
+NO_OPEN_PR = "no-open-pr"
+PUSH_IN_PROGRESS = "push-in-progress"
+
+#: A pre-push hook marks its branch under here while its gate runs (#20260).
+PUSH_MARKER_PREFIX = "refs/push-gate/"
 
 
 def merge_message(branch: str, base: str = "main") -> str:
@@ -68,6 +73,67 @@ def merge_message(branch: str, base: str = "main") -> str:
     commit carrying it. That is what keeps a sync at zero CI (#19548).
     """
     return f"Merge {base} into {branch} (auto-sync) [skip ci]"
+
+
+#: The one request that starts a suite on a synced head (#21577). The subject is fixed text plus the PR number
+#: in the issue-reference position the commit-subject rule needs; it carries no skip marker and no trailer.
+START_CI_SUBJECT = "chore(ci): start the suite on the synced head"
+SKIP_MARKER = "[skip ci]"
+SUITE_WORKFLOW_PATH = ".github/workflows/ci.yml"
+#: A run that never produced a verdict does not count as "the suite already started".
+RUNS_THAT_STARTED_NOTHING = frozenset({"cancelled", "skipped", "startup_failure"})
+_PR_NUMBER = re.compile(r"[1-9][0-9]{0,8}")
+
+
+def parse_pr_number(text: str) -> Optional[int]:
+    """The pull request number in *text* (an untrusted dispatch input): ASCII digits only, else None."""
+    return int(text) if _PR_NUMBER.fullmatch(text or "") else None
+
+
+def start_ci_message(number: int) -> str:
+    """The subject of the one empty commit that starts the suite; never the skip marker, never a trailer."""
+    return f"{START_CI_SUBJECT} (#{number})"
+
+
+def refuse_start_ci(pull: Dict[str, Any], repository: str, base: str, behind: Optional[int], local_head: str) -> str:
+    """Why a suite may NOT be started for this PR, or "" when it may.
+
+    Only an open, non-draft, same-repo PR into ``base`` whose branch is a sync target, is 0 behind ``base``
+    and whose head is the commit this run fetched. A branch behind ``base`` is refused, not merged first:
+    the ordinary sync merges it, then the request is made again.
+    """
+    head, number = pull.get("head") or {}, pull.get("number")
+    if pull.get("state") != "open":
+        return f"#{number} is not open"
+    if _is_fork(pull, repository):
+        return f"#{number} comes from a fork; nothing is ever pushed to a fork"
+    if (pull.get("base") or {}).get("ref") != base:
+        return f"#{number} does not target {base}"
+    if pull.get("draft"):
+        return f"#{number} is a draft; mark it ready for review first"
+    if _policy_bucket(head.get("ref", "")):
+        return f"#{number} is on branch {code(head.get('ref', ''))}, which the sync never writes to"
+    if behind is None or behind > 0:
+        count = "an unknown number of" if behind is None else str(behind)
+        return f"#{number} is {count} commit(s) behind {base}: let the sync merge it first, then ask again"
+    if not local_head or local_head != head.get("sha"):
+        return f"#{number}: its head is not the commit this run fetched (the branch moved); ask again"
+    return ""
+
+
+def suite_already_started(runs: Sequence[Dict[str, Any]], sha: str) -> bool:
+    """True when ``sha`` already has a ``pull_request`` run of the suite, in progress or completed.
+
+    A run counts when it is for exactly ``sha``, of the suite workflow, started by ``pull_request``, and is
+    not one that produced nothing (cancelled, skipped, failed to start). In progress has no conclusion yet.
+    """
+    return any(
+        run.get("head_sha") == sha
+        and run.get("event") == "pull_request"
+        and str(run.get("path") or "").startswith(SUITE_WORKFLOW_PATH)
+        and run.get("conclusion") not in RUNS_THAT_STARTED_NOTHING
+        for run in runs
+    )
 
 
 def classify_merge(returncode: int, output: str, unmerged: Sequence[str]) -> str:
@@ -168,20 +234,32 @@ def _plan_pulls(plan: Plan, pulls: Sequence[Dict[str, Any]], repository: str, ba
 
 
 def plan_run(pulls: Sequence[Dict[str, Any]], branches: Iterable[str], repository: str, base: str = "main") -> Plan:
-    """Every target for one run: same-repo PRs into ``base`` oldest first, then PR-less branches.
+    """Every target for one run: same-repo PRs into ``base``, oldest first. Nothing else (#20261).
 
-    A same-repo PR into another base is never merged into AND never treated as
-    parked: either would put main into a branch whose PR says it belongs elsewhere.
+    A branch with no open PR is skipped: merging main into one whose PR had closed made it look
+    ahead of main forever with nothing of its own. A same-repo PR into another base is never merged
+    into either: that would put main into a branch whose PR says it belongs elsewhere.
     """
     plan = Plan()
     claimed = _plan_pulls(plan, pulls, repository, base)
     for branch in sorted(set(branches) - claimed):
-        bucket = _policy_bucket(branch)
-        if bucket:
-            plan.skip(bucket, f"{code(branch)} (no PR)")
-        else:
-            plan.targets.append(SyncTarget(branch))
+        plan.skip(_policy_bucket(branch) or NO_OPEN_PR, f"{code(branch)} (no PR)")
     return plan
+
+
+def branches_being_pushed(ls_remote: str, now: float) -> set:
+    """Branches holding a live push marker, from ``git ls-remote`` output (#20260).
+
+    A marker is ``refs/push-gate/<branch>/<expiry epoch>``. An expired one, or one that does not
+    parse, is ignored, so a hook that died cannot hold a branch back for longer than its limit.
+    """
+    live = set()
+    for line in ls_remote.splitlines():
+        ref = line.split("\t")[-1]
+        branch, _, expiry = ref[len(PUSH_MARKER_PREFIX) :].rpartition("/")
+        if ref.startswith(PUSH_MARKER_PREFIX) and branch and expiry.isdigit() and int(expiry) > now:
+            live.add(branch)
+    return live
 
 
 def labels_to_clear(labels: Iterable[str]) -> List[str]:

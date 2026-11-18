@@ -46,6 +46,14 @@ class _Redis:
                 return 0
             self.hashes[key]["state"] = "settling"
             return 1
+        if script == sw._SET_IF_OWNER_LUA:
+            if args[0] == "":
+                if key not in self.hashes:
+                    return 0
+            elif self.hashes.get(key, {}).get("owner") != args[0]:
+                return 0
+            self.hashes[key].update(dict(zip(args[1::2], args[2::2])))
+            return 1
         raise AssertionError(f"unexpected script {script!r}")
 
     async def exists(self, key):
@@ -321,6 +329,15 @@ async def test_a_stale_build_does_not_block_a_new_start(env, monkeypatch):
     assert (await sw.start_switch(_kb(), MODEL))["state"] == "building"
 
 
+async def test_the_owner_is_the_shared_unique_worker_identity(env, monkeypatch):
+    """#21518: the owner in the state hash and the claim is the helper's per-instance identity."""
+    monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
+    monkeypatch.setattr(sw, "worker_identity", lambda *, unique=False: "host-3-9:ab12cd34" if unique else "host-3-9")
+    status = await sw.start_switch(_kb(), MODEL)
+    assert status["owner"] == "host-3-9:ab12cd34"
+    assert env.claims.holder() == "host-3-9:ab12cd34"
+
+
 async def test_each_attempt_writes_a_new_collection(env, monkeypatch):
     """A→B→A must not reopen the abandoned A collection."""
     monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
@@ -513,3 +530,33 @@ def test_the_target_collection_name_fits_chromadb():
     name = sw.target_collection("autobot_memory", "BAAI/bge-small-en-v1.5:latest", "0123456789abcdef")
     assert name == "autobot_memory__baai_bge_small_en_v1_5_lates__01234567"
     assert 3 <= len(name) <= 63 and name[0].isalnum() and name[-1].isalnum()
+
+
+async def test_an_unavailable_registry_reads_lock_unknown_not_stale_or_a_500(env, monkeypatch):
+    await sw._set_state(state="building", model=MODEL, collection="c")
+
+    async def _down():
+        raise work_claims.ClaimUnavailable("down")
+
+    monkeypatch.setattr(sw.lock, "holder", _down)
+    status = await sw.switch_status()
+    assert status["state"] == "building" and status["lock_unknown"] is True
+
+
+async def test_a_readable_registry_does_not_report_lock_unknown(env):
+    await sw._set_state(state="building", model=MODEL, collection="c")
+    assert "lock_unknown" not in await sw.switch_status()
+
+
+async def test_a_failed_release_cannot_mask_the_start_error(env, monkeypatch, caplog):
+    async def _state_fails(**fields):
+        raise ValueError("the real error")
+
+    async def _down(owner):
+        raise work_claims.ClaimUnavailable("down")
+
+    monkeypatch.setattr(sw, "_set_state", _state_fails)
+    monkeypatch.setattr(sw.lock, "release", _down)
+    with pytest.raises(ValueError, match="the real error"):
+        await sw.start_switch(_kb(), MODEL)
+    assert "could not release its claim" in caplog.text

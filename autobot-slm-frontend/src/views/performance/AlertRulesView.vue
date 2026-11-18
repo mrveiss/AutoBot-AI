@@ -12,7 +12,7 @@
 
 import { ref, onMounted } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { AlertRule } from '@/composables/usePerformanceMonitoring'
 import { BaseAlert, BaseModal } from '@autobot/ui'
 
@@ -114,7 +114,7 @@ function formatCondition(condition: string): string {
 }
 
 function formatLastTriggered(dateStr: string | null): string {
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 
 /**

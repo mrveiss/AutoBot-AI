@@ -94,7 +94,7 @@ sudo ./install.sh
 sudo ./install.sh --unattended
 
 # Custom admin password + specific branch
-sudo ./install.sh --admin-pass=MySecurePass --branch=main
+sudo ./install.sh --admin-pass-file=/path/to/password-file --branch=main
 
 # Multi-interface host: specify which IP to bind
 sudo ./install.sh --ip=192.168.1.100

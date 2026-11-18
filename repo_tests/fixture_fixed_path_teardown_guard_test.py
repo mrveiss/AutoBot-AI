@@ -134,6 +134,8 @@ from repo_tests.fixture_fixed_path_teardown_guard import (
     _scan_repo,
 )
 
+from tools.lint import _parse_cache as parse_cache
+
 
 @pytest.fixture(scope="module")
 def scan_result():
@@ -186,7 +188,7 @@ class TestKnownInertPlaceholdersStayUnflagged:
         needle_line = next(i + 1 for i, line in enumerate(source.splitlines()) if needle in line)
         fixture_lines = {
             lineno
-            for func in _iter_pytest_fixtures(ast.parse(source))
+            for func in _iter_pytest_fixtures(parse_cache.parse(source))
             for lineno in (getattr(n, "lineno", None) for n in ast.walk(func))
             if lineno is not None
         }
@@ -214,6 +216,6 @@ class TestRealFixtureRegressionPins:
     )
     def test_mcp_security_fixtures_are_classified_correctly(self, fixture_name, expected_violation):
         path = _REPO / "autobot-backend" / "mcp_server" / "mcp_security_test.py"
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         (func,) = (f for f in _iter_pytest_fixtures(tree) if f.name == fixture_name)
         assert _is_violation(func) is expected_violation

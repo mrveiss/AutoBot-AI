@@ -59,6 +59,7 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import strip_trailing_comment
 
 _SCANNED_SUFFIXES = (".yml", ".yaml", ".sh", ".py")
@@ -139,7 +140,7 @@ def _python_dpkg_strings(text: str) -> List[Tuple[int, str]]:
     `f"dpkg -l | grep {pkg}"` carries the pattern across a placeholder.
     """
     try:
-        tree = ast.parse(text)
+        tree = parse_cache.parse(text)
     except (SyntaxError, ValueError):
         return []
     docstring_nodes = set()
@@ -270,10 +271,10 @@ DPKG_LIST_CALL_SITES = declare(
     what="`dpkg -l` invocations in shell/YAML lines and Python strings (#17387, #17411)",
 )
 
-#: 8 today: the four rewritten by #17387 (postgresql, grafana, redis,
+#: 6 today: the four rewritten by #17387 (postgresql, grafana, redis,
 #: disable-idle-nginx), check-system-updates' ESM version lookup,
-#: decommission-node's `^ii`-anchored check, and the two Grafana presence checks
-#: #19329 added (slm_manager, migrate-grafana-to-vm). Floor 4 rather than 3: at 3 the
+#: and decommission-node's `^ii`-anchored check; #19661 folded the two Grafana
+#: presence checks #19329 added into the one install. Floor 4 rather than 3: at 3 the
 #: window was exactly the growth allowance, so a single removal reddened it.
 DPKG_REGISTRATIONS = declare(
     "dpkg-ansible-registrations",
@@ -282,7 +283,7 @@ DPKG_REGISTRATIONS = declare(
     # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
     # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
     # the commit message, which cannot drift from the tree it describes.
-    floor=7,
+    floor=5,
     growth=3,
     what="ansible tasks registering the result of a dpkg query (#17387)",
 )

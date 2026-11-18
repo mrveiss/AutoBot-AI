@@ -16,16 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.security.redaction import safe_log_text
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
-from llc.models.goal import LLCGoal
 from llc.services.portability_ceo import mint_agent_ids, settle_imported_ceo
 from llc.services.portability_export import PortabilityExportMixin, _scrub_adapter_config
 from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
 from user_management.models.organization import Organization
 
+from ..exceptions import PublicMessageMixin, refusal_text_keeping_public_reason
 from .activity_log import LLCActivityLogService
+from .actor import resolve_actor
 from .base import LLCServiceBase
 
 logger = get_logger(__name__)
@@ -40,8 +42,16 @@ _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 # ---------------------------------------------------------------------------
 
 
-class TemplateImportError(Exception):
-    """Raised when import cannot proceed (schema, collision, rollback)."""
+class ImportNeedsApprovalError(PublicMessageMixin, Exception):
+    """The template would add agents to an existing company that gates hires (#8214)."""
+
+
+class TemplateImportError(PublicMessageMixin, Exception):
+    """Raised when import cannot proceed (schema, collision, rollback).
+
+    Public: every raise site is a fixed text or names a value the caller supplied. A rollback never carries
+    the wrapped cause's text; the cause is logged where it is caught.
+    """
 
 
 class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServiceBase):
@@ -223,6 +233,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         # and this has to be renderable in every shipped locale.
         dropped_links: List[Dict[str, str]] = []
 
+        await self._refuse_agents_into_gated_company(template, target_company_id)
         sp = await self.session.begin_nested()
         try:
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
@@ -266,32 +277,21 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
                 else:
                     skipped["goals"].append(goal.get("title", ""))
 
-            # projects
-            for project in template.get("projects", []):
-                project_id = await self._import_project(project, company_id)
-                if project_id:
-                    created_entities["projects"].append(str(project_id))
-
-            # seed work items
-            for item in template.get("work_items", []):
-                if not item.get("is_seed"):
-                    continue
-                item_id = await self._import_work_item(item, company_id)
-                if item_id:
-                    created_entities["work_items"].append(str(item_id))
-                else:
-                    skipped["work_items"].append(item.get("title", ""))
+            # projects, then work items (parents first)
+            skipped_items = await self._import_work(template, company_id, created_entities, skipped, warnings)
 
             await sp.commit()
         except Exception as exc:
             await sp.rollback()
-            raise TemplateImportError(f"Import rolled back: {exc}") from exc
+            logger.warning("Template import rolled back: %s: %s", type(exc).__name__, safe_log_text(exc))
+            raise TemplateImportError(refusal_text_keeping_public_reason(exc, "Import rolled back")) from exc
 
         return {
             "company_id": str(company_id),
             "created_entities": created_entities,
             "skipped": skipped,
             "dropped_reporting_lines": dropped_links,
+            "skipped_work_items": skipped_items,
             "warnings": warnings,
         }
 
@@ -346,18 +346,24 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         )
         self.session.add(artifact)
 
-        if self.activity_log:
-            event_type = (
-                ActivityEventType.COMPANY_EXPORT_TEMPLATE
-                if export_kind == "template"
-                else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
-            )
-            await self.activity_log.append(
-                session=self.session,
-                company_id=company_id,
-                event_type=event_type,
-                after={"artifact_id": str(artifact_id), "storage_path": storage_path},
-            )
+        event_type = (
+            ActivityEventType.COMPANY_EXPORT_TEMPLATE
+            if export_kind == "template"
+            else ActivityEventType.COMPANY_EXPORT_SNAPSHOT
+        )
+        who = resolve_actor(user_id=actor)
+        await self.activity_log.record(
+            self.session,
+            company_id=str(company_id),
+            actor_type=who.type,
+            actor_id=who.id,
+            metadata=who.metadata(),
+            event_type=event_type,
+            entity_type="company",
+            entity_id=str(company_id),
+            # The artifact id and where it sits, never the exported payload.
+            after={"artifact_id": str(artifact_id), "storage_path": storage_path},
+        )
 
         return artifact_id
 
@@ -384,18 +390,33 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             )
         return [r[0] for r in rows]
 
-    async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
-        if not titles:
-            return []
-        q = select(LLCGoal.title).where(LLCGoal.title.in_(titles))
-        if company_id is not None:
-            q = q.where(LLCGoal.company_id == str(company_id))
-        result = await self.session.execute(q)
-        return [r[0] for r in result]
-
     # ------------------------------------------------------------------
     # Private helpers — entity creation
     # ------------------------------------------------------------------
+
+    async def _refuse_agents_into_gated_company(
+        self, template: Dict[str, Any], target_company_id: Optional[uuid.UUID]
+    ) -> None:
+        """An import into an EXISTING company that requires hire approval may not add agents (#8214).
+
+        Exempt on purpose: an import that creates its own company (no ``target_company_id``). That is the
+        admin bootstrapping a company, and the setting it carries comes from the template, so there is no
+        board yet to approve anything. Its default CEO is exempt for the same reason as in ``company_ceo``.
+        """
+        names = [a.get("name", "") for a in template.get("agents") or []]
+        if target_company_id is None or not names:
+            return
+        from llc.services.agent_hire_service import company_requires_hire_approval  # noqa: PLC0415
+
+        # An agent already in the company is skipped by the import, so it adds no hire.
+        existing = set(await self._agent_names_exist(names, target_company_id))
+        if existing.issuperset(names):
+            return
+        if await company_requires_hire_approval(self.session, target_company_id):
+            raise ImportNeedsApprovalError(
+                f"Company {target_company_id} requires board approval for hires; import without agents "
+                "or request each hire through the agent-hires route"
+            )
 
     async def _resolve_or_create_company(
         self,
@@ -422,6 +443,11 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             meta.get("require_approval_for_hires", False),
         )
 
+        require_budget_approval = remapping_options.get(
+            "require_approval_for_budget_raises",
+            meta.get("require_approval_for_budget_raises", False),
+        )
+
         org = Organization(
             id=uuid.uuid4(),
             name=meta.get("name", "Imported Company"),
@@ -431,6 +457,7 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             budget_monthly_cents=meta.get("budget_monthly_cents", 0),
             brand_color=meta.get("brand_color"),
             require_approval_for_hires=require_approval,
+            require_approval_for_budget_raises=require_budget_approval,
             llc_status=LLCCompanyStatus.ONBOARDING.value,
             settings={},
             issue_counter=0,
@@ -562,4 +589,4 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
             raise TemplateImportError(f"Unsupported schema_version {version!r}; expected '1.0'")
 
 
-__all__ = ["PortabilityService", "TemplateImportError", "_scrub_adapter_config"]
+__all__ = ["PortabilityService", "TemplateImportError", "ImportNeedsApprovalError", "_scrub_adapter_config"]

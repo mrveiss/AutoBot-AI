@@ -26,6 +26,7 @@ import {
 
 export { toNPUWorker }
 export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
+import type { AuditQueryResponse } from '@autobot/ui'
 import type * as LF from '@/composables/autobotAdminModels'
 import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
 export type { AgentConfigSummary, MCPServer, PermissionRule }
@@ -99,14 +100,6 @@ export interface SharedLinksAdminResponse {
   success: boolean
   data: { links: SharedLinkAdminItem[]; count: number }
   message: string
-}
-
-export interface RUMMetrics {
-  page_views: number
-  unique_users: number
-  avg_load_time_ms: number
-  error_count: number
-  timestamp: string
 }
 
 export interface VoiceSpeakResponse {
@@ -219,8 +212,8 @@ export interface OrphanRepairResponse {
   after: Record<string, unknown>
 }
 
-/** `services/audit_logger.py::AuditResult` (`Literal["success", "denied", "failed", "error"]`). */
-export type AuditResultValue = 'success' | 'denied' | 'failed' | 'error'
+/** `services/audit_logger.py::AuditResult` (`Literal["success", "denied", "failed", "error", "attempted"]`). */
+export type AuditResultValue = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
  * One row of GET /audit/logs (`AuditLogEntry.to_response_dict()` in
@@ -245,13 +238,6 @@ export interface AuditLogEntry {
   performance_ms: number | null
 }
 
-export interface AuditQueryResponse {
-  success: boolean
-  total_returned: number
-  has_more: boolean
-  entries: AuditLogEntry[]
-  query: Record<string, unknown>
-}
 
 // =============================================================================
 // Advanced Control (#12653) — desktop streaming + human takeover.
@@ -796,15 +782,6 @@ export function useAutobotApi() {
     return response
   }
 
-  // No route updates a rule (#18736 decides): delete and re-create it instead.
-  async function updatePermissionRule(
-    id: string,
-    data: Partial<PermissionRule>
-  ): Promise<PermissionRule> {
-    const response = await client.patch<PermissionRule>(`/permissions/rules/${id}`, data)
-    return response
-  }
-
   async function deletePermissionRule(rule: Pick<PermissionRule, 'tool' | 'pattern'>): Promise<void> {
     await client.delete('/permissions/rules', { body: rule })
   }
@@ -831,18 +808,6 @@ export function useAutobotApi() {
     }))
   }
 
-  async function getPromptTemplate(id: string): Promise<PromptTemplate> {
-    const response = await client.get<PromptTemplate>(`/prompts/${id}`)
-    return response
-  }
-
-  async function createPromptTemplate(
-    template: Omit<PromptTemplate, 'id' | 'modified_at'>
-  ): Promise<PromptTemplate> {
-    const response = await client.post<PromptTemplate>('/prompts', template)
-    return response
-  }
-
   async function updatePromptTemplate(
     id: string,
     data: Partial<PromptTemplate>
@@ -850,10 +815,6 @@ export function useAutobotApi() {
     // Backend exposes PUT /api/prompts/:id (also POST) — PATCH is not supported (Issue #11555)
     const response = await client.put<PromptTemplate>(`/prompts/${id}`, data)
     return response
-  }
-
-  async function deletePromptTemplate(id: string): Promise<void> {
-    await client.delete(`/prompts/${id}`)
   }
 
   async function revertPromptToDefault(id: string): Promise<PromptTemplate> {
@@ -964,11 +925,6 @@ export function useAutobotApi() {
     return response
   }
 
-  async function updateAgent(id: string, data: Partial<Agent>): Promise<Agent> {
-    const response = await client.patch<Agent>(`/agents/${id}`, data)
-    return response
-  }
-
   async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
     const response = await client.get<Record<string, unknown>[]>('/agent/agents/available')
     return response
@@ -997,19 +953,6 @@ export function useAutobotApi() {
   // =============================================================================
   // RUM (Real User Monitoring) API
   // =============================================================================
-
-  async function getRUMMetrics(options?: {
-    start?: string
-    end?: string
-    interval?: string
-  }): Promise<RUMMetrics[]> {
-    const params = new URLSearchParams()
-    if (options?.start) params.append('start', options.start)
-    if (options?.end) params.append('end', options.end)
-    if (options?.interval) params.append('interval', options.interval)
-    const response = await client.get<{ metrics: RUMMetrics[] }>(`/rum/metrics?${params}`)
-    return response.metrics
-  }
 
   // =============================================================================
   // Voice API
@@ -1134,37 +1077,18 @@ export function useAutobotApi() {
     operation?: string
     limit?: number
     offset?: number
-  }): Promise<AuditQueryResponse> {
+  }): Promise<AuditQueryResponse<AuditLogEntry>> {
     const params = new URLSearchParams()
     if (options?.operation) params.append('operation', options.operation)
     if (options?.limit) params.append('limit', String(options.limit))
     if (options?.offset) params.append('offset', String(options.offset))
-    const response = await client.get<AuditQueryResponse>(`/audit/logs?${params}`)
+    const response = await client.get<AuditQueryResponse<AuditLogEntry>>(`/audit/logs?${params}`)
     return response
   }
 
   // =============================================================================
   // Logs API (for viewing, not forwarding)
   // =============================================================================
-
-  async function getLogs(options?: {
-    source?: string
-    level?: string
-    search?: string
-    limit?: number
-    offset?: number
-  }): Promise<Array<{ timestamp: string; level: string; message: string; source: string }>> {
-    const params = new URLSearchParams()
-    if (options?.source) params.append('source', options.source)
-    if (options?.level) params.append('level', options.level)
-    if (options?.search) params.append('search', options.search)
-    if (options?.limit) params.append('limit', options.limit.toString())
-    if (options?.offset) params.append('offset', options.offset.toString())
-    const response = await client.get<{
-      logs: Array<{ timestamp: string; level: string; message: string; source: string }>
-    }>(`/logs?${params}`)
-    return response.logs
-  }
 
   // =============================================================================
   // System Monitoring API
@@ -1842,14 +1766,10 @@ export function useAutobotApi() {
     // Permissions
     getPermissionRules,
     createPermissionRule,
-    updatePermissionRule,
     deletePermissionRule,
     // Prompts
     getPromptTemplates,
-    getPromptTemplate,
-    createPromptTemplate,
     updatePromptTemplate,
-    deletePromptTemplate,
     revertPromptToDefault,
     // Files
     listFiles,
@@ -1870,14 +1790,12 @@ export function useAutobotApi() {
     // Agents (Issue #835)
     getAgent,
     getAgents,
-    updateAgent,
     getAvailableAgents,
     getAgentsStatus,
     pauseAgent,
     resumeAgent,
     executeAgentGoal,
     // RUM
-    getRUMMetrics,
     // Shared Chat Links (GH#8996)
     getSharedLinksAdmin,
     // Voice (Issue #835)
@@ -1899,7 +1817,6 @@ export function useAutobotApi() {
     repairOrphan,
     getAuditLogs,
     // Logs
-    getLogs,
     // System
     getSystemHealth,
     getSystemMetrics,

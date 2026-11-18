@@ -295,13 +295,14 @@
 </template>
 
 <script setup lang="ts">
+import { formatLocalTime, isoDateStamp } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, saveTextFile } from '@autobot/ui'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -339,6 +340,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { approvalErrorMessage } from '@/utils/approvalResult'
 import { createSpeechShaper, createTtsStream } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
@@ -402,7 +404,7 @@ const contextWindowProps = computed(() => ({
   usagePercent: _ctxWindow.usagePercent.value,
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
-  hasData: _ctxWindow.hasData.value,
+  hasData: _ctxWindow.hasData.value, loadError: _ctxWindow.loadError.value,
   isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
 
@@ -741,7 +743,7 @@ const sessionInfo = computed(() => {
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
-  const lastMessageTime = lastMessage ? new Date(lastMessage.timestamp).toLocaleTimeString() : null
+  const lastMessageTime = lastMessage ? formatLocalTime(lastMessage.timestamp) : null
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
@@ -750,7 +752,6 @@ const sessionInfo = computed(() => {
 
   return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
-
 
 // Methods
 
@@ -773,13 +774,8 @@ const exportSession = async () => {
       exportedAt: new Date().toISOString()
     }
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `chat-${session.title || session.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    const name = `chat-${session.title || session.id.slice(-8)}-${isoDateStamp()}.json`
+    saveTextFile(JSON.stringify(data, null, 2), name, 'application/json')
 
   } catch (error) {
     logger.error('Failed to export session:', error)
@@ -972,12 +968,9 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`)
-      }
-
-      await response.json()
-
+      if (!response.ok) throw new Error(`Server returned ${response.status}`)
+      const refusal = approvalErrorMessage(await response.json(), t)
+      if (refusal) { notify(refusal, 'error'); return } // 200 can carry a refusal: still pending (#21174)
       logger.debug('Command denied with user feedback/alternative approach')
       notify(t('chat.interface.feedbackSent'), 'success')
     }
@@ -1493,7 +1486,7 @@ watch(
   background: var(--color-warning-bg);
   border-bottom: 1px solid var(--color-warning-border);
 }
-.tool-approval-header .icon { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header .icon { color: var(--color-warning); width: 1.25rem; height: 1.25rem; }
 .tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }

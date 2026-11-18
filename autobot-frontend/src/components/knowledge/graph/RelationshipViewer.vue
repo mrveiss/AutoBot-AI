@@ -223,7 +223,8 @@ watch(() => props.entityId, fetchRelationships)
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-banner {

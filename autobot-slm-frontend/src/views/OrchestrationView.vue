@@ -30,7 +30,7 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
@@ -44,7 +44,6 @@ import {
   parseSystemdUnits,
 } from '@/composables/useRoles'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
@@ -73,7 +72,6 @@ const { t } = useI18n()
 
 // Role ownership map: role_name -> node_id (#1389)
 const roleOwners = ref<Record<string, string>>({})
-const ORCH_INFRA_ROLES = ['autobot_shared', 'slm-agent']
 
 // The Redis panel acts on the node holding the `redis` role, through that role's unit (#16245).
 // #16025 made systemd_service a sequence (a role can own >1 unit); redis owns exactly one.
@@ -393,11 +391,7 @@ function warnIfNothingWillDeploy(unreachable?: string[]): void {
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
   // Warn if role is already assigned to another node (#1389)
   const currentOwner = roleOwners.value[roleName]
-  if (
-    currentOwner &&
-    currentOwner !== nodeId &&
-    !ORCH_INFRA_ROLES.includes(roleName)
-  ) {
+  if (currentOwner && currentOwner !== nodeId) {
     const ownerLabel = getRoleOwnerLabel(roleName)
     const confirmed = confirm(
       `Role "${roleName}" is currently assigned to ${ownerLabel}. ` +
@@ -918,9 +912,15 @@ async function executePlaybookMigration(): Promise<void> {
 // Lifecycle
 // =============================================================================
 
+const REFRESH_READS = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
+
+// A loader that catches its own failure resolves null/false (or rejects); only a real result is a success
+const readSucceeded = (r: PromiseSettledResult<unknown>): boolean =>
+  r.status === 'fulfilled' && r.value !== null && r.value !== false
+
 async function refresh(): Promise<boolean> {
   try {
-    // Use Promise.allSettled to continue even if some calls fail
+    // allSettled so one failed read does not stop the others
     const results = await Promise.allSettled([
       orchestration.fetchFleetServices(),
       orchestration.fetchFleetStatus(),
@@ -929,15 +929,9 @@ async function refresh(): Promise<boolean> {
       roles.fetchRoles(),
       roles.fetchFleetHealth(),
     ])
-
-    // Log any failures for debugging
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
-        logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
-      }
-    })
-    return results.some((result) => result.status === 'fulfilled')
+    const failed = REFRESH_READS.filter((_, i) => !readSucceeded(results[i]))
+    if (failed.length) logger.warn(`Failed to fetch: ${failed.join(', ')}`)
+    return failed.length < results.length
   } catch (err) {
     logger.error('Unexpected error during refresh:', err)
     return false

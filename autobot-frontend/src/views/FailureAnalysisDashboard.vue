@@ -55,7 +55,7 @@
             :disabled="!taskId.trim() || loading"
             @click="submitAnalysis"
           >
-            <span v-if="loading" class="spinner" aria-hidden="true" />
+            <BaseSpinner v-if="loading" size="sm" />
             {{ loading ? $t('analytics.failureAnalysis.form.analyzing') : $t('analytics.failureAnalysis.form.analyze') }}
           </button>
           <button
@@ -236,7 +236,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { BaseBadge, RiskBadge, type BadgeVariant } from '@autobot/ui'
+import { BaseBadge, RiskBadge, type BadgeVariant, BaseSpinner } from '@autobot/ui'
 import { useFailureAnalysis } from '@/composables/useFailureAnalysis'
 
 const { loading, error, result, analyzeFailure, clearResult } = useFailureAnalysis()
@@ -406,20 +406,6 @@ const COST_VARIANT: Record<string, BadgeVariant> = { low: 'success', medium: 'wa
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--text-secondary);
   color: var(--text-primary);
-}
-
-.spinner {
-  display: inline-block;
-  width: var(--spacing-3-5);
-  height: var(--spacing-3-5);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: var(--faildash-on-accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 /* Error banner */

@@ -330,6 +330,25 @@ async def isolated_session_factory() -> AsyncGenerator[async_sessionmaker[AsyncS
         await engine.dispose()
 
 
+def reset_after_fork() -> None:
+    """Drop the engine and session factory inherited from a parent process (#20887).
+
+    Synchronous on purpose: ``close_database()`` needs a loop, and the inherited
+    pool's connections belong to the parent's sockets and loop. ``close=False``
+    discards them without touching those sockets, so the child never closes a
+    connection the parent still uses. The next ``get_async_engine()`` builds a
+    fresh engine on the child's own loop.
+    """
+    global _async_engine, _async_session_factory
+
+    engine = _async_engine
+    _async_engine = None
+    _async_session_factory = None
+    if engine is not None:
+        engine.sync_engine.dispose(close=False)
+        logger.info("Inherited PostgreSQL async engine dropped after fork")
+
+
 async def close_database() -> None:
     """
     Close the database connection pool.

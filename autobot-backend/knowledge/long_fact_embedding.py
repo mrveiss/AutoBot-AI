@@ -45,6 +45,12 @@ def window_metadata(text: str) -> Dict[str, int]:
     return {"embedding_window_chars": WINDOW_CHARS, "embedding_windows": min(len(_windows(text)), MAX_WINDOWS)}
 
 
+def with_window_metadata(metadata: Dict[str, Any], text: str) -> Dict[str, Any]:
+    """*metadata* marked for *text*, without the marker an edit from long to short would leave behind."""
+    kept = {k: v for k, v in metadata.items() if k not in ("embedding_window_chars", "embedding_windows")}
+    return {**kept, **window_metadata(text)}
+
+
 async def embed_in_windows(embed: Callable[..., Awaitable[List[float]]], text: str, **kwargs: Any) -> List[float]:
     """*embed*'s result for *text*, averaged over windows when it is too long; empty if any window failed."""
     if len(text) <= WINDOW_CHARS:

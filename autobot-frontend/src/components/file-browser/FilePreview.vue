@@ -69,7 +69,7 @@
             <strong>{{ $t('fileBrowser.preview.type') }}</strong> {{ previewFile.fileType }}
           </div>
           <div class="info-item">
-            <strong>{{ $t('fileBrowser.preview.size') }}</strong> {{ formatFileSize(previewFile.size, FILE_BROWSER_SIZE_OPTIONS) }}
+            <strong>{{ $t('fileBrowser.preview.size') }}</strong> {{ formatFileSize(previewFile.size, sizeOptions) }}
           </div>
           <p class="no-preview-message">
             {{ $t('fileBrowser.preview.noPreview') }}
@@ -89,7 +89,9 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { formatFileSize, FILE_BROWSER_SIZE_OPTIONS } from '@/utils/formatHelpers'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatFileSize, fileBrowserSizeOptions } from '@/utils/formatHelpers'
 
 interface FilePreviewData {
   name: string
@@ -112,6 +114,9 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const { t } = useI18n()
+const sizeOptions = computed(() => fileBrowserSizeOptions(t('fileBrowser.zeroSize')))
 
 // Methods
 const formatJson = (content: string): string => {

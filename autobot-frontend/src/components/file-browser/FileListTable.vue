@@ -45,7 +45,7 @@
             </span>
           </td>
           <td>{{ file.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(file.name) }}</td>
-          <td>{{ file.is_dir ? '-' : formatFileSize(file.size, FILE_BROWSER_SIZE_OPTIONS) }}</td>
+          <td>{{ file.is_dir ? '-' : formatFileSize(file.size, sizeOptions) }}</td>
           <td>{{ formatDate(file.last_modified) }}</td>
           <td>
             <div class="action-buttons">
@@ -107,8 +107,9 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, nextTick } from 'vue'
-import { formatDateTime, formatFileSize, FILE_BROWSER_SIZE_OPTIONS } from '@/utils/formatHelpers'
+import { ref, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatDateTime, formatFileSize, fileBrowserSizeOptions } from '@/utils/formatHelpers'
 import { getFileIconName } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseButton } from '@autobot/ui'
@@ -141,6 +142,9 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const { t } = useI18n()
+const sizeOptions = computed(() => fileBrowserSizeOptions(t('fileBrowser.zeroSize')))
 
 // Keyboard navigation state
 const focusedIndex = ref(0)

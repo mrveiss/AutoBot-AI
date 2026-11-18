@@ -66,7 +66,7 @@ backup_destinations:
 # plain HTTP, uvicorn bind port).  Defining it here would override the backend
 # role's default when distributed_setup runs after backend in the same play.
 backend_nginx_port: 8443
-frontend_port: 443
+frontend_tls_port: 443
 redis_port: 6379
 npu_worker_port: 8081
 # ai_stack_port: not defined here -- inventory/group_vars/all.yml is the one authority (#17856)

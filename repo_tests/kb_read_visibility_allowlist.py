@@ -62,7 +62,7 @@ _RAW_ADMIN_NO_QUARANTINE = (
 _ORPHAN_REPAIR = (
     "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
     "reachable only through api/admin_orphan_repair.py's router-level "
-    'Depends(require_role("admin", "superadmin"))'
+    "Depends(check_admin_permission) (the one admin gate, #16333)"
 )
 _RAW_REPAIR = "NOT_USER_FACING: operator vector-repair CLI; returns row ids and booleans, no fact content"
 _RAW_ADMIN_MEMORY = "ADMIN_ONLY: platform-admin user reassignment over the verbatim and trajectory stores, not KB facts"
@@ -91,7 +91,7 @@ _SCOPED_ADMIN_ROUTER = (
 )
 
 _RAG_LEG = (
-    "SCOPED: reached only through RAGService (services/rag_service.py:230,241,507), which post-filters every leg with "
+    "SCOPED: reached only through RAGService (services/rag_legs.py), which post-filters every leg with "
     "filter_ranked (#16664), and the module's convenience functions, which take a required principal (#18944); "
     "services/knowledge_sync_service.py only initialises it"
 )
@@ -104,7 +104,7 @@ _PRESERVE = (
     "the route returns a status and the fact id, never content"
 )
 _ADAPTER = (
-    "SCOPED: the adapter's only production caller is services/rag_service.py (:995), whose results pass "
+    "SCOPED: the adapter's only production caller is the fallback in services/rag_legs.py, whose results pass "
     "filter_ranked before use (#16664); get_all_facts has no production caller"
 )
 _RESEARCH_QUARANTINE = (
@@ -172,7 +172,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_search_aggregator.py",
         "_get_fact_relations_for_graph",
     ): (
-        "SCOPED: fact_ids come from _get_facts_for_graph's already-filtered output "
+        "SCOPED: fact_ids come from visible_facts_page's already-filtered output "
         "(#16665), and both ends of every returned edge are re-checked against that "
         "same fact_ids set -- include_fact_details=False means no fact content is "
         "ever fetched here"
@@ -227,6 +227,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/knowledge/vector_search_engine.py",
         "_CPUBackend.search",
     ): "IMPL: the KB's own CPU backend calling its vector primitive",
+    ("autobot-backend/knowledge_sync_replacement.py", "_delete_one"): (
+        "NOT_USER_FACING: the sync reads a fact it is replacing, to check it is untouched before deleting it"
+    ),
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_get_document"): _MCP_NON_PRIVATE,
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_search"): _MCP_NON_PRIVATE,
     ("autobot-backend/npu_semantic_search.py", "NPUSemanticSearch._handle_search_error"): _T2,
