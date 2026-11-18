@@ -17,6 +17,7 @@ from typing import Any, Dict
 import aiofiles
 import yaml
 
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class AsyncOperationsMixin:
 
                     # Check if field name contains sensitive pattern
                     if any(pattern in key_lower for pattern in sensitive_patterns):
-                        obj[key] = "***REDACTED***"
+                        obj[key] = REDACTED_PLACEHOLDER  # the one value placeholder (#19337)
                         logger.debug("Redacted sensitive field: %s", current_path)
                     elif isinstance(value, _CONTAINER_TYPES):  # Issue #380
                         obj[key] = redact_sensitive_fields(value, current_path)
@@ -196,9 +197,10 @@ class AsyncOperationsMixin:
         async with await self._get_async_lock():
             # For main config, return current config
             if config_type == "main":
-                if self._should_refresh_sync_cache():
-                    self._reload_config()
-                return self._config.copy()
+                # Same lock and re-entry guard as the sync readers (#18661).
+                with self._get_sync_lock():
+                    self._refresh_if_stale()
+                    return self._config.copy()
 
             # Try Redis cache first for other config types
             if use_cache:

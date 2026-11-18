@@ -29,6 +29,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import CONTENT_URL_EGRESS, VENDOR_API_EGRESS, instance_host_egress
 
 logger = get_logger(__name__)
 
@@ -45,9 +46,10 @@ class JiraIntegration(BaseIntegration):
     Base URL: https://your-domain.atlassian.net
     """
 
-    def __init__(self, config: IntegrationConfig):
+    def __init__(self, config: IntegrationConfig, instance_host: bool = False):
+        """``instance_host`` only when ``base_url`` is admin-entered; a tenant/DB URL stays public-only (#17576)."""
         super().__init__(config)
-        self._session: aiohttp.ClientSession | None = None
+        self._instance_host = instance_host
 
     async def test_connection(self) -> IntegrationHealth:
         """Test Jira connection by fetching server info."""
@@ -64,17 +66,12 @@ class JiraIntegration(BaseIntegration):
                     status=IntegrationStatus.CONNECTED,
                     latency_ms=latency,
                     message="Connected successfully",
-                    details={
-                        "version": body.get("version"),
-                        "server_title": body.get("serverTitle"),
-                    },
+                    details={"version": body.get("version"), "server_title": body.get("serverTitle")},
                 )
             elif result.get("status_code") == 401:
                 self._status = IntegrationStatus.UNAUTHORIZED
                 return IntegrationHealth(
-                    provider="jira",
-                    status=IntegrationStatus.UNAUTHORIZED,
-                    message="Invalid credentials",
+                    provider="jira", status=IntegrationStatus.UNAUTHORIZED, message="Invalid credentials"
                 )
             else:
                 self._status = IntegrationStatus.ERROR
@@ -86,11 +83,7 @@ class JiraIntegration(BaseIntegration):
         except Exception:
             self.logger.exception("Jira connection test failed")
             self._status = IntegrationStatus.ERROR
-            return IntegrationHealth(
-                provider="jira",
-                status=IntegrationStatus.ERROR,
-                message="Connection test failed",
-            )
+            return IntegrationHealth(provider="jira", status=IntegrationStatus.ERROR, message="Connection test failed")
 
     def get_available_actions(self) -> List[IntegrationAction]:
         """Return list of supported Jira actions."""
@@ -270,8 +263,7 @@ class JiraIntegration(BaseIntegration):
         """Make authenticated request to Jira API."""
         url = f"{self.config.base_url}{endpoint}"
         auth_str = f"{self.config.username}:{self.config.api_key}"
-        auth_bytes = auth_str.encode("utf-8")
-        auth_b64 = base64.b64encode(auth_bytes).decode("ascii")
+        auth_b64 = base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
 
         headers = {
             "Authorization": f"Basic {auth_b64}",
@@ -282,7 +274,12 @@ class JiraIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with get_http_client().tracked_request(
-                method, url, headers=headers, json=json_data, timeout=timeout
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                timeout=timeout,
+                guard_egress=instance_host_egress() if self._instance_host else CONTENT_URL_EGRESS,
             ) as resp:
                 if resp.status == 204:
                     return {"status_code": 204, "body": {}}
@@ -497,13 +494,13 @@ class TrelloIntegration(BaseIntegration):
             data = None
 
         try:
-            timeout = aiohttp.ClientTimeout(total=30.0)
             async with get_http_client().tracked_request(
                 method,
                 url,
                 params=params,
                 json=data if method != "GET" else None,
-                timeout=timeout,
+                timeout=aiohttp.ClientTimeout(total=30.0),
+                guard_egress=VENDOR_API_EGRESS,
             ) as resp:
                 body = await resp.json()
                 return {"status_code": resp.status, "body": body}
@@ -737,7 +734,7 @@ class AsanaIntegration(BaseIntegration):
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
             async with get_http_client().tracked_request(
-                method, url, headers=headers, json=json_data, timeout=timeout
+                method, url, headers=headers, json=json_data, timeout=timeout, guard_egress=VENDOR_API_EGRESS
             ) as resp:
                 body = await resp.json()
                 return {"status_code": resp.status, "body": body}

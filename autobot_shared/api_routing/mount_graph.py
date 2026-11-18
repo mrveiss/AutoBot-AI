@@ -12,11 +12,10 @@ which ``include_router`` calls mount which of them, and what each hop carries:
 * ``repo_tests/router_routes_traversal_test.py`` (#15093) — does anything read
   ``<router>.routes`` on a router that has children?
 
-They were one file's private machinery until #15093. Two copies of an AST
-resolver drift the way the two ``include_router`` regexes in
-``router_prefixes.py`` drifted (#12985): one gets a resolution fix, the other
-does not, and the gate that decides whether a PR may merge disagrees with the
-report a human reads to judge it. This is the single copy.
+They were one file's private machinery until #15093. Two copies of an AST resolver drift the way the
+two ``include_router`` regexes in ``router_prefixes.py`` drifted (#12985): one gets a resolution
+fix, the other does not, and the gate that decides whether a PR may merge disagrees with the report
+a human reads to judge it. This is the single copy.
 
 ## Why static
 
@@ -55,6 +54,8 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
+
+from autobot_shared.testfile_names import is_test_filename
 
 __all__ = [
     "APP_ROOT",
@@ -562,7 +563,9 @@ def python_files(root: Path, skip: FrozenSet[str] = _SKIP_DIRS) -> Iterable[Path
         yield path
 
 
-def build_graph(backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"tests"})) -> MountGraph:
+def build_graph(
+    backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"tests"}), skip_tests: bool = False
+) -> MountGraph:
     """Derive the whole mount graph from source — nothing is handed in.
 
     Three discovery sources, matching the three ways a router reaches the app:
@@ -572,6 +575,8 @@ def build_graph(backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"t
     graph = MountGraph()
     registry_files: List[Tuple[Path, Dict[str, str]]] = []
     for path in python_files(backend, skip):
+        if skip_tests and is_test_filename(path.name, include_js=False, include_conftest=False):
+            continue  # a colocated test's throwaway FastAPI() mount is no route into the app
         try:
             source = path.read_text(encoding="utf-8")
             if not is_relevant(source) and _REGISTRY_DIRNAME not in path.parts:

@@ -62,6 +62,8 @@ _MOCK_NAMES = [
     "user_management.config",
     # audit model — we supply a hand-rolled stub below
     "autobot_shared.user_management.models.audit",
+    # #17225 D1: the one audit_logs row constructor; stubbed to build the _AuditLog below.
+    "autobot_shared.user_management.audit_rows",
     "user_management.models",
     "user_management.models.base",
     # The shared audit counter rbac_middleware imports at module level (#14750).
@@ -103,8 +105,9 @@ class _AuditResourceType:
 
 
 _audit_mod.AuditLog = _AuditLog
-_audit_mod.AuditAction = _AuditAction
+_audit_mod.IdentityAuditAction = _AuditAction
 _audit_mod.AuditResourceType = _AuditResourceType
+sys.modules["autobot_shared.user_management.audit_rows"].audit_row = lambda **kwargs: _AuditLog(**kwargs)
 
 # autobot_shared.logging_manager / .ssot_constants are imported by rbac_middleware
 # but were missing from _MOCK_NAMES (#13312): a bare MagicMock has no submodule
@@ -123,6 +126,15 @@ sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
 _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300
 sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
+
+# #18338: the middleware scopes DB grants with the import-free grant_scope module. Load it
+# for real under its full name (a path-less MagicMock parent cannot be walked); the
+# restore block below removes it again with every other bootstrap key.
+_GRANT_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "autobot_shared.user_management.grant_scope", _SHARED_ROOT / "user_management" / "grant_scope.py"
+)
+sys.modules[_GRANT_SCOPE_SPEC.name] = importlib.util.module_from_spec(_GRANT_SCOPE_SPEC)
+_GRANT_SCOPE_SPEC.loader.exec_module(sys.modules[_GRANT_SCOPE_SPEC.name])
 
 # Load the module under test. The restore block MUST run even if exec_module()
 # raises, or a bad stub here (or a future import added to rbac_middleware.py)

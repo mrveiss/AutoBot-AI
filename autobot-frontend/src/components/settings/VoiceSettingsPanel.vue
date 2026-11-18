@@ -474,7 +474,7 @@ async function handleDelete(voiceId: string, name: string) {
 
 .submit-btn {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .submit-btn:disabled {

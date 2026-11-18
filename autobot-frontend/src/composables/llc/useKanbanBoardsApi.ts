@@ -94,12 +94,10 @@ export function useKanbanBoardsApi() {
     boardId: string,
     workItemId: string,
     columnId: string,
-    actorId?: string,
   ): Promise<MovedItem> {
     return await useApiClient().post<MovedItem>(`/api/llc/boards/${boardId}/move`, {
       work_item_id: workItemId,
       column_id: columnId,
-      actor_id: actorId || null,
     })
   }
 

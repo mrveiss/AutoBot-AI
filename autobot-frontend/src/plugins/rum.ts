@@ -7,9 +7,6 @@
 import type { App, ComponentPublicInstance } from 'vue'
 import type { Router } from 'vue-router'
 import rumAgent from '../utils/RumAgent'
-import { createLogger } from '@/utils/debugUtils'
-
-const logger = createLogger('RumPlugin')
 
 interface RumPluginOptions {
   router?: Router
@@ -26,21 +23,8 @@ type RumComponentInstance = ComponentPublicInstance & {
 
 export default {
   install(app: App, options: RumPluginOptions = {}) {
-    // Configure Vue error handler
-    app.config.errorHandler = (error, instance, info) => {
-      // Track Vue errors with RUM
-      const err = error as Error
-      const vm = instance as RumComponentInstance | null
-      rumAgent.trackError('vue_error', {
-        message: err.message,
-        stack: err.stack,
-        componentInfo: info,
-        component: vm?.$options?.name || 'unknown'
-      })
-
-      // Also log for development
-      logger.error('Vue Error', { error, info })
-    }
+    // Vue errors are reported to RUM by the single app.config.errorHandler in
+    // plugins/errorHandler.ts (#19458) — do not assign another one here.
 
     // Add RUM agent to global properties
     app.config.globalProperties.$rum = rumAgent

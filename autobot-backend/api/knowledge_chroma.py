@@ -10,11 +10,18 @@ Endpoints support listing collections, getting details, browsing documents,
 and performing similarity searches.
 """
 
-from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
+from api.quarantine_read_audit import audit_admin_quarantine_read, quarantined_row_ids
+from api.schemas_knowledge_chroma import (
+    ChromaSearchRequest,
+    ChromaSearchResponse,
+    CollectionDetailResponse,
+    CollectionListResponse,
+    CollectionMetadata,
+    DocumentListResponse,
+    SearchResultItem,
+)
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -40,82 +47,6 @@ _NOT_FOUND_MARKERS = ("does not exist", "not found", "not exist")
 def _is_collection_not_found(exc: Exception) -> bool:
     """True when the exception indicates the collection genuinely doesn't exist."""
     return any(marker in str(exc).lower() for marker in _NOT_FOUND_MARKERS)
-
-
-# ============================================================================
-# Pydantic Models
-# ============================================================================
-
-
-class CollectionMetadata(BaseModel):
-    """Metadata for a ChromaDB collection."""
-
-    name: str = Field(..., description="Collection name")
-    count: int = Field(..., description="Number of documents in collection")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Collection metadata")
-
-
-class CollectionListResponse(BaseModel):
-    """Response for listing all collections."""
-
-    success: bool = True
-    data: List[CollectionMetadata]
-    error: Optional[str] = None
-
-
-class CollectionDetailResponse(BaseModel):
-    """Response for getting collection details."""
-
-    success: bool = True
-    data: Optional[CollectionMetadata] = None
-    error: Optional[str] = None
-
-
-class DocumentItem(BaseModel):
-    """A document in a collection."""
-
-    id: str = Field(..., description="Document ID")
-    document: Optional[str] = Field(None, description="Document text content")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
-    embedding_dim: Optional[int] = Field(None, description="Embedding vector dimensionality")
-
-
-class DocumentListResponse(BaseModel):
-    """Response for listing documents in a collection."""
-
-    success: bool = True
-    data: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Documents with ids, documents, metadatas, embeddings summary",
-    )
-    total: Optional[int] = Field(None, description="Total document count")
-    error: Optional[str] = None
-
-
-class SearchRequest(BaseModel):
-    """Request for similarity search."""
-
-    query: str = Field(..., description="Query text for similarity search")
-    n_results: int = Field(10, ge=1, le=100, description="Number of results to return")
-    where: Optional[Dict[str, Any]] = Field(None, description="Metadata filter (ChromaDB where clause)")
-
-
-class SearchResultItem(BaseModel):
-    """A single search result."""
-
-    id: str
-    document: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    distance: Optional[float] = Field(None, description="Similarity distance score")
-
-
-class SearchResponse(BaseModel):
-    """Response for similarity search."""
-
-    success: bool = True
-    data: Optional[List[SearchResultItem]] = None
-    query: Optional[str] = None
-    error: Optional[str] = None
 
 
 # ============================================================================
@@ -237,6 +168,7 @@ async def get_collection_detail(
 )
 async def list_documents(
     name: str,
+    request: Request,
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     _: bool = Depends(check_admin_permission),
@@ -279,17 +211,27 @@ async def list_documents(
         # Get total count
         total = await collection.count()
 
+        # #19163: admins may see research-quarantined rows, but audited and labelled.
+        ids = results.get("ids", [])
+        metadatas = results.get("metadatas", [])
+        quarantined = quarantined_row_ids(ids, metadatas or [])
+        if quarantined:
+            await audit_admin_quarantine_read(request, f"chroma.list_documents:{name}", quarantined)
+
         return DocumentListResponse(
             success=True,
             data={
-                "ids": results.get("ids", []),
+                "ids": ids,
                 "documents": results.get("documents", []),
-                "metadatas": results.get("metadatas", []),
+                "metadatas": metadatas,
                 "embedding_dim": embedding_dim,
+                "quarantined_ids": quarantined,
             },
             total=total,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         # ChromaDB signals a genuinely missing collection differently across
         # versions (ValueError in <1.0, NotFoundError in 1.x) — detect by
@@ -307,7 +249,7 @@ async def list_documents(
         )
 
 
-@router.post("/collections/{name}/search", response_model=SearchResponse)
+@router.post("/collections/{name}/search", response_model=ChromaSearchResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_chroma_collection",
@@ -315,9 +257,10 @@ async def list_documents(
 )
 async def search_collection(
     name: str,
-    request: SearchRequest,
+    request: ChromaSearchRequest,
+    http_request: Request,
     _: bool = Depends(check_admin_permission),
-) -> SearchResponse:
+) -> ChromaSearchResponse:
     """
     Perform similarity search on a collection using query text.
 
@@ -330,7 +273,7 @@ async def search_collection(
         _: Admin permission check -- the raw explorer bypasses fact visibility (#16666)
 
     Returns:
-        SearchResponse with matching documents and similarity scores
+        ChromaSearchResponse with matching documents and similarity scores
 
     Raises:
         HTTPException: 400 for invalid parameters, 404 if collection not found,
@@ -362,6 +305,7 @@ async def search_collection(
             metadatas = results.get("metadatas", [[]])[0]
             distances = results.get("distances", [[]])[0]
 
+            quarantined = set(quarantined_row_ids(ids, metadatas))
             for i, doc_id in enumerate(ids):
                 search_results.append(
                     SearchResultItem(
@@ -369,10 +313,13 @@ async def search_collection(
                         document=documents[i] if i < len(documents) else None,
                         metadata=metadatas[i] if i < len(metadatas) else None,
                         distance=distances[i] if i < len(distances) else None,
+                        quarantined=doc_id in quarantined,
                     )
                 )
+            if quarantined:
+                await audit_admin_quarantine_read(http_request, f"chroma.search_collection:{name}", sorted(quarantined))
 
-        return SearchResponse(
+        return ChromaSearchResponse(
             success=True,
             data=search_results,
             query=request.query,

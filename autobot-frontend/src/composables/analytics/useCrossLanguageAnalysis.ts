@@ -86,6 +86,7 @@ async function _fetchCrossLanguageSection(
     {
       path: `/api/analytics/codebase/cross-language/${endpointPath}`,
       scopeToSource: true,
+      requireSource: true,
       pickData: (data) =>
         data.status === 'success' ? extractFn(data) : [],
       label: `Cross-language ${endpointPath}`,
@@ -116,6 +117,7 @@ export function useCrossLanguageAnalysis(deps: UseCodeIntelAnalysisDeps) {
     {
       path: '/api/analytics/codebase/cross-language/summary',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) =>
         r.status === 'success' && r.summary ? r.summary : null,
       onNoData: () => {
@@ -229,6 +231,7 @@ export function useCrossLanguageAnalysis(deps: UseCodeIntelAnalysisDeps) {
       path: '/api/analytics/codebase/cross-language/analyze',
       method: 'POST',
       scopeToSource: true,
+      requireSource: true,
       body: () => ({ use_llm: true, use_cache: true }),
       pickData: (r) => (r.status === 'success' ? true : null),
       onResponse: async (response) => {

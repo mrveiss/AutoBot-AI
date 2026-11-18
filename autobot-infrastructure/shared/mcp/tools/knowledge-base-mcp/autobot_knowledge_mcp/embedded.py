@@ -33,6 +33,7 @@ Usage:
         # All committed at end of batch
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -203,18 +204,30 @@ class EmbeddedKnowledgeClient:
         self._kb = knowledge_base
         self._lazy_init = lazy_init
         self._initialized = knowledge_base is not None
+        # One canonical lookup even when the first calls race (#19205 review).
+        self._init_lock = asyncio.Lock()
 
     async def _ensure_initialized(self) -> "KnowledgeBase":
         """Ensure knowledge base is initialized."""
-        if self._kb is None:
-            if self._lazy_init:
+        if self._kb is not None:
+            return self._kb
+        async with self._init_lock:
+            if self._kb is None and self._lazy_init:
                 # Lazy import to avoid circular dependencies
-                from config import config
-                from knowledge_base import KnowledgeBase
+                from knowledge_factory import get_knowledge_base_async
 
-                self._kb = KnowledgeBase(config_manager=config)
+                # The canonical, initialized instance (#18122 D2): None means
+                # creation failed or is cooling down -- surface it, never fall
+                # back to a private KnowledgeBase().
+                kb = await get_knowledge_base_async()
+                if kb is None:
+                    raise RuntimeError(
+                        "Knowledge base unavailable: knowledge_factory returned "
+                        "None (initialization failed or retry cooldown active)"
+                    )
+                self._kb = kb
                 self._initialized = True
-            else:
+            elif self._kb is None:
                 raise RuntimeError("Knowledge base not initialized")
         return self._kb
 

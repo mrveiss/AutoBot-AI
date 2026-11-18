@@ -26,6 +26,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 _SEP = ":"
+
+#: RBAC permission names the vault reads from a principal's DB grants (#10088). One home, so
+#: the vault and the #18259 grant report agree on what makes a vault admin.
+VAULT_ADMIN_PERMISSION = "admin:access"
+VAULT_PERMISSION_PREFIX = "secrets:"
 # Matches the String(255) limit on company_id / agent_id in the LLC models.
 _MAX_ID_LEN = 255
 

@@ -40,7 +40,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class CheckDefinition:
+class PrecommitCheckDefinition:
     """Definition of a pre-commit check rule."""
 
     id: str
@@ -70,7 +70,7 @@ class CheckDefinition:
 
 
 @dataclass
-class CheckResult:
+class PrecommitCheckResult:
     """Result of a single check."""
 
     check_id: str
@@ -105,7 +105,7 @@ class CheckResult:
 
 
 @dataclass
-class CommitCheckResult:
+class PrecommitCommitCheckResult:
     """Result of checking files for commit."""
 
     passed: bool
@@ -116,7 +116,7 @@ class CommitCheckResult:
     warnings: int
     infos: int
     duration_ms: float
-    results: List[CheckResult]
+    results: List[PrecommitCheckResult]
     files_checked: List[str]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -136,9 +136,9 @@ class CommitCheckResult:
 
 
 # Built-in check definitions
-BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
+BUILTIN_CHECKS: Dict[str, PrecommitCheckDefinition] = {
     # Security Checks
-    "SEC001": CheckDefinition(
+    "SEC001": PrecommitCheckDefinition(
         id="SEC001",
         name="Hardcoded Password",
         category=CheckCategory.SECURITY,
@@ -148,7 +148,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Use environment variables or secrets manager",
         file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.yaml", "*.yml"],
     ),
-    "SEC002": CheckDefinition(
+    "SEC002": PrecommitCheckDefinition(
         id="SEC002",
         name="API Key Exposure",
         category=CheckCategory.SECURITY,
@@ -158,7 +158,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Store API keys in environment variables",
         file_patterns=["*.py", "*.js", "*.ts", "*.json", "*.env"],
     ),
-    "SEC003": CheckDefinition(
+    "SEC003": PrecommitCheckDefinition(
         id="SEC003",
         name="Private Key in Code",
         category=CheckCategory.SECURITY,
@@ -168,7 +168,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Never commit private keys - use key management service",
         file_patterns=["*"],
     ),
-    "SEC004": CheckDefinition(
+    "SEC004": PrecommitCheckDefinition(
         id="SEC004",
         name="Hardcoded IP Address",
         category=CheckCategory.SECURITY,
@@ -178,7 +178,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Use configuration or NetworkConstants for IP addresses",
         file_patterns=["*.py", "*.js", "*.ts"],
     ),
-    "SEC005": CheckDefinition(
+    "SEC005": PrecommitCheckDefinition(
         id="SEC005",
         name="AWS Access Key",
         category=CheckCategory.SECURITY,
@@ -188,7 +188,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Use AWS credentials file or environment variables",
         file_patterns=["*"],
     ),
-    "SEC006": CheckDefinition(
+    "SEC006": PrecommitCheckDefinition(
         id="SEC006",
         name="JWT Token",
         category=CheckCategory.SECURITY,
@@ -199,7 +199,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         file_patterns=["*.py", "*.js", "*.ts", "*.json"],
     ),
     # Debug Checks
-    "DBG001": CheckDefinition(
+    "DBG001": PrecommitCheckDefinition(
         id="DBG001",
         name="Console.log Statement",
         category=CheckCategory.DEBUG,
@@ -209,7 +209,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Remove console statements before committing",
         file_patterns=["*.js", "*.ts", "*.vue"],
     ),
-    "DBG002": CheckDefinition(
+    "DBG002": PrecommitCheckDefinition(
         id="DBG002",
         name="Print Statement",
         category=CheckCategory.DEBUG,
@@ -219,7 +219,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Replace with proper logging",
         file_patterns=["*.py"],
     ),
-    "DBG003": CheckDefinition(
+    "DBG003": PrecommitCheckDefinition(
         id="DBG003",
         name="Debugger Statement",
         category=CheckCategory.DEBUG,
@@ -229,7 +229,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Remove debugger statements before committing",
         file_patterns=["*.py", "*.js", "*.ts"],
     ),
-    "DBG004": CheckDefinition(
+    "DBG004": PrecommitCheckDefinition(
         id="DBG004",
         name="TODO/FIXME Comment",
         category=CheckCategory.DEBUG,
@@ -240,7 +240,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         file_patterns=["*.py", "*.js", "*.ts", "*.vue"],
     ),
     # Quality Checks
-    "QUA001": CheckDefinition(
+    "QUA001": PrecommitCheckDefinition(
         id="QUA001",
         name="Empty Except Block",
         category=CheckCategory.QUALITY,
@@ -250,7 +250,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Add proper error handling or logging",
         file_patterns=["*.py"],
     ),
-    "QUA002": CheckDefinition(
+    "QUA002": PrecommitCheckDefinition(
         id="QUA002",
         name="Bare Except",
         category=CheckCategory.QUALITY,
@@ -260,7 +260,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Catch specific exception types",
         file_patterns=["*.py"],
     ),
-    "QUA003": CheckDefinition(
+    "QUA003": PrecommitCheckDefinition(
         id="QUA003",
         name="Long Line",
         category=CheckCategory.QUALITY,
@@ -270,7 +270,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Break line for readability",
         file_patterns=["*.py"],
     ),
-    "QUA004": CheckDefinition(
+    "QUA004": PrecommitCheckDefinition(
         id="QUA004",
         name="Hardcoded Port",
         category=CheckCategory.QUALITY,
@@ -281,7 +281,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         file_patterns=["*.py", "*.js", "*.ts"],
     ),
     # Style Checks
-    "STY001": CheckDefinition(
+    "STY001": PrecommitCheckDefinition(
         id="STY001",
         name="Trailing Whitespace",
         category=CheckCategory.STYLE,
@@ -291,7 +291,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Remove trailing whitespace",
         file_patterns=["*"],
     ),
-    "STY002": CheckDefinition(
+    "STY002": PrecommitCheckDefinition(
         id="STY002",
         name="Mixed Tabs and Spaces",
         category=CheckCategory.STYLE,
@@ -301,7 +301,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         suggestion="Use consistent indentation (spaces recommended)",
         file_patterns=["*.py", "*.js", "*.ts"],
     ),
-    "STY003": CheckDefinition(
+    "STY003": PrecommitCheckDefinition(
         id="STY003",
         name="Multiple Blank Lines",
         category=CheckCategory.STYLE,
@@ -313,7 +313,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         multiline=True,
     ),
     # Documentation Checks
-    "DOC001": CheckDefinition(
+    "DOC001": PrecommitCheckDefinition(
         id="DOC001",
         name="Missing Function Docstring",
         category=CheckCategory.DOCS,
@@ -324,7 +324,7 @@ BUILTIN_CHECKS: Dict[str, CheckDefinition] = {
         file_patterns=["*.py"],
         multiline=True,
     ),
-    "DOC002": CheckDefinition(
+    "DOC002": PrecommitCheckDefinition(
         id="DOC002",
         name="Missing Class Docstring",
         category=CheckCategory.DOCS,
@@ -344,7 +344,7 @@ class PrecommitAnalyzer:
     def __init__(
         self,
         project_root: str | None = None,
-        checks: Dict[str, CheckDefinition] | None = None,
+        checks: Dict[str, PrecommitCheckDefinition] | None = None,
         fast_mode: bool = False,
         parallel: bool = True,
         max_workers: int = 4,
@@ -355,7 +355,7 @@ class PrecommitAnalyzer:
         self.fast_mode = fast_mode
         self.parallel = parallel
         self.max_workers = max_workers
-        self.results: List[CheckResult] = []
+        self.results: List[PrecommitCheckResult] = []
 
         # Expensive checks to skip in fast mode
         self.expensive_checks = {"DOC001", "DOC002", "QUA003", "STY003"}
@@ -400,7 +400,7 @@ class PrecommitAnalyzer:
                 return True
         return False
 
-    def run_check(self, check: CheckDefinition, filepath: str, content: str) -> List[CheckResult]:
+    def run_check(self, check: PrecommitCheckDefinition, filepath: str, content: str) -> List[PrecommitCheckResult]:
         """Run a single check against file content."""
         results = []
 
@@ -427,12 +427,12 @@ class PrecommitAnalyzer:
 
     def _run_multiline_check(
         self,
-        check: CheckDefinition,
+        check: PrecommitCheckDefinition,
         filepath: str,
         content: str,
         lines: List[str],
         pattern: re.Pattern,
-        results: List[CheckResult],
+        results: List[PrecommitCheckResult],
     ) -> None:
         """Run multiline pattern matching against entire file content. Issue #620."""
         # #12884: build the offset->line map once; the per-match
@@ -445,11 +445,11 @@ class PrecommitAnalyzer:
 
     def _run_singleline_check(
         self,
-        check: CheckDefinition,
+        check: PrecommitCheckDefinition,
         filepath: str,
         lines: List[str],
         pattern: re.Pattern,
-        results: List[CheckResult],
+        results: List[PrecommitCheckResult],
     ) -> None:
         """Run single-line pattern matching against each line. Issue #620."""
         for i, line in enumerate(lines, 1):
@@ -459,14 +459,14 @@ class PrecommitAnalyzer:
 
     def _create_check_result(
         self,
-        check: CheckDefinition,
+        check: PrecommitCheckDefinition,
         filepath: str,
         line_num: int,
         snippet: str,
         column: int | None = None,
-    ) -> CheckResult:
-        """Create a CheckResult instance for a pattern match. Issue #620."""
-        return CheckResult(
+    ) -> PrecommitCheckResult:
+        """Create a PrecommitCheckResult instance for a pattern match. Issue #620."""
+        return PrecommitCheckResult(
             check_id=check.id,
             name=check.name,
             category=check.category,
@@ -492,7 +492,7 @@ class PrecommitAnalyzer:
 
         return "\n".join(snippet_lines)
 
-    def analyze_file(self, filepath: str) -> List[CheckResult]:
+    def analyze_file(self, filepath: str) -> List[PrecommitCheckResult]:
         """Analyze a single file for pre-commit issues."""
         content = self.get_file_content(filepath)
         if content is None:
@@ -507,7 +507,7 @@ class PrecommitAnalyzer:
 
         return results
 
-    def _get_active_checks(self) -> Dict[str, CheckDefinition]:
+    def _get_active_checks(self) -> Dict[str, PrecommitCheckDefinition]:
         """Get checks that should be run."""
         active = {k: v for k, v in self.checks.items() if v.enabled}
 
@@ -516,7 +516,7 @@ class PrecommitAnalyzer:
 
         return active
 
-    def _analyze_files_parallel(self, files: List[str]) -> List[CheckResult]:
+    def _analyze_files_parallel(self, files: List[str]) -> List[PrecommitCheckResult]:
         """Analyze files in parallel (Issue #335 - extracted helper)."""
         all_results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -529,7 +529,7 @@ class PrecommitAnalyzer:
                     logger.error("Error analyzing file: %s", e)
         return all_results
 
-    def _analyze_files_sequential(self, files: List[str]) -> List[CheckResult]:
+    def _analyze_files_sequential(self, files: List[str]) -> List[PrecommitCheckResult]:
         """Analyze files sequentially (Issue #335 - extracted helper)."""
         all_results = []
         for filepath in files:
@@ -537,7 +537,7 @@ class PrecommitAnalyzer:
             all_results.extend(results)
         return all_results
 
-    def analyze_files(self, files: List[str]) -> CommitCheckResult:
+    def analyze_files(self, files: List[str]) -> PrecommitCommitCheckResult:
         """Analyze multiple files for pre-commit issues."""
         start_time = time.time()
 
@@ -558,7 +558,7 @@ class PrecommitAnalyzer:
         active_checks = self._get_active_checks()
         total_checks = len(active_checks) * len(files)
 
-        return CommitCheckResult(
+        return PrecommitCommitCheckResult(
             passed=not blocked,
             blocked=blocked,
             total_checks=total_checks,
@@ -571,13 +571,13 @@ class PrecommitAnalyzer:
             files_checked=files,
         )
 
-    def analyze_staged(self) -> CommitCheckResult:
+    def analyze_staged(self) -> PrecommitCommitCheckResult:
         """Analyze all staged files."""
         staged_files = self.get_staged_files()
 
         if not staged_files:
             # Return empty result if no staged files
-            return CommitCheckResult(
+            return PrecommitCommitCheckResult(
                 passed=True,
                 blocked=False,
                 total_checks=0,
@@ -592,7 +592,7 @@ class PrecommitAnalyzer:
 
         return self.analyze_files(staged_files)
 
-    def analyze_content(self, content: str, filepath: str = "untitled.py") -> List[CheckResult]:
+    def analyze_content(self, content: str, filepath: str = "untitled.py") -> List[PrecommitCheckResult]:
         """Analyze arbitrary content."""
         results = []
         active_checks = self._get_active_checks()
@@ -644,15 +644,15 @@ class PrecommitAnalyzer:
             return True
         return False
 
-    def add_custom_check(self, check: CheckDefinition) -> None:
+    def add_custom_check(self, check: PrecommitCheckDefinition) -> None:
         """Add a custom check."""
         self.checks[check.id] = check
 
-    def get_checks(self) -> List[CheckDefinition]:
+    def get_checks(self) -> List[PrecommitCheckDefinition]:
         """Get all registered checks."""
         return list(self.checks.values())
 
-    def get_check(self, check_id: str) -> CheckDefinition | None:
+    def get_check(self, check_id: str) -> PrecommitCheckDefinition | None:
         """Get a specific check by ID."""
         return self.checks.get(check_id)
 

@@ -195,7 +195,7 @@ import { formatTime } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 import MessageStatus from '@/components/ui/MessageStatus.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import ApprovalRequestCard from './ApprovalRequestCard.vue'
 import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'

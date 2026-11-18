@@ -73,6 +73,7 @@ from repo_tests._nosec_b615_scan import comment_markers, unpinned_suppressed_cal
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 
@@ -153,7 +154,7 @@ def _parse(path: Path) -> ast.Module | None:
     failure instead of a silent contribution of zero findings.
     """
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except (SyntaxError, UnicodeDecodeError, ValueError, OSError):
         return None
 
@@ -379,9 +380,11 @@ def test_the_resolver_is_recognised_called_by_name_and_by_attribute() -> None:
     by_name = f"from autobot_shared.pinned_model_registry import {_RESOLVER}\nk = {_RESOLVER}('a')\n"
     by_attribute = f"import autobot_shared.pinned_model_registry as r\nk = r.{_RESOLVER}('a')\n"
     absent = "k = {}\n"
-    assert _calls_resolver(ast.parse(by_name)) is True
-    assert _calls_resolver(ast.parse(by_attribute)) is True, "an attribute-style resolver call was not recognised"
-    assert _calls_resolver(ast.parse(absent)) is False
+    assert _calls_resolver(parse_cache.parse(by_name)) is True
+    assert (
+        _calls_resolver(parse_cache.parse(by_attribute)) is True
+    ), "an attribute-style resolver call was not recognised"
+    assert _calls_resolver(parse_cache.parse(absent)) is False
 
 
 _RESOLVER_BUT_PIN_DROPPED = """

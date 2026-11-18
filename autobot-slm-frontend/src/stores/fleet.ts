@@ -19,7 +19,7 @@ import type {
   FleetSummary,
   FleetUpdateSummary,
   NodeUpdateSummary,
-  HealthStatus,
+  NodeHealthStatus,
   NodeRole,
   NodeCreate,
   NodeUpdate,
@@ -37,6 +37,10 @@ import type {
   NPUWorkerConfig,
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
+import i18n from '@/i18n'
+import { PartialListError } from '@/utils/fetchAllPages'
+import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
+import type { NodeListIncomplete } from './fleetHelpers'
 
 export const useFleetStore = defineStore('fleet', () => {
   const api = useSlmApi()
@@ -49,6 +53,11 @@ export const useFleetStore = defineStore('fleet', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const lastRefresh = ref<Date | null>(null)
+  /** Set when the node list held is not the whole fleet (#21584); null when it is. */
+  const incomplete = ref<NodeListIncomplete | null>(null)
+  /** Why the last node-list read failed outright; null after a read that succeeded, empty or not. */
+  const nodesError = ref<string | null>(null)
+  let nodesRequest = 0 // newest fetchNodes call
 
   /** Currently selected node for detail view */
   const selectedNode = ref<SLMNode | null>(null)
@@ -116,7 +125,7 @@ export const useFleetStore = defineStore('fleet', () => {
     }
   })
 
-  const overallHealth = computed<HealthStatus>(() => {
+  const overallHealth = computed<NodeHealthStatus>(() => {
     const summary = fleetSummary.value
     if (summary.total_nodes === 0) return 'unknown'
     if (summary.unhealthy_nodes > 0 || summary.offline_nodes > 0) return 'unhealthy'
@@ -179,34 +188,14 @@ export const useFleetStore = defineStore('fleet', () => {
     return fleetUpdateSummary.value?.nodes.find(n => n.node_id === nodeId)
   }
 
-  /**
-   * Reconcile a single node's cached update summary with a fresh live-check
-   * result (#11964).
-   *
-   * The live "Check for updates" scan (NodeLifecyclePanel) re-reads
-   * node.code_status directly from the DB at click-time. The fleet-wide
-   * summary that drives the node-card badge is otherwise only fetched once
-   * on page load, so it can go stale. Patching the cached entry here after
-   * every live check keeps the badge and the live scan from disagreeing.
-   */
+  /** Patch one node's cached update summary after a live check (#11964); see `reconcileUpdateSummary`. */
   function reconcileNodeUpdateSummary(
     nodeId: string,
     systemUpdates: number,
     codeUpdateAvailable: boolean,
     codeStatus: string
   ): void {
-    const summary = fleetUpdateSummary.value
-    const entry = summary?.nodes.find(n => n.node_id === nodeId)
-    if (!summary || !entry) return
-
-    entry.system_updates = systemUpdates
-    entry.code_update_available = codeUpdateAvailable
-    entry.code_status = codeStatus
-    entry.total_updates = systemUpdates + (codeUpdateAvailable ? 1 : 0)
-
-    summary.total_system_updates = summary.nodes.reduce((sum, n) => sum + n.system_updates, 0)
-    summary.total_code_updates = summary.nodes.filter(n => n.code_update_available).length
-    summary.nodes_needing_updates = summary.nodes.filter(n => n.total_updates > 0).length
+    reconcileUpdateSummary(fleetUpdateSummary.value, nodeId, systemUpdates, codeUpdateAvailable, codeStatus)
   }
 
   // ============================================================
@@ -235,21 +224,28 @@ export const useFleetStore = defineStore('fleet', () => {
    * Fetch all nodes from API
    */
   async function fetchNodes(): Promise<void> {
+    const request = ++nodesRequest // the newest call owns every mutation; an overlapped one is stale
     isLoading.value = true
-    error.value = null
+    error.value = nodesError.value = null
 
     try {
-      const nodeArray = await api.getNodes()
-      nodes.value.clear()
-      for (const node of nodeArray) {
-        nodes.value.set(node.node_id, node)
-      }
+      const loaded = toNodeMap(await api.getNodes())
+      if (request !== nodesRequest) return
+      nodes.value = loaded
+      incomplete.value = null
       lastRefresh.value = new Date()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch nodes'
+      if (request !== nodesRequest) return // superseded
+      // #21584: a partial read is a flagged result, not a failure; an outright failure keeps `incomplete` as it was.
+      if (err instanceof PartialListError) {
+        incomplete.value = incompleteOf(err)
+        nodes.value = toNodeMap(err.items as SLMNode[]) // usable data: `incomplete` is the signal, not `error`
+        return
+      }
+      error.value = nodesError.value = err instanceof Error ? err.message : i18n.global.t('fleetOverview.loadFailedUnknown')
       throw err
     } finally {
-      isLoading.value = false
+      if (request === nodesRequest) isLoading.value = false
     }
   }
 
@@ -892,8 +888,10 @@ export const useFleetStore = defineStore('fleet', () => {
   function $reset(): void {
     nodes.value.clear()
     isLoading.value = false
-    error.value = null
+    error.value = nodesError.value = null
+    nodesRequest++ // an in-flight read must not repopulate
     lastRefresh.value = null
+    incomplete.value = null
     selectedNode.value = null
     clearAllCaches()
   }
@@ -904,6 +902,8 @@ export const useFleetStore = defineStore('fleet', () => {
     isLoading,
     error,
     lastRefresh,
+    incomplete,
+    nodesError,
     selectedNode,
     nodeEvents,
     certificateStatus,

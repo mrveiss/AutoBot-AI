@@ -15,19 +15,20 @@ Provides WebSocket endpoints for:
 import asyncio
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 
-from agents.overseer import OverseerAgent, OverseerUpdate, StepExecutorAgent, StepResult
+from agents.overseer import OverseerAgent, OverseerUpdate, StepExecutorAgent, StepRunResult
 from agents.overseer.types import (
     CommandBreakdownPart,
     CommandExplanation,
     OutputExplanation,
-    StepStatus,
+    OverseerStepStatus,
 )
 from api.schemas_agent import OverseerQueryData
 from api.schemas_system import OverseerStatusResponse
 from api.ws_security import open_authenticated_ws, owns_chat_session
 from auth_middleware import get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
@@ -35,9 +36,9 @@ from chat_history import ChatHistoryManager
 logger = get_logger(__name__)
 
 
-def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
+def _dict_to_step_result(step_data: Dict[str, Any]) -> StepRunResult:
     """
-    Convert a dictionary to a StepResult object.
+    Convert a dictionary to a StepRunResult object.
 
     Issue #665: Extracted from handle_query to reduce function length and
     improve code reusability.
@@ -46,7 +47,7 @@ def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
         step_data: Dictionary containing step result data
 
     Returns:
-        StepResult object populated from the dict
+        StepRunResult object populated from the dict
     """
     cmd_exp = None
     if step_data.get("command_explanation"):
@@ -72,12 +73,12 @@ def _dict_to_step_result(step_data: Dict[str, Any]) -> StepResult:
 
     # Handle status with defensive error handling
     try:
-        status = StepStatus(step_data.get("status", "completed"))
+        status = OverseerStepStatus(step_data.get("status", "completed"))
     except ValueError:
         logger.warning("Invalid status '%s', defaulting to COMPLETED", step_data.get("status"))
-        status = StepStatus.COMPLETED
+        status = OverseerStepStatus.COMPLETED
 
-    return StepResult(
+    return StepRunResult(
         task_id=step_data.get("task_id", ""),
         step_number=step_data.get("step_number", 0),
         total_steps=step_data.get("total_steps", 0),
@@ -216,7 +217,7 @@ class OverseerWebSocketHandler:
         except Exception as e:
             logger.error("[OverseerWS] Failed to save plan to chat: %s", e)
 
-    def _format_step_message_text(self, result: StepResult) -> str:
+    def _format_step_message_text(self, result: StepRunResult) -> str:
         """
         Build human-readable chat message text for a step result.
 
@@ -245,7 +246,7 @@ class OverseerWebSocketHandler:
             f"{cmd_explanation}{output_explanation}"
         )
 
-    async def save_step_result_to_chat(self, result: StepResult) -> None:
+    async def save_step_result_to_chat(self, result: StepRunResult) -> None:
         """Save step result with explanations to chat history."""
         try:
             message_text = self._format_step_message_text(result)
@@ -310,7 +311,7 @@ class OverseerWebSocketHandler:
             if update.update_type == "step_complete" and update.content:
                 if isinstance(update.content, dict):
                     await self.save_step_result_to_chat(_dict_to_step_result(update.content))
-                elif isinstance(update.content, StepResult):
+                elif isinstance(update.content, StepRunResult):
                     await self.save_step_result_to_chat(update.content)
 
     async def handle_query(self, query: str, context: Dict | None = None):
@@ -466,7 +467,7 @@ async def overseer_websocket(websocket: WebSocket, session_id: str):
             data = await websocket.receive_json()
             await handler.handle_message(data)
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         await handler.disconnect()
     except Exception as e:
         logger.error("[OverseerWS] Error: %s", e)

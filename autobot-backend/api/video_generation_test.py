@@ -57,6 +57,8 @@ def _fake_provider(available=True, name="runway"):
     p = MagicMock()
     p.name = name
     p.available = available
+    # The real BaseVideoProvider's reason when disabled (#18094: a vault refusal reports its own reason).
+    p.unavailable_reason = "RUNWAY_API_KEY not configured"
     p.submit = AsyncMock(return_value="provider-job-1")
     return p
 

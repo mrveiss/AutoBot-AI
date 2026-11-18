@@ -169,3 +169,13 @@ to `autobot-backend/` unless prefixed.
 | `autobot-frontend/src/stores/useChatStore.ts`, chat send API call | Send `Idempotency-Key` per message; match echoes by key |
 | `initialization/lifespan.py`, `a2a/task_manager.py` | Startup sweep marking in-flight chat turns and WORKING A2A tasks interrupted |
 | `chat_workflow/delegation_test.py` (or a sibling) | Scripted multi-agent chain/cycle test |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18134 — delegation: the per-turn cap resets in every child and the internal engine never times out — bound the whole tree before enablement
+- #18135 — feat(chat): correlate a sent message with its echo by a client id, not by (sender, content)
+- #18136 — bug(a2a): a task WORKING when the backend dies stays WORKING until its TTL — no startup recovery
+- #18137 — feat(memory): batch fact extraction and skip trivial exchanges instead of one LLM call per turn
+- #18138 — feat(memory): cap the fact profile and consolidate into a log through the approval gate, never delete outright

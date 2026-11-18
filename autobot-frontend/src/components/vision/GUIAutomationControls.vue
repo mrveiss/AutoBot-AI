@@ -7,10 +7,10 @@
         <p>{{ t('vision.guiAutomation.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button @click="$emit('refresh')" class="btn-refresh" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="$emit('refresh')" :disabled="loading">
           <Icon name="sync-alt" />
           {{ t('vision.guiAutomation.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -19,7 +19,7 @@
       v-if="actionError"
       variant="error"
       :message="actionError"
-      dismissible
+      dismissible :dismiss-label="t('ui.alert.dismissAlert')"
       @dismiss="actionError = null"
     />
 
@@ -54,14 +54,14 @@
             {{ opportunity.description }}
           </div>
           <div class="card-actions">
-            <button @click.stop="executeAction(opportunity)" class="btn-execute" :disabled="executing">
+            <BaseButton size="xs" @click.stop="executeAction(opportunity)" :disabled="executing">
               <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
               {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.execute') }}
-            </button>
-            <button @click.stop="viewDetails(opportunity)" class="btn-details">
+            </BaseButton>
+            <BaseButton variant="secondary" size="xs" @click.stop="viewDetails(opportunity)">
               <Icon name="info-circle" />
               {{ t('vision.guiAutomation.details') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -153,13 +153,13 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="executeAction(selectedOpportunity)" class="btn-primary" :disabled="executing">
+          <BaseButton size="sm" @click="executeAction(selectedOpportunity)" :disabled="executing">
             <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
             {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.executeAction') }}
-          </button>
-          <button @click="selectedOpportunity = null" class="btn-secondary">
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="selectedOpportunity = null">
             {{ t('vision.guiAutomation.close') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -167,19 +167,15 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert, BaseButton, httpErrorText, isHttpError } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
-import {
-  visionMultimodalApiClient,
-  type AutomationOpportunity,
-  type ElementTypeInfo,
-  type InteractionTypeInfo,
-} from '@/utils/VisionMultimodalApiClient';
+import { detectElements, getElementTypes, getInteractionTypes } from '@/composables/useVisionApi';
+import type { AutomationOpportunity, ElementTypeInfo, InteractionTypeInfo } from '@/types/visionMultimodal';
 
 const { t } = useI18n();
 const logger = createLogger('GUIAutomationControls');
@@ -208,16 +204,12 @@ const interactionTypesList = ref<InteractionTypeInfo[]>([]);
 const loadReferenceData = async () => {
   try {
     const [elementsRes, interactionsRes] = await Promise.all([
-      visionMultimodalApiClient.getElementTypes(),
-      visionMultimodalApiClient.getInteractionTypes(),
+      getElementTypes(),
+      getInteractionTypes(),
     ]);
 
-    if (elementsRes.success && elementsRes.data) {
-      elementTypesList.value = elementsRes.data.element_types;
-    }
-    if (interactionsRes.success && interactionsRes.data) {
-      interactionTypesList.value = interactionsRes.data.interaction_types;
-    }
+    elementTypesList.value = elementsRes.element_types ?? [];
+    interactionTypesList.value = interactionsRes.interaction_types;
   } catch (err) {
     logger.error('Failed to load reference data:', err);
   }
@@ -238,15 +230,11 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
   executing.value = true;
   actionError.value = null;
   try {
-    const res = await visionMultimodalApiClient.detectElements({
+    const res = await detectElements({
       element_type: opportunity.element_type,
       min_confidence: opportunity.confidence * 0.8,
     });
-    if (!res.success || !res.data) {
-      actionError.value = t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' });
-      return;
-    }
-    const found = res.data.elements?.some(
+    const found = res.elements?.some(
       (el: { element_id: string }) => el.element_id === opportunity.element_id
     );
     if (found) {
@@ -263,7 +251,9 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
     emit('refresh');
   } catch (err) {
     logger.error('Execute action failed:', err);
-    actionError.value = t('vision.guiAutomation.toastExecutionFailed');
+    actionError.value = isHttpError(err)
+      ? t('vision.guiAutomation.toastVerifyFailed', { error: httpErrorText(err, t('vision.guiAutomation.toastExecutionFailed')) })
+      : t('vision.guiAutomation.toastExecutionFailed');
   } finally {
     executing.value = false;
   }
@@ -359,30 +349,6 @@ onMounted(() => {
   margin: var(--spacing-0);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-}
-
-.btn-refresh {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Loading State */
@@ -496,39 +462,8 @@ onMounted(() => {
   gap: var(--spacing-2);
 }
 
-.btn-execute,
-.btn-details {
+.card-actions :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-1-5);
-  transition: all var(--duration-200);
-}
-
-.btn-execute {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-}
-
-.btn-execute:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-details {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-details:hover {
-  background: var(--bg-hover);
 }
 
 /* Empty State */
@@ -756,38 +691,8 @@ onMounted(() => {
   border-top: 1px solid var(--border-default);
 }
 
-.btn-primary {
+.modal-actions :deep(.aui-btn--primary) {
   flex: 1;
-  padding: var(--spacing-3);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
 }
 
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  padding: var(--spacing-3) var(--spacing-5);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
 </style>

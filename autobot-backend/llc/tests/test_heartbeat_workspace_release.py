@@ -69,7 +69,7 @@ class TestEarlyExitsReleaseTheWorkspace:
         The first early return is reached when marking the run RUNNING raises. A source
         count cannot tell that this path releases; running it can.
         """
-        from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+        from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
         run_id = uuid.uuid4()
         session = AsyncMock()
@@ -77,7 +77,7 @@ class TestEarlyExitsReleaseTheWorkspace:
         session.__aexit__ = AsyncMock(return_value=False)
         session.execute = AsyncMock(side_effect=RuntimeError("cannot mark RUNNING"))
 
-        scheduler = HeartbeatScheduler()
+        scheduler = LLCHeartbeatScheduler()
         with (
             patch("llc.scheduler.heartbeat_scheduler.get_async_session_factory", return_value=lambda: session),
             patch("llc.scheduler.heartbeat_scheduler.release_workspace_best_effort", new=AsyncMock()) as released,
@@ -105,7 +105,7 @@ class TestEarlyExitsReleaseTheWorkspace:
 
         from llc.scheduler import heartbeat_scheduler as mod
 
-        tree = ast.parse(inspect.getsource(mod.HeartbeatScheduler._run_adapter).lstrip())
+        tree = ast.parse(inspect.getsource(mod.LLCHeartbeatScheduler._run_adapter).lstrip())
         func = tree.body[0]
 
         def _is_release(node: ast.AST) -> bool:

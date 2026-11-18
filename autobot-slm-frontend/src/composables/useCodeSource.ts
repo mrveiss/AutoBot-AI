@@ -24,7 +24,7 @@
 import { ref } from 'vue'
 import slmApiClient from '@/utils/ApiClient'
 
-export interface CodeSource {
+export interface NodeCodeSource {
   node_id: string
   hostname: string | null
   ip_address: string | null
@@ -42,7 +42,7 @@ export interface CodeSourceAssignRequest {
 }
 
 export function useCodeSource() {
-  const codeSource = ref<CodeSource | null>(null)
+  const codeSource = ref<NodeCodeSource | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -54,7 +54,7 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      codeSource.value = await slmApiClient.get<CodeSource | null>('/code-source')
+      codeSource.value = await slmApiClient.get<NodeCodeSource | null>('/code-source')
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch code source'
     } finally {
@@ -73,12 +73,12 @@ export function useCodeSource() {
     nodeId: string,
     repoPath: string = '/opt/autobot/code_source',
     branch: string = 'main'
-  ): Promise<CodeSource | null> {
+  ): Promise<NodeCodeSource | null> {
     isLoading.value = true
     error.value = null
 
     try {
-      const result = await slmApiClient.post<CodeSource>('/code-source/assign', {
+      const result = await slmApiClient.post<NodeCodeSource>('/code-source/assign', {
         node_id: nodeId,
         repo_path: repoPath,
         branch,

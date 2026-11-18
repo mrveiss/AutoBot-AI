@@ -78,13 +78,22 @@ class TestOperationIntegrationManager:
 
     @pytest.mark.asyncio
     async def test_initialize_without_redis(self):
-        manager = OperationIntegrationManager(redis_url="redis://invalid:6379/9")
-        with patch("redis.asyncio.from_url") as mock_redis:
-            mock_client = AsyncMock()
-            mock_client.ping = AsyncMock(side_effect=Exception("Connection failed"))
-            mock_redis.return_value = mock_client
+        manager = OperationIntegrationManager()
+        with patch("utils.operation_timeout_integration.get_async_redis_client", new=AsyncMock(return_value=None)):
             await manager.initialize()
-            assert manager.redis_client is None or manager.operation_manager is not None
+        assert manager.redis_client is None
+        assert manager.operation_manager is not None
+
+    @pytest.mark.asyncio
+    async def test_initialize_uses_a_non_decoding_client_on_the_temp_db(self):
+        """#18553/#14187: bytes from `temp`, so a legacy pickled entry cannot fail a pipeline batch."""
+        manager = OperationIntegrationManager()
+        client = AsyncMock()
+        getter = AsyncMock(return_value=client)
+        with patch("utils.operation_timeout_integration.get_async_redis_client", new=getter):
+            await manager.initialize()
+        getter.assert_awaited_once_with("temp", decode_responses=False)
+        assert manager.redis_client is client
 
     @pytest.mark.asyncio
     async def test_shutdown(self):
