@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.secret_redaction import redact_text, redact_url_credentials
@@ -68,10 +69,19 @@ def _timeout_ms(error: BaseException) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _without_query(url: str) -> str:
+    """*url* without its query string and fragment: both routinely carry tokens and session ids (#21769)."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return url.split("?", 1)[0].split("#", 1)[0]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
 def _echo(value: Any, *, is_url: bool) -> str | None:
     if not isinstance(value, str) or not value:
         return None
-    cleaned = _CONTROL_RE.sub(" ", value)[:BROWSER_ERROR_ECHO_MAX_CHARS]
+    cleaned = _CONTROL_RE.sub(" ", _without_query(value) if is_url else value)[:BROWSER_ERROR_ECHO_MAX_CHARS]
     return redact_text(redact_url_credentials(cleaned) if is_url else cleaned)
 
 

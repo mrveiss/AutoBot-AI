@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from chat_workflow import browser_tool_handler as handler
+from chat_workflow.browser_error_report import build_browser_error_report, format_browser_error_text
 
 _PLANTED = (
     "page.textContent: Timeout 30000ms exceeded waiting for locator('#missing')\n"
@@ -67,3 +68,16 @@ async def test_navigation_failure_names_class_and_redacted_url() -> None:
 async def test_unclassifiable_error_without_context_is_other(params: dict) -> None:
     _, results, _ = await _run("get_text", params, RuntimeError("boom"))
     assert results[0]["error_detail"]["error_class"] == "other"
+
+
+def test_an_echoed_url_carries_no_query_string_or_fragment():
+    err = TimeoutError("Timeout 3000ms exceeded")
+    url = "https://example.test/path/page?token=abc123&session=xyz#frag-secret"
+    report = build_browser_error_report("navigate", {"url": url}, err)
+    assert report["url"] == "https://example.test/path/page"
+    assert "abc123" not in format_browser_error_text(report) and "frag-secret" not in format_browser_error_text(report)
+
+
+def test_a_malformed_url_is_still_stripped_of_its_query():
+    report = build_browser_error_report("navigate", {"url": "http://[bad?token=zzz"}, TimeoutError("x"))
+    assert "zzz" not in report["url"]
