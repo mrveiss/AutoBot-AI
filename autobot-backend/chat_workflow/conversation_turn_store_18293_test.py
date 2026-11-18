@@ -112,6 +112,21 @@ async def test_a_short_stale_cache_never_wins_over_chat_sessions(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_a_cache_that_already_equals_the_projection_is_not_rewritten(monkeypatch) -> None:
+    """#21847: no Redis write per turn when nothing changed."""
+    redis = AsyncMock()
+    redis.get.return_value = json.dumps([{"user": "q", "assistant": "a"}])
+    _fake_chat_history(
+        monkeypatch, [{"sender": "user", "text": "q"}, {"sender": "assistant", "text": "a", "messageType": "response"}]
+    )
+
+    await _Handler(redis)._load_conversation_history(SESSION)
+    await asyncio.sleep(0)
+
+    redis.set.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_the_cache_serves_only_when_chat_sessions_is_unreadable(monkeypatch) -> None:
     redis = AsyncMock()
     redis.get.return_value = json.dumps([{"user": "c", "assistant": "d"}])

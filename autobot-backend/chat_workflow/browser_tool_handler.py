@@ -44,6 +44,10 @@ logger = get_logger(__name__)
 BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
 
 # Issue #21772: how much of the page's visible text a navigate result carries after URL and title.
+#: Characters of one screenshot data URL kept on the persisted message (#21847). The chat history is read and parsed
+#: whole on every turn (``ChatHistoryManager.load_session``), so a stored image is paid for on each later turn; a larger
+#: one is not stored as an image (the vision loop still gets the raw bytes this turn).
+BROWSER_IMAGE_PERSIST_MAX_CHARS = env_int("AUTOBOT_BROWSER_IMAGE_PERSIST_MAX_CHARS", default=1_500_000)
 BROWSER_NAVIGATE_EXCERPT_MAX_CHARS = env_int("AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS", default=1500)
 
 # Issue #11537: text formatters for the four indexed-element tool results,
@@ -240,6 +244,9 @@ def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[st
     the ``result`` copy so the history does not store the screenshot twice.
     """
     url = base64_image if base64_image.startswith("data:") else f"data:image/png;base64,{base64_image}"
+    if len(url) > BROWSER_IMAGE_PERSIST_MAX_CHARS:
+        logger.warning("[#21847] browser screenshot is %d chars, over the persisted-image cap; not stored", len(url))
+        return {}
     if not SAFE_DATA_IMAGE_RE.match(url):
         logger.warning("[#13424] browser result image is not an allowed data URL; it is not rendered")
         return {}

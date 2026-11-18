@@ -174,3 +174,16 @@ register_env_var(
         component="security",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_IMAGE_PERSIST_MAX_CHARS",
+        type=int,
+        default=1_500_000,
+        description=(
+            "Largest browser screenshot data URL (characters) stored on a chat message (#21847). The session "
+            "document is read whole on every turn, so a larger image is shown this turn but not persisted."
+        ),
+        component="backend",
+    )
+)

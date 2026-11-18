@@ -90,8 +90,8 @@ class ConversationHandlerMixin:
             history = await self._project_from_chat_sessions(session_id)
             if history is None:  # unreadable: a cached projection is better than none, never a legacy transcript
                 return await self._try_redis_history(session_id) or []
-            if history and self.redis_client is not None:
-                fire_and_forget(
+            if history and self.redis_client is not None and await self._try_redis_history(session_id) != history:
+                fire_and_forget(  # #21847: no Redis write per turn when the cache already equals the projection
                     self._save_conversation_history(session_id, history),
                     name="conversation-history-cache-refill",
                 )

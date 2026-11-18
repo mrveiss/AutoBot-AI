@@ -87,3 +87,10 @@ def test_only_png_jpeg_webp_data_urls_become_an_image_payload() -> None:
 
 def test_a_non_dict_inner_result_does_not_crash_the_image_metadata() -> None:
     assert handler.persisted_result({"result": "plain string"}, ("image",)) == {"result": "plain string"}
+
+
+def test_an_image_over_the_persisted_cap_is_not_stored_on_the_message(monkeypatch) -> None:
+    monkeypatch.setattr(handler, "BROWSER_IMAGE_PERSIST_MAX_CHARS", 10)  # #21847
+    results: list = []
+    msg = handler.record_browser_success("screenshot", {}, _SCREENSHOT, results)
+    assert "image_payload" not in msg.metadata and results[0]["base64_image"] == _PNG
