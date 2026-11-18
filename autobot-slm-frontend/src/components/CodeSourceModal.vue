@@ -11,17 +11,17 @@
  * The code-source POST is migrated onto the canonical `slmApiClient` (#12420
  * Phase 2): it resolves the base URL via `getSlmApiBase()`, injects the SLM
  * bearer token, and centrally handles 401 — replacing the local axios instance
- * and request interceptor. Node loading still flows through `useSlmApi`.
+ * and request interceptor. Node loading flows through the fleet store.
  */
 
 import { ref, onMounted } from 'vue'
 import { BaseModal, createLogger } from '@autobot/ui'
-import { useSlmApi } from '@/composables/useSlmApi'
+import { useFleetStore } from '@/stores/fleet'
 import slmApiClient from '@/utils/ApiClient'
 import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
-const slmApi = useSlmApi()
+const fleetStore = useFleetStore()
 
 const props = defineProps<{
   currentNodeId?: string
@@ -46,8 +46,9 @@ const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
-    // Reuse existing API composable (Issue #860)
-    nodes.value = await slmApi.getNodes()
+    // The one node-list fetch, through the fleet store (Issue #860, #21584)
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell
+    nodes.value = fleetStore.nodeList
   } catch (e: unknown) {
     // Show actual error for debugging (Issue #860)
     const err = e as { response?: { data?: { detail?: string } }; message?: string }

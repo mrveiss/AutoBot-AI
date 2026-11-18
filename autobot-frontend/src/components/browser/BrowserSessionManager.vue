@@ -383,7 +383,7 @@ export default {
       }
     }
 
-    const formatDate = createDateFormatter({ locale: 'en-US', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
+    const formatDate = createDateFormatter({ locale: () => locale.value, intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
     const formatTimeAgo = createRecencyFormatter({ locale: () => locale.value, maxUnit: 'day', invalidText: '—' })
 

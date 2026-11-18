@@ -908,12 +908,6 @@ class SecureCommandExecutor(CommandResultBuilders):
         Returns:
             Error result dictionary
         """
-        if isinstance(error, asyncio.TimeoutError):
-            logger.error("Command timed out: %s", command)
-            log_entry["error"] = "Command timed out"
-            self.command_history.append(log_entry)
-            return self._build_error_result(risk, reasons, "timeout", "Command execution timed out after 5 minutes")
-
         logger.error("Command execution error: %s", error)
         log_entry["error"] = str(error)
         self.command_history.append(log_entry)
@@ -952,10 +946,14 @@ class SecureCommandExecutor(CommandResultBuilders):
             result = await execute_shell_command(actual_command, policy)
             log_entry["executed"] = True
             log_entry["return_code"] = result["return_code"]
+            if result.get("timed_out"):  # the runner killed it at its deadline (#20740): audit it as such
+                logger.error("Command timed out: %s", shown)
+                log_entry["error"] = "Command timed out"
             filter_command, filter_stdout = self._filter_inputs(prepared_command, result.get("stdout", ""), policy)
             result["stdout"] = _filter.filter(filter_command, filter_stdout, exit_code=result["return_code"])
             self.command_history.append(log_entry)
             result["security"] = self._build_execution_security_info(risk, reasons, log_entry, rule_info)
+            result["security"]["timeout"] = bool(result.get("timed_out"))
             return result
         except Exception as e:
             return self._handle_execution_error(shown, risk, reasons, log_entry, e)

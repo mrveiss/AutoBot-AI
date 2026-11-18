@@ -10,10 +10,6 @@ stands the manager in). These tests use the real manager, controller and executo
 stub only the edges: the messenger (what would go to the browser) and the command runner
 (``_execute_command`` is a simulation today). A step waits until it is approved or
 skipped; there is no step timeout (owner decision, #17677).
-
-Not covered on purpose: ``approve_step`` for a step id that is not the current step is
-logged and answered ``success: true`` without running anything. That is a defect with
-its own issue, #20918, and pinning today's behaviour here would pin the defect.
 """
 
 import asyncio
@@ -145,3 +141,52 @@ def test_second_approve_while_executing_does_not_run_the_step_again(harness):
     assert response.status_code == 409
     assert h.ran == []
     assert h.statuses[0] == WorkflowStepStatus.EXECUTING
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_decision_for_a_step_still_executing_is_refused_and_changes_nothing(harness, action):
+    """#20918: approve and skip both need the step parked in WAITING_APPROVAL, not just named."""
+    h, client = harness
+    h.park_current_step()
+    h.workflow.steps[0].status = WorkflowStepStatus.EXECUTING
+    response = h.control(client, action, "s1")
+    assert response.status_code == 409
+    assert h.ran == []
+    assert h.statuses == [WorkflowStepStatus.EXECUTING, WorkflowStepStatus.PENDING]
+    assert h.workflow.current_step_index == 0
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_decision_for_the_wrong_step_is_refused_and_changes_nothing(harness, action):
+    """#20918: a step id that is not the waiting step is a 409, never `success: true`."""
+    h, client = harness
+    h.park_current_step()
+    response = h.control(client, action, "s2")
+    assert response.status_code == 409
+    assert h.ran == []
+    assert h.statuses == [WorkflowStepStatus.WAITING_APPROVAL, WorkflowStepStatus.PENDING]
+    assert h.workflow.current_step_index == 0
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_decision_for_an_unknown_step_is_refused(harness, action):
+    h, client = harness
+    h.park_current_step()
+    assert h.control(client, action, "nope").status_code == 409
+    assert h.ran == []
+    assert h.statuses[0] == WorkflowStepStatus.WAITING_APPROVAL
+
+
+@pytest.mark.parametrize("action", ["approve_step", "skip_step"])
+def test_refused_wrong_step_decision_is_not_counted_as_approved_or_skipped(harness, action):
+    """#20918: the approval metric moves only for a decision the executor accepted."""
+    h, client = harness
+    recorded = []
+    h.manager.controller.prometheus_metrics = SimpleNamespace(
+        record_workflow_approval=lambda **kw: recorded.append(kw["decision"])
+    )
+    h.park_current_step()
+    assert h.control(client, action, "s2").status_code == 409
+    assert recorded == []
+    assert h.control(client, action, "s1").status_code == 200
+    assert recorded == [{"approve_step": "approved", "skip_step": "skipped"}[action]]

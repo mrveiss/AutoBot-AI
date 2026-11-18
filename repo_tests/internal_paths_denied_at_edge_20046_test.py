@@ -27,7 +27,7 @@ from typing import cast
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from autobot_shared.slm_credential_deletion import PROPOSAL_PATH, claim_path, delete_path
+from autobot_shared.slm_credential_actions import PROPOSAL_PATH, claim_path, delete_path
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 

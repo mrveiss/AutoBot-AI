@@ -37,7 +37,7 @@ Add idempotent schema initialization to `ConversationFileManager.__init__()`.
 ### Implementation Tasks
 
 #### Task 1.1: Add _initialize_schema() Method (15 min)
-**Agent**: database-engineer
+**Agent**: autobot-dev-skills:senior-developer (database-engineer lens)
 **File**: `src/conversation_file_manager.py`
 **Dependencies**: None
 
@@ -67,7 +67,7 @@ def _initialize_schema(self) -> None:
 ```
 
 #### Task 1.2: Call from __init__ (5 min)
-**Agent**: database-engineer
+**Agent**: autobot-dev-skills:senior-developer (database-engineer lens)
 **File**: `src/conversation_file_manager.py`
 **Dependencies**: Task 1.1
 
@@ -81,7 +81,7 @@ def __init__(self, ...):
 ```
 
 #### Task 1.3: Test Schema Initialization (10 min)
-**Agent**: testing-engineer
+**Agent**: autobot-dev-skills:senior-developer (testing-engineer lens)
 **File**: `tests/test_conversation_file_manager_init.py` (create)
 **Dependencies**: Task 1.2
 
@@ -117,7 +117,7 @@ Convert to async Redis using existing `AsyncRedisManager` infrastructure.
 ### Implementation Tasks
 
 #### Task 2.1: Update Redis Client Initialization (15 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: None
 
@@ -132,7 +132,7 @@ self.redis_manager = None  # Initialize in async init
 ```
 
 #### Task 2.2: Add Async Initialization Method (20 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: Task 2.1
 
@@ -147,7 +147,7 @@ async def initialize(self):
 ```
 
 #### Task 2.3: Convert _load_conversation_history to Async (15 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: Task 2.2
 
@@ -161,7 +161,7 @@ history_json = await self.redis_client.get(key)
 ```
 
 #### Task 2.4: Convert _save_conversation_history to Async (15 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: Task 2.2
 
@@ -175,7 +175,7 @@ await self.redis_client.set(key, history_json, ex=self.conversation_history_ttl)
 ```
 
 #### Task 2.5: Wrap File I/O in Thread Pool (15 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: None (parallel with Tasks 2.1-2.4)
 
@@ -193,14 +193,14 @@ transcript = await asyncio.to_thread(
 ```
 
 #### Task 2.6: Update All Callers (10 min)
-**Agent**: senior-backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **Files**: `autobot-backend/api/chat_enhanced.py`, other chat endpoints
 **Dependencies**: Tasks 2.1-2.5
 
 **Changes**: Ensure `await manager.initialize()` called before use.
 
 #### Task 2.7: Performance Testing (10 min)
-**Agent**: performance-engineer
+**Agent**: autobot-dev-skills:senior-developer (performance-engineer lens)
 **File**: `tests/performance/test_async_chat_performance.py` (create)
 **Dependencies**: Task 2.6
 
@@ -235,7 +235,7 @@ API Key + HMAC-SHA256 signing with authorization matrix, deployed in 4 phases.
 #### Day 1: Core Infrastructure (6 hours)
 
 **Task 3.1: Create Service Auth Module (2 hours)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **File**: `backend/security/service_auth.py` (create)
 **Dependencies**: None
 
@@ -247,7 +247,7 @@ API Key + HMAC-SHA256 signing with authorization matrix, deployed in 4 phases.
 - Key rotation mechanism
 
 **Task 3.2: Create Auth Middleware (2 hours)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **Files**:
 - `backend/middleware/service_auth_logging.py` (create) - Day 2 deployment
 - `backend/middleware/service_auth_enforcement.py` (create) - Day 3 deployment
@@ -287,7 +287,7 @@ class ServiceAuthEnforcementMiddleware:
 - Comprehensive audit logging
 
 **Task 3.3: Create Service HTTP Client (1 hour)**
-**Agent**: backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `backend/utils/service_client.py` (create)
 **Dependencies**: Task 3.1
 
@@ -298,7 +298,7 @@ class ServiceAuthEnforcementMiddleware:
 - Timeout management
 
 **Task 3.4: Define Authorization Matrix (1 hour)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **File**: `config/service_authorization.yaml` (create)
 **Dependencies**: None (parallel with 3.1-3.3)
 
@@ -325,7 +325,7 @@ authorization_matrix:
 #### Day 2: Key Distribution & Deployment (8 hours)
 
 **Task 3.5: Generate Service Keys (1 hour)**
-**Agent**: devops-engineer
+**Agent**: autobot-dev-skills:senior-developer (devops-engineer lens)
 **File**: `scripts/generate_service_keys.py` (create)
 **Dependencies**: Task 3.1
 
@@ -335,7 +335,7 @@ authorization_matrix:
 - Create deployment script
 
 **Task 3.6: Create Ansible Deployment Playbook (2 hours)**
-**Agent**: devops-engineer
+**Agent**: autobot-dev-skills:senior-developer (devops-engineer lens)
 **File**: `ansible/playbooks/deploy-service-auth.yml` (create)
 **Dependencies**: Tasks 3.1-3.5
 
@@ -346,7 +346,7 @@ authorization_matrix:
 - Health checks after deployment
 
 **Task 3.7: Deploy to All VMs (Logging Middleware) (3 hours)**
-**Agent**: devops-engineer
+**Agent**: autobot-dev-skills:senior-developer (devops-engineer lens)
 **Dependencies**: Task 3.6
 
 **CRITICAL POLICY COMPLIANCE**: Deploy logging middleware file, NOT environment variable.
@@ -375,7 +375,7 @@ ssh autobot@<backend-ip> "grep -l 'ServiceAuthLoggingMiddleware' /home/autobot/b
 4. Restarts backend service
 
 **Task 3.8: Monitor Logs for 24 Hours (2 hours active monitoring)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **Dependencies**: Task 3.7
 
 **Monitoring**:
@@ -387,7 +387,7 @@ ssh autobot@<backend-ip> "grep -l 'ServiceAuthLoggingMiddleware' /home/autobot/b
 #### Day 3: Enforcement Activation (6 hours)
 
 **Task 3.9: Validate Logging Results (1 hour)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **Dependencies**: Task 3.8
 
 **Validation**:
@@ -396,7 +396,7 @@ ssh autobot@<backend-ip> "grep -l 'ServiceAuthLoggingMiddleware' /home/autobot/b
 - Document authorization matrix accuracy
 
 **Task 3.10: Deploy Enforcement Middleware (2 hours)**
-**Agent**: devops-engineer
+**Agent**: autobot-dev-skills:senior-developer (devops-engineer lens)
 **Dependencies**: Task 3.9
 
 **CRITICAL POLICY COMPLIANCE**: Replace logging middleware with enforcement middleware file.
@@ -425,7 +425,7 @@ ssh autobot@<backend-ip> "grep -l 'ServiceAuthEnforcementMiddleware' /home/autob
 **NO environment variable checks in code** - only file replacement.
 
 **Task 3.11: Monitor for Blocked Legitimate Calls (3 hours)**
-**Agent**: security-auditor
+**Agent**: autobot-dev-skills:reviewer (security-auditor lens)
 **Dependencies**: Task 3.10
 
 **Monitoring**:
@@ -436,7 +436,7 @@ ssh autobot@<backend-ip> "grep -l 'ServiceAuthEnforcementMiddleware' /home/autob
 #### Day 4: Redis ACL Configuration (6 hours)
 
 **Task 3.12: Create Redis ACL Configuration (1 hour)**
-**Agent**: database-engineer
+**Agent**: autobot-dev-skills:senior-developer (database-engineer lens)
 **File**: `config/redis-acl.conf` (create)
 **Dependencies**: Task 3.1
 
@@ -450,7 +450,7 @@ user browser-service on >password ~sessions:* +get +set +del +expire
 ```
 
 **Task 3.13: Deploy Redis ACL (2 hours)**
-**Agent**: devops-engineer
+**Agent**: autobot-dev-skills:senior-developer (devops-engineer lens)
 **Dependencies**: Task 3.12
 
 **Execution**:
@@ -463,14 +463,14 @@ ssh autobot@<database-ip> "sudo systemctl restart redis-stack-server"
 ```
 
 **Task 3.14: Update All Redis Clients with Auth (2 hours)**
-**Agent**: backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **Files**: All files using Redis (10+ files)
 **Dependencies**: Task 3.13
 
 **Changes**: Add username/password to Redis connection strings.
 
 **Task 3.15: Integration Testing (1 hour)**
-**Agent**: testing-engineer
+**Agent**: autobot-dev-skills:senior-developer (testing-engineer lens)
 **Dependencies**: Task 3.14
 
 **Test Cases**:
@@ -494,21 +494,21 @@ Model-specific configuration system with centralized ContextWindowManager.
 #### Day 1: Configuration & Manager (6 hours)
 
 **Task 4.1: Create Model Configuration File (1 hour)**
-**Agent**: ai-ml-engineer
+**Agent**: autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 **File**: `config/llm_models.yaml` (create)
 **Dependencies**: None
 
-**Content**: See ai-ml-engineer's detailed config from research phase.
+**Content**: See autobot-dev-skills:senior-developer (ai-ml-engineer lens)'s detailed config from research phase.
 
 **Task 4.2: Implement ContextWindowManager (3 hours)**
-**Agent**: ai-ml-engineer
+**Agent**: autobot-dev-skills:senior-developer (ai-ml-engineer lens)
 **File**: `src/context_window_manager.py` (create)
 **Dependencies**: Task 4.1
 
-**Implementation**: See ai-ml-engineer's detailed implementation from research phase.
+**Implementation**: See autobot-dev-skills:senior-developer (ai-ml-engineer lens)'s detailed implementation from research phase.
 
 **Task 4.3: Unit Tests for ContextWindowManager (2 hours)**
-**Agent**: testing-engineer
+**Agent**: autobot-dev-skills:senior-developer (testing-engineer lens)
 **File**: `tests/test_context_window_manager.py` (create)
 **Dependencies**: Task 4.2
 
@@ -522,21 +522,21 @@ Model-specific configuration system with centralized ContextWindowManager.
 #### Day 2: Integration (6 hours)
 
 **Task 4.4: Update chat_enhanced.py (2 hours)**
-**Agent**: backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `autobot-backend/api/chat_enhanced.py`
 **Dependencies**: Task 4.2
 
 **Changes**: Replace hardcoded `limit=500` and `[-200:]` with ContextWindowManager.
 
 **Task 4.5: Update chat_workflow_manager.py (2 hours)**
-**Agent**: backend-engineer
+**Agent**: autobot-dev-skills:senior-developer (senior-backend-engineer lens)
 **File**: `src/chat_workflow_manager.py`
 **Dependencies**: Task 4.2
 
 **Changes**: Replace hardcoded `[-5:]` with model-aware limit.
 
 **Task 4.6: Integration Testing (2 hours)**
-**Agent**: testing-engineer
+**Agent**: autobot-dev-skills:senior-developer (testing-engineer lens)
 **Dependencies**: Tasks 4.4-4.5
 
 **Test Cases**:
@@ -552,20 +552,20 @@ Model-specific configuration system with centralized ContextWindowManager.
 ### Parallel Execution Strategy (5.5 days)
 
 **Day 1** (Parallel):
-- Fix #1 (Database Init): 30 min - database-engineer
-- Fix #2 (Event Loop): 90 min - senior-backend-engineer
-- Fix #3 Day 1 (Service Auth Core): 6 hours - security-auditor + backend-engineer
-- Fix #4 Day 1 (Context Config): 6 hours - ai-ml-engineer + testing-engineer
+- Fix #1 (Database Init): 30 min - autobot-dev-skills:senior-developer (database-engineer lens)
+- Fix #2 (Event Loop): 90 min - autobot-dev-skills:senior-developer (senior-backend-engineer lens)
+- Fix #3 Day 1 (Service Auth Core): 6 hours - autobot-dev-skills:reviewer (security-auditor lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens)
+- Fix #4 Day 1 (Context Config): 6 hours - autobot-dev-skills:senior-developer (ai-ml-engineer lens) + autobot-dev-skills:senior-developer (testing-engineer lens)
 
 **Day 2**:
-- Fix #3 Day 2 (Key Distribution): 8 hours - devops-engineer + security-auditor
+- Fix #3 Day 2 (Key Distribution): 8 hours - autobot-dev-skills:senior-developer (devops-engineer lens) + autobot-dev-skills:reviewer (security-auditor lens)
 
 **Day 3**:
-- Fix #3 Day 3 (Enforcement): 6 hours - devops-engineer + security-auditor
-- Fix #4 Day 2 (Integration): 6 hours (parallel) - backend-engineer + testing-engineer
+- Fix #3 Day 3 (Enforcement): 6 hours - autobot-dev-skills:senior-developer (devops-engineer lens) + autobot-dev-skills:reviewer (security-auditor lens)
+- Fix #4 Day 2 (Integration): 6 hours (parallel) - autobot-dev-skills:senior-developer (senior-backend-engineer lens) + autobot-dev-skills:senior-developer (testing-engineer lens)
 
 **Day 4**:
-- Fix #3 Day 4 (Redis ACL): 6 hours - database-engineer + backend-engineer + testing-engineer
+- Fix #3 Day 4 (Redis ACL): 6 hours - autobot-dev-skills:senior-developer (database-engineer lens) + autobot-dev-skills:senior-developer (senior-backend-engineer lens) + autobot-dev-skills:senior-developer (testing-engineer lens)
 
 **Day 5** (Testing & Validation):
 - Integration testing all 4 fixes together: 6 hours
@@ -718,22 +718,22 @@ curl -X POST https://<backend-ip>:8443/api/chat/stream \
 ## Agent Assignments
 
 **Parallel Track 1** (Day 1):
-- **database-engineer**: Fix #1 (30 min)
-- **senior-backend-engineer**: Fix #2 (90 min)
+- **autobot-dev-skills:senior-developer (database-engineer lens)**: Fix #1 (30 min)
+- **autobot-dev-skills:senior-developer (senior-backend-engineer lens)**: Fix #2 (90 min)
 
 **Parallel Track 2** (Days 1-4):
-- **security-auditor**: Fix #3 core auth + monitoring (Days 1-3)
-- **devops-engineer**: Fix #3 deployment + Redis ACL (Days 2-4)
-- **backend-engineer**: Fix #3 client updates (Day 4)
+- **autobot-dev-skills:reviewer (security-auditor lens)**: Fix #3 core auth + monitoring (Days 1-3)
+- **autobot-dev-skills:senior-developer (devops-engineer lens)**: Fix #3 deployment + Redis ACL (Days 2-4)
+- **autobot-dev-skills:senior-developer (senior-backend-engineer lens)**: Fix #3 client updates (Day 4)
 
 **Parallel Track 3** (Days 1-3):
-- **ai-ml-engineer**: Fix #4 config + manager (Day 1)
-- **testing-engineer**: Fix #4 tests + integration (Days 1-2)
+- **autobot-dev-skills:senior-developer (ai-ml-engineer lens)**: Fix #4 config + manager (Day 1)
+- **autobot-dev-skills:senior-developer (testing-engineer lens)**: Fix #4 tests + integration (Days 1-2)
 
 **Integration Phase** (Days 5-5.5):
-- **testing-engineer**: Integration + load + security testing
-- **performance-engineer**: Performance validation
-- **code-reviewer**: Final code review
+- **autobot-dev-skills:senior-developer (testing-engineer lens)**: Integration + load + security testing
+- **autobot-dev-skills:senior-developer (performance-engineer lens)**: Performance validation
+- **autobot-dev-skills:reviewer (code-reviewer lens)**: Final code review
 
 **Total Agents**: 7 specialists working in parallel tracks
 

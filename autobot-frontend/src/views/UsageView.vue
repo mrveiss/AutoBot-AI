@@ -102,7 +102,7 @@
             </thead>
             <tbody>
               <tr v-for="(r, i) in personalRecent" :key="i">
-                <td>{{ r.timestamp ? new Date(r.timestamp).toLocaleString() : '—' }}</td>
+                <td>{{ fmtDate(r.timestamp) }}</td>
                 <td>{{ r.provider ?? '—' }}</td>
                 <td>{{ r.model ?? '—' }}</td>
                 <td>{{ (r.input_tokens ?? 0).toLocaleString() }}</td>
@@ -380,7 +380,7 @@ function fmtSeconds(s: number): string {
   return `${m}m ${sec}s`
 }
 
-const fmtDate = createDateFormatter()
+const fmtDate = createDateFormatter({ emptyText: '—' })
 
 onMounted(load)
 </script>
