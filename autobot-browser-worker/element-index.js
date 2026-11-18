@@ -116,7 +116,34 @@ function resolveElementByIndex(elements, index, expectedCount) {
   return { element: target };
 }
 
+/*
+ * Navigate excerpt (#21772). It lives here because this module is already shipped by every deploy path, which copy the
+ * worker's local modules by explicit list; a new file would be missing there and the worker would not start.
+ * One cap, shared with the backend: AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS (registered once, read by both).
+ */
+const DEFAULT_EXCERPT_MAX_CHARS = 1500;
+
+/** The cap from the environment; a non-numeric or non-positive value yields the default. */
+function excerptCap(env = process.env) {
+  const parsed = parseInt(env.AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXCERPT_MAX_CHARS;
+}
+
+/** Whitespace-collapsed visible text of the page, capped; '' when the page cannot be read. */
+async function pageExcerpt(page, cap = excerptCap()) {
+  try {
+    const text = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+    return String(text || '').replace(/\s+/g, ' ').trim().slice(0, cap);
+  } catch (err) {
+    // The excerpt is a convenience: a page that cannot be read must never fail the navigation itself.
+    return '';
+  }
+}
+
 module.exports = {
+  DEFAULT_EXCERPT_MAX_CHARS,
+  excerptCap,
+  pageExcerpt,
   DEFAULT_MAX_ELEMENTS,
   INDEX_ELEMENTS_SCRIPT,
   collectIndexedElements,

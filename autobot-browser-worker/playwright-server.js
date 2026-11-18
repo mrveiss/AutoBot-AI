@@ -7,8 +7,7 @@ const express = require('express');
 // Default frontend for the /test-frontend* routes; one place, env-overridable.
 const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://localhost:5173';
 const { SessionStore } = require('./session-store');
-const { collectIndexedElements, resolveElementByIndex } = require('./element-index');
-const { pageExcerpt } = require('./navigate-excerpt');
+const { collectIndexedElements, resolveElementByIndex, pageExcerpt } = require('./element-index');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));

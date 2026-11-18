@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { DEFAULT_EXCERPT_MAX_CHARS, excerptCap, pageExcerpt } = require('../navigate-excerpt');
+const { DEFAULT_EXCERPT_MAX_CHARS, excerptCap, pageExcerpt } = require('../element-index');
 
 const VAR = 'AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS';
 
