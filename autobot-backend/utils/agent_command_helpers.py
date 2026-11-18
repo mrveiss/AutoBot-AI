@@ -14,7 +14,7 @@ Extracted to eliminate code duplication (Issue #292).
 from typing import Any, Dict, List
 
 from constants.threshold_constants import TimingConstants
-from utils.command_utils import execute_shell_command
+from utils.command_utils import execute_command
 
 
 async def run_agent_command(
@@ -22,9 +22,9 @@ async def run_agent_command(
     timeout: int = TimingConstants.STANDARD_TIMEOUT,
 ) -> Dict[str, Any]:
     """
-    Run a shell command with timeout and return standardized result.
+    Run a command (argv, no shell) with a timeout and return a standardized result.
 
-    This wrapper around execute_shell_command provides a simplified
+    This wrapper around execute_command provides a simplified
     interface commonly used by security/network scanning agents.
 
     Args:
@@ -37,7 +37,8 @@ async def run_agent_command(
             - output: stdout on success
             - message: error message on failure
     """
-    result = await execute_shell_command(cmd, timeout=timeout)
+    # #20741: argv runs exec-style with no shell (these carry scan targets), under the canonical runner's timeout.
+    result = (await execute_command(cmd, timeout=timeout)).to_dict()
 
     # Convert to expected format for agents
     if result["status"] == "success":

@@ -31,13 +31,20 @@ by its known positive and by synthetic fixtures instead.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
-from repo_tests._hardcoded_ui_literal_baseline import HARDCODED_UI_LITERALS
+from repo_tests._hardcoded_ui_literal_baseline import (
+    HARDCODED_UI_LITERAL_IDS,
+    HARDCODED_UI_LITERALS,
+    literal_digest,
+)
 from repo_tests._hardcoded_ui_literal_detect import (
     APP_TREES,
     REACH_UI_LITERAL_FILES,
+    formatter_files,
     literals_in,
     scan,
     scanned_files,
@@ -50,6 +57,7 @@ from repo_tests._ui_literal_rederive import (
     regex_literals,
     tracked_vue_files,
 )
+from repo_tests._ui_literal_scan import script_literals, template_hits, ts_literals
 
 _PANEL = "autobot-frontend/src/components/knowledge/connectors/ConnectorHistoryPanel.vue"
 _PANEL_LITERALS = {
@@ -59,8 +67,9 @@ _PANEL_LITERALS = {
     ("attribute", "Close"),
 }
 _FIX = (
-    "Use t('...') with an English key in en.json (English-only i18n; SLM locales go "
-    "through scripts/lift_locale_translations.py). The untranslated ratchet may rise by "
+    "Use t('...') with an English key in en.json, e.g. `label: t('area.thing.label')` for a "
+    "script `label:` or `zeroText:` literal (#19885); English-only i18n, SLM locales go "
+    "through scripts/lift_locale_translations.py. The untranslated ratchet may rise by "
     "exactly the moved keys (owner ruling, #12732)."
 )
 
@@ -70,22 +79,60 @@ def measured() -> dict[str, list[tuple[str, str]]]:
     return scan(repo_root())
 
 
+def identity_diff(recorded, measured):
+    """Per-file multiset diff of recorded digests against measured (kind, literal) pairs.
+
+    Returns (new, stale): new is {file: [(kind, literal)]} with the CURRENT text from the scan,
+    stale is {file: [digest]}. The baseline holds digests only (#18802), so a stale entry is
+    named by its digest.
+    """
+    new, stale = {}, {}
+    for f in sorted(set(recorded) | set(measured)):
+        pairs = measured.get(f, [])
+        have, had = Counter(literal_digest(k, t) for k, t in pairs), Counter(recorded.get(f, []))
+        added = have - had
+        if added:
+            text = {literal_digest(k, t): (k, t) for k, t in pairs}
+            new[f] = sorted(text[d] for d in added.elements())
+        if gone := sorted((had - have).elements()):
+            stale[f] = gone
+    return new, stale
+
+
 class TestThePopulationOnlyShrinks:
     def test_no_file_gains_a_literal(self, measured):
-        grew = {
-            f: (HARDCODED_UI_LITERALS.get(f, 0), len(v))
-            for f, v in measured.items()
-            if len(v) > HARDCODED_UI_LITERALS.get(f, 0)
-        }
-        assert not grew, f"hard-coded UI text grew (file: recorded, now) {grew}. {_FIX}"
+        new, _ = identity_diff(HARDCODED_UI_LITERAL_IDS, measured)
+        assert not new, f"hard-coded UI text not in the baseline (file: [(kind, literal)]) {new}. {_FIX}"
 
-    def test_a_shrink_is_recorded_in_the_commit_that_did_the_work(self, measured):
-        shrunk = {
-            f: (n, len(measured.get(f, [])))
-            for f, n in HARDCODED_UI_LITERALS.items()
-            if 0 < len(measured.get(f, [])) < n
-        }
-        assert not shrunk, f"lower these in _hardcoded_ui_literal_baseline.py (recorded, now): {shrunk}"
+    def test_a_removed_literal_is_deleted_in_the_commit_that_did_the_work(self, measured):
+        _, stale = identity_diff(HARDCODED_UI_LITERAL_IDS, measured)
+        assert not stale, (
+            "literals gone from these files; delete these digests from "
+            f"hardcoded_ui_literal_baseline_12732.json: {stale}"
+        )
+
+    def test_a_swap_in_one_file_fails_both_ways(self):
+        """A per-file count passed this (#18802): one literal out, another in, same total."""
+        recorded = {"A.vue": [literal_digest("script", "Old text")]}
+        new, stale = identity_diff(recorded, {"A.vue": [("script", "New text")]})
+        assert new == {"A.vue": [("script", "New text")]}
+        assert stale == {"A.vue": [literal_digest("script", "Old text")]}
+        assert identity_diff(recorded, {"A.vue": [("script", "Old text")]}) == ({}, {})
+
+    def test_a_duplicate_literal_counts_twice(self):
+        recorded = {"A.vue": [literal_digest("attribute", "Close")]}
+        new, _ = identity_diff(recorded, {"A.vue": [("attribute", "Close")] * 2})
+        assert new == {"A.vue": [("attribute", "Close")]}
+
+    def test_the_kind_is_part_of_the_identity(self):
+        """The same text as a different kind is a different literal."""
+        assert literal_digest("attribute", "Close") != literal_digest("template-text", "Close")
+
+    def test_the_baseline_stores_no_literal_text(self):
+        """Digests only: no secret-shaped placeholder text in a tracked file (#18802)."""
+        digest = re.compile(r"^[0-9a-f]{8}$")
+        bad = {f: d for f, v in HARDCODED_UI_LITERAL_IDS.items() for d in v if not digest.match(d)}
+        assert not bad, f"baseline entries that are not 8-hex digests: {bad}"
 
     def test_a_file_that_reaches_zero_leaves_the_dict(self, measured):
         gone = sorted(f for f in HARDCODED_UI_LITERALS if f not in measured)
@@ -97,8 +144,10 @@ class TestThePopulationOnlyShrinks:
         assert not bad, f"entries that are zero or outside the boundary: {bad}"
 
     def test_the_baseline_is_sorted(self):
-        keys = list(HARDCODED_UI_LITERALS)
+        keys = list(HARDCODED_UI_LITERAL_IDS)
         assert keys == sorted(keys)
+        unsorted = [f for f, v in HARDCODED_UI_LITERAL_IDS.items() if v != sorted(v)]
+        assert not unsorted, f"digests not sorted within: {unsorted}"
 
 
 class TestTheBoundaryDoesNotMoveSilently:
@@ -128,6 +177,111 @@ class TestKnownPositive:
     def test_the_detector_finds_the_history_panel_literals(self):
         text = (repo_root() / _PANEL).read_text(encoding="utf-8")
         assert _PANEL_LITERALS <= set(literals_in(text))
+
+
+class TestLabelAndZeroTextFields:
+    """`label:` and `zeroText:` in `<script>` (#19885): a positive, a negative and a growth control each."""
+
+    def _script(self, body: str) -> list[str]:
+        return [t for k, t in literals_in(f"<script>{body}</script>") if k == "script"]
+
+    def test_label_positive(self):
+        assert self._script("const o = [{ value: 'a', label: 'Total Nodes' }]") == ["Total Nodes"]
+
+    def test_zero_text_positive(self):
+        assert self._script("const f = { zeroText: 'No data yet' }") == ["No data yet"]
+
+    def test_label_negatives(self):
+        body = "[{ label: t('x.y') }, { label: name }, { label: 'lower case' }, { label: 'PDF' }, { label: 'Chat' }]"
+        assert self._script(body) == []
+
+    def test_zero_text_negatives(self):
+        assert self._script("{ zeroText: t('common.zeroSize') }, { zeroText: size }, { nullText: '—' }") == []
+
+    @pytest.mark.parametrize(
+        ("body", "found"),
+        [
+            ("{ zeroText: '0B' }", "0B"),
+            ("{ nullText: '0 B' }", "0 B"),
+            ("{ label: '1.5 KB' }", "1.5 KB"),
+            ("{ label: '2 GiB' }", "2 GiB"),
+            ("[{ label: 'SLOs' }]", "SLOs"),
+        ],
+    )
+    def test_the_size_and_acronym_plural_shapes_are_seen(self, body, found):
+        """The #19885 sites: a size or an acronym plural is visible text the prose rule cannot see."""
+        assert self._script(body) == [found]
+
+    @pytest.mark.parametrize("value", ["1h", "6h", "24h", "7d", "30 min", "500ms"])
+    def test_a_time_unit_after_label_is_seen(self, value):
+        """The #20765 sites: `label: '24h'` is visible text; the shape is limited to `label:`."""
+        assert self._script(f"[{{ value: '1', label: '{value}' }}]") == [value]
+
+    @pytest.mark.parametrize("body", ["{ 'label': '24h' }", '{ "label": "24h" }', "{ label : '24h' }"])
+    def test_a_quoted_or_spaced_label_key_is_seen(self, body):
+        assert self._script(body) == ["24h"]
+
+    def test_a_fractional_time_value_is_seen(self):
+        assert self._script("[{ label: '1.5h' }, { label: '0.5 d' }]") == ["1.5h", "0.5 d"]
+
+    def test_a_longer_key_ending_in_label_is_not_the_label_key(self):
+        assert self._script("{ sublabel: '24h', 'ariaLabel': '7d' }") == []
+
+    def test_the_ts_formatter_scan_reaches_the_time_label(self):
+        """`ts_literals` shares the matcher (#20765): a label is seen, a time-like `value` is not."""
+        found = ts_literals("export const R = [{ label: '24h', value: '24h' }, { id: '7d' }]")
+        assert found == [("script", "24h")]
+
+    def test_a_time_unit_under_another_key_stays_unmatched(self):
+        """`'3d'` as a mode id (`m.value = '3d'`, `viewMode === '3d'`) is not text; neither is `{ value: '24h' }`."""
+        assert self._script("m.value = '3d'; if (viewMode === '3d') {}; const o = { value: '24h', id: '7d' }") == []
+
+    def test_other_short_shapes_stay_unmatched(self):
+        """A bare acronym, a short word, a lone unit and a unit-less number after `label:` are not these shapes."""
+        assert (
+            self._script("[{ label: 'PDF' }, { label: 'Chat' }, { label: 's' }, { label: '24' }, { label: '2x' }]")
+            == []
+        )
+
+    def test_a_label_key_outside_script_is_not_a_script_literal(self):
+        src = "<template><p>{ label: 'Hello there' }</p></template>"
+        assert [t for k, t in literals_in(src) if k == "script"] == []
+
+    @pytest.mark.parametrize("key", ["label", "zeroText", "nullText"])
+    def test_the_frozen_baseline_fails_on_a_new_literal(self, measured, key):
+        """Real recorded digests for a real baselined file plus one new literal: the diff names it."""
+        rel = next(f for f in sorted(measured) if any(k == "script" for k, _ in measured[f]))
+        added = ("script", "Brand new words")
+        source = (
+            (repo_root() / rel)
+            .read_text(encoding="utf-8")
+            .replace("<script", f"<script>const _n = {{ {key}: 'Brand new words' }}</script>\n<script", 1)
+        )
+        assert added in literals_in(source)
+        new, stale = identity_diff({rel: HARDCODED_UI_LITERAL_IDS[rel]}, {rel: literals_in(source)})
+        assert new == {rel: [added]} and stale == {}
+
+    @pytest.mark.parametrize("key", ["label", "zeroText"])
+    def test_a_duplicate_new_literal_counts_twice(self, key):
+        body = f"{{ {key}: 'Same words' }}, {{ {key}: 'Same words' }}"
+        pairs = [("script", t) for t in self._script(body)]
+        recorded = {"A.vue": [literal_digest("script", "Same words")]}
+        assert identity_diff(recorded, {"A.vue": pairs})[0] == {"A.vue": [("script", "Same words")]}
+
+    def test_the_formatter_modules_are_scanned(self):
+        """The `.ts` formatter that held `nullText: '0 B'` (#19885) is in the scanned set."""
+        assert "autobot-frontend/src/utils/formatHelpers.ts" in formatter_files(repo_root())
+
+    def test_a_planted_size_text_in_a_formatter_is_found(self, tmp_path):
+        """A `.ts` formatter planted with the pre-#19885 shape: `scan` reports it as a script literal."""
+        mod = tmp_path / APP_TREES[0] / "utils" / "formatPlanted.ts"
+        mod.parent.mkdir(parents=True)
+        mod.write_text("export const opts = { nullText: '0 B', zeroText: t('x') }\n", encoding="utf-8")
+        assert scan(tmp_path) == {f"{APP_TREES[0].as_posix()}/utils/formatPlanted.ts": [("script", "0 B")]}
+
+    def test_the_known_positive_in_a_real_component(self):
+        text = (repo_root() / "autobot-slm-frontend/src/components/fleet/FleetSummary.vue").read_text(encoding="utf-8")
+        assert ("script", "Total Nodes") in literals_in(text)
 
 
 class TestEachMatcherOnSyntheticSources:
@@ -171,6 +325,21 @@ class TestEachMatcherOnSyntheticSources:
     def test_script_negatives(self):
         src = "<script>a.value = 'lower case'; b.value = t('x'); title: 'A'</script>"
         assert self._kinds(src, "script") == []
+
+    def test_script_quotes_close_on_the_opening_delimiter(self):
+        """An apostrophe inside double quotes, and double quotes inside single (#18802)."""
+        src = "<script>alert(\"Can't connect\"); e.value = 'Say \"hi\" now'; title: `It's ${n}`</script>"
+        assert self._kinds(src, "script") == ["Can't connect", 'Say "hi" now', "It's ${n}"]
+
+    def test_script_literal_with_an_escaped_quote_is_recorded(self):
+        """`label: 'Let\\'s go'` is a literal; an escaped quote does not end it or hide it."""
+        src = '<script>const o = { label: \'Let\\\'s go\', zeroText: "Say \\"hi\\" now" }</script>'
+        assert self._kinds(src, "script") == ["Let\\'s go", 'Say \\"hi\\" now']
+
+    def test_script_quote_negatives(self):
+        """A mismatched pair is not a literal, nor is a lower-case string with an apostrophe."""
+        assert self._kinds("<script>alert(\"Unclosed text')</script>", "script") == []
+        assert self._kinds('<script>x.value = "don\'t count"</script>', "script") == []
 
     def test_script_text_in_template_is_not_a_script_literal(self):
         assert self._kinds("<template><p>message: 'Hello there'</p></template>", "script") == []
@@ -233,3 +402,20 @@ class TestSecondDerivation:
         assert explain_parser_only(src, "template-text", "3 items found") == "outside-regex-class"
         assert explain_parser_only(src, "template-text", "Plain words here") is None
         assert explain_parser_only(src, "attribute", "*.pdf, *.md") == "outside-regex-class"
+
+
+def test_script_blocks_end_at_any_valid_closing_tag() -> None:
+    """`</script >` and `</SCRIPT foo>` close a block too (CodeQL py/bad-tag-filter, #12732)."""
+    source = (
+        "<template><p>Shown text here</p></template>\n"
+        "<script setup>const a = 1</script >\n"
+        '<script>alert("Spaced closing tag")</SCRIPT data-x>\n'
+    )
+    assert script_literals(source) == ["Spaced closing tag"]
+    assert [kind for kind, _ in literals_in(source)] == ["template-text", "script"]
+
+
+def test_each_line_of_a_multi_line_text_node_has_its_own_line_number() -> None:
+    """A literal reports its own line, even after a multi-line interpolation (#18802 review)."""
+    source = "<template>\n  <p>\n    First line here\n    {{\n      count\n    }}\n    Third real line\n  </p>\n</template>\n"
+    assert [(hit.line, hit.text) for hit in template_hits(source)] == [(3, "First line here"), (7, "Third real line")]

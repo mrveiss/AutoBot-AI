@@ -1,9 +1,10 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025-2026 mrveiss -->
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
+import { getEnvPositiveInt } from '@autobot/ui'
 import UploadModal from '@/components/transcriber/UploadModal.vue'
 import ProcessingProgress from '@/components/transcriber/ProcessingProgress.vue'
 import {
@@ -18,6 +19,11 @@ const logger = createLogger('TranscriberProjectDetailView')
 
 // Live progress returns with its route (#18746): the SSE /recordings/{id}/progress route is not served.
 const LIVE_PROGRESS_ENABLED = false
+
+// While live progress is off, a pending/processing recording is refreshed by polling its served GET.
+const POLL_MS_RAW = getEnvPositiveInt(import.meta.env, 'VITE_TRANSCRIBER_POLL_MS', 4000)
+// Empty, malformed or non-positive values fall back in the reader; under 1s would poll near-continuously, so fall back too.
+const RECORDING_POLL_MS = POLL_MS_RAW >= 1000 ? POLL_MS_RAW : 4000
 
 const route = useRoute()
 const router = useRouter()
@@ -54,7 +60,7 @@ async function load() {
 }
 
 function onUploaded(recording: Recording) {
-  // Surface the new recording immediately; ProcessingProgress drives it to done.
+  // Surface the new recording immediately; polling (or ProcessingProgress) drives it to done.
   recordings.value = [recording, ...recordings.value]
   store.setRecordings(recordings.value)
 }
@@ -97,10 +103,45 @@ function isInProgress(r: Recording): boolean {
   return r.status === 'pending' || r.status === 'processing'
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+const formatDate = createDateFormatter({ emptyText: '—', invalidText: '—' })
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPolling() {
+  if (pollTimer === null) return
+  clearInterval(pollTimer)
+  pollTimer = null
 }
+
+let pollBusy = false
+
+// One batch at a time: a slow service must not stack requests or let an older reply win.
+async function pollInProgress() {
+  if (pollBusy) return
+  pollBusy = true
+  try {
+    await Promise.all(recordings.value.filter(isInProgress).map((r) => onProcessingSettled(r.id)))
+  } finally {
+    pollBusy = false
+  }
+}
+
+const hasInProgress = computed(() => recordings.value.some(isInProgress))
+
+// Poll only while something is pending/processing and live progress is off.
+watch(
+  hasInProgress,
+  (active) => {
+    if (active && !LIVE_PROGRESS_ENABLED && pollTimer === null) {
+      pollTimer = setInterval(pollInProgress, RECORDING_POLL_MS)
+    } else if (!active) {
+      stopPolling()
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(stopPolling)
 
 // Re-load when navigating directly between sibling project routes.
 watch(projectId, (next, prev) => {

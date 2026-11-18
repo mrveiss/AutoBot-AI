@@ -11,7 +11,7 @@ full picture, see [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.
 Installation uses a two-phase deployment model:
 
 1. **`install.sh`** — a shell script that deploys the **Service Lifecycle Manager (SLM)**
-   and all dependencies onto a blank Debian/Ubuntu host. The SLM is the management layer
+   and all dependencies onto a blank Ubuntu 22.04+ host. The SLM is the management layer
    that then deploys, operates, and scales the rest of the infrastructure.
 2. **Setup Wizard** — a guided web UI that walks you through adding fleet nodes, testing
    connections, enrolling agents, assigning roles, and provisioning.
@@ -23,19 +23,30 @@ ready to run the core and install modules.
 
 ## Requirements
 
+`install.sh` installs the **SLM node** -- the control plane. The **platform nodes** (backend,
+frontend, Redis, ChromaDB, LLM) are provisioned afterwards by the Setup Wizard, onto the hosts
+you add there, which may include this one.
+
+**SLM node** -- what `install.sh` checks before it starts:
+
 | Requirement | Minimum |
 |-------------|---------|
-| OS | Debian 11+ / Ubuntu 22.04+ |
+| OS | Ubuntu 22.04+ (the installer gets Python 3.14 and Ansible from Ubuntu PPAs; on Debian and other systems, use [Docker](#docker-deployment)) |
 | Init system | **systemd running as PID 1** — the installer manages every service as a systemd unit |
 | RAM | 1.5 GB (the installer refuses to run below this; SLM control plane only) |
 | Disk | 5 GB free (the installer refuses to run below this); 20 GB recommended |
 | Access | Root (or sudo) |
 | Network | Internet access for package downloads |
 
-**Supported hosts:** a Debian/Ubuntu VM or bare-metal machine booted with systemd, or
+**Supported hosts:** an Ubuntu 22.04+ VM or bare-metal machine booted with systemd, or
 WSL2 with systemd enabled (`[boot] systemd=true` in `/etc/wsl.conf`). **Not supported by
 `install.sh`:** containers and other hosts where systemd is not PID 1 — use the
 [Docker deployment](#docker-deployment) there instead.
+
+**Platform nodes:** no minimum is enforced. Provisioning reaches them over SSH, and the
+backend unit sizes its own memory limits from the host's memory. A local LLM is the main
+consumer: plan memory for the models you pull, or use a cloud provider instead (see
+[Choose your AI provider](docs/user-guide/03-configuration.md#choose-your-ai-provider)).
 
 ---
 
@@ -52,6 +63,60 @@ sudo ./install.sh
 ```
 
 The installer takes 10-20 minutes depending on network speed and hardware.
+
+The `main` one-liner runs the newest installer, unpinned and unverified. For a production host,
+install a release instead and verify it first.
+
+### Verified, pinned install (recommended)
+
+Each release publishes three files next to its notes (#18666):
+- `install.sh`, pinned to that release: it installs exactly that tag;
+- `install.sh.sha256`, its checksum;
+- `install.sh.sig`, a cosign signature made with the key in this repository's `cosign.pub`.
+
+Releases made before this change do not carry them. Verify, then run:
+
+```bash
+TAG=v0.0.0   # the release you want, from https://github.com/mrveiss/AutoBot-AI/releases
+BASE="https://github.com/mrveiss/AutoBot-AI/releases/download/${TAG}"
+curl -fsSLO "${BASE}/install.sh"
+curl -fsSLO "${BASE}/install.sh.sha256"
+curl -fsSLO "${BASE}/install.sh.sig"
+curl -fsSL -o cosign.pub "https://raw.githubusercontent.com/mrveiss/AutoBot-AI/${TAG}/cosign.pub"
+sha256sum -c install.sh.sha256 \
+  && cosign verify-blob --key cosign.pub --signature install.sh.sig install.sh \
+  && sudo bash install.sh
+```
+
+The `&&` chain is the point: if a download is missing, the checksum differs or the signature does
+not verify, `install.sh` never runs.
+
+A signature only proves the script matches the key, so the key is the thing to check. Fetching
+`cosign.pub` from the same tag, as above, proves nothing by itself: whoever can replace a tag can
+replace its key, signature and release notes together. The first time, compare `sha256sum cosign.pub`
+with a fingerprint from a channel a release cannot rewrite:
+
+- `cosign.pub` on the `main` branch, viewed in the repository's web interface at a commit you pin
+  (its history shows when the key last changed), and
+- the fingerprint the owner publishes alongside the key (#19126).
+
+Then keep that `cosign.pub` and verify later releases against your copy. The SHA256 printed in each
+signed release's notes is a comparison aid only, never the proof.
+
+Until the signing key is set up, a release carries `install.sh` and `install.sh.sha256` but no
+`install.sh.sig`; its release job says so in a warning. For such a release, verify the checksum and
+drop the `cosign` step from the chain: `sha256sum -c install.sh.sha256 && sudo bash install.sh`. A checksum downloaded from
+the same release proves the file arrived intact, not who made it: authenticity needs the signing key
+(#19126).
+
+Pinned but unverified, as a one-liner next to the `main` one:
+
+```bash
+curl -fsSL "https://github.com/mrveiss/AutoBot-AI/releases/download/${TAG}/install.sh" | sudo bash
+```
+
+**Offline or air-gapped installs are out of scope for now.** Phase 3 clones the repository from
+GitHub, and the roles install packages from your distribution's and vendors' mirrors.
 
 ---
 
@@ -85,9 +150,9 @@ logged.
 | `--yes`, `-y` | Skip confirmation prompts (use with `--uninstall`) |
 | `--validate` | Verify installation integrity (required service directories present) |
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
-| `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
+| `--admin-pass-file=PATH` | Read the SLM admin password from the first line of PATH (auto-generated if not set). The file must be non-empty and mode `600` or tighter (`chmod 600 PATH`), or the installer refuses it. `--admin-pass=` is refused: a command-line argument is readable by every local user (#19236). |
 | `--ip=IP` | Override the auto-detected IP address (multi-interface hosts) |
-| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass=` |
+| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and does not use `--admin-pass-file=`, though it still validates that file |
 | `--help`, `-h` | Show help |
 
 Environment variables skip the matching interactive prompt:
@@ -95,10 +160,17 @@ Environment variables skip the matching interactive prompt:
 | Variable | Effect |
 |----------|--------|
 | `AUTOBOT_INSTALL_BRANCH=<branch>` | Same as `--branch=` |
-| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | Same as `--admin-pass=` |
+| `SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file). `AUTOBOT_SLM_ADMIN_PASSWORD` still works but is a deprecated alias (#19318) |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
+
+**Headless host with more than one interface** (a Docker bridge counts): the installer cannot show its menu without a terminal, and `sudo` drops variables set before it. Pass the choice after `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo AUTOBOT_INSTALL_INTERFACE=eth0 bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash -s -- --ip=<address>
+```
 
 ### Log Files
 
@@ -118,7 +190,7 @@ images needs headroom on top:
 
 | What you start | Containers | Memory limits (sum) | Measured use | Host RAM |
 |----------------|------------|---------------------|--------------|----------|
-| SLM web GUI only (`--profile slm`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB idle just after start (CI); ~414 MiB with the SLM restarting (an external test) | 1 GB+ free to run; building the images needs more (not measured) |
+| SLM web GUI only (`up -d autobot-slm-gui`) | SLM, its GUI, Redis, PostgreSQL | ~3.1 GB | ~215 MiB idle just after start (CI); ~414 MiB with the SLM restarting (an external test) | 1 GB+ free to run; building the images needs more (not measured) |
 | Full stack | backend, worker, celery-beat, SLM, frontend, Redis, PostgreSQL, ChromaDB | ~9 GB | not measured | 16 GB recommended |
 
 ### First: per-host secrets and network range
@@ -147,6 +219,20 @@ it. A stack started without the line has no main-app account; add the line with
 `bash docker/generate-secrets.sh` (it keeps every value already in the file) and restart the
 backend.
 
+Every credential compose needs comes from this file; none has a built-in default. If one is
+missing, `docker compose` stops with an error that names it (#17793).
+
+**Upgrading a stack that already has data.** An existing Postgres volume keeps the database
+password it was created with and ignores a new one. So if `docker/.env.secrets` has no
+`AUTOBOT_DB_PASSWORD` line, `generate-secrets.sh` refuses to create one while the Postgres
+volume exists. Add the password the stack already uses (a stack started from the old tracked
+default used `autobot`), then rerun the script to add any other missing line:
+
+```bash
+echo 'AUTOBOT_DB_PASSWORD=<the password this stack already uses>' >> docker/.env.secrets
+bash docker/generate-secrets.sh
+```
+
 ### SLM web GUI first (smallest start)
 
 Start only the Service Lifecycle Manager and its web GUI, then add the rest of the fleet
@@ -156,11 +242,28 @@ from the GUI's Setup Wizard:
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 bash docker/generate-secrets.sh
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile slm up -d --build autobot-slm-gui
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build autobot-slm-gui
 ```
 
-The SLM GUI is then at **http://localhost/slm/**. It binds port 80, like the full stack's
-frontend — run one or the other, not both.
+The SLM GUI is then at **http://localhost:8080/slm/**. It has its own ports, so it runs alongside the full stack's frontend, and it starts with the full stack too. Change them with `AUTOBOT_DOCKER_SLM_HTTP_PORT` and `AUTOBOT_DOCKER_SLM_HTTPS_PORT` (default 8443). It listens on this machine only by default, because plain HTTP would send the admin login across the network in clear text. To reach it from another machine, select the TLS config below and set `AUTOBOT_DOCKER_SLM_BIND_ADDRESS=0.0.0.0`.
+
+To serve it over HTTPS, put a certificate in `docker/certs/` (`autobot.crt` and `autobot.key`;
+`bash docker/certs/generate-self-signed.sh` makes a self-signed pair for testing) and select
+the TLS config. Port 80 then redirects to HTTPS:
+
+```bash
+AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf \
+  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d autobot-slm-gui
+```
+
+The GUI is then at **https://localhost:8443/slm/**. Open that address directly: the plain-HTTP redirect goes to the default HTTPS port, which on a full stack is the frontend. The full stack's frontend switches to TLS the same way, with
+`AUTOBOT_DOCKER_NGINX_CONF=./docker/nginx/nginx-ssl.conf`.
+
+### Upgrading a stack from before the SLM had its own Postgres
+
+Run the same `up` command. A one-time step, `autobot-slm-postgres-copy`, copies the SLM's databases out of `autobot-postgres` before the SLM starts, and leaves the originals where they are. If `autobot-postgres` isn't running it stops and says so, and the SLM waits: start it and run `up` again. After that the SLM no longer needs it to start.
+
+Keep `SLM_DB_NAME` at its current value for this first start: it names the database that gets copied. Compose backups you take yourself need to include the new `slm_postgres_data` volume.
 
 ### Full stack
 
@@ -168,8 +271,8 @@ frontend — run one or the other, not both.
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
 
-This starts the core services: backend, SLM, frontend, Redis, PostgreSQL, and
-ChromaDB.
+This starts the core services: backend, SLM, the SLM GUI at `http://localhost:8080/slm/`,
+frontend, Redis, PostgreSQL, and ChromaDB.
 
 ### Profiles
 
@@ -183,14 +286,18 @@ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --pr
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile monitoring up -d --build
 ```
 
-Which AI providers to use is your choice: local, hybrid or cloud (#15494). Cloud and
-hybrid providers need no local model. Only on the fully local path, with the `ollama`
-profile, does Ollama start empty: pull the models `docker/.env.docker` names, or the
-ones you set there instead:
+Which AI providers to use is your choice: local, hybrid or cloud (#15494). Out of the box,
+every LLM tier points at `autobot-ollama` (`docker-compose.yml`, the `AUTOBOT_OLLAMA_*` and
+`AUTOBOT_LLM_*` endpoints), which only runs with `--profile ollama`. Without that profile, either
+point `AUTOBOT_OLLAMA_HOST` at an Ollama server you run, or use Anthropic:
+`ANTHROPIC_API_KEY` is the one provider key compose passes to the backend. Then select the
+provider in **SLM Admin > Settings > LLM**. With the `ollama` profile, Ollama starts empty:
+pull the models `docker/.env.docker` names, or the ones you set there instead:
 
 ```bash
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
+# every model docker/.env.docker names, read from the file itself (about 21 GB with the defaults)
+sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u | \
+  xargs -n1 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec -T autobot-ollama ollama pull
 ```
 
 ### Exposed Services
@@ -220,7 +327,9 @@ automatically.
 
 Every command above passes `--env-file docker/.env.docker`. That is the only Docker env file
 (#18555). To change a value, edit a copy of it and pass the copy with `--env-file` instead.
-`.env.example` is the reference for native installs, not for Docker.
+`.env.example` is the reference for native installs, not for Docker. Native-install development
+tooling reads `.env.base` (the shared keys) and then one overlay -- `.env.localhost`, `.env.native-vm`
+or `.env.network` -- in that order (#18555).
 
 ---
 
@@ -239,27 +348,42 @@ login the setup wizard launches automatically and guides you through:
 |------|--------|
 | Welcome | Overview of the setup process |
 | Add Nodes | Enter hostname/IP and SSH credentials for each fleet node |
-| Test Connections | Verify SSH connectivity to every node |
-| Enroll Agents | Install the AutoBot agent on each node |
-| Assign Roles | Choose which role(s) each node performs |
-| Provision Fleet | Run Ansible provisioning across the fleet |
-| Verify Health | Confirm all nodes and required roles are healthy |
-| Complete | Setup finished — redirects to Fleet Overview |
+| Test | Verify SSH connectivity to every node |
+| Enroll | Install the AutoBot agent on each node |
+| Roles | Choose which role(s) each node performs |
+| API Keys | Configure the secrets the fleet needs |
+| Provision | Run Ansible provisioning across the fleet |
+| Verify | Confirm all nodes and required roles are healthy |
+| Done | Setup finished — redirects to Fleet Overview |
 
 You can skip the wizard at any time and return to it later from
-**Settings > General > Re-run Setup Wizard**.
+**Settings > General > Launch Wizard**.
 
 ### Resetting the Wizard
 
-To run the wizard again:
+To start the wizard over from the first step, use **Settings > General > Reset Wizard** in the
+SLM web UI.
+
+Over the API, log in to the SLM first. The response's `access_token` is the bearer token
+(an account with MFA enabled gets an MFA challenge instead; use the UI for that one). These
+commands send the admin password and a token, so run them **on the SLM server itself**: the
+installer's certificate is self-signed, and `-k` (skip certificate checks) is only safe over
+loopback. From another machine, install a certificate from a CA you trust, drop `-k`, and use
+the server's name instead of `127.0.0.1`. `--fail` makes a rejected login or reset exit non-zero
+instead of looking successful:
 
 ```bash
-# Via API
-curl -sk -X POST https://localhost/api/setup/reset \
-  -H "Authorization: Bearer <token>"
-
-# Or from the Settings page in the UI
+TOKEN=$(curl -sSk --fail -X POST https://127.0.0.1/slm/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username": "admin", "password": "<password>"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+curl -sSk --fail -X POST https://127.0.0.1/slm/api/setup/reset -H "Authorization: Bearer ${TOKEN}"
 ```
+
+### After the wizard
+
+- **First login to the main app**, and where the chat UI is: [README: First login](README.md#first-login).
+- **First steps:** [Quick Start](docs/user-guide/02-quickstart.md) · **settings and the AI provider:** [Configuration](docs/user-guide/03-configuration.md) · **problems:** [Troubleshooting](docs/user-guide/04-troubleshooting.md).
+- **Upgrades, backups and recovery:** [README: Running AutoBot](README.md#running-autobot).
 
 ---
 
@@ -289,6 +413,7 @@ After a successful install the following paths are created:
 | `autobot-slm-backend` | FastAPI backend (systemd) |
 | `nginx` | Reverse proxy + static frontend |
 | `postgresql` | Database |
+| `prometheus`, `grafana-server`, `node_exporter` | Monitoring, installed by phase 4 (`alertmanager` only when `monitoring_install_alertmanager` is set) |
 
 Check service status:
 
@@ -296,7 +421,33 @@ Check service status:
 sudo systemctl status autobot-slm-backend
 sudo systemctl status nginx
 sudo systemctl status postgresql
+sudo systemctl status prometheus grafana-server node_exporter
 ```
+
+### The `autobot` account's root access
+
+The installer creates the `autobot` service account and gives it **unrestricted passwordless
+root**: it writes `autobot ALL=(ALL) NOPASSWD:ALL` to `/etc/sudoers.d/autobot`.
+
+Why it is that broad today:
+- the SLM deploys and updates hosts with Ansible using `become`, and that runs arbitrary
+  module code as root through `sudo /bin/sh -c ...`, which a sudoers command list cannot
+  usefully restrict;
+- the builtin updater and the agent's privileged tasks run commands as root through `sudo -n`.
+
+Treat the `autobot` account as root-equivalent: anyone who can act as it can act as root on
+this host. Narrowing the grant without breaking deploys is designed in #19245.
+
+To audit it:
+
+```bash
+sudo cat /etc/sudoers.d/autobot   # exactly the one line above, mode 0440
+sudo -l -U autobot                # what the account may run
+```
+
+To remove it, run `sudo rm /etc/sudoers.d/autobot`. Fleet deploys, the builtin updater and
+privileged agent tasks then stop working on this host until it is restored. The uninstaller
+removes it along with the account it created (see below).
 
 ---
 
@@ -361,21 +512,37 @@ sudo systemctl status autobot-slm-backend
 sudo nginx -t
 sudo systemctl status nginx
 
-# Test backend health directly
-curl -sk https://localhost/api/health
+# Test the SLM backend's health through nginx (/slm/api/ is the SLM; /api/ is the main
+# backend, which exists only once the wizard has provisioned it)
+curl -sk https://localhost/slm/api/health
 ```
 
 ### Setup wizard does not appear
 
 The wizard only redirects on first run (before `setup_wizard_completed` is set
-to `true` in the database). To force it:
+to `true` in the database). To force it, reset it as described in
+[Resetting the Wizard](#resetting-the-wizard), then refresh the browser.
 
-```bash
-curl -sk -X POST https://localhost/api/setup/reset \
-  -H "Authorization: Bearer <token>"
-```
+### Docker: containers cannot reach each other
 
-Then refresh the browser.
+Symptom: a service restarts in a loop, and its log says it `cannot reach PostgreSQL at
+autobot-postgres:5432` (or Redis, or another service), naming the host and port it tried and
+whether the attempt **timed out**, was **refused**, or the name **did not resolve**.
+
+- **Timed out:** nothing answered in time. A timeout alone does not say why; possible causes
+  include packets being dropped, a target host or container that is down or overloaded, or
+  routing that leads nowhere. One common cause is a host firewall whose forwarding policy drops
+  container-to-container traffic. Check `sudo iptables -S FORWARD` (a `-P FORWARD DROP` with no
+  Docker accept rules points there), and if so allow traffic on the Docker bridges, or restore
+  Docker's own chains with `sudo systemctl restart docker`.
+- **Refused:** the target container is not listening yet, or not running. Check
+  `docker compose --env-file docker/.env.docker --env-file docker/.env.secrets ps` and that
+  container's logs.
+- **Did not resolve:** Docker's DNS could not find the name. Possible causes include the two
+  containers not sharing a network, the target service not being started (or a different
+  service name), or a host DNS problem. Check that the name matches a service in the compose
+  files, and start the whole stack with the same compose files and env files, so every service
+  joins the networks it declares.
 
 ### Re-running the installer
 

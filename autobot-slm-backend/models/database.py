@@ -174,7 +174,7 @@ class Setting(Base):
     )
 
 
-class EventType(str, enum.Enum):
+class NodeEventType(str, enum.Enum):
     """Node event type enumeration."""
 
     STATE_CHANGE = "state_change"
@@ -743,7 +743,7 @@ class PolicyStatus(str, enum.Enum):
     DRAFT = "draft"
 
 
-class AuditLog(Base):
+class SlmNodeAuditLog(Base):
     """SLM node/system audit log (integer-PK).
 
     Records SLM control-plane actions (node management, service control,
@@ -836,7 +836,7 @@ class SlmSecurityEvent(Base):
     )
 
 
-class SecurityPolicy(Base):
+class SlmSecurityPolicy(Base):
     """Security policy definitions for enforcement across the fleet."""
 
     __tablename__ = "security_policies"

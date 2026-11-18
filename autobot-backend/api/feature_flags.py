@@ -22,12 +22,12 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth_middleware import get_current_user
-from autobot_shared.auth.permissions import is_admin_role
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.feature_flags import FeatureFlags, get_feature_flags
 
@@ -50,37 +50,15 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["admin", "feature-flags"])
 
 
-# Dependency for admin authentication
 async def require_admin_role(
+    _admin: bool = Depends(check_admin_permission),  # first: FastAPI resolves in order, so the gate decides
     current_user: Dict = Depends(get_current_user),
 ) -> Dict:
+    """The one admin gate (#16333), returning the admin's identity for the audit trail.
+
+    ``check_admin_permission`` decides: 401 unauthenticated, 403 (AUTH_0003, audited) for a
+    non-admin. It runs first, so ``current_user`` is only read for an admin.
     """
-    Require admin role for access to feature flags endpoints.
-
-    Uses the authentication middleware to verify the user is authenticated
-    and has admin privileges. Falls back to development mode if auth is disabled.
-
-    Args:
-        current_user: Authenticated user from auth middleware
-
-    Returns:
-        User information dict
-
-    Raises:
-        HTTPException: 403 if user lacks admin role
-    """
-    # Check if user has admin role
-    user_role = current_user.get("role", "").lower()
-    if not is_admin_role(user_role):
-        logger.warning(
-            f"Non-admin user '{current_user.get('username', 'unknown')}' "
-            f"attempted to access feature flags (role: {user_role})"
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access required for feature flag management",
-        )
-
     return current_user
 
 
@@ -143,7 +121,7 @@ async def update_enforcement_mode(
 
         # Audit log the change
         await audit_log(
-            operation="config.update",
+            operation=AuditAction.CONFIG_UPDATE.value,
             result="success",
             user_id=admin.get("username", "admin"),
             resource="feature_flag:access_control:enforcement_mode",
@@ -205,7 +183,7 @@ async def set_endpoint_enforcement(
 
         # Audit log
         await audit_log(
-            operation="config.update",
+            operation=AuditAction.CONFIG_UPDATE.value,
             result="success",
             user_id=admin.get("username", "admin"),
             resource=f"feature_flag:endpoint:{endpoint}",

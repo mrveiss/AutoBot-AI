@@ -61,16 +61,18 @@
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.sizes') }}</h4>
           <div class="input-stack">
-            <BaseInput v-model="sampleText" size="sm" :placeholder="$t('views.componentShowcase.smallInput')" />
-            <BaseInput v-model="sampleText" size="md" :placeholder="$t('views.componentShowcase.mediumInput')" />
-            <BaseInput v-model="sampleText" size="lg" :placeholder="$t('views.componentShowcase.largeInput')" />
+            <BaseInput v-model="sampleText" size="sm" :placeholder="$t('views.componentShowcase.smallInput')" :aria-label="$t('views.componentShowcase.smallInput')" />
+            <BaseInput v-model="sampleText" size="md" :placeholder="$t('views.componentShowcase.mediumInput')" :aria-label="$t('views.componentShowcase.mediumInput')" />
+            <BaseInput v-model="sampleText" size="lg" :placeholder="$t('views.componentShowcase.largeInput')" :aria-label="$t('views.componentShowcase.largeInput')" />
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.clearable') }}</h4>
           <BaseInput
             v-model="clearableText"
             :placeholder="$t('views.componentShowcase.typeSomething')"
+            :aria-label="$t('views.componentShowcase.clearable')"
             clearable
+            :clear-label="$t('base.input.clearInput')"
           />
         </div>
       </BaseCard>
@@ -167,8 +169,13 @@
         <BaseCard :title="$t('views.componentShowcase.table')" :subtitle="$t('views.componentShowcase.tableSubtitle')">
           <BaseTable
             :columns="tableColumns"
-            :data="tableData"
+            :rows="tableData"
+            :caption="$t('views.componentShowcase.table')"
             :selectable="true"
+            :select-all-label="$t('base.table.selectAllRows')"
+            :select-row-label="(n: number) => $t('base.table.selectRow', { row: n })"
+            :actions-label="$t('base.table.actions')"
+            :empty-title="$t('base.table.noDataAvailable')"
             :zebra="true"
             size="comfortable"
           >
@@ -177,6 +184,7 @@
                 <BaseInput
                   v-model="tableSearch"
                   :placeholder="$t('views.componentShowcase.searchPlaceholder')"
+                  :aria-label="$t('views.componentShowcase.searchPlaceholder')"
                   size="sm"
                   style="max-width: 300px;"
                 />
@@ -289,14 +297,10 @@
 </template>
 
 <script setup lang="ts">
+import { BaseBadge, BaseButton, BaseCard, BaseInput, BaseTable } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseInput from '@/components/base/BaseInput.vue'
-import { BaseBadge } from '@autobot/ui'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseTable from '@/components/base/BaseTable.vue'
 
 const { t } = useI18n()
 const logger = createLogger('ComponentShowcase')

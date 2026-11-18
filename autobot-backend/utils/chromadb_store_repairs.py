@@ -203,7 +203,9 @@ def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 def _column_types(conn: sqlite3.Connection, table: str) -> dict:
     """Column name -> declared type, in table order (``table`` is always a literal here)."""
-    return {row[1]: row[2] for row in conn.execute(f"PRAGMA table_info({table})")}  # nosec B608
+    # Identifier, not a value: PRAGMA cannot bind a table name, and every caller passes a literal.
+    pragma_sql = f"PRAGMA table_info({table})"  # nosec B608  # nosemgrep: autobot-sql-string-format
+    return {row[1]: row[2] for row in conn.execute(pragma_sql)}
 
 
 def _clear_leftover_copy(conn: sqlite3.Connection) -> bool:
@@ -237,7 +239,10 @@ def _copy_rows(conn: sqlite3.Connection) -> bool:
         logger.error("embeddings has columns %s that the rebuilt table lacks; refusing to drop them", extra)
         return False
     names = ", ".join(f'"{c}"' for c in new_cols if c in old_cols)
-    conn.execute(f"INSERT INTO embeddings_fix ({names}) SELECT {names} FROM embeddings")  # nosec B608
+    # Identifiers, not values: column names read from the table's own schema, each double-quoted.
+    insert_sql = f"INSERT INTO embeddings_fix ({names})"  # nosec B608  # nosemgrep: autobot-sql-string-format
+    copy_sql = f"{insert_sql} SELECT {names} FROM embeddings"  # nosec B608  # nosemgrep: autobot-sql-string-format
+    conn.execute(copy_sql)
     return True
 
 

@@ -27,9 +27,10 @@ import sys
 import types
 from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from testkit.fake_async_session import FakeAsyncSession
 
 _BACKEND = Path(__file__).resolve().parents[2]
 _ROOT = _BACKEND.parent
@@ -88,20 +89,18 @@ finally:
     sys.modules.update(_orig)
 
 
-class _FakeSession:
-    def __init__(self, first=None, scalar=None, hang: float = 0.0):
-        self.statements: list = []
-        self._first, self._scalar, self._hang = first, scalar, hang
-        self.commit = AsyncMock()
+class _FakeSession(FakeAsyncSession):
+    """One answer for every query: the row `first()` returns, or else the value `scalar_one_or_none()` returns."""
 
-    async def execute(self, stmt):
+    def __init__(self, first=None, scalar=None, hang: float = 0.0):
+        answer = first if first is not None else scalar
+        super().__init__(default_result=[] if answer is None else [answer])
+        self._hang = hang
+
+    async def execute(self, stmt, *args, **kwargs):
         if self._hang:
             await asyncio.sleep(self._hang)
-        self.statements.append(stmt)
-        result = MagicMock()
-        result.first.return_value = self._first
-        result.scalar_one_or_none.return_value = self._scalar
-        return result
+        return await super().execute(stmt, *args, **kwargs)
 
     def sql(self) -> list[str]:
         return [str(s.compile(dialect=postgresql.dialect())) for s in self.statements]
@@ -195,7 +194,7 @@ async def test_revoking_inserts_prunes_and_commits(store):
         "greatest(slm_revoked_tokens.expires_at, excluded.expires_at)" in insert_sql
     ), "a repeat revoke must never shorten"
     assert prune_sql.startswith("DELETE FROM slm_revoked_tokens") and "expires_at <=" in prune_sql
-    store["session"].commit.assert_awaited_once()
+    assert store["session"].commits == 1
 
 
 async def test_a_revocation_write_failure_does_not_raise(store, monkeypatch):

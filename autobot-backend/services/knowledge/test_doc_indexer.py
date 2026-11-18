@@ -93,7 +93,7 @@ from services.knowledge.doc_indexer import (  # noqa: E402 — after sys.modules
     _should_exclude,
     get_doc_indexer_service,
 )
-from tests.fixtures import read_text_async, write_text_async
+from tests.fixtures import read_text_async, write_text_async  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -295,6 +295,7 @@ class TestIndexAll:
         stale_cache = {"docs/features/feature_a.md": "stale", "docs/features/feature_b.md": "stale"}
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, json.dumps(stale_cache))
+        await write_text_async(tmp_path / ".doc_index_store.json", '{"store": ""}')  # same store (#20886)
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -309,9 +310,7 @@ class TestIndexAll:
             await svc.index_all(force=False)
 
         # Both files must be indexed — cache was ignored because collection was empty
-        assert mock_index.call_count == 2, (
-            f"Expected 2 files indexed (full index forced by empty collection), " f"got {mock_index.call_count}"
-        )
+        assert mock_index.call_count == 2, "full index forced by empty collection"
 
     @pytest.mark.asyncio
     async def test_force_true_reindexes_all_files(self, tmp_path) -> None:
@@ -623,6 +622,7 @@ class TestIndexAllEmpty4350Fix:
         cache = {"docs/features/api.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, json.dumps(cache))
+        await write_text_async(tmp_path / ".doc_index_store.json", '{"store": ""}')  # same store (#20886)
 
         indexed_files = []
 
@@ -1017,21 +1017,17 @@ class TestIndexChunkOversized4665:
         # Only one embed attempt (the initial oversized call) — halves are empty, skipped
         assert call_count[0] == 1
 
-    def test_index_chunk_logs_warning_on_oversized(self, caplog):
-        """Oversized chunk must emit a WARNING with doc path and char count (#4665)."""
+    def test_index_chunk_logs_warning_on_oversized(self, caplog, monkeypatch):
+        """Oversized chunk must emit a WARNING with doc path and char count (#4665).
+
+        The flood filter is off here: it counts this message across tests, so an earlier
+        test's repeats would suppress the one this test asserts on (#20207).
+        """
         import logging
 
+        monkeypatch.setattr(_doc_indexer_mod.logger, "filters", [])
         svc = _make_service()
-
-        call_count = [0]
-
-        def _fake_embed(text):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise ValueError("input too large")
-            return [0.3] * 128
-
-        svc._embed_model.get_text_embedding.side_effect = _fake_embed
+        svc._embed_model.get_text_embedding.side_effect = [ValueError("input too large"), [0.3] * 128, [0.3] * 128]
 
         with caplog.at_level(logging.WARNING, logger="services.knowledge.doc_indexer"):
             chunk = self._make_chunk("D" * 400)

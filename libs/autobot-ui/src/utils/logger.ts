@@ -9,13 +9,20 @@
  * `@/` alias, so it carries its own minimal logger for the composables that
  * emit developer warnings (usePagination, useFormValidation).
  *
- * Behavior is byte-for-byte identical to the app helper: each call forwards
- * a `[timestamp] [LEVEL]` prefix plus the scoped message to the matching
- * `console.*` method.
+ * Each call forwards a `[timestamp] [LEVEL]` prefix plus the scoped message to the
+ * matching `console.*` method. Debug output is dropped in production builds; dev builds
+ * (and anything without Vite's env, such as a plain test run) log every level. Both apps
+ * use this one logger: the SLM's level-filtering copy merged into it (maintainer decision
+ * 2026-10-26, #14908).
  */
 
 /** Log levels for console output. */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+const LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
+
+/** The lowest level that is printed: `info` in a production build, `debug` otherwise. */
+export const MIN_LOG_LEVEL: LogLevel = import.meta.env?.DEV === false ? 'info' : 'debug'
 
 /**
  * Enhanced console logging with timestamp and level prefix. Supports
@@ -23,6 +30,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
  * multiple values.
  */
 export function log(level: LogLevel, message: string, ...args: unknown[]): void {
+  if (LEVEL_RANK[level] < LEVEL_RANK[MIN_LOG_LEVEL]) return
   const timestamp = new Date().toISOString()
   const prefix = `[${timestamp}] [${level.toUpperCase()}]`
   const consoleFn = level === 'debug' ? console.debug

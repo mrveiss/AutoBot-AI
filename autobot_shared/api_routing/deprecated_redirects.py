@@ -25,16 +25,30 @@ from fastapi.responses import Response
 HTTP_PERMANENT_REDIRECT = 308
 
 
-def _redirect_handler(old_path: str, new_path: str):
-    """Build the handler that 308s ``old_path`` to ``new_path`` (same prefix)."""
+def _build_target(request: Request, old_path: str, new_path: str, absolute: bool) -> str:
+    """The ``Location`` for *request*: path params quoted, then any fixed query appended.
+
+    ``absolute`` means *new_path* is a full served path (it may end in a fixed
+    ``?query`` that is appended after quoting, never quoted itself); otherwise
+    it replaces *old_path* under the request's own mount prefix.
+    """
+    params = request.path_params
+    if absolute:
+        path_part, _, fixed_query = new_path.partition("?")
+        prefix = ""
+    else:
+        path_part, fixed_query = new_path, ""
+        prefix = request.url.path.removesuffix(old_path.format(**params))
+    target = quote(prefix + path_part.format(**params), safe="/")
+    queries = [q for q in (fixed_query, request.url.query) if q]
+    return f"{target}?{'&'.join(queries)}" if queries else target
+
+
+def _redirect_handler(old_path: str, new_path: str, absolute: bool = False):
+    """Build the handler that 308s ``old_path`` to ``new_path``."""
 
     async def _redirect(request: Request) -> Response:
-        params = request.path_params
-        served_old = old_path.format(**params)
-        prefix = request.url.path.removesuffix(served_old)
-        target = quote(prefix + new_path.format(**params), safe="/")
-        if request.url.query:
-            target = f"{target}?{request.url.query}"
+        target = _build_target(request, old_path, new_path, absolute)
         return Response(
             status_code=HTTP_PERMANENT_REDIRECT,
             headers={
@@ -47,16 +61,20 @@ def _redirect_handler(old_path: str, new_path: str):
     return _redirect
 
 
-def add_deprecated_redirects(router: APIRouter, moves: Mapping[tuple[str, str], str]) -> None:
+def add_deprecated_redirects(
+    router: APIRouter, moves: Mapping[tuple[str, str], str], *, absolute: bool = False
+) -> None:
     """Add a 308 shim for every ``(method, old_path) -> new_path`` move.
 
     Paths are router-relative and may carry the same ``{param}`` names on
-    both sides.
+    both sides. With ``absolute=True`` every ``new_path`` is instead a full
+    served path (e.g. a route on another router), optionally with a fixed
+    ``?query``; the request's own query string is merged in after it.
     """
     for (method, old_path), new_path in moves.items():
         router.add_api_route(
             old_path,
-            _redirect_handler(old_path, new_path),
+            _redirect_handler(old_path, new_path, absolute),
             methods=[method],
             status_code=HTTP_PERMANENT_REDIRECT,
             include_in_schema=False,

@@ -27,7 +27,7 @@ import type { Board, SourceCard } from './knowledgeResearchTypes'
 
 const logger = createLogger('KnowledgeResearchPanel')
 
-// Accept returns with its route (#18745): no backend route ingests a research source yet.
+// Accept returns with its route (#18745); until then its button is hidden and acceptSource sends nothing.
 const ACCEPT_SOURCE_ENABLED = false
 const userStore = useUserStore()
 
@@ -98,8 +98,8 @@ const {
     isResearching.value = false
     stopScreenshotPolling()
   },
-  onClose: () => {
-    if (isResearching.value) {
+  onClose: (_event, info) => {
+    if (info.current && isResearching.value) {
       isResearching.value = false
       stopScreenshotPolling()
       statusText.value = t('knowledge.research.statusDisconnected')
@@ -306,12 +306,11 @@ async function _emitAnnotationFeedback(
 }
 
 async function acceptSource(card: SourceCard): Promise<void> {
+  if (!ACCEPT_SOURCE_ENABLED) return
   card.decision = 'accepted'
   try {
-    await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/knowledge/verification/approve`, {
-      source_url: card.url,
-      title: card.title,
-    })
+    const body = { source_url: card.url, title: card.title }
+    await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/knowledge/verification/approve`, body)
   } catch (e) {
     logger.warn('Accept source API call failed (non-critical):', e)
   }
@@ -734,7 +733,7 @@ onUnmounted(() => {
 .btn-primary {
   flex-shrink: 0;
   padding: var(--spacing-2) var(--spacing-3);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--kresearch-on-accent);
   border: none;
   border-radius: var(--radius-md);
@@ -773,7 +772,7 @@ onUnmounted(() => {
 }
 
 .btn-stop:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 
@@ -977,7 +976,7 @@ onUnmounted(() => {
 
 .btn-accept:hover {
   background: var(--color-success);
-  color: var(--kresearch-on-accent);
+  color: var(--text-on-success);
 }
 
 .btn-reject {
@@ -987,7 +986,7 @@ onUnmounted(() => {
 }
 
 .btn-reject:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 

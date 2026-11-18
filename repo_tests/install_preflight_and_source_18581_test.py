@@ -27,7 +27,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _INSTALL = repo_root() / "install.sh"
 _BASH = shutil.which("bash") or "bash"
@@ -103,7 +103,7 @@ echo RETURNED
 def _git_repo(path: Path) -> str:
     def git(*args: str) -> str:
         return subprocess.run(
-            ["git", "-C", str(path), *args], check=True, capture_output=True, text=True, env=scrubbed_git_env()
+            ["git", "-C", str(path), *args], check=True, capture_output=True, text=True, env=isolated_git_env()
         ).stdout.strip()
 
     git("init", "-q")

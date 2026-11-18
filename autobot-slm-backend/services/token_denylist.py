@@ -18,7 +18,7 @@ nobody could log in to a freshly installed SLM.
 Fail-CLOSED policy for ``is_jti_revoked`` (#16387, unchanged): if the store
 cannot answer, the function raises instead of returning ``False`` -- "not
 revoked" and "unknown" are different answers. ``decode_token_async``
-(``services/auth.py``) catches the raise and returns 401. The store is now the
+(``services/auth.py``) catches the raise and answers 503 (#18892). The store is now the
 database the SLM cannot run without, so this no longer denies a healthy SLM.
 
 Upgrade note: revocations recorded in Redis before #18663 are not carried over --
@@ -33,11 +33,12 @@ auth latency is never hostage to a stuck connection.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
+
+from autobot_shared.logging_manager import get_logger
 
 try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wraps them
     import asyncpg
@@ -46,7 +47,7 @@ try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wrap
 except ImportError:  # pragma: no cover - asyncpg is the SLM's driver in deployments
     _DRIVER_FAILURES = ()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Failures that mean "the store could not answer".
 _STORE_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, SQLAlchemyError, *_DRIVER_FAILURES)
@@ -119,7 +120,8 @@ async def is_jti_revoked(jti: str) -> bool:
     Raises:
         ConnectionError | asyncio.TimeoutError: the denylist could not be checked. A
             database error is raised as ConnectionError, the store-unavailable type
-            ``decode_token_async`` turns into a 401 rather than a 500.
+            ``decode_token_async`` turns into a 503 + Retry-After (#18892): the token is
+            refused, but as "could not decide", not as a dead credential (401) or a 500.
     """
     try:
         return await asyncio.wait_for(_lookup(jti), timeout=_STORE_DEADLINE_SECONDS)

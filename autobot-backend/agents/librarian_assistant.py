@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.url_safety import host_matches
 from config import config
-from knowledge_base import KnowledgeBase
+from knowledge_base import get_knowledge_base
 from services.llm_service import get_llm_service
 
 logger = get_logger(__name__)
@@ -50,7 +50,7 @@ class LibrarianAssistant:
     def __init__(self):
         """Initialize the Librarian Assistant Agent."""
         self.config = config
-        self.knowledge_base = KnowledgeBase()
+        self.knowledge_base = None  # #18122: canonical instance resolved lazily
         self.llm = get_llm_service()
 
         # Configuration
@@ -339,17 +339,14 @@ class LibrarianAssistant:
                 "timestamp": content_data.get("timestamp", datetime.now(tz=timezone.utc).isoformat()),
             }
 
-            success = self.knowledge_base.add_document(document_content, metadata)
-
-            if success:
-                logger.info(
-                    "Stored content from %s in knowledge base",
-                    content_data.get("domain"),
-                )
+            kb = self.knowledge_base or await get_knowledge_base()
+            # add_document reports failure as {"status": "error"|"partial"|"timeout"}, which is truthy
+            result = await kb.add_document(document_content, metadata)
+            if isinstance(result, dict) and result.get("status") == "success":
+                logger.info("Stored content from %s in knowledge base", content_data.get("domain"))
                 return True
-            else:
-                logger.error("Failed to store content from %s", content_data.get("url"))
-                return False
+            logger.error("Failed to store content from %s", content_data.get("url"))
+            return False
 
         except Exception as e:
             logger.error("Error storing content in knowledge base: %s", e)

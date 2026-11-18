@@ -21,10 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._post_sync_plan import ordered_post_sync_plan
+from api._role_procedure_vars import role_procedure_extra_vars
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
 from services.database import get_db
-from services.role_registry import get_role_definitions, list_roles
+from services.role_nodes import RoleNodeHealth, get_role_owners, get_roles_with_nodes_down, with_nodes_down
+from services.role_registry import MULTI_NODE_ROLES, get_role_definitions, list_roles
 from services.service_restart import build_service_ssh_base_cmd, build_service_ssh_cmd, run_systemctl_over_ssh
 
 logger = logging.getLogger(__name__)
@@ -103,6 +105,7 @@ class FleetHealthResponse(BaseModel):
     required_down: List[str]
     optional_down: List[str]
     detail: str
+    roles_with_nodes_down: List[RoleNodeHealth] = []  # #19706: multi-node roles
 
 
 # ---- Post-sync action models (Issue #1243) ----
@@ -169,14 +172,8 @@ async def get_role_owners_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> dict:
-    """Return role -> node_id mapping for all assigned service roles (#1389).
-
-    Used by deployment/migration UIs to show which node owns each role.
-    """
-    from services.role_registry import get_role_owners
-
-    owners = await get_role_owners(db)
-    return {"owners": owners}
+    """Return role -> node ids, and which roles may hold several (#1389, #19706)."""
+    return {"owners": await get_role_owners(db), "multi_node_roles": sorted(MULTI_NODE_ROLES)}
 
 
 @router.get("/fleet-health", response_model=FleetHealthResponse)
@@ -196,7 +193,7 @@ async def get_fleet_health(
     all_roles = list(roles_result.scalars().all())
 
     active_roles = await _get_active_role_names(db)
-    return _classify_fleet_health(all_roles, active_roles)
+    return with_nodes_down(_classify_fleet_health(all_roles, active_roles), await get_roles_with_nodes_down(db))
 
 
 async def _get_active_role_names(db: AsyncSession) -> set:
@@ -433,11 +430,10 @@ async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
     try:
         result = await executor.execute_playbook(
             playbook_name=role.ansible_playbook,
-            # deploy_role.yml requires `role_name` and derives deploy_role from
-            # it; passing `deploy_role` alone tripped its role_name-undefined
-            # guard so every Migrate/Redeploy failed validation (#11782).
+            # deploy_role.yml needs `role_name` (not `deploy_role` alone, #11782); the
+            # slm-agent playbook also gets slm_agent_run_common=false (#19040).
             limit=[target_node_id],
-            extra_vars={"role_name": role.name},
+            extra_vars=role_procedure_extra_vars(role, target_node_id),
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)
@@ -679,7 +675,7 @@ async def _reported(call) -> tuple:
         combined = stdout.decode("utf-8", errors="replace") + stderr.decode("utf-8", errors="replace")
         return returncode == 0, combined[:2000]
     except asyncio.TimeoutError:
-        return False, "Timeout after 120 seconds"
+        return False, f"Timeout after {_SSH_ACTION_TIMEOUT_S:g} seconds"
     except Exception as e:
         logger.exception("SSH command error: %s", e)
         return False, "Error: SSH command failed"

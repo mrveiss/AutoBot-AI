@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -247,11 +248,39 @@ def _setup_py_npu_extras() -> list:
                 continue
             for key_node, value_node in zip(kw.value.keys, kw.value.values):
                 if isinstance(key_node, ast.Constant) and key_node.value == "npu" and isinstance(value_node, ast.List):
-                    return [elt.value for elt in value_node.elts if isinstance(elt, ast.Constant)]
+                    return [_setup_py_spec(tree, elt) for elt in value_node.elts]
     raise AssertionError(
         f"no extras_require['npu'] list found in {_CODE_ANALYSIS_SETUP.name} "
         "— this guard is pinned to the wrong shape"
     )
+
+
+def _setup_py_spec(tree: ast.Module, elt: ast.expr) -> str:
+    """A literal spec as written; ``f"openvino{_ssot_floor('openvino')}"`` as setup.py would build it (#18047).
+
+    The derived form is evaluated with setup.py's own ``_ssot_floor`` against ``_SSOT_CONSTRAINTS``,
+    so what the guard checks is what an install would request -- not a restated copy of it.
+    """
+    if isinstance(elt, ast.Constant):
+        return elt.value
+    if isinstance(elt, ast.JoinedStr):
+        floor_fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_ssot_floor"]
+        assert floor_fn, f"{_CODE_ANALYSIS_SETUP.name} builds a spec without its _ssot_floor helper"
+        namespace: dict = {"re": re, "_SSOT_CONSTRAINTS": str(_SSOT_CONSTRAINTS)}
+        exec(compile(ast.Module(body=floor_fn, type_ignores=[]), str(_CODE_ANALYSIS_SETUP), "exec"), namespace)
+        parts = []
+        for value in elt.values:
+            if isinstance(value, ast.Constant):
+                parts.append(value.value)
+            else:
+                call = value.value
+                assert (
+                    isinstance(call, ast.Call) and getattr(call.func, "id", None) == "_ssot_floor"
+                ), f"{_CODE_ANALYSIS_SETUP.name}: an f-string spec may only interpolate _ssot_floor(...)"
+                args = [a.value for a in call.args]
+                parts.append(namespace["_ssot_floor"](*args, constraints=str(_SSOT_CONSTRAINTS)))
+        return "".join(parts)
+    raise AssertionError(f"{_CODE_ANALYSIS_SETUP.name}: an npu extra is neither a literal nor an SSOT-derived spec")
 
 
 def _install_sh_npu_pip_line() -> str:
@@ -463,20 +492,29 @@ def test_the_shared_constraints_are_applied(site_name: str):
 
 _HISTORICAL_DOC_TREES = ("docs/audit/", "docs/archives/")
 
-# One per live document that pins openvino today. A floor, not a census: it exists so
-# that a glob which silently stops matching fails loudly instead of guarding nothing.
-_MIN_LIVE_DOC_PINS = 4
+# #18047: live documents no longer restate the floor; they cite constraints/shared.txt. The
+# instrument is therefore the number of documents READ, not pins found -- zero pins is the
+# goal, and a scan that reads nothing would report the same zero. Measured 2026-11-03: 1229.
+_MIN_LIVE_DOCS_SCANNED = 1000
 
-_DOC_PIN_RE = re.compile(r"openvino\s*>=\s*([0-9][0-9.]*)")
+_DOC_PIN_RE = re.compile(r"(?<![\w-])openvino\s*>=\s*([0-9][0-9.]*)")
+
+
+def _live_docs() -> list[Path]:
+    """Markdown outside the historical trees."""
+    return [
+        path
+        for path in sorted(_REPO_ROOT.rglob("*.md"))
+        if not path.relative_to(_REPO_ROOT).as_posix().startswith(_HISTORICAL_DOC_TREES)
+        and "node_modules/" not in path.relative_to(_REPO_ROOT).as_posix()
+    ]
 
 
 def _live_doc_pins() -> list[tuple[str, int, str]]:
     """Every `openvino>=` pin in Markdown outside the historical trees."""
     found: list[tuple[str, int, str]] = []
-    for path in sorted(_REPO_ROOT.rglob("*.md")):
+    for path in _live_docs():
         relative = path.relative_to(_REPO_ROOT).as_posix()
-        if relative.startswith(_HISTORICAL_DOC_TREES) or "node_modules/" in relative:
-            continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             match = _DOC_PIN_RE.search(line)
             if match:
@@ -484,28 +522,33 @@ def _live_doc_pins() -> list[tuple[str, int, str]]:
     return found
 
 
-def test_the_documentation_scan_reaches_the_known_pins():
-    """A glob that matches nothing would make the drift check below vacuous."""
+def test_the_documentation_scan_reads_the_docs():
+    """A glob that matches nothing would make the check below vacuous."""
+    scanned = len(_live_docs())
+    assert (
+        scanned >= _MIN_LIVE_DOCS_SCANNED
+    ), f"the documentation scan read {scanned} file(s), floor {_MIN_LIVE_DOCS_SCANNED}: it stopped reaching the docs"
+    assert _DOC_PIN_RE.search("pip install openvino>=1.2.3"), "the pin pattern no longer matches a pin"
+
+
+def test_no_live_document_restates_the_floor():
+    """A document names the SSOT instead of a version, so a floor bump cannot leave it behind (#15415, #18047)."""
     pins = _live_doc_pins()
-
-    assert len(pins) >= _MIN_LIVE_DOC_PINS, (
-        f"only {len(pins)} live documentation pin(s) found, expected at least "
-        f"{_MIN_LIVE_DOC_PINS} — this scan has stopped reaching the docs it guards"
+    assert not pins, "documentation restates the openvino floor; cite constraints/shared.txt instead:\n" + "\n".join(
+        f"  {path}:{number} says >={pin}" for path, number, pin in pins
     )
 
 
-def test_no_document_publishes_a_floor_below_the_ssot():
-    """A stale install instruction sends a reader to a version the repo rejects.
-
-    Reported as a whole rather than one failure at a time: the floor moves in one
-    commit and every document that missed it is the same defect, so a first-failure
-    abort would hide the rest of the set behind a re-run.
-    """
-    ssot_floor = _ssot_openvino_floor()
-
-    drifted = [(path, number, pin) for path, number, pin in _live_doc_pins() if pin != ssot_floor]
-
-    assert not drifted, "documentation contradicts the SSOT openvino floor (#15415):\n" + "\n".join(
-        f"  {path}:{number} says >={pin}, {_SSOT_CONSTRAINTS.name} declares >={ssot_floor}"
-        for path, number, pin in drifted
+def test_a_floor_bump_in_the_ssot_alone_leaves_every_site_consistent(tmp_path, monkeypatch):
+    """Dependabot changes constraints/shared.txt and nothing else; that must be a complete change (#18047)."""
+    bumped = tmp_path / "shared.txt"
+    current = _ssot_openvino_floor()
+    bumped.write_text(
+        _SSOT_CONSTRAINTS.read_text(encoding="utf-8").replace(f"openvino>={current}", "openvino>=9999.0.0"),
+        encoding="utf-8",
     )
+    monkeypatch.setattr(sys.modules[__name__], "_SSOT_CONSTRAINTS", bumped, raising=True)
+    assert _ssot_openvino_floor() == "9999.0.0", "the simulated bump did not take"
+    for site_name in _SITES:
+        test_the_floor_is_not_below_the_ssot(site_name)
+    test_no_live_document_restates_the_floor()

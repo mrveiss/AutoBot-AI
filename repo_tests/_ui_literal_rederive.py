@@ -56,7 +56,8 @@ from pathlib import Path
 from tools.lint._scan_helpers import tracked_paths
 
 _TREES = ("autobot-frontend/src", "autobot-slm-frontend/src")
-_SCRIPT = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+# The closing tag tolerates whitespace and attributes (`</script >`), as browsers do (CodeQL py/bad-tag-filter).
+_SCRIPT = re.compile(r"<(script|style)\b[^>]*>.*?</\1\b[^>]*>", re.DOTALL | re.IGNORECASE)
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _TEMPLATE = re.compile(r"<template\b.*</template>", re.DOTALL)
 _TEXT = re.compile(r"""> *\s*([A-Za-z][A-Za-z ,.!?'’()-]{2,}?)\s*<""")
@@ -108,7 +109,8 @@ def rederived(root: Path) -> set[tuple[str, str, str]]:
     return out
 
 
-_CODE_ID = re.compile(r"^([A-Za-z][a-z0-9]*[A-Z]\w*|[A-Za-z]\w*([_-]\w+)+)$")
+# No `\w` here: it contains `_`, which made `\w*([_-]\w+)+` ambiguous and exponential (CodeQL py/redos).
+_CODE_ID = re.compile(r"^(?:[A-Za-z][a-z0-9]*[A-Z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)+)$")
 _TEXT_CLASS = re.compile(r"[A-Za-z][A-Za-z ,.!?'\u2019()-]{2,}")
 _TEXT_OUTSIDE = re.compile(r"[^A-Za-z ,.!?'\u2019()-]+")
 _ATTR_CLASS = re.compile(r"[A-Za-z][^\"{}]{2,}")

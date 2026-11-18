@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { h } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
@@ -138,5 +138,39 @@ describe('ProjectDetailView.vue', () => {
     const cards = wrapper.findAll('.recording-card')
     expect(cards).toHaveLength(3)
     expect(cards[0].text()).toContain('rec-99.mp3')
+  })
+
+  describe('polling while live progress is off', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('polls a processing recording, then stops once it settles', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      expect(getRecording).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(4000)
+      await flushPromises()
+      expect(getRecording).toHaveBeenCalledTimes(1)
+      expect(getRecording).toHaveBeenCalledWith(11)
+
+      // The refreshed row is "complete", so nothing is in progress: no further polls.
+      await vi.advanceTimersByTimeAsync(12000)
+      expect(getRecording).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('stops polling on unmount', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      wrapper.unmount()
+
+      await vi.advanceTimersByTimeAsync(12000)
+      expect(getRecording).not.toHaveBeenCalled()
+    })
   })
 })

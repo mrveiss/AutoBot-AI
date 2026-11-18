@@ -230,7 +230,7 @@ class TestDecodeTokenAsyncRevocation:
     @pytest.mark.asyncio
     async def test_jti_denylist_exception_denies_token(self):
         """#16387: when is_jti_revoked raises, decode_token_async fails
-        CLOSED -- 401, not a fail-open pass-through."""
+        CLOSED -- refused with 503 (store unavailable, #18892), never a fail-open pass-through."""
         service = AuthService()
         token = service.create_access_token(data={"sub": "eve", "admin": False, "role": "user"})
 
@@ -238,12 +238,12 @@ class TestDecodeTokenAsyncRevocation:
             with pytest.raises(fastapi.HTTPException) as exc_info:
                 await service.decode_token_async(token)
 
-        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
+        assert exc_info.value.status_code == fastapi.status.HTTP_503_SERVICE_UNAVAILABLE
 
     @pytest.mark.asyncio
     async def test_password_epoch_exception_denies_token(self):
         """#16387: when is_token_revoked_by_password_change raises,
-        decode_token_async fails CLOSED -- 401, not a fail-open pass-through."""
+        decode_token_async fails CLOSED -- 503 (#18892), never a fail-open pass-through."""
         service = AuthService()
         token = service.create_access_token(data={"sub": "frank", "admin": False, "role": "user"})
 
@@ -258,13 +258,13 @@ class TestDecodeTokenAsyncRevocation:
             with pytest.raises(fastapi.HTTPException) as exc_info:
                 await service.decode_token_async(token)
 
-        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
+        assert exc_info.value.status_code == fastapi.status.HTTP_503_SERVICE_UNAVAILABLE
 
     @pytest.mark.asyncio
     async def test_a_real_epoch_store_error_denies_token(self):
         """#16659: the epoch store's own Redis read raising reaches the REAL
         get_password_epoch, which raises RevocationCheckUnavailable, and
-        decode_token_async denies (401). Unlike the test above, nothing between
+        decode_token_async denies (503, #18892). Unlike the test above, nothing between
         decode_token_async and the Redis client is mocked."""
         service = AuthService()
         token = service.create_access_token(data={"sub": "grace", "admin": False, "role": "user"})
@@ -276,7 +276,7 @@ class TestDecodeTokenAsyncRevocation:
             with pytest.raises(fastapi.HTTPException) as exc_info:
                 await service.decode_token_async(token)
 
-        assert exc_info.value.status_code == fastapi.status.HTTP_401_UNAUTHORIZED
+        assert exc_info.value.status_code == fastapi.status.HTTP_503_SERVICE_UNAVAILABLE
 
     @pytest.mark.asyncio
     async def test_a_healthy_epoch_store_with_no_marker_accepts_token(self):

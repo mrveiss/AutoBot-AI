@@ -56,7 +56,6 @@ def _source_population(root):
 REACH = declare(
     "backoff-formula-scan",
     discover=_source_population,
-    floor=994,
     what="frontend and kit source",
     roots=_ROOTS,
     growth=150,

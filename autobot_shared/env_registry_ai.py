@@ -51,10 +51,10 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OPENVINO_CACHE_DIR",
         type=str,
-        default="data/openvino_cache",
+        default=None,
         description=(
-            "Directory for compiled OpenVINO model artefacts. Relative to the "
-            "working directory unless given as an absolute path."
+            "Directory for compiled OpenVINO model artefacts. Unset: "
+            "shared_cache_path('openvino') in the user cache, never the repo (#19553)."
         ),
         component="ai",
     )

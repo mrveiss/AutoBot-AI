@@ -23,6 +23,7 @@ from autobot_shared.ai_lines import SCOPE_COMPANY, AiLine, fallback_keys, parse_
 from autobot_shared.logging_manager import get_logger
 
 from ..models.ai_line import ACTION_KEY_LENGTH, LLCAiLine
+from .company_os.errors import CompanyOsError
 
 logger = get_logger(__name__)
 
@@ -33,7 +34,7 @@ def normalise_key(raw: str) -> str:
     """The canonical stored key, or ``ValueError`` -- a typo would silently set a line nobody reads."""
     key = (raw or "").strip().lower()
     if not key or len(key) > ACTION_KEY_LENGTH or not _KEY_SHAPE.match(key):
-        raise ValueError("an action key is '<tool>' or '<tool>:<action>' (letters, digits, _ . -)")
+        raise CompanyOsError("an action key is '<tool>' or '<tool>:<action>' (letters, digits, _ . -)")
     return key
 
 

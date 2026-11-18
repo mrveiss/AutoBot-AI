@@ -19,20 +19,23 @@ const meta = {
 } as Meta<typeof CodebaseSecurityPanel>;
 
 export default meta;
-// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
+// #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props.
+// The sample findings must still use the real shapes (types/codeIntelligence.ts): the relaxed type
+// hid a story built on fields the table never reads, which crashed it (#18694).
 type Story = StoryObj<Record<string, unknown>>;
 
 export const Default: Story = {
   args: {
     securityFindings: [
       {
-        id: 'sec-001',
+        vulnerability_type: 'sql_injection',
+        severity: 'high',
         file_path: 'autobot-backend/api/routes.py',
         line_number: 42,
-        severity: 'high',
-        pattern_name: 'SQL Injection Risk',
-        description: 'Unsanitized user input used in query',
-        suggestion: 'Use parameterized queries',
+        code_snippet: 'cursor.execute(f"... {user_input}")',
+        message: 'Unsanitized user input used in query',
+        remediation: 'Use parameterized queries',
+        owasp_category: 'A03:2021-Injection',
       },
     ],
     performanceFindings: [],
@@ -69,33 +72,35 @@ export const MultipleFindings: Story = {
   args: {
     securityFindings: [
       {
-        id: 'sec-001',
+        vulnerability_type: 'hardcoded_secret',
+        severity: 'critical',
         file_path: 'autobot-backend/api/routes.py',
         line_number: 42,
-        severity: 'critical',
-        pattern_name: 'Hardcoded Secret',
-        description: 'API key hardcoded in source',
-        suggestion: 'Move to environment variable',
+        code_snippet: 'API_KEY = <string literal, elided in this fixture>',
+        message: 'API key hardcoded in source',
+        remediation: 'Move to environment variable',
+        owasp_category: 'A07:2021-Identification and Authentication Failures',
       },
       {
-        id: 'sec-002',
+        vulnerability_type: 'weak_hash',
+        severity: 'high',
         file_path: 'autobot-backend/auth/handler.py',
         line_number: 15,
-        severity: 'high',
-        pattern_name: 'Weak Hash',
-        description: 'MD5 used for password hashing',
-        suggestion: 'Use bcrypt or argon2',
+        code_snippet: 'hashlib.md5(password)',
+        message: 'MD5 used for password hashing',
+        remediation: 'Use bcrypt or argon2',
+        owasp_category: 'A02:2021-Cryptographic Failures',
       },
     ],
     performanceFindings: [
       {
-        id: 'perf-001',
+        issue_type: 'n_plus_one_query',
+        severity: 'medium',
         file_path: 'autobot-backend/db/queries.py',
         line_number: 88,
-        severity: 'medium',
-        pattern_name: 'N+1 Query',
-        description: 'Database query in loop',
-        suggestion: 'Use batch query',
+        message: 'Database query in loop',
+        recommendation: 'Use batch query',
+        estimated_impact: 'One query per row',
       },
     ],
     redisFindings: [],

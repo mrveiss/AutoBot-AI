@@ -150,23 +150,30 @@ def test_the_tenant_context_still_refuses_a_service_principal_handed_to_it_direc
         ({"username": "alice", "role": "admin"}, True),  # control: the same role, no service marker
     ],
 )
-def test_me_derives_platform_admin_from_the_shared_predicate(monkeypatch, claims, expected):
+def test_me_derives_platform_admin_from_the_shared_predicate(claims, expected):
     import api.user_management.users as users_api  # noqa: PLC0415
+    from tests.user_management.test_users_me_18786 import _stored_user  # noqa: PLC0415
 
-    # UserResponse is stood in: /me builds it with created_at=None, which its schema
-    # refuses (a separate defect), so the flag is read off the constructor call.
-    built = {}
-    monkeypatch.setattr(users_api, "UserResponse", lambda **kwargs: built.update(kwargs))
+    uid = uuid.uuid4()
+    service = MagicMock()
+    service.get_user = AsyncMock(return_value=_stored_user(uid))
 
-    asyncio.run(users_api.get_current_user_profile(current_user=dict(claims)))
+    # The real UserResponse is built (#18786): the flag is the claims', not the stored row's.
+    response = asyncio.run(
+        users_api.get_current_user_profile(current_user={**claims, "user_id": str(uid)}, user_service=service)
+    )
 
-    assert built["is_platform_admin"] is expected
+    assert response.is_platform_admin is expected
 
 
 def test_a_human_admin_jwt_still_lists_companies(monkeypatch):
+    import auth_revocation  # noqa: PLC0415
     import llc.api.companies as companies_api  # noqa: PLC0415
 
     install_canonical_gate(monkeypatch, _jwt_middleware())
+    # #19061 review: a username-only login token is now epoch-checked (it was silently skipped
+    # without a `sub`), so this test stands in the epoch store like its neighbours.
+    monkeypatch.setattr(auth_revocation, "is_token_revoked_by_password_change", AsyncMock(return_value=False))
     svc = MagicMock()
     svc.list_root_companies = AsyncMock(return_value=[])
     app = FastAPI()
@@ -179,7 +186,8 @@ def test_a_human_admin_jwt_still_lists_companies(monkeypatch):
     svc.list_root_companies.assert_awaited_once()
 
 
-def test_the_internal_service_key_still_works_on_a_non_tenant_route(monkeypatch):
+def test_the_internal_service_key_alone_is_not_a_user_on_a_non_tenant_route(monkeypatch):
+    """#16333 (owner ruling b): it used to become the synthetic ``service:slm`` admin here."""
     real = _service_key_gate(monkeypatch)
     app = FastAPI()
 
@@ -189,8 +197,7 @@ def test_the_internal_service_key_still_works_on_a_non_tenant_route(monkeypatch)
 
     response = TestClient(app).get("/whoami", headers={"X-Internal-API-Key": INTERNAL_KEY})
 
-    assert response.status_code == 200, response.text
-    assert response.json() == {"username": "service:slm", "role": "admin", "service": True}
+    assert response.status_code == 401, response.text
 
 
 def test_a_service_principal_is_not_a_platform_admin_or_reporting_line_writer():

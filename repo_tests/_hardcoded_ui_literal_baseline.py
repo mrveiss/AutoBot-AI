@@ -19,17 +19,30 @@ English literals it contains, where:
     A plain one-word label (`Running`, `Close`) is prose, for both guards;
   * attribute: a static (unbound) `placeholder`, `title`, `alt`, `aria-label`,
     `aria-description` or `label` whose value passes the same prose test;
-  * script: in `<script>`, matching
-    ``(?:\.value\s*=|message:|title:|confirm\(|alert\(|Error\()\s*[`'"]([A-Z][a-z][^`'"]{3,})[`'"]``.
+  * script: in `<script>`, and in the formatter modules `src/utils/format*.ts` of both apps,
+    matching one of `.value =`, `message:`, `title:`, `label:`, `zeroText:`, `nullText:`
+    (`label:` and `zeroText:` were added in #19885, and the 120 sites they brought in are a
+    one-time recorded freeze, see RATCHET_BASELINES.md; `nullText:` and the formatter scan were
+    added later in #19885 and found none), `confirm(`, `alert(`, `Error(` followed by a quoted
+    string that is prose (a capital, then a lower-case letter, five characters at least), a
+    byte size (`0 B`, `1.5 KB`) or an acronym plural (`SLOs`). It must close with the SAME quote
+    character it opened with (`_SCRIPT_LITERAL` in `_ui_literal_scan.py`).
 
 **Not seen:** a literal in a custom component's own prop (`message`, `caption`,
-`hint`), text built by concatenation, `v-bind` string literals, `.ts` files,
+`hint`), text built by concatenation, `v-bind` string literals, `.ts` files other than
+the formatters,
 props defaults, and any language other than English.
 
-**Pinned per file, not as a total**, so a literal removed in one file cannot
-hide a new one in another. Counts are exact: a removed literal leaves its entry
-stale until it is lowered in the commit that did the work, and a file that
-reaches 0 leaves the dict.
+**Pinned per file and per literal**, in
+`repo_tests/hardcoded_ui_literal_baseline_12732.json` (`file -> [digest, ...]`, a
+multiset). A digest is `literal_digest(kind, text)`: the first 8 hex characters of
+SHA-256 over `kind`, a NUL and the text. The text itself is not stored, because some
+literals are placeholder examples shaped like secrets (a PEM header, a DSN), which the
+secret guards rightly refuse in a tracked file (#18802). A literal removed in one file
+cannot hide a new one in another, and swapping one literal for another in the same file
+fails twice: the new one is unrecorded and the old digest is stale. The failure message
+prints the new literal's text from the current scan. A removed literal's digest is deleted
+from the JSON in the commit that did the work, and a file that reaches 0 leaves it.
 
 **Shrink-only.** Replace a literal with `t('...')` and an English key in
 `en.json`; do not delete text to get under the check. English-only i18n is the
@@ -48,175 +61,26 @@ from a one-word label. They stay in the counts; a migration that moves them to
 
 from __future__ import annotations
 
-#: ``repo-relative .vue path -> hard-coded English literals not yet moved to t()``.
-HARDCODED_UI_LITERALS: dict[str, int] = {
-    "autobot-frontend/src/components/admin/NpuWorkerPairConfirmDialog.vue": 9,
-    "autobot-frontend/src/components/agents/AgentTaskDetail.vue": 15,
-    "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 31,
-    "autobot-frontend/src/components/analytics/AddSourceModal.vue": 2,
-    "autobot-frontend/src/components/analytics/AgentCostPanel.vue": 1,
-    "autobot-frontend/src/components/analytics/AnalyticsGrid.vue": 1,
-    "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 2,
-    "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 3,
-    "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1,
-    "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1,
-    "autobot-frontend/src/components/analytics/CodebaseDependenciesPanel.vue": 2,
-    "autobot-frontend/src/components/analytics/CodebaseOverviewPanel.vue": 1,
-    "autobot-frontend/src/components/analytics/CodebaseSecurityPanel.vue": 1,
-    "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 6,
-    "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 1,
-    "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 2,
-    "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 4,
-    "autobot-frontend/src/components/analytics/ShareSourceModal.vue": 2,
-    "autobot-frontend/src/components/analytics/SourceManager.vue": 1,
-    "autobot-frontend/src/components/analytics/UnwiredTrackerTile.vue": 2,
-    "autobot-frontend/src/components/analytics/panels/CodebaseApiEndpointsPanel.vue": 5,
-    "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 10,
-    "autobot-frontend/src/components/analytics/panels/CodebaseConfigDuplicatesPanel.vue": 4,
-    "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 9,
-    "autobot-frontend/src/components/analytics/panels/CodebaseEnvironmentPanel.vue": 8,
-    "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 21,
-    "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 12,
-    "autobot-frontend/src/components/artifact-cells/ChartCell.vue": 4,
-    "autobot-frontend/src/components/artifact-cells/CodeCell.vue": 2,
-    "autobot-frontend/src/components/async/AsyncComponentWrapper.vue": 1,
-    "autobot-frontend/src/components/async/AsyncErrorFallback.vue": 7,
-    "autobot-frontend/src/components/autoresearch/ApprovalCard.vue": 6,
-    "autobot-frontend/src/components/autoresearch/ExperimentTimeline.vue": 3,
-    "autobot-frontend/src/components/autoresearch/InsightsPanel.vue": 6,
-    "autobot-frontend/src/components/autoresearch/PromptOptimizerPanel.vue": 12,
-    "autobot-frontend/src/components/browser/InteractiveScreenshot.vue": 3,
-    "autobot-frontend/src/components/canvas/CanvasCell.vue": 19,
-    "autobot-frontend/src/components/canvas/CanvasCellToolbar.vue": 5,
-    "autobot-frontend/src/components/canvas/CanvasConflictBanner.vue": 6,
-    "autobot-frontend/src/components/canvas/CanvasEdgeStates.vue": 14,
-    "autobot-frontend/src/components/canvas/CanvasExportSheet.vue": 8,
-    "autobot-frontend/src/components/canvas/CanvasPanel.vue": 1,
-    "autobot-frontend/src/components/canvas/CanvasSplitLayout.vue": 1,
-    "autobot-frontend/src/components/canvas/CanvasToolPalette.vue": 9,
-    "autobot-frontend/src/components/canvas/CanvasView.vue": 1,
-    "autobot-frontend/src/components/canvas/CodeCell.vue": 5,
-    "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 5,
-    "autobot-frontend/src/components/charts/ImportTreeChart.vue": 2,
-    "autobot-frontend/src/components/chat/ChatBrowser.vue": 1,
-    "autobot-frontend/src/components/chat/ChatFilePanel.vue": 1,
-    "autobot-frontend/src/components/chat/ChatInput.vue": 7,
-    "autobot-frontend/src/components/chat/ChatInterface.vue": 3,
-    "autobot-frontend/src/components/chat/ChatMessages.vue": 1,
-    "autobot-frontend/src/components/chat/DeleteConversationDialog.vue": 2,
-    "autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue": 5,
-    "autobot-frontend/src/components/chat/McpPromptPicker.vue": 15,
-    "autobot-frontend/src/components/chat/MessageItem.vue": 2,
-    "autobot-frontend/src/components/chat/OverseerStepMessage.vue": 2,
-    "autobot-frontend/src/components/chat/SlashCommandDropdown.vue": 1,
-    "autobot-frontend/src/components/desktop/DesktopContextPanel.vue": 1,
-    "autobot-frontend/src/components/desktop/DesktopInterface.vue": 13,
-    "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": 4,
-    "autobot-frontend/src/components/documents/AIDocumentEditor.vue": 11,
-    "autobot-frontend/src/components/examples/ThemingPatternExample.vue": 46,
-    "autobot-frontend/src/components/file-browser/SandboxFileBrowser.vue": 12,
-    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 24,
-    "autobot-frontend/src/components/knowledge/DeduplicationManager.vue": 7,
-    "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 1,
-    "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 15,
-    "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 1,
-    "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 2,
-    "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 1,
-    "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 4,
-    "autobot-frontend/src/components/knowledge/McpResourceBrowser.vue": 10,
-    "autobot-frontend/src/components/knowledge/MemoryOrphanManager.vue": 1,
-    "autobot-frontend/src/components/knowledge/SessionOrphanManager.vue": 1,
-    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 19,
-    "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 46,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 11,
-    "autobot-frontend/src/components/knowledge/connectors/ConnectorHistoryPanel.vue": 6,
-    "autobot-frontend/src/components/knowledge/web-research/CrawlTab.vue": 1,
-    "autobot-frontend/src/components/knowledge/web-research/ExtractTab.vue": 1,
-    "autobot-frontend/src/components/knowledge/web-research/ScrapeTab.vue": 2,
-    "autobot-frontend/src/components/knowledge/web-research/SiteMapTab.vue": 1,
-    "autobot-frontend/src/components/llc/LlcBreadcrumb.vue": 1,
-    "autobot-frontend/src/components/llc/TemplateBrowser.vue": 9,
-    "autobot-frontend/src/components/manpage/ManPageManager.vue": 3,
-    "autobot-frontend/src/components/plugins/CapabilityApprovalDialog.vue": 3,
-    "autobot-frontend/src/components/plugins/PluginInstallModal.vue": 1,
-    "autobot-frontend/src/components/security/SecretsManager.vue": 2,
-    "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 2,
-    "autobot-frontend/src/components/settings/PushNotificationSettingsPanel.vue": 11,
-    "autobot-frontend/src/components/settings/SettingsPanel.vue": 2,
-    "autobot-frontend/src/components/settings/TelegramSettingsPanel.vue": 13,
-    "autobot-frontend/src/components/settings/ThemePresetPicker.vue": 5,
-    "autobot-frontend/src/components/terminal/CompletionSuggestions.vue": 1,
-    "autobot-frontend/src/components/terminal/SSHTerminal.vue": 3,
-    "autobot-frontend/src/components/terminal/TerminalHeader.vue": 2,
-    "autobot-frontend/src/components/terminal/TerminalModals.vue": 1,
-    "autobot-frontend/src/components/terminal/TerminalOutput.vue": 1,
-    "autobot-frontend/src/components/terminal/TerminalStatusBar.vue": 1,
-    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 2,
-    "autobot-frontend/src/components/theme/EmberThemeToggle.vue": 4,
-    "autobot-frontend/src/components/transcriber/AiAnalysisPanel.vue": 6,
-    "autobot-frontend/src/components/transcriber/AsrProviderSelector.vue": 14,
-    "autobot-frontend/src/components/transcriber/UploadModal.vue": 2,
-    "autobot-frontend/src/components/ui/ConfirmDialog.vue": 2,
-    "autobot-frontend/src/components/ui/PreferencesPanel.vue": 1,
-    "autobot-frontend/src/components/visualizations/ServiceMessageTimeline.vue": 2,
-    "autobot-frontend/src/components/workflow/NotificationConfigModal.vue": 2,
-    "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 1,
-    "autobot-frontend/src/components/workflow/WorkflowTemplateGallery.vue": 1,
-    "autobot-frontend/src/views/AdminMcpServersView.vue": 1,
-    "autobot-frontend/src/views/AdminSandboxView.vue": 2,
-    "autobot-frontend/src/views/AgentActivity.vue": 9,
-    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 2,
-    "autobot-frontend/src/views/CanvasView.vue": 1,
-    "autobot-frontend/src/views/ComponentShowcaseView.vue": 9,
-    "autobot-frontend/src/views/CustomDashboard.vue": 6,
-    "autobot-frontend/src/views/ExperimentDashboard.vue": 7,
-    "autobot-frontend/src/views/OnboardingWizard.vue": 28,
-    "autobot-frontend/src/views/SettingsView.vue": 8,
-    "autobot-frontend/src/views/UsageView.vue": 60,
-    "autobot-frontend/src/views/secrets/LlmApiKeysView.vue": 1,
-    "autobot-frontend/src/views/slm/ThemeManagerView.vue": 3,
-    "autobot-frontend/src/views/transcriber/ProjectDetailView.vue": 10,
-    "autobot-frontend/src/views/transcriber/ProjectsView.vue": 16,
-    "autobot-frontend/src/views/transcriber/TranscriptView.vue": 5,
-    "autobot-frontend/src/views/voice/VoiceBundleInfo.vue": 5,
-    "autobot-slm-frontend/src/components/DeploymentLogViewer.vue": 4,
-    "autobot-slm-frontend/src/components/RoleManagementModal.vue": 1,
-    "autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue": 1,
-    "autobot-slm-frontend/src/components/fleet/AssignNPURoleModal.vue": 1,
-    "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 1,
-    "autobot-slm-frontend/src/components/fleet/NPUDetailsPanel.vue": 2,
-    "autobot-slm-frontend/src/components/fleet/NodeServicesPanel.vue": 1,
-    "autobot-slm-frontend/src/components/monitoring/GrafanaDashboard.vue": 2,
-    "autobot-slm-frontend/src/components/orchestration/RestartConfirmDialog.vue": 1,
-    "autobot-slm-frontend/src/views/CodeSyncView.vue": 5,
-    "autobot-slm-frontend/src/views/DeploymentsView.vue": 21,
-    "autobot-slm-frontend/src/views/ExternalAgentsView.vue": 1,
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 9,
-    "autobot-slm-frontend/src/views/OrchestrationView.vue": 2,
-    "autobot-slm-frontend/src/views/ReplicationView.vue": 2,
-    "autobot-slm-frontend/src/views/SecurityView.vue": 21,
-    "autobot-slm-frontend/src/views/SetupWizardView.vue": 3,
-    "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 5,
-    "autobot-slm-frontend/src/views/monitoring/AlertsMonitor.vue": 1,
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 1,
-    "autobot-slm-frontend/src/views/settings/APISettings.vue": 1,
-    "autobot-slm-frontend/src/views/settings/BackendSettings.vue": 2,
-    "autobot-slm-frontend/src/views/settings/DisposalPolicySettings.vue": 1,
-    "autobot-slm-frontend/src/views/settings/GeneralSettings.vue": 3,
-    "autobot-slm-frontend/src/views/settings/MonitoringSettings.vue": 1,
-    "autobot-slm-frontend/src/views/settings/NotificationsSettings.vue": 2,
-    "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 6,
-    "autobot-slm-frontend/src/views/settings/admin/CacheSettings.vue": 5,
-    "autobot-slm-frontend/src/views/settings/admin/ConfigDefaultsSettings.vue": 4,
-    "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 1,
-    "autobot-slm-frontend/src/views/settings/admin/LLMSettings.vue": 2,
-    "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 4,
-    "autobot-slm-frontend/src/views/settings/admin/PromptsSettings.vue": 4,
-    "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 2,
-    "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 6,
-    "autobot-slm-frontend/src/views/tools/admin/BatchTool.vue": 3,
-    "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": 1,
-    "autobot-slm-frontend/src/views/tools/admin/NoVNCTool.vue": 1,
-    "autobot-slm-frontend/src/views/tools/admin/VisionTool.vue": 1,
-    "autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue": 4,
-}
+import hashlib
+import json
+from pathlib import Path
+
+#: The JSON beside this module: ``repo-relative .vue path -> [digest, ...]``.
+BASELINE_PATH = Path(__file__).with_name("hardcoded_ui_literal_baseline_12732.json")
+
+
+def literal_digest(kind: str, text: str) -> str:
+    """The identity a literal is recorded under: 8 hex chars of SHA-256 over kind, NUL, text.
+
+    Eight, not more: identity only has to be unique WITHIN one file (at most ~60 literals),
+    and an 8-character string has at most 3.0 bits of Shannon entropy per character, which never
+    exceeds detect-secrets' hex limit (> 3.0). A longer digest is flagged as a secret.
+    """
+    return hashlib.sha256(f"{kind}\0{text}".encode("utf-8")).hexdigest()[:8]
+
+
+#: ``path -> digests`` of the literals not yet moved to ``t()``; a multiset, order-free.
+HARDCODED_UI_LITERAL_IDS: dict[str, list[str]] = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+
+#: ``path -> how many``, derived from the identities (kept for the reach and sort checks).
+HARDCODED_UI_LITERALS: dict[str, int] = {f: len(v) for f, v in HARDCODED_UI_LITERAL_IDS.items()}

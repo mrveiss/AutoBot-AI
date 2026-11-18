@@ -28,14 +28,15 @@ function metaString(meta: Record<string, unknown>, key: string): string {
 
 export function factToDocument(documentId: string, fact: FactByKeyBody): KnowledgeDocument {
   const meta = fact.metadata ?? {}
-  const created = fact.created_at ? new Date(fact.created_at) : new Date(0)
+  const parsed = fact.created_at ? new Date(fact.created_at) : null
+  const created = parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date(0)
   return {
     id: documentId,
     title: metaString(meta, 'title'),
-    content: fact.content,
+    content: typeof fact.content === 'string' ? fact.content : '',
     source: metaString(meta, 'source'),
     type: 'document',
-    tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
+    tags: Array.isArray(meta.tags) ? meta.tags.filter((tag): tag is string => typeof tag === 'string') : [],
     category: metaString(meta, 'category'),
     createdAt: created,
     updatedAt: created,

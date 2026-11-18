@@ -2,7 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
-/** Prop and score shapes for CodebaseIntelligenceScoresPanel.vue (split out of the component for the size ceiling, #18730). */
+/** Prop and score shapes for CodebaseIntelligenceScoresPanel.vue (split out of the component for the size ceiling, #18730).
+ * CodeHealthScore, QualityScore, CodeSuggestion and CodeAnalysisResult come from
+ * composables/useCodeIntelligence.ts, the single definition. */
+export type {
+  CodeHealthScore,
+  QualityScore,
+  CodeSuggestion,
+  CodeAnalysisResult,
+} from '@/composables/useCodeIntelligence'
 
 export interface SecurityScoreResult {
   security_score: number
@@ -62,48 +70,4 @@ export interface RedisOptimization {
   line?: number
   category?: string
   recommendation?: string
-}
-
-export interface CodeHealthScore {
-  health_score: number
-  total_files: number
-  issues_count: {
-    critical: number
-    high: number
-    medium: number
-    low: number
-  }
-  coverage_percent: number
-  technical_debt_hours: number
-  timestamp: string
-}
-
-export interface QualityScore {
-  overall_score: number
-  metrics: {
-    complexity: number
-    maintainability: number
-    documentation: number
-    testing: number
-    security: number
-  }
-  grade: string
-  trend?: 'improving' | 'stable' | 'declining'
-}
-
-export interface CodeSuggestion {
-  id: string
-  type: string
-  priority: 'high' | 'medium' | 'low'
-  title: string
-  description: string
-  impact: string
-}
-
-export interface CodeAnalysisResult {
-  id: string
-  language: string
-  filename?: string
-  quality_score: number
-  timestamp: string
 }

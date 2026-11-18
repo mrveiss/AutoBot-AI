@@ -32,6 +32,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend/api", "autobot-slm-backend/api")
@@ -61,8 +62,6 @@ def _population(root) -> list[str]:
 REACH = declare(
     "doubled-api-prefix-scan",
     discover=_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=473,
     what="non-test python source",
     roots=_ROOTS,
     growth=60,
@@ -127,9 +126,17 @@ def _is_router_ctor(call: ast.Call) -> bool:
     return _ctor_name(call) == "APIRouter"
 
 
+def _is_router_include(call: ast.Call, apps: set[str]) -> bool:
+    """``<router>.include_router(sub, prefix=...)``; on the FastAPI app, ``/api`` is the root mount."""
+    func = call.func
+    if not (isinstance(func, ast.Attribute) and func.attr == "include_router"):
+        return False
+    return not (isinstance(func.value, ast.Name) and func.value.id in apps)
+
+
 def doubled_paths(source: str) -> list[str]:
     """Every route path and ``APIRouter(prefix=...)`` in `source` that starts with ``/api``."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     routers, apps = _bound_names(tree, "APIRouter"), _bound_names(tree, "FastAPI")
     decorators = _decorator_calls(tree)
     found: list[str] = []
@@ -138,7 +145,7 @@ def doubled_paths(source: str) -> list[str]:
             continue
         if _is_route_call(node, routers, apps, decorators):
             path = _declared_path(node)
-        elif _is_router_ctor(node):
+        elif _is_router_ctor(node) or _is_router_include(node, apps):
             path = next((_str_const(k.value) for k in node.keywords if k.arg == "prefix"), None)
         else:
             continue
@@ -175,6 +182,8 @@ _PLANTED = (
     ('r: APIRouter = APIRouter()\nr.add_api_route("/api/z", f)\n', ["/api/z"]),
     # Unknown receiver used as a route decorator: flagged conservatively.
     ('@mystery.get("/api/q")\nasync def f(): ...\n', ["/api/q"]),
+    # Composition: a router included into another router under an ``/api`` prefix (CodeRabbit, #18827).
+    ('router.include_router(sub, prefix="/api/x")\n', ["/api/x"]),
 )
 
 #: Contrast: shapes that must NOT be flagged.
@@ -191,6 +200,9 @@ _CLEAN = (
     # Not a decorator and not a known router: a call, not a declaration.
     'resp = session.get("/api/health")\n',
     'add_deprecated_redirects(router, {("GET", "/api/cache/stats"): "/cache/stats"})\n',
+    # The app's own include is the root mount, not a doubled prefix.
+    'app = FastAPI()\napp.include_router(sub, prefix="/api")\n',
+    'router.include_router(sub, prefix="/cache")\n',
 )
 
 

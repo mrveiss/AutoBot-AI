@@ -26,14 +26,17 @@ from npm_audit_gate_test import BULK_LOG, _FakeNpm, _report
 
 # --- recorded unfixable advisories (#13400) --------------------------------
 #
-# Owner decision 2026-10-03: GHSA-vfj7-8cjw-p6xm (braces <= 3.0.3, published 2026-09-18)
-# has `first_patched_version: null`, every lockfile here is already at 3.0.3, and the chain
-# is devDependencies only. The gate yields to it until the recorded expiry.
+# The mechanism is exercised with a SYNTHETIC advisory id injected by the
+# `recorded_exception` fixture. The first real record (GHSA-vfj7-8cjw-p6xm, braces, owner
+# decision 2026-10-03) was retired when upstream stopped reporting it (2026-10-23), and the
+# live table may legitimately be empty, so no test here may depend on a real entry.
 #
 # Every fixture below is a literal in this file, so none of them can degrade through a
 # loader, and each failure mode the record can have gets one that trips it.
 
-_EXCUSED = "GHSA-vfj7-8cjw-p6xm"
+_EXCUSED = "GHSA-t3st-t3st-t3st"
+# The shipped table, captured before any fixture patches it.
+_SHIPPED = dict(policy.ADVISORY_EXCEPTIONS)
 _UNKNOWN = "GHSA-aaaa-bbbb-cccc"
 
 
@@ -101,7 +104,7 @@ def test_a_fix_being_available_withdraws_the_exception(recorded_exception) -> No
     assert "patched version" in verdict.reason and _EXCUSED in verdict.reason
 
 
-def test_an_expired_exception_fails_and_names_the_date() -> None:
+def test_an_expired_exception_fails_and_names_the_date(recorded_exception) -> None:
     """Injected date, so the test does not change meaning when the expiry passes."""
     expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
     honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry + timedelta(days=1))
@@ -110,7 +113,7 @@ def test_an_expired_exception_fails_and_names_the_date() -> None:
     assert any(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
 
 
-def test_the_exception_is_honoured_on_its_last_day() -> None:
+def test_the_exception_is_honoured_on_its_last_day(recorded_exception) -> None:
     """Contrast for the boundary: expiry is inclusive, so the off-by-one is pinned."""
     expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
     honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry)
@@ -119,7 +122,7 @@ def test_the_exception_is_honoured_on_its_last_day() -> None:
     assert problems == []
 
 
-def test_a_drained_exception_fails_rather_than_lingering() -> None:
+def test_a_drained_exception_fails_rather_than_lingering(recorded_exception) -> None:
     """Shrink-only, as the ratchet baselines are: a record cannot outlive its advisory."""
     honoured, problems = gate.exception_problems({_UNKNOWN: False}, date(2026, 10, 3))
 
@@ -217,7 +220,9 @@ def test_an_excused_pass_names_the_advisory_in_stdout_and_the_summary(
     assert "| high | 6 |" in written, "the counts are still reported; the advisory is excused, not hidden"
 
 
-def test_a_stale_record_on_a_clean_audit_says_so_rather_than_claiming_advisories(tmp_path, monkeypatch, capsys) -> None:
+def test_a_stale_record_on_a_clean_audit_says_so_rather_than_claiming_advisories(
+    tmp_path, monkeypatch, capsys, recorded_exception
+) -> None:
     """The drain case: counts are zero, the entry is dead, and the headline must not hunt a ghost."""
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
     monkeypatch.setenv("NPM_AUDIT_MAX_ATTEMPTS", "1")
@@ -486,3 +491,21 @@ def test_a_genuine_upgrade_is_a_patch() -> None:
 def test_an_unreadable_range_counts_as_a_patch_so_the_exception_is_withdrawn() -> None:
     """A range this cannot parse must not become permission."""
     assert gate.entry_offers_a_patch("braces", _patch_entry(rng="not a range", fix={"name": "braces", "version": "9"}))
+
+
+def test_the_picomatch_exception_is_recorded_per_owner_decision() -> None:
+    """GHSA-fc5q-39xc-vjpf: no patched version exists; owner decision on #21736, expires 2026-12-17."""
+    entry = _SHIPPED["GHSA-fc5q-39xc-vjpf"]
+    assert entry.expires == "2026-12-17"
+    assert "#21736" in entry.reason
+
+
+def test_the_picomatch_exception_retires_when_a_patch_ships() -> None:
+    """A patched picomatch withdraws the exception; an affected-everywhere one (`*`) honours it."""
+    ghsa = "GHSA-fc5q-39xc-vjpf"
+    before = date(2026, 11, 17)
+    unpatched = {ghsa: False}
+    assert policy.exception_problems(unpatched, before) == ({ghsa}, [])
+    assert policy.exception_problems({ghsa: True}, before)[1], "a published patch must withdraw it"
+    assert policy.exception_problems(unpatched, date(2026, 12, 18))[1], "expired entries must fail"
+    assert policy.exception_problems({}, before)[1], "an advisory no longer reported must be removed"
