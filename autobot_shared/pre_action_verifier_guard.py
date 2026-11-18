@@ -101,8 +101,10 @@ VERIFIER_ENABLED: bool = os.environ.get("VERIFIER_ENABLED", "1") != "0"
 #: Token budget for the verifier LLM call.
 VERIFIER_MAX_TOKENS: int = env_int("VERIFIER_MAX_TOKENS", 512)
 
-#: Timeout in seconds for the verifier LLM call.
-VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 30.0)
+#: Timeout in seconds for the verifier LLM call. Kept well below the chat stream's own
+#: timeout (#21844): the verifier runs on its own small model (``AUTOBOT_VERIFIER_MODEL``),
+#: and a slow verifier must give up (fail-open, logged) rather than stall the turn.
+VERIFIER_TIMEOUT_S: float = env_float("VERIFIER_TIMEOUT_S", 10.0)
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +300,19 @@ async def _select_verifier_provider(actor_provider: str | None) -> Any:
 # ---------------------------------------------------------------------------
 
 
+def _verifier_model_for(provider: Any) -> str | None:
+    """The SSOT verifier model when *provider* is the local Ollama one, else None (#21844).
+
+    The configured model names an Ollama tag; a different provider keeps its own default.
+    """
+    from autobot_shared.ssot_config import config
+    from llm_shared.models import ProviderType
+
+    if getattr(provider, "provider_name", None) != ProviderType.OLLAMA.value:
+        return None
+    return config.verifier_model or None
+
+
 async def _call_verifier_once(
     tool_name: str,
     args: dict[str, Any],
@@ -320,6 +335,7 @@ async def _call_verifier_once(
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
     request = LLMRequest(
+        model_name=_verifier_model_for(provider),
         messages=[
             {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
             {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
