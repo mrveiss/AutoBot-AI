@@ -27,8 +27,8 @@ describe('formatChatMessageHtml ANSI handling', () => {
   })
 
   it('removes a forged link placeholder from the input instead of resolving it', () => {
-    const html = formatChatMessageHtml('x 0 y')
-    expect(html).not.toContain('')
+    const html = formatChatMessageHtml('x \uFDD00\uFDD0 y')
+    expect(html).not.toContain('\uFDD0')
     expect(html).toContain('x')
   })
 })
