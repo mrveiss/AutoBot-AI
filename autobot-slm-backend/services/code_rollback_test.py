@@ -131,6 +131,27 @@ async def test_orchestrator_scopes_every_playbook_run_to_the_target_and_releases
     assert current_rollback_ref() is None
 
 
+async def test_a_failed_outdated_node_collection_runs_no_slm_or_fleet_stage_and_ends_failed(monkeypatch):
+    """#21334: collection that cannot determine the outdated nodes is a failure, never "nothing outdated"."""
+    seen: dict = {}
+    cs = _fake_cs(slm_fired=True, seen=seen)
+
+    async def _collection_fails(job, commit, db):
+        job.status = "failed"  # what the real collector does when the node query cannot be answered
+        return []
+
+    cs._collect_outdated_node_ids = _collection_fails
+    monkeypatch.setitem(sys.modules, "api.code_sync", cs)
+    monkeypatch.setattr(api, "code_sync", cs, raising=False)
+    record = AsyncMock()
+    monkeypatch.setattr(cr.rollback_audit, "record_rollback", record)
+    job = SimpleNamespace(status="pending")
+    await cr.orchestrator(TARGET, "alice")(job, _db())
+    assert job.status == "failed"
+    assert not {"slm_target", "reconcile_target", "fleet_target"} & seen.keys()
+    assert record.await_args.kwargs["outcome"] == "failed"
+
+
 async def test_a_commit_that_left_the_branch_during_the_fetch_stops_the_run(monkeypatch):
     seen: dict = {}
     cs = _fake_cs(slm_fired=True, seen=seen)

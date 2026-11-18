@@ -195,11 +195,11 @@ class ModelFallbackCoordinator:
 
             {
                 "fallback_used": True | False,
-                "primary_model": "claude-opus-4",
-                "fallback_model": "claude-sonnet-4",   # only when fallback triggered
+                "primary_model": "<primary model id>",
+                "fallback_model": "<fallback model id>",   # only when fallback triggered
                 "fallback_reason": "rate_limit_429",
                 "attempt_count": 2,
-                "fallback_chain_tried": ["claude-opus-4", "claude-sonnet-4"],
+                "fallback_chain_tried": ["<primary model id>", "<fallback model id>"],
             }
         """
         if not request.fallback_enabled:

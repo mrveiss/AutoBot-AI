@@ -60,12 +60,12 @@ Tests agent loading with optimization:
 - `test_agent_routing_unchanged()` - Compare routing pre/post optimization
 
 Test queries:
-- "review my code" → code-reviewer
-- "optimize backend performance" → senior-backend-engineer
-- "write comprehensive tests" → testing-engineer
-- "audit API security" → security-auditor
-- "design system architecture" → systems-architect
-- "improve database queries" → database-engineer
+- "review my code" → code reviewer
+- "optimize backend performance" → senior backend engineer
+- "write comprehensive tests" → testing engineer
+- "audit API security" → security auditor
+- "design system architecture" → systems architect
+- "improve database queries" → database engineer
 
 **Expected Behavior:**
 - Identical agent selection with/without optimization
@@ -123,7 +123,7 @@ Uncached load: 2.35ms
 Cached load: 0.12ms
 Improvement: 94.9%
 
-=== Real Agent File Test: testing-engineer-md.md ===
+=== Real Agent File Test: testing engineer-md.md ===
 Original size: 78,965 bytes
 Optimized size: 55,276 bytes
 Reduction: 30.0%
@@ -286,7 +286,7 @@ pytest tests/test_optimized_agent_loader.py -v
 
 **File Not Found:**
 ```bash
-FileNotFoundError: Agent file not found: .claude/agents/...
+FileNotFoundError: Agent file not found: autobot-backend/resources/prompts/...
 ```
 **Solution:** Run tests from project root, not tests/ directory:
 ```bash
@@ -394,7 +394,7 @@ cache_key = hashlib.md5(file_path.encode()).hexdigest()
 - **Tests:** `tests/test_optimized_agent_loader.py`
 - **Fixtures:** `tests/fixtures/agent_optimization/`
 - **CLAUDE.md:** Project development guidelines
-- **Agent Files:** `.claude/agents/*.md`
+- **Agent Files:** the host agents directory, `claude_agents_dir()` in `autobot_shared/claude_config.py` (default `~/.claude/agents`; override with `AUTOBOT_CLAUDE_CONFIG_DIR` or `CLAUDE_CONFIG_DIR`, or `--agent-dir`)
 
 ## Maintenance
 

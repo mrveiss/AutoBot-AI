@@ -18,7 +18,7 @@
         :key="variant"
         @click="setThemeVariant(variant)"
         :class="{
-          'bg-autobot-primary text-white': themeVariant === variant,
+          'bg-autobot-primary text-autobot-text-on-primary': themeVariant === variant,
           'bg-autobot-bg-tertiary text-autobot-text-primary hover:bg-autobot-bg-hover': themeVariant !== variant
         }"
         class="px-4 py-2 rounded-md transition-colors duration-200"

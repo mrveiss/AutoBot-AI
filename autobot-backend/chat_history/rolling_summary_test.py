@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA, COMPARE_AND_PEXPIRE_LUA
 from chat_history import rolling_summary as rs
 from chat_history.context_overflow import ConversationSummarizer, SummarizationFailed
 from chat_history.summarization_prompt import SummaryResult, build_prompt
@@ -60,14 +61,14 @@ class FakeRedis:
         self._expire(keys[0])
         if self.data.get(keys[0]) != argv[0]:
             return 0  # every script is guarded by the lock token
-        if script == rs._RELEASE_LOCK:
+        if script == COMPARE_AND_DELETE_LUA:
             del self.data[keys[0]]
         elif script == rs._STORE_IF_LOCKED:
             self.data[keys[1]] = argv[1]
             self.ttls[keys[1]] = argv[2]
         else:
-            assert script == rs._EXTEND_LOCK
-            self._arm(keys[0], argv[1])
+            assert script == COMPARE_AND_PEXPIRE_LUA
+            self._arm(keys[0], int(argv[1]) // 1000)  # PEXPIRE takes milliseconds
         return 1
 
 
@@ -153,6 +154,17 @@ def env():
 def _context(history, summary):
     session = SimpleNamespace(conversation_history=history)
     return LLMHandlerMixin.__new__(LLMHandlerMixin)._build_conversation_context(session, summary)
+
+
+@pytest.mark.asyncio
+async def test_extend_renews_the_lock_for_its_full_ttl_in_seconds_not_milliseconds():
+    now = [0]
+    redis = FakeRedis(clock=lambda: now[0])
+    lock = rs._RefreshLock(redis, SID)
+    assert await lock.acquire()
+    now[0] = rs._LOCK_TTL_SECONDS - 1
+    assert await lock.extend()
+    assert redis.expiry[lock.key] == now[0] + rs._LOCK_TTL_SECONDS
 
 
 @pytest.mark.asyncio

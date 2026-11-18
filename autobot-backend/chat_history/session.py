@@ -26,6 +26,7 @@ from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import existing_chat_path, run_in_chat_io_executor
 from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
+from chat_history.owner_keys import owner_from_metadata
 from chat_history.session_lease import CHAT_LEASE_BEST_EFFORT_WAIT_S, ChatFileUnreadable, SessionLeaseTimeout
 from chat_history.session_locked import SessionLockMixin
 from chat_history.session_merge import combine_messages
@@ -751,16 +752,15 @@ class SessionMixin(SessionLockMixin):
         """Username of the session's owner, or None if it has no file or records none."""
         try:
             chat_file = await self._existing_chat_file(session_id)
-            if chat_file is None:
+            if chat_file is None:  # Inline below, so CodeQL sees the containment at the read (code_sync_paths.py)
                 return None
-            # Inline, so CodeQL sees the containment at the read (the shape in code_sync_paths.py)
             chat_file, root = os.path.realpath(chat_file), os.path.realpath(self._get_chats_directory())
             if not chat_file.startswith(root + os.sep):
                 raise ValueError("the chat file resolved outside the chats directory")
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
-            metadata = self._decrypt_data(file_content).get("metadata", {})
-            return metadata.get("owner") or metadata.get("username")
+            decrypted = await run_in_chat_io_executor(self._decrypt_data, file_content)  # #21664: off the loop
+            return owner_from_metadata(decrypted.get("metadata", {}))
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
             raise SessionOwnerUnreadable(session_id) from e
