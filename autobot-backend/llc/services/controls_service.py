@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from models.agent_org import AgentOrgNode
 
+from ..exceptions import PublicMessageMixin
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
 from .company import CompanyNotFoundError
@@ -42,7 +43,7 @@ class SprintNotFoundError(Exception):
     pass
 
 
-class AgentNotPausableError(Exception):
+class AgentNotPausableError(PublicMessageMixin, Exception):
     """Pausing an agent in a terminal status (terminated): the transition is refused before any write (#21056)."""
 
     def __init__(self, agent_id: str, status: str) -> None:
@@ -50,7 +51,7 @@ class AgentNotPausableError(Exception):
         self.status = status
 
 
-class AgentNotSchedulableError(Exception):
+class AgentNotSchedulableError(PublicMessageMixin, Exception):
     """Enabling a heartbeat on an agent whose status means it must never run (#15907)."""
 
     def __init__(self, agent_id: str, status: str) -> None:

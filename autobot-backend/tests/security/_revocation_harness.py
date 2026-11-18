@@ -46,11 +46,15 @@ def get_current_user(real_auth_middleware, monkeypatch):
     return real_auth_middleware.get_current_user
 
 
-def token_request(age_seconds: int = 60, username: str = "alice", role: str = Role.USER.value) -> Request:
+def token_headers(age_seconds: int = 60, username: str = "alice", role: str = Role.USER.value) -> dict[str, str]:
+    """The ``Authorization`` header a client sends with a login token minted *age_seconds* ago."""
     claims = {"username": username, "role": role, "token_type": LOGIN_TOKEN_TYPE}
     claims["iat"] = int(time.time()) - age_seconds
-    token = encode_jwt(claims, secret=PLATFORM_SECRET, expiry_hours=24)
-    headers = [(b"authorization", f"Bearer {token}".encode())]
+    return {"Authorization": f"Bearer {encode_jwt(claims, secret=PLATFORM_SECRET, expiry_hours=24)}"}
+
+
+def token_request(age_seconds: int = 60, username: str = "alice", role: str = Role.USER.value) -> Request:
+    headers = [(b"authorization", token_headers(age_seconds, username, role)["Authorization"].encode())]
     scope = {"type": "http", "method": "GET", "path": "/api/chat", "query_string": b"", "headers": headers}
     return Request({**scope, "client": ("testclient", 5), "app": FastAPI()})
 

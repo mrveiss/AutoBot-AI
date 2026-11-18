@@ -95,7 +95,7 @@ async def _boom(self, *args, **kwargs):
     yield  # pragma: no cover - makes this an async generator like the real one
 
 
-async def _drive(script, workspace_root, graph_raises=False):
+async def _drive(script, workspace_root, graph_raises=False, gate_on=False):
     """Run the default turn runner with *script* as the model; returns (record, contexts, deleted_threads)."""
     contexts: list = []
     deleted: list = []
@@ -106,6 +106,11 @@ async def _drive(script, workspace_root, graph_raises=False):
     async def passes(self, http, prompt, iteration, ctx):
         async for item in script(iteration, ctx):
             yield item
+
+    async def plan_passes(self, http, prompt, iteration, ctx):
+        """The plan-only seam (the shipping default): the same script, its final pair as (text, no calls, stop)."""
+        async for item in script(iteration, ctx):
+            yield (item[0], [], False) if isinstance(item, tuple) else item
 
     real_delete = graph_module.delete_thread_checkpoints
 
@@ -119,7 +124,10 @@ async def _drive(script, workspace_root, graph_raises=False):
         with (
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", passes),
+            patch.object(ChatWorkflowManager, "_run_llm_iteration_plan_only", plan_passes),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
+            # The inline seam is scripted by default; gate_on drives the plan-only path the shipping default takes.
+            patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", gate_on),
             patch("chat_workflow.graph.attachment_prompt", AsyncMock(return_value="p")),
             patch("chat_workflow.get_chat_workflow_manager", lambda: manager),
             patch("chat_workflow.graph.delete_thread_checkpoints", spy_delete),
@@ -145,6 +153,18 @@ async def test_a_clean_answer_has_no_category_and_the_turn_is_pinned_bounded_and
     assert ctx["requires_approval_before"], "every approval category is gated"
     (thread,) = deleted
     assert thread.startswith("eval-g-") and not [c async for c in saver.alist({"configurable": {"thread_id": thread}})]
+
+
+async def test_a_clean_answer_through_the_shipping_plan_only_path(tmp_path):
+    """Gate ON (the default): generate_response -> _generate_response_planned -> persist, no inline pass."""
+
+    async def script(iteration, ctx):
+        yield {"type": "response", "content": "a grounded answer", "metadata": {}}
+        yield ("a grounded answer", False)
+
+    record, contexts, deleted, saver = await _drive(script, tmp_path, gate_on=True)
+    assert record.final_text == "a grounded answer" and record.final_status == "completed"
+    assert classify_failures(record) == [] and len(deleted) == 1
 
 
 async def test_a_repeated_tool_call_trips_the_real_loop_detector(tmp_path):
@@ -220,7 +240,7 @@ async def test_a_session_id_the_eval_made_is_accepted_by_its_own_delete_guard():
 
 
 async def test_a_denied_approval_ends_the_turn_and_runs_no_tool():
-    """Chat's resume supports a terminal deny: the denied branch of execute_tools skips every call."""
+    """A deny runs none of the shown calls; the model is told they were refused and the turn goes on (#19957)."""
     state = {
         "session_id": "eval-g-1",
         "tool_calls": [{"name": "navigate", "params": {"url": "x"}, "needs_approval": True}],
@@ -230,8 +250,8 @@ async def test_a_denied_approval_ends_the_turn_and_runs_no_tool():
     }
     with patch.object(graph_module, "dispatch_approved_calls", AsyncMock(side_effect=AssertionError("ran a tool"))):
         update = await graph_module.execute_tools(state, {"configurable": {"manager": object()}})
-    assert update["should_continue"] is False and "execution_history" not in update
-    assert graph_module.route_after_execution({**state, **update}) == "persist_conversation"
+    assert update["should_continue"] is True and [r["status"] for r in update["execution_history"]] == ["refused"]
+    assert graph_module.route_after_execution({**state, **update}) == "generate_response"
 
 
 async def test_a_graph_that_raised_and_fell_back_to_legacy_is_not_run_and_is_still_cleaned_up(tmp_path):

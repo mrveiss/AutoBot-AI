@@ -8,6 +8,7 @@ Provides real-time metrics for AutoBot system components.
 """
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
@@ -18,6 +19,7 @@ import psutil
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.redis_scan import cached_count, count_age_seconds
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -59,7 +61,6 @@ class SystemMetricsCollector:
         self.logger = get_logger(__name__)
         self._collection_interval = config.get("monitoring.metrics.collection_interval", 5)
         self._is_collecting = False
-        self._auth_error_logged = False  # Track if auth error was already logged
         self._kb_counts: Dict[str, tuple] = {}  # pattern -> (last attempt ts, count|None, ts count taken)
 
         # Phase 5 (Issue #348): Prometheus is now the primary metrics store
@@ -457,12 +458,13 @@ class SystemMetricsCollector:
         """
         error_msg = str(error)
         if "Authentication required" in error_msg or "NOAUTH" in error_msg:
-            if not self._auth_error_logged:
-                self.logger.warning(
-                    "Knowledge base metrics collection skipped: Redis authentication required. "
-                    "Configure Redis credentials in get_redis_client() to enable KB metrics."
-                )
-                self._auth_error_logged = True
+            log_once(
+                self.logger,
+                logging.WARNING,
+                "kb_metrics_redis_auth",
+                "Knowledge base metrics collection skipped: Redis authentication required. "
+                "Configure Redis credentials in get_redis_client() to enable KB metrics.",
+            )
         else:
             self.logger.error("Error collecting knowledge base metrics: %s", error)
 

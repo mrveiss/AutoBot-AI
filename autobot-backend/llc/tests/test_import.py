@@ -347,7 +347,7 @@ async def test_execute_import_skips_non_seed_work_items() -> None:
     company_id = uuid.uuid4()
     created: list[str] = []
 
-    async def fake_import_work_item(item, cid, project_id):  # noqa: ANN001
+    async def fake_import_work_item(item, cid, project_id, parent_id=None):  # noqa: ANN001
         created.append(item["title"])
         return uuid.uuid4()
 

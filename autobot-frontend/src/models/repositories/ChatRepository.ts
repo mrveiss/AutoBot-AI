@@ -439,7 +439,7 @@ export class ChatRepository {
     if (type.includes('utility')) return 'utility'
     if (type.includes('source')) return 'sources'
     if (type.includes('json')) return 'json'
-    if (type === 'command_approval_request') return 'command_approval_request'
+    if (type === 'command_approval_request' || type === 'human_question') return type // #21022: keep the stall card
     if (type === 'terminal_output' || type === 'terminal_command') return type
 
     // Default to 'message' for unrecognized types
