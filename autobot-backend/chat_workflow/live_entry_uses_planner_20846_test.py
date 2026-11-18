@@ -79,10 +79,25 @@ async def _two_passes(self, http, prompt, iteration, ctx):
     yield ("answer", iteration == 1)
 
 
-async def _plan_only_answer(self, http, prompt, iteration, ctx):
-    """The plan-only seam (the shipping default): one answer, no tool calls."""
-    yield {"type": "response", "content": "answer", "metadata": {}}
-    yield ("answer", [], False)
+async def _plan_only_search_then_answer(self, http, prompt, iteration, ctx):
+    """The plan-only seam (the shipping default): pass 1 plans a read, which execute_tools dispatches; pass 2 answers."""
+    if iteration == 1:
+        yield {"type": "response", "content": "searching", "metadata": {}}
+        yield ("searching", [{"name": "web_search", "params": {"query": "files"}}], False)
+    else:
+        yield {"type": "response", "content": "answer", "metadata": {}}
+        yield ("answer", [], False)
+
+
+async def _dispatch_the_search(self, tool_calls, *_a, ctx=None, **_k):
+    """The dispatch of execute_tools: one successful result, the way the real handler reports a search."""
+    results = [{"tool": c["name"], "status": "success", "output": "two files"} for c in tool_calls]
+    yield {"type": "execution_summary", "content": "", "metadata": {"execution_results": results}}
+    yield (False, None)
+
+
+async def _keep_output(self, results):
+    return results
 
 
 async def _drive(manager, gate_on=False):
@@ -92,7 +107,10 @@ async def _drive(manager, gate_on=False):
         with (
             patch.object(graph_module, "get_redis_checkpointer", AsyncMock(return_value=saver)),
             patch.object(ChatWorkflowManager, "_run_continuation_loop_iteration", _two_passes),
-            patch.object(ChatWorkflowManager, "_run_llm_iteration_plan_only", _plan_only_answer),
+            patch.object(ChatWorkflowManager, "_run_llm_iteration_plan_only", _plan_only_search_then_answer),
+            patch.object(ChatWorkflowManager, "_process_tool_calls", _dispatch_the_search),
+            patch.object(ChatWorkflowManager, "_offload_oversized_output", _keep_output),
+            patch.object(ChatWorkflowManager, "_bind_spill_run", lambda self, _sid: None),
             patch("autobot_shared.http_client.get_http_client", lambda: None),
             # The inline seam is scripted by default; gate_on drives the plan-only path the shipping default takes.
             patch("chat_workflow.session_role.CHAT_APPROVAL_GATE_ENABLED", gate_on),
