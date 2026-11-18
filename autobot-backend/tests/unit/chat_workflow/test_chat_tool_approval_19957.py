@@ -375,3 +375,41 @@ async def test_a_pass_where_every_call_was_refused_settles_the_plan_step():
     (_manager_arg, _state_arg, entries), _ = settle.await_args
     assert [e["status"] for e in entries] == ["refused"]
     assert out["plan_progress"] == {"block": "", "step_id": None} and out["tool_calls"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_claude_code_delegate_spawned_in_an_approved_dispatch_still_refuses_what_the_parent_gated():
+    """Parent declares "writing files", the approved dispatch clears it, and claude_code still refuses Write."""
+    import services.execution.claude_code_backend as ccb
+    from chat_workflow import delegation
+    from chat_workflow.graph_tool_dispatch import dispatch_approved_calls
+    from chat_workflow.run_authority import Inheritance
+
+    state = {
+        "session_id": "s1",
+        "terminal_session_id": "t1",
+        "execution_history": [],
+        "llm_params": {"ollama_endpoint": "http://x", "selected_model": "m"},
+        "context": {},
+    }
+    exec_ctx = SimpleNamespace(context={}, requires_approval_before=["writing files"], agent_context=None)
+    inherited = {}
+
+    class Manager:
+        def _bind_spill_run(self, _sid):
+            pass
+
+        async def _process_tool_calls(self, *_a, ctx=None, **_k):
+            inherited["value"] = Inheritance.of(ctx)  # what the delegate handler builds from its parent
+            yield (False, None)
+
+    await dispatch_approved_calls(Manager(), exec_ctx, state, [dict(CLICK)], 1, [], None)
+    assert exec_ctx.requires_approval_before == [], "control: the clear happened"
+    assert inherited["value"].authority.approval_gates == {"writing files"}
+
+    from unittest.mock import AsyncMock
+
+    mock_exec = AsyncMock(return_value=SimpleNamespace(stdout="ok", stderr=""))
+    with patch.object(ccb.ClaudeCodeBackend, "execute", new=mock_exec):
+        await delegation._run_claude_code_subagent("subtask", "research_agent", 0, "user", inherited["value"])
+    assert {"Write", "Edit"} <= set(mock_exec.await_args.args[0].metadata["disallowed_tools"])

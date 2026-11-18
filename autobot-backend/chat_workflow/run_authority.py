@@ -26,8 +26,9 @@ def authority_of(ctx: Any) -> Authority:
 
     agent_context = getattr(ctx, "agent_context", None)
     agent_id = agent_context.agent_id if agent_context is not None else None
+    gates = getattr(ctx, "approval_gates_snapshot", None)  # #19957: what the run held before its dispatch cleared them
     own = Authority(
-        approval_gates=frozenset(getattr(ctx, "requires_approval_before", None) or ()),
+        approval_gates=frozenset(gates if gates is not None else getattr(ctx, "requires_approval_before", None) or ()),
         forbidden_tools=resolve_forbidden_tools(agent_id),
     )
     inherited = getattr(ctx, "authority", None)

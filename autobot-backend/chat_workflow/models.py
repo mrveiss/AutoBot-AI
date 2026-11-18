@@ -406,6 +406,9 @@ class LLMIterationContext:
     # #19957: the categories this run declared, taken before an approved dispatch clears them from `context`, so a
     # delegate spawned in that dispatch inherits them (None: not captured; read `context` instead).
     declared_snapshot: Optional[tuple] = None
+    # #19957: the gates this run enforced when its approved dispatch began, before `requires_approval_before` was
+    # cleared for that dispatch. The authority a delegate inherits (both engines) is built from this, not the clear.
+    approval_gates_snapshot: Optional[frozenset] = None
     # #16950: authority inherited from the principals this run acts for -- a delegating
     # parent's gates, boundary and grants. Met with the run's own at every seam that
     # enforces one, so no hop can widen it. None: nothing inherited.

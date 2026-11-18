@@ -105,7 +105,9 @@ async def dispatch_approved_calls(
     # approved action (double-block); clearing it supersedes the seam gate on
     # the graph path while leaving it fully active for legacy/MCP callers
     # that never pass through the interrupt.
-    exec_ctx.declared_snapshot = declared_categories_of(exec_ctx)  # #19957: a delegate spawned below inherits it
+    # #19957: a delegate spawned below inherits what this run held before the clear, on both engines.
+    exec_ctx.declared_snapshot = declared_categories_of(exec_ctx)
+    exec_ctx.approval_gates_snapshot = frozenset(exec_ctx.requires_approval_before or ())
     exec_ctx.requires_approval_before = []
     exec_ctx.context.pop(DECLARED_CATEGORIES_KEY, None)  # #19957: the stamped declared set is cleared with it
 
