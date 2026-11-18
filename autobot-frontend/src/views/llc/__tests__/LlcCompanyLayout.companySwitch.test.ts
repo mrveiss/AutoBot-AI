@@ -276,6 +276,49 @@ describe('the company layout remounts its routed view on a company switch (#2150
     expect(m.wrapper.text()).not.toContain('Alpha')
   })
 
+  // #21502 AC3: the people view reads agents (org chart), contacts and teams; with the new company's
+  // requests all in flight, opening it must not surface a single person of the previous company.
+  it('shows none of the previous company\'s people when the people view opens while the new company is in flight', async () => {
+    const m = await mountAt('llc-company-org-chart', 'c1')
+    await click(m, 'org-view-people')
+    expect(m.wrapper.text()).toContain(DATA.c1.contact)
+    const urls = [
+      '/api/llc/companies/c2/org-chart',
+      '/api/llc/contacts/c2/involved',
+      '/api/llc/companies/c2/teams',
+    ]
+    const holds = urls.map((url) => hold(url))
+
+    await switchTo(m, 'llc-company-org-chart', 'c2')
+    await click(m, 'org-view-people')
+    // Every held URL was actually requested: a hold nobody used would let the pending checks pass vacuously.
+    expect(calls).toEqual(expect.arrayContaining(urls))
+
+    // While the org chart is in flight the view renders only its loading state (`v-else-if="isLoading"`
+    // precedes the people branch), so the people list is not mounted at all.
+    expect(m.wrapper.findComponent(OrgPeopleList).exists()).toBe(false)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    expect(m.wrapper.text()).not.toContain(DATA.c1.contact)
+
+    // Org chart answered, contacts and teams still pending: the list is mounted, without a previous-company group.
+    holds[0].resolve(tableAnswer(urls[0], 'c2'))
+    await flushPromises()
+    const pending = m.wrapper.findComponent(OrgPeopleList)
+    expect(pending.exists()).toBe(true)
+    const names = (pending.props('groups') as { name: string }[]).map((g) => g.name)
+    expect(names).not.toContain(DATA.c1.team)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    expect(m.wrapper.text()).not.toContain(DATA.c1.contact)
+
+    holds.slice(1).forEach((entry, i) => entry.resolve(tableAnswer(urls[i + 1], 'c2')))
+    await flushPromises()
+    const groups = (m.wrapper.findComponent(OrgPeopleList).props('groups') as { name: string }[]).map((g) => g.name)
+    expect(groups).toContain(DATA.c2.team)
+    expect(groups).not.toContain(DATA.c1.team)
+    expect(m.wrapper.text()).toContain(DATA.c2.contact)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+  })
+
   it('shows the failure, not the previous company, when the new company cannot be read', async () => {
     const m = await mountAt('llc-company-org-chart', 'c1')
     expect(m.wrapper.text()).toContain(DATA.c1.agent)
@@ -314,6 +357,7 @@ describe('the company layout remounts its routed view on a company switch (#2150
     await switchTo(m, 'llc-company-org-chart', 'c2')
     await click(m, 'org-view-canvas')
 
+    expect(calls).toEqual(expect.arrayContaining(urls)) // same: every held URL was requested
     expect(m.wrapper.find('[data-testid="executor-rollup-loading"]').exists()).toBe(true)
     expect(m.wrapper.text()).not.toContain('Alpha')
     expect(canvasIds(m).filter((id) => id.includes('c1') || id.includes(DATA.c1.tool))).toEqual([])
