@@ -25,7 +25,8 @@ from fastapi.testclient import TestClient
 
 import api.rum as rum_api
 import api.rum_ingest_bounds as bounds
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared import rate_limiter as rl_mod
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
 _PREFIX = "/api/rum"
 _ADMIN, _USER, _OPEN = "admin", "user", "open"
@@ -64,9 +65,15 @@ def rum_state(monkeypatch):
     monkeypatch.setattr(rum_api, "rum_sessions", {})
     monkeypatch.setitem(rum_api.rum_config, "enabled", True)
     monkeypatch.setattr(rum_api, "rum_logger", MagicMock())
-    limiter = IPRateLimiter(key_prefix="ratelimit:rum_test", limit_env=bounds._RATE_ENV, default_limit=120)
+    limiter = WindowQuota.for_scope(
+        "rum_test",
+        policy=WindowFailurePolicy.LOCAL,
+        max_requests=120,
+        window_seconds=60,
+        limit_env=bounds._RATE_ENV,
+    )
     monkeypatch.setattr(bounds, "_ingest_limiter", limiter)
-    monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=None))
+    monkeypatch.setattr(rl_mod, "get_async_redis_client", AsyncMock(return_value=None))
     return rum_api
 
 
