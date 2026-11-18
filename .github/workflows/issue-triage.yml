@@ -30,8 +30,8 @@
 #   event-level `if`: a run whose jobs all skip would still take the pending slot and
 #   displace a run that did the work. Nothing needs to stay per-issue-immediate: with no
 #   run in flight the first event starts a run at once, and `opened`'s one-time comment is
-#   decided by created_at >= window start plus an already-commented check.
-#   The window advances only through the final `cursor` job (its name carries the cursor), so
+#   decided by the issue's age (ASK_MAX_AGE_HOURS) plus an already-asked check.
+#   The window advances only through the final `cursor` job (its name carries the cursor `<updated_at>#<issue number>`), so
 #   a failed job never advances it. The changed set is capped (ISSUE_TRIAGE_MAX_CHANGED in
 #   issue_structure.py, oldest first) and the cursor then stops at the last processed issue;
 #   the backlog sweep runs only on schedule or dispatch.
@@ -107,7 +107,8 @@ jobs:
       - name: Triage issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
-          SINCE: ${{ needs.window.outputs.since }}
+          # A deferral lasts at most a few runs (events and the 2h schedule); a week bounds it.
+          ASK_MAX_AGE_HOURS: '168'
           CHANGED: ${{ needs.window.outputs.changed }}
         with:
           script: |
@@ -115,7 +116,9 @@ jobs:
             // so it is a pure function with unit tests, instead of untestable
             // inline substring matching that mislabelled #13032-#13036.
             const { selectLabels } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-triage-labels.js`);
-            const since = process.env.SINCE;
+            // #21854: the one-time ask is decided by age and by the already-asked check, never by
+            // the window: a capped window can defer an issue past its own creation time.
+            const askAfter = Date.now() - Number(process.env.ASK_MAX_AGE_HOURS) * 3600 * 1000;
             const numbers = process.env.CHANGED.split(' ').filter(Boolean).map(Number);
             const ASK = 'Auto-triage could not confidently classify this issue';
             const { owner, repo } = context.repo;
@@ -123,29 +126,29 @@ jobs:
             const failed = [];
             for (const number of numbers) {
               try {
-              const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number });
-              if (issue.pull_request) continue;
-              const { labels, reason, suppressed } = selectLabels(issue);
-              console.log(`#${number} triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
+                const { data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number });
+                if (issue.pull_request) continue;
+                const { labels, reason, suppressed } = selectLabels(issue);
+                console.log(`#${number} triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
 
-              if (labels.length === 0) {
-                // #13050: no label beats a wrong one — but only ASK when we are genuinely
-                // uncertain, once, on creation. `suppressed` means the author already triaged
-                // it. A failed run is re-covered by the next window, so also skip an issue
-                // that already carries our question.
-                if (!suppressed && issue.created_at >= since) {
-                  const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number });
-                  if (comments.some(c => c.body.includes(ASK))) continue;
-                  await github.rest.issues.createComment({
-                    owner, repo, issue_number: number,
-                    body: `👋 ${ASK} (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
-                  });
+                if (labels.length === 0) {
+                  // #13050: no label beats a wrong one — but only ASK when we are genuinely
+                  // uncertain, once, on creation. `suppressed` means the author already triaged
+                  // it. A failed run is re-covered by the next window, so also skip an issue
+                  // that already carries our question.
+                  if (!suppressed && new Date(issue.created_at).getTime() >= askAfter) {
+                    const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number });
+                    if (comments.some(c => c.body.includes(ASK))) continue;
+                    await github.rest.issues.createComment({
+                      owner, repo, issue_number: number,
+                      body: `👋 ${ASK} (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
+                    });
+                  }
+                  continue;
                 }
-                continue;
-              }
 
-              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
-              console.log(`#${number} triage complete! Applied labels: ${labels.join(', ')}`);
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
+                console.log(`#${number} triage complete! Applied labels: ${labels.join(', ')}`);
               } catch (error) {
                 // One bad issue must not strand the rest; the run still fails so the window holds.
                 console.log(`#${number} triage failed: ${error.message}`);
@@ -190,11 +193,14 @@ jobs:
       - name: Check the changed issues (and the backlog on schedule or dispatch)
         if: ${{ !cancelled() }}
         env:
-          BACKLOG: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '--backlog' || '' }}
+          BACKLOG: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'true' || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CHANGED: ${{ needs.window.outputs.changed }}
-        run: python3 pipeline-scripts/issue_structure.py sweep --changed "$CHANGED" $BACKLOG
+        run: |
+          args=(--changed "$CHANGED")
+          if [ -n "$BACKLOG" ]; then args+=(--backlog); fi
+          python3 pipeline-scripts/issue_structure.py sweep "${args[@]}"
 
   # #19645: issue bodies must make sense to an outside contributor -- no automation
   # session ids, no internal process roles. Flagged, never blocked: a hit adds the

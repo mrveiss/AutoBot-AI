@@ -411,11 +411,24 @@ def sweep_targets(items: Iterable[Dict[str, Any]], cap: int = SWEEP_MAX_CHECKS) 
     return [number for _, number in ranked[:cap]]
 
 
-def last_success_cursor(client: StructureClient) -> Optional[str]:
-    """Where the newest successful run said it had processed up to, else that run's start.
+_CURSOR_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(?:#(\d+))?$")
 
-    The run publishes the cursor in the name of its final ``cursor`` job (``CURSOR_JOB_PREFIX``),
-    which exists only when every other job succeeded - so a failed or partial run never advances it.
+
+def parse_window_cursor(text: str) -> Tuple[str, int]:
+    """``(updated_at, issue number)``: issues at or before this pair were processed; 0 = whole second."""
+    match = _CURSOR_RE.match(text.strip())
+    if not match:
+        raise StructureError(f"unparseable window cursor {text!r}")
+    return match.group(1), int(match.group(2) or 0)
+
+
+def last_success_cursor(client: StructureClient) -> Optional[str]:
+    """The newest successful run's cursor text; None when no run succeeded.
+
+    The run publishes it in the name of its final ``cursor`` job (``CURSOR_JOB_PREFIX``), which
+    exists only when every other job succeeded. Only when that run has NO cursor job (it predates
+    the cursor) does its ``run_started_at`` stand in; a cursor job that does not parse fails loud,
+    since guessing a start there could skip issues.
     """
     path = f"/repos/{client.repo}/actions/workflows/{TRIAGE_WORKFLOW_FILE}/runs?status=success&per_page=1"
     runs = client.call("GET", path).get("workflow_runs") or []
@@ -424,7 +437,9 @@ def last_success_cursor(client: StructureClient) -> Optional[str]:
     jobs = client.call("GET", f"/repos/{client.repo}/actions/runs/{runs[0]['id']}/jobs?per_page=100")
     for job in jobs.get("jobs") or []:
         if str(job.get("name", "")).startswith(CURSOR_JOB_PREFIX):
-            return job["name"][len(CURSOR_JOB_PREFIX) :].strip() or None
+            text = job["name"][len(CURSOR_JOB_PREFIX) :]
+            parse_window_cursor(text)
+            return text.strip()
     return runs[0].get("run_started_at")
 
 
@@ -438,21 +453,28 @@ def fallback_since(now: Optional[datetime.datetime] = None) -> str:
 
 
 def changed_window(client: StructureClient, cap: int = CHANGED_MAX) -> Tuple[str, List[int], str]:
-    """``(since, at most cap open issues updated since, until)``: the next window starts at ``until``.
+    """``(cursor, at most cap open issues after it, next cursor)`` (#21854).
 
-    The oldest-updated ``cap`` issues are taken, and ``until`` is the last one's ``updated_at``,
-    so the run's success advances the window only over what it processed (#21854). When the
-    whole window fits, ``until`` is the moment before it was listed. Limit: more than ``cap``
-    issues sharing one updated_at second would repeat; the second-resolution tie is not broken.
+    Issues are ordered by ``(updated_at, number)`` and those after the cursor pair are taken, so
+    a tie on one second is broken by number and the cursor always moves. When the whole window
+    fits, the next cursor is the moment before it was listed; when capped it is the last
+    processed issue's ``updated_at#number``, so success advances only over what was processed.
     """
-    since = last_success_cursor(client) or fallback_since()
+    cursor = last_success_cursor(client) or fallback_since()
+    since, after = parse_window_cursor(cursor)
     listed_at = _utc(datetime.datetime.now(datetime.timezone.utc))
     params = {"state": "open", "since": since, "sort": "updated", "direction": "asc"}
     items, _ = list_issues(client, params, SWEEP_PAGE_SIZE, SWEEP_MAX_PAGES)
-    if len(items) <= cap:
-        return since, sorted(item["number"] for item in items), listed_at
-    logger.warning("%d issues changed since %s; %d this run, the rest on the next", len(items), since, cap)
-    return since, sorted(item["number"] for item in items[:cap]), items[cap - 1]["updated_at"]
+    pending = sorted((i for i in items if (i["updated_at"], i["number"]) > (since, after)), key=_cursor_key)
+    if len(pending) <= cap:
+        return cursor, sorted(i["number"] for i in pending), listed_at
+    logger.warning("%d issues changed after %s; %d this run, the rest on the next", len(pending), cursor, cap)
+    last = pending[cap - 1]
+    return cursor, sorted(i["number"] for i in pending[:cap]), f"{last['updated_at']}#{last['number']}"
+
+
+def _cursor_key(item: Dict[str, Any]) -> Tuple[str, int]:
+    return item["updated_at"], item["number"]
 
 
 def write_outputs(values: Dict[str, str]) -> None:

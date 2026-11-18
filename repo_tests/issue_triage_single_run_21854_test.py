@@ -125,6 +125,62 @@ def test_the_real_workflow_is_the_file_the_guard_names():
     assert "issues" in (doc.get(True) or doc.get("on"))
 
 
+def cursor_violations(doc: dict, prefix: str) -> list[str]:
+    """Why the window could not advance (or would advance past unfinished work)."""
+    job = doc.get("jobs", {}).get("cursor")
+    if job is None:
+        return ["no cursor job: the window never advances"]
+    found = []
+    needs = job.get("needs", [])
+    missing = set(_WINDOWED + ("window",)) - set([needs] if isinstance(needs, str) else needs)
+    if missing:
+        found.append(f"cursor job does not need {sorted(missing)}, so it can succeed past a failed job")
+    if not str(job.get("name", "")).startswith(prefix):
+        found.append(f"cursor job name does not start with {prefix!r}, so last_success_cursor cannot find it")
+    if "if" in job:
+        found.append("cursor job has an `if`: it must run exactly when every job it needs succeeded")
+    return found
+
+
+_PREFIX = "Window cursor "
+_CURSOR_JOB = {"name": _PREFIX + "${{ needs.window.outputs.until }}", "needs": ["window", *_WINDOWED]}
+
+
+def _with_cursor(**changes) -> dict:
+    doc = copy.deepcopy(GOOD)
+    doc["jobs"]["cursor"] = {**_CURSOR_JOB, **changes}
+    return doc
+
+
+def test_the_good_cursor_job_passes():
+    assert cursor_violations(_with_cursor(), _PREFIX) == []
+
+
+@pytest.mark.parametrize(
+    "doc, expected",
+    [
+        (GOOD, "no cursor job"),
+        (_with_cursor(needs=["window", "triage", "structure"]), "wording"),
+        (_with_cursor(needs="window"), "structure"),
+        (_with_cursor(name="Cursor ${{ needs.window.outputs.until }}"), "name does not start"),
+        (_with_cursor(**{"if": "always()"}), "has an `if`"),
+    ],
+)
+def test_each_way_the_cursor_can_break_is_caught(doc, expected):
+    assert any(expected in line for line in cursor_violations(doc, _PREFIX)), cursor_violations(doc, _PREFIX)
+
+
+def test_the_real_cursor_job_matches_the_script_that_reads_it():
+    import sys
+
+    sys.path.insert(0, str(repo_root() / "pipeline-scripts"))
+    import issue_structure
+
+    doc = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    assert issue_structure.CURSOR_JOB_PREFIX == _PREFIX
+    assert cursor_violations(doc, issue_structure.CURSOR_JOB_PREFIX) == []
+
+
 def test_the_real_workflow_runs_one_run_at_a_time():
     doc = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     assert violations(doc) == []
