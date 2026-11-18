@@ -41,6 +41,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.store_authority import STORE_AUTHORITY, Store, system_of_record
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_lines
 
@@ -151,14 +152,7 @@ def _is_test(relative: str) -> bool:
     file exists to catch.
     """
     path = Path(relative)
-    name = path.name
-    return (
-        name.startswith("test_")
-        or name.endswith("_test.py")
-        or name == "conftest.py"
-        or "tests" in path.parts
-        or path.parts[0] == "repo_tests"
-    )
+    return is_test_filename(path.name, include_js=False) or "tests" in path.parts or path.parts[0] == "repo_tests"
 
 
 def dual_store_modules() -> dict[str, set[Store]]:

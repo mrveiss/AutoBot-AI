@@ -64,6 +64,8 @@ import re
 from html.parser import HTMLParser
 from typing import NamedTuple
 
+from tools.lint._comment_syntax import SCRIPT_ELEMENT, SCRIPT_ELEMENT_FLAGS
+
 #: Attributes a user reads. `aria-*` included: a screen reader is a user.
 _VISIBLE_ATTRS = frozenset({"placeholder", "title", "alt", "aria-label", "aria-description", "label"})
 
@@ -101,7 +103,8 @@ _CODE_IDENTIFIER = re.compile(r"^([A-Za-z][a-z0-9]*[A-Z][A-Za-z0-9]*|[A-Za-z][A-
 
 # Closing tags tolerate whitespace and attributes (`</script >`), as browsers do (CodeQL py/bad-tag-filter).
 _SCRIPT_BLOCK = re.compile(r"<(script|style)\b[^>]*>.*?</\1\b[^>]*>", re.DOTALL | re.IGNORECASE)
-_SCRIPT_BODY = re.compile(r"<script\b[^>]*>(.*?)</script\b[^>]*>", re.DOTALL | re.IGNORECASE)
+#: The one SFC `<script>` body extractor, built from the shared element pattern; `_unconnected_frontend.py` reuses it.
+SCRIPT_BODY = re.compile(SCRIPT_ELEMENT, SCRIPT_ELEMENT_FLAGS)
 #: The closing quote is the opening one (backreference), so `alert("Can't connect")` is one
 #: literal; the other two quote characters may occur inside it (#18802).
 _SCRIPT_LITERAL = re.compile(
@@ -220,7 +223,7 @@ def literals_in_source(source: str, label: str) -> list[str]:
 def script_literals(source: str) -> list[str]:
     """Every script-kind literal, from the `<script>` blocks only."""
     found: list[str] = []
-    for block in _SCRIPT_BODY.findall(source):
+    for block in SCRIPT_BODY.findall(source):
         found += _script_texts(block)
     return found
 

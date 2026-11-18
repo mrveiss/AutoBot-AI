@@ -147,6 +147,12 @@ export function usePollingJob<T>(
   }
 
   function start(taskId: string): void {
+    // #21474: no interval outlives its owner. A start() after the owning scope was disposed (an
+    // async caller resuming after its component unmounted) would leave a timer nothing can stop.
+    if (disposed) {
+      logger.debug(`start(${taskId}) refused: the owning scope is disposed`)
+      return
+    }
     stop()
     currentTaskId = taskId
     attempts.value = 0
@@ -163,8 +169,14 @@ export function usePollingJob<T>(
   }
 
   // Auto-cleanup when owning scope (component / effectScope) disposes
+  // and refuses any later start() (#21474). A poller created outside any scope has no owner to
+  // outlive and is never refused.
+  let disposed = false
   if (getCurrentScope()) {
-    onScopeDispose(stop)
+    onScopeDispose(() => {
+      disposed = true
+      stop()
+    })
   }
 
   return {

@@ -15,8 +15,10 @@ import time
 from typing import Any, Callable, Optional, cast
 
 from fastapi import HTTPException
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.client_disconnect import is_client_disconnect, log_client_disconnect, propagate_client_disconnect
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import RetryConfig, exponential_backoff_delay
 
@@ -57,6 +59,7 @@ async def _handle_async_attempt(
         result = await func(*args, **kwargs)
         return (True, result)
     except Exception as e:
+        propagate_client_disconnect(logger, e, f"{context.component}.{context.function}")
         if attempt == max_retries:
             return (True, await manager.handle_error(e, context))
         if recovery_strategy == RecoveryStrategy.RETRY:
@@ -95,6 +98,7 @@ def _handle_sync_attempt(
         result = func(*args, **kwargs)
         return (True, result)
     except Exception as e:
+        propagate_client_disconnect(logger, e, f"{context.component}.{context.function}")
         if attempt == max_retries:
             # #7469: defensive sync/async-context handler. Bare asyncio.run()
             # crashes when this sync wrapper is dispatched from a running
@@ -274,6 +278,23 @@ def _create_api_error_response(
     )
 
 
+def _find_websocket(args: tuple, kwargs: dict) -> Optional[WebSocket]:
+    """The WebSocket an endpoint was called with, if any."""
+    return next((v for v in (*args, *kwargs.values()) if isinstance(v, WebSocket)), None)
+
+
+def _on_client_disconnect(e: Exception, operation: str, websocket: Optional[WebSocket]):
+    """Expected peer disconnect: debug-log it instead of building a 500 (#20939).
+
+    Only a WebSocket endpoint may end quietly with ``None``. An HTTP endpoint
+    re-raises, so the ASGI layer answers it (499) rather than a 200 null body.
+    """
+    log_client_disconnect(logger, e, operation)
+    if websocket is None and not isinstance(e, WebSocketDisconnect):
+        raise e
+    return None
+
+
 def _raise_or_return_error(error_response: APIErrorResponse):
     """
     Raise HTTPException or return error dict.
@@ -417,6 +438,11 @@ def with_error_handling(
     """
     Simplified decorator for API endpoints with automatic HTTP error conversion.
 
+    A client disconnect is not converted. An endpoint that is handed a WebSocket ends
+    quietly (returns ``None``) for a ``WebSocketDisconnect`` and, by design, for the
+    ``RuntimeError`` Starlette raises on a socket whose state is already DISCONNECTED;
+    the same ``RuntimeError`` on a live socket is a real error. An HTTP endpoint re-raises.
+
     Usage:
         @with_error_handling(
             category=ErrorCategory.VALIDATION,
@@ -462,6 +488,9 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
+                    ws = _find_websocket(args, kwargs)
+                    if is_client_disconnect(e, websocket=ws):
+                        return _on_client_disconnect(e, func_operation, ws)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 
@@ -476,6 +505,9 @@ def with_error_handling(
                 except (HTTPException, PassThroughError):
                     raise  # Preserve intentional HTTP status codes / app-level handlers (#17982)
                 except Exception as e:
+                    ws = _find_websocket(args, kwargs)
+                    if is_client_disconnect(e, websocket=ws):
+                        return _on_client_disconnect(e, func_operation, ws)
                     error_response = _create_api_error_response(e, category, func_operation, error_code_prefix)
                     return _raise_or_return_error(error_response)
 

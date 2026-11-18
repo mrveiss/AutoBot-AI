@@ -17,6 +17,8 @@ def _ssot_floor(package: str, constraints: str = _SSOT_CONSTRAINTS) -> str:
     """The ``>=`` floor *package* has in constraints/shared.txt, the one place it is stated (#18047).
 
     Raises rather than falling back to a literal: a restated floor is what drifted on every bump.
+    The shared constraints file is therefore required: building this directory outside the repository
+    fails here (the same as the existing openvino behaviour).
     """
     with open(constraints, encoding="utf-8") as f:
         for line in f:
@@ -59,8 +61,8 @@ setup(
     install_requires=requirements,
     extras_require={
         "dev": [
-            "pytest>=7.0.0",
-            "pytest-asyncio>=0.21.0",
+            f"pytest{_ssot_floor('pytest')}",  # #18060: floors for constrained packages come from the SSOT
+            f"pytest-asyncio{_ssot_floor('pytest-asyncio')}",
             "black>=22.0.0",
             "flake8>=4.0.0",
             "isort>=5.10.0",
@@ -71,9 +73,9 @@ setup(
             "onnxruntime>=1.12.0",
         ],
         "web": [
-            "fastapi>=0.95.0",
-            "uvicorn>=0.20.0",
-            "jinja2>=3.1.0",
+            f"fastapi{_ssot_floor('fastapi')}",
+            f"uvicorn{_ssot_floor('uvicorn')}",
+            f"jinja2{_ssot_floor('jinja2')}",
         ],
     },
     entry_points={

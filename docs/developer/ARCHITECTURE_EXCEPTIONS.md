@@ -641,3 +641,25 @@ prefix). The SLM vhost templates are already among the files it reads and all ca
 
 **Review trigger:** reopen this if the route gains any non-internal caller, if the hash is read or
 logged anywhere beyond that one first-start link, or if the shared-users decision on #10200 changes.
+
+---
+
+## SLM API-Key Route Scoping — No Route Is Called With a User API Key
+
+**File:** `autobot-slm-backend/services/auth.py` (`get_api_key_user`, `require_key_permission`)
+**Diverges from:** the expectation that every dependency in the auth module has a production route behind it
+**Issue:** #20534, #16294
+
+**Reason:** maintainer decision (2026-11-17): no SLM route is called with a user API key, so none is
+scoped to one. Keys are created, stored, listed and revoked; they are not yet a way to call the SLM.
+`require_key_permission` is the mechanism, proved on a test route
+(`autobot-slm-backend/tests/api/test_api_key_route_scope_16040.py`). Which routes accept a key is
+the open product decision on #16294.
+
+**Baseline:** the two `declared:` entries (`get_api_key_user`, `require_key_permission`) in
+`repo_tests/unconnected_code_baseline.txt` stay as the record of this decision; the baseline is
+shrink-only and a declared entry is true only while its referencing files are exactly the live ones
+(`repo_tests/unconnected_code_gate_20512_test.py`, `test_declared_entries_describe_the_live_references`).
+
+**Review trigger:** when #16294 names a route that accepts a user API key, that route uses
+`require_key_permission` with a test, and both `declared:` baseline lines are deleted in the same PR.

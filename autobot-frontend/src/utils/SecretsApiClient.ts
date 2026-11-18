@@ -51,8 +51,11 @@ export interface UpdateSecretOptions {
 
 export interface DeleteSecretOptions {
   chatId?: string | null;
-  /** Delete although dependents still use the secret; send only after the user has seen them (#20557). */
-  confirmDependents?: boolean;
+  /**
+   * The `dependents_digest` of the 409 listing the user confirmed (#20557, #21039): the delete goes
+   * ahead only while exactly that set still depends on the secret.
+   */
+  dependentsDigest?: string;
 }
 
 export interface TransferSecretsOptions {
@@ -168,8 +171,8 @@ class SecretsApiClient {
       params.append('chat_id', (options.chatId || this.currentChatId) as string);
     }
 
-    if (options.confirmDependents) {
-      params.append('confirm_dependents', 'true');
+    if (options.dependentsDigest) {
+      params.append('dependents_digest', options.dependentsDigest);
     }
 
     // Issue #552: Fixed path - removed duplicate /secrets prefix
