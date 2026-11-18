@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 # Rendered env file; shared by the render task and the #15502 embedding-model preserve step.
-backend_services_env_dest: /opt/autobot/config/backend.env
+backend_services_env_dest: "{{ autobot.base_dir }}/config/backend.env"

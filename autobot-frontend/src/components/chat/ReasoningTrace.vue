@@ -48,7 +48,7 @@
           <span
             v-if="entry.durationMs != null"
             class="reasoning-trace__entry-duration"
-          >{{ formatDuration(entry.durationMs) }}</span>
+          >{{ formatDuration(entry.durationMs, DURATION_OPTIONS) }}</span>
           <span
             v-if="entry.kind === 'tool_result'"
             class="reasoning-trace__entry-status"
@@ -66,6 +66,8 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
+import Icon from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import type { TraceEntry, TraceEntryKind } from '@/composables/useReasoningTrace'
 
 // ---------------------------------------------------------------------------
@@ -103,25 +105,21 @@ function iconForKind(kind: TraceEntryKind): IconName {
   return map[kind] ?? 'circle'
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-import Icon from '@/components/ui/Icon.vue'
+const DURATION_OPTIONS = { style: 'msSeconds1dp' } as const
 </script>
 
 <style scoped>
 .reasoning-trace {
-  border: 1px solid var(--border-default, #334155);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-2);
-  background: var(--color-bg-subtle, #0f172a);
+  background: var(--bg-primary);
   overflow: hidden;
   font-size: var(--text-xs);
 }
 
 .reasoning-trace--active {
-  border-color: var(--color-electric-500, #6366f1);
+  border-color: var(--color-electric-500);
 }
 
 /* Header */
@@ -134,18 +132,18 @@ import Icon from '@/components/ui/Icon.vue'
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   text-align: left;
   user-select: none;
 }
 
 .reasoning-trace__header:hover {
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 
 .reasoning-trace__icon {
   font-size: 0.85rem;
-  color: var(--color-electric-400, #818cf8);
+  color: var(--color-electric-400);
   width: 1rem;
   text-align: center;
 }
@@ -162,7 +160,7 @@ import Icon from '@/components/ui/Icon.vue'
 
 .reasoning-trace__count {
   font-size: 0.7rem;
-  background: var(--border-default, #334155);
+  background: var(--border-default);
   border-radius: var(--radius-full);
   padding: 0 0.4rem;
   line-height: 1.4rem;
@@ -175,7 +173,7 @@ import Icon from '@/components/ui/Icon.vue'
 
 /* Body */
 .reasoning-trace__body {
-  border-top: 1px solid var(--border-default, #334155);
+  border-top: 1px solid var(--border-default);
   max-height: 18rem;
   overflow-y: auto;
   padding: var(--spacing-1) var(--spacing-0);
@@ -192,34 +190,34 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .reasoning-trace__entry--step_start {
-  border-left-color: var(--color-electric-400, #818cf8);
+  border-left-color: var(--color-electric-400);
 }
 
 .reasoning-trace__entry--step_complete {
-  border-left-color: var(--color-green-400, #4ade80);
+  border-left-color: var(--color-success);
 }
 
 .reasoning-trace__entry--tool_call {
-  border-left-color: var(--color-yellow-400, #facc15);
+  border-left-color: var(--color-warning);
 }
 
 .reasoning-trace__entry--tool_result {
-  border-left-color: var(--color-blue-400, #60a5fa);
+  border-left-color: var(--color-info);
 }
 
 .reasoning-trace__entry--llm_chunk {
-  border-left-color: var(--color-purple-400, #c084fc);
+  border-left-color: var(--color-purple-light);
   font-family: monospace;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .reasoning-trace__entry--plan {
-  border-left-color: var(--color-orange-400, #fb923c);
+  border-left-color: var(--color-warning-hover);
 }
 
 .reasoning-trace__entry-icon {
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   width: 0.9rem;
   text-align: center;
   flex-shrink: 0;
@@ -232,19 +230,19 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .reasoning-trace__entry-label {
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 
 .reasoning-trace__entry-detail {
   display: block;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
 
 .reasoning-trace__entry-duration {
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   flex-shrink: 0;
   font-size: 0.7rem;
   margin-left: auto;
@@ -258,11 +256,11 @@ import Icon from '@/components/ui/Icon.vue'
 }
 
 .reasoning-trace__entry-status--ok {
-  color: var(--color-green-400, #4ade80);
+  color: var(--color-success);
 }
 
 .reasoning-trace__entry-status--error {
-  color: var(--color-red-400, #f87171);
+  color: var(--color-error);
 }
 
 /* Collapse transition */

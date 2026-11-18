@@ -9,28 +9,21 @@
  * Attribute-keyed overrides only; every base value lives in design-tokens.css.
  * Replaces the override half of the retired styles/theme.css.
  *
- * [data-font-size]       -- the type scale, set by usePreferences
+ * [data-font-size]       -- the type scale factor (--font-scale), set by usePreferences
  * [data-layout-density]  -- the density scope, below.
  */
 
+/* The type scale. design-tokens.css and every theme define each --text-* step
+   as its size times --font-scale; this sets the factor, so the preference and
+   a theme (ember redefines several steps) both apply. Medium is the default
+   factor of 1 and has no rule. Steps stay within half a pixel of the old
+   per-step tables (small: 11/13/15/17/19/22/28, large: 13/15/17/19/21/26/32). */
 [data-font-size="small"] {
-  --font-size-xs: 0.6875rem;   /* 11px */
-  --font-size-sm: 0.8125rem;   /* 13px */
-  --font-size-base: 0.9375rem; /* 15px */
-  --font-size-lg: 1.0625rem;   /* 17px */
-  --font-size-xl: 1.1875rem;   /* 19px */
-  --font-size-2xl: 1.375rem;   /* 22px */
-  --font-size-3xl: 1.75rem;    /* 28px */
+  --font-scale: 0.9375;
 }
 
 [data-font-size="large"] {
-  --font-size-xs: 0.8125rem;   /* 13px */
-  --font-size-sm: 0.9375rem;   /* 15px */
-  --font-size-base: 1.0625rem; /* 17px */
-  --font-size-lg: 1.1875rem;   /* 19px */
-  --font-size-xl: 1.3125rem;   /* 21px */
-  --font-size-2xl: 1.625rem;   /* 26px */
-  --font-size-3xl: 2rem;       /* 32px */
+  --font-scale: 1.0625;
 }
 
 /* ----------------------------------------------------------------------------

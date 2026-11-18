@@ -1,0 +1,54 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #19869, #19738: fetch the pinned speech-to-text and code-embedding models into the service user's HuggingFace
+# cache, then confirm they are there. The model ids, revisions and digests live in autobot_shared
+# (ssot_hf_models, pinned_model_registry); nothing here names them. The script retries a failed download,
+# tries every model, and names each failure with the room left. Both models are optional at
+# runtime, so a host that cannot get one warns and carries on, unless backend_model_prefetch_required
+# asks for a stop. backend_prefetch_models: false skips this, for an air-gapped host.
+---
+- name: "Backend | Fetch the pinned HuggingFace models into the service user's cache (#19869, #19738)"
+  ansible.builtin.command:
+    cmd: >-
+      {{ backend_code_dir }}/venv/bin/python -m autobot_shared.model_prefetch
+      --retries {{ backend_model_prefetch_retries }} --delay {{ backend_model_prefetch_retry_delay }}
+  become_user: "{{ backend_user }}"
+  environment:
+    PYTHONPATH: "{{ backend_install_dir | dirname }}"
+  register: _backend_model_prefetch
+  changed_when: false
+  failed_when: false
+  timeout: 1800  # about a gigabyte of weights between the two; retries and their delays count inside this
+  tags: ['backend', 'models']
+
+- name: "Backend | Confirm the pinned HuggingFace models are in the service user's cache (#19869, #19738)"
+  ansible.builtin.command:
+    cmd: "{{ backend_code_dir }}/venv/bin/python -m autobot_shared.model_prefetch --check"
+  become_user: "{{ backend_user }}"
+  environment:
+    PYTHONPATH: "{{ backend_install_dir | dirname }}"
+  register: _backend_model_cache_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: ['backend', 'models']
+
+- name: "Backend | Warn about models that could not be fetched (#19869, #19738)"
+  ansible.builtin.debug:
+    msg: >-
+      A pinned HuggingFace model is not in {{ backend_user }}'s cache, so speech-to-text or code embeddings
+      download it at first use, or fail offline: {{ _backend_model_cache_check.stdout_lines | select('match', '^FAILED') | list }}.
+      The fetch said: {{ _backend_model_prefetch.stdout_lines | default([]) | select('match', '^FAILED') | list }}
+  when: _backend_model_cache_check.rc != 0
+  tags: ['backend', 'models']
+
+- name: "Backend | Stop this host: a required pinned model is missing (#19869, #19738)"
+  ansible.builtin.fail:
+    msg: "backend_model_prefetch_required is set and a pinned model could not be fetched; see the warning above."
+  when:
+    - _backend_model_cache_check.rc != 0
+    - backend_model_prefetch_required | bool
+  tags: ['backend', 'models']

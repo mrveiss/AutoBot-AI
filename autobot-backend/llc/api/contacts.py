@@ -41,6 +41,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import assert_company_access
 from user_management.database import get_async_session
@@ -210,10 +211,11 @@ async def _delete_via_directory(
             actor_user_id=actor_id(current_user),
         )
     except ContactInUseError as exc:
+        refusal = http_refusal(status.HTTP_409_CONFLICT, exc, scope="contacts.delete_contact")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"message": str(exc), "company_ids": [str(c) for c in exc.company_ids]},
-        ) from exc
+            detail={"message": refusal.detail, "company_ids": [str(c) for c in exc.company_ids]},
+        ) from None
     except NotAuthorisedError as exc:
         raise forbidden(exc) from exc
     if not deleted:

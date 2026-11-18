@@ -467,14 +467,14 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 ### ✅ PHASE 10: Local Intelligence Models (COMPLETE)
 
-**Original Plan**: TinyLLaMA, Phi-2, ctransformers backend, OpenAI fallback
+**Original Plan**: TinyLLaMA, Phi-2 (not provisioned today), ctransformers backend, OpenAI fallback
 
 **Status**: Multi-provider support with 8 provider types
 
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
 | TinyLLaMA integration | ✓ | Replaced with Mistral 7B | ✅ Evolved |
-| Phi-2 optional | ✓ | Available | ✅ |
+| Phi-2 optional (not provisioned today) | ✓ | Available | ✅ |
 | ctransformers/llama-cpp | ✓ | Ollama instead | ✅ Replaced |
 | OpenAI fallback | ✓ | Full provider | ✅ |
 | LLM usage logging | ✓ | Comprehensive | ✅ |

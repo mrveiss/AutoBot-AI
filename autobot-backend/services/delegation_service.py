@@ -9,7 +9,7 @@ Assigns tasks from managers to direct reports, escalates stuck tasks
 up the chain of command, and provides activity summaries.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Collection, Dict, List
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,17 +82,7 @@ class DelegationService:
         delegation as escalated.
         """
         delegation = await self._get_or_raise(delegation_id)
-
-        chain = await self._org.get_chain_of_command(delegation.delegator_id)
-        escalation_target = None
-        for i, link in enumerate(chain):
-            if link["agent_id"] == delegation.delegator_id and i + 1 < len(chain):
-                escalation_target = chain[i + 1]["agent_id"]
-                break
-
-        if escalation_target is None:
-            raise ValueError(f"No manager above {delegation.delegator_id!r} to escalate to")
-
+        escalation_target = await self.escalation_target(delegation)
         delegation.status = DelegationStatus.ESCALATED.value
         delegation.escalated_to = escalation_target
         await self.session.commit()
@@ -100,6 +90,18 @@ class DelegationService:
 
         logger.info("Task %s escalated to %s", delegation_id, escalation_target)
         return delegation
+
+    async def escalation_target(self, delegation: TaskDelegation) -> str:
+        """The manager above the delegator: who an escalation goes to (#1753).
+
+        Separate from ``escalate_task`` so the router can check the caller may act on the
+        target before anything is written (#19246).
+        """
+        chain = await self._org.get_chain_of_command(delegation.delegator_id)
+        for i, link in enumerate(chain):
+            if link["agent_id"] == delegation.delegator_id and i + 1 < len(chain):
+                return chain[i + 1]["agent_id"]
+        raise ValueError(f"No manager above {delegation.delegator_id!r} to escalate to")
 
     async def update_status(
         self,
@@ -124,7 +126,7 @@ class DelegationService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_activity_summary(self, manager_id: str) -> Dict[str, Any]:
+    async def get_activity_summary(self, manager_id: str, assignees: Collection[str] | None = None) -> Dict[str, Any]:
         """
         Aggregate activity for all direct reports (#1753).
 
@@ -138,6 +140,8 @@ class DelegationService:
             .where(TaskDelegation.delegator_id == manager_id)
             .group_by(TaskDelegation.status)
         )
+        if assignees is not None:  # only the assignees in the caller's view are counted (#19246)
+            stmt = stmt.where(TaskDelegation.assignee_id.in_(list(assignees)))
         result = await self.session.execute(stmt)
         rows = result.all()
 
@@ -154,12 +158,21 @@ class DelegationService:
         role: str = "delegator",
         status_filter: str | None = None,
         limit: int = 50,
+        counterparts: Collection[str] | None = None,
     ) -> List[TaskDelegation]:
-        """List delegations where agent_id is delegator or assignee (#1753)."""
+        """List delegations where agent_id is delegator or assignee (#1753).
+
+        ``counterparts`` keeps only delegations whose other agent is in it, filtered in the
+        query so ``limit`` counts visible rows only (#19246).
+        """
         col = TaskDelegation.delegator_id if role == "delegator" else TaskDelegation.assignee_id
-        stmt = select(TaskDelegation).where(col == agent_id).order_by(TaskDelegation.created_at.desc()).limit(limit)
+        other = TaskDelegation.assignee_id if role == "delegator" else TaskDelegation.delegator_id
+        stmt = select(TaskDelegation).where(col == agent_id)
+        if counterparts is not None:
+            stmt = stmt.where(other.in_(list(counterparts)))
         if status_filter:
             stmt = stmt.where(TaskDelegation.status == status_filter)
+        stmt = stmt.order_by(TaskDelegation.created_at.desc()).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

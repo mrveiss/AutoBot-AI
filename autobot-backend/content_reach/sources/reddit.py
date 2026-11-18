@@ -22,7 +22,7 @@ from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserContentBackend
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceKind, SourceReliability
 
@@ -63,7 +63,7 @@ class RedditJsonBackend(ContentBackend):
         """Always return True — liveness validated at fetch-time via circuit breaker."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch Reddit posts; raise BackendError on network, HTTP, or parse failure."""
         headers = {"User-Agent": _USER_AGENT}
 
@@ -122,7 +122,7 @@ class RedditJsonBackend(ContentBackend):
             else:
                 text_lines.append(title)
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=SourceKind.REDDIT,
             backend_used=self.name,
@@ -136,7 +136,7 @@ class HnAlgoliaBackend(ContentBackend):
     """HN content backend using the Algolia search API for Hacker News.
 
     probe() always returns True — pure-HTTP backend, always capable.
-    fetch() searches via hn.algolia.com and maps hits to ContentResult.
+    fetch() searches via hn.algolia.com and maps hits to ContentReachResult.
 
     Accepts an optional injected httpx.AsyncClient for testing.
     """
@@ -151,7 +151,7 @@ class HnAlgoliaBackend(ContentBackend):
         """Always return True — pure-HTTP backend, always capable."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch HN hits from Algolia; raise BackendError on failure."""
         try:
             response = await http_get(
@@ -191,7 +191,7 @@ class HnAlgoliaBackend(ContentBackend):
             hits.append({"title": title, "url": url, "points": points, "hn_url": hn_url})
             text_lines.append(f"{title} — {url}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=SourceKind.FORUM,  # #11079: HN is a forum, not Reddit
             backend_used=self.name,

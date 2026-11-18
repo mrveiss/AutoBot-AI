@@ -279,7 +279,7 @@ class ClaudeAPIBatchManager:
     async def _optimize_payload_if_enabled(self, content: str) -> str:
         """Return payload-optimized content string when optimizer is enabled.
 
-        Bugfix (#10945): ``OptimizationResult`` has no ``optimized``/
+        Bugfix (#10945): ``PayloadOptimizationResult`` has no ``optimized``/
         ``optimized_content``/``size_reduction`` attributes (its real fields are
         ``optimization_type``, ``chunks``, ``savings_percent``) — the previous
         implementation raised ``AttributeError`` on every call where the

@@ -132,7 +132,7 @@ async def test_ytdlp_probe_false_when_absent(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ytdlp_fetch_maps_caption_text(monkeypatch):
-    """fetch() returns ContentResult with captions text when subtitles["en"] present."""
+    """fetch() returns ContentReachResult with captions text when subtitles["en"] present."""
     import content_reach._url_guard as guard_mod
     from content_reach.sources import youtube as yt_mod
 

@@ -5,6 +5,16 @@
 # Author: mrveiss
 """Domain-agnostic analysis prompts for the transcriber module."""
 
+from autobot_shared.env_utils import env_int_clamped
+
+#: Output-token budget for one analysis, shared by both analysis surfaces (#16924).
+#: Explicit because ``LLMService.stream()`` otherwise applies the general task
+#: default (1024), which cut long summaries off; before that, the providers'
+#: own default applied (4096 on most of them).
+ANALYSIS_MAX_TOKENS: int = env_int_clamped(
+    "AUTOBOT_TRANSCRIPT_ANALYSIS_MAX_TOKENS", default=4096, min_v=256, max_v=32768
+)
+
 _PROMPTS = {
     "summarize": (
         "You are an expert analyst. Read the following transcript and write a concise, "

@@ -43,6 +43,8 @@ import ast
 from repo_tests.fixture_fixed_path_teardown_flow import _always_running_child_ids
 from repo_tests.fixture_fixed_path_teardown_guard import _is_violation, _iter_pytest_fixtures
 
+from tools.lint import _parse_cache as parse_cache
+
 _FIXTURE_TEMPLATE = """
 import shutil
 from pathlib import Path
@@ -58,7 +60,7 @@ def temp_dir({params}):
 
 
 def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    (func,) = _iter_pytest_fixtures(ast.parse(source))
+    (func,) = _iter_pytest_fixtures(parse_cache.parse(source))
     return func
 
 
@@ -111,7 +113,6 @@ def temp_dir(created_flag):
 """
 
 
-
 class TestATryBodyRunsButItsHandlersDoNot:
     """#15821 review: a try body is a statement list, not a conditional branch."""
 
@@ -125,20 +126,12 @@ class TestATryBodyRunsButItsHandlersDoNot:
         exceptions in neither -- so gating a try body while a plain list is
         unconditional would be an inconsistency rather than extra caution.
         """
-        assert _flags_teardown(
-            "    try:\n"
-            "        shutil.rmtree(test_dir)\n"
-            "    except OSError:\n"
-            "        pass"
-        )
+        assert _flags_teardown("    try:\n" "        shutil.rmtree(test_dir)\n" "    except OSError:\n" "        pass")
 
     def test_removal_only_in_an_except_handler_is_not_unconditional(self):
         """Contrast half. A handler needs the body to have raised first."""
         assert not _flags_teardown(
-            "    try:\n"
-            "        pass\n"
-            "    except OSError:\n"
-            "        shutil.rmtree(test_dir)"
+            "    try:\n" "        pass\n" "    except OSError:\n" "        shutil.rmtree(test_dir)"
         )
 
     def test_removal_only_in_a_try_else_is_not_unconditional(self):
@@ -379,7 +372,7 @@ class TestExceptHandlerIsGated:
         and ``orelse`` stay gated -- each needs the body to have raised, or not
         to have, before it runs at all.
         """
-        node = ast.parse(_EVERY_TRY_CLAUSE).body[0]
+        node = parse_cache.parse(_EVERY_TRY_CLAUSE).body[0]
         expected = {id(stmt) for stmt in list(node.body) + list(node.finalbody)}
         assert _always_running_child_ids(node) == expected
         gated = {id(stmt) for stmt in list(node.orelse)}
@@ -442,7 +435,7 @@ class TestMatchCaseIsGated:
         matches, and the rule still gates it rather than reasoning about an
         exhaustiveness it cannot verify.
         """
-        node = ast.parse(_EVERY_MATCH_CASE).body[0]
+        node = parse_cache.parse(_EVERY_MATCH_CASE).body[0]
         assert _always_running_child_ids(node) == {id(node.subject)}
 
 
@@ -521,11 +514,11 @@ class TestUnrecognisedNodeTypesDefaultToGated:
     """
 
     def test_a_node_type_the_rule_does_not_name_gates_every_child(self):
-        removal = ast.parse("shutil.rmtree(test_dir)").body[0]
+        removal = parse_cache.parse("shutil.rmtree(test_dir)").body[0]
         assert _always_running_child_ids(_FutureBranch(body=[removal])) == set()
 
     def test_a_named_node_type_still_reports_its_children_as_always_running(self):
-        removal = ast.parse("shutil.rmtree(test_dir)").body[0]
+        removal = parse_cache.parse("shutil.rmtree(test_dir)").body[0]
         assert _always_running_child_ids(removal) == {id(removal.value)}
 
     def test_removal_only_inside_an_unnamed_construct_is_not_unconditional(self):

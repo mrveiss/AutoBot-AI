@@ -32,7 +32,7 @@ def _patch_heavy_collaborators(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tracker_module, "ProjectStateManager", MagicMock)
     monkeypatch.setattr(tracker_module, "get_redis_client", lambda: MagicMock())
     monkeypatch.setattr(tracker_module, "get_error_boundary_manager", lambda: None)
-    monkeypatch.setattr(tracker_module, "init_database", lambda *_a, **_k: None)
+    monkeypatch.setattr(tracker_module, "init_state_tracking_database", lambda *_a, **_k: None)
     monkeypatch.setattr(tracker_module.ProjectStateTracker, "_define_milestones", lambda self: None)
     monkeypatch.setattr(tracker_module.ProjectStateTracker, "_load_state", lambda self: None)
     monkeypatch.setattr(tracker_module.ProjectStateTracker, "_start_background_tracking", lambda self: None)
