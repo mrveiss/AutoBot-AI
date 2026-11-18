@@ -60,6 +60,7 @@ STATUS_OUTCOME: Dict[str, str] = {
     "schema_error": FAIL,
     "ast_rejected": FAIL,
     "gated": FAIL,
+    "refused": FAIL,
     "pending_approval": WAIT,
     "approval_required": WAIT,
     "pending_delegation": WAIT,
