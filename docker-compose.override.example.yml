@@ -4,8 +4,9 @@
 #
 # Usage:
 #   cp docker-compose.override.example.yml docker-compose.override.yml
-#   docker compose up -d                  # Automatically uses the override
-#   docker compose -f docker-compose.yml up -d  # Skip override (production)
+#   bash docker/generate-secrets.sh
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d  # Automatically uses the override
+#   docker compose -f docker-compose.yml --env-file docker/.env.docker --env-file docker/.env.secrets up -d  # Skip override (production)
 #
 # Known limitations:
 #   - autobot_shared changes require container restart (pip -e at boot)
@@ -48,13 +49,15 @@ services:
         --app-dir /app/autobot-backend
     environment:
       - AUTOBOT_ENVIRONMENT=development
+      # #19395: this environment also keeps feature-router boot strict.
       - AUTOBOT_LOG_LEVEL=DEBUG
     ports:
       # debugpy remote debugging — to enable, install debugpy in container:
       #   docker exec -it autobot-backend pip install debugpy
       # then restart with:
       #   python -m debugpy --listen 0.0.0.0:5678 -m uvicorn ...
-      - "5678:5678"
+      # Loopback only (#17500): a debugger on every interface runs any code anyone on the LAN sends it.
+      - "127.0.0.1:5678:5678"
     healthcheck:
       interval: 30s
       timeout: 15s

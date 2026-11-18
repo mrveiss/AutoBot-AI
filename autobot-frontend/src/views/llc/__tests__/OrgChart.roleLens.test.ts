@@ -15,7 +15,16 @@ const get = vi.fn()
 const post = vi.fn()
 
 vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({ get, post }),
+  // #21001: the viewer's role comes from the members list; answer it as an owner, off the test's `get` script.
+  useApiClient: () => ({
+    get: (url: string, ...rest: unknown[]) =>
+      String(url).startsWith('/api/llc/workflows/')
+        ? Promise.resolve([]) // #21242: the company's workflows, listed on canvas entry
+        : String(url).endsWith('/members')
+          ? Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true })
+          : get(url, ...rest),
+    post,
+  }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -99,7 +108,8 @@ async function mountChart() {
   const wrapper = mount(OrgChart, {
     global: {
       plugins: [i18n],
-      stubs: { HireAgentModal: true },
+      // The node drawer is the kit BaseDrawer, which teleports to body (#14780).
+      stubs: { HireAgentModal: true, Teleport: true },
     },
   })
   await flushPromises()
@@ -109,6 +119,9 @@ async function mountChart() {
 async function mountOnCanvas() {
   const wrapper = await mountChart()
   await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+  // Canvas entry starts loaders (people sources, process and tool nodes); let them settle so a case
+  // that clears or snapshots a request counter afterwards is not racing them (#21501).
+  await flushPromises()
   return wrapper
 }
 
@@ -234,6 +247,9 @@ describe('OrgChart "View As: role" lens (#13943)', () => {
 
   it('never fetches or posts as a result of a lens selection — presentation only', async () => {
     const wrapper = await mountOnCanvas()
+    // Canvas entry did issue requests; without this the assertions below could pass on a counter
+    // that was never fed.
+    expect(get.mock.calls.map(([url]) => String(url)).some((url) => url.endsWith('/involved'))).toBe(true)
     get.mockClear()
     post.mockClear()
 
@@ -242,7 +258,8 @@ describe('OrgChart "View As: role" lens (#13943)', () => {
     await wrapper.get('[data-testid="role-lens-clear"]').trigger('click')
     await flushPromises()
 
-    expect(get).not.toHaveBeenCalled()
-    expect(post).not.toHaveBeenCalled()
+    // By URL, so a failure names the request a lens selection must not make.
+    expect(get.mock.calls.map(([url]) => String(url))).toEqual([])
+    expect(post.mock.calls.map(([url]) => String(url))).toEqual([])
   })
 })

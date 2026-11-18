@@ -79,18 +79,18 @@ silently stopped matching otherwise passes having asserted nothing.
 from __future__ import annotations
 
 import argparse
+import functools
 import logging
 import pathlib
 import sys
-
-import yaml
 
 # tools/lint/ is not a Python package; make the sibling helper importable
 # regardless of invocation mode (script / importlib from tests).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import _exclude_anchoring as _shared
 import _scan_helpers
-from _scan_helpers import configure_logging, tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging, report_audit  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082) — see check_flake8_exclude_anchoring.py.
 logger = logging.getLogger(__name__)
@@ -110,32 +110,9 @@ ARTIFACT_DIR_NAMES = frozenset({"node_modules", ".venv", "__pycache__"})
 TRACKED_PY_FLOOR = _scan_helpers.TRACKED_PY_FLOOR  # canonical: one measured floor, was a local 3000 (#15928)
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd.
-
-    A cwd-relative walk answers confidently and wrongly when run from a
-    subdirectory.
-    """
-    return pathlib.Path(__file__).resolve().parents[2]
-
-
-def read_exclude_entries(config_text: str) -> list[str]:
-    """Parsed ``exclude_dirs`` entries of a bandit config given as YAML text.
-
-    PyYAML because that is what ``bandit.core.config.BanditConfig`` uses to
-    read ``.bandit`` — this must read what bandit reads, and a hand-rolled
-    parser could drift from bandit's own YAML rules (e.g. comment stripping)
-    in a way that hides an entry from the audit.
-    """
-    parsed = yaml.safe_load(config_text) or {}
-    entries = parsed.get("exclude_dirs") or []
-    return [str(entry) for entry in entries]
-
-
-def load_entries(config_path: pathlib.Path | None = None) -> list[str]:
-    """Exclude entries of the repo's ``.bandit`` (or a given config)."""
-    path = config_path if config_path is not None else repo_root() / ".bandit"
-    return read_exclude_entries(path.read_text(encoding="utf-8"))
+read_exclude_entries = _shared.read_bandit_exclude_dirs
+load_entries = functools.partial(_shared.load_entries, default_name=".bandit", reader=read_exclude_entries)
+tracked_py_files = _shared.tracked_py_files
 
 
 def is_glob_pattern(entry: str) -> bool:
@@ -150,47 +127,30 @@ def is_glob_pattern(entry: str) -> bool:
     return "*" in entry
 
 
-def bare_entries(entries: list[str]) -> list[str]:
-    """Entries bandit's substring test can match at any depth: no ``/``, no ``*``."""
-    return [entry for entry in entries if "/" not in entry and not is_glob_pattern(entry)]
+#: Entries bandit's substring test can match at any depth: no ``/``, no ``*``.
+bare_entries = functools.partial(_shared.bare_entries, separators="/", skip_globs=True)
+
+#: Bare entries that are not a sanctioned artifact name (shared decision, #14896).
+unanchored_source_entries = functools.partial(
+    _shared.unanchored_source_entries, bare_entries=bare_entries, artifact_names=ARTIFACT_DIR_NAMES
+)
 
 
-def unanchored_source_entries(entries: list[str]) -> list[str]:
-    """Bare entries that are not a sanctioned artifact name.
+def _substring_hits(entry: str, path: str) -> int:
+    """1 when bandit's OWN matcher (``entry in path``) excludes *path*.
 
-    The decision the guard turns on, kept separate so callers can put a
-    synthetic list through it instead of asserting on the config's text.
+    Deliberately a substring test, not a path-component test. bandit does not
+    use component matching for a bare entry, so a component-based check would
+    pass ``venv`` as safe while bandit's real matcher still excludes
+    ``check_venv_producers.py`` through its filename.
     """
-    return [entry for entry in bare_entries(entries) if entry not in ARTIFACT_DIR_NAMES]
+    return int(entry in path)
 
 
-def tracked_py_files(root: pathlib.Path | None = None) -> list[str]:
-    """Every tracked ``*.py`` path, enumerated by git rather than by bandit.
-
-    Through the shared enumerator (#14896) so the ``env=scrubbed_git_env()``
-    this needs -- an inherited ``GIT_DIR`` outranks ``cwd=`` and would list
-    another checkout's index -- is not a per-hook repeat, and so a failed or
-    empty listing raises instead of reading as "bandit excludes nothing".
-    """
-    return tracked_paths(root if root is not None else repo_root(), "*.py")
-
-
-def entries_covering_tracked_python(entries: list[str], tracked: list[str]) -> dict[str, int]:
-    """Bare entries that cover tracked Python under bandit's OWN matcher.
-
-    Deliberately a substring test (``entry in path``), not a path-component
-    test. bandit does not use component matching for a bare entry, so a
-    component-based check here would pass ``venv`` as safe while bandit's
-    real matcher still excludes ``check_venv_producers.py`` through its
-    filename. Verifying against the wrong predicate is how a guard for this
-    exact bug would itself fail open.
-    """
-    counts: dict[str, int] = {}
-    for entry in bare_entries(entries):
-        hits = sum(1 for path in tracked if entry in path)
-        if hits:
-            counts[entry] = hits
-    return counts
+#: Bare entries that cover tracked Python under bandit's OWN matcher.
+entries_covering_tracked_python = functools.partial(
+    _shared.entries_covering_tracked_python, bare=bare_entries, hits_in_path=_substring_hits
+)
 
 
 def unanchored_path_entries(entries: list[str]) -> list[str]:
@@ -207,74 +167,54 @@ def unanchored_path_entries(entries: list[str]) -> list[str]:
     ]
 
 
-def audit_excludes(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
-    """Apply the invariant to every entry in ``.bandit``.
-
-    Returns ``(entries_reached, problems)``. ``entries_reached`` is counted
-    from the parsed list so a config whose ``exclude_dirs`` has gone missing
-    or empty cannot report a clean scan of nothing.
-    """
-    base = root if root is not None else repo_root()
-    problems: list[str] = []
-
-    entries = load_entries(base / ".bandit")
-    if not entries:
-        return 0, [f"{base / '.bandit'} parsed to zero exclude_dirs entries — the guard checked nothing."]
-
+def _unanchored_finding(entries: list[str], _root: pathlib.Path) -> str | None:
     unanchored = unanchored_source_entries(entries)
-    if unanchored:
-        problems.append(
-            f"unanchored exclude_dirs entries {sorted(unanchored)}: bandit tests each as a raw "
-            "substring of the full path, with no component boundary, so each of these excludes "
-            "any file whose path merely contains the string, at any depth (#14489). Write the "
-            "path the entry was meant for wrapped in `/` (`/tests/`, not `tests`)."
-        )
+    if not unanchored:
+        return None
+    return (
+        f"unanchored exclude_dirs entries {sorted(unanchored)}: bandit tests each as a raw "
+        "substring of the full path, with no component boundary, so each of these excludes "
+        "any file whose path merely contains the string, at any depth (#14489). Write the "
+        "path the entry was meant for wrapped in `/` (`/tests/`, not `tests`)."
+    )
 
+
+def _bad_anchor_finding(entries: list[str], _root: pathlib.Path) -> str | None:
     bad_anchor = unanchored_path_entries(entries)
-    if bad_anchor:
-        problems.append(
-            f"exclude_dirs entries missing a leading or trailing `/`: {sorted(bad_anchor)}. bandit "
-            "never rewrites an entry into an absolute path the way flake8 does — without a "
-            "separator on BOTH sides this still matches as an unbounded substring (`tests/` matches "
-            "`repo_tests/foo.py`)."
-        )
-
-    try:
-        tracked = tracked_py_files(base)
-    except RuntimeError as exc:
-        # The shared enumerator refuses an empty or failed listing rather than
-        # returning one (#14896). Recorded as a problem here instead of
-        # propagating: the anchoring findings above are still worth printing,
-        # and this path is already a nonzero exit.
-        tracked = []
-        problems.append(str(exc))
-    if len(tracked) < TRACKED_PY_FLOOR:
-        problems.append(
-            f"git ls-files returned only {len(tracked)} Python files (floor "
-            f"{TRACKED_PY_FLOOR}) — the enumeration broke, so the coverage "
-            "check below asserted nothing."
-        )
-    else:
-        covered = entries_covering_tracked_python(entries, tracked)
-        if covered:
-            problems.append(
-                f"bare exclude_dirs entries cover tracked Python: {covered}. Those files are "
-                f"silently unscanned for security findings. Either the entry is not an artifact "
-                f"directory and must be wrapped in `/`, or it does not belong in "
-                f"ARTIFACT_DIR_NAMES in {SELF_REL}."
-            )
-
-    return len(entries), problems
+    if not bad_anchor:
+        return None
+    return (
+        f"exclude_dirs entries missing a leading or trailing `/`: {sorted(bad_anchor)}. bandit "
+        "never rewrites an entry into an absolute path the way flake8 does — without a "
+        "separator on BOTH sides this still matches as an unbounded substring (`tests/` matches "
+        "`repo_tests/foo.py`)."
+    )
 
 
-def run_audit() -> int:
-    reached, problems = audit_excludes()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\n.bandit exclude_dirs audit FAILED over %d entries (#14489).", reached)
-        return 1
-    logger.info(".bandit exclude_dirs audit clean over %d entries (#14489).", reached)
-    return 0
+def _describe_covered(covered: dict[str, int]) -> str:
+    return (
+        f"bare exclude_dirs entries cover tracked Python: {covered}. Those files are "
+        f"silently unscanned for security findings. Either the entry is not an artifact "
+        f"directory and must be wrapped in `/`, or it does not belong in "
+        f"ARTIFACT_DIR_NAMES in {SELF_REL}."
+    )
+
+
+#: Apply the invariant to every entry in ``.bandit``; returns ``(entries_reached, problems)``.
+audit_excludes = functools.partial(
+    _shared.audit_excludes,
+    config_name=".bandit",
+    load=load_entries,
+    key="exclude_dirs",
+    before=(_unanchored_finding, _bad_anchor_finding),
+    coverage=functools.partial(
+        _shared.coverage_problem,
+        covering=entries_covering_tracked_python,
+        describe=_describe_covered,
+        floor=TRACKED_PY_FLOOR,
+    ),
+    after=(),
+)
 
 
 def main(argv: list[str]) -> int:
@@ -288,7 +228,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit_excludes:
         parser.error("nothing to do — pass --audit-excludes")
-    return run_audit()
+    reached, problems = audit_excludes()
+    return report_audit(
+        logger,
+        problems,
+        "\n.bandit exclude_dirs audit FAILED over %d entries (#14489).",
+        ".bandit exclude_dirs audit clean over %d entries (#14489).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

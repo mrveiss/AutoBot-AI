@@ -48,12 +48,10 @@ should pass the remaining seconds derived from the token's ``exp`` claim.
 
 import logging
 
+from autobot_shared.auth.jwt_core import RS256_DENYLIST_PREFIX
 from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
-
-#: Shared Redis key prefix used by BOTH autobot-backend (write) and SLM (read).
-RS256_DENYLIST_PREFIX = "auth:rs256:jti:denylist:"
 
 
 def _rs256_denylist_key(jti: str) -> str:

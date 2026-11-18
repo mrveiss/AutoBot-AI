@@ -43,7 +43,7 @@ firewall_service_ports:
   postgresql: 5432
 
   # AI/ML services
-  ai_stack: 8080
+  ai_stack: "{{ ai_stack_port }}"
   npu_worker: 8081
 
   # Browser automation (port 9001 is canonical; 3000 was legacy/Grafana conflict, #5608)
@@ -60,7 +60,7 @@ firewall_service_ports:
   node_exporter: 9100
 
   # SLM services
-  slm_backend: 8000
+  slm_backend: "{{ slm_backend_port }}"
   slm_frontend: 443
 
 # Default UFW logging level

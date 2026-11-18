@@ -58,11 +58,9 @@ for name, mod in [
     sys.modules.setdefault(name, mod)
 
 # The in-memory graph doubles are shared with the #13474 wiring test rather than
-# duplicated — see graph_test_doubles.py.
-from tests.memory_graph.graph_test_doubles import (  # noqa: E402
-    make_graph,
-    make_harness,
-)
+# duplicated — see _graph_test_doubles.py.
+from tests.memory_graph._graph_test_doubles import HARNESS_OWNER as OWNER  # noqa: E402
+from tests.memory_graph._graph_test_doubles import make_graph, make_harness
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -514,7 +512,7 @@ class TestFindPath:
     async def test_resolves_names_and_returns_path(self):
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Incident 7")
+        result = await h.find_path("Redis Config", "Incident 7", owner=OWNER)
 
         assert result["found"] is True
         assert result["reason"] is None
@@ -531,7 +529,7 @@ class TestFindPath:
         """Only e1 -> e2 is stored; the reverse question must still be answered."""
         h = await make_harness()
 
-        result = await h.find_path("Incident 7", "Redis Config")
+        result = await h.find_path("Incident 7", "Redis Config", owner=OWNER)
 
         assert result["found"] is True
         assert result["hops"] == 1
@@ -541,7 +539,7 @@ class TestFindPath:
     async def test_direction_override_is_passed_through(self):
         h = await make_harness()
 
-        result = await h.find_path("Incident 7", "Redis Config", direction="outgoing")
+        result = await h.find_path("Incident 7", "Redis Config", direction="outgoing", owner=OWNER)
 
         assert result["found"] is False
         assert result["reason"] == "no_path"
@@ -551,7 +549,7 @@ class TestFindPath:
     async def test_unconnected_entities_report_no_path(self):
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Orphan")
+        result = await h.find_path("Redis Config", "Orphan", owner=OWNER)
 
         assert result["found"] is False
         assert result["reason"] == "no_path"
@@ -564,7 +562,7 @@ class TestFindPath:
         """A typo must not read as "these are unrelated" — different reason, named."""
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Does Not Exist")
+        result = await h.find_path("Redis Config", "Does Not Exist", owner=OWNER)
 
         assert result["found"] is False
         assert result["reason"] == "entity_not_found"
@@ -575,7 +573,7 @@ class TestFindPath:
     async def test_both_names_unknown_are_both_listed(self):
         h = await make_harness()
 
-        result = await h.find_path("Nope", "Also Nope")
+        result = await h.find_path("Nope", "Also Nope", owner=OWNER)
 
         assert result["reason"] == "entity_not_found"
         assert result["missing_entities"] == ["Nope", "Also Nope"]
@@ -586,7 +584,7 @@ class TestFindPath:
         report the entity as unreachable from itself."""
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Redis Config")
+        result = await h.find_path("Redis Config", "Redis Config", owner=OWNER)
 
         assert result["found"] is True
         assert result["reason"] is None
@@ -597,14 +595,14 @@ class TestFindPath:
     async def test_relation_filter_is_applied(self):
         h = await make_harness()
 
-        assert (await h.find_path("Redis Config", "Incident 7", relation="CAUSED"))["found"] is True
-        assert (await h.find_path("Redis Config", "Incident 7", relation="BLOCKS"))["reason"] == "no_path"
+        assert (await h.find_path("Redis Config", "Incident 7", relation="CAUSED", owner=OWNER))["found"] is True
+        assert (await h.find_path("Redis Config", "Incident 7", relation="BLOCKS", owner=OWNER))["reason"] == "no_path"
 
     @pytest.mark.asyncio
     async def test_query_echoes_traversal_parameters(self):
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Incident 7", relation="CAUSED", max_depth=3)
+        result = await h.find_path("Redis Config", "Incident 7", relation="CAUSED", max_depth=3, owner=OWNER)
 
         assert result["query"] == {
             "from_entity": "Redis Config",
@@ -625,7 +623,7 @@ class TestFindPath:
         h.graph.shortest_path = _boom
 
         with pytest.raises(ConnectionError):
-            await h.find_path("Redis Config", "Incident 7")
+            await h.find_path("Redis Config", "Incident 7", owner=OWNER)
 
 
 class TestFindPathFailureModes:
@@ -641,7 +639,7 @@ class TestFindPathFailureModes:
         h.ping_error = ConnectionError("redis down")
 
         with pytest.raises(RuntimeError):
-            await h.find_path("Redis Config", "Incident 7")
+            await h.find_path("Redis Config", "Incident 7", owner=OWNER)
 
     @pytest.mark.asyncio
     async def test_genuine_typo_still_reports_entity_not_found(self):
@@ -649,7 +647,7 @@ class TestFindPathFailureModes:
         store reachable, an unknown name is still reported as such."""
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Does Not Exist")
+        result = await h.find_path("Redis Config", "Does Not Exist", owner=OWNER)
 
         assert result["reason"] == "entity_not_found"
         assert result["missing_entities"] == ["Does Not Exist"]
@@ -660,9 +658,9 @@ class TestFindPathFailureModes:
         into the property graph (best-effort sync, or created before the mirror
         existed). Answering "not connected" there is a confident wrong answer."""
         h = await make_harness()
-        h._entities["Unmirrored"] = {"id": "e9", "name": "Unmirrored", "type": "note"}
+        h._entities["Unmirrored"] = {"id": "e9", "name": "Unmirrored", "type": "note", "owner_user_id": OWNER.user_id}
 
-        result = await h.find_path("Redis Config", "Unmirrored")
+        result = await h.find_path("Redis Config", "Unmirrored", owner=OWNER)
 
         assert result["found"] is False
         assert result["reason"] == "not_in_graph"
@@ -673,7 +671,7 @@ class TestFindPathFailureModes:
         """The not_in_graph guard must not mask a genuine disconnection."""
         h = await make_harness()
 
-        result = await h.find_path("Redis Config", "Orphan")
+        result = await h.find_path("Redis Config", "Orphan", owner=OWNER)
 
         assert result["found"] is False
         assert result["reason"] == "no_path"

@@ -96,7 +96,7 @@ export const CriticalOverlay: Story = {
     showDetails: true,
     autoHide: 0,
     statusDetails: {
-      status: 'offline',
+      status: 'critical',
       lastCheck: Date.now(),
       consecutiveFailures: 8,
       error: 'ECONNREFUSED 192.0.2.20:8001',

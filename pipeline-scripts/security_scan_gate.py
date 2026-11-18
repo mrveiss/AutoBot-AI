@@ -42,15 +42,16 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.report_error import ReportError  # noqa: E402
+from autobot_shared.status_enums import Severity  # noqa: E402
+
 # Most severe first. "unknown" is last and is still a finding: a scanner that
 # reports no severity (pip-audit, flake8) must not be gated into invisibility.
-SEVERITIES = ("critical", "high", "medium", "low", "unknown")
+SEVERITIES = tuple(s.value for s in (Severity.CRITICAL, *reversed(Severity.triage_ladder()), Severity.UNKNOWN))
 
 _FLAKE8_LINE = re.compile(r"^(?P<location>[^:]+:\d+:\d+):\s+(?P<code>[A-Z]+\d+)\s")
-
-
-class ReportError(RuntimeError):
-    """A report could not be read or understood. Never downgraded to zero."""
 
 
 @dataclass(frozen=True)
@@ -232,7 +233,7 @@ def _npm_advisory_closure(vulnerabilities: dict) -> "dict[str, tuple[str, ...]]"
     of which only one can be matched by an advisory-id allowance -- the other
     N-1 fail with nothing able to excuse them.
 
-    GHSA-vfj7-8cjw-p6xm is the live example: `braces` names it, while
+    GHSA-vfj7-8cjw-p6xm (retired, no longer reported as of 2026-10-23) was the example: `braces` named it, while
     `micromatch`, `fast-glob`, `globby`, `stylelint` and
     `@vue/eslint-config-typescript` only name each other.
 
@@ -274,7 +275,7 @@ def _npm_advisory_ids(entry: dict) -> tuple[str, ...]:
     and the advisory id lives one level down in `via[].url`. Without this, an
     allowance recorded by advisory id could never match an npm finding, and one
     root advisory appears as N package findings that nothing can excuse
-    together: GHSA-vfj7-8cjw-p6xm surfaces as `braces`, `micromatch`,
+    together: GHSA-vfj7-8cjw-p6xm (retired 2026-10-23) surfaced as `braces`, `micromatch`,
     `fast-glob`, `globby`, `stylelint` and `@vue/eslint-config-typescript`.
 
     Transitive entries carry `via` as a list of package-name STRINGS rather than
@@ -417,7 +418,7 @@ def recorded_npm_allowances(today: "date | None" = None) -> "tuple[set[str], lis
     `npm_audit_gate.py` has always honoured it. This gate parses a report that
     workflow never produced, so the same advisory was judged by one gate and
     invisible to the other: the braces exception (GHSA-vfj7-8cjw-p6xm, owner
-    decision 2026-10-03) was live in `frontend-test.yml` and absent here, which
+    decision 2026-10-03, retired 2026-10-23) was live in `frontend-test.yml` and absent here, which
     failed `security.yml` on ten open PRs at once.
 
     The alternative — repeating the ids as `--allow-id` in the workflow — would

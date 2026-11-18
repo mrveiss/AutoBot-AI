@@ -269,8 +269,7 @@ Suggested Next Steps:
 After tests pass locally, verify the fix works on remote server:
 
 ```bash
-# Deploy using /deploy skill
-/deploy main
+# Deploy the fix from main through your normal deployment process
 
 # Verify the original error is gone
 ssh autobot@172.16.168.20 "journalctl -u autobot-backend --since '1 hour ago' | grep 'ConnectionRefusedError' || echo 'Error is gone'"

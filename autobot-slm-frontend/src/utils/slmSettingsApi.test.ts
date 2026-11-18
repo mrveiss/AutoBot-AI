@@ -16,7 +16,7 @@
  *     silently sending the request unauthenticated;
  *   * a 401 clears the SLM session and redirects, instead of being swallowed;
  *   * every request carries an abort signal (the timeout the copies lacked);
- *   * `getSetting`/`getWizardStatus` still return `null` on a non-OK response,
+ *   * `getSetting` returns `null` on 404 (throws otherwise); `getWizardStatus` still returns `null` on a non-OK response,
  *     and `upsertSetting` still PUTs-then-POSTs on 404.
  */
 
@@ -165,7 +165,8 @@ describe('slmSettingsApi', () => {
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(USER_KEY)).toBeNull()
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
-    expect(window.location.href).toBe('/login')
+    // #18892: the base-aware login URL carries the current route back as ?redirect=
+    expect(window.location.href).toBe('/login?redirect=%2Fsettings%2Fgeneral')
   })
 
   it('surfaces a server error instead of yielding an empty settings list', async () => {
@@ -193,10 +194,16 @@ describe('slmSettingsApi', () => {
   // Preserved status-code contracts
   // -------------------------------------------------------------------------
 
-  it('getSetting() returns null on a non-OK response rather than throwing', async () => {
+  it('getSetting() returns null for an absent key (404)', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: 'missing' }, 404))
 
     await expect(getSetting('nope')).resolves.toBeNull()
+  })
+
+  it('getSetting() throws on a non-404 failure so it is not read as an absent key', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'down' }, 503))
+
+    await expect(getSetting('nope')).rejects.toThrow('HTTP 503')
   })
 
   it('getTimeConfig()/getWizardStatus() return null on a non-OK response', async () => {

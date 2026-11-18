@@ -24,6 +24,11 @@ const i18n = createI18n({
   messages: {
     en: {
       analytics: {
+        truncation: {
+          showingOf: 'Showing {shown} of {total}',
+          showMore: 'Show {count} more',
+          serverLimited: 'Showing the top {shown} of {total}. The server limits this list.',
+        },
         duplicates: {
           title: 'Duplicate Code',
           pairs: 'pairs',
@@ -34,7 +39,6 @@ const i18n = createI18n({
           totalLines: 'Total Lines',
           similar: 'similar',
           lines: 'lines',
-          showingOf: 'Showing {shown} of {total}',
           emptyMessage: 'No duplicate code detected',
           similarityGroups: {
             high: 'High Similarity',
@@ -135,16 +139,25 @@ describe('DuplicatesSection (#5369)', () => {
     })
   })
 
-  describe('overflow footer', () => {
-    it('shows "Showing 20 of N" when a group has more than 20 items', async () => {
+  describe('show more (#12741)', () => {
+    it('is a button that reveals the next rows and keeps the count accurate', async () => {
       const items = Array.from({ length: 25 }, (_, i) =>
         makeDup({ similarity: 95, file1: `a${i}.ts`, file2: `b${i}.ts` }),
       )
       const w = mountSection(items)
       const header = w.find('.accordion-header')
       await header.trigger('click')
-      expect(w.find('.show-more').exists()).toBe(true)
-      expect(w.find('.show-more').text()).toContain('25')
+      const rows = () => w.findAll('.list-item')
+      expect(rows()).toHaveLength(20)
+      expect(w.find('[data-testid="truncation-count"]').text()).toBe('Showing 20 of 25')
+
+      const button = w.find('[data-testid="truncation-show-more"]')
+      expect(button.element.tagName).toBe('BUTTON')
+      await button.trigger('click')
+
+      expect(rows()).toHaveLength(25)
+      // Everything is visible now, so the notice (and its button) is gone.
+      expect(w.find('[data-testid="truncation-show-more"]').exists()).toBe(false)
     })
   })
 })

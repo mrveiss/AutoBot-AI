@@ -482,7 +482,7 @@ services:
       - "8001:8001"
     environment:
       - AUTOBOT_ENV=production
-      - AUTOBOT_DB_HOST=postgres
+      - AUTOBOT_POSTGRES_HOST=postgres
       - AUTOBOT_REDIS_HOST=redis
       - AUTOBOT_SECRET_KEY=${AUTOBOT_SECRET_KEY}
     volumes:

@@ -215,7 +215,7 @@
       class="pagination"
     >
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         :disabled="currentPage === 1"
         @click="goToPage(currentPage - 1)"
@@ -226,7 +226,7 @@
         {{ $t('knowledge.verification.pageInfo', { current: currentPage, total: totalPages }) }}
       </span>
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         :disabled="currentPage === totalPages"
         @click="goToPage(currentPage + 1)"
@@ -246,7 +246,7 @@ import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import type { VerificationConfig } from '@/types/knowledgeBase'
 import { formatDate } from '@/utils/formatHelpers'
 import { useBatchSelection } from '@/composables/useBatchSelection'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import QualityScoreBadge from './QualityScoreBadge.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -435,9 +435,7 @@ function formatSourceType(type: string): string {
   return typeMap[type] || type
 }
 
-function formatTimestamp(timestamp: string): string {
-  return formatDate(new Date(timestamp))
-}
+const formatTimestamp = formatDate
 
 function truncateContent(content: string): string {
   if (content.length <= 200) return content
@@ -602,8 +600,8 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.loading-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon {
+  width: var(--text-2xl); height: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 

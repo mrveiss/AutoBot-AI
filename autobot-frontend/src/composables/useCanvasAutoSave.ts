@@ -3,6 +3,7 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 import { ref, watch, computed } from 'vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { useCanvasStore } from '@/stores/useCanvasStore'
 import { useDebounce } from '@/composables/useDebounce'
 import { CANVAS_AUTOSAVE_DEBOUNCE_MS } from '@/constants/canvas'
@@ -10,6 +11,7 @@ import { createLogger } from '@/utils/debugUtils'
 import type { AutoSaveStatus, CanvasCell } from '@/types/canvas'
 
 const logger = createLogger('useCanvasAutoSave')
+const formatClockMinutes = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit' } })
 
 export function useCanvasAutoSave(
   saveFn: (canvasId: string, cells: CanvasCell[]) => Promise<void>
@@ -32,7 +34,7 @@ export function useCanvasAutoSave(
       }))
       store.markSaved()
       status.value = 'saved'
-      lastSavedAt.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      lastSavedAt.value = formatClockMinutes(new Date())
     } catch (err) {
       logger.error('Auto-save failed', err)
       status.value = 'error'

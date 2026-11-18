@@ -10,13 +10,11 @@ Provides endpoints for real-time validation dashboard and reports
 from __future__ import annotations
 
 import os
-
-# Import the dashboard generator
 import sys
 from datetime import datetime, timezone
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from api.schemas_workflows import (
@@ -31,6 +29,8 @@ from api.schemas_workflows import (
     ValidationJudgeStatusResponse,
     ValidationJudgmentResponse,
 )
+from api.validation_dashboard_summary import has_trend_history, summarise_phases
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import (
@@ -61,7 +61,7 @@ try:
 except ImportError:
     VALIDATION_JUDGES_AVAILABLE = False
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = get_logger(__name__)
 
 # Thread-safe global singletons
@@ -80,9 +80,7 @@ _validation_judges_lock = threading.Lock()
 # Validation dashboard now returns proper error responses when generator unavailable.
 
 
-def _try_create_dashboard_generator() -> (
-    ValidationDashboardGenerator | None
-):  # #6794: _MissingDep handles stub | None safely
+def _try_create_dashboard_generator() -> ValidationDashboardGenerator | None:
     """Try to create dashboard generator, return None on failure. (Issue #315 - extracted)"""
     try:
         generator = ValidationDashboardGenerator()
@@ -330,7 +328,9 @@ async def get_dashboard_file():
     operation="generate_dashboard",
     error_code_prefix="VALIDATION_DASHBOARD",
 )
-async def generate_dashboard(request: DashboardGenerateRequest, background_tasks: BackgroundTasks):
+async def generate_dashboard(
+    request: DashboardGenerateRequest, background_tasks: BackgroundTasks, _: bool = Depends(check_admin_permission)
+):
     """Generate validation dashboard with custom settings"""
     try:
         generator = get_dashboard_generator()
@@ -394,14 +394,7 @@ async def get_dashboard_metrics():
             "current_metrics": report["metrics"],
             "alert_count": len(report["alerts"]),
             "recommendation_count": len(report["recommendations"]),
-            "phase_summary": {
-                "total_phases": len(report["phase_details"]),
-                "completed_phases": len([p for p in report["phase_details"] if p["completion_percentage"] >= 95.0]),
-                "phases_in_progress": len(
-                    [p for p in report["phase_details"] if 50.0 <= p["completion_percentage"] < 95.0]
-                ),
-                "phases_not_started": len([p for p in report["phase_details"] if p["completion_percentage"] < 50.0]),
-            },
+            "phase_summary": summarise_phases(report["phase_details"]),
         }
 
         return {
@@ -435,6 +428,7 @@ async def get_trend_data():
         return {
             "status": "success",
             "trends": trend_data,
+            "available": has_trend_history(trend_data),
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
