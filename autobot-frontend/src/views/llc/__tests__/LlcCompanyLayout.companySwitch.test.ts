@@ -31,6 +31,9 @@ const DATA: Record<string, CompanyData> = {
   c2: { agent: 'Bravo Person', contact: 'Bravo Contact', team: 'Bravo Team', role: 'Bravo Role', tool: 'bravo_tool' },
 }
 
+// Open items per company in the executor rollup: a count only one company can have produced.
+const ROLLUP: Record<string, number> = { c1: 7, c2: 3 }
+
 interface Held {
   promise: Promise<unknown>
   resolve: (value: unknown) => void
@@ -116,7 +119,7 @@ function tableAnswer(url: string, cid: string): unknown {
       ],
     }
   }
-  if (url.endsWith('/executor-rollup')) return { cells: [] }
+  if (url.endsWith('/executor-rollup')) return { cells: [{ executor_class: 'agent', status: 'todo', count: ROLLUP[cid] }] }
   if (url.endsWith('/process-nodes')) return { nodes: [{ role_id: role, role_name: d.role, workflow_id: `wf-${cid}` }] }
   if (url.endsWith('/tool-nodes')) return { nodes: [{ role_id: role, role_name: d.role, tool_name: d.tool }] }
   if (url.startsWith('/api/llc/roles/')) return [{ id: role, name: d.role }]
@@ -291,6 +294,56 @@ describe('the company layout remounts its routed view on a company switch (#2150
     expect(people.props('contactsFailed')).toBe(true)
     expect(people.props('teamsFailed')).toBe(true)
     expect(m.wrapper.text()).not.toContain('Alpha')
+  })
+
+  // The canvas caches (process nodes, tool nodes, attach roles) and the executor rollup load lazily or by
+  // company; each of them must be empty, loading or failed for the new company -- never the old one's.
+  it('shows none of the previous company in any canvas cache or the rollup while the new one is loading', async () => {
+    const m = await mountAt('llc-company-org-chart', 'c1')
+    await click(m, 'org-view-canvas')
+    expect(canvasIds(m)).toEqual(expect.arrayContaining(['process:r-c1:wf-c1', `tool:${DATA.c1.tool}`]))
+    expect(m.wrapper.get('[data-testid="executor-rollup-total"]').text()).toContain('7')
+    const urls = [
+      '/api/llc/companies/c2/work-items/executor-rollup',
+      '/api/llc/companies/c2/process-nodes',
+      '/api/llc/companies/c2/tool-nodes',
+      '/api/llc/roles/c2',
+    ]
+    const holds = urls.map((url) => hold(url))
+
+    await switchTo(m, 'llc-company-org-chart', 'c2')
+    await click(m, 'org-view-canvas')
+
+    expect(m.wrapper.find('[data-testid="executor-rollup-loading"]').exists()).toBe(true)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    expect(canvasIds(m).filter((id) => id.includes('c1') || id.includes(DATA.c1.tool))).toEqual([])
+    expect(m.wrapper.findComponent(OrgProcessAttachForm).props('roles')).not.toContainEqual({ id: 'r-c1', name: DATA.c1.role })
+
+    holds.forEach((entry, i) => entry.resolve(tableAnswer(urls[i], 'c2')))
+    await flushPromises()
+    expect(m.wrapper.get('[data-testid="executor-rollup-total"]').text()).toContain('3')
+    expect(canvasIds(m)).toEqual(expect.arrayContaining(['process:r-c2:wf-c2', `tool:${DATA.c2.tool}`]))
+    expect(m.wrapper.findComponent(OrgProcessAttachForm).props('roles')).toEqual([{ id: 'r-c2', name: DATA.c2.role }])
+  })
+
+  it('shows none of the previous company in any canvas cache or the rollup when the new one fails', async () => {
+    const m = await mountAt('llc-company-org-chart', 'c1')
+    await click(m, 'org-view-canvas')
+    expect(m.wrapper.findComponent(OrgProcessAttachForm).props('roles')).toEqual([{ id: 'r-c1', name: DATA.c1.role }])
+    failingCompany = 'c2'
+
+    await switchTo(m, 'llc-company-org-chart', 'c2')
+    await click(m, 'org-view-canvas')
+
+    expect(m.wrapper.find('[data-testid="executor-rollup-unavailable"]').exists()).toBe(true)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    expect(canvasIds(m).filter((id) => id.startsWith('process:') || id.startsWith('tool:'))).toEqual([])
+    // The attach forms are mutation controls shown only to a viewer known to manage the company
+    // (`v-if="canManageCompany"`). The new company's members request failed, so the viewer's standing is
+    // unknown: the view says so and offers no form -- and so no role list, least of all the previous company's.
+    expect(m.wrapper.find('[data-testid="org-standing-unavailable"]').exists()).toBe(true)
+    expect(m.wrapper.findComponent(OrgProcessAttachForm).exists()).toBe(false)
+    expect(m.wrapper.text()).not.toContain(DATA.c1.role)
   })
 
   it('remounts an ordinary view, keeps an opted-out view and never remounts the sidebar', async () => {
