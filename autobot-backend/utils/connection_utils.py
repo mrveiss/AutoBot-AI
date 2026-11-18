@@ -15,7 +15,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
+from autobot_shared.ollama_urls import ollama_generate_url, ollama_tags_url
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
@@ -26,7 +26,6 @@ from autobot_shared.ssot_config import get_ollama_url
 # `.get_nested()` lookups below require `config_manager`. Using `config` here
 # previously raised AttributeError (#12069, same root cause as #11971).
 from config import config_manager
-from constants.api_constants import PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from type_defs.common import Metadata
 
@@ -67,7 +66,7 @@ class ConnectionTester:
             ollama_status = "disconnected"
             try:
                 ollama_endpoint = get_ollama_url()
-                ollama_check_url = f"{ollama_endpoint}/api/tags"
+                ollama_check_url = ollama_tags_url(ollama_endpoint)
                 timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.health_check)
                 # Issue #12979: shared pool instead of a per-probe session.
                 # suppress_error_log because this probe already swallows failure
@@ -218,7 +217,7 @@ class ConnectionTester:
             endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
             endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
 
-            check_url = ollama_api_url(endpoint, PATH_OLLAMA_TAGS)
+            check_url = ollama_tags_url(endpoint)
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
             # Issue #12979: shared pool. The reachability probe releases its
@@ -327,7 +326,7 @@ class ConnectionTester:
     async def _check_ollama_embedding(provider_config: dict, current_model: str, provider: str) -> Metadata:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
         ollama_host = provider_config.get("host", get_ollama_url())
-        tags_url = f"{ollama_host}/api/tags"
+        tags_url = ollama_tags_url(ollama_host)
         timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.connect)
 
         # Issue #12979: shared pool; status is inspected, so the response block stays.
@@ -512,7 +511,7 @@ class ModelManager:
         try:
             ollama_config = config_manager.get_nested("llm_config.ollama", {})
             ollama_host = ollama_config.get("host", get_ollama_url())
-            ollama_url = f"{ollama_host}/api/tags"
+            ollama_url = ollama_tags_url(ollama_host)
 
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
             # Issue #12979: shared pool. suppress_error_log because this path

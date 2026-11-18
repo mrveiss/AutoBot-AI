@@ -10,7 +10,15 @@ both must yield exactly one path segment.
 
 import pytest
 
-from autobot_shared.ollama_urls import ollama_api_url, ollama_generate_url
+from autobot_shared.ollama_urls import (
+    ollama_api_url,
+    ollama_base_url,
+    ollama_chat_url,
+    ollama_embeddings_url,
+    ollama_generate_url,
+    ollama_pull_url,
+    ollama_tags_url,
+)
 from autobot_shared.ssot_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
 
 _EXPECTED = "http://ollama.example:11434/api/generate"
@@ -42,3 +50,14 @@ def test_other_paths_replace_a_carried_path():
 def test_path_prefixed_base_keeps_its_prefix():
     assert ollama_generate_url("http://gw.example/ollama/api/generate") == "http://gw.example/ollama/api/generate"
     assert ollama_generate_url("http://gw.example/ollama") == "http://gw.example/ollama/api/generate"
+
+
+@pytest.mark.parametrize("base", ["http://ollama.example:11434", _EXPECTED, "http://ollama.example:11434/api/tags/"])
+def test_named_wrappers_each_yield_one_path(base):
+    root = "http://ollama.example:11434"
+    assert ollama_base_url(base) == root
+    assert ollama_chat_url(base) == root + "/api/chat"
+    assert ollama_tags_url(base) == root + "/api/tags"
+    assert ollama_pull_url(base) == root + "/api/pull"
+    assert ollama_embeddings_url(base) == root + "/api/embeddings"
+    assert ollama_embeddings_url(root + "/api/embeddings") == root + "/api/embeddings"
