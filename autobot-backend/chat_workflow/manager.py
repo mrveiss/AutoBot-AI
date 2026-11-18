@@ -15,7 +15,6 @@ Composes all functionality through mixins:
 import asyncio
 import functools
 import json
-import os
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
@@ -34,6 +33,7 @@ from chat_workflow.tool_call_grammar import (
     strip_unparsed_tool_tags,
 )
 from chat_workflow.tool_call_loop import framed_tool_output
+from chat_workflow.vision_capability import model_supports_vision, refresh_vision_capability
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
@@ -104,27 +104,7 @@ VISION_TOOL_LOOKBACK_MESSAGES = env_int("CHAT_VISION_TOOL_LOOKBACK_MESSAGES", de
 # representative default, env-overridable — never hardcode a tunable).
 VISION_IMAGE_TOKEN_ESTIMATE = env_int("CHAT_VISION_IMAGE_TOKEN_ESTIMATE", default=1100)
 
-# Case-insensitive substrings of a model name that indicate vision support.
-# Ollama exposes no per-tag capability registry (unlike the fixed AIProvider
-# registry in modern_ai_integration.py), so this is the pragmatic gate.
-_DEFAULT_VISION_MODEL_PATTERNS = (
-    "llava,vision,gpt-4o,gpt-4-vision,claude-3,claude-4,gemini,qwen-vl,qwen2-vl,qwen2.5-vl,pixtral,bakllava"
-)
-VISION_MODEL_NAME_PATTERNS = tuple(
-    p.strip().lower()
-    for p in os.getenv("CHAT_VISION_MODEL_PATTERNS", _DEFAULT_VISION_MODEL_PATTERNS).split(",")
-    if p.strip()
-)
-
-
-def _model_supports_vision(model_name: str) -> bool:
-    """Heuristic vision-capability gate for the chat continuation loop (#11538).
-
-    Ollama exposes no per-tag capability registry, so this matches known
-    vision-model name substrings (env-overridable via CHAT_VISION_MODEL_PATTERNS).
-    """
-    name = (model_name or "").lower()
-    return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
+_model_supports_vision = model_supports_vision  # capability-first gate (#21770), see vision_capability.py
 
 
 def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
@@ -1974,6 +1954,8 @@ before summarizing.
         vision_ready = image_b64 and _model_supports_vision(selected_model)
         if vision_ready and self._image_fits_budget(current_prompt, selected_model):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
+        elif vision_ready:
+            logger.info("Screenshot not attached: over the history token budget for %s (#21770)", selected_model)
         return payload
 
     async def _log_and_parse_tool_calls(
@@ -2069,6 +2051,8 @@ before summarizing.
             yield refusal
             yield (None, None)
             return
+        if image_b64:
+            await refresh_vision_capability(http_client, ollama_endpoint, selected_model)  # #21770
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
