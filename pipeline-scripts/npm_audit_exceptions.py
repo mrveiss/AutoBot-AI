@@ -52,8 +52,8 @@ class AdvisoryException:
 #:
 #: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
 #: failing on a date would block every Python PR, where the gate blocks only the PRs that
-#: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
-#: reminder to look again before 2026-11-14.
+#: trigger the frontend suite. So the suite stays date-independent and #21736 carries the
+#: reminder to look again before 2026-12-17.
 #:
 #: The table is EMPTY whenever nothing is currently unfixable, and holds one entry per advisory
 #: that is. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
@@ -65,8 +65,14 @@ ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
     "GHSA-fc5q-39xc-vjpf": AdvisoryException(
         expires="2026-12-17",
         reason=(
-            "picomatch has no patched version (latest, 4.0.7, is still affected), so no bump can clear "
-            "it; owner decision 2026-11-17 on #21736, renewed or removed deliberately by the expiry"
+            "picomatch <= 4.0.7 ReDoS through single-branch repeated extglobs, with no patched "
+            "version (npm latest is 4.0.7; upstream fix PRs are open and unmerged), so no bump "
+            "or override exists. Reached through glob matching in build and dev tooling (vite, "
+            "vitest, vue-tsc, stylelint via micromatch, storybook, npm-run-all2). The lockfile "
+            "marks exactly four of the ten copies as non-dev (vite, vue-router, tinyglobby and "
+            "unplugin-utils); no autobot-frontend source file imports picomatch, and whether "
+            "those four reach the browser bundle is not established. Owner decision 2026-11-17 "
+            "on #21736, renewed or removed deliberately by the expiry."
         ),
     ),
 }
