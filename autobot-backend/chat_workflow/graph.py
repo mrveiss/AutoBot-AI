@@ -49,6 +49,7 @@ from chat_workflow.graph_tool_dispatch import (
     send_denied_message,
     split_refused,
 )
+from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK, reflection_update, wants_another_pass
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
@@ -720,11 +721,9 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
         rlm_cfg.max_reflections,
     )
 
-    return {
-        "reflection_count": reflection_count + 1,
-        "reflection_history": history,
-        "rlm_refinement_hint": result.refinement_hint,
-    }
+    return reflection_update(
+        state, result, history, rlm_cfg.max_reflections, config["configurable"].get("stream_callback")
+    )
 
 
 async def inline_judge_response(state: ChatState, config: RunnableConfig) -> dict:
@@ -1208,14 +1207,8 @@ def route_after_reflection(state: ChatState) -> str:
     if not history:
         return "inline_judge_response"
 
-    latest = history[-1]
-    verdict = latest.get("verdict", "ACCEPT")
-    reflection_count = state.get("reflection_count", 0)
-
     # Use default config ceiling — the actual config is in the node
-    max_reflections = RLMConfig().max_reflections
-
-    if verdict == "REFINE" and reflection_count < max_reflections:
+    if wants_another_pass(history[-1], state.get("reflection_count", 0), RLMConfig().max_reflections):  # #21845
         return "generate_response"
     return "inline_judge_response"
 
@@ -1239,7 +1232,7 @@ async def force_final_answer(state: ChatState, config: RunnableConfig) -> dict:
     if not llm_response:
         fallback = {
             "type": "response",
-            "content": "I ran out of steps before finishing and could not write a final answer. Please try again.",
+            "content": NO_ANSWER_FALLBACK,
             "metadata": {"iteration": iteration},
         }
         messages.append(fallback)

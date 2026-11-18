@@ -29,8 +29,9 @@ class ReflectionVerdict(Enum):
     REFINE = auto()  # Response needs improvement — recurse
     FAIL = auto()  # Hard failure (unused; retained for backwards-compat).
     # #6697: evaluator infrastructure error (LLM down, parse error, etc.).
-    # Routing treats this like ACCEPT (graph branches only on REFINE), but
-    # callers can distinguish "evaluator broke" from "response was bad."
+    # Callers can distinguish "evaluator broke" from "response was bad"; the graph
+    # does NOT accept it -- a result with ``evaluator_failed`` is re-asked within
+    # the reflection budget (#21845, ``chat_workflow/reflection_gate.py``).
     INDETERMINATE = auto()
 
 
@@ -52,6 +53,8 @@ class ReflectionResult:
     refinement_hint: str = ""
     iteration: int = 1
     timestamp: datetime = field(default_factory=now_utc)
+    #: The evaluator broke (transport, timeout, unreadable reply): there is NO reading of the response (#21845).
+    evaluator_failed: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for event stream / logging."""
@@ -61,6 +64,7 @@ class ReflectionResult:
             "critique": self.critique,
             "refinement_hint": self.refinement_hint,
             "iteration": self.iteration,
+            "evaluator_failed": self.evaluator_failed,
             "timestamp": self.timestamp.isoformat(),
         }
 

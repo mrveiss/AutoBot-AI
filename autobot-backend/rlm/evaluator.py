@@ -67,6 +67,10 @@ _EVAL_SCHEMA: dict = {
 }
 
 
+#: Asked of the model when the evaluator could not read its answer (#21845).
+EVALUATOR_FAILED_HINT = "Your answer could not be verified. Re-check it and answer directly in plain text."
+
+
 def _unparsed_tool_call_result(response: str, iteration: int) -> ReflectionResult | None:
     """REFINE verdict when *response* is raw TOOL_CALL markup that never ran, else None. (#21845)
 
@@ -142,10 +146,10 @@ class ResponseQualityEvaluator:
             # verdict=FAIL with empty exception text when exc.__str__ was
             # empty (e.g. ConnectionError()). Now log type+repr+traceback and
             # use INDETERMINATE so callers can tell evaluator-broke from a
-            # genuine FAIL. Routing semantics unchanged (graph only branches
-            # on REFINE; INDETERMINATE falls through to accept like ACCEPT).
+            # genuine FAIL. The graph does not accept it (#21845): `evaluator_failed`
+            # re-asks within the reflection budget, then falls back (reflection_gate).
             logger.warning(
-                "RLM evaluator failed (%s: %r) — passing through with INDETERMINATE verdict",
+                "RLM evaluator failed (%s: %r) — no reading, response is not accepted",
                 type(exc).__name__,
                 exc,
                 exc_info=True,
@@ -156,7 +160,9 @@ class ResponseQualityEvaluator:
                 # carries no passing score; a made-up 0.7 cleared the threshold and passed the response.
                 quality_score=0.0,
                 critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
+                refinement_hint=EVALUATOR_FAILED_HINT,
                 iteration=iteration,
+                evaluator_failed=True,
             )
 
     # ------------------------------------------------------------------
