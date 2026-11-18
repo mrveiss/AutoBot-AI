@@ -292,12 +292,27 @@ describe('the company layout remounts its routed view on a company switch (#2150
     await switchTo(m, 'llc-company-org-chart', 'c2')
     await click(m, 'org-view-people')
 
+    // While the org chart is in flight the view renders only its loading state (`v-else-if="isLoading"`
+    // precedes the people branch), so the people list is not mounted at all.
+    expect(m.wrapper.findComponent(OrgPeopleList).exists()).toBe(false)
     expect(m.wrapper.text()).not.toContain('Alpha')
-    const groups = m.wrapper.findComponent(OrgPeopleList).props('groups').map((g: { name: string }) => g.name)
-    expect(groups).not.toContain(DATA.c1.team)
+    expect(m.wrapper.text()).not.toContain(DATA.c1.contact)
 
-    holds.forEach((entry, i) => entry.resolve(tableAnswer(urls[i], 'c2')))
+    // Org chart answered, contacts and teams still pending: the list is mounted, without a previous-company group.
+    holds[0].resolve(tableAnswer(urls[0], 'c2'))
     await flushPromises()
+    const pending = m.wrapper.findComponent(OrgPeopleList)
+    expect(pending.exists()).toBe(true)
+    const names = (pending.props('groups') as { name: string }[]).map((g) => g.name)
+    expect(names).not.toContain(DATA.c1.team)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    expect(m.wrapper.text()).not.toContain(DATA.c1.contact)
+
+    holds.slice(1).forEach((entry, i) => entry.resolve(tableAnswer(urls[i + 1], 'c2')))
+    await flushPromises()
+    const groups = (m.wrapper.findComponent(OrgPeopleList).props('groups') as { name: string }[]).map((g) => g.name)
+    expect(groups).toContain(DATA.c2.team)
+    expect(groups).not.toContain(DATA.c1.team)
     expect(m.wrapper.text()).toContain(DATA.c2.contact)
     expect(m.wrapper.text()).not.toContain('Alpha')
   })
