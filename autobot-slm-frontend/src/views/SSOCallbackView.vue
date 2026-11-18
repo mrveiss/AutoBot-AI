@@ -16,7 +16,7 @@ import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { slmApiClient } from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('SSOCallbackView')
 const router = useRouter()
@@ -41,7 +41,8 @@ onMounted(async () => {
   window.history.replaceState(window.history.state, '', window.location.pathname)
 
   if (error) {
-    router.push({ name: 'login', query: { error: 'sso_failed' } })
+    // #20631: the backend says why when the account is not an admin's.
+    router.push({ name: 'login', query: { error: error === 'admin_only' ? error : 'sso_failed' } })
     return
   }
 

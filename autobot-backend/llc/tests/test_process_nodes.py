@@ -25,6 +25,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.api.companies import get_process_nodes
+from llc.models.activity import LLCActivityLog
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_workflow import LLCRoleWorkflow
@@ -44,7 +45,7 @@ async def session_factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         "sqlite+aiosqlite:///:memory:"
     )
-    tables = [Role.__table__, LLCRoleWorkflow.__table__, LLCCompanyMembership.__table__]
+    tables = [LLCActivityLog.__table__, Role.__table__, LLCRoleWorkflow.__table__, LLCCompanyMembership.__table__]
     for table in tables:
         harness._scrub_pg_server_defaults(table)
         harness._clientside_timestamps(table)

@@ -33,11 +33,13 @@ import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
 import { setDocumentTitle } from '@/utils/documentTitle'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
+import { getBackendUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
-import { llcCompanyChildren } from './llcRoutes'
+import { approvalsRoutes, llcCompanyChildren } from './llcRoutes'
 import { preferencesRoutes } from './preferencesRoutes'
+import { slmRedirectRoutes } from './slmRedirectRoutes'
 import { adminRoutes, resolveAdminPermissionRedirect } from './adminRoutes'
+import { userToolRoutes } from './userToolRoutes'
 
 const logger = createLogger('Router');
 
@@ -635,6 +637,7 @@ export const routes: RouteRecordRaw[] = [
     ]
   },
   ...preferencesRoutes, // Issue #753 Settings + #19241 provider sign-in callback
+  ...approvalsRoutes, // #20917: what is waiting for the person, from any page
   // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
   {
     path: '/home',
@@ -775,87 +778,12 @@ export const routes: RouteRecordRaw[] = [
   },
   // #19833: the 9 /admin/* routes are children of the /admin parent (adminRoutes.ts)
   ...adminRoutes,
-  // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
-  // Redirect any bookmarked /desktop URLs to /chat.
+  ...userToolRoutes, // #20644: Batch Processing and Vision, moved here from the SLM
+  // /desktop left the nav (noVNC is the Chat tab's noVNC tab); bookmarked /desktop URLs go to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // #20605: remote desktop and the theme manager are SLM screens (tools/novnc, settings/admin/themes).
-  // A bookmark to the old URL goes where the Platform admin shield goes: the SLM console. The old
-  // views (SlmNoVncView, slm/ThemeManagerView) stay until nothing is confirmed to link to them.
-  {
-    path: '/slm/tools/novnc',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/tools/novnc`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/slm/themes',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/settings/admin/themes`
-      return '/chat' // Fallback
-    }
-  },
-  // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
-  // Issue #729: Infrastructure routes redirected to slm-admin
-  // These routes are kept as redirects for backwards compatibility
-  {
-    path: '/tools',
-    redirect: () => {
-      // Redirect to SLM Admin Tools
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat' // Fallback
-    }
-  },
-  {
-    path: '/tools/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/tools`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/monitoring/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/monitoring`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/settings/:pathMatch(.*)*',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/settings`
-      return '/chat'
-    }
-  },
-  {
-    path: '/infrastructure',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/`
-      return '/chat'
-    }
-  },
-  {
-    path: '/tls-certificates',
-    redirect: () => {
-      window.location.href = `${getSLMAdminUrl()}/#/security`
-      return '/chat'
-    }
-  },
+  // Issue #729 / #20631: legacy infrastructure paths; admins go to the SLM, others to /home
+  ...slmRedirectRoutes,
   // Issue #929: Plugin Manager UI
   {
     path: '/plugins',
@@ -998,8 +926,7 @@ export const routes: RouteRecordRaw[] = [
       isPublic: true
     }
   },
-  // GH#9627: company-scoped LLC routes share the LlcCompanyLayout (contextual
-  // sidebar) and the llcCompanyParamGuard (missing companyId → selector).
+  // GH#9627: company-scoped LLC routes share LlcCompanyLayout and the llcCompanyParamGuard (no companyId → selector).
   // Children: GH#8248 (backlog/sprint/kanban) + GH#8249/GH#8550 (modules).
   {
     path: '/llc/companies/:companyId',

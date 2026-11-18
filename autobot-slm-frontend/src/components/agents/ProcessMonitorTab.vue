@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, formatDuration, createDateFormatter } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -29,7 +29,6 @@ import { useI18n } from 'vue-i18n'
 import { ref, computed } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { useAuthStore } from '@/stores/auth'
-import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,

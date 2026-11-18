@@ -48,9 +48,6 @@ router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 class SecretSetRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     value: str = Field(..., min_length=1)
-    actor: Optional[str] = Field(
-        None, description="Deprecated and ignored: the actor is the authenticated caller (#20102)"
-    )
 
 
 class SecretSummary(BaseModel):
@@ -195,7 +192,6 @@ async def get_secret(
 @router.delete("/{company_id}/{name}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_secret(
     name: str,
-    actor: Optional[str] = None,  # deprecated and ignored: the actor is the authenticated caller (#20102)
     company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),

@@ -209,16 +209,21 @@ describe('header icon cluster (#18240)', () => {
     }
   })
 
-  it('Secrets and Platform admin are advanced; Preferences is not', () => {
+  it('Secrets and Platform admin are advanced; Approvals and Preferences are not', () => {
     const adv = Object.fromEntries(navIconItems.map((i) => [i.labelKey, !!i.adv]))
-    expect(adv).toEqual({ 'nav.secrets': true, 'nav.preferences': false, 'nav.platformAdmin': true })
+    expect(adv).toEqual({
+      'nav.approvals.aria': false,
+      'nav.secrets': true,
+      'nav.preferences': false,
+      'nav.platformAdmin': true,
+    })
   })
 
-  it('Platform admin is external and gated on service management, with no router target', () => {
+  it('Platform admin is external and for admins only, with no router target', () => {
     const admin = navIconItems.find((i) => i.labelKey === 'nav.platformAdmin')!
     expect(admin.to).toBeUndefined()
     expect(typeof admin.href).toBe('function')
-    expect(admin.requires).toBe('serviceManagement')
+    expect(admin.requires).toBe('admin')
   })
 
   it('Plugins is in no user-app registry (it lives in the SLM console nav)', () => {

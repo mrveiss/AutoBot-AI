@@ -18,7 +18,8 @@ from advanced_rag_optimizer import RAGMetrics, RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_filters import KbPrincipal
 from services.context_sufficiency import SufficiencyVerdict, get_context_sufficiency_evaluator
-from services.rag_visibility import RESULT_METADATA_KEY, filter_ranked
+from services.rag_visibility import RESULT_METADATA_KEY, cache_scope, filter_ranked
+from services.retrieval_contract import RetrievalPlan, stamp_cached_from, uses_shared_cache
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 
@@ -62,6 +63,8 @@ class RAGCacheTiersMixin:
                 )
                 for i, c in enumerate(chunks)
             ]
+            for hit, chunk in zip(results, chunks):
+                stamp_cached_from(hit, chunk.metadata.get("source", ""))
             results = await self._visible(results, principal)
             if not results:
                 return None
@@ -102,10 +105,11 @@ class RAGCacheTiersMixin:
                 return None
             # Reconstruct a single RankedResult; it carries the stored top result's ownership
             # metadata so the visibility filter can judge it (#16664).
+            stored = hit.metadata.get(RESULT_METADATA_KEY) or {}
             sr = RankedResult(
                 content=hit.response_text,
                 metadata={
-                    **(hit.metadata.get(RESULT_METADATA_KEY) or {}),
+                    **stored,
                     "source": "semantic_cache",
                     "model": hit.model,
                     "original_query": hit.original_query,
@@ -117,6 +121,7 @@ class RAGCacheTiersMixin:
                 relevance_rank=1,
                 source_path="semantic_cache",
             )
+            stamp_cached_from(sr, stored.get("source", ""))
             if not await self._visible([sr], principal):
                 return None
             metrics = RAGMetrics()
@@ -199,3 +204,23 @@ class RAGCacheTiersMixin:
             return topic_result + (cache_key,)
 
         return None
+
+    async def _cached_or_mesh(
+        self,
+        query: str,
+        max_results: int,
+        enable_reranking: bool,
+        categories: List[str] | None,
+        principal: KbPrincipal,
+        plan: RetrievalPlan,
+    ) -> Tuple[Tuple[List[RankedResult], RAGMetrics] | None, str | None]:
+        """The cache tiers, then the Neural Mesh path (#2059): ``(result or None, cache scope)``."""
+        # The cache toggle off makes the scope None: every tier is skipped, read and write (#20958).
+        scope = await cache_scope(principal) if uses_shared_cache(plan) else None
+        # Only DEFAULT_PLAN uses the shared tiers; any other plan bypasses them, read and write (retrieval_contract).
+        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories, principal, scope)
+        if hit is not None:
+            return (hit[0], hit[1]), scope
+        if self.config.mesh_retriever_enabled and self._mesh_retriever is not None:
+            return await self._run_mesh_retriever(query, max_results, principal), scope
+        return None, scope

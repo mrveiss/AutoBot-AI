@@ -16,6 +16,8 @@ import {
   describeUploadError,
   ensureUploadSession,
   postConversationUpload,
+  uploadEtaSeconds,
+  usesCanonicalRoute,
 } from '@/utils/conversationFileUpload'
 
 type Listener = (event?: unknown) => void
@@ -46,6 +48,11 @@ class FakeXhr {
   }
   send(body: unknown) {
     this.body = body
+  }
+  aborted = false
+  abort() {
+    this.aborted = true
+    this.listeners.abort?.()
   }
 }
 
@@ -241,5 +248,83 @@ describe('ensureUploadSession (#20133)', () => {
     const create = vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce('new-3')
     await expect(ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).rejects.toThrow('down')
     expect(await ensureUploadSession({ currentSessionId: null }, { createNewSession: create })).toBe('new-3')
+  })
+})
+
+describe('usesCanonicalRoute (#20195)', () => {
+  it('sends a turn with files to the canonical route even when the overseer is on', () => {
+    expect(usesCanonicalRoute(true, ['file-1'])).toBe(true)
+  })
+
+  it('lets the overseer take a turn with no files', () => {
+    expect(usesCanonicalRoute(true, [])).toBe(false)
+  })
+
+  it('uses the canonical route whenever the overseer is off', () => {
+    expect(usesCanonicalRoute(false, [])).toBe(true)
+    expect(usesCanonicalRoute(false, ['file-1'])).toBe(true)
+  })
+
+  it('control: the decision depends on the ids, not on the overseer flag alone', () => {
+    expect(usesCanonicalRoute(true, [])).not.toBe(usesCanonicalRoute(true, ['file-1']))
+  })
+})
+
+describe('user cancel of an upload (#20133)', () => {
+  beforeEach(() => vi.stubGlobal('XMLHttpRequest', FakeXhr))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('aborting the signal aborts the request and rejects as cancelled', async () => {
+    const controller = new AbortController()
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(FakeXhr.last.aborted).toBe(false)
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(true)
+    await expect(pending).rejects.toMatchObject({ code: 'cancelled' })
+  })
+
+  it('a signal that is already aborted rejects as cancelled and never sends', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const sent = vi.spyOn(FakeXhr.prototype, 'send')
+    await expect(postConversationUpload('s1', file(), () => {}, controller.signal)).rejects.toMatchObject({
+      code: 'cancelled',
+    })
+    expect(sent).not.toHaveBeenCalled()
+    sent.mockRestore()
+  })
+
+  it('removes the abort listener once the request settles', async () => {
+    const controller = new AbortController()
+    const remove = vi.spyOn(controller.signal, 'removeEventListener')
+    const pending = postConversationUpload('s1', file(), () => {}, controller.signal)
+    expect(remove).not.toHaveBeenCalled()
+    FakeXhr.last.listeners.load()
+    await pending
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+    controller.abort()
+    expect(FakeXhr.last.aborted).toBe(false)
+  })
+
+  it('control: without a signal nothing aborts', () => {
+    void postConversationUpload('s1', file(), () => {}).catch(() => {})
+    expect(FakeXhr.last.aborted).toBe(false)
+  })
+})
+
+describe('uploadEtaSeconds (#20133)', () => {
+  it('extrapolates the average rate so far', () => {
+    // 25 of 100 bytes in 10 s -> 75 bytes left at 2.5 B/s = 30 s
+    expect(uploadEtaSeconds(25, 100, 10_000)).toBeCloseTo(30)
+  })
+
+  it('has no estimate before time or bytes have passed', () => {
+    expect(uploadEtaSeconds(0, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(10, 100, 0)).toBeUndefined()
+  })
+
+  it('has no estimate when a second or less remains', () => {
+    expect(uploadEtaSeconds(100, 100, 5_000)).toBeUndefined()
+    expect(uploadEtaSeconds(99, 100, 99_000)).toBeUndefined()
   })
 })

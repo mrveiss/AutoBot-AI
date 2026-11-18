@@ -55,6 +55,19 @@ def _key(connector_id: str) -> str:
     return f"connector:sync:{connector_id}"
 
 
+async def sync_lease_held(connector_id: str) -> bool:
+    """Whether some run holds the connector's lease right now, i.e. a sync is in flight (#20755)."""
+    try:
+        redis = await get_async_redis_client(database=_DATABASE)
+        if redis is None:
+            raise ConnectorSyncUnavailable(connector_id)
+        return bool(await redis.exists(_key(connector_id)))
+    except ConnectorSyncUnavailable:
+        raise
+    except Exception as exc:
+        raise ConnectorSyncUnavailable(connector_id) from exc
+
+
 async def claim_connector_sync(connector_id: str) -> LeaderLease:
     """Take the connector's lease now, for a run that may start later. It lapses if never held.
 

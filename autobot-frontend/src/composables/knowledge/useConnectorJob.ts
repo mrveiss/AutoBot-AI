@@ -4,8 +4,13 @@
  * useConnectorJob — live sync job state poller for a single connector.
  *
  * Issue #8149: polls GET /knowledge_base/connectors/{id}/job every 5 s
- * while status is "running".  Stops automatically on terminal status or
+ * while a sync is in flight.  Stops automatically on any other answer or
  * when the caller calls stop().
+ *
+ * #20755: the backend answers from the sync's lease, which is held from the moment the sync is
+ * claimed: 'starting' until its first job state is written (after change detection, however
+ * long that takes), then 'running'. So 'no job' always means none is in flight, and no guessed
+ * wait is needed.
  */
 
 import { ref, readonly, onUnmounted } from 'vue'
@@ -17,8 +22,7 @@ import type { ConnectorJobState, ConnectorLeaderState, ConnectorHistoryEntry } f
 const logger = createLogger('useConnectorJob')
 
 const POLL_INTERVAL_MS = 5_000
-/** About a minute of polls for a just-started sync to report its job. */
-const FIRST_JOB_WAIT_POLLS = 12
+const IN_FLIGHT: ReadonlyArray<ConnectorJobState['status']> = ['starting', 'running']
 
 /** Fetch current in-flight job state. Returns null when no job is active (404); any other failure throws. */
 export async function fetchConnectorJob(connectorId: string): Promise<ConnectorJobState | null> {
@@ -67,8 +71,6 @@ export function useConnectorJob() {
   /** True when the last progress request failed; the job's state is then unknown, not "running". */
   const pollFailed = ref(false)
   let timerId: ReturnType<typeof setTimeout> | null = null
-  let seenJob = false
-  let pollsWithoutJob = 0
 
   function _clearTimer() {
     if (timerId !== null) {
@@ -91,12 +93,7 @@ export function useConnectorJob() {
       return
     }
     jobState.value = state
-
-    // #19714: a sync just started writes its job state after change detection, so an early "no job"
-    // isn't the end of it. Keep asking for a bounded time, until a job has been seen.
-    const waiting = state === null && !seenJob && pollsWithoutJob++ < FIRST_JOB_WAIT_POLLS
-    if (state !== null) seenJob = true
-    if ((state?.status === 'running' || waiting) && isPolling.value) {
+    if (state !== null && IN_FLIGHT.includes(state.status) && isPolling.value) {
       timerId = setTimeout(() => _poll(connectorId), POLL_INTERVAL_MS)
     } else {
       isPolling.value = false
@@ -105,8 +102,6 @@ export function useConnectorJob() {
 
   function start(connectorId: string) {
     _clearTimer()
-    seenJob = false
-    pollsWithoutJob = 0
     pollFailed.value = false
     isPolling.value = true
     _poll(connectorId)

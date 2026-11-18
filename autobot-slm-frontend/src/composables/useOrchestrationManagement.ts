@@ -19,7 +19,7 @@ import { ref, computed, readonly, reactive } from 'vue'
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '@autobot/ui'
 import type {
   ServiceDefinition,
   ServiceActionRequest,

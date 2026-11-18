@@ -7,38 +7,38 @@
 # Issue #682: Service management handlers
 
 - name: Restart backend service
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: restarted
-    daemon_reload: true
-  listen: "restart autobot services"
+  listen: restart autobot services
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-backend
+    restart_unit_daemon_reload: true
 
 - name: Restart AI stack service
-  ansible.builtin.systemd:
-    name: autobot-aistack
-    state: restarted
-    daemon_reload: true
-  listen: "restart autobot services"
+  listen: restart autobot services
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-aistack
+    restart_unit_daemon_reload: true
 
 - name: Restart NPU worker service
-  ansible.builtin.systemd:
-    name: autobot-npu
-    state: restarted
-    daemon_reload: true
-  listen: "restart autobot services"
+  listen: restart autobot services
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-npu
+    restart_unit_daemon_reload: true
 
 - name: Restart frontend service
-  ansible.builtin.systemd:
-    name: autobot-frontend
-    state: restarted
-    daemon_reload: true
-  listen: "restart autobot services"
+  listen: restart autobot services
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: autobot-frontend
+    restart_unit_daemon_reload: true
 
 - name: Restart Redis service
-  ansible.builtin.systemd:
-    name: redis-stack-server
-    state: restarted
-  listen: "restart redis"
+  listen: restart redis
+  ansible.builtin.include_tasks: ../../../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+  vars:
+    restart_unit_name: redis-stack-server
 
 - name: Reload systemd
   ansible.builtin.systemd:

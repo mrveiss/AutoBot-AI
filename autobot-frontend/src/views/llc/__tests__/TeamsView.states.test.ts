@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 // #18245: the Teams screen says loading, empty, couldn't-read and not-available apart, names members from
-// the company's member list, and nothing on it writes (read-only until the company-scoped write routes land, #14106).
+// the company's member list. The writes are in TeamsView.writes.test.ts (#14106).
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -16,7 +16,7 @@ const get = vi.fn()
 const route = reactive({ params: { companyId: 'coA' } })
 
 vi.mock('vue-router', () => ({ useRoute: () => route }))
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get }) }))
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, post: vi.fn(), delete: vi.fn() }) }))
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }))
@@ -31,9 +31,10 @@ const MEMBERS = [
   { user_id: 'u3', display_name: 'Alex Smith', role: 'guest', is_active: true },
   { user_id: 'u4', display_name: 'Left Person', role: 'member', is_active: false },
 ]
+const MEMBERS_REPLY = { members: MEMBERS, viewer_can_manage: true, viewer_role: 'owner', viewer_grantable_roles: [] }
 const TEAMS = { teams: [{ id: 't1', name: 'Platform', member_user_ids: ['u1', 'u2'] }, { id: 't2', name: 'Empty team', member_user_ids: [] }] }
 
-function reply(teams: unknown, members: unknown = MEMBERS) {
+function reply(teams: unknown, members: unknown = MEMBERS_REPLY) {
   get.mockImplementation((url: string) => {
     const out = url.endsWith('/teams') ? teams : members
     return out instanceof Error ? Promise.reject(out) : Promise.resolve(out)
@@ -64,15 +65,6 @@ describe('TeamsView (#18245)', () => {
     await flushPromises()
     expect(byId('teams-loading')?.textContent).toContain(en.llcTeams.loading)
     expect(byId('teams-empty')).toBeNull()
-  })
-
-  it('offers no create, delete, add or remove control', async () => {
-    reply(TEAMS)
-    await show()
-    await click(buttonNamed(en.llcTeams.viewMembers))
-    const labels = [...document.body.querySelectorAll('button')].map((b) => b.textContent?.trim())
-    expect(labels).toEqual([en.llcTeams.viewMembers, en.llcTeams.viewMembers])
-    expect(document.body.querySelector('input, select, [role="dialog"]')).toBeNull()
   })
 
   it('reads the company-scoped teams and members routes', async () => {
@@ -114,12 +106,20 @@ describe('TeamsView (#18245)', () => {
     await click(buttonNamed(en.llcTeams.viewMembers))
     const text = byId('team-members')?.textContent ?? ''
     expect(text.match(/Alex Smith/g)).toHaveLength(2)
-    expect(text).toContain('member')
-    expect(text).toContain('guest')
+    expect(text).toContain(en.llcMembers.role.member)
+    expect(text).toContain(en.llcMembers.role.guest)
   })
 
   it('shows members without invented names when the member list cannot be read', async () => {
     reply(TEAMS, httpError(500))
+    await show()
+    await click(buttonNamed(en.llcTeams.viewMembers))
+    expect(byId('teams-names-error')?.textContent).toContain(en.llcTeams.namesError)
+    expect(byId('team-members')?.textContent).toContain(en.llcTeams.unknownMember)
+  })
+
+  it('reads a legacy array members reply as a failed read, with the notice (#21096)', async () => {
+    reply(TEAMS, MEMBERS)
     await show()
     await click(buttonNamed(en.llcTeams.viewMembers))
     expect(byId('teams-names-error')?.textContent).toContain(en.llcTeams.namesError)

@@ -73,7 +73,10 @@ export default defineConfig(({ mode }) => {
       // Required for file: workspace packages — see #8482 / MVA-893.
       preserveSymlinks: true,
       // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
-      dedupe: autobotUiResolve().dedupe,
+      // #18550: also pin the xterm packages `@autobot/terminal` imports to this app's
+      // copy -- the plugin directory has no node_modules, so when its in-tree source
+      // is loaded by real path (a worktree test) they would not resolve at all.
+      dedupe: [...autobotUiResolve().dedupe, '@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
       alias: [
         ...autobotUiResolve().alias,
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },

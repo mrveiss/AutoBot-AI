@@ -164,6 +164,11 @@ CODE_GRAPH_COLLECTION = "autobot_code_graph"
 _CODE_GRAPH_DESCRIPTION = "Code graph: resolved call nodes and edges (record_type=node|edge)"
 
 
+def code_graph_collection_name() -> str:
+    """The code-graph collection's name, for a module that must recognise it but never open it (#17254)."""
+    return CODE_GRAPH_COLLECTION
+
+
 def get_code_graph_collection():
     """The code-graph collection (sync). Mirrors get_code_collection."""
     try:
@@ -177,6 +182,22 @@ def get_code_graph_collection():
         return collection
     except Exception as e:
         logger.error("ChromaDB code-graph connection failed: %s", e)
+        return None
+
+
+def get_existing_code_graph_collection():
+    """The code-graph collection if it already exists, else None. Never creates it.
+
+    For read paths: a query must not bring an empty collection into being, so a graph that
+    was never built stays "not indexed" instead of turning into "exists but empty".
+    """
+    try:
+        chroma_client = get_default_client(
+            db_path=str(chromadb_data_dir()), allow_reset=False, anonymized_telemetry=False
+        )
+        return chroma_client.get_collection(name=CODE_GRAPH_COLLECTION)
+    except Exception as e:
+        logger.info("ChromaDB %s collection not available for reading: %s", CODE_GRAPH_COLLECTION, e)
         return None
 
 

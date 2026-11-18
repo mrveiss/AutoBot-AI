@@ -40,18 +40,14 @@ from api.user_management.dependencies import (
     get_current_user,
     require_org_context,
 )
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.api.company_member_schemas import CompanyMembersResponse
+from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
-from llc.models.company import (
-    CompanyAncestor,
-    CompanyCreate,
-    CompanyRead,
-    CompanyTreeNode,
-    CompanyUpdate,
-)
+from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
     AssigneeType,
     ExternalPMType,
@@ -74,9 +70,7 @@ from llc.services.company import (
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
 from llc.services.member_standing import member_people, person_is_active, viewer_standing
-from llc.services.membership_service import (
-    MembershipService,
-)
+from llc.services.membership_service import MembershipService
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
@@ -349,7 +343,7 @@ async def activate_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.activate_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -379,7 +373,7 @@ async def suspend_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.suspend_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -410,7 +404,7 @@ async def offboard_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.offboard_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -439,7 +433,7 @@ async def archive_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
     except ValueError as exc:
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+        raise http_refusal(status.HTTP_409_CONFLICT, exc, scope="companies.archive_company") from None
     except Exception:
         await svc.session.rollback()
         raise
@@ -538,34 +532,33 @@ async def get_kb_ancestry_collections(
 # ------------------------------------------------------------------
 
 
-@router.get("/{company_id}/members")
+@router.get("/{company_id}/members", response_model=CompanyMembersResponse)
 async def list_members(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     members = await svc.list_members(session, str(company_id))
     # Resolve display names so the assignee/reviewer pickers show people, not UUIDs. `active` is #13956:
     # whether each member may still be given work. Carried, not filtered -- see `person_is_active`.
     names, active = await member_people(session, [m.user_id for m in members])
-    # #20073: the caller's own standing, computed here from the verified context so the view only reflects it.
     standing = await viewer_standing(session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin)
-    return [
-        {
-            **_to_member_read(m),
-            "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
-            # A membership whose user row is missing entirely resolves to
-            # False: nothing is known about them, and unknown must not read as
-            # available.
-            "is_active": active.get(m.user_id, False),
-            **standing,
-        }
-        for m in members
-    ]
+    return {
+        "members": [
+            {
+                **_to_member_read(m),
+                "display_name": resolve_display_name(names.get(m.user_id), None, str(m.user_id)),
+                # A membership whose user row is gone resolves to False: unknown must not read as available.
+                "is_active": active.get(m.user_id, False),
+            }
+            for m in members
+        ],
+        **standing,
+    }
 
 
 # ------------------------------------------------------------------
@@ -644,7 +637,7 @@ async def test_pm_config(
         health = await _test_pm_connectivity(pm_type, pm_config)
     except Exception as exc:
         # #17300: str(exc) to the caller leaked the decrypted pm_config URL and its credentials.
-        logger.warning("PM connectivity test failed for %s: %s", pm_type, exc, exc_info=True)
+        log_unexpected(logger, f"companies.test_pm_config {pm_type}", exc)
         return {"ok": False, "error": "Connectivity test failed; see server logs"}
     return {"ok": health.get("ok", False), "details": health}
 
@@ -985,7 +978,7 @@ def _compose_agent_node(
     Extracted from ``get_org_chart``'s per-row loop; the org-chart tests cover every field.
     """
     b_spent, b_total = _resolve_agent_budget(budget)
-    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config)
+    block_reason = run_block_reason(row.status, row.adapter_type, row.adapter_config, org_role=row.org_role)
     return OrgChartNode(
         id=row.agent_id,
         node_id=str(row.id),  # AgentOrgNode UUID PK (assignment keyspace, #10032)
@@ -1546,11 +1539,7 @@ async def search_agents(
 
         return {"agents": agents, "count": len(agents), "query": q}
     except Exception as e:
-        logger.exception("Agent search failed for company %s: %s", company_id, str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent search failed: {str(e)}",
-        )
+        raise logged_server_error(logger, "Agent search failed", f"company {company_id}", e) from e
 
 
 # Export endpoints (GH#8245)
@@ -1574,7 +1563,7 @@ async def export_template(
     # Issue #12233: tenant authz — exporting another tenant's structure is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_template(company_id)
+    payload = await svc.export_template(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
         content=payload,
@@ -1597,7 +1586,7 @@ async def export_snapshot(
     # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
     # cross-tenant data leak; caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    payload = await svc.export_snapshot(company_id)
+    payload = await svc.export_snapshot(company_id, actor=str(_current_user.get("id") or "system"))
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(
         content=payload,
