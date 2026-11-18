@@ -49,6 +49,7 @@ lists; the full sweep on every push to main does.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import subprocess  # nosec B404  # the sandboxed probe IS the subject of this guard
 import sys
@@ -63,7 +64,10 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.import_hermeticity_known_offenders import DOES_NOT_IMPORT, HAS_IMPORT_EFFECT
 
+from autobot_shared.log_dir import DEPRECATED_LOGS_DIR_ENV, LOGS_DIR_ENV
+
 _REPO_ROOT = repo_root()
+_LOG_DIR_ENVS = (LOGS_DIR_ENV, DEPRECATED_LOGS_DIR_ENV)
 _WORKFLOW = ".github/workflows/import-hermeticity-sweep.yml"
 _BASELINE_FILE = "repo_tests/import_hermeticity_known_offenders.py"
 
@@ -142,43 +146,9 @@ REACH = declare(
     # Measured, not felt (#16199 review): this population grows with ordinary work --
     # 504 modules at e47e4eb02 (~12 Jul), 556 at eef2b3a3e (~11 Aug), 608 on 10 Sep,
     # about 52 per 30 days. A band of 20 would fail an unrelated PR within days, so
-    # growth covers a little over a month of that rate; the floor sits just under
-    # today's count. Losing a whole root is caught separately: the population test
+    # growth covers a little over a month of that rate; the floor is computed from
+    # the base commit (#19676). Losing a whole root is caught separately: the population test
     # requires every root to contribute.
-    # Re-pinned 600 -> 601 (#16230): measured 661 non-test modules on the tree that
-    # merges this branch with main. Floor = population - growth. This branch adds
-    # four (api/analytics_cost_pricing.py, api/schemas_analytics_pricing.py,
-    # llm_shared/pricing/sync_cache_scheduler.py, autobot_shared/env_registry_pricing.py)
-    # against 60 of allowance that main had already spent 61 of, so the branch did
-    # not cause the red on its own.
-    # Re-pinned 601 -> 602: measured 662 non-test modules under api/ and
-    # autobot_shared/ across both backends. This branch adds exactly one
-    # (autobot_shared/security/path_http.py, the shared path->HTTP translation
-    # for #13579); the remaining growth is main's.
-    # Re-pinned 602 -> 604 (#17305, #17306, held here for #17307/#17308):
-    # measured 664 non-test modules against a 60 allowance main had spent down
-    # to 56. The in-scope additions are the shared-module pair
-    # autobot_shared/verifier_degradation.py and verifier_prompt.py, both
-    # extracted to keep their callers under the 600-line ceiling; this branch's
-    # own new modules live under llm_shared/, outside this scope, so the pin
-    # does not move again. Pinned at `population - growth`.
-    # #14881 pins 635 rather than main's 604. This branch adds a module under
-    # the counted roots (autobot_shared/code_review_enums.py, the shared home
-    # the four hand-copied enums moved to), and main's pin is `population -
-    # growth` -- zero headroom by construction, so one added module is enough.
-    # Second time this declaration has gone red that way in a night.
-    #
-    # 660 is mid-window, not the bottom. The block above records this population
-    # growing ~52 modules per 30 days, so a floor at the bottom of its band is
-    # red again within weeks of ordinary work.
-    #
-    # NO MEASURED NUMBERS HERE, deliberately: prose citing a population survives
-    # the rebase that changes it, which is how these floor files accumulated
-    # several stale narratives in one night -- the resolver owns the value and
-    # nothing owns the sentence. The arithmetic is in the commit message, which
-    # cannot drift from the tree it describes. Re-derive rather than trusting
-    # any figure written here.
-    floor=717,  # re-pinned mid-window: population 718, window [658, 718]
     what="non-test modules under api/ and autobot_shared/, both backends",
     growth=60,
 )
@@ -190,6 +160,7 @@ def _probe(path_entry: str, module: str, *, sandbox_dir: str) -> tuple[bool, str
         k: v
         for k, v in os.environ.items()
         if not k.startswith(("GIT_", "PYTHON"))  # inherited state must not decide the answer
+        and k not in _LOG_DIR_ENVS  # an inherited override would stand in for the default under test (#20894)
     }
     env["PYTHONPATH"] = os.pathsep.join([sandbox_dir, path_entry, str(_REPO_ROOT)])
     env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -496,9 +467,36 @@ def test_no_listed_paths_is_the_whole_population(tmp_path: Path) -> None:
 def test_the_plan_is_full_on_the_sweep_itself_and_none_when_no_swept_module_changed(tmp_path: Path) -> None:
     population = _plant(tmp_path)
     assert scope.plan(["autobot-backend/api/a.py", _BASELINE_FILE], population) == ("full", [])
-    unswept = ["autobot-backend/api/a_test.py", "autobot-backend/services/s.py", "requirements-ci.txt"]
+    unswept = ["autobot-backend/api/a_test.py", "autobot-backend/services/s.py", "docs/README.md"]
     assert scope.plan(["autobot-backend/api/a.py", *unswept], population) == ("subset", ["autobot-backend/api/a.py"])
     assert scope.plan(unswept, population) == ("none", [])
+
+
+_ENVIRONMENT_CHANGES = [
+    ".python-version",
+    "autobot_shared/pyproject.toml",
+    "constraints/shared.txt",
+    "requirements-ci.txt",
+    "requirements-ci/framework.txt",
+]
+
+
+@pytest.mark.parametrize("dependency", _ENVIRONMENT_CHANGES)
+def test_a_dependency_only_change_plans_the_full_sweep(tmp_path: Path, dependency: str) -> None:
+    """#21471: these seed the sweep's environment, so a PR changing only one must not plan ``none``."""
+    population = _plant(tmp_path)
+    assert scope.plan([dependency], population) == ("full", [])
+    assert scope.plan(["autobot-backend/services/s.py", dependency], population) == ("full", [])
+    doc = yaml.safe_load((_REPO_ROOT / _WORKFLOW).read_text(encoding="utf-8"))
+    filters = (doc.get(True) or doc.get("on") or {})["pull_request"]["paths"]
+    # Glob-aware: autobot_shared/pyproject.toml triggers through ``autobot_shared/**``.
+    assert any(fnmatch.fnmatchcase(dependency, f) for f in filters), f"{_WORKFLOW}: does not trigger on {dependency}"
+
+
+def test_every_environment_input_has_a_planning_case() -> None:
+    """A file added to ENVIRONMENT_FILES without a case above would go unproven."""
+    assert scope.ENVIRONMENT_FILES <= set(_ENVIRONMENT_CHANGES)
+    assert all(any(c.startswith(d) for c in _ENVIRONMENT_CHANGES) for d in scope.ENVIRONMENT_DIRS)
 
 
 def test_every_self_file_exists_and_triggers_the_workflow() -> None:

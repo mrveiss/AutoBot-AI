@@ -7,7 +7,8 @@
 Every test gets a disposable database created on the Postgres server named by
 ``AUTOBOT_MIGRATION_TEST_ADMIN_URL`` (an asyncpg URL with rights to CREATE
 DATABASE, e.g. ``postgresql+asyncpg://migtest:migtest@127.0.0.1:5499/postgres``).
-Without that variable the whole directory is skipped — these tests need a real
+Without that variable the whole directory is skipped, unless ``AUTOBOT_MIGRATION_TEST_REQUIRE_DB``
+is set (the Migration Gate sets it, #20080), in which case they fail instead — these tests need a real
 Postgres because the migration chain uses Postgres-only constructs
 (postgresql.ENUM, JSONB, TIMESTAMPTZ conversions).
 
@@ -28,6 +29,10 @@ from pathlib import Path
 import pytest
 
 ADMIN_URL_ENV = "AUTOBOT_MIGRATION_TEST_ADMIN_URL"
+# The Migration Gate sets this (#20080): a missing admin URL then FAILS the tests instead of
+# skipping them, so a lost URL turns the job red. Unset (a developer without Postgres), they skip.
+REQUIRE_DB_ENV = "AUTOBOT_MIGRATION_TEST_REQUIRE_DB"
+_TRUTHY = frozenset({"1", "true", "yes"})
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -39,10 +44,25 @@ def _admin_url() -> str | None:
     return os.environ.get(ADMIN_URL_ENV)
 
 
-requires_postgres = pytest.mark.skipif(
-    not os.environ.get(ADMIN_URL_ENV),
-    reason=f"{ADMIN_URL_ENV} not set — needs a disposable Postgres server",
-)
+def _db_required() -> bool:
+    return os.environ.get(REQUIRE_DB_ENV, "").strip().lower() in _TRUTHY
+
+
+def _missing_db_message() -> str:
+    return f"{ADMIN_URL_ENV} not set — needs a disposable Postgres server"
+
+
+@pytest.fixture
+def _require_admin_url():
+    """Fail (never skip) a requires_postgres test when the gate demands a database but has no URL."""
+    if not _admin_url():
+        pytest.fail(f"{_missing_db_message()} ({REQUIRE_DB_ENV} is set: a skip would hide the gate)")
+
+
+if _db_required():
+    requires_postgres = pytest.mark.usefixtures("_require_admin_url")
+else:
+    requires_postgres = pytest.mark.skipif(not os.environ.get(ADMIN_URL_ENV), reason=_missing_db_message())
 
 
 @pytest.fixture
@@ -50,6 +70,8 @@ async def fresh_db_url():
     """Create a throwaway database for one test; drop it afterwards."""
     admin_url = _admin_url()
     if not admin_url:
+        if _db_required():
+            pytest.fail(f"{_missing_db_message()} ({REQUIRE_DB_ENV} is set)")
         pytest.skip(f"{ADMIN_URL_ENV} not set")
 
     from sqlalchemy import text

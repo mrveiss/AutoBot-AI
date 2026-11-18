@@ -12,7 +12,7 @@ Issue #3286: Comprehensive Theming System
   <form class="preferences-panel" @submit.prevent>
     <div class="panel-header">
       <h3 class="panel-title">
-        <Icon name="sliders-h" size="md" />
+        <Icon name="cog" size="md" />
         {{ t('ui.preferences.title') }}
       </h3>
       <button
@@ -261,13 +261,13 @@ function handleReset() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
 }
 
-.panel-title i {
+.panel-title .icon {
   color: var(--color-primary);
 }
 
@@ -280,7 +280,7 @@ function handleReset() {
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -324,15 +324,16 @@ function handleReset() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.preference-label i {
-  font-size: var(--font-size-xs);
+.preference-label .icon {
+  width: var(--text-xs);
+  height: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -362,7 +363,7 @@ function handleReset() {
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -381,7 +382,7 @@ function handleReset() {
 
 .option-btn.active {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
   font-weight: 600;
 }
@@ -452,7 +453,7 @@ function handleReset() {
 }
 
 .color-label {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }

@@ -16,7 +16,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
 
 from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
@@ -24,13 +23,15 @@ from api.schemas_code import (
     VoiceListenResponse,
     VoiceTranscribeResponse,
 )
+from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission, get_current_user
+from auth_service_opt_in import service_opt_in
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
 from services.realtime_mcp_bridge import get_realtime_bridge
-from services.tts_client import get_tts_client
+from services.tts_client import TTSReferenceAudioRejected, get_tts_client
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -43,11 +44,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Realtime MCP tool endpoints (Issue #7343)
 # ---------------------------------------------------------------------------
-
-
-class _RealtimeToolCallRequest(BaseModel):
-    name: str
-    arguments: Dict[str, Any] = {}
 
 
 @realtime_router.get("/realtime/tools")
@@ -67,9 +63,8 @@ async def voice_realtime_list_tools(
     """
     role = current_user.get("role", "user")
     is_admin = is_admin_role(role)  # #12717: superadmin gets the admin realtime bridge
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     bridge = await get_realtime_bridge(is_admin=is_admin)
-    tools = await bridge.list_realtime_tools(user_id=str(user_id) if user_id else None, role=role)
+    tools = await bridge.list_realtime_tools(user_id=voice_bundle_user_id(current_user), role=role)
     return {
         "tools": [
             {
@@ -83,43 +78,7 @@ async def voice_realtime_list_tools(
     }
 
 
-@realtime_router.post("/realtime/tools/call")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="voice_realtime_call_tool",
-    error_code_prefix="VOICE",
-)
-async def voice_realtime_call_tool(
-    body: _RealtimeToolCallRequest,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-):
-    """Invoke an MCP tool by name and return the result envelope.
-
-    Accepts ``{name, arguments}`` and proxies the call through MCPClient.
-    Errors surface as ``{is_error: true, content: "<message>"}`` so the
-    Realtime model can self-correct verbally without the session crashing.
-    """
-    from fastapi import HTTPException
-
-    is_admin = is_admin_role(current_user.get("role"))  # #12717
-    _id = current_user.get("id")
-    user_id = _id if _id is not None else current_user.get("sub")
-    session_id = request.headers.get("X-Session-Id")
-
-    bridge = await get_realtime_bridge(is_admin=is_admin)
-    allowed_tools = await bridge.list_realtime_tools()
-    allowed_names = {t.name for t in allowed_tools}
-    if body.name not in allowed_names:
-        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
-
-    result = await bridge.call_tool(
-        body.name,
-        body.arguments,
-        user_id=user_id,
-        session_id=session_id,
-    )
-    return {"is_error": result.is_error, "content": result.content}
+# POST /realtime/tools/call lives in api/realtime_session.py only (#18721): one handler, one scoping.
 
 
 # #13215: chunked audio wire format for the HTTP synthesis routes.
@@ -380,6 +339,7 @@ async def voice_clone_api(
     operation="voice_list_api",
     error_code_prefix="VOICE",
 )
+@service_opt_in("slm-voice-proxy")
 async def voice_list_api():
     """List available voice profiles from TTS worker."""
     tts = get_tts_client()
@@ -399,12 +359,17 @@ async def voice_create_api(
 ):
     """Create a voice profile from reference audio."""
     # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.reference_wav import UNSUPPORTED_AUDIO_CODE, to_reference_wav  # noqa: PLC0415
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
-    audio_bytes = await read_capped_audio(audio)
-    tts = get_tts_client()
-    result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
-    return result
+    audio_bytes = await to_reference_wav(await read_capped_audio(audio), audio.filename)  # #18477: WAV for libsndfile
+    try:
+        return await get_tts_client().create_voice(name, audio_bytes, "ref.wav")
+    except TTSReferenceAudioRejected as exc:  # the worker could not decode it either: the client's file, not a 500
+        logger.warning("TTS worker rejected the reference audio: %s", exc)
+        raise HTTPException(
+            status_code=422, detail={"code": UNSUPPORTED_AUDIO_CODE, "message": "The audio could not be decoded"}
+        ) from exc
 
 
 @router.delete("/voices/{voice_id}", response_model=VoiceDeleteResponse)
@@ -548,7 +513,7 @@ async def voice_transcribe_api(
     # Function-local: the media package import chain is not inert (see _whisper_sync).
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
-    audio_bytes = await read_capped_audio(audio)
+    audio_bytes = await read_capped_audio(audio, name_from_mime=audio.content_type or "audio/webm")
     if not audio_bytes:
         return JSONResponse(
             status_code=400,

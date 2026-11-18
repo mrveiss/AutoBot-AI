@@ -44,9 +44,12 @@ from typing import Sequence, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.ssot_config import config
 from models.database import Node, Service, SystemdState
+from services.docker_proxy_client import is_compose_node, run_compose_service_action
+from services.journal_fetch import build_journal_command, fetch_service_journal
+from services.ssh_utils import ssh_destination
 from services.unit_names import validate_unit_name
 
 logger = logging.getLogger(__name__)
@@ -69,9 +72,18 @@ _RESPONSE_FLUSH_DELAY_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_FLUSH_DEL
 # value that is generous on a fast one.
 _RESTART_SSH_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_RESTART_SSH_TIMEOUT_SECONDS", 30.0, 1.0, 600.0)
 
+# Journal lines and characters (per section) a failed fleet action brings back from the node (#18714).
+# The retired `manage-service.yml` rescue block returned the same two pieces; both bounds are
+# env-backed because the useful size depends on how chatty the fleet's units are.
+_FAILURE_DIAG_JOURNAL_LINES = env_int_clamped("AUTOBOT_SLM_FAILURE_DIAG_JOURNAL_LINES", 30, 1, 500)
+_FAILURE_DIAG_MAX_CHARS = env_int_clamped("AUTOBOT_SLM_FAILURE_DIAG_MAX_CHARS", 4000, 200, 65536)
+
 
 def build_service_ssh_base_cmd(node: Node) -> list:
-    """The ssh argv for *node*, up to but not including the remote command. Ref: #1088."""
+    """The ssh argv for *node*, up to but not including the remote command. Ref: #1088.
+
+    Raises ``InvalidSshDestination`` for a user or host that ssh would read as an option (#18366).
+    """
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
     ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
@@ -87,7 +99,8 @@ def build_service_ssh_base_cmd(node: Node) -> list:
         ssh_key,
         "-p",
         str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
+        "--",
+        ssh_destination(ssh_user, node.ip_address),
     ]
 
 
@@ -110,6 +123,8 @@ class SystemctlResult:
 
 # systemctl verbs the executor will put on a remote command line (#18359).
 ALLOWED_SYSTEMCTL_ACTIONS = frozenset({"start", "stop", "restart", "status", "reload"})
+#: The actions that clear a start-limit park first (#20767).
+_RESETS_START_LIMIT = frozenset({"start", "restart"})
 
 
 def systemctl_remote_command(
@@ -119,6 +134,7 @@ def systemctl_remote_command(
     use_noninteractive_sudo: bool = True,
     tolerate_failure: bool = False,
     user_scope: bool = False,
+    no_pager: bool = False,
 ) -> str:
     """The ONE remote shell line for ``systemctl <action> -- <units>``: validated, units quoted (#18359).
 
@@ -126,12 +142,22 @@ def systemctl_remote_command(
     """
     if action not in ALLOWED_SYSTEMCTL_ACTIONS:
         raise ValueError(f"systemctl action not allowed: {action!r}")
+    if not units:
+        raise ValueError("systemctl needs at least one unit")
     quoted = " ".join(shlex.quote(validate_unit_name(unit)) for unit in units)
     tail = " || true" if tolerate_failure else ""
+    flags = " --no-pager" if no_pager else ""
+    # #20767: a unit parked by its start limit (#4090, #20764) refuses start and restart until the
+    # window passes. Every start or restart clears that first, as the SLM watchdog does; resetting a
+    # unit that isn't failed is a no-op, and the line's exit status stays the action's own.
+    # `systemctl` stays literal on every line, so the #18359 quoting and #18186 executor guards read each one.
+    resets = action in _RESETS_START_LIMIT
     if user_scope:
-        return f"systemctl --user {action} -- {quoted}{tail}"
+        reset = f"systemctl --user reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+        return f"{reset}systemctl --user {action}{flags} -- {quoted}{tail}"
     sudo = "sudo -n" if use_noninteractive_sudo else "sudo"
-    return f"{sudo} systemctl {action} -- {quoted}{tail}"
+    reset = f"{sudo} systemctl reset-failed -- {quoted} 2>/dev/null; " if resets else ""
+    return f"{reset}{sudo} systemctl {action}{flags} -- {quoted}{tail}"
 
 
 async def run_systemctl_over_ssh(
@@ -143,6 +169,7 @@ async def run_systemctl_over_ssh(
     timeout: float,
     merge_stderr: bool = False,
     tolerate_failure: bool = False,
+    no_pager: bool = False,
 ) -> SystemctlResult:
     """The ONE place an SSH `sudo [-n] systemctl <action> -- <units>` command is built and run (#18186).
 
@@ -154,7 +181,11 @@ async def run_systemctl_over_ssh(
     raises ValueError before anything is spawned. `tolerate_failure` appends exactly ` || true`.
     """
     remote_cmd = systemctl_remote_command(
-        action, units, use_noninteractive_sudo=use_noninteractive_sudo, tolerate_failure=tolerate_failure
+        action,
+        units,
+        use_noninteractive_sudo=use_noninteractive_sudo,
+        tolerate_failure=tolerate_failure,
+        no_pager=no_pager,
     )
     ssh_cmd = [*ssh_base_cmd, remote_cmd]
     process = await asyncio.create_subprocess_exec(
@@ -166,12 +197,56 @@ async def run_systemctl_over_ssh(
     return SystemctlResult(process.returncode, stdout, stderr)
 
 
+async def _diagnostic_status(node: Node, service_name: str) -> str:
+    """`systemctl status --no-pager` of the unit, over the same SSH helper the action used."""
+    result = await run_systemctl_over_ssh(
+        build_service_ssh_base_cmd(node),
+        "status",
+        [service_name],
+        use_noninteractive_sudo=True,
+        timeout=_RESTART_SSH_TIMEOUT_SECONDS,
+        merge_stderr=True,
+        no_pager=True,
+    )
+    return result.stdout.decode("utf-8", errors="replace")  # non-zero is normal for a failed unit
+
+
+async def _diagnostic_journal(node: Node, service_name: str) -> str:
+    """The last `_FAILURE_DIAG_JOURNAL_LINES` journal lines, through the shared journal fetch."""
+    remote = build_journal_command(service_name, _FAILURE_DIAG_JOURNAL_LINES)
+    ok, text = await fetch_service_journal(build_service_ssh_cmd(node, remote), service_name)
+    return text if ok else f"unavailable: {text}"
+
+
+async def _diagnostic_section(title: str, fetch, node: Node, service_name: str) -> str:
+    """One bounded section; a failing fetch is logged and named in the text, never raised."""
+    try:
+        body = (await fetch(node, service_name))[-_FAILURE_DIAG_MAX_CHARS:]
+    except Exception as exc:
+        logger.exception("Failure diagnostics (%s) for %s on %s failed", title, service_name, node.hostname)
+        body = f"unavailable: {type(exc).__name__}"
+    return f"== {title} ==\n{body.rstrip()}"
+
+
+async def fetch_failure_diagnostics(node: Node, service_name: str) -> str:
+    """`systemctl status` and recent journal of *service_name* on *node*, for a failed action (#18714).
+
+    Replaces the retired `manage-service.yml` rescue block. Never raises: each section that cannot
+    be fetched says so in its own text, so the caller's original error is never masked.
+    """
+    status = await _diagnostic_section("systemctl status", _diagnostic_status, node, service_name)
+    journal = await _diagnostic_section("journalctl", _diagnostic_journal, node, service_name)
+    return f"{status}\n{journal}"
+
+
 async def run_ansible_service_action(
     node: Node,
     service_name: str,
     action: str,
 ) -> Tuple[bool, str]:
     """Run SSH command to control a service via systemctl. Ref: #1088."""
+    if is_compose_node(node):  # #20629: a container has no SSH or systemd
+        return await run_compose_service_action(node, service_name, action)
     ssh_base_cmd = build_service_ssh_base_cmd(node)  # outside the try, as before: a bad node row raises
 
     try:
@@ -305,6 +380,11 @@ async def _load_services(db: AsyncSession, node_id: str, service_names: list) ->
     return [by_name[name] for name in service_names if name in by_name]
 
 
+async def wait_for_response_flush() -> None:
+    """Let the HTTP response flush before a restart that may kill this process (#816, #17455)."""
+    await asyncio.sleep(_RESPONSE_FLUSH_DELAY_SECONDS)
+
+
 async def restart_slm_services(node_id: str, service_names: list) -> None:
     """Restart the deferred SLM services on *node_id*, owning the session used.
 
@@ -317,7 +397,7 @@ async def restart_slm_services(node_id: str, service_names: list) -> None:
         node_id: Node whose SLM services are being restarted
         service_names: Service names, in the order they must be restarted
     """
-    await asyncio.sleep(_RESPONSE_FLUSH_DELAY_SECONDS)  # let the response flush (#816)
+    await wait_for_response_flush()  # #816
 
     from services.database import db_service
 

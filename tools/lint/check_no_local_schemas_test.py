@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _HOOK_PATH = Path(__file__).parent / "check_no_local_schemas.py"
 _spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK_PATH)
@@ -290,7 +290,7 @@ def test_main_returns_0_for_empty_argv(tmp_path: Path) -> None:
 # pass whatever the hunk parser did.
 # ---------------------------------------------------------------------------
 
-E = scrubbed_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
+E = isolated_git_env()  # #15246: an ambient GIT_DIR would point these git calls at the live repo
 
 LEGACY = """\
 from pydantic import BaseModel

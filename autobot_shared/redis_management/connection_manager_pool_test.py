@@ -24,6 +24,7 @@ def _bare_manager() -> RedisConnectionManager:
     m = object.__new__(RedisConnectionManager)
     m._async_pools = {}
     m._async_pool_tasks = {}
+    m._configs = {}
     m._async_lock = asyncio.Lock()
     return m
 
@@ -100,7 +101,7 @@ class TestEnsureAsyncPoolLockScope:
         calls = {"n": 0}
         pool = object()
 
-        async def _slow_create(name):
+        async def _slow_create(name, decode_responses=None):
             calls["n"] += 1
             await asyncio.sleep(0.1)
             return pool
@@ -118,7 +119,7 @@ class TestEnsureAsyncPoolLockScope:
         m = _bare_manager()
         pool = object()
 
-        async def _slow_create(name):
+        async def _slow_create(name, decode_responses=None):
             await asyncio.sleep(0.2)
             return pool
 
@@ -137,7 +138,7 @@ class TestEnsureAsyncPoolLockScope:
         m = _bare_manager()
         started = asyncio.Event()
 
-        async def _slow_create(name):
+        async def _slow_create(name, decode_responses=None):
             started.set()
             await asyncio.sleep(0.2)
             return object()
@@ -155,7 +156,7 @@ class TestEnsureAsyncPoolLockScope:
         attempts = {"n": 0}
         pool = object()
 
-        async def _flaky_create(name):
+        async def _flaky_create(name, decode_responses=None):
             attempts["n"] += 1
             if attempts["n"] == 1:
                 raise RedisConfigurationError("empty host")
@@ -183,7 +184,7 @@ class TestEnsureAsyncPoolLockScope:
         await task  # completed, but registry never written (waiter "not yet run")
         m._async_pool_tasks["main"] = task
 
-        async def _must_not_run(name):  # pragma: no cover - failure path
+        async def _must_not_run(name, decode_responses=None):  # pragma: no cover - failure path
             raise AssertionError("duplicate creation spawned")
 
         m._create_async_pool = _must_not_run

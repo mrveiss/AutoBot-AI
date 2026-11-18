@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from autobot_shared.retry_mechanism import RetryStrategy
 from llm_shared.optimization.cloud_batcher import CloudRequestBatcher
 from llm_shared.optimization.prompt_compressor import (
     CompressionConfig,
@@ -23,7 +24,6 @@ from llm_shared.optimization.rate_limiter import (
     RateLimitConfig,
     RateLimitError,
     RateLimitHandler,
-    RetryStrategy,
 )
 from llm_shared.optimization.router import (
     LLMServingOptimizationCategory,
@@ -206,7 +206,7 @@ class TestRateLimitHandler:
         """Should initialize with default config."""
         handler = RateLimitHandler()
         assert handler.config.max_retries == 3
-        assert handler.config.strategy == RetryStrategy.EXPONENTIAL
+        assert handler.config.strategy == RetryStrategy.EXPONENTIAL_BACKOFF
 
     @pytest.mark.asyncio
     async def test_execute_with_retry_success(self):

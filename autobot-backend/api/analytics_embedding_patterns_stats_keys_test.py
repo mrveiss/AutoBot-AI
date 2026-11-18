@@ -35,6 +35,7 @@ import pytest
 
 from api.analytics_embedding_patterns import EmbeddingPatternAnalyzer
 from api.schemas_analytics import EmbeddingUsageRequest
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 # text-embedding-3-small bills 0.02 USD / 1M tokens with no compute cost, so
 # 1500 tokens is a small but strictly non-zero figure — exactly the kind of
@@ -42,37 +43,6 @@ from api.schemas_analytics import EmbeddingUsageRequest
 MODEL = "text-embedding-3-small"
 TOKENS = 1500
 EXPECTED_COST_PER_OP = TOKENS / 1_000_000 * 0.02
-
-
-class _FakePipeline:
-    """Buffered pipeline with redis-py asyncio's awaitable-command shape."""
-
-    def __init__(self, store):
-        self._store = store
-        self._queued = []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc_info):
-        return False
-
-    async def hincrby(self, key, field, amount=1):
-        self._queued.append(lambda: self._store.raw_hincrby(key, field, amount))
-
-    async def hincrbyfloat(self, key, field, amount):
-        self._queued.append(lambda: self._store.raw_hincrbyfloat(key, field, amount))
-
-    async def hgetall(self, key):
-        self._queued.append(lambda: self._store.raw_hgetall(key))
-
-    async def expire(self, key, ttl):
-        self._queued.append(lambda: True)
-
-    async def execute(self):
-        results = [op() for op in self._queued]
-        self._queued.clear()
-        return results
 
 
 class _FakeAsyncRedis:
@@ -88,18 +58,18 @@ class _FakeAsyncRedis:
         self._hashes = {}
         self._decoded = decoded
 
-    # -- raw storage ---------------------------------------------------
-    def raw_hincrby(self, key, field, amount):
+    # -- storage (the canonical pipeline applies queued commands to these) -----
+    async def hincrby(self, key, field, amount):
         bucket = self._hashes.setdefault(key, {})
         bucket[field] = str(int(bucket.get(field, "0")) + amount)
         return int(bucket[field])
 
-    def raw_hincrbyfloat(self, key, field, amount):
+    async def hincrbyfloat(self, key, field, amount):
         bucket = self._hashes.setdefault(key, {})
         bucket[field] = repr(float(bucket.get(field, "0")) + amount)
         return float(bucket[field])
 
-    def raw_hgetall(self, key):
+    async def hgetall(self, key):
         # scan() hands back bytes keys on a non-decoding client, and redis-py
         # accepts either form for HGETALL regardless of decode_responses.
         if isinstance(key, bytes):
@@ -112,7 +82,10 @@ class _FakeAsyncRedis:
 
     # -- client surface ------------------------------------------------
     def pipeline(self):
-        return _FakePipeline(self)
+        return FakeAsyncPipeline(self)
+
+    async def expire(self, key, ttl):
+        return True
 
     async def setex(self, key, ttl, value):
         return True

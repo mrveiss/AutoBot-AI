@@ -252,7 +252,7 @@ def test_no_duplicate_class_names_across_schema_modules() -> None:
 def test_no_new_hardcoded_status_strings_in_agents() -> None:
     """Agent code must not add new 'status': 'success' / 'error' literals (#6703).
 
-    The AgentStatus enum in agents/payloads.py is the canonical source.
+    The AgentOutcome enum in agents/payloads.py is the canonical source.
     Hardcoded status strings bypass the type system — the structural cause of
     #6648 / #6650.
 
@@ -276,7 +276,7 @@ def test_no_new_hardcoded_status_strings_in_agents() -> None:
     EXCLUDED: set[str] = {"agents/payloads.py"}
 
     # Baseline total violation count at the time payloads.py was introduced (#6703).
-    # Should only decrease as files are migrated to AgentStatus. Never increase.
+    # Should only decrease as files are migrated to AgentOutcome. Never increase.
     KNOWN_BASELINE: int = 85
 
     backend_root = Path(__file__).resolve().parent.parent
@@ -297,66 +297,79 @@ def test_no_new_hardcoded_status_strings_in_agents() -> None:
     assert len(violations) <= KNOWN_BASELINE, (
         f"New hardcoded status string(s) added to agent code (#6703). "
         f"Count {len(violations)} > baseline {KNOWN_BASELINE}. "
-        f"Use AgentStatus enum from agents/payloads.py instead.\n"
+        f"Use AgentOutcome enum from agents/payloads.py instead.\n"
         f"All current violations:\n  " + "\n  ".join(violations)
     )
 
 
-def test_strict_mode_raises_on_router_import_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AUTOBOT_FEATURE_ROUTERS_STRICT=1 raises RuntimeError when any router import fails (#6690).
-
-    Verifies the strict-boot path end-to-end:
-    - ImportError injected for the first configured feature-router module.
-    - Config patched to strict=1 (default in dev/CI after #6690 fix).
-    - load_feature_routers() must raise RuntimeError mentioning AUTOBOT_FEATURE_ROUTERS_STRICT=1.
-    """
-    import importlib as _importlib
-    import importlib.util
+def _stub_router_registry_packages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the parent packages (with __path__) so their __init__, which may fail locally, never runs."""
     import sys
     import types
     from pathlib import Path
 
-    # initialization/__init__.py transitively imports chat_history which may fail
-    # in certain local envs. Pre-populate parent-package stubs with __path__ set
-    # so the import machinery can find submodules without running __init__.py.
-    _backend_root = Path(__file__).resolve().parent.parent
-    _pkg_dirs = {
-        "initialization": str(_backend_root / "initialization"),
-        "initialization.router_registry": str(_backend_root / "initialization/router_registry"),
-    }
-    for _pkg, _pkg_dir in _pkg_dirs.items():
-        if _pkg not in sys.modules:
-            _stub = types.ModuleType(_pkg)
-            _stub.__path__ = [_pkg_dir]  # type: ignore[attr-defined]
-            _stub.__package__ = _pkg
-            monkeypatch.setitem(sys.modules, _pkg, _stub)
+    backend_root = Path(__file__).resolve().parent.parent
+    for pkg in ("initialization", "initialization.router_registry"):
+        if pkg not in sys.modules:
+            stub = types.ModuleType(pkg)
+            stub.__path__ = [str(backend_root / pkg.replace(".", "/"))]  # type: ignore[attr-defined]
+            stub.__package__ = pkg
+            monkeypatch.setitem(sys.modules, pkg, stub)
 
+
+def _feature_routers_with_failing(monkeypatch: pytest.MonkeyPatch, router_name: str, strict: str):
+    """feature_routers configured with ONE synthetic router, *router_name*, whose import fails.
+
+    #14207: the import lives in the shared loader, so that is where the failure is injected;
+    patching feature_routers' own `importlib` would silently no-op.
+    """
+    import importlib as _importlib
+
+    _stub_router_registry_packages(monkeypatch)
     feature_routers = _importlib.import_module("initialization.router_registry.feature_routers")
-
-    # Narrow FEATURE_ROUTER_CONFIGS to one synthetic entry so load_feature_routers()
-    # doesn't try to import the entire real router list (many of which have
-    # pre-existing Python-version or dependency issues in the local test env).
-    _fake_module = "initialization._test_fake_router"
-    monkeypatch.setattr(
-        feature_routers,
-        "FEATURE_ROUTER_CONFIGS",
-        [(_fake_module, "/fake", ["fake"], "fake_router")],
-    )
+    fake = "initialization._test_fake_router"
+    monkeypatch.setattr(feature_routers, "FEATURE_ROUTER_CONFIGS", [(fake, "/fake", ["fake"], router_name)])
 
     def _failing_import(name: str, *args, **kwargs):
-        if name == _fake_module:
+        if name == fake:
             raise ImportError(f"injected failure for {name}")
         return _importlib.import_module(name, *args, **kwargs)
 
-    monkeypatch.setenv("AUTOBOT_FEATURE_ROUTERS_STRICT", "1")
-    monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", "1")
-    _fake_importlib = type("_FakeImportlib", (), {"import_module": staticmethod(_failing_import)})()
-    # #14207: the import moved to the shared loader every registry now uses, so
-    # that is where the failure has to be injected. Patching feature_routers'
-    # own `importlib` would silently no-op — the module no longer imports it,
-    # and the fake would never be consulted.
-    _loader = _importlib.import_module("initialization.router_registry.loader")
-    monkeypatch.setattr(_loader, "importlib", _fake_importlib)
+    monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", strict)
+    loader = _importlib.import_module("initialization.router_registry.loader")
+    # The synthetic failure is recorded in the shared registry; restore it after the test (#19660).
+    monkeypatch.setitem(loader._LOAD_RESULTS, "feature", loader.get_load_results("feature"))
+    monkeypatch.setattr(loader, "importlib", type("_Fake", (), {"import_module": staticmethod(_failing_import)})())
+    return feature_routers, loader
 
+
+def test_strict_mode_raises_on_router_import_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AUTOBOT_FEATURE_ROUTERS_STRICT=1 raises when any router import fails, optional or not (#6690)."""
+    feature_routers, _ = _feature_routers_with_failing(monkeypatch, "fake_router", "1")
     with pytest.raises(RuntimeError, match="AUTOBOT_FEATURE_ROUTERS_STRICT=1"):
         feature_routers.load_feature_routers()
+
+
+def test_strict_mode_raises_on_required_router_import_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """In strict mode a required security router aborts too, naming the router and its failure (#19319)."""
+    feature_routers, _ = _feature_routers_with_failing(monkeypatch, "permissions", "1")
+    with pytest.raises(RuntimeError, match=r"required security .*permissions .*injected failure"):
+        feature_routers.load_feature_routers()
+
+
+def test_lenient_mode_aborts_on_required_security_router_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """STRICT=0 does not cover a security router: its failed import refuses startup (#19319)."""
+    feature_routers, _ = _feature_routers_with_failing(monkeypatch, "run_jwt", "0")
+    with pytest.raises(RuntimeError, match=r"run_jwt \(initialization\._test_fake_router\): .*injected failure"):
+        feature_routers.load_feature_routers()
+
+
+def test_lenient_mode_skips_and_logs_an_optional_router_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """STRICT=0 keeps the #6690 degraded start for an optional router: skipped, logged at ERROR."""
+    feature_routers, loader = _feature_routers_with_failing(monkeypatch, "marketplace", "0")
+    errors: list = []
+    monkeypatch.setattr(loader.logger, "error", lambda msg, *a, **k: errors.append(msg % a))
+    monkeypatch.setattr(feature_routers, "_publish_load_results_to_redis", lambda results: None)
+    assert feature_routers.load_feature_routers() == []
+    assert [r["name"] for r in feature_routers.get_feature_router_load_results() if not r["loaded"]] == ["marketplace"]
+    assert any("marketplace" in e for e in errors), errors

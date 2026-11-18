@@ -189,7 +189,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function closeSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<unknown>(`${getApiBase()}/browser/close`, { session_id: sessionId })
+      await ApiClient.delete<unknown>(`${getApiBase()}/research-browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       if (currentSession.value?.id === sessionId) {
         currentSession.value = null
@@ -229,7 +229,11 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function getSession(sessionId: string): Promise<BrowserSession | null> {
     try {
-      const data = await ApiClient.get<BrowserSession>(`${getApiBase()}/browser/session/${sessionId}`)
+      // Handler returns the bare status dict (JSONResponse), not the DataResponse envelope.
+      const record = await ApiClient.get<Record<string, unknown>>(
+        `${getApiBase()}/research-browser/session/${sessionId}/status`,
+      )
+      const data = mapSessionRecord(record)
       currentSession.value = data
       logger.debug('Fetched session details:', data)
       return data
@@ -343,7 +347,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function deleteSession(sessionId: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.delete<unknown>(`${getApiBase()}/browser/session/${sessionId}`)
+      await ApiClient.delete<unknown>(`${getApiBase()}/research-browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       logger.debug('Deleted session:', sessionId)
       return true

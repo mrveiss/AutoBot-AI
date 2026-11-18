@@ -13,22 +13,23 @@ import logging
 import time
 from typing import Dict
 
+from gui.utils.app_config import DEFAULT_WORKER_PORT
+from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
+    QComboBox,
+    QFrame,
+    QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSpinBox,
-    QComboBox,
-    QProgressBar,
     QTextEdit,
-    QGridLayout,
-    QFrame,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThread
-from PySide6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -128,9 +129,9 @@ class BenchmarkWorker(QThread):
 class BenchmarkWidget(QWidget):
     """Widget for running and displaying NPU benchmarks"""
 
-    def __init__(self, api_url: str = "http://localhost:8082", parent=None):
+    def __init__(self, api_url: str | None = None, parent=None):
         super().__init__(parent)
-        self.api_url = api_url
+        self.api_url = api_url or f"http://localhost:{DEFAULT_WORKER_PORT}"
         self._benchmark_worker: BenchmarkWorker | None = None
         self._last_results: Dict | None = None
         self.init_ui()

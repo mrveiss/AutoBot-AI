@@ -41,6 +41,9 @@ CASES = [
     ("8 DIVIDED BY 2 = ?", 4),  # the old OCR-solver copy returned None here
     ("5 / 0 = ?", None),
     ("enter the captcha", None),
+    ("1234567890 + 1 = ?", None),  # #18476: 10-digit operand is rejected, not truncated
+    ("1 + 1234567890 = ?", None),
+    ("123456789 + 1 = ?", 123456790),  # 9 digits is the cap
 ]
 
 

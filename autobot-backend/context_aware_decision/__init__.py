@@ -20,7 +20,7 @@ Usage:
     from context_aware_decision import (
         ContextAwareDecisionSystem,
         DecisionType,
-        ConfidenceLevel,
+        DecisionConfidenceLevel,
         context_aware_decision_system,
     )
 
@@ -65,8 +65,8 @@ from .types import (
     HIGH_RESOURCE_CONSTRAINT_TYPES,
     HIGH_RISK_ACTIONS,
     MITIGATION_REQUIRED_RISK_LEVELS,
-    ConfidenceLevel,
     ContextType,
+    DecisionConfidenceLevel,
     DecisionType,
 )
 
@@ -75,7 +75,7 @@ context_aware_decision_system = ContextAwareDecisionSystem()
 
 __all__ = [
     # Types and enums
-    "ConfidenceLevel",
+    "DecisionConfidenceLevel",
     "ContextType",
     "DecisionType",
     "HIGH_RESOURCE_CONSTRAINT_TYPES",

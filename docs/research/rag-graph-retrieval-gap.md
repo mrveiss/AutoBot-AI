@@ -114,3 +114,17 @@ Searched open **and** closed issues, 3–6 queries per finding.
 | F9 embedding-model cache key | **new** (#17967 is a different embedding bug) | **#18143** (under #17312) |
 | F10 hybrid weight literals | **fits** #18094 | comment posted on #18094 |
 | Population | **covered** — #17588, #18129, #17537 Phase 2 | none |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16665 — security(kb): the knowledge search and RAG routes filter results by the caller's access
+- #17526 — Umbrella: knowledge/memory is the relation system of record and every module a consumer — today nothing outside knowledge calls it
+- #18094 — tech-debt: forked env defaults, shadowed constants and same-name functions — the remainder after #17419/#16177/#18093
+- #18139 — bug(rag): PPR is wired with the mesh adapter whose get_neighbors signature differs — mesh retrieval raises TypeError on first use (closed)
+- #18140 — bug(memory): security memory integration calls traverse_relations, which the memory graph does not have (closed)
+- #18141 — tech-debt(rag): graph-blended retrieval paths fork the score blend, config, reranker weights and stale filter
+- #18142 — tech-debt(kb): chunk identity is derived eight ways, so graph nodes cannot reliably join to vector chunks
+- #18143 — bug(kb): embedding cache key and generator resolve the embedding model from different config fields (closed)
+- #18144 — feat(rag): chat retrieval has no graph view — three graph retrievers exist, all off the default path
