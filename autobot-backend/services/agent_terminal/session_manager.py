@@ -25,12 +25,16 @@ from .pending_claim import drop_pending_slot, hold_pending_slot
 from .redis_usability import usable_redis
 from .session_state import (
     APPROVAL_PENDING_SESSION_TTL,
+    ApprovalStateUnavailableError,
     apply_record,
     claim_decision,
+    close_record,
+    conversation_pointer_key,
     pending_decision_id,
     persist_if_current,
     read_record,
     session_from_record,
+    session_is_closed,
     session_key,
 )
 
@@ -234,6 +238,8 @@ class SessionManager:
             refreshed = await self._refresh_from_redis(session_id, cached)
             if refreshed:
                 return refreshed
+            async with self._sessions_lock:
+                cached = self.sessions.get(session_id)  # a refresh may have dropped a closed session
         if cached:
             return cached
 
@@ -253,7 +259,7 @@ class SessionManager:
             logger.warning("Could not read session %s from Redis: %s", session_id, e)
             return cached
         if data is None:
-            return cached
+            return await self._cached_unless_closed(session_id, cached)
         if cached:
             apply_record(cached, data)
             return cached
@@ -262,6 +268,21 @@ class SessionManager:
             session = self.sessions.setdefault(session_id, session)
         logger.info("Loaded session %s from Redis persistence", session_id)
         return session
+
+    async def _cached_unless_closed(self, session_id: str, cached):
+        """No record: a session closed on another worker is dropped from this one's cache (#21202)."""
+        if cached is None:
+            return None
+        try:
+            closed = await session_is_closed(self.redis_client, session_id)
+        except ApprovalStateUnavailableError as e:
+            logger.warning("Could not tell whether session %s was closed: %s", session_id, e)
+            return cached
+        if not closed:
+            return cached
+        async with self._sessions_lock:
+            self.sessions.pop(session_id, None)
+        return None
 
     async def _owner_for(self, conversation_id: str | None, owner: str | None) -> str | None:
         """The session's owner: ``owner`` if it owns the conversation, else the conversation's (#17422).
@@ -353,33 +374,35 @@ class SessionManager:
         return sessions
 
     async def close_session(self, session_id: str) -> bool:
-        """
-        Close an agent terminal session.
+        """Close an agent terminal session, on the store whether or not this worker cached it (#21202).
 
-        Args:
-            session_id: Session to close
+        With Redis the tombstone and the record's removal land first, in one step; a failure there is
+        ``False`` and the cached copy stays, so nothing is marked closed that the store still holds open.
 
         Returns:
-            True if closed successfully
+            True if the session is closed
         """
-        # CRITICAL: Atomic check-and-delete with lock to prevent race conditions
+        redis_closed = usable_redis(self.redis_client)
+        if redis_closed and not await self._close_in_store(session_id):
+            return False
         async with self._sessions_lock:
-            if session_id in self.sessions:
-                del self.sessions[session_id]
-            else:
-                return False
-
+            cached = self.sessions.pop(session_id, None)
+        if cached is None and not redis_closed:
+            return False
         logger.info("Closed agent terminal session %s", session_id)
+        return True
 
-        # Remove from Redis (outside lock since Redis has its own concurrency control)
-        if self.redis_client:
-            try:
-                key = f"agent_terminal:session:{session_id}"
-                await self.redis_client.delete(key)
-                await drop_pending_slot(self.redis_client, session_id)
-            except Exception as e:
-                logger.error("Failed to remove session from Redis: %s", e)
-
+    async def _close_in_store(self, session_id: str) -> bool:
+        """Tombstone the session in Redis; ``False`` if the store did not take it."""
+        try:
+            await close_record(self.redis_client, session_id)
+        except Exception as e:  # noqa: BLE001 - the caller reports the session as not closed
+            logger.error("Could not close session %s in Redis; it stays open: %s", session_id, e)
+            return False
+        try:
+            await drop_pending_slot(self.redis_client, session_id)
+        except Exception as e:  # noqa: BLE001 - the session is closed; the slot's TTL frees it
+            logger.error("Session %s is closed but its pending slot was not freed: %s", session_id, e)
         return True
 
     async def _persist_session(self, session: AgentTerminalSession) -> bool:
@@ -406,19 +429,8 @@ class SessionManager:
             if not await persist_if_current(self.redis_client, session, ttl):
                 return await self._refuse_stale_persist(session)
 
-            # #13478: a companion pointer so the approve path can still find the
-            # conversation after the session itself is gone. `get_session` takes
-            # a session_id and `_restore_pending_approval` needs a
-            # conversation_id, so without this the chat-history restore — which
-            # exists and works — is unreachable from the approve endpoint.
-            if session.has_pending_approval() and session.conversation_id:
-                await self.redis_client.setex(
-                    f"agent_terminal:approval_conversation:{session.session_id}",
-                    APPROVAL_PENDING_SESSION_TTL,
-                    session.conversation_id,
-                )
-            if session.has_pending_approval():
-                await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
+            if not await self._write_pending_pointers(session, ttl):
+                return False
 
             logger.debug("Persisted session %s to Redis with key %s (ttl=%ds)", session.session_id, key, ttl)
 
@@ -426,6 +438,28 @@ class SessionManager:
         except Exception as e:
             logger.error("Failed to persist session to Redis: %s", e)
             return False
+
+    async def _write_pending_pointers(self, session: AgentTerminalSession, ttl: int) -> bool:
+        """Write the pending slot and the conversation pointer of a saved approval (#13478).
+
+        The pointer lets the approve endpoint reach the chat-history restore once the session is gone.
+        A close can land between the save and these writes, so the tombstone is read again afterwards and
+        whatever was written is taken back (#21202); a close that lands later removes them itself.
+        """
+        if not session.has_pending_approval():
+            return True
+        if session.conversation_id:
+            await self.redis_client.setex(
+                conversation_pointer_key(session.session_id), APPROVAL_PENDING_SESSION_TTL, session.conversation_id
+            )
+        await hold_pending_slot(self.redis_client, session.session_id, session.get_pending_command_id(), ttl)
+        if not await session_is_closed(self.redis_client, session.session_id):
+            return True
+        await self.redis_client.delete(conversation_pointer_key(session.session_id))
+        await drop_pending_slot(self.redis_client, session.session_id)
+        async with self._sessions_lock:
+            self.sessions.pop(session.session_id, None)
+        return False
 
     async def persist_control(self, session: AgentTerminalSession, target) -> Metadata | None:
         """Move *session* to the control state *target* and save it so other workers see it (#20674).
@@ -442,6 +476,11 @@ class SessionManager:
 
     async def _refuse_stale_persist(self, session: AgentTerminalSession) -> bool:
         """The record moved on since this copy was read (#20674): keep it, take it as the copy, report no save."""
+        if await session_is_closed(self.redis_client, session.session_id):
+            logger.warning("Session %s was closed on another worker; dropping this copy", session.session_id)
+            async with self._sessions_lock:
+                self.sessions.pop(session.session_id, None)
+            return False
         logger.warning("Session %s changed in Redis since this copy was read; not overwriting it", session.session_id)
         await self._refresh_from_redis(session.session_id, session)
         return False
@@ -472,7 +511,7 @@ class SessionManager:
             return None
         try:
             raw = await asyncio.wait_for(
-                self.redis_client.get(f"agent_terminal:approval_conversation:{session_id}"),
+                self.redis_client.get(conversation_pointer_key(session_id)),
                 timeout=2.0,
             )
         except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001

@@ -56,7 +56,7 @@ def _recorded_author(method: str, path: str, json, *, internal_key: bool) -> str
     with (
         patch("api.agent_config.ConfigRevisionService", revisions),
         patch("api.agent_config.ConfigService.clear_cache"),
-        patch("config.unified_config_manager", _fake_unified_config_manager()),
+        patch("config.config_manager", _fake_unified_config_manager()),
         patch(
             "api.agent_config.get_db_session",
             return_value=MagicMock(__aenter__=AsyncMock(return_value=MagicMock()), __aexit__=AsyncMock()),

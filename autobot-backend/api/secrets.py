@@ -46,6 +46,7 @@ from api.schemas_system import (
     SecretUpdateRequest,
 )
 from api.secrets_audit import audit_secret_op, remember_actor
+from api.secrets_delete_outcome import record_delete_failure
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
@@ -58,6 +59,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import REFUSAL_TEXT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config as ssot_config
@@ -425,7 +427,7 @@ class SecretsManager:
         for secret_id in request.secret_ids:
             secret_data = secrets.get(secret_id)
             if not secret_data:
-                failed.append({"secret_id": secret_id, "reason": "Secret not found"})
+                failed.append({"secret_id": secret_id, "reason": REFUSAL_TEXT[404]})
                 continue
 
             # Check access permissions for source
@@ -717,10 +719,10 @@ async def create_secret(
     except PermissionError as e:
         # #17099: a refused SYSTEM-vault write (non-admin) is a 403, not a 500.
         await audit_secret_op("CREATE", None, http_request, "denied", reason=type(e).__name__)
-        raise HTTPException(status_code=403, detail="Not permitted to create this secret")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except ValueError as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
     except HTTPException:
         # #16428: without this, get_coordinator()'s 503 (vault not configured)
         # falls into the generic handler below and becomes a misleading 500.
@@ -884,8 +886,7 @@ async def get_secret(
         secret = await _get_secret_dual_read(secret_id, chat_id, owner_id)
         if not secret:
             await audit_secret_op("ACCESS", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
-
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
         # Issue #608: Track secret usage in memory graph when accessed within a chat
         if chat_id:
             memory_graph: AutoBotMemoryGraph | None = getattr(http_request.app.state, "memory_graph", None)
@@ -912,7 +913,7 @@ async def get_secret(
         return JSONResponse(status_code=200, content=secret)
     except PermissionError:
         await audit_secret_op("ACCESS", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except HTTPException:
         raise
     except Exception as e:
@@ -954,11 +955,11 @@ async def update_secret(
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
                 await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             secret_data = await _get_connector_bridged_secret(secret_id, owner_id)
         else:
             await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
 
         await audit_secret_op("UPDATE", secret_id, http_request, phase="completed")  # #20557: the outcome
         return JSONResponse(
@@ -971,11 +972,11 @@ async def update_secret(
         )
     except PermissionError:
         await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except ValueError as e:
         # #16428: rotate()'s merged-bundle validation failure: a bad request.
         await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
     except HTTPException:
         raise
     except Exception as e:
@@ -994,27 +995,28 @@ async def delete_secret(
     secret_id: str,
     http_request: Request,
     chat_id: str | None = Query(None),
-    confirm_dependents: bool = Query(False),
+    dependents_digest: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
+    intent_recorded = False
     try:
         _user = get_auth_middleware().get_user_from_request(http_request)
         owner_id = remember_actor(http_request, _user)
         # #20557: the record comes first; a failed write stops the delete
         await audit_secret_op("DELETE", secret_id, http_request, "attempted", required=True, phase="before_write")
+        intent_recorded = True
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
         # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too (409 while dependents exist).
         success = success or await delete_system_vault_secret(
-            secret_id, owner_id, http_request.headers, confirm_dependents
+            secret_id, owner_id, http_request.headers, dependents_digest
         )
         if not success:
             # #16428: revoke() is idempotent, so check existence first to 404 an unknown id.
             bridged = await _get_connector_bridged_secret(secret_id, owner_id)
             if bridged is None:
-                await audit_secret_op("DELETE", secret_id, http_request, "failed", reason="not_found")
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             await get_credential_store().revoke(secret_id, owner_id)
 
         audit_record(
@@ -1028,17 +1030,10 @@ async def delete_secret(
         )
         await audit_secret_op("DELETE", secret_id, http_request, phase="completed")  # #20557: the outcome
         return JSONResponse(status_code=200, content={"status": "success", "message": "Secret deleted successfully"})
-    except PermissionError:
-        await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
-    except HTTPException as exc:
-        if exc.status_code == 409:  # #20557: a refusal must not read as a bare intent in the trail
-            await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="has_dependents")
-        raise
-    except Exception as e:
-        await audit_secret_op("DELETE", secret_id, http_request, "failed", reason=type(e).__name__)
-        logger.error("Failed to delete secret: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Failed to delete secret")
+    except Exception as exc:  # #21204: every failure leaves an outcome after the intent (secrets_delete_outcome)
+        raise await record_delete_failure(
+            audit_secret_op, secret_id, http_request, exc, intent_recorded=intent_recorded
+        )
 
 
 @router.post("/transfer", response_model=DataResponse[SecretTransferData])

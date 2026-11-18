@@ -12,11 +12,12 @@ Architecture:
     AutoBotMCPServer.handle_request(method, params, auth_token)
         |-- kb.*       → KnowledgeBase (knowledge/_composed.py)
         |-- memory.*   → AutoBotMemoryGraph + VerbatimStore
+        |-- code.*     → read-only code-graph queries (api/codebase_analytics/code_graph_queries.py)
         └── agents.*   → AgentDiaryService + agents/ directory listing
 
 Auth:
     Bearer tokens have the form ``<secret>:<scope1>,<scope2>`` and carry the
-    scopes ``kb``, ``memory``, ``agents``.
+    scopes ``kb``, ``memory``, ``agents``, ``code``.
 
     ``AUTOBOT_MCP_TOKEN`` is the SECRET SEGMENT ONLY — never the whole bearer
     token (#13266).  It has no default: an unconfigured secret rejects every
@@ -56,7 +57,9 @@ from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import QueryDefaults
 from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
+from mcp_server.agent_registry import AGENT_REGISTRY as _AGENT_REGISTRY
 from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
+from mcp_server.code_graph_tools import CODE_TOOLS, CodeGraphToolsMixin
 from mcp_server.memory_session_tools import SESSION_TOOLS, MemorySessionToolsMixin
 from mcp_server.memory_tools import MemoryToolsMixin
 from mcp_server.principal import STDIO_CLIENT, bind_owner, mcp_owner_scope, unbind_owner
@@ -285,37 +288,12 @@ _TOOLS: Dict[str, Dict[str, Any]] = {
     **SESSION_TOOLS,
 }
 
-# Static agent registry — enumerate agents/ directory names + descriptions.
-_AGENT_REGISTRY: List[Dict[str, str]] = [
-    {"id": "chat_agent", "description": "General-purpose conversational agent"},
-    {"id": "research_agent", "description": "Multi-source research and summarisation"},
-    {"id": "code_generation_agent", "description": "Source-code generation and review"},
-    {"id": "data_analysis_agent", "description": "Structured data analysis and charting"},
-    {"id": "classification_agent", "description": "Text classification via LLM"},
-    {"id": "audio_processing_agent", "description": "Transcription and audio analysis"},
-    {"id": "kb_librarian_agent", "description": "Knowledge base curation librarian"},
-    {"id": "librarian_assistant", "description": "Librarian assistant for KB indexing"},
-    {
-        "id": "enhanced_system_commands_agent",
-        "description": "System-command execution with safety guards",
-    },
-    {
-        "id": "graph_entity_extractor",
-        "description": "Extracts entities and relations for the memory graph",
-    },
-    {
-        "id": "development_speedup_agent",
-        "description": "Dev workflow acceleration and code scaffolding",
-    },
-]
-
-
 # ---------------------------------------------------------------------------
 # Main server class
 # ---------------------------------------------------------------------------
 
 
-class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin):
+class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin, CodeGraphToolsMixin):
     """MCP server that exposes AutoBot KB, memory graph, and agents.
 
     All tool implementations are thin delegation layers — they call existing
@@ -325,7 +303,7 @@ class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin):
     error string is returned to prevent information leakage.
     """
 
-    TOOLS: Dict[str, Dict[str, Any]] = _TOOLS
+    TOOLS: Dict[str, Dict[str, Any]] = {**_TOOLS, **CODE_TOOLS}
 
     # ------------------------------------------------------------------
     # Auth helpers

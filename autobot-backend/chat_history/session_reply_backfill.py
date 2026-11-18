@@ -42,7 +42,7 @@ import argparse
 import asyncio
 from typing import Any, Callable, Dict, List, Tuple
 
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from chat_history.legacy_transcripts import read_legacy_transcript_pairs
 
 logger = get_logger(__name__)
@@ -212,6 +212,7 @@ async def _main(session_ids: List[str]) -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     parser = argparse.ArgumentParser(description="Backfill missing chat:session:* assistant turns (#13293).")
     parser.add_argument(
         "--session-id",

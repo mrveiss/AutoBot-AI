@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -15,6 +15,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import config from '@/config/ssot-config'
 import { slmApiClient } from '@/utils/ApiClient'
+import { useFleetStore } from '@/stores/fleet'
+import type { SLMNode } from '@/types/slm'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -33,17 +35,14 @@ interface Agent {
   is_default: boolean
 }
 
-interface FleetNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  roles: string[]
-}
+// The node fields this view reads, from the one node type the fleet store holds.
+type FleetNode = Pick<SLMNode, 'node_id' | 'hostname' | 'ip_address' | 'status' | 'roles'>
 
 const OLLAMA_PORT = config.port.ollama
 const CUSTOM_VALUE = '__custom__'
 
+const fleetStore = useFleetStore()
+const logger = createLogger('AgentsView')
 const route = useRoute()
 const router = useRouter()
 
@@ -122,13 +121,11 @@ async function fetchNodes() {
   try {
     // A non-OK response used to `return` silently; `get()` rejects, so it now
     // lands in the catch below — the same outcome (fall back to Custom mode)
-    // reached by one code path instead of two.
-    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
-    nodes.value = (data.nodes || []).filter(
-      (n: FleetNode) => n.status === 'online',
-    )
-  } catch {
-    // Non-critical — fall back to Custom mode
+    // reached by one code path instead of two. Every page of the fleet (#21584).
+    await fleetStore.fetchNodes() // a partial read is kept and announced once by the shell, not here
+    nodes.value = fleetStore.nodeList.filter((n: FleetNode) => n.status === 'online')
+  } catch (err) {
+    logger.warn('Could not load the node list; falling back to Custom mode (non-critical):', err)
   }
 }
 

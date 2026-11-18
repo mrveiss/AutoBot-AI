@@ -761,7 +761,7 @@ import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { useChatStore } from '@/stores/useChatStore';
 import { useUserStore } from '@/stores/useUserStore';
 import { createLogger } from '@/utils/debugUtils';
-import { createDateFormatter, DEFAULT_DATE_TIME_INTL } from '@/utils/formatHelpers';
+import { createDateFormatter, DEFAULT_DATE_TIME_INTL, toDateTimeLocalValue } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger';
 import { useVirtualList } from '@/composables/useVirtualList';
@@ -1324,7 +1324,7 @@ const editSecret = (secret: Secret | null) => {
   secretForm.scope = secret.scope;
   secretForm.chat_id = secret.chat_id || '';
   secretForm.description = secret.description || '';
-  secretForm.expires_at = secret.expires_at ? new Date(secret.expires_at).toISOString().slice(0, 16) : '';
+  secretForm.expires_at = toDateTimeLocalValue(secret.expires_at);
   secretForm.tags = [...(secret.tags || [])];
   tagsInput.value = secretForm.tags.join(', ');
 

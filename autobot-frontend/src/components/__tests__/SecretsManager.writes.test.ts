@@ -108,7 +108,11 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
   it('a delete refused for dependents lists them in a second confirm, then forces it', async () => {
     deleteSecret
       .mockRejectedValueOnce(new HttpError(409, 'Conflict', {
-        detail: { code: 'secret_has_dependents', dependents: [{ dependent_kind: 'service', dependent_id: 'scheduler' }] },
+        detail: {
+          code: 'secret_has_dependents',
+          dependents: [{ dependent_kind: 'service', dependent_id: 'scheduler' }],
+          dependents_digest: 'digest-1',
+        },
       }))
       .mockResolvedValueOnce({})
     confirm.mockResolvedValue(true)
@@ -117,7 +121,28 @@ describe('SecretsManager writes and reloads (#20732, #20734)', () => {
     expect(confirm.mock.calls[0][0].message).toContain('service:scheduler')
     expect(deleteSecret).toHaveBeenCalledTimes(2)
     expect(deleteSecret).toHaveBeenNthCalledWith(1, 's1', { chatId: null })
-    expect(deleteSecret).toHaveBeenNthCalledWith(2, 's1', { chatId: null, confirmDependents: true })
+    expect(deleteSecret).toHaveBeenNthCalledWith(2, 's1', { chatId: null, dependentsDigest: 'digest-1' })
+  })
+
+  it('a dependent added after the first list is shown and confirmed again before the delete is forced (#21039)', async () => {
+    const refusal = (digest: string, ids: string[]) =>
+      new HttpError(409, 'Conflict', {
+        detail: {
+          code: 'secret_has_dependents',
+          dependents: ids.map((id) => ({ dependent_kind: 'service', dependent_id: id })),
+          dependents_digest: digest,
+        },
+      })
+    deleteSecret
+      .mockRejectedValueOnce(refusal('d1', ['scheduler']))
+      .mockRejectedValueOnce(refusal('d2', ['scheduler', 'late']))
+      .mockResolvedValueOnce({})
+    confirm.mockResolvedValue(true)
+    const { vm } = await mountManager()
+    await deleteUserSecret(vm)
+    expect(confirm.mock.calls[1][0].message).toContain('service:late')
+    expect(deleteSecret).toHaveBeenNthCalledWith(2, 's1', { chatId: null, dependentsDigest: 'd1' })
+    expect(deleteSecret).toHaveBeenNthCalledWith(3, 's1', { chatId: null, dependentsDigest: 'd2' })
   })
 
   it('a failed delete shows the unconfirmed-write alert and reloads the list', async () => {

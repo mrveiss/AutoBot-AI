@@ -13,7 +13,8 @@ import pytest
 
 # Import the modules to test
 import security_layer
-from autobot_shared.paths import project_root
+from autobot_shared.auth.jwt_core import hash_password
+from autobot_shared.log_dir import resolve_logs_dir
 from autobot_shared.ssot_config import default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
@@ -377,7 +378,7 @@ class TestSecurityLayer:
     def test_authenticate_user_auth_enabled(self):
         """Test user authentication when auth is enabled"""
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": "test_password"}
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("test_password")}}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
 
         # Valid credentials
@@ -391,15 +392,18 @@ class TestSecurityLayer:
         result = self.security.authenticate_user("invalid_user", "any_password")
         assert result is None
 
-    def test_authenticate_user_compares_through_secure_compare(self):
-        """#20761: the stored password is compared via secure_compare, not ``==``."""
+    def test_authenticate_user_verifies_through_verify_password(self):
+        """#20761/#21088: the password is checked by the canonical hasher, not ``==``."""
+        from autobot_shared.auth import configured_users
+
         self.security.enable_auth = True
-        self.security.allowed_users = {"test_user": "stored"}
+        self.security.allowed_users = {"test_user": {"password_hash": hash_password("stored")}}
         self.security.security_config = {"user_roles": {"test_user": "developer"}}
-        with patch.object(security_layer, "secure_compare", return_value=True) as compare:
+        with patch.object(configured_users, "verify_password", return_value=True) as verify:
             assert self.security.authenticate_user("test_user", "supplied") == "developer"
-        compare.assert_called_once_with("supplied", "stored")
-        with patch.object(security_layer, "secure_compare", return_value=False):
+        assert verify.call_count == 1
+        assert verify.call_args.args[0] == "supplied"
+        with patch.object(configured_users, "verify_password", return_value=False):
             assert self.security.authenticate_user("test_user", "stored") is None
 
     def test_get_pending_approvals(self):
@@ -477,14 +481,12 @@ class TestAuditLogFileDefault:
         assert not default_audit_log_file().startswith("/opt/autobot")
 
     def test_default_is_wired_to_the_canonical_resolver(self):
-        assert default_audit_log_file() == str(project_root() / "logs" / "audit.log")
+        assert default_audit_log_file() == str(resolve_logs_dir() / "audit.log")
 
-    def test_default_tracks_project_root_env_override(self, monkeypatch, tmp_path):
-        fake_root = tmp_path / "fake-checkout"
-        fake_root.mkdir()
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", str(fake_root))
+    def test_default_tracks_logs_dir_env_override(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", str(tmp_path / "logs"))
 
-        assert default_audit_log_file() == str(fake_root / "logs" / "audit.log")
+        assert default_audit_log_file() == str(tmp_path / "logs" / "audit.log")
 
     def test_deployed_install_still_resolves_to_the_original_default(self, monkeypatch):
         """Compositional check for the deployed case — see the equivalent test
@@ -492,7 +494,7 @@ class TestAuditLogFileDefault:
         the real ``.env``-walk here, and why full host verification is out of
         scope for a hermetic test.
         """
-        monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
+        monkeypatch.setenv("AUTOBOT_LOGS_DIR", "/opt/autobot/logs")
 
         assert default_audit_log_file() == str(Path("/opt/autobot/logs/audit.log"))
 
