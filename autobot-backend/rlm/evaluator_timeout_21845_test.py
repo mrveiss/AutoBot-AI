@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""An evaluator timeout is not a pass; unexecuted TOOL_CALL markup is refined (#21845)."""
+"""An evaluator failure of any kind is not a pass; unexecuted TOOL_CALL markup is refined (#21845)."""
 
 from __future__ import annotations
 
@@ -18,8 +18,18 @@ BAD_CALL = """<TOOL_CALL name="browser_evaluate" params='{'expression': 'a('b')'
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exc", [TimeoutError(), httpx.ReadTimeout("slow")])
-async def test_timeout_carries_no_passing_score(exc):
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TimeoutError(),
+        httpx.ReadTimeout("slow"),
+        ConnectionError(),
+        httpx.ConnectError("refused"),
+        RuntimeError("provider returned 500"),
+        ValueError("unreadable reply"),
+    ],
+)
+async def test_any_evaluator_failure_carries_no_passing_score(exc):
     evaluator = ResponseQualityEvaluator(config=RLMConfig())
     with patch.object(evaluator, "_call_llm", new=AsyncMock(side_effect=exc)):
         result = await evaluator.evaluate(query="q", response="some answer", iteration=1)

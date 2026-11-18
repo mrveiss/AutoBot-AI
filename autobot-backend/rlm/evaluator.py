@@ -13,10 +13,6 @@ to generate_response with the critique as a refinement hint.
 Issue #1373: Initial RLM prototype.
 """
 
-import asyncio
-
-import httpx
-
 from autobot_shared.logging_manager import get_logger
 from llm_shared.validated_llm import Completer, complete_validated
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
@@ -69,9 +65,6 @@ _EVAL_SCHEMA: dict = {
     },
     "required": ["score"],
 }
-
-
-_TIMEOUT_ERRORS = (TimeoutError, asyncio.TimeoutError, httpx.TimeoutException)
 
 
 def _unparsed_tool_call_result(response: str, iteration: int) -> ReflectionResult | None:
@@ -157,11 +150,11 @@ class ResponseQualityEvaluator:
                 exc,
                 exc_info=True,
             )
-            timed_out = isinstance(exc, _TIMEOUT_ERRORS)
             return ReflectionResult(
                 verdict=ReflectionVerdict.INDETERMINATE,
-                # #21845: a timeout means NO reading, so it carries no passing score.
-                quality_score=0.0 if timed_out else 0.7,
+                # #21845: a failed evaluation (timeout, transport, unreadable reply) is NO reading, so it
+                # carries no passing score; a made-up 0.7 cleared the threshold and passed the response.
+                quality_score=0.0,
                 critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
                 iteration=iteration,
             )
