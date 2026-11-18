@@ -20,6 +20,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import isolated_git_env
+from tools.lint._comment_syntax import code_text
 
 _ROOT = repo_root()
 _GUARD_LIB = _ROOT / "scripts/lib/branch-guards.sh"
@@ -117,5 +118,5 @@ def test_unresolvable_ref_is_kept(tmp_path) -> None:
 def test_workflow_gates_deletion_on_the_guard() -> None:
     text = _WORKFLOW.read_text(encoding="utf-8")
     step = text.split("Delete branches for closed issues", 1)[1].split("Run cleanup script", 1)[0]
-    code = "\n".join(line for line in step.splitlines() if not line.lstrip().startswith("#"))
+    code = code_text(step, name="step.sh")
     assert code.index("branch_has_no_unlanded_changes") < code.index("git push origin --delete")
