@@ -80,23 +80,22 @@ class ConversationHandlerMixin:
         return await load_turn_pairs(session_id)
 
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
-        """LLM context: the Redis cache, else projected from chat_sessions, else nothing (#18293)."""
+        """LLM context: projected from chat_sessions (the system of record), else the cache, else nothing (#18293).
+
+        #21847: the durable projection is authoritative. The Redis copy is only a projection of it, so a
+        short or stale cache must never win over chat_sessions; it is served only when chat_sessions
+        cannot be read, and is refreshed from the projection whenever that is read.
+        """
         try:
-            redis_history = await self._try_redis_history(session_id)
-            if redis_history is not None:
-                return redis_history
-
             history = await self._project_from_chat_sessions(session_id)
-            if not history:
-                return []  # unreadable, or no completed turns: never a legacy transcript
-
-            if self.redis_client is not None:
+            if history is None:  # unreadable: a cached projection is better than none, never a legacy transcript
+                return await self._try_redis_history(session_id) or []
+            if history and self.redis_client is not None:
                 fire_and_forget(
                     self._save_conversation_history(session_id, history),
                     name="conversation-history-cache-refill",
                 )
             return history
-
         except Exception as e:
             logger.error("Failed to load conversation history: %s", e)
             return []
