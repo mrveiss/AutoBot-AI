@@ -95,23 +95,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
 }
 
 h2 {
-  font-size: var(--font-size-2xl);
+  font-size: var(--text-2xl);
 }
 
 h3 {
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
 }
 
 h4 {
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
 }
 
 h5, h6 {
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
 }
 
 p {
@@ -167,7 +167,7 @@ button {
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -227,7 +227,7 @@ input,
 textarea,
 select {
   font-family: inherit;
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   color: var(--text-primary);
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);

@@ -52,8 +52,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
 from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.log_dir import LOGS_DIR_DEFAULT, resolve_logs_dir
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
+from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
 from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
@@ -79,7 +82,7 @@ def default_audit_log_file() -> str:
     """The ONE definition of the audit-log default (#14070): was ALSO spelled out
     as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
     test -- agreement today, not derivation. A function, so it stays lazy."""
-    return str(project_root() / "logs" / "audit.log")
+    return str(resolve_logs_dir() / "audit.log")  # #20894
 
 
 # Default model constants - single source of truth for fallback values (#2553)
@@ -208,7 +211,7 @@ class PortConfig(RedactedSettings):
     chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
-class LLMConfig(RedactedSettings):
+class LLMConfig(RedactedSettings, ChatGraphSettings):
     """
     LLM model configuration with multi-provider support.
 
@@ -222,11 +225,7 @@ class LLMConfig(RedactedSettings):
     environment variables, defaulting to the main AUTOBOT_LLM_PROVIDER.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    # model_config is inherited from ChatGraphSettings (same .env / utf-8 / extra="ignore"): one ConfigDict.
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
@@ -292,8 +291,7 @@ class LLMConfig(RedactedSettings):
         ),
     )
     # Inline AgentResponseJudge on chat replies (#10599, §3.3).
-    # OFF by default — each judge call adds one LLM round-trip.
-    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    # OFF by default (one LLM round-trip per judge call); enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
@@ -1243,11 +1241,10 @@ class PathConfig(RedactedSettings):
     # resolve into the checkout rather than into the live install.
     base_dir: str = Field(default_factory=lambda: str(install_base_dir()), alias="AUTOBOT_BASE_DIR")
 
-    # Well-known sub-directories (all relative to base_dir unless absolute).
-    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    # Well-known sub-directories (relative to base_dir unless absolute); override via AUTOBOT_PLUGINS_DIR etc.
     plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
     data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
-    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    logs_dir: str = Field(default=LOGS_DIR_DEFAULT, alias="AUTOBOT_LOGS_DIR")  # #20894: unset -> resolver
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
     upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
@@ -1317,14 +1314,13 @@ class PathConfig(RedactedSettings):
     # autobot_ssh_key_path's owning account).
     ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
-    # Explicit override for the `claude` CLI binary used by the LLC claude_code
-    # adapter (GH#12478). Empty string means "not configured" — the adapter falls
-    # back to shutil.which("claude") then common per-user install locations before
-    # raising a clear error. Set this when the service account's PATH does not
-    # include the directory the Claude Code CLI was installed into (e.g. a
-    # per-user npm/curl install landed in ~/.local/bin, which systemd services
-    # typically don't inherit).
+    # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
+    # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
     claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
+    # Claude Code user-level config dir (agents/, skills/); empty = ~/.claude of the backend account.
+    claude_config_dir: str = Field(
+        default="", validation_alias=AliasChoices("AUTOBOT_CLAUDE_CONFIG_DIR", "CLAUDE_CONFIG_DIR")
+    )
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1345,8 +1341,8 @@ class PathConfig(RedactedSettings):
 
     @property
     def logs_path(self) -> Path:
-        """Absolute path to the logs directory."""
-        return self.resolve(self.logs_dir)
+        """Absolute path to the logs directory: the one resolver, never the source tree (#20894)."""
+        return resolve_logs_dir(self.logs_dir or None)
 
     @property
     def models_path(self) -> Path:
@@ -1384,7 +1380,7 @@ class PathConfig(RedactedSettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1845,12 +1841,6 @@ class MiscConfig(RedactedSettings):
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
-    codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
-    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
-    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")

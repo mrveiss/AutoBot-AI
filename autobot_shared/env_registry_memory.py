@@ -154,6 +154,18 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_FACT_SCAN_BATCH_SIZE",
+        type=int,
+        default=200,
+        description=(
+            "Fact hashes read per round trip while get_all_facts streams the fact keyspace (knowledge/fact_stream.py)."
+        ),
+        component="knowledge",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_FACTS_PRUNE_MAX_PER_RUN",
         type=int,
         default=100,

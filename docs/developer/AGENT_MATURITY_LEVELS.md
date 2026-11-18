@@ -19,7 +19,7 @@ execute → iterate → report → standby.
 
 | Construct | Where |
 |---|---|
-| Agent execution loop (Manus-style 6-step) | [`autobot-backend/agent_loop/loop.py`](../../autobot-backend/agent_loop/loop.py) |
+| Agent execution loop (the chat graph is canonical, #20846; `AgentLoop` is a ported reference) | [`autobot-backend/chat_workflow/graph.py`](../../autobot-backend/chat_workflow/graph.py) |
 | Loop configuration | [`autobot-backend/agent_loop/types.py`](../../autobot-backend/agent_loop/types.py) (`AgentLoopConfig`) |
 
 Best for a single personal/work assistant. No orchestrator or task delegation is

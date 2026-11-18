@@ -46,6 +46,14 @@ class _Redis:
                 return 0
             self.hashes[key]["state"] = "settling"
             return 1
+        if script == sw._SET_IF_OWNER_LUA:
+            if args[0] == "":
+                if key not in self.hashes:
+                    return 0
+            elif self.hashes.get(key, {}).get("owner") != args[0]:
+                return 0
+            self.hashes[key].update(dict(zip(args[1::2], args[2::2])))
+            return 1
         raise AssertionError(f"unexpected script {script!r}")
 
     async def exists(self, key):
@@ -319,6 +327,15 @@ async def test_a_stale_build_does_not_block_a_new_start(env, monkeypatch):
     monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
     await sw._set_state(state="building", model="old", collection="c")  # stale: no lock
     assert (await sw.start_switch(_kb(), MODEL))["state"] == "building"
+
+
+async def test_the_owner_is_the_shared_unique_worker_identity(env, monkeypatch):
+    """#21518: the owner in the state hash and the claim is the helper's per-instance identity."""
+    monkeypatch.setattr(sw, "fire_and_forget", lambda coro, name: coro.close())
+    monkeypatch.setattr(sw, "worker_identity", lambda *, unique=False: "host-3-9:ab12cd34" if unique else "host-3-9")
+    status = await sw.start_switch(_kb(), MODEL)
+    assert status["owner"] == "host-3-9:ab12cd34"
+    assert env.claims.holder() == "host-3-9:ab12cd34"
 
 
 async def test_each_attempt_writes_a_new_collection(env, monkeypatch):

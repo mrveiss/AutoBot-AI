@@ -47,9 +47,15 @@ def test_step_3_goal_project_and_work_items(scenario):  # noqa: ANN001
         scenario.ids["goal"] = api.call("POST", "/goals", json=body)["id"]
         scenario.ids["project"] = _project(api, scenario.ids["goal"])
         scenario.ids["epic"] = _item(api, scenario, "epic", "Release readiness")
-        scenario.ids["task"] = _item(api, scenario, "task", "Write the release notes", scenario.ids["epic"])
+        # A task sits under a PBI, a PBI under an epic (work_item_hierarchy.ALLOWED_PARENT_TYPES, #18978).
+        scenario.ids["pbi"] = _item(api, scenario, "pbi", "Release notes", scenario.ids["epic"])
+        scenario.ids["task"] = _item(api, scenario, "task", "Write the release notes", scenario.ids["pbi"])
         titles = _titles_in_project(api, scenario.ids["project"])
-        assert {"Release readiness", "Write the release notes"} <= titles, f"project items: {sorted(titles)}"
+        assert {
+            "Release readiness",
+            "Release notes",
+            "Write the release notes",
+        } <= titles, f"project items: {sorted(titles)}"
         scenario.done.add(3)
 
 

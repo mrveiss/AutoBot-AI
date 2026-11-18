@@ -160,7 +160,10 @@ async def test_a_valid_request_reaches_the_executor_once_with_the_quoted_argv(en
     response = await env.post(_node_url(_KNOWN, action))
     assert response.status_code == 200, response.text
     assert len(spawned) == 1
-    assert spawned[0][-1] == f"sudo -n systemctl {action} -- {_KNOWN}"
+    reset = (
+        f"sudo -n systemctl reset-failed -- {_KNOWN} 2>/dev/null; " if action in ("start", "restart") else ""
+    )  # #20767
+    assert spawned[0][-1] == f"{reset}sudo -n systemctl {action} -- {_KNOWN}"
     assert spawned[0][0] == "/usr/bin/ssh"
 
 
@@ -169,7 +172,9 @@ async def test_the_fleet_route_validates_then_reaches_the_executor_for_a_known_u
     assert (await env.post("/fleet/services/foo;id/restart")).status_code == 422
     assert spawned == []
     assert (await env.post(f"/fleet/services/{_KNOWN}/restart")).status_code == 200
-    assert [argv[-1] for argv in spawned] == [f"sudo -n systemctl restart -- {_KNOWN}"]
+    assert [argv[-1] for argv in spawned] == [
+        f"sudo -n systemctl reset-failed -- {_KNOWN} 2>/dev/null; sudo -n systemctl restart -- {_KNOWN}"
+    ]
 
 
 # --- the logs route: same validators, 422 before anything is spawned -----------------------------

@@ -18,6 +18,7 @@ BACKFILL = ANSIBLE / "roles" / "slm_manager" / "tasks" / "secrets_root_key.yml"
 BACKEND_MAIN = ANSIBLE / "roles" / "backend" / "tasks" / "main.yml"
 BACKEND_ENV_ONLY = ANSIBLE / "roles" / "backend" / "tasks" / "env_only.yml"
 BACKEND_TASKS = ANSIBLE / "roles" / "backend" / "tasks" / "read_secrets_root_key.yml"
+SHARED_READ = ANSIBLE / "_shared" / "tasks" / "read_slm_secrets_root_key.yml"  # #20941: the ONE read
 _INCLUDE = re.compile(r"name: slm_manager\s+tasks_from: secrets_root_key\.yml")
 
 
@@ -53,16 +54,14 @@ def test_the_back_fill_only_adds() -> None:
 
 def test_an_empty_key_from_the_slm_file_fails_the_backend_deploy() -> None:
     text = _read(BACKEND_TASKS)
-    align = text.index("Align autobot_secrets_root_key with slm-secrets.env")
+    align = text.index("read_slm_secrets_root_key.yml")
     guard = text.index("Fail when the SLM secrets file yields no root key")
     assert align < guard, "the empty-key failure must sit after the read-back"
     block = text[guard:]
     assert "ansible.builtin.fail" in block
-    assert "_root_key_slm_secrets_stat.stat.exists" in block, "it must fire only where the SLM file is the key's source"
-    assert "_backend_slm_root_key | length == 0" in block, "judge the FILE's key; an inventory key must not mask it"
-    assert (
-        "register: _root_key_slm_secrets_stat" in text
-    ), "the file must stat slm-secrets.env itself, not lean on a caller"
+    assert "_slm_root_key_file_exists" in block, "it must fire only where the SLM file is the key's source"
+    assert "_slm_root_key_read | length == 0" in block, "judge the FILE's key; an inventory key must not mask it"
+    assert "register: _slm_root_key_stat" in _read(SHARED_READ), "the shared read must stat the file itself"
 
 
 def _flat_tasks(tasks):
@@ -105,10 +104,12 @@ def test_every_backend_env_render_reads_the_root_key_first() -> None:
 
 def test_the_backend_root_key_read_exists_once() -> None:
     marker = "AUTOBOT_SECRETS_ROOT_KEY=\\K"
-    copies = [p.name for p in (BACKEND_MAIN, BACKEND_ENV_ONLY, UPDATER, BACKEND_TASKS) if marker in _read(p)]
+    copies = [
+        p.name for p in (BACKEND_MAIN, BACKEND_ENV_ONLY, UPDATER, BACKEND_TASKS, SHARED_READ) if marker in _read(p)
+    ]
     assert copies == [
-        BACKEND_TASKS.name
-    ], f"the backend's root-key read must live only in {BACKEND_TASKS.name}; found {copies}"
+        SHARED_READ.name
+    ], f"the root-key read must live only in {SHARED_READ.name} (#20941); found {copies}"
 
 
 # --- #19294 review F1/F2/F3/F5: never generate over an existing key -------------------------
@@ -194,13 +195,13 @@ def test_an_export_line_counts_as_present_and_is_replaced_not_duplicated() -> No
 
 def test_the_backend_reads_every_key_line_the_back_fill_counts_as_present() -> None:
     # CodeRabbit on #19364: an `export`-prefixed or quoted key skipped the back-fill but read back empty.
-    text = _read(BACKEND_TASKS)
-    block = text[text.index("Read AUTOBOT_SECRETS_ROOT_KEY from slm-secrets.env") :]
-    pcre = re.search(r"grep -oP '(.+?)'", block).group(1).replace(r"\K", "(?P<key>") + ")"
+    text = _read(SHARED_READ)
+    block = text[text.index("Read AUTOBOT_SECRETS_ROOT_KEY from the SLM") :]
+    pcre = re.search(r"- '(\^.+?)'", block).group(1).replace(r"\K", "(?P<key>") + ")"
     lines = ("AUTOBOT_SECRETS_ROOT_KEY=k", "export AUTOBOT_SECRETS_ROOT_KEY=k", "  export  AUTOBOT_SECRETS_ROOT_KEY=k")
     for line in lines:
         assert (m := re.match(pcre, line)) and m.group("key") == "k", f"the backend must read the key in {line!r}"
-    unquote = text[text.index("Unquote the root key read from slm-secrets.env") :]
+    unquote = text[text.index("Expose the SLM's secrets root key") :]
     assert "regex_replace(" in unquote.split("\n- name:")[0], "a quoted key must be unquoted before use"
 
 
