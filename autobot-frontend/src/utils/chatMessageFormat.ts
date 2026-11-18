@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The ONE chat-message formatter (#21771).
  *
