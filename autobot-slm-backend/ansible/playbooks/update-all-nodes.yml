@@ -12,7 +12,7 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=release
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
-#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart -e autobot_restart_services=false   # code-only, no restarts (#20743)
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
@@ -25,11 +25,16 @@
 #   slm-agent            - slm_agent role redeploy (code + secrets + restart) (#11480)
 #   shared               - autobot_shared deploy tasks (all nodes)
 #
-# NOTE (#11480): the slm-agent redeploy imports the slm_agent role, whose restart
-# runs via a handler and whose pip install is tagged `packages` (not `deps`).
-# So `--skip-tags restart` / `--skip-tags deps` do NOT skip the agent restart or
-# its dep install — a code-only push still restarts the agent. Use
-# `--skip-tags slm-agent` to exclude agent redeploy entirely.
+# NOTE (#20743): restarts come from two places, and a sync without restarts has to
+# stop both. Restart TASKS are tagged `restart`. Restart HANDLERS (the agent's
+# `Restart SLM agent` among them, notified by its code, config and secrets) cannot
+# be: Ansible ignores tags on handlers. Each restart handler checks
+# `autobot_restart_services` instead. So a code-only push is
+#   --skip-tags restart -e autobot_restart_services=false
+# which is what code sync passes when "restart after sync" is off
+# (services/sync_restart.py). Every service then keeps running its old code until
+# its next restart. The agent's pip install is tagged `packages` (not `deps`, #11480);
+# use `--skip-tags slm-agent` to exclude the agent redeploy entirely.
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -55,6 +60,11 @@
     # `autobot.services` stops carrying unrendered templates (#15731).
     git_repo_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"
     deploy_ref: "main"
+    # #20214: a rollback sets this and a full commit id as `deploy_ref` (services/rollback_target.py). The id
+    # was validated as an ancestor of the branch head before it got here, so the branch allow-list does not
+    # apply; and the commit is NOT announced to /code-source/notify below, which would record it as the
+    # latest commit and make every node read as current at an old commit.
+    deploy_is_rollback: false
     allowed_branches:
       - main
       - release
@@ -148,6 +158,7 @@
           Override: -e skip_branch_check=true
       when:
         - not skip_branch_check | bool
+        - not deploy_is_rollback | bool
         - deploy_ref not in allowed_branches
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
@@ -163,7 +174,10 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot_shared/ }
+        # #20942: .python-version rides in the SAME archive as autobot_shared, so the Python
+        # floor python_floor.py reads comes from the deploy_ref checkout that supplied the
+        # code, lands on every node that unpacks it, and precedes every backend restart.
+        - { name: shared, path: "autobot_shared/ .python-version" }
         # #15462: both frontends declare `file:` dependencies on these two
         # (@autobot/ui, @autobot/terminal, @autobot/vnc). npm installs them as
         # symlinks INTO the deployed tree, so a frontend build resolves them
@@ -322,6 +336,21 @@
       register: deploy_commit_subject
       changed_when: false
 
+    # #20250: Play 3 waits for this many nodes. A per-node update has --limit localhost,<node> and
+    # needn't wait for the whole fleet. Any other limit counts, a group name included: it can't be
+    # told from a host here, and a wait of at most 3 minutes beats reporting nothing.
+    - name: "[PRE-FLIGHT] Count the nodes online before the update"
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_before
+      failed_when: false
+      when: >-
+        ansible_limit is not defined
+        or (slm_manager_inventory_host | default('')) in ansible_limit.split(',')
+        or not ('localhost' in ansible_limit.split(',') and (ansible_limit.split(',') | length) == 2)
+
     - name: "[PRE-FLIGHT] Notify SLM of new commit"
       uri:
         url: "https://localhost/api/code-source/notify"
@@ -337,6 +366,7 @@
         validate_certs: false
         status_code: [200, 404]
       ignore_errors: true
+      when: not deploy_is_rollback | bool
 
 # =============================================================================
 # PLAY 1: Update SLM Server First
@@ -542,26 +572,16 @@
 
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
       tags: [slm, slm-agent, shared]
 
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       tags: [slm, slm-backend, shared]
 
     # #12907/#12959: same role-owned reconciliation as PLAY 2, for the SLM
@@ -634,11 +654,12 @@
       ansible.builtin.include_tasks:
         file: ../roles/_shared/tasks/clear_venv_husks.yml
         apply:
-          tags: [slm, deps]
+          tags: [slm, slm-backend, deps]
       vars:
+        repo_source_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"  # #20509
         husk_venv_dir: "{{ autobot.base_dir }}/autobot-slm-backend/venv"
       when: hostvars['localhost']['python_deps_changed'] | bool
-      tags: [slm, deps]
+      tags: [slm, slm-backend, deps]
 
     - name: "[PLAY 1] SLM | Install Python dependencies"
       command:
@@ -711,11 +732,13 @@
               Continuing to backend restart.
 
     - name: "[PLAY 1] SLM | Restart backend service"
-      systemd:
-        name: autobot-slm-backend
-        state: restarted
-        daemon_reload: true
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [slm, slm-backend, restart]
+      vars:
+        restart_unit_name: autobot-slm-backend
+        restart_unit_daemon_reload: true
       tags: [slm, slm-backend, restart]
 
     # #15610: this play deploys the SLM backend by unarchive and never runs the
@@ -734,10 +757,12 @@
       tags: [slm, slm-frontend, nginx]
 
     - name: "[PLAY 1] SLM | Restart nginx"
-      systemd:
-        name: nginx
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [slm, slm-frontend, restart]
+      vars:
+        restart_unit_name: nginx
       tags: [slm, slm-frontend, restart]
 
     - name: "[PLAY 1] SLM | Wait for API to be ready"
@@ -1041,14 +1066,9 @@
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-backend
       when: "'backend' in group_names"
       tags: [backend, shared, symlink]
 
@@ -1067,6 +1087,7 @@
         apply:
           tags: [backend, deps]
       vars:
+        repo_source_root: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}"  # #20509
         husk_venv_dir: "{{ autobot.base_dir }}/autobot-backend/venv"
       when:
         - "'backend' in group_names"
@@ -1159,19 +1180,43 @@
       no_log: true
       tags: [backend, env]
 
-    # Internal service API key — backend must use the same key the SLM expects.
-    # Written by the backend role into /etc/autobot/autobot-backend.env (#10632).
-    - name: "[PLAY 2] Backend | Read AUTOBOT_INTERNAL_API_KEY (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-          {{ autobot_backend_env_file | quote }} 2>/dev/null || true
-      register: existing_internal_api_key
-      become: true
+    # Internal service API key (#10636): the one resolution install shares (#20750). The SLM's
+    # key is canonical; a backend whose key differs keeps it, visibly, because changing it needs
+    # the owner's approval (#17038). Sets autobot_internal_api_key for the env_only render below.
+    - name: "[PLAY 2] Backend | Resolve AUTOBOT_INTERNAL_API_KEY (#10636, #20750)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/resolve_internal_api_key.yml
+        apply:
+          tags: [backend, env]  # a dynamic include's tags don't reach its tasks without apply
+      vars:
+        internal_api_key_current_env_files:
+          - "{{ autobot.base_dir }}/autobot-backend/.env"
+          - "{{ autobot_backend_env_file }}"
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
+      tags: [backend, env]
+
+    # #21343: loaded BEFORE the key proposal below (it was after the DB-credential reads): `backend_port`
+    # is the one the backend's unit and env render from, so the proposal's URL cannot disagree with the
+    # port the service listens on, and it exists on the registry-built inventory, which sets none. Tagged
+    # `always` ONLY (not `always, env`: a skip tag matches any tag on the task), so neither `--tags` nor
+    # `--skip-tags` of a reader's tag can run the reader without it.
+    - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
+      ansible.builtin.include_vars:
+        file: vars/backend-env.yml
+      when: "'backend' in group_names"
+      tags: [always]
+
+    # #20750: a mismatch is proposed for approval; an approved realign is claimed here and applied by
+    # this run's render, restart and the verify step after "Wait for API to be ready".
+    - name: "[PLAY 2] Backend | Propose or claim re-aligning the internal key (#20750)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_claim.yml
+        apply:
+          tags: [backend, env]
+      vars:
+        internal_api_key_loaded_file: "{{ autobot.base_dir }}/autobot-backend/.env"
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; vars/backend-env.yml (#21343)
+      when: "'backend' in group_names"
       tags: [backend, env]
 
     # Full user management requires the autobot_app DB password (#10636).
@@ -1218,12 +1263,6 @@
         apply:
           become: true
           tags: [backend, env]
-      when: "'backend' in group_names"
-      tags: [backend, env]
-
-    - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
-      ansible.builtin.include_vars:
-        file: vars/backend-env.yml
       when: "'backend' in group_names"
       tags: [backend, env]
 
@@ -1287,6 +1326,7 @@
         tasks_from: env_only
       when: "'backend' in group_names"
       vars:
+        backend_model_check_warn_only: true  # #19731: this play is any_errors_fatal
         backend_env_dest: "{{ autobot.base_dir }}/autobot-backend/.env"
         backend_env_owner: autobot
         backend_env_group: autobot
@@ -1294,9 +1334,8 @@
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
         backend_jwt_secret: "{{ (existing_slm_secret_key.stdout | default('') | trim) if (existing_slm_secret_key.stdout | default('') | trim) | length > 0 else (existing_secret_key.stdout | default('') | trim) }}"
-        # #10636: internal service API key + full-user-management DB password,
-        # read from /etc/autobot above.
-        autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
+        # #10636: full-user-management DB password, read from /etc/autobot above. The internal
+        # service API key is the fact resolved above (#20750), not passed here.
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
         autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
@@ -1384,11 +1423,13 @@
       tags: [backend, access-control, enforcement]
 
     - name: "[PLAY 2] Backend | Restart service"
-      systemd:
-        name: autobot-backend
-        state: restarted
-        daemon_reload: true
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [backend, restart]
+      vars:
+        restart_unit_name: autobot-backend
+        restart_unit_daemon_reload: true
       when: "'backend' in group_names"
       tags: [backend, restart]
 
@@ -1418,11 +1459,13 @@
       tags: [backend, restart, celery]
 
     - name: "[PLAY 2] Backend | Restart celery workers so they run the synced code (#13539)"
-      systemd:
-        name: "{{ item.item }}"
-        state: restarted
-        daemon_reload: true
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [backend, restart, celery]
+      vars:
+        restart_unit_name: "{{ item.item }}"
+        restart_unit_daemon_reload: true
       loop: "{{ celery_unit_files.results | default([]) }}"
       loop_control:
         label: "{{ item.item }}"
@@ -1452,23 +1495,35 @@
 
     - name: "[PLAY 2] Backend | Wait for API to be ready"
       uri:
-        # uvicorn binds plain HTTP on localhost:8001 (backend_port); nginx holds
+        # uvicorn binds plain HTTP on localhost:<backend_port>; nginx holds
         # TLS on 443. There is NO 8443 listener (#957/#10378). Probe the direct
         # backend on the loopback — it does not depend on nginx (deployed after
         # this task) and needs no cert validation (#10650).
         #
         # #11455: run ON the backend node (no delegate_to) so 127.0.0.1 is the
-        # node's own loopback. 8001 is bound to localhost, so it is unreachable
+        # node's own loopback. backend_port is bound to localhost, so it is unreachable
         # from the controller — delegating to localhost only worked for a
         # co-located single-node backend and spun 42×10s against the wrong host
         # for any remote backend, aborting the rollout via any_errors_fatal.
-        url: "http://127.0.0.1:8001/api/health"
+        url: "http://127.0.0.1:{{ backend_port }}/api/health"  # the port the unit renders from (#21343)
         status_code: 200
       register: backend_health_check
       until: backend_health_check.status == 200
       retries: 42
       delay: 10
       when: "'backend' in group_names"
+      tags: [backend, restart]
+
+    - name: "[PLAY 2] Backend | Check the re-aligned internal key works, and report it (#20750)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/realign_internal_api_key_verify.yml
+        apply:
+          tags: [backend, restart]
+      vars:
+        internal_api_key_backend_url: "http://127.0.0.1:{{ backend_port }}"  # pragma: allowlist secret -- a URL; vars/backend-env.yml (#21343)
+      when:
+        - "'backend' in group_names"
+        - internal_api_key_realign_applying | default(false) | bool
       tags: [backend, restart]
 
     # ----- Frontend -----
@@ -1585,10 +1640,12 @@
       tags: [frontend, restart]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
-      systemd:
-        name: nginx
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [frontend, restart]
+      vars:
+        restart_unit_name: nginx
       when: "'frontend' in group_names"
       tags: [frontend, restart]
 
@@ -1662,13 +1719,15 @@
       tags: [npu, npu-worker, deps]
 
     - name: "[PLAY 2] NPU | Restart service"
-      systemd:
-        name: autobot-npu-worker
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [npu, npu-worker, restart]
+      vars:
+        restart_unit_name: autobot-npu-worker
+        restart_unit_tolerate_failure: true
       when: >-
         'npu' in group_names
-      failed_when: false
       tags: [npu, npu-worker, restart]
 
     - name: "[PLAY 2] NPU | Wait for service to stabilize (#1633)"
@@ -1746,10 +1805,12 @@
     # nothing says so. A restart that cannot complete is a real failure and
     # should be visible.
     - name: "[PLAY 2] TTS | Restart service"
-      systemd:
-        name: autobot-tts-worker
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [tts, tts-worker, restart]
+      vars:
+        restart_unit_name: autobot-tts-worker
       when: "'npu' in group_names"
       tags: [tts, tts-worker, restart]
 
@@ -1884,13 +1945,15 @@
       tags: [browser, browser-worker, deps]
 
     - name: "[PLAY 2] Browser | Restart service"
-      systemd:
-        name: autobot-playwright
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [browser, browser-worker, restart]
+      vars:
+        restart_unit_name: autobot-playwright
+        restart_unit_tolerate_failure: true
       when: >-
         'browser' in group_names
-      failed_when: false
       tags: [browser, browser-worker, restart]
 
     # #12912: waited on 3000, which nothing serves — autobot-playwright binds
@@ -1947,23 +2010,27 @@
       tags: [ai-stack, aiml]
 
     - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
-      systemd:
-        name: autobot-ai-stack
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [ai-stack, aiml, restart]
+      vars:
+        restart_unit_name: autobot-ai-stack
+        restart_unit_tolerate_failure: true
       when: >-
         'aiml' in group_names
-      failed_when: false
       tags: [ai-stack, aiml, restart]
 
     - name: "[PLAY 2] AI Stack | Restart autobot-chromadb service"
-      systemd:
-        name: autobot-chromadb
-        state: restarted
-      become: true
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/restart_unit.yml
+        apply:
+          tags: [ai-stack, aiml, chromadb, restart]
+      vars:
+        restart_unit_name: autobot-chromadb
+        restart_unit_tolerate_failure: true
       when: >-
         'aiml' in group_names
-      failed_when: false
       tags: [ai-stack, aiml, chromadb, restart]
 
     # ----- Shared (non-backend nodes) -----
@@ -1999,19 +2066,6 @@
       when: "'backend' not in group_names"
       tags: [shared]
 
-    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
-    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
-      when: slm_node_id is defined
-      tags: [slm-agent, shared]
-
     # #11480: redeploy the slm-agent (code + agent-secrets.env + restart) on
     # remote nodes too. block/rescue keeps a single node's agent failure from
     # aborting the whole fleet update (Play 2 has any_errors_fatal: true) —
@@ -2040,16 +2094,21 @@
               agent may run stale code / miss agent-secrets.env (#11480).
               Continuing fleet update.
 
+    # Linked after the redeploy so a freshly enrolled node (no agent tree yet) gets the
+    # link once the role has installed it (#21035).
+    # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
+    - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-agent
+      when: slm_node_id is defined
+      tags: [slm-agent, shared]
+
     # Issue #9565: slm-backend needs autobot_shared in PYTHONPATH
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
-      ansible.builtin.file:
-        src: ../autobot_shared
-        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
-        state: link
-        force: true
-        owner: autobot
-        group: autobot
-      become: true
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/link_autobot_shared.yml
+      vars:
+        shared_link_component: autobot-slm-backend
       when: slm_node_id is defined
       tags: [slm-backend, shared]
 
@@ -2490,10 +2549,57 @@
       retries: 12
       delay: 10
 
+    # #20250: the agents reconnect after the restarts above, so read the count once they have had
+    # time to. Judged against the count before the update, so a node that was already down costs no
+    # wait and isn't blamed on it. Not a failure of this task: the marker below says it.
+    - name: Wait for the nodes to report back
+      uri:
+        url: "https://{{ slm_host }}/slm/api/health"
+        validate_certs: false
+        status_code: 200
+      register: fleet_nodes_health
+      until: >-
+        fleet_nodes_health.status == 200 and
+        (fleet_nodes_health.json.nodes_online | default(0) | int) >= (fleet_nodes_before.json.nodes_online | default(0) | int)
+      retries: "{{ update_nodes_online_retries | default(18) }}"
+      delay: "{{ update_nodes_online_delay | default(10) }}"
+      failed_when: false
+      # /health answers 200 with 0 nodes when its database is down, which is no count to judge against.
+      when: fleet_nodes_before.json is defined and fleet_nodes_before.json.database == 'healthy'
+
     - name: Clean up deploy archives
       file:
         path: /tmp/autobot-deploy
         state: absent
+
+    # Read by services/self_update_log_reader.py, so the update page says so too.
+    - name: Report nodes still offline after the update
+      debug:
+        msg: >-
+          NODES OFFLINE AFTER UPDATE:
+          {{ (fleet_nodes_before.json.nodes_online | default(0) | int) - (fleet_nodes_health.json.nodes_online | default(0) | int) }}
+          of {{ fleet_nodes_before.json.nodes_online | default(0) | int }}
+      when:
+        - fleet_nodes_before.json is defined
+        - fleet_nodes_before.json.database == 'healthy'
+        - fleet_nodes_health.json is defined
+        - fleet_nodes_health.json.database == 'healthy'
+        - (fleet_nodes_health.json.nodes_online | default(0) | int) < (fleet_nodes_before.json.nodes_online | default(0) | int)
+
+    - name: Say when the nodes could not be counted
+      debug:
+        msg: "Could not compare the nodes online before and after this update"
+      when: >-
+        fleet_nodes_before.json is defined and
+        (fleet_nodes_before.json.database != 'healthy' or fleet_nodes_health.json.database | default('') != 'healthy')
+
+    # #21343: where the credential re-alignment stands, from each node that reported it; the proposal
+    # step records it and never fails the update.
+    - name: "Collect the credential re-alignment reports (#21343)"
+      ansible.builtin.set_fact:
+        internal_key_realign_lines: >-
+          {{ groups['infrastructure'] | default([]) | map('extract', hostvars, 'internal_api_key_realign_report')
+             | select('defined') | list }}
 
     - name: Display update summary
       debug:
@@ -2509,4 +2615,6 @@
           - ""
           - "  SLM Admin:     https://{{ slm_host | default('(not-deployed)') }}/"
           - "  User Frontend: https://{{ frontend_host | default('(not-deployed)') }}/"
+          - ""
+          - "  Credential re-alignment: {{ internal_key_realign_lines | default([]) | join(' | ') or 'nothing pending' }}"
           - ""

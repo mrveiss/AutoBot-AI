@@ -512,7 +512,7 @@ fi
 # ──────────────────────────────────────────────
 # Untrusted-repo clone safety (#16488)
 #
-# The research/adopt skills read other people's repositories, and a clone
+# The `/autobot-dev-skills:lifecycle research` and `adopt` workflows read other people's repositories, and a clone
 # brings an untrusted `.git` onto the machine with it -- hooks, `core.fsmonitor`,
 # `core.sshCommand`, filter drivers, and recursive submodules can all execute
 # during or after a plain `git clone`. `scripts/research/safe_clone.py` is the

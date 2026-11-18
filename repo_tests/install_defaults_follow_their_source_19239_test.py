@@ -38,7 +38,7 @@ def test_the_node_minimum_is_the_frontends_engines_floor() -> None:
 
 
 def test_the_backend_port_is_the_roles_slm_backend_port() -> None:
-    defaults = _ROOT / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"  # #19832: the one authority
+    defaults = _ROOT / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"  # #20600: the one authority
     port = yaml.safe_load(defaults.read_text(encoding="utf-8"))["slm_backend_port"]
     assert str(port) == _readonly("SLM_BACKEND_PORT")
     assert "127.0.0.1:8000" not in _INSTALL.read_text(encoding="utf-8"), "a literal backend port is back"

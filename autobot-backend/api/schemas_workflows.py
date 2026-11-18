@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Workflow, registry, RUM, elevation, advanced-control, state-tracking, and validation schemas.
-"""
+"""Workflow, registry, RUM, elevation, advanced-control, state-tracking, and validation schemas."""
 
 import re
 from datetime import datetime
@@ -66,6 +64,7 @@ class ValidationDashboardTrendsResponse(BaseModel):
 
     status: str
     trends: Any | None = None
+    available: bool = False  # False when no stored trend history backs the series (#20523)
     timestamp: str
 
 

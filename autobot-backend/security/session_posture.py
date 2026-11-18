@@ -48,6 +48,18 @@ class SessionPosture(enum.Enum):
     STRICT = "strict"
 
 
+class NotSessionOwner(HTTPException):
+    """STRICT's 403 for a session another user owns -- a 403 to every caller, a 404 only where a route says so.
+
+    A subclass, so its status, detail and every ``except HTTPException`` are unchanged. The owner routes of the
+    conversation files catch it to answer 404 (the same as an unknown id), so a caller cannot learn that a
+    conversation exists (#20195). It is never raised for an unreadable owner (a store failure stays 403, #14033).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(status_code=403, detail="Access denied: You do not own this session")
+
+
 async def authenticated_user(session_id: str, request: Request) -> Dict:
     """The authenticated user from the request, or 401 -- a revoked JWT included (#18688)."""
     user_data = await resolve_human_user(request)
@@ -59,6 +71,14 @@ async def authenticated_user(session_id: str, request: Request) -> Dict:
 
 #: A store failure, which a route must not present as "no such session" to the real owner.
 UNREADABLE_OWNER_DETAIL = "Cannot verify session ownership"
+
+#: The one body for "no such session for you", whether it is another user's or does not exist (#20413).
+SESSION_NOT_FOUND_DETAIL = "Chat session not found"
+
+
+def session_not_found() -> HTTPException:
+    """The single decision point: a foreign and an unknown conversation answer with this, byte for byte."""
+    return HTTPException(status_code=404, detail=SESSION_NOT_FOUND_DETAIL)
 
 
 def deny_unreadable_owner(session_id: str, username: str | None) -> HTTPException:
@@ -115,7 +135,7 @@ async def unowned_access(session_id: str, user_data: Dict, request: Request) -> 
         logger.error("Session %s... has no owner: %s by %s", session_id[:8], request.method, username)
     if is_admin_role(user_data.get("role")):
         return {"authorized": True, "user_data": user_data, "reason": "admin_unowned_access"}
-    raise HTTPException(status_code=404, detail="Chat session not found")
+    raise session_not_found()
 
 
 async def _strict_owner_check(session_id: str, user_data: Dict, request: Request) -> Dict:
@@ -129,7 +149,7 @@ async def _strict_owner_check(session_id: str, user_data: Dict, request: Request
         return {"authorized": True, "user_data": user_data, "reason": "legacy_unowned"}
     if owner != username:
         logger.warning("Access denied: %s wanted session %s... owned by %s", username, session_id[:8], owner)
-        raise HTTPException(status_code=403, detail="Access denied: You do not own this session")
+        raise NotSessionOwner()
     return {"authorized": True, "user_data": user_data, "reason": "owner_match"}
 
 
@@ -146,3 +166,20 @@ async def validate_strict(session_id: str, user_data: Dict, request: Request) ->
     except Exception as e:
         logger.error("Session ownership validation error: %s", e)
         raise_internal_error("Failed to validate session ownership")
+
+
+async def validate_strict_hidden(session_id: str, request: Request, *, must_exist: bool = False) -> Dict:
+    """STRICT for a route that must not reveal whether a conversation exists (#20413).
+
+    Another user's conversation answers exactly as an unknown id does (``session_not_found``); the real denial
+    stays in the server log (``_strict_owner_check``). An unreadable owner stays 403, so a store outage is not
+    shown to the real owner as "not found" (#14033). ``must_exist`` is for a write that would otherwise let an
+    id with no session through as ``legacy_unowned`` (the way a new chat gets created): that id is a 404 too.
+    """
+    try:
+        decision = await validate_strict(session_id, await authenticated_user(session_id, request), request)
+    except NotSessionOwner:
+        raise session_not_found() from None
+    if must_exist and decision.get("reason") == "legacy_unowned":
+        raise session_not_found()
+    return decision

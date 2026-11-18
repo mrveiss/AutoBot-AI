@@ -8,9 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem, LLCWorkItemComment
 from llc.services.handoff import HandoffNotAllowed, HandoffService
+from llc.services.work_item_service import WorkItemService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -154,7 +156,10 @@ class TestAgentToHuman:
         item = _make_item(assignee_agent_id=agent_id)
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)):
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
+        ):
             result = await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -174,7 +179,10 @@ class TestAgentToHuman:
         item = _make_item(assignee_agent_id=agent_id, title="My work item")
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)):
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
+        ):
             result = await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -197,7 +205,10 @@ class TestAgentToHuman:
         item = _make_item(assignee_agent_id=agent_id, version=3)
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)):
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
+        ):
             await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -214,7 +225,11 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         redis_mock = AsyncMock()
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
+        redis_mock.get.return_value = f"{agent_id}#run-123"  # the fence of the checkout being handed off
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+        ):
             await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -223,7 +238,11 @@ class TestAgentToHuman:
                 company_id=str(item.company_id),
             )
 
-        redis_mock.delete.assert_called_once_with(f"llc:checkout:{item.id}")
+        redis_mock.delete.assert_not_called()  # never an unconditional DEL (#19631)
+        # the exact fence of the handed-off generation, so the same agent's next checkout keeps its own (#21640 review)
+        redis_mock.eval.assert_called_once_with(
+            COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{item.id}", f"{agent_id}#run-123"
+        )
 
     async def test_publishes_notification(self, service, mock_session):
         agent_id = uuid.uuid4()
@@ -233,7 +252,10 @@ class TestAgentToHuman:
         mock_session._db_result.scalar_one_or_none.return_value = item
 
         redis_mock = AsyncMock()
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=redis_mock)):
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=redis_mock)),
+        ):
             await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -256,7 +278,10 @@ class TestAgentToHuman:
         item = _make_item(assignee_agent_id=agent_id)
         mock_session._db_result.scalar_one_or_none.return_value = item
 
-        with patch("llc.services.handoff.get_async_redis_client", new=AsyncMock(return_value=None)):
+        with (
+            patch("llc.services.work_item_own_task.get_async_redis_client", new=AsyncMock(return_value=None)),
+            patch("llc.services.commit_publish.get_async_redis_client", new=AsyncMock(return_value=None)),
+        ):
             await service.agent_to_human(
                 mock_session,
                 work_item_id=str(item.id),
@@ -271,6 +296,18 @@ class TestAgentToHuman:
 # ---------------------------------------------------------------------------
 # approve
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def done_path():
+    """The shared work item service approve finishes through (#21590), with its outward effects faked."""
+    svc = WorkItemService(activity_log=MagicMock(record=AsyncMock()))
+    svc._trigger_artifact_ingest = AsyncMock()
+    with (
+        patch("llc.services.handoff.get_work_item_service", return_value=svc),
+        patch("llc.services.work_item_service.release_workspace_for_task", new=AsyncMock()),
+    ):
+        yield svc
 
 
 class TestApprove:
@@ -298,7 +335,7 @@ class TestApprove:
                 company_id=str(item.company_id),
             )
 
-    async def test_sets_status_done_and_completed_at(self, service, mock_session):
+    async def test_sets_status_done_and_completed_at(self, service, mock_session, done_path):
         reviewer_id = uuid.uuid4()
         item = _make_item(reviewer_user_id=reviewer_id, status=WorkItemStatus.IN_REVIEW)
         mock_session._db_result.scalar_one_or_none.return_value = item

@@ -26,8 +26,9 @@ import { THEME_PRESETS, type ThemePreset } from './themePresets'
 
 /** The built-in themes a `data-theme` attribute can carry (#18223). `contrast`
  * (high contrast) and `mono` (monochrome) are light-based accessibility and
- * corporate themes; css/themes/{contrast,mono}.css style them. */
-export const EFFECTIVE_THEMES = ['light', 'dark', 'contrast', 'mono'] as const
+ * corporate themes; `contrast-dark` is the high-contrast theme on a dark base
+ * (#18253). css/themes/{contrast,contrast-dark,mono}.css style them. */
+export const EFFECTIVE_THEMES = ['light', 'dark', 'contrast', 'contrast-dark', 'mono'] as const
 export type EffectiveTheme = (typeof EFFECTIVE_THEMES)[number]
 
 /** Available theme options: the built-ins plus `system`, which follows the OS
@@ -37,7 +38,7 @@ export type Theme = (typeof THEMES)[number]
 
 /** The `color-scheme` a theme renders with (native controls, scrollbars). */
 export function colorSchemeFor(theme: EffectiveTheme): 'dark' | 'light' {
-  return theme === 'dark' ? 'dark' : 'light'
+  return theme === 'dark' || theme === 'contrast-dark' ? 'dark' : 'light'
 }
 
 /** Available accent color options */
@@ -220,13 +221,6 @@ function applyPreset(preset: ThemePreset): void {
 
   applyTheme(config.theme)
   applyAccentColor(config.accentColor)
-
-  // Apply high contrast mode if specified
-  if (config.highContrast) {
-    document.documentElement.setAttribute('data-high-contrast', 'true')
-  } else {
-    document.documentElement.removeAttribute('data-high-contrast')
-  }
 }
 
 /**
@@ -328,11 +322,10 @@ export function useTheme() {
     clearNamedPreset()
   }
 
-  /** A manual theme or accent change leaves no named preset; high contrast goes with it */
+  /** A manual theme or accent change leaves no named preset */
   function clearNamedPreset(): void {
     currentPreset.value = presetFor(NO_NAMED_PRESET, currentTheme.value, currentAccent.value)
     savePreset(null)
-    document.documentElement.removeAttribute('data-high-contrast')
   }
 
   /**
@@ -415,6 +408,7 @@ export function useTheme() {
     dark: 'Dark',
     light: 'Light',
     contrast: 'High contrast',
+    'contrast-dark': 'High contrast dark',
     mono: 'Monochrome',
     system: 'System',
   }
@@ -427,6 +421,9 @@ export function useTheme() {
     dark: 'ui.themeToggle.dark',
     light: 'ui.themeToggle.light',
     contrast: 'ui.themeToggle.highContrast',
+    // The preset's own name (already translated in every locale), so the
+    // picker needs no new key (#18253).
+    'contrast-dark': 'ui.themePresets.names.high-contrast-dark',
     mono: 'ui.themeToggle.monochrome',
     system: 'ui.themeToggle.system',
   }
@@ -563,16 +560,12 @@ export function initializeTheme(): void {
     currentAccent.value = config.accentColor
     applyTheme(config.theme)
     applyAccentColor(config.accentColor)
-    if (config.highContrast) {
-      document.documentElement.setAttribute('data-high-contrast', 'true')
-    }
   } else {
     // Fallback to individual settings
     const savedTheme = loadTheme()
     const savedAccent = loadAccentColor()
     applyTheme(savedTheme)
     applyAccentColor(savedAccent)
-    document.documentElement.removeAttribute('data-high-contrast')
     currentTheme.value = savedTheme
     currentAccent.value = savedAccent
     currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)

@@ -22,13 +22,14 @@ import numpy as np
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.paths import shared_cache_path
+from autobot_shared.ssot_hf_models import CODE_EMBEDDING_MODEL
 from knowledge.embedding_cache import get_embedding_cache
 from worker_node import WorkerNode
 
 logger = get_llm_logger("code_embedding_generator")
 
 # CodeBERT model and embedding dimension; the code index's recorded space (#18185)
-CODEBERT_MODEL_NAME = "microsoft/codebert-base"
+CODEBERT_MODEL_NAME = CODE_EMBEDDING_MODEL  # the one definition: autobot_shared/ssot_hf_models.py (#19738)
 CODEBERT_EMBEDDING_DIM = 768
 
 # Persistent OpenVINO compiled-model cache (#10601): without CACHE_DIR the model

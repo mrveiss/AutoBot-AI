@@ -20,6 +20,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 _CORE = "services/service_upsert.py"
 _KNOWN_FORKS: set[str] = set()  # the third copy moved onto the core (#19059)
@@ -97,9 +99,9 @@ def _sources() -> dict[str, ast.AST]:
     out = {}
     for path in _SLM_ROOT.rglob("*.py"):
         rel = path.relative_to(_SLM_ROOT).as_posix()
-        if rel.endswith("_test.py") or rel.startswith(("tests/", "migrations/", "venv/", ".venv/")) or "/test_" in rel:
+        if rel.startswith(("tests/", "migrations/", "venv/", ".venv/")) or "/test_" in rel:
             continue
-        if path.name.startswith("test_") or path.name == "conftest.py":
+        if is_test_filename(path.name, include_js=False):
             continue
         out[rel] = ast.parse(path.read_text(encoding="utf-8"))
     return out

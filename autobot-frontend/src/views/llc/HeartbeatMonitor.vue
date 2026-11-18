@@ -162,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveBlob } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -344,13 +345,7 @@ async function downloadFixture(run: AgentRun) {
     const url = `${getApiBase()}/llc/agents/${selectedAgent.value.id}/runs/${run.id}/fixture`
     const res = await fetchWithAuth(url)
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    const blob = await res.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = `fixture_${run.id.slice(0, 8)}.json`
-    a.click()
-    URL.revokeObjectURL(objectUrl)
+    saveBlob(await res.blob(), `fixture_${run.id.slice(0, 8)}.json`)
   } catch (err) {
     logger.error('Fixture export failed', err)
   } finally {
@@ -437,7 +432,7 @@ onUnmounted(() => {
 }
 
 .view-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
   margin: 0;
 }
@@ -463,7 +458,7 @@ onUnmounted(() => {
 .agent-grid {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .agent-grid th {
@@ -530,7 +525,7 @@ onUnmounted(() => {
 .btn-trigger {
   padding: 0.3rem 0.75rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: 0.8rem;
@@ -547,7 +542,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   justify-content: flex-end;
 }
@@ -572,14 +567,14 @@ onUnmounted(() => {
 
 .drawer-header h3 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
 .btn-close {
   background: none;
   border: none;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   cursor: pointer;
   color: var(--text-secondary);
 }
@@ -606,7 +601,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .run-reason {
@@ -724,7 +719,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .meta-item {
@@ -741,7 +736,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .event-nav button {
@@ -782,7 +777,7 @@ onUnmounted(() => {
 .diff-title,
 .output-title {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -791,7 +786,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   overflow-x: auto;
   margin: 0;
   white-space: pre;

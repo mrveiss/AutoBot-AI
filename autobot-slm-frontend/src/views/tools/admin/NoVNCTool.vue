@@ -2,7 +2,7 @@
 // Copyright (c) 2025 mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 /**
  * NoVNCTool - noVNC Remote Desktop Viewer
  *
@@ -15,7 +15,6 @@ import { VncViewer, VncToolbar } from '@autobot/vnc'
 import type { VncHost } from '@autobot/vnc'
 import { getVNCHosts, getSlmApiBase } from '@/config/ssot-config'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NoVNCTool')
 const api = useSlmApi()

@@ -35,6 +35,7 @@ from ..models.role_assignment import LLCRoleAssignment
 from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 
 _HOLDER_COLUMNS = {
     RoleHolderType.AGENT: "holder_agent_id",
@@ -53,7 +54,7 @@ def _coerce_holder_type(holder_type: object) -> RoleHolderType:
         return RoleHolderType(holder_type)
     except ValueError as exc:
         valid = ", ".join(sorted(m.value for m in RoleHolderType))
-        raise ValueError(f"invalid holder_type {holder_type!r}; expected one of: {valid}") from exc
+        raise CompanyOsError(f"invalid holder_type {holder_type!r}; expected one of: {valid}") from exc
 
 
 class RoleAssignmentService(LLCServiceBase):
@@ -67,9 +68,7 @@ class RoleAssignmentService(LLCServiceBase):
         actor: Optional[str],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        """Emit one activity-log event, or nothing if the DI slot is unpopulated."""
-        if not self.activity_log:
-            return
+        """Emit one activity-log event in the caller's transaction."""
         await self.activity_log.record(
             session=session,
             company_id=str(assignment.company_id),
@@ -92,7 +91,7 @@ class RoleAssignmentService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleAssignment:
         if company_id is None or role_id is None or holder_id is None:
-            raise ValueError("company_id, role_id and holder_id are all required")
+            raise CompanyOsError("company_id, role_id and holder_id are all required")
         # Occupancy is an admin action. Without this, any member could assign
         # themselves to a role an admin had granted permissions to and inherit
         # them — effective_permissions() honours any open tenure and cannot see
@@ -102,7 +101,7 @@ class RoleAssignmentService(LLCServiceBase):
         await self._require_role(session, company_id, role_id)
 
         if await self._current_tenure(session, company_id, role_id, resolved, holder_id):
-            raise ValueError("holder already holds this role")
+            raise CompanyOsError("holder already holds this role")
 
         assignment = LLCRoleAssignment(
             company_id=company_id,

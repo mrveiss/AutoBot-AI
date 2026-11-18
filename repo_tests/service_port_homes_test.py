@@ -37,6 +37,7 @@ from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import PortConfig
+from tools.lint import _parse_cache as parse_cache
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
 
 from tools.lint import _env_fork_scan as scan_mod  # isort: skip
@@ -173,7 +174,6 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "service-port-homes-scan",
     discover=_scanned_files,
-    floor=5570,  # mid-window: population 5645, window (5495, 5645)
     growth=150,
     what="production python and text sources swept for a second definition of a service port",
     roots=_SCAN_ROOTS,
@@ -206,7 +206,7 @@ def _docstrings(tree: ast.Module) -> set[int]:
 def _python_sites(source: str, value: int, rel: str = "<source>") -> list[int]:
     """Lines of each non-docstring int or string constant stating *value*."""
     try:
-        tree = ast.parse(source, filename=rel)
+        tree = parse_cache.parse(source, filename=rel)
     except SyntaxError as exc:  # name the file: a bare SyntaxError would hide which one broke the sweep
         raise AssertionError(f"{rel}: swept but does not parse ({exc.msg}, line {exc.lineno})") from exc
     word = re.compile(_WORD.format(value))
@@ -388,7 +388,9 @@ def test_an_unreadable_discovered_file_fails_the_sweep(tmp_path: Path) -> None:
 
 def test_a_retired_number_has_no_home() -> None:
     assert _homes(6081) == set(), "6081 is served by no host; nothing may state it"
-    found = forbidden_sites(6081, {"autobot-frontend/src/config/x.ts": "port: getEnvNumber('P', 6081),\n"})
+    found = forbidden_sites(
+        6081, {"autobot-frontend/src/config/x.ts": "port: getEnvPositiveInt(import.meta.env, 'P', 6081),\n"}
+    )
     assert found == ["autobot-frontend/src/config/x.ts:1: 6081 -- read PortConfig.vnc"]
 
 

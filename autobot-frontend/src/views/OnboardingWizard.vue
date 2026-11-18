@@ -485,7 +485,7 @@ onMounted(async () => {
   border: 2px solid var(--border-default);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -556,7 +556,7 @@ onMounted(async () => {
 }
 
 .wizard-step-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 1.5rem;
@@ -571,7 +571,7 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .error-banner--soft {
@@ -620,7 +620,7 @@ onMounted(async () => {
 }
 
 .section-title {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -644,19 +644,19 @@ onMounted(async () => {
 }
 
 .metric-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-bottom: 0.25rem;
 }
 
 .metric-value {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .metric-sub {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-top: 0.125rem;
 }
@@ -677,7 +677,7 @@ onMounted(async () => {
 
 .service-name {
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   min-width: 80px;
 }
 
@@ -807,7 +807,7 @@ onMounted(async () => {
   gap: 1rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .review-row:last-child {

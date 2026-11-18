@@ -93,6 +93,9 @@ def agent_api_command() -> Optional[str]:
     backend tree, so a deployed install has both. A path with a space or shell metacharacter cannot
     be allow-listed as a clean prefix, so it yields ``None`` rather than a wider grant.
     """
+    if not Path(_SCRIPT).is_file():
+        logger.warning("Agent API command is missing; this run gets no API instructions")
+        return None
     command = f"{sys.executable} {_SCRIPT}"
     if not all(_SAFE_COMMAND_RE.match(part) for part in command.split(" ")) or command.count(" ") != 1:
         logger.warning("Agent API command path is not safe to allow-list: %r", command)

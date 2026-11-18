@@ -14,7 +14,7 @@
  * Author: mrveiss
  */
 
-import { getConfig, getServiceUrl as ssotGetServiceUrl, getApiBase } from './ssot-config';
+import { getConfig, getServiceUrl as ssotGetServiceUrl, getApiBase, getBackendUrl } from './ssot-config';
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -110,13 +110,7 @@ export default class ServiceDiscovery {
     // For backend service, check proxy mode FIRST before any SSOT/env lookup (#919)
     // When VITE_API_BASE_URL is not set, all API calls go through nginx proxy (relative URLs)
     if (serviceName === 'backend') {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-      if (!apiBaseUrl) {
-        this.log('Backend service using proxy mode (empty URL) - requests via nginx at .21');
-        return '';
-      }
-      this.log(`Using VITE_API_BASE_URL for backend:`, apiBaseUrl);
-      return apiBaseUrl;
+      return getBackendUrl(); // #19821: the one backend-origin rule (proxy mode unless VITE_API_BASE_URL)
     }
 
     // Try SSOT helper function for non-backend services
@@ -401,6 +395,7 @@ export default class ServiceDiscovery {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+        // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
         const response = await fetch(testUrl, {
           method: 'HEAD',
           signal: controller.signal,
@@ -429,6 +424,7 @@ export default class ServiceDiscovery {
         testEndpoint = '/vnc.html';
       }
 
+      // eslint-disable-next-line no-restricted-syntax -- reachability probe of candidate hosts, not the backend
       const response = await fetch(`${url}${testEndpoint}`, {
         method: 'HEAD',
         signal: controller.signal,

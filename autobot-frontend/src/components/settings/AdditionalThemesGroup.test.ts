@@ -9,6 +9,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
+const userState = vi.hoisted(() => ({ isAdmin: true }))
+vi.mock('@/stores/useUserStore', () => ({ useUserStore: () => userState }))
+
 vi.mock('@/composables/useThemeRegistry', () => ({
   fetchInstalledThemes: () =>
     Promise.resolve([{ id: 'aqua', name: 'Aqua', author: 'Northwind', version: '1.2', supports: [] }]),
@@ -32,6 +35,7 @@ async function mountGroup() {
 }
 
 beforeEach(() => {
+  userState.isAdmin = true
   localStorage.clear()
 })
 
@@ -49,5 +53,16 @@ describe('AdditionalThemesGroup', () => {
     const link = wrapper.get('a[target="_blank"]')
     expect(link.attributes('rel')).toContain('noopener')
     expect(link.text()).toBe(en.settings.additionalThemes.slmLink)
+    expect(link.attributes('href')).toMatch(/\/settings\/admin\/themes$/)
+  })
+
+  it('shows a non-admin an administrator note, not an SLM link, and keeps the badge', async () => {
+    userState.isAdmin = false
+    const { wrapper } = await mountGroup()
+    expect(wrapper.find('a[target="_blank"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="additional-themes-admin-note"]').text()).toBe(
+      en.settings.additionalThemes.adminManaged,
+    )
+    expect(wrapper.get('[data-testid="additional-theme-aqua"]').text()).toContain('Deployed via SLM')
   })
 })

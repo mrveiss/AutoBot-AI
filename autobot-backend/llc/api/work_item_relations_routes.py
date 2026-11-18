@@ -7,9 +7,9 @@
 Moved out of ``work_items.py`` (at its size ceiling); the paths are unchanged.
 
 Scope and identity come from the verified caller, never the request: the company
-is ``ctx.org_id`` and the acting user is ``actor_id(current_user)``. ``company_id``,
-``created_by_*`` and ``actor_*`` are still accepted so an existing client does not
-start failing with a 422, and are ignored.
+is ``ctx.org_id`` and the acting user is ``actor_id(current_user)``. ``company_id`` is
+still accepted so an existing client does not start failing with a 422, and is ignored;
+a creator or actor sent in the body or query is not a field, so it is dropped.
 """
 
 import uuid
@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
@@ -31,10 +32,10 @@ from ..models.enums import WorkItemRelationType
 from ..models.work_item import LLCWorkItemRelation
 from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import WorkItemService
-from ._common import actor_id
+from ._common import actor_id, require_work_item_id
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
+router = APIRouter(prefix="/work-items", tags=["llc-work-items"], dependencies=[Depends(require_work_item_id)])
 _get_relation_service = lazy_singleton(WorkItemRelationService)
 _service = service_dep(WorkItemService)
 
@@ -43,13 +44,11 @@ _REL_NOT_FOUND = "Relation not found"
 
 
 class RelationCreate(BaseModel):
-    """``company_id`` and ``created_by_*`` are accepted for compatibility and ignored."""
+    """``company_id`` is accepted for compatibility and ignored; the creator is the authenticated caller."""
 
     company_id: Optional[str] = None
     target_id: str
     relation_type: WorkItemRelationType
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
 
 
 def _relation_service() -> WorkItemRelationService:
@@ -110,10 +109,10 @@ async def add_relation(
         )
         await session.commit()
     except RelationConflict as exc:
-        logger.info("Relation conflict on %s: %s", work_item_id, exc)
+        logger.info("Relation conflict on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=409, detail="Relation already exists or is invalid")
     except ValueError as exc:
-        logger.info("Relation add rejected on %s: %s", work_item_id, exc)
+        logger.info("Relation add rejected on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return {
         "id": str(rel.id),
@@ -128,8 +127,6 @@ async def remove_relation(
     work_item_id: str,
     relation_id: str,
     company_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
-    actor_agent_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
-    actor_user_id: Optional[str] = Query(None, description="Accepted for compatibility; ignored."),
     session: AsyncSession = Depends(get_session),
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -145,5 +142,5 @@ async def remove_relation(
         )
         await session.commit()
     except ValueError as exc:
-        logger.info("Relation remove rejected on %s: %s", work_item_id, exc)
+        logger.info("Relation remove rejected on %s: %s", work_item_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=404, detail=_REL_NOT_FOUND)

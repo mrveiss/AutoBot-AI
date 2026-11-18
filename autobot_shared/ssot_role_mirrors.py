@@ -38,13 +38,12 @@ SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
 # Feature-router boot mode (#6690, #19319): whether one failed feature-router import aborts
 # startup. #6690 ruled strict wherever a broken import should surface before deploy, and a
 # degraded start in production, which prefers a backend missing one router (logged at ERROR,
-# published to the router health endpoint) over an outage. Both profiles live here:
-#   * DEFAULT -- every process that does not set AUTOBOT_FEATURE_ROUTERS_STRICT: dev checkouts
-#     and CI. ``MiscConfig.feature_routers_strict`` defaults to it; the dev compose override
-#     example carries it explicitly so it is not inherited from the production base file.
-#   * PRODUCTION -- the two production deployments: Ansible-managed backends (the backend role's
-#     ``backend_feature_routers_strict``, rendered by ``backend.env.j2``; an inventory may override
-#     it) and the ``autobot-backend`` service in ``docker-compose.yml`` (owner ruling on #19319).
-# Every carrier is pinned by ``repo_tests/feature_routers_strict_one_home_19319_test.py``.
+# published to the router health endpoint) over an outage. ``deployment_profile.
+# feature_routers_strict_default`` picks between them from the environment (#19395):
+#   * DEFAULT -- any non-production environment, and a process that names no environment.
+#   * PRODUCTION -- a process that names any other environment.
+# AUTOBOT_FEATURE_ROUTERS_STRICT, set explicitly, overrides both; the backend role's optional
+# ``backend_feature_routers_strict`` inventory variable is how a managed host does that.
+# Pinned by ``repo_tests/feature_routers_strict_one_home_19319_test.py``.
 FEATURE_ROUTERS_STRICT_DEFAULT = "1"
 FEATURE_ROUTERS_STRICT_PRODUCTION = "0"

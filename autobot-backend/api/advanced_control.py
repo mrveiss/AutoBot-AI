@@ -9,7 +9,7 @@ Provides monitoring, desktop streaming, and takeover management endpoints
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket
 
 from api.schemas_emergency_stop import EmergencyStopReportResponse
 from api.schemas_system import (
@@ -36,6 +36,7 @@ from api.schemas_workflows import (
 )
 from api.ws_security import enforce_ws_admin, enforce_ws_desktop_auth, enforce_ws_origin
 from auth_middleware import check_admin_permission
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.websocket_subprotocol import accept_websocket
@@ -533,7 +534,6 @@ async def monitoring_websocket(websocket: WebSocket):
 
     try:
         while True:
-            # Send periodic system updates
             try:
                 health_data = await get_system_health()
                 await websocket.send_json({"type": "system_health", "data": health_data})
@@ -541,15 +541,15 @@ async def monitoring_websocket(websocket: WebSocket):
                 # Wait for next update cycle
                 await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)
 
-            except WebSocketDisconnect:
+            except PEER_CLOSED_ERRORS:
                 break
             except Exception as e:
                 logger.error("Error in monitoring WebSocket: %s", e)
                 await websocket.send_json({"type": "error", "message": "Operation failed"})
                 break
 
-    except WebSocketDisconnect:
-        logger.info("Monitoring WebSocket client disconnected")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "monitoring_websocket")
     finally:
         try:
             await websocket.close()
@@ -575,8 +575,8 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     try:
         # Use the desktop streaming manager's WebSocket handler
         await get_desktop_streaming().handle_websocket_client(websocket, f"/ws/desktop/{session_id}")
-    except WebSocketDisconnect:
-        logger.info("Desktop streaming WebSocket client disconnected: %s", session_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "desktop_streaming_websocket")
 
 
 @router.get("/", response_model=AdvancedControlInfoResponse)

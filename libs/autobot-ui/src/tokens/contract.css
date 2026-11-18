@@ -125,7 +125,10 @@
   /* ---- Layering ------------------------------------------------------ */
   --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
+  /* Portaled menus/popovers opened from a modal or drawer must sit above its overlay (#20382). */
+  --aui-z-popover: calc(var(--aui-z-modal) + 1);
   --aui-z-tooltip: 1200;
+  --aui-z-toast: calc(var(--aui-z-tooltip) + 100);
   --aui-z-raised: 1;
   --aui-z-skip-link: calc(var(--aui-z-modal) + 1);
 

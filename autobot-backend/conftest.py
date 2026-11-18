@@ -40,10 +40,11 @@ sys.path.insert(0, str(backend_root))
 # #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
 # (78 call sites across this file alone); keeps this file under the file-size
 # ratchet without a raised ceiling every time a new module needs real-loading.
+from testkit.llm_failover_modules import load_coordinator as _load_coordinator
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
 from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
-from testkit.singleton_state import reset_feature_flags_singleton  # noqa: F401 -- autouse
+from testkit.singleton_state import fake_session_lease, reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -527,7 +528,7 @@ if "llm_shared" not in sys.modules:
     # model_fallback_coordinator, which imports it at module level. events.bus
     # / events.event_types are unstubbed lightweight modules, safe to import here.
     _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
-    _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
+    _load_coordinator(_llm_root)  # #19753: the coordinator + the failover modules it imports (testkit)
     # #9017: chat_workflow.manager imports reasoning_effort at module level -- real, not the providers stub.
     _real_load_and_bind("llm_shared.providers.reasoning_effort", _llm_root / "providers" / "reasoning_effort.py")
     # #9037: per-run credential primitives (ContextVar + RunCredentialContext); #19241: the LLM sign-in
@@ -549,7 +550,6 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
-    _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
     # #15026: header -> headroom-window mapping, imported at module level by base_provider.
     _real_load_and_bind("llm_shared.rate_limit_headers", _llm_root / "rate_limit_headers.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
@@ -891,10 +891,10 @@ sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 # and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
 # stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
 # so import-time behaviour for api/*.py is never worse than the old hand-written stub.
-_real_load_and_bind(
-    "code_intelligence.merge_conflict_resolver",
-    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
-)
+# #21004: merge_conflict_resolver imports the canonical code_intelligence.python_files, so that
+# leaf is real-loaded first (the real package __init__ stays unexecuted).
+for _leaf in ("python_files", "merge_conflict_resolver"):
+    _real_load_and_bind(f"code_intelligence.{_leaf}", backend_root / "code_intelligence" / f"{_leaf}.py")
 
 # NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
 # real-loaded again by code_intelligence/conftest.py, which runs after this file and

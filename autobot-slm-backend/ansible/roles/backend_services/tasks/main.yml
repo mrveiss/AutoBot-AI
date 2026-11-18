@@ -42,7 +42,7 @@
     tasks_from: ensure_venv_version
   vars:
     venv_path: "{{ autobot.base_dir }}/venv"
-    venv_python: python3.14
+    venv_python: "{{ python_interpreter_binary }}"
 
 # #16641: `virtualenv_python:` alone only applies when `virtualenv_command:`
 # names the standalone `virtualenv` tool -- it is silently ignored for `-m
@@ -79,7 +79,7 @@
 
 - name: Copy AutoBot application files
   synchronize:
-    src: "{{ playbook_dir }}/../"
+    src: "{{ role_path }}/../../"
     dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
       - "--chmod=o-w"  # #19503
@@ -101,6 +101,27 @@
   ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
   tags: ['backend', 'config']
 
+# #20941: backend.env.j2 renders AUTOBOT_SECRETS_ROOT_KEY unconditionally; without this read it is
+# written empty. Same read (and fail-on-empty) as the backend role.
+- name: "Backend | Read the secrets root key (#14758, #20941)"
+  ansible.builtin.include_tasks:
+    file: ../../backend/tasks/read_secrets_root_key.yml
+    apply:
+      tags: ['backend', 'config']
+  tags: ['backend', 'config']
+
+- name: "Backend | Resolve the models for this model server (#19731)"
+  ansible.builtin.include_tasks: ../../backend/tasks/resolve_models.yml
+  tags: ['backend', 'config']
+
+# #20750: the internal key is resolved, and each file keeps its own, as on every other render.
+- name: "Resolve AUTOBOT_INTERNAL_API_KEY (#20750)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/resolve_internal_api_key.yml
+  vars:
+    internal_api_key_current_env_files:
+      - "{{ backend_services_env_dest }}"
+      - "{{ autobot_backend_env_file }}"
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2
@@ -108,7 +129,10 @@
     owner: autobot
     group: autobot
     mode: '0640'
+  diff: false  # the file carries secrets (#20941)
   notify: restart backend services
+  vars:
+    internal_api_key_render: "{{ (internal_api_key_by_file | default({})).get(backend_services_env_dest, internal_api_key_resolved | default(autobot_internal_api_key)) }}"  # #20750: the file keeps its key
 
 # #10005: Render the backend role's unit template — the single source of truth
 # for autobot-backend.service (carries the #9934 LimitNOFILE directive). This

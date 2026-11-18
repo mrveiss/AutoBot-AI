@@ -30,6 +30,11 @@ nginx_http_port: 80
 # backend_host and backend_port are set dynamically by
 # _build_infra_vars() in setup_wizard.py at provisioning time
 #
+# #21400: the port nginx's backend upstream renders is the one the proxy scheme listens on. It is defined once,
+# in _shared/vars/backend_scheme_port.yml; every task file of this role that reads it includes
+# _shared/tasks/load_backend_scheme_port.yml first.
+frontend_upstream_backend_port: "{{ backend_scheme_port }}"
+
 # #10348: default to EMPTY = relative same-origin /api. nginx serves the SPA and
 # proxies /api to the backend, so the browser must call the SAME origin it loaded
 # from — an absolute base (esp. one built from backend_host, which is the 0.0.0.0
