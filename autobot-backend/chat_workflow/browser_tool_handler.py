@@ -203,10 +203,27 @@ def record_browser_success(
     if base64_image:
         entry["base64_image"] = base64_image
     execution_results.append(entry)
-    metadata: dict[str, Any] = {"tool": tool_name, "params": params, "result": result, "status": "success"}
+    metadata: dict[str, Any] = {
+        "tool": tool_name,
+        "params": params,
+        "result": persisted_result(result, PAGE_TEXT_KEYS),  # #21772: the wrapped excerpt is in ``content``
+        "status": "success",
+    }
     if base64_image:
         metadata.update(browser_image_metadata(result, base64_image))
     return WorkflowMessage(type="command_output", content=summary, metadata=metadata)
+
+
+#: Result keys that hold untrusted page text; the trust-wrapped excerpt is in the message content, so the raw copy
+#: is not persisted next to it (#21772).
+PAGE_TEXT_KEYS = ("text",)
+
+
+def persisted_result(result: dict[str, Any], drop: tuple[str, ...]) -> dict[str, Any]:
+    """A copy of a browser *result* without the *drop* keys, at the top level and under ``result``."""
+    inner = result.get("result", result)
+    stripped_inner = {k: v for k, v in inner.items() if k not in drop} if isinstance(inner, dict) else inner
+    return {**result, "result": stripped_inner} if "result" in result else stripped_inner
 
 
 def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[str, Any]:
@@ -217,13 +234,10 @@ def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[st
     the ``result`` copy so the history does not store the screenshot twice.
     """
     url = base64_image if base64_image.startswith("data:") else f"data:image/png;base64,{base64_image}"
-    inner = result.get("result", result)
-    stripped_inner = {k: v for k, v in inner.items() if k not in ("image", "screenshot")}
-    stripped = {**result, "result": stripped_inner} if "result" in result else stripped_inner
     return {
         "display_type": "image",
         "image_payload": {"images": [{"url": url}], "provider": "browser"},
-        "result": stripped,
+        "result": persisted_result(result, ("image", "screenshot", *PAGE_TEXT_KEYS)),
     }
 
 
@@ -279,6 +293,15 @@ def format_browser_result(
     return summary + state_block if state_block else summary
 
 
+def wrap_page_title(title: Any, url: str) -> str:
+    """The page title behind the same trust boundary as page text: a page controls its own title (#21772)."""
+    if not isinstance(title, str) or not title.strip():
+        return ""
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return sanitize_and_wrap_web_content(" ".join(title.split())[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS], url)
+
+
 def navigate_excerpt(text: Any, url: str) -> str:
     """Whitespace-collapsed, capped, trust-wrapped visible-text excerpt for a navigate result. Issue #21772."""
     if not isinstance(text, str):
@@ -302,7 +325,9 @@ def format_browser_action_text(
     if tool_name == "navigate":
         url = inner.get("url", params.get("url", ""))
         title = inner.get("title", "")
-        return f"Navigated to: {url}\nPage title: {title}" + navigate_excerpt(inner.get("text"), url)
+        return f"Navigated to: {url}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
+            inner.get("text"), url
+        )
 
     if tool_name == "screenshot":
         has_image = bool(inner.get("image") or inner.get("screenshot"))
