@@ -76,7 +76,7 @@ describe('graph-interrupt approval cards', () => {
     expect(url).toMatch(/\/chats\/chat-1\/resume$/)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ approved: true, reason: '' })
-    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true })
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1')
     expect(terminal).not.toHaveBeenCalled()
     expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('approved')
   })
