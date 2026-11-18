@@ -43,6 +43,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
+
 #: Extensions that can carry an env-var reference. Kept narrow so the walk stays
 #: fast; widening it can only find MORE names, which fails loudly rather than
 #: silently passing.
@@ -133,6 +135,28 @@ def _scanned_files(root: Path) -> list[Path]:
     return files
 
 
+def _scannable_tracked_count(root: Path) -> int:
+    """How many TRACKED files could carry an env-var reference -- the denominator (#17914).
+
+    Independent of the sweep in the way that matters: the sweep walks the FILESYSTEM with
+    `rglob`, this reads git's index through the canonical helper. A broken `rglob` filter does
+    not move this number, which is the whole property a relative floor needs -- and the one the
+    first design of #17142 did not have, where `examined()` was compared against `population()`
+    and those are the same call.
+
+    The same predicate on both sides, deliberately: `_is_scannable` is what makes this the
+    guard's own population class rather than the tracked tree. A fraction of the TREE would
+    rise at the tree's rate while the counted subset grew at its own, which is the mistake
+    #17142's first version made in the opposite direction. The sweep legitimately exceeds this
+    by the untracked scannable files it finds; the fraction leaves room for that.
+    """
+    try:
+        listed = tracked_paths(root)
+    except EmptyEnumeration:
+        return 0
+    return sum(1 for rel in listed if _is_scannable(Path(rel).name))
+
+
 #: The reach floor, declared as data rather than asserted inside one test
 #: (#15826), so `reach_declarations_test.py` can run this discovery against an
 #: empty directory and REQUIRE the failure. My first version hand-wrote a
@@ -140,20 +164,31 @@ def _scanned_files(root: Path) -> list[Path]:
 #: prove the check would fire if it ever became empty -- that is the difference
 #: the mechanism exists for, and the meta-guard caught me not using it.
 #:
-#: **10,267** files match today -- one fewer than a raw count, because the sweep
-#: excludes this file. The floor sits just under that with a growth band rather
-#: than far below it: `reach_declarations_test` refuses a floor more than
-#: `skips + growth` under the live population, and it is right to. A floor at
-#: 6000 (my first attempt) "passes while most of the tree stops being reached",
-#: which is the failure a reach floor exists to prevent, dressed as a safety
-#: margin. So the band is explicit: 10,000..10,400 needs no action, and beyond
-#: that the floor is ratcheted deliberately.
+#: CONVERTED to a RELATIVE floor 2026-10-04 (#17914, mechanism from #17142). It carried
+#: `floor=10000, growth=400`, and that shape is the one that produced seventeen re-pins of
+#: `hooks-path-override`: the floor is a constant, the tree grows, the gap is consumed on a
+#: schedule, and every number is correct when written.
+#:
+#: This one converts where most of the 52 cannot, and the discriminator is the reference rather
+#: than the symptom. Its population is a FILE CLASS -- everything `_is_scannable` admits -- so
+#: an independent enumeration of that same class co-moves with it exactly, and every change the
+#: rule should welcome moves numerator and denominator together (RATCHET_BASELINES.md rule 7).
+#: A guard bounding a proper subset of a larger class has no such reference: a share of all
+#: tracked Python sinks whenever tests are added, which is a change the rule welcomes, and the
+#: guard would fire with nothing wrong.
+#:
+#: It also has no `completed()` call, so one fraction does not have to serve two bounds -- the
+#: blocker that keeps `audio-extension-allowlist` and `enum-hand-copy-census` absolute.
+#:
+#: 0.99 rather than 1.0: the sweep walks the filesystem and the reference reads git's index, so
+#: they differ by untracked scannable files in one direction and by index-only paths in the
+#: other. `relative_reach_floor_17142_test` asserts this fraction is TIGHTER than the 10000 it
+#: replaced, rather than leaving that claim in this comment.
 REACH = declare(
     "tts-address-env-name-sweep",
     discover=_scanned_files,
-    floor=10000,
-    growth=400,
-    skips=0,
+    min_fraction=0.99,
+    reference=_scannable_tracked_count,
     what="text files that can carry an env-var reference",
 )
 

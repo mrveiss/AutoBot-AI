@@ -12,7 +12,7 @@ name: Validate PR Issue Link
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -34,11 +34,19 @@ permissions:
 
 jobs:
   validate:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Check PR links to its issue
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
 
       - name: Validate PR issue linkage
         id: validate
@@ -96,7 +104,7 @@ jobs:
           # first per verb is a readability convention, not a requirement -- ERE
           # is leftmost-longest, so the order does not change what matches.
           # Kept identical to check_pr_issue_batching.py's _CLOSING_WORDS, and
-          # scripts/check_pr_issue_batching_test.py reads both files and fails if
+          # scripts/check_pr_issue_batching_keywords_17580_test.py reads both files and fails if
           # they drift: the parity was previously maintained by hand, and holding
           # while both diverged from GitHub is exactly how this went unnoticed.
           if ! printf '%s' "$BODY" | grep -iqE "(^|[^[:alnum:]_-])(closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve|refs|references|part of):?[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
@@ -187,11 +195,19 @@ jobs:
   # outright, and 0-with-a-`::warning::` (rather than 1) for any other
   # single-issue or closes-nothing PR that has not stated a rationale.
   batching:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Check same-scope batching
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v7
+
+      # #20903: the repo scripts import autobot_shared, which refuses an interpreter
+      # below the .python-version floor; the runner default python3 is not guaranteed to meet it.
+      - name: Set up Python from .python-version
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
 
       - name: Validate same-scope batching
         env:

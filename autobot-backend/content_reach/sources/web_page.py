@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Web-page content source: TrafilaturaBackend → JinaReaderBackend → BrowserBackend (#10932).
+"""Web-page content source: TrafilaturaBackend → JinaReaderBackend → BrowserContentBackend (#10932).
 
 Chain priority:
   1. TrafilaturaBackend — HTML fetch via httpx + text extraction via trafilatura (sync, in asyncio.to_thread)
   2. JinaReaderBackend  — GET https://r.jina.ai/<url> (pure httpx, always available)
-  3. BrowserBackend     — Playwright-backed page fetch (browser required)
+  3. BrowserContentBackend     — Playwright-backed page fetch (browser required)
 """
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
-from content_reach.backends.browser import BrowserBackend
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.backends.browser import BrowserContentBackend
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,7 @@ class TrafilaturaBackend(ContentBackend):
     """
 
     name = "trafilatura"
-    source_type = SourceType.WEB_PAGE
+    source_type = SourceKind.WEB_PAGE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -71,7 +71,7 @@ class TrafilaturaBackend(ContentBackend):
             logger.warning("TrafilaturaBackend: trafilatura is not installed; backend unavailable")
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """GET request.url, extract text via trafilatura; raise BackendError on failure."""
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
@@ -99,7 +99,7 @@ class TrafilaturaBackend(ContentBackend):
             )
             raise BackendError(f"TrafilaturaBackend: no text extracted from {request.url!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -121,7 +121,7 @@ class JinaReaderBackend(ContentBackend):
     """
 
     name = "jina_reader"
-    source_type = SourceType.WEB_PAGE
+    source_type = SourceKind.WEB_PAGE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -130,7 +130,7 @@ class JinaReaderBackend(ContentBackend):
         """Return True — Jina reader is a plain HTTP endpoint, always available."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """GET https://r.jina.ai/<url>; raise BackendError on non-200 or empty body."""
         await ensure_public_url(request.url)
         await ensure_robots_allowed(request.url)
@@ -158,7 +158,7 @@ class JinaReaderBackend(ContentBackend):
             logger.debug("JinaReaderBackend: empty response for %r", request.url)
             raise BackendError(f"JinaReaderBackend: empty response for {request.url!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -173,10 +173,10 @@ def build_web_page_chain() -> ContentSourceChain:
     """Build the web-page fallback chain: trafilatura → jina_reader → browser."""
     return ContentSourceChain(
         source="web_page",
-        source_type=SourceType.WEB_PAGE,
+        source_type=SourceKind.WEB_PAGE,
         backends=[
             TrafilaturaBackend(),
             JinaReaderBackend(),
-            BrowserBackend(SourceType.WEB_PAGE),
+            BrowserContentBackend(SourceKind.WEB_PAGE),
         ],
     )

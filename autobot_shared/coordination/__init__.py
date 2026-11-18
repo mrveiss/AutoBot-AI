@@ -8,7 +8,6 @@ from .branch_stewardship import EmptyLiveSet, HandoffRefused, Interest, acquire_
 from .claim_waitlist import Waiter, arbitrate
 from .shared_runtime_bag import ChangeEvent, SharedRuntimeBag
 from .work_claims import (
-    Claim,
     ClaimConflict,
     ClaimConflictError,
     ClaimMode,
@@ -16,8 +15,9 @@ from .work_claims import (
     HolderError,
     Scope,
     ScopeError,
+    WorkClaim,
     list_claims,
-    release,
+    release_scope,
     renew,
     try_acquire,
     work_claim,
@@ -32,7 +32,7 @@ __all__ = [
     "HandoffRefused",
     "EmptyLiveSet",
     "acquire_aware",
-    "Claim",
+    "WorkClaim",
     "ClaimConflict",
     "ClaimConflictError",
     "ClaimMode",
@@ -41,7 +41,7 @@ __all__ = [
     "Scope",
     "ScopeError",
     "list_claims",
-    "release",
+    "release_scope",
     "renew",
     "try_acquire",
     "work_claim",

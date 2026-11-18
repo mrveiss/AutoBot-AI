@@ -21,10 +21,10 @@ from autobot_memory_graph import (  # noqa: F401
     VALID_ACTIVITY_TYPES,
     AutoBotMemoryGraph,
     AutoBotMemoryGraphCore,
+    EntitySearchResult,
     HybridScorer,
     MemoryGraphQueryProcessor,
     QueryIntent,
-    SearchResult,
     ensure_indexes,
 )
 from autobot_memory_graph.entities import EntityOperationsMixin  # noqa: F401

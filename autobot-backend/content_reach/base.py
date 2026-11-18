@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 
 class BackendError(Exception):
@@ -30,11 +30,11 @@ class ContentRequest:
 
 
 @dataclass
-class ContentResult:
+class ContentReachResult:
     """Normalized result returned by a backend."""
 
     success: bool
-    source_type: SourceType
+    source_type: SourceKind
     backend_used: str
     text: str = ""
     structured: dict[str, Any] = field(default_factory=dict)
@@ -43,7 +43,7 @@ class ContentResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def failure(cls, source_type: SourceType, detail: str) -> "ContentResult":
+    def failure(cls, source_type: SourceKind, detail: str) -> "ContentReachResult":
         """Build a non-successful result carrying an error detail."""
         return cls(
             success=False,
@@ -57,12 +57,12 @@ class ContentBackend(ABC):
     """A single way to fetch content for a source (e.g. ddgs, jina, browser)."""
 
     name: str
-    source_type: SourceType
+    source_type: SourceKind
 
     @abstractmethod
     async def probe(self) -> bool:
         """Return True if this backend is actually working right now."""
 
     @abstractmethod
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch content; raise BackendError (or return success=False) on failure."""

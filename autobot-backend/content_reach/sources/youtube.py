@@ -6,7 +6,7 @@
 
 Chain:
   1. YtDlpCaptionBackend — extracts English captions (subtitles or automatic)
-     via yt-dlp, converts to plain text, returns ContentResult.
+     via yt-dlp, converts to plain text, returns ContentReachResult.
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
-from source_attribution import SourceReliability, SourceType
+from source_attribution import SourceKind, SourceReliability
 
 logger = get_logger(__name__)
 
@@ -153,13 +153,13 @@ class YtDlpCaptionBackend(ContentBackend):
     probe() returns True iff yt_dlp is importable.
     fetch() calls yt_dlp.YoutubeDL.extract_info in asyncio.to_thread (yt-dlp
     is synchronous), picks the best English caption track, GETs its URL via
-    httpx, converts to plain text, and returns a ContentResult.
+    httpx, converts to plain text, and returns a ContentReachResult.
 
     Accepts an optional injected httpx.AsyncClient for testing.
     """
 
     name = "yt_dlp"
-    source_type = SourceType.YOUTUBE
+    source_type = SourceKind.YOUTUBE
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client
@@ -173,7 +173,7 @@ class YtDlpCaptionBackend(ContentBackend):
             logger.warning("YtDlpCaptionBackend: yt_dlp is not installed; backend unavailable")
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Extract captions from request.url via yt-dlp; raise BackendError on failure.
 
         _ytdlp_extract_info owns the yt_dlp import check and raises BackendError
@@ -229,7 +229,7 @@ class YtDlpCaptionBackend(ContentBackend):
             logger.debug("YtDlpCaptionBackend: empty caption text for %r", request.url)
             raise BackendError(f"YtDlpCaptionBackend: empty captions for {request.url!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -247,6 +247,6 @@ def build_youtube_chain() -> ContentSourceChain:
     """Build the YouTube caption chain: yt_dlp."""
     return ContentSourceChain(
         source="youtube",
-        source_type=SourceType.YOUTUBE,
+        source_type=SourceKind.YOUTUBE,
         backends=[YtDlpCaptionBackend()],
     )

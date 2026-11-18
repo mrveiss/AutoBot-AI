@@ -13,6 +13,7 @@ Provides detailed logging of terminal commands with:
 """
 
 import asyncio
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List
@@ -20,6 +21,9 @@ from typing import Any, Dict, FrozenSet, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.file_io import atomic_write
+from chat_history.session_lease import session_lease
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
 from utils.encoding_utils import strip_ansi_codes
@@ -60,6 +64,10 @@ class TerminalLogger:
             f"TerminalLogger initialized - data_dir: {self.data_dir}, " f"redis_enabled: {redis_client is not None}"
         )
 
+    def _session_file(self, session_id: str, suffix: str) -> Path:
+        """Path of ``<session_id>_<suffix>`` under the data dir; ValueError if it would escape (#20611)."""
+        return validate_relative_path(f"{session_id}_{suffix}", self.data_dir)
+
     async def _ensure_chat_json_exists(self, session_id: str):
         """
         CRITICAL: Ensure chat.json exists before creating terminal.log.
@@ -68,36 +76,41 @@ class TerminalLogger:
         because the frontend loads sessions by scanning for *_chat.json files.
         Without chat.json, the session is invisible in the UI.
 
+        A chat file only ever appears through the atomic writer (a rename), so one that exists is
+        complete and an established session never waits for the session lease. A missing one is created
+        under the lease, checked again there, through the same atomic writer and file lock as every
+        other write of a session file (#20862).
+
         Args:
             session_id: Chat session ID
         """
-        import json
-
-        chat_file = self.data_dir / f"{session_id}_chat.json"
-
-        # Only create if it doesn't exist
-        # Issue #358 - avoid blocking
-        if not await asyncio.to_thread(chat_file.exists):
-            current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-
-            chat_data = {
-                "chatId": session_id,
-                "name": "",
-                "messages": [],
-                "created_time": current_time,
-                "last_modified": current_time,
-            }
-
+        chat_file = self._session_file(session_id, "chat.json")
+        if await asyncio.to_thread(chat_file.exists):  # Issue #358 - avoid blocking
+            return
+        async with session_lease(session_id, "terminal_chat_stub") as lease:
+            if await asyncio.to_thread(chat_file.exists):
+                return
+            chat_data = self._stub_chat_data(session_id)
+            await lease.begin(0)
+            await lease.fence(chat_data, 0)
             try:
-                async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(chat_data, indent=2))
-                logger.info("✅ Created chat.json for terminal session: %s", session_id)
-            except OSError as e:
-                logger.error(f"❌ Failed to write chat.json file {chat_file}: {e}")
-                raise
+                await atomic_write(str(chat_file), json.dumps(chat_data, indent=2), lease.verify)
             except Exception as e:
-                logger.error(f"❌ Failed to create chat.json for session {session_id}: {e}")
+                logger.error("❌ Failed to create chat.json for session %s: %s", session_id, e)
                 raise
+        logger.info("✅ Created chat.json for terminal session: %s", session_id)
+
+    @staticmethod
+    def _stub_chat_data(session_id: str) -> Dict[str, Any]:
+        """The empty chat a terminal session gets so the frontend lists it."""
+        current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return {
+            "chatId": session_id,
+            "name": "",
+            "messages": [],
+            "created_time": current_time,
+            "last_modified": current_time,
+        }
 
     def _create_log_entry(
         self,
@@ -122,7 +135,7 @@ class TerminalLogger:
 
     async def _write_log_to_file(self, session_id: str, log_line: str) -> None:
         """Write a formatted log line to the session terminal log file. Issue #620."""
-        log_file = self.data_dir / f"{session_id}_terminal.log"
+        log_file = self._session_file(session_id, "terminal.log")
         try:
             async with aiofiles.open(log_file, "a", encoding="utf-8") as f:
                 await f.write(log_line + "\n")
@@ -256,7 +269,7 @@ class TerminalLogger:
 
     async def _read_from_file(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Read recent commands from log file."""
-        log_file = self.data_dir / f"{session_id}_terminal.log"
+        log_file = self._session_file(session_id, "terminal.log")
 
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(log_file.exists):
@@ -389,7 +402,7 @@ class TerminalLogger:
         """
         try:
             # Delete file
-            log_file = self.data_dir / f"{session_id}_terminal.log"
+            log_file = self._session_file(session_id, "terminal.log")
             # Issue #358 - avoid blocking
             if await asyncio.to_thread(log_file.exists):
                 await asyncio.to_thread(log_file.unlink)

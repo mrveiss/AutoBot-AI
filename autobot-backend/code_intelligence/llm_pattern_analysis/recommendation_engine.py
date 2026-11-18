@@ -16,8 +16,8 @@ from typing import List
 from code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
     CacheOpportunity,
+    CodePatternRecommendation,
     CostEstimate,
-    OptimizationRecommendation,
     RetryPattern,
     UsagePattern,
 )
@@ -41,12 +41,12 @@ class RecommendationEngine:
     def _get_caching_recommendations(
         cls,
         cache_opportunities: List[CacheOpportunity],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate caching recommendations from cache opportunities."""
         recommendations = []
         for cache_opp in cache_opportunities:
             if cache_opp.should_implement():
-                rec = OptimizationRecommendation(
+                rec = CodePatternRecommendation(
                     recommendation_id=f"rec_{cache_opp.opportunity_id}",
                     category=OptimizationCategory.CACHING,
                     priority=cache_opp.priority,
@@ -64,7 +64,7 @@ class RecommendationEngine:
     def _get_batching_recommendations(
         cls,
         batching_opportunities: List[BatchingOpportunity],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate batching recommendations from batching opportunities."""
         significant_batching = [b for b in batching_opportunities if b.is_significant()]
         if not significant_batching:
@@ -72,7 +72,7 @@ class RecommendationEngine:
 
         files = list(set(b.file_path for b in significant_batching))
         return [
-            OptimizationRecommendation(
+            CodePatternRecommendation(
                 recommendation_id="rec_batching_001",
                 category=OptimizationCategory.BATCHING,
                 priority=OptimizationPriority.MEDIUM,
@@ -95,7 +95,7 @@ class RecommendationEngine:
     def _get_retry_recommendations(
         cls,
         retry_patterns: List[RetryPattern],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate retry strategy recommendations from retry patterns."""
         suboptimal_retries = [r for r in retry_patterns if not r.is_optimal()]
         if not suboptimal_retries:
@@ -107,7 +107,7 @@ class RecommendationEngine:
             all_recs.extend(retry_pat.get_optimization_recommendations())
 
         return [
-            OptimizationRecommendation(
+            CodePatternRecommendation(
                 recommendation_id="rec_retry_001",
                 category=OptimizationCategory.RETRY_STRATEGY,
                 priority=OptimizationPriority.HIGH,
@@ -125,14 +125,14 @@ class RecommendationEngine:
     def _get_token_recommendations(
         cls,
         patterns: List[UsagePattern],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate token optimization recommendations from usage patterns."""
         high_token_patterns = [p for p in patterns if p.is_high_token_usage()]
         if not high_token_patterns:
             return []
 
         return [
-            OptimizationRecommendation(
+            CodePatternRecommendation(
                 recommendation_id="rec_tokens_001",
                 category=OptimizationCategory.TOKEN_OPTIMIZATION,
                 priority=OptimizationPriority.MEDIUM,
@@ -155,14 +155,14 @@ class RecommendationEngine:
         cls,
         patterns: List[UsagePattern],
         cost_estimates: List[CostEstimate],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """Generate model selection recommendations from cost estimates."""
         expensive_models = [e for e in cost_estimates if e.is_expensive_model()]
         if not expensive_models or len(patterns) <= 5:
             return []
 
         return [
-            OptimizationRecommendation(
+            CodePatternRecommendation(
                 recommendation_id="rec_model_001",
                 category=OptimizationCategory.MODEL_SELECTION,
                 priority=OptimizationPriority.HIGH,
@@ -183,8 +183,8 @@ class RecommendationEngine:
     @classmethod
     def _sort_by_priority(
         cls,
-        recommendations: List[OptimizationRecommendation],
-    ) -> List[OptimizationRecommendation]:
+        recommendations: List[CodePatternRecommendation],
+    ) -> List[CodePatternRecommendation]:
         """Sort recommendations by priority order."""
         priority_order = {
             OptimizationPriority.CRITICAL: 0,
@@ -204,7 +204,7 @@ class RecommendationEngine:
         batching_opportunities: List[BatchingOpportunity],
         retry_patterns: List[RetryPattern],
         cost_estimates: List[CostEstimate],
-    ) -> List[OptimizationRecommendation]:
+    ) -> List[CodePatternRecommendation]:
         """
         Generate optimization recommendations.
 

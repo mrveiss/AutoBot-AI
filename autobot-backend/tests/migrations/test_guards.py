@@ -14,13 +14,13 @@ schema verification instead (see PR evidence and the #10002 migration gate).
 import ast
 from pathlib import Path
 
-import pytest
-
 # Real alembic required: the backend conftest stubs alembic with a MagicMock
-# when it is not installed, which cannot drive an Operations context.
-_alembic_migration = pytest.importorskip("alembic.migration")
-_alembic_operations = pytest.importorskip("alembic.operations")
-
+# when it is not installed, which cannot drive an Operations context. A plain
+# import (no importorskip) so a missing package is a collection error that turns
+# the Migration Gate red instead of a skip that keeps it green (#20146).
+import alembic.migration as _alembic_migration
+import alembic.operations as _alembic_operations
+import pytest
 import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.dialects import postgresql  # noqa: E402
 

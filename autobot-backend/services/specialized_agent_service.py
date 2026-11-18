@@ -5,24 +5,27 @@
 """
 Specialized Agent Service (#1794)
 
-Parses .claude/agents/*.md files to surface AutoBot specialized agent
-definitions in the web UI.  Each .md file uses YAML frontmatter
-(name, description, model, color, tools) followed by a markdown system
-prompt.
+Parses the host's Claude Code user-level agent definitions (``*.md``) to
+surface them in the web UI.  The directory comes from SSOT config
+(``claude_agents_dir()``), never from the source tree.  Each
+.md file uses YAML frontmatter (name, description, model, color, tools, and an
+optional ``tier``) followed by a markdown system prompt.  Agents are arbitrary
+user content: a ``tier`` that names an AgentTier wins, any other agent gets
+the classifier's default tier.
 """
 
-import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+import yaml
+
+from agent_tier_classifier import AgentTier, get_agent_tier
+from autobot_shared.claude_config import claude_agents_dir
+from autobot_shared.frontmatter import split_frontmatter, strip_frontmatter
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
 
 logger = get_logger(__name__)
-
-# Repository root — two levels up from services/
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_AGENTS_DIR = _REPO_ROOT / ".claude" / "agents"
 
 # Agent categories inferred from name + description keywords.
 _CATEGORY_RULES: List[tuple] = [
@@ -79,10 +82,19 @@ def _categorize_agent(name: str, description: str) -> str:
     return "general"
 
 
+def _yaml_scalar(value: str) -> str | None:
+    """A frontmatter value decoded as a YAML scalar (quotes and trailing comments dropped)."""
+    try:
+        decoded = yaml.safe_load(value)
+    except yaml.YAMLError:
+        return value
+    return None if decoded is None else str(decoded)
+
+
 def _parse_frontmatter(content: str) -> Dict[str, Any]:
     """Parse YAML frontmatter from an agent .md file (#1794).
 
-    Supports: name, description, model, color, tools (comma-separated).
+    Supports: name, description, model, color, tier, tools (comma-separated).
     """
     result: Dict[str, Any] = {
         "name": "",
@@ -90,13 +102,14 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
         "tools": [],
         "color": "gray",
         "model": None,
+        "tier": None,
     }
 
-    match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
-    if not match:
+    raw, _ = split_frontmatter(content)
+    if raw is None:
         return result
 
-    for line in match.group(1).split("\n"):
+    for line in raw.split("\n"):
         if ":" not in line:
             continue
         key, value = line.split(":", 1)
@@ -113,28 +126,42 @@ def _parse_frontmatter(content: str) -> Dict[str, Any]:
             result["color"] = value
         elif key == "model":
             result["model"] = value
+        elif key == "tier":
+            result["tier"] = _yaml_scalar(value)
 
     return result
 
 
+def _resolve_tier(stem: str, declared: str | None) -> str:
+    """Tier value for an agent: a valid declared ``tier``, else the classifier default."""
+    if declared and declared in {t.value for t in AgentTier}:
+        return declared
+    if declared:
+        logger.warning("Agent %s declares unknown tier %r; using the default tier", stem, declared)
+    return get_agent_tier(stem).value
+
+
 def _extract_system_prompt_excerpt(content: str, max_chars: int = 300) -> str:
     """Return the first ``max_chars`` of the body after frontmatter (#1794)."""
-    match = re.match(r"^---\s*\n.*?\n---\s*\n?", content, re.DOTALL)
-    body = content[match.end() :].strip() if match else content.strip()
+    body = strip_frontmatter(content).strip()
     if len(body) > max_chars:
         return body[:max_chars] + "…"
     return body
 
 
 class SpecializedAgentService:
-    """Read-only service that discovers AutoBot specialized agents (#1794)."""
+    """Read-only service that discovers the host's Claude Code agents (#1794)."""
 
     def __init__(self, agents_dir: Path | None = None) -> None:
-        self.agents_dir = agents_dir or _AGENTS_DIR
+        self.agents_dir = agents_dir or claude_agents_dir()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def is_available(self) -> bool:
+        """Whether the agents directory exists (False = the setting needs configuring)."""
+        return self.agents_dir.is_dir()
 
     def list_agents(self) -> List[Dict[str, Any]]:
         """Return all agents found in the agents directory (#1794)."""
@@ -149,6 +176,16 @@ class SpecializedAgentService:
                 agents.append(agent)
 
         return agents
+
+    def list_payload(self) -> Dict[str, Any]:
+        """Listing body for GET /agents/specialized, minus the timestamp (#1794)."""
+        agents = self.list_agents()
+        return {
+            "agents": agents,
+            "total_count": len(agents),
+            "categories": self.get_categories_summary(agents),
+            "available": self.is_available(),
+        }
 
     def get_agent(self, agent_id: str) -> Dict[str, Any] | None:
         """Return a single agent by ID (stem of .md filename) (#1794)."""
@@ -196,13 +233,13 @@ class SpecializedAgentService:
             "color": frontmatter["color"],
             "tools": frontmatter["tools"],
             "category": _categorize_agent(name, description),
-            "source_file": str(md_file.relative_to(_REPO_ROOT)),
+            "source_file": md_file.name,
+            "tier": _resolve_tier(md_file.stem, frontmatter["tier"]),
             "type": "specialized",
             "excerpt": _extract_system_prompt_excerpt(content),
         }
 
         if include_full_prompt:
-            match = re.match(r"^---\s*\n.*?\n---\s*\n?", content, re.DOTALL)
-            agent["system_prompt"] = content[match.end() :].strip() if match else content.strip()
+            agent["system_prompt"] = strip_frontmatter(content).strip()
 
         return agent

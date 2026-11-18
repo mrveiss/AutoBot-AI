@@ -23,6 +23,7 @@ from integrations.base import (
     IntegrationHealth,
     IntegrationStatus,
 )
+from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
 
@@ -77,6 +78,7 @@ class DatadogIntegration(BaseIntegration):
                 headers=self._get_headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
                 suppress_error_log=True,
+                guard_egress=VENDOR_API_EGRESS,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -185,6 +187,7 @@ class DatadogIntegration(BaseIntegration):
             f"{self.base_url}/monitor",
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         return {"monitors": monitors, "count": len(monitors)}
 
@@ -199,6 +202,7 @@ class DatadogIntegration(BaseIntegration):
             headers=self._get_headers(),
             params={"query": query, "from": from_time, "to": to_time},
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
 
     async def _list_hosts(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -207,6 +211,7 @@ class DatadogIntegration(BaseIntegration):
             f"{self.base_url}/hosts",
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         return {
             "hosts": data.get("host_list", []),
@@ -223,6 +228,7 @@ class DatadogIntegration(BaseIntegration):
             headers=self._get_headers(),
             params={"start": start, "end": end},
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         return {"events": data.get("events", [])}
 
@@ -240,6 +246,7 @@ class DatadogIntegration(BaseIntegration):
             monitor_data,
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
 
 
@@ -293,6 +300,7 @@ class NewRelicIntegration(BaseIntegration):
                 headers=self._get_headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
                 suppress_error_log=True,
+                guard_egress=VENDOR_API_EGRESS,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -386,6 +394,7 @@ class NewRelicIntegration(BaseIntegration):
             f"{self.base_url}/applications.json",
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         apps = data.get("applications", [])
         return {"applications": apps, "count": len(apps)}
@@ -419,6 +428,7 @@ class NewRelicIntegration(BaseIntegration):
             graphql_query,
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         results = data.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}).get("results", [])
         return {"results": results, "count": len(results)}
@@ -429,6 +439,7 @@ class NewRelicIntegration(BaseIntegration):
             f"{self.base_url}/alerts_policies.json",
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         policies = data.get("policies", [])
         return {"policies": policies, "count": len(policies)}
@@ -443,6 +454,7 @@ class NewRelicIntegration(BaseIntegration):
             f"{self.base_url}/applications/{app_id}.json",
             headers=self._get_headers(),
             timeout=aiohttp.ClientTimeout(total=30),
+            guard_egress=VENDOR_API_EGRESS,
         )
         app = data.get("application", {})
         return {

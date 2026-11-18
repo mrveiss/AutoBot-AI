@@ -33,6 +33,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.code_review_enums import ReviewCategory, ReviewSeverity
 from autobot_shared.git_probe import run_git
+from autobot_shared.git_refs import is_safe_range
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
 from utils.line_index import LineIndex  # #12884
@@ -41,9 +42,6 @@ logger = get_logger(__name__)
 
 # Allowlist pattern for git ref arguments passed to subprocess (Issue #1733).
 # Allows: HEAD, HEAD~N, commit hashes, branch names, --cached, --staged, .. and ... ranges.
-_VALID_GIT_DIFF_ARG_RE = re.compile(
-    r"^(?:--[a-zA-Z][-a-zA-Z0-9]*|[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?)$"
-)
 
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False
@@ -713,7 +711,7 @@ class CodeReviewEngine(_BaseClass):
         Returns:
             ReviewResult with all findings
         """
-        diff_content = self._get_git_diff("--cached")
+        diff_content = self._get_git_diff(cached=True)
         if not diff_content:
             return ReviewResult(
                 id=f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
@@ -851,21 +849,23 @@ class CodeReviewEngine(_BaseClass):
         self._finalize_current_file(current_file, current_hunk, files)
         return files
 
-    def _get_git_diff(self, args: str) -> str:
-        """Get git diff output."""
+    def _get_git_diff(self, revision_range: str | None = None, *, cached: bool = False) -> str:
+        """Diff a revision range, or the staged changes. "" when rejected or git fails.
+
+        #18125: took one string and `args.split()` with a pattern allowing
+        `--[a-zA-Z]...`, so `--output /tmp/evil HEAD` reached `git diff`. Now it cannot.
+        """
+        argv = ["diff"]
+        if cached:
+            argv.append("--cached")
+        elif revision_range is not None:
+            if not is_safe_range(revision_range):
+                logger.warning("Rejected invalid git revision range: %s", revision_range)
+                return ""
+            argv.append(revision_range)
         try:
-            split_args = args.split()
-            for arg in split_args:
-                if not _VALID_GIT_DIFF_ARG_RE.match(arg):
-                    logger.warning("Rejected invalid git diff argument: %s", arg)
-                    return ""
-            # run_git scrubs the ambient git environment (#16179) and defaults
-            # capture_output/text/encoding, so this is both the fix and smaller.
-            result = run_git(
-                ["diff", *split_args],
-                timeout=TimingConstants.SHORT_TIMEOUT,
-                cwd=self.project_root,
-            )
+            # run_git scrubs the ambient git env (#16179) and defaults capture/text.
+            result = run_git(argv, timeout=TimingConstants.SHORT_TIMEOUT, cwd=self.project_root)
             return result.stdout if result.returncode == 0 else ""
         except Exception as e:
             logger.warning("Failed to get git diff: %s", e)

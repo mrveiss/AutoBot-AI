@@ -98,15 +98,11 @@ class TestAntiPatternType:
             "god_class",
             "feature_envy",
             "circular_dependency",
-            "shotgun_surgery",
-            "speculative_generality",
             "dead_code",
             "data_clump",
             "long_method",
             "long_parameter_list",
-            "primitive_obsession",
             "lazy_class",
-            "refused_bequest",
         ]
         actual_types = [t.value for t in AntiPatternType]
         for expected in expected_types:

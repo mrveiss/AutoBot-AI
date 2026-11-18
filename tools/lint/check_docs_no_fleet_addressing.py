@@ -62,6 +62,15 @@ import re
 import sys
 from typing import Iterable, NamedTuple
 
+# #13842: the sibling-directory insert, so this resolves whether the
+# checker is run as a script (`python3 tools/lint/<name>.py`, which CI
+# does) or imported as a module. A `tools.lint.` path import works only
+# in the second case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
+
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside a lint
 # job, and `autobot_shared.logging_manager` would drag config loading into it.
 logger = logging.getLogger(__name__)
@@ -105,11 +114,6 @@ class Block(NamedTuple):
 
     start: int
     lines: list[str]
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root, derived from this file's location (``tools/lint/`` is two deep)."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def _drop_last_octet(pattern: str) -> str:
@@ -221,8 +225,7 @@ def scan_document(rel: str, text: str, pattern: re.Pattern[str]) -> tuple[list[F
         hits = _block_hits(rel, block, pattern)
         if pending == EXEMPT_BLOCK and not hits:
             problems.append(
-                f"{rel}:{block.start}: stranded {EXEMPT_BLOCK} marker — "
-                "the block it covers carries no address"
+                f"{rel}:{block.start}: stranded {EXEMPT_BLOCK} marker — " "the block it covers carries no address"
             )
         if pending != EXEMPT_BLOCK:
             findings.extend(hits)
@@ -246,7 +249,7 @@ def _block_hits(rel: str, block: Block, pattern: re.Pattern[str]) -> list[Findin
     ]
 
 
-def check_paths(
+def scan_markdown_for_fleet_addresses(
     paths: Iterable[pathlib.Path], base: pathlib.Path, pattern: re.Pattern[str]
 ) -> tuple[list[Finding], list[str]]:
     """Scan the given Markdown files. An unreadable file is a problem, never a skip."""
@@ -293,7 +296,7 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
             f"discovery returned only {len(files)} Markdown file(s) under {DOCS_DIR}/ "
             f"(floor {DISCOVERY_FLOOR}) — the sweep broke, so a clean result below would assert nothing."
         )
-    findings, scan_problems = check_paths(files, base, pattern)
+    findings, scan_problems = scan_markdown_for_fleet_addresses(files, base, pattern)
     problems.extend(scan_problems)
     if findings:
         problems.append(_leak_problem(findings))
@@ -306,29 +309,20 @@ def _selected_paths(paths: list[str], base: pathlib.Path) -> list[pathlib.Path]:
     return [p for p in resolved if p.suffix == ".md" and p.is_file()]
 
 
-def configure_logging() -> None:
-    """Attach a stderr handler so findings actually reach the developer."""
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
 def _run(args: argparse.Namespace, base: pathlib.Path) -> tuple[str, list[str]]:
     """Execute the requested scope, returning (scope description, problems)."""
     if args.audit:
         reached, problems = audit(base)
         return f"{reached} Markdown file(s) under {DOCS_DIR}/", problems
     selected = _selected_paths(args.paths, base)
-    findings, problems = check_paths(selected, base, fleet_address_pattern(base))
+    findings, problems = scan_markdown_for_fleet_addresses(selected, base, fleet_address_pattern(base))
     if findings:
         problems.append(_leak_problem(findings))
     return f"{len(selected)} given file(s)", problems
 
 
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--audit", action="store_true", help=f"sweep every Markdown file under {DOCS_DIR}/")
     parser.add_argument("paths", nargs="*", help="Markdown files to check")

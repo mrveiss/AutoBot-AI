@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM Pydantic Schemas
-
-Request and response models for the SLM API.
-"""
+"""SLM Pydantic Schemas: request and response models for the SLM API."""
 
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from .database import BackupServiceType, NodeStatus
+from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import model_config
+from services.ssh_utils import SshHost, SshPassword, SshUser
+
+from .database import BackupServiceType, NodeStatus, ScheduleTargetType  # noqa: F401  (re-exported)
 
 # =============================================================================
 # Authentication Schemas
@@ -52,7 +52,7 @@ class MfaChallengeResponse(BaseModel):
     temp_token: str
 
 
-class UserCreate(BaseModel):
+class SlmAdminUserCreate(BaseModel):
     """User creation request."""
 
     username: str = Field(..., min_length=3, max_length=64)
@@ -60,7 +60,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
-class UserResponse(BaseModel):
+class SlmAdminUserResponse(BaseModel):
     """User response (excludes password)."""
 
     id: Any
@@ -165,12 +165,12 @@ class NodeCreate(BaseModel):
 
     hostname: str
     ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
-    ip_address: str
+    ip_address: SshHost
     node_id: str | None = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
-    ssh_user: str | None = "autobot"
+    ssh_user: SshUser | None = config.path.ssh_user  # #19730
     ssh_port: int | None = 22
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
     auth_method: str | None = "password"
     import_existing: bool = False
     auto_enroll: bool = False
@@ -181,7 +181,7 @@ class NodeUpdate(BaseModel):
 
     hostname: str | None = None
     ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
-    ip_address: str | None = None
+    ip_address: SshHost | None = None
     status: NodeStatus | None = None
     roles: List[str] | None = None
 
@@ -197,7 +197,7 @@ class NodeResponse(BaseModel):
     status: str
     roles: List[str] | None = []
     detected_roles: List[str] = Field(default_factory=list)
-    ssh_user: str | None = "autobot"
+    ssh_user: str | None = config.path.ssh_user
     ssh_port: int | None = 22
     auth_method: str | None = "key"
     cpu_percent: float
@@ -271,7 +271,7 @@ class HeartbeatResponse(BaseModel):
 class EnrollRequest(BaseModel):
     """Node enrollment request with SSH credentials."""
 
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
 
 
 # =============================================================================
@@ -332,7 +332,7 @@ class BackupCreate(BaseModel):
 
 
 class BackupResponse(BaseModel):
-    """Backup response."""
+    """Backup response; ``restorable`` tells the GUI where to offer Restore (#19455)."""
 
     id: int
     backup_id: str
@@ -346,8 +346,27 @@ class BackupResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
-
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def restorable(self) -> bool:
+        return BackupServiceType.is_restorable(self.service_type)
+
+
+class BackupListResponse(BaseModel):
+    """Paginated backup list."""
+
+    backups: List[BackupResponse]
+    total: int
+
+
+class BackupRestoreResponse(BaseModel):
+    """Backup restore response."""
+
+    success: bool
+    message: str
+    job_id: str | None = None
 
 
 # =============================================================================
@@ -476,8 +495,8 @@ class SystemMetrics(BaseModel):
 class ConnectionTestRequest(BaseModel):
     """SSH connection test request."""
 
-    ip_address: str
-    ssh_user: str = "autobot"
+    ip_address: SshHost
+    ssh_user: SshUser = config.path.ssh_user
     ssh_port: int = 22
     auth_method: str = "password"
     password: str | None = None
@@ -749,26 +768,6 @@ class ReplicationListResponse(BaseModel):
 
 
 # =============================================================================
-# Backup Schemas (extended)
-# =============================================================================
-
-
-class BackupListResponse(BaseModel):
-    """Paginated backup list."""
-
-    backups: List[BackupResponse]
-    total: int
-
-
-class BackupRestoreResponse(BaseModel):
-    """Backup restore response."""
-
-    success: bool
-    message: str
-    job_id: str | None = None
-
-
-# =============================================================================
 # Data Verification Schemas
 # =============================================================================
 
@@ -930,31 +929,6 @@ class RestartAllServicesResponse(BaseModel):
         False,
         description="Whether SLM agent was restarted (done last)",
     )
-
-
-class ServiceCategoryUpdate(BaseModel):
-    """Request to update service category."""
-
-    category: str = Field(..., pattern=r"^(autobot|system)\z")
-
-
-class FleetServiceStatus(BaseModel):
-    """Service status across the fleet."""
-
-    service_name: str
-    category: str = "system"  # autobot or system
-    nodes: List[Dict]  # [{node_id, hostname, status}]
-    running_count: int
-    stopped_count: int
-    failed_count: int
-    total_nodes: int
-
-
-class FleetServicesResponse(BaseModel):
-    """Aggregated service status across fleet."""
-
-    services: List[FleetServiceStatus]
-    total_services: int
 
 
 # =============================================================================
@@ -1636,9 +1610,9 @@ class CodeSyncStatusResponse(BaseModel):
     outdated_nodes: int = 0
     total_nodes: int = 0
     # #11820: components deployed on this box whose files drift from code_source.
-    # Non-empty means a managed component is stale even if node code_version
-    # matches latest — so consumers must not report "up to date" while this is set.
+    # Non-empty: stale even if node code_version matches latest, so never report "up to date".
     stale_components: list[str] = []
+    stale_scan_unknown: bool = False  # #20250: the scan gave no answer, so stale_components proves nothing
     # #15323: per-component "stale"/"healthy"/"unknown" — does the RUNNING
     # service's loaded code match what stale_components already knows is on
     # disk? Distinct question: a component can have zero file drift and still
@@ -1865,14 +1839,6 @@ class CodeVersionNotificationResponse(BaseModel):
 # =============================================================================
 
 
-class ScheduleTargetType(str, Enum):
-    """Schedule target type enumeration."""
-
-    ALL = "all"
-    SPECIFIC = "specific"
-    TAG = "tag"
-
-
 class ScheduleCreate(BaseModel):
     """Request to create a new update schedule."""
 
@@ -2024,30 +1990,28 @@ class ServiceConflictListResponse(BaseModel):
 # =============================================================================
 
 
+#: Max agent LLM timeout (s); the configured default is clamped into it, pydantic skips defaults (#19730).
+_LLM_TIMEOUT_MAX = 300
+
+
 class AgentLLMConfig(BaseModel):
     """LLM configuration for an agent (excludes API key)."""
 
     llm_provider: str
     llm_endpoint: str | None = None
     llm_model: str
-    llm_timeout: int = 30
-    llm_temperature: float = 0.7
+    llm_timeout: int = config.llm_timeout  # #19730
+    llm_temperature: float = model_config.DEFAULT_TEMPERATURE
     llm_max_tokens: int | None = None
 
 
-class AgentResponse(BaseModel):
-    """Agent response with LLM config."""
+class AgentResponse(AgentLLMConfig):
+    """Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730)."""
 
     id: int
     agent_id: str
     name: str
     description: str | None = None
-    llm_provider: str
-    llm_endpoint: str | None = None
-    llm_model: str
-    llm_timeout: int = 30
-    llm_temperature: float = 0.7
-    llm_max_tokens: int | None = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -2066,8 +2030,8 @@ class AgentCreateRequest(BaseModel):
     llm_endpoint: str | None = None
     llm_model: str = Field(..., min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage
-    llm_timeout: int = Field(default=30, ge=1, le=300)
-    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    llm_timeout: int = Field(default=min(max(config.llm_timeout, 1), _LLM_TIMEOUT_MAX), ge=1, le=_LLM_TIMEOUT_MAX)
+    llm_temperature: float = Field(default=model_config.DEFAULT_TEMPERATURE, ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
     is_default: bool = False
     is_active: bool = True
@@ -2082,7 +2046,7 @@ class AgentUpdateRequest(BaseModel):
     llm_endpoint: str | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage
-    llm_timeout: int | None = Field(default=None, ge=1, le=300)
+    llm_timeout: int | None = Field(default=None, ge=1, le=_LLM_TIMEOUT_MAX)
     llm_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
     is_default: bool | None = None
@@ -2096,10 +2060,9 @@ class AgentListResponse(BaseModel):
     total: int
 
 
-class AgentLLMConfigWithKey(AgentLLMConfig):
-    """LLM config including decrypted API key (for backend only)."""
-
-    llm_api_key: str | None = None
+# `AgentLLMConfigWithKey` removed (#17865): it carried a decrypted provider key
+# and said "for backend only" while being the `response_model` of a GET. A schema
+# that is safe only when used carefully is not safe.
 
 
 # =============================================================================

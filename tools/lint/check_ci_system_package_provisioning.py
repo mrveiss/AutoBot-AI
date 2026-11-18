@@ -55,12 +55,21 @@ imports these functions rather than restating the rule.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import logging
 import os
 import pathlib
+import sys
+
+# Run as `python3 tools/lint/<name>.py`, where the repo root is not on
+# sys.path; a `tools.lint.` path fails there (#13916).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
 import re
 import subprocess  # nosec B404  # fixed argv, no shell
 import sys
+
+from _comment_syntax import code_text  # noqa: E402
 
 # tools/lint/ is not a package; make the sibling helper importable however this
 # module is loaded. `autobot_shared` is NOT importable when this runs as a bare
@@ -68,7 +77,19 @@ import sys
 # same trap as #15914.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _scan_helpers import scrubbed_git_env, tracked_paths  # noqa: E402
+from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
+from _scan_helpers import report_audit, scrubbed_git_env, tracked_paths  # noqa: E402
+
+# The ONE test-file-name predicate, loaded from its file: importing the
+# `autobot_shared` package would run its __init__ (and non-stdlib imports),
+# and this checker runs before any dependency is installed. The module itself
+# is stdlib-only (#21078).
+_TESTFILE_NAMES_PATH = pathlib.Path(__file__).resolve().parents[2] / "autobot_shared" / "testfile_names.py"
+_testfile_names_spec = importlib.util.spec_from_file_location("_testfile_names", _TESTFILE_NAMES_PATH)
+_testfile_names = importlib.util.module_from_spec(_testfile_names_spec)
+_testfile_names_spec.loader.exec_module(_testfile_names)
+is_test_filename = _testfile_names.is_test_filename
 
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which
@@ -147,11 +168,6 @@ _PROBE_CALL_RE = re.compile("|".join(re.escape(call) for call in PROBE_CALL_TO_B
 _APT_INSTALL_LINE_RE = re.compile(r"apt(?:-get)?\s+install[^\n]*")
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
-
-
 def ansible_feature_packages(root: pathlib.Path | None = None) -> set[str]:
     """Packages the backend ansible role installs, minus the build toolchain."""
     base = root if root is not None else repo_root()
@@ -183,7 +199,7 @@ def _strip_comment_lines(text: str) -> str:
     that. Without this, words from the comment's sentence get tokenized
     alongside the real package names.
     """
-    return "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
+    return code_text(text)
 
 
 def ci_installed_packages(root: pathlib.Path | None = None) -> set[str]:
@@ -255,7 +271,7 @@ def _walked_test_files(root: pathlib.Path) -> list[str]:
             if not name.endswith(".py"):
                 continue
             rel = (pathlib.Path(dirpath) / name).relative_to(root).as_posix()
-            if name.startswith("test_") or name.endswith("_test.py") or "/tests/" in f"/{rel}":
+            if is_test_filename(name, include_js=False, include_conftest=False) or "/tests/" in f"/{rel}":
                 found.append(rel)
     return sorted(found)
 
@@ -394,26 +410,8 @@ def audit_provisioning(root: pathlib.Path | None = None) -> tuple[int, list[str]
     return len(findings), problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
-def run_audit() -> int:
-    reached, problems = audit_provisioning()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\nCI system-package provisioning audit FAILED over %d gated binary/ies (#14550).", reached)
-        return 1
-    logger.info("CI system-package provisioning audit clean over %d gated binary/ies (#14550).", reached)
-    return 0
-
-
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",
@@ -423,7 +421,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    reached, problems = audit_provisioning()
+    return report_audit(
+        logger,
+        problems,
+        "\nCI system-package provisioning audit FAILED over %d gated binary/ies (#14550).",
+        "CI system-package provisioning audit clean over %d gated binary/ies (#14550).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

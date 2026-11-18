@@ -53,6 +53,16 @@ const SYSTEM_ROLE = { id: 'r2', company_id: 'c1', name: 'platform-admin', is_sys
 
 function respond(overrides: Record<string, unknown> = {}): void {
   get.mockImplementation((url: string) => {
+    // #21241: the workflows panel also reads the company's workflows and the viewer's standing. The
+    // company list URL contains '/workflows', which the role routes below match on, so both go first.
+    if (url.startsWith('/api/llc/workflows/')) {
+      return overrides.companyWorkflows instanceof Error
+        ? Promise.reject(overrides.companyWorkflows)
+        : Promise.resolve(overrides.companyWorkflows ?? [])
+    }
+    if (url.endsWith('/members')) {
+      return Promise.resolve({ members: [], viewer_grantable_roles: [], viewer_can_manage: overrides.canManage ?? true })
+    }
     if (url.includes('/holders')) return Promise.resolve(overrides.holders ?? [])
     if (url.includes('/permissions')) return Promise.resolve(overrides.permissions ?? [])
     if (url.includes('/workflows')) return Promise.resolve(overrides.workflows ?? [])
@@ -298,5 +308,50 @@ describe('RolesView (#14221 step 6)', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('system role cannot be deleted')
+  })
+
+  // #21241: the workflow controls follow the server's verdict on the viewer, and the panel keeps its
+  // loading, unavailable and nothing-attachable states apart.
+  describe('workflows panel (#21241)', () => {
+    const WORKFLOW = { workflow_id: 'wf-quarterly', name: 'Quarterly', kind: 'workflow' }
+
+    it('shows the picker and New workflow to a viewer who may manage the company', async () => {
+      respond({ workflows: ['wf-quarterly'], companyWorkflows: [WORKFLOW] })
+      const wrapper = await mountView()
+
+      expect(wrapper.find('[data-testid="role-workflows-controls"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="role-workflows-new"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="role-workflow-detach-wf-quarterly"]').exists()).toBe(true)
+    })
+
+    it('hides the workflow mutation controls from a viewer who may not, and still lists what is attached', async () => {
+      respond({ workflows: ['wf-quarterly'], companyWorkflows: [WORKFLOW], canManage: false })
+      const wrapper = await mountView()
+
+      expect(wrapper.text()).toContain('wf-quarterly')
+      expect(wrapper.find('[data-testid="role-workflows-controls"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="role-workflows-new"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="role-workflow-detach-wf-quarterly"]').exists()).toBe(false)
+    })
+
+    it('tells an unavailable workflows list from one with nothing to attach', async () => {
+      respond({ companyWorkflows: new Error('HTTP 500: boom') })
+      const failed = await mountView()
+      expect(failed.find('[data-testid="role-workflows-unavailable"]').exists()).toBe(true)
+      expect(failed.find('[data-testid="role-workflows-nothing-attachable"]').exists()).toBe(false)
+
+      respond({ companyWorkflows: [] })
+      const empty = await mountView()
+      expect(empty.find('[data-testid="role-workflows-unavailable"]').exists()).toBe(false)
+      expect(empty.get('[data-testid="role-workflows-nothing-attachable"]').text()).toBe(en.llc.workflows.nothingAttachable)
+    })
+
+    it('no longer offers a free-text workflow id', async () => {
+      respond({ companyWorkflows: [WORKFLOW] })
+      const wrapper = await mountView()
+
+      expect(wrapper.find('#attachment-workflows').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="role-workflows-panel"] input[type="text"]').exists()).toBe(false)
+    })
   })
 })

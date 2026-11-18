@@ -19,20 +19,24 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
+import npm_audit_exceptions as policy
 import npm_audit_gate as gate
 import pytest
 from npm_audit_gate_test import BULK_LOG, _FakeNpm, _report
 
 # --- recorded unfixable advisories (#13400) --------------------------------
 #
-# Owner decision 2026-10-03: GHSA-vfj7-8cjw-p6xm (braces <= 3.0.3, published 2026-09-18)
-# has `first_patched_version: null`, every lockfile here is already at 3.0.3, and the chain
-# is devDependencies only. The gate yields to it until the recorded expiry.
+# The mechanism is exercised with a SYNTHETIC advisory id injected by the
+# `recorded_exception` fixture. The first real record (GHSA-vfj7-8cjw-p6xm, braces, owner
+# decision 2026-10-03) was retired when upstream stopped reporting it (2026-10-23), and the
+# live table may legitimately be empty, so no test here may depend on a real entry.
 #
 # Every fixture below is a literal in this file, so none of them can degrade through a
 # loader, and each failure mode the record can have gets one that trips it.
 
-_EXCUSED = "GHSA-vfj7-8cjw-p6xm"
+_EXCUSED = "GHSA-t3st-t3st-t3st"
+# The shipped table, captured before any fixture patches it.
+_SHIPPED = dict(policy.ADVISORY_EXCEPTIONS)
 _UNKNOWN = "GHSA-aaaa-bbbb-cccc"
 
 
@@ -65,12 +69,11 @@ def recorded_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     policy instead, so the mechanism's tests and the record's expiry are independent.
     """
     monkeypatch.setattr(
-        gate,
+        policy,
         "ADVISORY_EXCEPTIONS",
         {
-            _EXCUSED: gate.AdvisoryException(
-                expires="2099-01-01",
-                reason="test policy: unfixable, devDependencies only, recorded on #13400",
+            _EXCUSED: policy.AdvisoryException(
+                expires="2099-01-01", reason="test policy: unfixable, devDependencies only, recorded on #13400"
             )
         },
     )
@@ -98,30 +101,30 @@ def test_a_fix_being_available_withdraws_the_exception(recorded_exception) -> No
     verdict = gate.classify(_detailed(("braces", _EXCUSED, True), high=1), BULK_LOG)
 
     assert verdict.result == gate.FOUND
-    assert "fix available" in verdict.reason
+    assert "patched version" in verdict.reason and _EXCUSED in verdict.reason
 
 
-def test_an_expired_exception_fails_and_names_the_date() -> None:
+def test_an_expired_exception_fails_and_names_the_date(recorded_exception) -> None:
     """Injected date, so the test does not change meaning when the expiry passes."""
-    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
-    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry + timedelta(days=1))
+    expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry + timedelta(days=1))
 
     assert honoured == set()
-    assert any(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
+    assert any(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires in problem for problem in problems)
 
 
-def test_the_exception_is_honoured_on_its_last_day() -> None:
+def test_the_exception_is_honoured_on_its_last_day(recorded_exception) -> None:
     """Contrast for the boundary: expiry is inclusive, so the off-by-one is pinned."""
-    expiry = date.fromisoformat(gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
-    honoured, problems = gate.exception_problems({_EXCUSED}, False, expiry)
+    expiry = date.fromisoformat(policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires)
+    honoured, problems = gate.exception_problems({_EXCUSED: False}, expiry)
 
     assert honoured == {_EXCUSED}
     assert problems == []
 
 
-def test_a_drained_exception_fails_rather_than_lingering() -> None:
+def test_a_drained_exception_fails_rather_than_lingering(recorded_exception) -> None:
     """Shrink-only, as the ratchet baselines are: a record cannot outlive its advisory."""
-    honoured, problems = gate.exception_problems({_UNKNOWN}, False, date(2026, 10, 3))
+    honoured, problems = gate.exception_problems({_UNKNOWN: False}, date(2026, 10, 3))
 
     assert honoured == set()
     assert any("no longer reported" in problem for problem in problems)
@@ -157,7 +160,7 @@ def test_unreadable_detail_is_never_excused_into_a_pass() -> None:
 
 def test_every_recorded_exception_carries_a_reason_and_an_issue() -> None:
     """A record whose entries need no justification is a silence with a dict around it."""
-    for advisory, exception in gate.ADVISORY_EXCEPTIONS.items():
+    for advisory, exception in policy.ADVISORY_EXCEPTIONS.items():
         assert date.fromisoformat(exception.expires), advisory
         assert len(exception.reason) > 80, f"{advisory} needs a reason, not a label"
         assert "#" in exception.reason, f"{advisory} must cite the issue recording the decision"
@@ -170,7 +173,7 @@ def test_an_empty_record_excuses_nothing(monkeypatch: pytest.MonkeyPatch) -> Non
     old behaviour or a new hole. Here it is the old behaviour: nothing is honoured, every
     failing advisory is unexcused, and the verdict is FOUND.
     """
-    monkeypatch.setattr(gate, "ADVISORY_EXCEPTIONS", {})
+    monkeypatch.setattr(policy, "ADVISORY_EXCEPTIONS", {})
     verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=6), BULK_LOG)
 
     assert verdict.result == gate.FOUND
@@ -208,7 +211,7 @@ def test_an_excused_pass_names_the_advisory_in_stdout_and_the_summary(
     for place, text in (("stdout", printed), ("the job summary", written)):
         assert _EXCUSED in text, f"the advisory id never reached {place}"
         assert "#13400" in text, f"the issue recording the decision never reached {place}"
-        assert gate.ADVISORY_EXCEPTIONS[_EXCUSED].expires in text, f"the expiry never reached {place}"
+        assert policy.ADVISORY_EXCEPTIONS[_EXCUSED].expires in text, f"the expiry never reached {place}"
     assert "no high or critical advisories" not in printed, (
         "an excused pass must not claim there were none -- six were excused, and that sentence "
         "is the false statement #13400 exists to forbid"
@@ -217,7 +220,9 @@ def test_an_excused_pass_names_the_advisory_in_stdout_and_the_summary(
     assert "| high | 6 |" in written, "the counts are still reported; the advisory is excused, not hidden"
 
 
-def test_a_stale_record_on_a_clean_audit_says_so_rather_than_claiming_advisories(tmp_path, monkeypatch, capsys) -> None:
+def test_a_stale_record_on_a_clean_audit_says_so_rather_than_claiming_advisories(
+    tmp_path, monkeypatch, capsys, recorded_exception
+) -> None:
     """The drain case: counts are zero, the entry is dead, and the headline must not hunt a ghost."""
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
     monkeypatch.setenv("NPM_AUDIT_MAX_ATTEMPTS", "1")
@@ -283,9 +288,9 @@ def test_a_malformed_expiry_fails_closed_without_raising(monkeypatch: pytest.Mon
     1 -- but a crash is a different thing from a verdict, and the docstring claimed the latter.
     """
     monkeypatch.setattr(
-        gate,
+        policy,
         "ADVISORY_EXCEPTIONS",
-        {_EXCUSED: gate.AdvisoryException(expires="not-a-date", reason="x" * 90 + " #13400")},
+        {_EXCUSED: policy.AdvisoryException(expires="not-a-date", reason="x" * 90 + " #13400")},
     )
 
     verdict = gate.classify(_detailed(("braces", _EXCUSED, False), high=1), BULK_LOG)
@@ -397,3 +402,110 @@ def test_the_real_transitive_chain_still_passes(recorded_exception) -> None:
 
     assert verdict.result == gate.PASSED, verdict.reason
     assert _EXCUSED in verdict.reason and "6 excused" in verdict.reason
+
+
+# --- per-advisory attribution, and what counts as a patch ---------------------
+#
+# The gate used ONE boolean meaning "any failing package in this report is fixable" and
+# withdrew an exception on it, so an unrelated advisory revoked an owner ruling. And npm
+# reports a "fix" for three different situations, only one of which is a patch. Fixtures are
+# literals here; the real report that exposed both is quoted in the first test.
+
+
+def _patch_entry(severity: str = "high", *, fix: object = False, rng: str = ">=1.0.0", via: object = None) -> dict:
+    return {"severity": severity, "fixAvailable": fix, "range": rng, "via": via or [_GHSA_VIA]}
+
+
+def test_an_unrelated_fixable_advisory_does_not_withdraw_the_exception(recorded_exception) -> None:
+    """The defect: a global flag let any fixable package revoke a recorded owner ruling.
+
+    Shape taken from the real report on #17887 -- six highs, the excused one unpatchable and a
+    neighbour carrying its own patch. Before this, the neighbour's patch withdrew the exception
+    and the gate failed every frontend-touching PR.
+
+    Takes `recorded_exception` and asserts the reason EXACTLY (CodeRabbit, #17902). Without the
+    fixture this drove the production record, so the negative assertion below passed for three
+    reasons that are not the behaviour under test: the real entry expiring on 2026-11-14, the
+    entry being removed, or the withdrawal message being reworded. A test whose key assertion is
+    "this message is absent" goes green when the mechanism is absent -- which is the vacuity this
+    PR exists to fix, in the test proving the fix. Asserting the whole reason also pins that the
+    excused advisory is NOT listed alongside the neighbour, which a substring check allowed.
+    """
+    other_via = {"url": "https://github.com/advisories/GHSA-zzzz-yyyy-xxxx"}
+    report = _with(
+        {
+            "braces": _patch_entry(rng="*", fix={"name": "stylelint", "version": "7.7.0"}),
+            "neighbour": _patch_entry(fix={"name": "neighbour", "version": "9.9.9"}, via=[other_via]),
+        },
+        high=2,
+    )
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    # The neighbour is still unexcused -- it has no exception -- but the reason must name IT,
+    # not revoke the braces ruling.
+    assert verdict.result == gate.FOUND
+    assert verdict.reason == "not excused: GHSA-zzzz-yyyy-xxxx", verdict.reason
+
+
+def test_the_exception_is_withdrawn_when_its_own_package_is_patched(recorded_exception) -> None:
+    """The other direction: narrower, not softer."""
+    report = _with({"braces": _patch_entry(rng=">=3.0.0", fix={"name": "braces", "version": "3.0.4"})}, high=1)
+
+    verdict = gate.classify(report, BULK_LOG)
+
+    assert verdict.result == gate.FOUND
+    assert "patched version" in verdict.reason
+
+
+@pytest.mark.parametrize(
+    ("case", "entry"),
+    [
+        pytest.param(
+            "parent bump", _patch_entry(rng=">=1.0.0", fix={"name": "stylelint", "version": "7.7.0"}), id="parent"
+        ),
+        pytest.param(
+            "every version vulnerable", _patch_entry(rng="*", fix={"name": "braces", "version": "3.0.4"}), id="star"
+        ),
+        pytest.param(
+            "rollback", _patch_entry(rng=">=7.7.1", fix={"name": "braces", "version": "7.7.0"}), id="downgrade"
+        ),
+    ],
+)
+def test_these_offers_are_not_patches(recorded_exception, case: str, entry: dict) -> None:
+    """Three situations npm reports as a fix; none is a patched version of the package.
+
+    `range == "*"` is npm's own way of saying there is no safe version -- the owner's condition
+    (`first_patched_version: null`) expressed in the gate's own input rather than inferred.
+    """
+    assert not gate.entry_offers_a_patch("braces", entry), case
+    verdict = gate.classify(_with({"braces": entry}, high=1), BULK_LOG)
+    assert verdict.result == gate.PASSED, f"{case}: {verdict.reason}"
+
+
+def test_a_genuine_upgrade_is_a_patch() -> None:
+    """Contrast: without this, a predicate that always answers 'not a patch' passes the three above."""
+    assert gate.entry_offers_a_patch("braces", _patch_entry(rng=">=3.0.0", fix={"name": "braces", "version": "3.0.4"}))
+
+
+def test_an_unreadable_range_counts_as_a_patch_so_the_exception_is_withdrawn() -> None:
+    """A range this cannot parse must not become permission."""
+    assert gate.entry_offers_a_patch("braces", _patch_entry(rng="not a range", fix={"name": "braces", "version": "9"}))
+
+
+def test_the_picomatch_exception_is_recorded_per_owner_decision() -> None:
+    """GHSA-fc5q-39xc-vjpf: no patched version exists; owner decision on #21736, expires 2026-12-17."""
+    entry = _SHIPPED["GHSA-fc5q-39xc-vjpf"]
+    assert entry.expires == "2026-12-17"
+    assert "#21736" in entry.reason
+
+
+def test_the_picomatch_exception_retires_when_a_patch_ships() -> None:
+    """A patched picomatch withdraws the exception; an affected-everywhere one (`*`) honours it."""
+    ghsa = "GHSA-fc5q-39xc-vjpf"
+    before = date(2026, 11, 17)
+    unpatched = {ghsa: False}
+    assert policy.exception_problems(unpatched, before) == ({ghsa}, [])
+    assert policy.exception_problems({ghsa: True}, before)[1], "a published patch must withdraw it"
+    assert policy.exception_problems(unpatched, date(2026, 12, 18))[1], "expired entries must fail"
+    assert policy.exception_problems({}, before)[1], "an advisory no longer reported must be removed"

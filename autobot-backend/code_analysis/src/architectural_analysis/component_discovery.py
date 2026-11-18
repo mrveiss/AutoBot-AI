@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 from .cohesion_calculator import CohesionCalculator
 from .complexity_calculator import ComplexityCalculator
-from .dependency_analyzer import DependencyAnalyzer
+from .dependency_analyzer import ComponentDependencyAnalyzer
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent
 
@@ -35,13 +36,13 @@ class ComponentDiscovery:
         >>> components = await discovery.discover_components(".", ["**/*.py"])
     """
 
-    # Default patterns to skip
+    # Default patterns to skip: "/name/" for each canonical dir (whole path components, matched
+    # against the "/"-prefixed root-relative path), plus this tool's own file patterns. ".git" was a
+    # bare substring, so ".github" and ".gitlab" stay skipped explicitly.
     DEFAULT_SKIP_PATTERNS = [
-        "__pycache__",
-        ".git",
-        "node_modules",
-        ".venv",
-        "venv",
+        *(f"/{name}/" for name in sorted(SKIP_DIRS)),
+        "/.github/",
+        "/.gitlab/",
         "test_",
         "_test.py",
         ".pyc",
@@ -52,7 +53,7 @@ class ComponentDiscovery:
         skip_patterns: List[str] = None,
         cohesion_calculator: CohesionCalculator = None,
         complexity_calculator: ComplexityCalculator = None,
-        dependency_analyzer: DependencyAnalyzer = None,
+        dependency_analyzer: ComponentDependencyAnalyzer = None,
         pattern_detector: PatternDetector = None,
     ):
         """
@@ -68,7 +69,7 @@ class ComponentDiscovery:
         self.skip_patterns = skip_patterns or self.DEFAULT_SKIP_PATTERNS
         self._cohesion = cohesion_calculator or CohesionCalculator()
         self._complexity = complexity_calculator or ComplexityCalculator()
-        self._deps = dependency_analyzer or DependencyAnalyzer()
+        self._deps = dependency_analyzer or ComponentDependencyAnalyzer()
         self._patterns = pattern_detector or PatternDetector()
 
     async def discover_components(self, root_path: str, patterns: List[str]) -> List[ArchitecturalComponent]:
@@ -87,13 +88,15 @@ class ComponentDiscovery:
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                await self._process_file_for_components(file_path, components)
+                await self._process_file_for_components(file_path, components, root)
 
         return components
 
-    async def _process_file_for_components(self, file_path: Path, components: List[ArchitecturalComponent]) -> None:
+    async def _process_file_for_components(
+        self, file_path: Path, components: List[ArchitecturalComponent], root: Path | None = None
+    ) -> None:
         """Process a single file to extract components."""
-        if not file_path.is_file() or self._should_skip_file(file_path):
+        if not file_path.is_file() or self._should_skip_file(file_path, root):
             return
 
         try:
@@ -102,9 +105,13 @@ class ComponentDiscovery:
         except Exception as e:
             logger.warning(f"Failed to extract components from {file_path}: {e}")
 
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped."""
-        path_str = str(file_path)
+    def _should_skip_file(self, file_path: Path, root: Path | None = None) -> bool:
+        """Check if file should be skipped (root-relative when ``root`` is given, #13602)."""
+        try:
+            rel = str(file_path.relative_to(root)) if root is not None else str(file_path)
+        except ValueError:
+            rel = str(file_path)
+        path_str = "/" + rel.lstrip("/")
         return any(pattern in path_str for pattern in self.skip_patterns)
 
     async def _extract_components_from_file(self, file_path: str) -> List[ArchitecturalComponent]:

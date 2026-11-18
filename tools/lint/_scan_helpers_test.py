@@ -13,13 +13,14 @@ that motivated the extraction per #5394 and #5418).
 from __future__ import annotations
 
 import importlib.util
+import logging
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.isolated_git import isolated_git_env  # noqa: E402
 
 # Load the module-under-test directly (tools/lint is not a package).
 _HELPER_PATH = Path(__file__).parent / "_scan_helpers.py"
@@ -40,7 +41,7 @@ def _make_tree(root: Path, rel_paths: list[str]) -> None:
 def _run_git(root: Path, *argv: str) -> None:
     """Run one git command in *root*, refusing to continue if it failed.
 
-    ``env=scrubbed_git_env()`` is not optional here (#15490): pytest inherits
+    ``env=isolated_git_env()`` is not optional here (#15490): pytest inherits
     the ambient hook environment, and an inherited ``GIT_DIR`` makes ``git
     init``/``git add`` operate on the real repository instead of ``tmp_path``.
     """
@@ -51,7 +52,7 @@ def _run_git(root: Path, *argv: str) -> None:
         text=True,
         encoding="utf-8",
         check=False,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(f"git {' '.join(argv)} failed in {root}: {result.stderr.strip()}")
@@ -263,3 +264,59 @@ def test_logical_lines_reports_the_first_physical_line_of_each_fold() -> None:
     assert joined[0] == (1, "one")
     assert joined[1][0] == 2
     assert joined[2] == (4, "four")
+
+
+# ---------------------------------------------------------------------------
+# iter_ansible_files — skip dirs are matched below root only (#18972)
+# ---------------------------------------------------------------------------
+
+
+def _touch(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("- hosts: all\n", encoding="utf-8")
+    return path
+
+
+def test_iter_ansible_files_scans_a_root_that_itself_lives_under_a_skip_dir(tmp_path: Path) -> None:
+    root = tmp_path / ".worktrees" / "repo"
+    play = _touch(root / "ansible" / "x.yml")
+    assert list(helpers.iter_ansible_files(root, {".yml"})) == [play]
+
+
+def test_iter_ansible_files_skips_a_skip_dir_inside_root(tmp_path: Path) -> None:
+    root = tmp_path / ".worktrees" / "repo"
+    play = _touch(root / "ansible" / "x.yml")
+    for skipped in (".worktrees/other/ansible/y.yml", "node_modules/pkg/z.yml", ".venv/lib/w.yml"):
+        _touch(root / skipped)
+    assert list(helpers.iter_ansible_files(root, {".yml"})) == [play]
+
+
+def _audit_logger(name: str) -> logging.Logger:
+    """A throwaway logger that propagates, so ``caplog`` sees what ``report_audit`` emits."""
+    log = logging.getLogger(name)
+    log.propagate = True
+    return log
+
+
+def test_report_audit_with_problems_returns_1_and_logs_them_then_the_failed_summary(caplog) -> None:
+    log = _audit_logger("report_audit_failed_probe")
+    with caplog.at_level(logging.DEBUG, logger=log.name):
+        rc = helpers.report_audit(
+            log, ["first problem", "second problem"], "\nprobe audit FAILED over %d, %d", "unused", 7, 3
+        )
+
+    assert rc == 1
+    records = [(r.levelno, r.getMessage()) for r in caplog.records]
+    assert records == [
+        (logging.ERROR, "first problem\n\nsecond problem"),
+        (logging.ERROR, "\nprobe audit FAILED over 7, 3"),
+    ]
+
+
+def test_report_audit_without_problems_returns_0_and_logs_only_the_clean_summary_at_info(caplog) -> None:
+    log = _audit_logger("report_audit_clean_probe")
+    with caplog.at_level(logging.DEBUG, logger=log.name):
+        rc = helpers.report_audit(log, [], "unused %d", "probe audit clean over %d", 5)
+
+    assert rc == 0
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [(logging.INFO, "probe audit clean over 5")]

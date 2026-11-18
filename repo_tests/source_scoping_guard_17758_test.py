@@ -10,7 +10,7 @@ This class has been closed four times in three files and came back each time:
   filesystem-scanning analytics endpoints accepted a ``source_id`` 'for API
   consistency' but ignored it, scanning AutoBot's own project root regardless of
   the selected code source -- cross-project data leakage."*
-* **#12384** added ``_path_checkpoint_key(path, source_id)``.
+* **#12384** added ``path_checkpoint_key(path, source_id)``.
 * **#8436** scoped ``code_intelligence.py``'s task-result prefix.
 * **#12393** swapped a root resolver that was wrong for deployed layouts.
 
@@ -33,6 +33,9 @@ import pathlib
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
+
 _REPO = repo_root()
 
 #: Where a `source_id` is load-bearing. Not "the analytics directory" -- that
@@ -41,6 +44,7 @@ _SCOPED_TREES = (
     "autobot-backend/api/codebase_analytics",
     "autobot-backend/api/code_intelligence.py",
     "autobot-backend/tasks/analytics_tasks.py",
+    "autobot-backend/tasks/pattern_checkpoint.py",
     "autobot-backend/utils/celery_task_status.py",
 )
 
@@ -62,21 +66,8 @@ _ACCEPTS_WITHOUT_READING: frozenset[str] = frozenset()
 #: and a verdict is not something this guard can supply.
 _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
     {
-        "autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:47",
-        "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:334",
-        "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:386",
-        "autobot-backend/api/codebase_analytics/endpoints/environment.py:45",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:312",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:329",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
-        "autobot-backend/api/codebase_analytics/endpoints/ownership.py:479",
-        "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py:644",
-        "autobot-backend/tasks/analytics_tasks.py:38",
-        "autobot-backend/api/codebase_analytics/chromadb_storage.py:688",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:219",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:279",
-        "autobot-backend/api/codebase_analytics/endpoints/stats.py:463",
+        "autobot-backend/tasks/pattern_checkpoint.py:22",
+        "autobot-backend/api/codebase_analytics/chromadb_storage.py:606",
     }
 )
 
@@ -88,10 +79,18 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
 #: ``Name`` test; adding the inverted ``if not source_id`` form and the
 #: ``source_id or "default"`` form surfaced eleven sites that were always there
 #: and always invisible -- ten of them the ``or`` spelling, including #12384's
-#: own fix, ``_path_checkpoint_key``. A raised pin normally means somebody
+#: own fix, ``path_checkpoint_key``. A raised pin normally means somebody
 #: parked a leak; this one means somebody could finally see them. Any future
 #: rise needs the same distinction stated, or it is the former.
-_MAX_KNOWN_UNSCOPED_FALLBACKS = 15
+#:
+#: 15 -> 17, under #17651: `declarations.py` moved an existing unscoped read into this spelling, so the
+#: detector can see it. `store_state.py` is a new read, but it returns only whether any row exists, no
+#: row content. The verdict on both stays on #17761.
+#:
+#: 17 -> 2, under #20513: the other fifteen are routes and route helpers, and the routes now REQUIRE their
+#: source (`SourceIdQuery`) while the helpers go through `require_source_id`. What is left is the scheduler
+#: task wrapper and the indexing-side document tag, which #20513 defers.
+_MAX_KNOWN_UNSCOPED_FALLBACKS = 2
 
 
 #: Scan entry points must resolve their root through the source-aware resolver.
@@ -102,8 +101,7 @@ _UNSCOPED_ROOT_RESOLVERS = ("get_project_root", "resolve_project_root")
 
 
 def _is_test(path: pathlib.Path) -> bool:
-    name = path.name
-    return name.endswith("_test.py") or name.startswith("test_")
+    return is_test_filename(path.name, include_js=False, include_conftest=False)
 
 
 def _is_unscoped_fallback(node: ast.AST) -> bool:
@@ -195,7 +193,7 @@ def test_the_sweep_reads_files():
 def test_the_sweep_finds_source_id_parameters():
     total = 0
     for path in _python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         total += sum(1 for _ in _functions_taking_source_id(tree))
     assert total >= 40, f"only {total} functions take a source_id; the sweep is probably looking in the wrong place"
 
@@ -214,7 +212,7 @@ def test_every_source_id_parameter_is_read_in_its_body():
     """
     offenders = []
     for path in _python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         for fn in _functions_taking_source_id(tree):
             if fn.name in _ACCEPTS_WITHOUT_READING:
                 continue
@@ -246,7 +244,7 @@ def test_no_key_or_filter_falls_back_to_an_unscoped_form():
     """
     offenders = []
     for path in _python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not _is_unscoped_fallback(node):
                 continue
@@ -285,7 +283,7 @@ def test_every_baselined_site_still_has_the_shape_it_was_recorded_for():
         if not path.exists():
             stale.append(f"{site} (file is gone)")
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         # `_is_unscoped_fallback`, not a second copy of the predicate. The first
         # version of this assertion inlined the narrow `IfExp`-with-`Name` test,
         # so widening the detector left it checking a shape the detector no
@@ -317,7 +315,7 @@ def test_scan_entry_points_use_the_source_aware_resolver():
     """
     path = _REPO / "autobot-backend/tasks/analytics_tasks.py"
     source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
 
     called = {node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
     unscoped = sorted(called & set(_UNSCOPED_ROOT_RESOLVERS))
@@ -357,14 +355,14 @@ _MUST_NOT_TRIP = (
 
 @pytest.mark.parametrize("snippet", _MUST_TRIP)
 def test_the_detector_trips_on_every_fallback_spelling(snippet):
-    tree = ast.parse(snippet)
+    tree = parse_cache.parse(snippet)
     assert any(_is_unscoped_fallback(n) for n in ast.walk(tree)), f"detector missed: {snippet}"
 
 
 @pytest.mark.parametrize("snippet", _MUST_NOT_TRIP)
 def test_the_detector_leaves_correct_code_alone(snippet):
     """Without this, a detector that returns True for everything would pass."""
-    tree = ast.parse(snippet)
+    tree = parse_cache.parse(snippet)
     assert not any(_is_unscoped_fallback(n) for n in ast.walk(tree)), f"false positive: {snippet}"
 
 
@@ -388,7 +386,7 @@ def test_every_inline_source_id_pattern_matches_the_canonical_one():
     """
     import re as _re
 
-    canonical_src = (_REPO / "autobot-backend/api/codebase_analytics/source_scope.py").read_text(encoding="utf-8")
+    canonical_src = (_REPO / "autobot-backend/api/source_scope.py").read_text(encoding="utf-8")
     canonical = _re.search(r'_SOURCE_ID_SHAPE = re\.compile\(r"([^"]+)"\)', canonical_src)
     assert canonical, "source_scope._SOURCE_ID_SHAPE is gone or reshaped; this pin needs rewriting"
 

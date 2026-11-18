@@ -34,6 +34,7 @@ export function useApiEndpointAnalysis(deps: UseCodeIntelAnalysisDeps) {
     {
       path: '/api/analytics/codebase/endpoint-analysis',
       scopeToSource: true,
+      requireSource: true,
       pickData: (r) =>
         r.status === 'success' && r.analysis ? r.analysis : null,
     },

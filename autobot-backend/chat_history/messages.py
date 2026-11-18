@@ -18,9 +18,11 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from chat_history.session_lease import SessionLeaseError
+from chat_history.session_merge import MESSAGE_STAMP_FIELD
 
 logger = get_logger(__name__)
 
@@ -36,7 +38,22 @@ class MessagesMixin:
     - self.save_session(): method
     - self._save_history(): method
     - self._periodic_memory_check(): method
+    - self._locked_update(), self._update_redis_cache_on_save(): methods (SessionLockMixin / SessionMixin)
     """
+
+    if TYPE_CHECKING:  # the host interface this mixin calls, declared like SessionLockMixin does
+
+        async def _locked_update(
+            self,
+            session_id: str,
+            operation: str,
+            mutate: Callable[[Dict[str, Any]], Optional[bool]],
+            *,
+            must_exist: bool = False,
+            after: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
+        ) -> Optional[Dict[str, Any]]: ...
+
+        async def _update_redis_cache_on_save(self, session_id: str, chat_data: Dict[str, Any]) -> None: ...
 
     def _build_message_dict(
         self,
@@ -55,7 +72,12 @@ class MessagesMixin:
             sender: The sender of the message.
             text: The content of the message.
             message_type: The type of message.
-            raw_data: Additional raw data (metadata).
+            raw_data: Additional raw data (metadata). ``None`` is persisted as
+                ``{}`` (#13280), so a message never stores ``metadata: null``.
+                Every other value survives verbatim, ``0``/``""``/``[]``/``False``
+                included — so the contract is "never null", **not** "always a
+                mapping". A reader needing a mapping must still check;
+                ``test_falsy_but_supplied_metadata_survives_verbatim`` pins it.
             tool_markers: Optional list of tool usage markers.
             author_id: Optional user ID for multi-user attribution (Issue #3282).
             sources: Optional RAG retrieval sources for citation display (Issue #4448).
@@ -71,7 +93,13 @@ class MessagesMixin:
             "sender": sender,
             "text": text,
             "messageType": message_type,
-            "metadata": raw_data,
+            # #13280: ``raw_data`` defaults to ``None``, and persisting that
+            # ``None`` is what made every reader of a chat message defend
+            # against ``"metadata": null`` (#13220). Normalise at the writer so
+            # the shape is uniform from here on. ``is not None`` rather than a
+            # truthiness test, because ``0``/``""``/``[]`` are metadata a caller
+            # chose to pass and must survive the round-trip.
+            "metadata": raw_data if raw_data is not None else {},
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "sources": sources if sources is not None else [],
         }
@@ -95,11 +123,11 @@ class MessagesMixin:
         Issue #620.
         """
         try:
-            messages = await self.load_session(session_id)
-            messages.append(message)
-            await self.save_session(session_id, messages=messages)
+            await self.save_session(session_id, messages=[message], append=True)
             logger.debug("Added message to session %s", session_id)
             return True
+        except SessionLeaseError:
+            raise  # #20862: a wait that timed out is surfaced, not turned into a quiet False
         except Exception as e:
             logger.error("Error adding message to session %s: %s", session_id, e)
             return False
@@ -125,15 +153,15 @@ class MessagesMixin:
         if not messages:
             return True
         try:
-            existing = await self.load_session(session_id)
-            existing.extend(messages)
-            await self.save_session(session_id, messages=existing)
+            await self.save_session(session_id, messages=messages, append=True)
             logger.debug(
                 "Batch-added %d messages to session %s",
                 len(messages),
                 session_id,
             )
             return True
+        except SessionLeaseError:
+            raise  # #20862
         except Exception as e:
             logger.error(
                 "Batch add to session %s failed: %s",
@@ -281,10 +309,14 @@ class MessagesMixin:
 
         Issue #620.
         """
-        # Issue #13220: messages are persisted with ``"metadata": None`` whenever
-        # ``add_message`` is called without ``raw_data``. ``.get(key, {})`` returns
-        # that explicit ``None`` — the default only applies when the key is absent —
-        # so test the *value*, not key presence.
+        # Issue #13220: ``.get(key, {})`` returns an explicit stored ``None`` —
+        # the default only applies when the key is *absent* — so test the
+        # *value*, not key presence.
+        # #13280 fixed the writer, so nothing persisted from that commit onward
+        # carries ``"metadata": null``. Sessions already on disk were not
+        # rewritten and keep it forever, so this guard stays: it defends
+        # historical data, which is not dead code just because the producer
+        # stopped producing.
         msg_metadata = message.get("metadata") or {}
         return all(msg_metadata.get(key) == value for key, value in metadata_filter.items())
 
@@ -301,9 +333,13 @@ class MessagesMixin:
         # Issue #13220: ``"metadata" not in message`` is False for a persisted
         # ``"metadata": None``, so the guard passed and ``None.update()`` raised.
         # Testing the value handles missing, ``None`` and ``{}`` uniformly.
+        # Retained past the #13280 writer fix for the same reason as
+        # ``_message_matches_filter`` above — old sessions do not rewrite
+        # themselves.
         if not message.get("metadata"):
             message["metadata"] = {}
         message["metadata"].update(metadata_updates)
+        message[MESSAGE_STAMP_FIELD] = time.time()
 
     async def update_message_metadata(
         self,
@@ -333,24 +369,47 @@ class MessagesMixin:
             )
         """
         try:
-            messages = await self.load_session(session_id)
-
-            for message in messages:
-                if self._message_matches_filter(message, metadata_filter):
-                    self._apply_metadata_updates(message, metadata_updates)
-                    await self.save_session(session_id, messages=messages)
-                    logger.info(
-                        f"Updated message metadata in session {session_id}: "
-                        f"filter={metadata_filter}, updates={metadata_updates}"
-                    )
-                    return True
+            if await self._update_first_matching_message(session_id, metadata_filter, metadata_updates):
+                logger.info(
+                    f"Updated message metadata in session {session_id}: "
+                    f"filter={metadata_filter}, updates={metadata_updates}"
+                )
+                return True
 
             logger.warning(f"No message found matching metadata filter in session " f"{session_id}: {metadata_filter}")
             return False
 
+        except SessionLeaseError:
+            raise  # #20862: a wait that timed out is surfaced, not turned into a quiet False
         except Exception as e:
             logger.error(f"Error updating message metadata in session {session_id}: {e}")
             return False
+
+    async def _update_first_matching_message(
+        self, session_id: str, metadata_filter: Dict[str, Any], metadata_updates: Dict[str, Any]
+    ) -> bool:
+        """Apply *metadata_updates* to the first matching message inside the session's locked update (#20862).
+
+        The message is found and changed on the file as it is once the lease is held, so a concurrent
+        edit to another key of the same message, or a new message, is kept rather than overwritten by a
+        snapshot loaded before the wait.
+        """
+        found = False
+
+        def apply(chat_data: Dict[str, Any]) -> bool:
+            nonlocal found
+            for message in chat_data.get("messages") or []:
+                if self._message_matches_filter(message, metadata_filter):
+                    self._apply_metadata_updates(message, metadata_updates)
+                    chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    found = True
+                    return True
+            return False  # no match: nothing is rewritten, cached or fenced
+
+        written = await self._locked_update(
+            session_id, "update_message_metadata", apply, must_exist=True, after=self._update_redis_cache_on_save
+        )
+        return written is not None and found
 
     async def add_tool_marker_to_last_message(
         self, session_id: str, tool_type: str, tool_action: str, **marker_data: Any

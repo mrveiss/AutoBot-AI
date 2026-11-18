@@ -157,12 +157,12 @@ def test_redis_unavailable_fails_open(monkeypatch, eager_app):
 
 def test_transient_errors_match_canonical_retryable_set():
     """CELERY_TRANSIENT_ERRORS must stay identical to the canonical set (#11689)."""
-    from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS, RetryConfig
+    from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS, RetryPolicy
 
     assert CELERY_TRANSIENT_ERRORS == RETRYABLE_EXCEPTIONS
     # Every celery-transient error must be retryable (and not non-retryable)
-    # under the canonical RetryConfig split.
-    config = RetryConfig()
+    # under the canonical RetryPolicy split.
+    config = RetryPolicy()
     for exc_type in CELERY_TRANSIENT_ERRORS:
         assert issubclass(exc_type, config.retryable_exceptions)
         assert not issubclass(exc_type, config.non_retryable_exceptions)

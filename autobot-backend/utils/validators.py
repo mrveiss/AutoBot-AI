@@ -61,12 +61,11 @@ from pathlib import Path
 from typing import Any, Iterable, Set
 from urllib.parse import urlparse
 
+import email_validator
+
 from utils.path_validation import contains_path_traversal
 
 # Issue #380: Pre-compiled regex patterns for validation
-# Issue #1733: ReDoS fix - removed '.' from domain character class to prevent
-# ambiguous backtracking between [a-zA-Z0-9.-]+ and \.[a-zA-Z]{2,}
-_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$")
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 # ============================================================================
@@ -518,7 +517,7 @@ def validate_file_size(
 
 def validate_email(value: str, field_name: str = "Email") -> str:
     """
-    Validate email format (basic check).
+    Validate an email address against the RFC rule `email_validator` implements.
 
     Args:
         value: Email to validate
@@ -537,14 +536,14 @@ def validate_email(value: str, field_name: str = "Email") -> str:
         >>> validate_email("invalid.email")
         ValueError: Invalid Email format
     """
-    # Issue #380: Use pre-compiled pattern
-    if not _EMAIL_RE.match(value):
-        raise ValueError(f"Invalid {field_name} format")
-
+    try:
+        email_validator.validate_email(value, check_deliverability=False)
+    except email_validator.EmailNotValidError as exc:
+        raise ValueError(f"Invalid {field_name} format") from exc
     return value
 
 
-def validate_url(value: str, field_name: str = "URL", require_https: bool = False) -> str:
+def validate_url_format(value: str, field_name: str = "URL", require_https: bool = False) -> str:
     """
     Validate URL format.
 
@@ -560,10 +559,10 @@ def validate_url(value: str, field_name: str = "URL", require_https: bool = Fals
         ValueError: If URL format invalid
 
     Examples:
-        >>> validate_url("https://example.com")
+        >>> validate_url_format("https://example.com")
         'https://example.com'
 
-        >>> validate_url("http://example.com", require_https=True)
+        >>> validate_url_format("http://example.com", require_https=True)
         ValueError: URL must use HTTPS
     """
     try:

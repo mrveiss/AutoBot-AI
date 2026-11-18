@@ -15,12 +15,17 @@ from pathlib import Path
 
 import requests
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-import config as config
-from agents.classification_agent import ClassificationAgent
-from conversation import conversation_manager
+import config as config  # noqa: E402
+from agents.classification_agent import ClassificationAgent  # noqa: E402
+from async_chat_workflow import process_chat_message_with_timeout  # noqa: E402
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -55,17 +60,20 @@ async def test_conversation_flow():
     logger.info("\n💬 Testing Conversation Flow...")
 
     try:
-        # Create a test conversation
-        conversation = conversation_manager.create_conversation("test_debug_chat")
-
-        # Process the message
-        result = await conversation.process_user_message("hello")
+        # The conversation_manager this used was removed; the async chat workflow is its successor.
+        outcome = await process_chat_message_with_timeout("hello", "test_debug_chat")
+        result = {
+            "response": outcome.response,
+            "message_type": outcome.message_type.value,
+            "processing_time": outcome.processing_time,
+            "kb_results_count": len(outcome.kb_results),
+        }
 
         logger.info("✅ Conversation processing successful:")
         logger.info(f"   Response: {result['response'][:100]}...")
-        print(f"   Classification: {result.get('classification', {}).get('complexity', 'None')}")
-        logger.info(f"   Processing time: {result.get('processing_time', 0):.2f}s")
-        logger.info(f"   KB results: {result.get('kb_results_count', 0)}")
+        logger.info(f"   Message type: {result['message_type']}")
+        logger.info(f"   Processing time: {result['processing_time']:.2f}s")
+        logger.info(f"   KB results: {result['kb_results_count']}")
 
         return True, result
     except Exception as e:

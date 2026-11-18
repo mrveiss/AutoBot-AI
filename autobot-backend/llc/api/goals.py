@@ -32,6 +32,7 @@ from user_management.services import TenantContext
 from ..models.goal import GoalLevel, GoalStatus, LLCGoal
 from ..models.work_item import LLCWorkItem
 from ..services.goal import GoalService
+from ._common import acting_user_id
 
 router = APIRouter(prefix="/goals", tags=["llc-goals"])
 
@@ -175,6 +176,7 @@ async def create_goal(
         owner_agent_id=body.owner_agent_id,
         due_date=body.due_date,
         status=body.status,
+        actor_user_id=acting_user_id(_current_user),
     )
     return GoalResponse.model_validate(goal)
 

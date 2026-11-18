@@ -180,7 +180,7 @@ async def acquire_lease(
     return lease
 
 
-def release(lease: LLCWorkspaceLease, reason: str, now: Optional[datetime] = None) -> LLCWorkspaceLease:
+def release_lease(lease: LLCWorkspaceLease, reason: str, now: Optional[datetime] = None) -> LLCWorkspaceLease:
     """Hand *lease* back, recording why.
 
     Idempotent: a lease already released keeps its original reason and timestamp. A
@@ -207,7 +207,7 @@ async def release_for_run(
     )
     leases = list(result.scalars().all())
     for lease in leases:
-        release(lease, reason, now=now)
+        release_lease(lease, reason, now=now)
     if leases:
         logger.info("#16818: released %d workspace lease(s) held by run %s", len(leases), heartbeat_run_id)
     return leases
@@ -232,7 +232,7 @@ async def reclaim_expired(session: AsyncSession, now: Optional[datetime] = None)
             logger.error("#16818: refusing to reclaim live lease on %s held by %s", lease.path, lease.owner)
             continue
         reclaimed.append(lease)
-        release(lease, RECLAIM_REASON, now=now)
+        release_lease(lease, RECLAIM_REASON, now=now)
         logger.warning(
             "#16818: reclaimed workspace %s from %s (expired %s, purpose %r)",
             lease.path,
@@ -255,6 +255,6 @@ __all__ = [
     "live_lease_count",
     "live_lease_select",
     "reclaim_expired",
-    "release",
+    "release_lease",
     "release_for_run",
 ]

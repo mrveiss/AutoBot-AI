@@ -192,23 +192,77 @@ def ci_transitive_closure(ci_names: set[str], requires: dict[str, list[str]]) ->
     return reached
 
 
+def floating_packages(
+    ci: dict[str, str],
+    closure: dict[str, list[tuple[str, str]]],
+) -> set[str]:
+    """Closure packages whose installed version the CI plane does not hold still.
+
+    #17558 item 2 AC2: a cap is only structural if the package STATING it is
+    itself held. `opentelemetry-proto` is the worked example and the reason this
+    function exists. With #17502 reverted, its only requirers are
+    `opentelemetry-exporter-otlp-proto-grpc` and `-proto-common`, and both say
+    `opentelemetry-proto==1.44.0` -- which reads as a cap, so a per-requirement
+    test calls it structurally bounded and reports nothing.
+
+    It is not bounded. `==1.44.0` is what grpc 1.44.0's metadata says; grpc itself
+    is unpinned in the reverted CI plane, so pip takes grpc 1.45.0, whose metadata
+    says `opentelemetry-proto==1.45.0`, and proto moves with it. The cap is real
+    and it travels. Reading a requirement string without asking which release of
+    the requirer produced it is `MEASUREMENT_DISCIPLINE.md` family F: a correct
+    answer to "does this requirement have an upper bound" read as an answer to
+    "can this package's version climb".
+
+    A package is HELD when the CI plane declares it with an upper bound; otherwise
+    it floats as soon as any requirer either leaves it unbounded or floats itself.
+    Computed to a fixed point because the property is transitive -- `floating`
+    only ever grows, so the loop terminates in at most one pass per package.
+
+    Measured blast radius when this replaced the per-requirement test: the tree's
+    reported set was `['protobuf']` before and after, and the #17502 revert fixture
+    went from three of #17557's four packages to all four.
+    """
+    floating: set[str] = set()
+
+    def held(name: str) -> bool:
+        declared = ci.get(name)
+        if declared is not None and bounds_above(declared):
+            return True
+        return name in closure and name not in floating
+
+    changed = True
+    while changed:
+        changed = False
+        for name, requirers in closure.items():
+            if name in floating:
+                continue
+            declared = ci.get(name)
+            if declared is not None and bounds_above(declared):
+                continue
+            if any(not bounds_above(specifier_of(spec)) or not held(who) for who, spec in requirers):
+                floating.add(name)
+                changed = True
+    return floating
+
+
 def unenforced_pairs(
     production: dict[str, str],
     ci: dict[str, str],
     closure: dict[str, list[tuple[str, str]]],
 ) -> list[UnenforcedPair]:
     """Production upper bounds the CI plane neither declares nor structurally keeps."""
+    floating = floating_packages(ci, closure)
     found: list[UnenforcedPair] = []
     for name, specifier in sorted(production.items()):
         if name in ci or name not in closure or not bounds_above(specifier):
             continue
-        requirers = closure[name]
-        # Structural agreement: if EVERY requirer caps it, the resolution cannot
-        # climb past the cap and the planes cannot diverge. Only an unbounded
-        # requirer makes the agreement a coincidence.
-        if all(bounds_above(specifier_of(spec)) for _, spec in requirers):
+        # Structural agreement: if every requirer caps it AND every requirer is
+        # itself held at a version, the resolution cannot climb past the cap and
+        # the planes cannot diverge. A cap stated by a floating requirer floats
+        # with it -- see `floating_packages`.
+        if name not in floating:
             continue
-        found.append(UnenforcedPair(name=name, production=specifier, requirers=tuple(requirers)))
+        found.append(UnenforcedPair(name=name, production=specifier, requirers=tuple(closure[name])))
     return found
 
 

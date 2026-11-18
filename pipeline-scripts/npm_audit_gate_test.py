@@ -16,6 +16,7 @@ import json
 import subprocess
 import sys
 
+import npm_audit_exceptions as policy
 import npm_audit_gate as gate
 import pytest
 
@@ -71,7 +72,7 @@ def no_recorded_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
     of the record shrinking. A test asserting what `main()` prints on a clean report has to
     say which world it is in, and that is this one -- no policy in force.
     """
-    monkeypatch.setattr(gate, "ADVISORY_EXCEPTIONS", {})
+    monkeypatch.setattr(policy, "ADVISORY_EXCEPTIONS", {})
 
 
 def test_low_and_moderate_advisories_pass(no_recorded_exceptions) -> None:
@@ -147,7 +148,7 @@ def test_a_report_that_came_through_audits_quick_is_unavailable() -> None:
 
 
 def test_an_endpoint_error_is_retried_until_a_report_arrives(no_recorded_exceptions) -> None:
-    npm, sleeps = _FakeNpm((ENDPOINT_ERROR, ""), (ENDPOINT_ERROR, ""), (_report(), BULK_LOG)), []
+    npm, sleeps = (_FakeNpm((ENDPOINT_ERROR, ""), (ENDPOINT_ERROR, ""), (_report(), BULK_LOG)), [])
 
     outcome = gate.audit_with_retries(["npm"], 3, 7, run=npm, sleep=sleeps.append)
 

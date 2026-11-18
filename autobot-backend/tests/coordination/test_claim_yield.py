@@ -179,3 +179,28 @@ async def test_a_timeout_shorter_than_one_poll_is_still_honoured(env):
         f"waited {elapsed:.3f}s for a 0.05s budget; anything at or above "
         f"_POLL_S ({_POLL_S}s) means the deadline is not bounding the sleep"
     )
+
+
+@pytest.mark.asyncio
+async def test_the_published_reason_and_the_ledger_copy_are_both_capped_18563(env):
+    from autobot_shared.coordination.ledger_events import TEXT_CAP, read_events
+
+    manager, client = env
+    await request_yield(
+        "path:a/b",
+        holder_task_id="h",
+        requester_agent_id="a" * (TEXT_CAP * 2),
+        requester_task_id="t",
+        reason="z" * (TEXT_CAP * 2),
+    )
+    sent = manager.published[0][1]
+    assert sent["reason"] == "z" * TEXT_CAP
+    assert sent["requester_agent_id"] == "a" * (TEXT_CAP * 2)  # ids are never cut
+    assert (await read_events(client))[0]["reason"] == "z" * TEXT_CAP
+
+
+def test_the_shared_channel_name_is_the_task_managers_18599():
+    from a2a.task_manager import _KEY_EVENTS
+    from autobot_shared.coordination.yield_ask import TASK_EVENTS_CHANNEL
+
+    assert TASK_EVENTS_CHANNEL == _KEY_EVENTS

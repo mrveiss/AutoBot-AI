@@ -252,8 +252,8 @@ output of a comparative audit is often not the thing you adopt.
   and drift.
 - **#13250** (tool approval gated twice) — partial static answer to its open "can any flow
   reach execution with neither gate firing" question. Path A fail-opens twice:
-  `AUTOBOT_CHAT_APPROVAL_GATE` reads as `False` when unset
-  (`chat_workflow/session_role.py:34`), and `_tool_call_needs_approval`
+  `AUTOBOT_CHAT_APPROVAL_GATE` read as `False` when unset when this was written
+  (`chat_workflow/session_role.py`; it is on by default since #19957), and `_tool_call_needs_approval`
   (`chat_workflow/graph.py:494`) returns `False` whenever no categories are declared. A third
   route to the same place: a declared category outside the valid set matches no tools and
   silently disables the gate (`tool_catalogue.py:90` docstring). Labelled `needs-decision`
@@ -298,3 +298,12 @@ the one absence claim (#14067) was verified with a positive control. Medium on t
 side — fetched summaries of ten modules, not full file reads. One correction during the
 audit: the first pass named `HTTP_WRITE_TOOLS` as the notable approval-category gap;
 differencing all atoms found six more, and `FILE_WRITE_TOOLS` is the worse one.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #14065 — bug(chat): summarization failure returns a success-shaped placeholder — half the conversation is destroyed and reported as compacted (closed)
+- #14066 — feat(chat): compaction splits at a raw message index, summarizes away every user message, and carries no deterministic state (closed)
+- #14067 — security(gateway): outbound sends cross no approval seam — every connector message leaves the machine ungated (closed)
+- #14068 — feat(approvals): an approval can only be answered at the screen — no remote delivery, and 'nobody is watching' can only be expressed by lowering the guard profile

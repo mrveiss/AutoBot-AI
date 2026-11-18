@@ -25,9 +25,8 @@ already-authenticated principal.
 
 Gaps (documented, not force-tested):
 - ``verify_replication_sync`` happy path and ``verify_data`` redis path
-  reach ``replication_service``/SSH subprocess infra that cannot be
-  unit-tested without a live Redis + SSH target; only their 404 / non-redis
-  branches are covered here.
+  reach ``replication_service``/SSH subprocess infra that cannot be unit-tested
+  without a live Redis + SSH target; only their 404 / non-redis branches are covered.
 """
 
 from __future__ import annotations
@@ -36,6 +35,7 @@ import asyncio
 import contextlib
 import importlib
 import sys
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -129,6 +129,7 @@ def _load_api_module(dotted: str):
     """Import a real ``api.*`` router module under the real-module swap."""
     with _real_modules_swapped():
         sys.modules.pop(dotted, None)
+        sys.modules.pop("services.node_events", None)  # re-bind to the real models (#17856)
         return importlib.import_module(dotted)
 
 
@@ -161,6 +162,16 @@ with _real_modules_swapped():
 _PRINCIPAL = {"admin": True, "role": "admin", "sub": "tester"}
 
 
+def _use_service_double(monkeypatch, **methods) -> None:
+    """Bind ``_stateful.replication_service`` to a plain double carrying *methods*.
+
+    The global is the conftest's MagicMock stub. pytest >= 9.2 ``monkeypatch.setattr``
+    reads the original statically, misses a mock's auto-child, and its undo
+    ``delattr``s it, so the next test's patch raises ``AttributeError`` (#19878).
+    """
+    monkeypatch.setattr(_stateful, "replication_service", types.SimpleNamespace(**methods))
+
+
 async def _close_session_and_engine(session, engine) -> None:
     """Close *session*, then dispose *engine*, without using ``__aexit__``.
 
@@ -188,10 +199,10 @@ async def _close_session_and_engine(session, engine) -> None:
 async def db():
     """A fresh real in-memory SQLite AsyncSession per test."""
     with _real_modules_swapped():
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    session = async_sessionmaker(engine, expire_on_commit=False)()
+    session = async_sessionmaker(engine, expire_on_commit=False)()  # canonical: ignore py-adhoc-db-engine
     try:
         yield session
     finally:
@@ -540,11 +551,7 @@ class TestStatefulReplications:
 
     async def test_promote_translates_service_success(self, db, monkeypatch):
         """promote_replica maps a service (True, msg) into an ActionResponse."""
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "promote_replica",
-            AsyncMock(return_value=(True, "promoted")),
-        )
+        _use_service_double(monkeypatch, promote_replica=AsyncMock(return_value=(True, "promoted")))
         result = await _stateful.promote_replica(replication_id="rep-x", db=db, _=_PRINCIPAL)
         assert result.action == "promote"
         assert result.success is True
@@ -552,22 +559,14 @@ class TestStatefulReplications:
         assert result.resource_id == "rep-x"
 
     async def test_promote_service_failure_400(self, db, monkeypatch):
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "promote_replica",
-            AsyncMock(return_value=(False, "not a replica")),
-        )
+        _use_service_double(monkeypatch, promote_replica=AsyncMock(return_value=(False, "not a replica")))
         with pytest.raises(HTTPException) as exc:
             await _stateful.promote_replica(replication_id="rep-x", db=db, _=_PRINCIPAL)
         assert exc.value.status_code == 400
         assert exc.value.detail == "not a replica"
 
     async def test_stop_translates_service_success(self, db, monkeypatch):
-        monkeypatch.setattr(
-            _stateful.replication_service,
-            "stop_replication",
-            AsyncMock(return_value=(True, "stopped")),
-        )
+        _use_service_double(monkeypatch, stop_replication=AsyncMock(return_value=(True, "stopped")))
         result = await _stateful.stop_replication(replication_id="rep-y", db=db, _=_PRINCIPAL)
         assert result.action == "stop"
         assert result.success is True
