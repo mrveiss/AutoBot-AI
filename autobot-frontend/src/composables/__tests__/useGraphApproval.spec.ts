@@ -10,7 +10,7 @@
  * terminal route, unchanged.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 type Card = { id: string; metadata: Record<string, unknown> }
 
@@ -173,5 +173,40 @@ describe('stall question answers (#21022)', () => {
     handleStreamingResponse.mockResolvedValue(false)
     await useStallAnswer()(fakeStore.currentMessages[0] as never, '')
     expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({ answer: '', question_id: 'q1' })
+  })
+})
+
+describe('a card answered after the person opened another chat (#21357)', () => {
+  beforeEach(() => {
+    fakeStore.currentSessionId = 'chat-2' // the card belongs to chat-1
+    fakeStore.updateMessageMetadata.mockClear()
+    fakeStore.setPendingApproval.mockClear()
+    fetchWithAuth.mockReset()
+    handleStreamingResponse.mockReset()
+    fetchWithAuth.mockResolvedValue({ ok: true })
+    handleStreamingResponse.mockResolvedValue(false)
+  })
+
+  afterEach(() => {
+    fakeStore.currentSessionId = 'chat-1'
+  })
+
+  it('updates the stall card in its own chat', async () => {
+    fakeStore.currentMessages = [{ id: 'q-card', metadata: { session_id: 'chat-1', question_id: 'q1' } }]
+    await useStallAnswer()(fakeStore.currentMessages[0] as never, 'go')
+    expect(fakeStore.updateMessageMetadata).toHaveBeenCalledWith('q-card', { answered: true, answer_text: 'go' }, 'chat-1')
+    expect(handleStreamingResponse).toHaveBeenCalledWith({ ok: true }, 'chat-1')
+  })
+
+  it('leaves the open chat pending-approval flag alone, success and failure', async () => {
+    seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
+    await useApprovalRouting(vi.fn())('term-1', true)
+    expect(fakeStore.setPendingApproval).not.toHaveBeenCalled()
+
+    seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }] })
+    handleStreamingResponse.mockRejectedValue(new Error('reader failed'))
+    await expect(useApprovalRouting(vi.fn())('term-1', true)).rejects.toThrow('reader failed')
+    expect(fakeStore.setPendingApproval).not.toHaveBeenCalled()
+    expect(fakeStore.updateMessageMetadata).toHaveBeenLastCalledWith('m1', expect.anything(), 'chat-1')
   })
 })

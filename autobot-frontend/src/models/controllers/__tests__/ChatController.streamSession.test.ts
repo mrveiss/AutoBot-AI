@@ -127,4 +127,52 @@ describe('ChatController stream is bound to its originating chat (#21357)', () =
     s.close()
     await done
   })
+
+  it('interleaved streams each keep their buffered update through one flush', async () => {
+    const sa = controlledStream()
+    const doneA = chat.handleStreamingResponse(sa.response)
+    store.switchToSession(b)
+    const sb = controlledStream()
+    const doneB = chat.handleStreamingResponse(sb.response)
+    sa.push({ type: 'response', content: 'A text', metadata: { message_id: 'ma' } })
+    sb.push({ type: 'response', content: 'B text', metadata: { message_id: 'mb' } })
+    await tick() // one flush interval: neither stream's update replaced the other's
+
+    expect(contents(a)).toEqual(['A text'])
+    expect(contents(b)).toEqual(['B text'])
+    sa.close()
+    sb.close()
+    await Promise.all([doneA, doneB])
+  })
+
+  it('shows a stream preview only while its chat is the open one', async () => {
+    const s = controlledStream()
+    store.setTyping(true)
+    const done = chat.handleStreamingResponse(s.response)
+    store.switchToSession(b)
+    store.setTyping(true) // B has its own turn in flight
+    s.push({ type: 'response', content: 'Thinking about the plan for A.', metadata: { message_id: 'm1' } })
+    await new Promise((r) => setTimeout(r, 260)) // past the 200ms preview throttle
+    expect(store.streamingPreview).toBe('')
+
+    s.close()
+    await done
+  })
+
+  it('keeps the typing indicator for a chat whose send is still in the request', async () => {
+    let settle!: (v: unknown) => void
+    vi.spyOn(chat as unknown as { sendMessageWithRetry: () => Promise<unknown> }, 'sendMessageWithRetry').mockImplementation(
+      () => new Promise((r) => { settle = r })
+    )
+    const sent = chat.sendMessage('hello')
+    await Promise.resolve()
+    await Promise.resolve()
+    store.switchToSession(b)
+    await chat.switchToSession(a)
+    expect(store.isTyping).toBe(true)
+
+    settle({ type: 'json', data: {} })
+    await sent
+    expect(store.isTyping).toBe(false)
+  })
 })

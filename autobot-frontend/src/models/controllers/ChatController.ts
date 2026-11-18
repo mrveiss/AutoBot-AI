@@ -12,6 +12,7 @@ import { requestQueue } from '@/composables/useRequestQueue'
 import { stripBracketTags } from '@/utils/llmProtocolTags'
 import { showAttachmentNotice } from '@/utils/attachmentNotice'
 import { keepUnansweredQuestions } from './stallQuestions'
+import { ActiveStreams } from './activeStreams'
 import { extractStreamingPreview, mapMessageType } from './streamFormat'
 
 const logger = createLogger('ChatController')
@@ -63,16 +64,16 @@ export class ChatController {
   private retryDelay = 1000
 
   // Issue #1312: Streaming update throttle state
-  private _pendingStreamUpdate: {
+  // #21357: one buffered update per `sessionId:messageId`, so interleaved streams each keep the throttle
+  private _pendingStreamUpdates = new Map<string, {
     sessionId?: string
     messageId: string
     content: string
     type: ChatMessageDisplayType | string | undefined
     metadata: Record<string, unknown>
-  } | null = null
+  }>()
   private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
-  /** #21357: chats with a response stream in flight (count per chat), so typing state follows the chat. */
-  private _activeStreams = new Map<string, number>()
+  private _activeStreams = new ActiveStreams() // #21357
   private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
   private static readonly STREAM_FLUSH_INTERVAL_MS = 80
   private static readonly PREVIEW_THROTTLE_MS = 200
@@ -105,6 +106,7 @@ export class ChatController {
   // Enhanced message operations with comprehensive error handling
   async sendMessage(content: string, options?: Record<string, unknown>): Promise<string> {
     let originSessionId: string | undefined // #21357: the chat this send started in
+    let registered = false
     try {
       // #6693: don't toggle the global appStore.isLoading flag here. App.vue
       // wraps the entire <router-view> in a UnifiedLoadingView bound to it,
@@ -135,6 +137,8 @@ export class ChatController {
       }
 
       originSessionId = this.chatStore.currentSessionId ?? undefined
+      this._activeStreams.begin(originSessionId) // before the POST: a switch away and back mid-request keeps the indicator
+      registered = true
       const userMessageId = this.chatStore.addMessage({
         content,
         sender: 'user',
@@ -170,7 +174,7 @@ export class ChatController {
 
           // Handle response based on type
           if (response.type === 'streaming') {
-            await this.handleStreamingResponse(response.response!, originSessionId)
+            await this.handleStreamingResponse(response.response!, originSessionId, true)
           } else {
             this.handleJsonResponse(response.data, originSessionId)
           }
@@ -216,6 +220,7 @@ export class ChatController {
       throw error
     } finally {
       // #21357: typing belongs to the chat that sent; another open chat keeps its own indicator
+      if (registered) this._activeStreams.end(originSessionId)
       if (this.isOpenChat(originSessionId)) this.chatStore.setTyping(false)
     }
   }
@@ -303,10 +308,11 @@ export class ChatController {
    * Batches rapid chunk updates into a single store mutation per flush interval.
    */
   private flushStreamUpdate(): void {
-    if (!this._pendingStreamUpdate) return
-    const { sessionId, messageId, content, type, metadata } = this._pendingStreamUpdate
-    this._pendingStreamUpdate = null
-    this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] }, sessionId)
+    const pending = [...this._pendingStreamUpdates.values()]
+    this._pendingStreamUpdates.clear()
+    for (const { sessionId, messageId, content, type, metadata } of pending) {
+      this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] }, sessionId)
+    }
   }
 
   /**
@@ -321,9 +327,7 @@ export class ChatController {
     type: ChatMessageDisplayType | string | undefined,
     metadata: Record<string, unknown>
   ): void {
-    // #21357: the buffer holds one update; a different stream's update must not overwrite it unflushed
-    if (this._pendingStreamUpdate && this._pendingStreamUpdate.messageId !== messageId) this.flushStreamUpdate()
-    this._pendingStreamUpdate = { sessionId, messageId, content, type, metadata }
+    this._pendingStreamUpdates.set(`${sessionId ?? ''}:${messageId}`, { sessionId, messageId, content, type, metadata })
     if (!this._streamFlushTimer) {
       this._streamFlushTimer = setTimeout(() => {
         this._streamFlushTimer = null
@@ -350,7 +354,8 @@ export class ChatController {
   /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
   async handleStreamingResponse(
     response: Response,
-    sessionId: string | undefined = this.chatStore.currentSessionId ?? undefined // #21357: bound once, at start
+    sessionId: string | undefined = this.chatStore.currentSessionId ?? undefined, // #21357: bound once, at start
+    registered = false // the caller already counts this stream (sendMessage registers before the POST)
   ): Promise<boolean> {
     const streamState: StreamState = { reportedError: false, sessionId } // per stream: overlapping streams must not share it
     const reader = response.body?.getReader()
@@ -365,7 +370,7 @@ export class ChatController {
 
     const decoder = new TextDecoder()
     let buffer = ''
-    if (sessionId) this._activeStreams.set(sessionId, (this._activeStreams.get(sessionId) ?? 0) + 1)
+    if (!registered) this._activeStreams.begin(sessionId)
 
     try {
       logger.debug('Starting to read streaming response (Agent Zero pattern)')
@@ -404,17 +409,10 @@ export class ChatController {
       }
       throw error
     } finally {
-      this._endStream(sessionId)
+      if (!registered) this._activeStreams.end(sessionId)
       reader.releaseLock()
     }
     return streamState.reportedError
-  }
-
-  private _endStream(sessionId: string | undefined): void {
-    if (!sessionId) return
-    const left = (this._activeStreams.get(sessionId) ?? 1) - 1
-    if (left > 0) this._activeStreams.set(sessionId, left)
-    else this._activeStreams.delete(sessionId)
   }
 
   private _processStreamLine(
@@ -549,7 +547,8 @@ export class ChatController {
       this._streamFlushTimer = null
     }
     this.flushStreamUpdate()
-    if (this._previewThrottleTimer) {
+    // #21357: the preview timer is shared; another running stream still needs it
+    if (this._previewThrottleTimer && this._activeStreams.total <= 1) {
       clearTimeout(this._previewThrottleTimer)
       this._previewThrottleTimer = null
     }
