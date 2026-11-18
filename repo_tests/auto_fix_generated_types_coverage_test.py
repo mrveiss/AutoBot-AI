@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Auto-fix must cover every artifact the verify gate checks (#14368).
 
-`verify-generated-types.yml` runs TWO independent freshness checks:
+`_gate-generated-types.yml` runs TWO independent freshness checks:
 `verify-types-run` diffs the backend's `autobot-frontend/src/types/generated/api.ts`,
 and `verify-generated-types-slm` diffs the SLM backend's
 `autobot-slm-frontend/openapi.json` + `.../src/types/generated/api.ts`. Before
@@ -31,7 +31,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 _WORKFLOWS_DIR = repo_root() / ".github" / "workflows"
-_VERIFY = _WORKFLOWS_DIR / "verify-generated-types.yml"
+_VERIFY = _WORKFLOWS_DIR / "_gate-generated-types.yml"
 _AUTOFIX = _WORKFLOWS_DIR / "auto-fix-generated-types.yml"
 # The job's steps live in the composite action both callers run (#18500).
 _AUTOFIX_STEPS = repo_root() / ".github" / "actions" / "generated-types-autofix" / "action.yml"
@@ -44,7 +44,7 @@ _DIFF_INVOCATION = re.compile(r"git diff --exit-code ([^\n;]+)")
 
 
 def _verify_checked_artifacts() -> set[str]:
-    """Every file path any `verify-generated-types.yml` job diffs for drift."""
+    """Every file path any `_gate-generated-types.yml` job diffs for drift."""
     text = _VERIFY.read_text(encoding="utf-8")
     artifacts: set[str] = set()
     for match in _DIFF_INVOCATION.finditer(text):
@@ -73,8 +73,9 @@ def _autofix_reported_artifacts() -> set[str]:
 
 
 def _autofix_trigger_paths() -> list[str]:
-    document = yaml.safe_load(_AUTOFIX.read_text(encoding="utf-8"))
-    return document[True]["pull_request"]["paths"]
+    # #20552: ci.yml calls the auto-fix when verify fails, so verify's paths are its trigger.
+    filters = _WORKFLOWS_DIR.parent / "filters" / "gate-paths.yml"
+    return yaml.safe_load(filters.read_text(encoding="utf-8"))["slm_types"]
 
 
 def test_the_scan_actually_found_artifacts_on_both_sides():
@@ -90,7 +91,7 @@ def test_every_artifact_the_verify_gate_checks_is_reported_by_the_autofix():
 
     missing = checked - committed
     assert missing == set(), (
-        f"verify-generated-types.yml diffs {missing} for freshness, but "
+        f"_gate-generated-types.yml diffs {missing} for freshness, but "
         "auto-fix-generated-types.yml never stages it -- a drift there goes "
         "red with no auto-fix, the exact #14368 gap for the SLM frontend"
     )
@@ -98,10 +99,10 @@ def test_every_artifact_the_verify_gate_checks_is_reported_by_the_autofix():
 
 def test_the_slm_backend_source_tree_can_actually_trigger_the_autofix():
     """A commit step that stages the right file is still dead code if nothing
-    in `on.pull_request.paths` ever fires the job for an SLM schema change."""
+    in the verify gate's `slm_types` paths ever fires the job for an SLM schema change."""
     paths = _autofix_trigger_paths()
     assert "autobot-slm-backend/**/*.py" in paths, (
-        "auto-fix-generated-types.yml's pull_request.paths does not watch "
+        "gate-paths.yml's slm_types does not watch "
         "autobot-slm-backend sources -- an SLM schema change would never "
         "trigger this workflow at all"
     )

@@ -35,7 +35,15 @@ _FACTORIES = frozenset({"lazy_singleton", "async_lazy_singleton"})
 
 #: Classes whose one shared instance lives in ``llc/services/accessors.py``.
 _MANAGED = frozenset(
-    {"WorkItemService", "BudgetService", "AgentWikiService", "AttachmentService", "WorkProductService"}
+    {
+        "WorkItemService",
+        "BudgetService",
+        "AgentWikiService",
+        "AttachmentService",
+        "WorkProductService",
+        "HandoffService",
+        "ReviewGatePolicyService",
+    }
 )
 
 #: A factory built inside a function on purpose, with the reason.

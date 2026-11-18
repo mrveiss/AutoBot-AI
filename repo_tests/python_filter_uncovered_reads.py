@@ -38,9 +38,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
         ".github/filters/code-quality-paths.yml",
-        ".github/workflows/code-quality-required-context.yml",
-        ".github/workflows/code-quality.yml",
-        ".github/workflows/frontend-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
         # #19548: replaces the parked-branch workflow's entry one-for-one (its
@@ -146,7 +143,10 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: dependabot coverage guards read; deleting a block's directory touches no .py file.
 #: LOWERED 32 -> 31 by #21359: the filter now covers `pytest.ini`, which the pre-board lane's guard reads.
 #: LOWERED 31 -> 30 by #18060: the filter now covers `constraints/shared.txt`, which several guards read.
-MAX_UNCOVERED_READS = 30
+#: LOWERED 30 -> 27 by #18208: the three workflows `code-quality-required-context.yml`, `code-quality.yml` and
+#: `frontend-test.yml` no longer exist (their gates are `_gate-*.yml` bodies the filter now names), so no guard
+#: reads them.
+MAX_UNCOVERED_READS = 27
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

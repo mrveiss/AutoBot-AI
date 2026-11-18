@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from autobot_shared.secrets_envelope import ROOT_KEY_ENV
 from services import provider_key_process_init as init
 from services import provider_key_vault as pkv
@@ -29,7 +30,7 @@ _NAME = "GROQ_API_KEY"  # pragma: allowlist secret
 def _clean(monkeypatch):
     monkeypatch.setattr(pkv, "_hydrated_keys", {})
     monkeypatch.setattr(pkv, "_unreadable_keys", set())
-    monkeypatch.setattr(pkv, "_env_fallback_logged", set())
+    reset_log_once()
     monkeypatch.setattr(pkv, "_vault_state", pkv.VAULT_REACHABLE)  # empty vault; lazy-path tests set their own
     # No real retry against a DB from these tests; the process-init tests call _REAL_HYDRATE.
     monkeypatch.setattr(init, "hydrate_this_process", lambda: [])
