@@ -1,0 +1,18 @@
+# The one-time re-measure of #21428, dated 2026-11-13: following a router included through a package-level router
+# (api.codebase_analytics, whose router is built two re-exports below its __init__) gives these routes their real mount
+# path. They were never connected: each passed the gate only because an unrelated /api/{p} literal matched its unmounted
+# form. Each is linked to the issue that wires it in or decides its fate (#21459 codebase analytics, #21460 the Company OS
+# API package's GET /health); no route code is deleted. This list is frozen and may only shrink: it may not gain a line
+# against the base (unconnected_code_gate_20512_test.py), and a key leaves it when its baseline line does.
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /api-calls
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /api-endpoints
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /endpoint-coverage
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /missing-endpoints
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /orphaned-endpoints
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:GET /used-endpoints
+route:autobot-backend/api/codebase_analytics/endpoints/api_endpoints.py:POST /refresh-endpoint-cache
+route:autobot-backend/api/codebase_analytics/endpoints/environment.py:GET /env-recommendations
+route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /expertise
+route:autobot-backend/api/codebase_analytics/endpoints/ownership.py:GET /knowledge-gaps
+route:autobot-backend/api/codebase_analytics/endpoints/stats.py:GET /embedding-stats
+route:autobot-backend/llc/api/__init__.py:GET /health

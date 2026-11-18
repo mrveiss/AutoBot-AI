@@ -60,7 +60,7 @@ async def _hire(heartbeat_enabled: bool) -> AsyncMock:
     with (
         patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
         patch.object(mod, "adapter_unavailable_reason", return_value=None),
-        patch("llc.services.agent_hire_service.BudgetService.provision_budget", new=AsyncMock()),
+        patch("llc.services.budget.BudgetService.provision_budget", new=AsyncMock()),
         patch.object(mod, "company_requires_hire_approval", new=AsyncMock(return_value=False)),
         patch.object(schedule_entry, "schedule_heartbeat", new=AsyncMock(return_value=True)) as schedule,
     ):

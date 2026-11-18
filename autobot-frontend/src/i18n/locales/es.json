@@ -1114,7 +1114,6 @@
       "quality": {
         "title": "Calidad del código",
         "overallScore": "Puntuación general",
-        "testCoverage": "Cobertura de prueba",
         "codeDuplicates": "Duplicados de código",
         "technicalDebt": "Deuda Técnica",
         "noMetrics": "No hay métricas de calidad de código disponibles."
@@ -2313,7 +2312,6 @@
       "noCommunicationData": "Sin datos de comunicación",
       "codeQuality": "Calidad del código",
       "overallScore": "Puntuación general",
-      "testCoverage": "Cobertura de pruebas",
       "codeDuplicates": "Duplicados de código",
       "technicalDebt": "Deuda técnica",
       "noQualityMetrics": "Sin métricas de calidad",

@@ -32,6 +32,7 @@ from llc.models.secret import LLCSecret
 from llc.services.actor import resolve_actor
 from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
+from ..exceptions import PublicMessageMixin
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ _ENV_MASTER_KEY = "LLC_SECRET_MASTER_KEY"
 _derive_fernet_key = derive_llc_company_fernet
 
 
-class SecretNotFound(Exception):
+class SecretNotFound(PublicMessageMixin, Exception):
     """Raised when the named secret does not exist or is revoked."""
 
     def __init__(self, company_id: str, name: str) -> None:

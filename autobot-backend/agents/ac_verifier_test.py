@@ -246,7 +246,7 @@ class TestACitationMustHaveBeenShown:
 
     The citation check used to prove only that a `file:line` exists and is not
     blank, so a citation to any real, non-blank line in the tree survived --
-    whether or not it had anything to do with the criterion. A code-reviewer
+    whether or not it had anything to do with the criterion. A review
     pass on the merged code made the point with this file's own fixture: line 2
     of `_FILE` says "line two has content", which supports nothing.
     """

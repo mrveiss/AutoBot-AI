@@ -8,9 +8,10 @@ Cache management endpoints
 
 import asyncio
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.source_scope import SourceIdQuery
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -30,7 +31,7 @@ router = APIRouter()
     error_code_prefix="CODEBASE",
 )
 async def clear_codebase_cache(
-    source_id: str = Query(..., min_length=1, description="Required (#17758): the source whose cache to clear"),
+    source_id: SourceIdQuery,
 ):
     """Clear ONE code source's analysis cache from storage.
 
@@ -83,5 +84,6 @@ async def clear_codebase_cache(
             ),
             "deleted_keys": len(keys_to_delete) if redis_client else deleted_count,
             "storage_type": storage_type,
+            "source_id": source_id,
         }
     )

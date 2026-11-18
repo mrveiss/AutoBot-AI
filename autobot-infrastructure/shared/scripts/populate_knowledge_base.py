@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exclude_file
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
@@ -86,7 +86,12 @@ def collect_documentation_files(root: Path, patterns: List[str] | None = None) -
         all_files.extend(glob.glob(str(root / pattern), recursive=True))
 
     unique_files = sorted(set(all_files))  # sorted: a caller that takes the first N gets the same N every run
-    return [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, EXCLUDE_PATTERNS)]
+    # Patterns apply to the path inside the checkout: a checkout under a hidden directory must not exclude itself.
+    return [
+        fp
+        for fp in unique_files
+        if os.path.isfile(fp) and not should_exclude_file(f"/{os.path.relpath(fp, root)}", EXCLUDE_PATTERNS)
+    ]
 
 
 async def add_single_file(fp: str, root: Path, kb) -> tuple:
@@ -177,4 +182,5 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     asyncio.run(add_documentation_to_kb(_parse_args().patterns))

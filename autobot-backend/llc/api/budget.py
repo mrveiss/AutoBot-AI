@@ -14,11 +14,15 @@ from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
+from autobot_shared.db_session import commit_and_run_post_commit
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import safe_log_text
 from llc.config import DEFAULT_BUDGET_LIMIT
 from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted, UnpricedModel
-from llc.models.budget import LLCAgentBudget
+from llc.models.budget import TOKEN_LIMIT_MAX, TOKEN_LIMIT_MIN, LLCAgentBudget, token_limit_blocks
+from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
@@ -80,7 +84,7 @@ class UpdateLimitRequest(BaseModel):
 
     budget_mode: Optional[str] = None  # "dollars" or "tokens"
     budget_limit: Optional[Decimal] = None  # For DOLLARS mode
-    token_limit: Optional[int] = None  # For TOKENS mode
+    token_limit: Optional[int] = Field(None, ge=TOKEN_LIMIT_MIN, le=TOKEN_LIMIT_MAX)  # For TOKENS mode
     alert_threshold: Optional[float] = None
 
 
@@ -109,7 +113,7 @@ def _derive_status(row: LLCAgentBudget) -> tuple:
 
     if budget_mode == "tokens" and token_limit is not None:
         remaining = Decimal(str(token_limit - tokens_spent))
-        is_over = tokens_spent > token_limit
+        is_over = token_limit_blocks(tokens_spent, token_limit)
         alert = token_limit > 0 and tokens_spent / token_limit >= threshold
     else:
         remaining = limit - spent
@@ -196,7 +200,7 @@ async def provision_budget(
     # The first row carries a limit the caller chose, so it is the same admin act as changing one (#20422).
     await _require_budget_admin(session, company_id, agent_id, ctx)
 
-    svc = BudgetService()
+    svc = get_budget_service()
     over_default = body.budget_limit is not None and body.budget_limit > DEFAULT_BUDGET_LIMIT
     gated = over_default and await company_requires_budget_approval(session, uuid.UUID(company_id))
     row, created = await svc.provision_budget(session, agent_id, company_id, None if gated else body.budget_limit)
@@ -209,6 +213,8 @@ async def provision_budget(
         response.status_code = status.HTTP_202_ACCEPTED
         return await _file_raise(session, row, {"budget_limit": body.budget_limit}, ctx)
 
+    # Every write route commits before it answers: the dependency's own commit runs after the response (#21332).
+    await commit_and_run_post_commit(session)
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
 
@@ -224,7 +230,7 @@ async def list_budgets(
     assert_company_access(ctx, company_id)
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
-    svc = BudgetService()
+    svc = get_budget_service()
     out: List[Dict[str, Any]] = []
     for row in rows:
         remaining, is_over, alert = await svc.check_budget(session, row.agent_id, row.company_id)
@@ -287,7 +293,7 @@ async def ingest_cost(
         id_attr="agent_id",
         not_found_detail=f"No budget row for agent {agent_id}",
     )
-    svc = BudgetService()
+    svc = get_budget_service()
     try:
         cost = await svc.ingest_cost_event(
             session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
@@ -296,15 +302,19 @@ async def ingest_cost(
         # 402 is right; the detail was not. It said "Internal server error" for a
         # budget the caller had exhausted, which is a client-actionable condition
         # reported as a server fault.
-        logger.warning("Budget exhausted for agent %s: %s", agent_id, exc)
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
+        logger.warning("Budget exhausted for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(402, exc, scope="budget.ingest_cost") from None
     except UnpricedModel as exc:
         # #15860 gave `ingest_cost_event` a second failure mode, and this route
         # is its other caller. Without this the same condition that returns 422
         # from POST /agent/cost-events returns 500 here -- two routes disagreeing
         # about one service call from the day the condition was introduced.
-        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, exc)
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("Unpriced model in cost ingest for agent %s: %s", agent_id, safe_log_text(repr(exc)))
+        raise http_refusal(422, exc, scope="budget.ingest_cost") from None
+    # `get_async_session` commits in its teardown, which FastAPI (>=0.118) runs AFTER the response has been
+    # sent: the caller can read a 200 before the charge is visible to another session, read the old
+    # remainder and charge it again (#21332). The 200 says "recorded", so commit before producing it.
+    await commit_and_run_post_commit(session)
     return IngestResponse(cost=cost)
 
 
@@ -315,7 +325,7 @@ async def _require_budget_admin(session: AsyncSession, company_id: str, agent_id
             session, uuid.UUID(str(company_id)), ctx.user_id, platform_admin=ctx.is_platform_admin
         )
     except NotAuthorisedError as exc:
-        logger.warning("Refused budget limit change for %s: %s", agent_id, exc)
+        logger.warning("Refused budget limit change for %s: %s", agent_id, safe_log_text(repr(exc)))
         raise HTTPException(status_code=403, detail="Only a company owner or admin may change a budget limit") from exc
 
 
@@ -331,7 +341,10 @@ async def _require_limit_admin(session: AsyncSession, row: LLCAgentBudget, ctx: 
 async def _file_raise(
     session: AsyncSession, row: LLCAgentBudget, fields: Dict[str, Any], ctx: TenantContext
 ) -> BudgetRaisePending:
-    """File *fields* as a pending BUDGET_OVERRIDE requested by the verified caller (#8214)."""
+    """File *fields* as a pending BUDGET_OVERRIDE requested by the verified caller (#8214).
+
+    `file_budget_raise` commits the approval itself, so the 202 branches need no commit of their own (#21332).
+    """
     if ctx.user_id is None:  # the request must name a verified requester, never the string "None"
         raise HTTPException(status_code=403, detail="The budget change cannot be attributed to a verified user")
     return await file_budget_raise(session, ApprovalService(), row, override_payload(row.agent_id, fields), ctx.user_id)
@@ -401,6 +414,9 @@ async def update_limit(
         )
         .values(**values)
     )
+    # Commit before the cache is dropped and before the response: the dependency's own commit runs after the
+    # response is sent, so a reader that re-populated the cache (or a caller reading back) saw the old limit (#21332).
+    await commit_and_run_post_commit(session)
     await session.refresh(row)
 
     # Drop the tracker cache so readers (watchdog, check_budget) see the new

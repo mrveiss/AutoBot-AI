@@ -18,14 +18,13 @@
 
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, PollingPausedAlert, createLogger } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert, createLogger, createDateFormatter, createRecencyFormatter } from '@autobot/ui'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import {
   useAutobotApi,
   type LLMFallbackChain,
   type LLMActiveFallback,
 } from '@/composables/useAutobotApi'
-import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('LLMFallbacksView')
 const api = useAutobotApi()
@@ -54,13 +53,16 @@ async function fetchFallbackStatus(): Promise<void> {
   }
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp * 1000)
-  if (Date.now() - date.getTime() < 3600000) return formatCompactRelativeTime(date)
-  return date.toLocaleTimeString()
-}
+const { t, locale } = useI18n()
 
-const { t } = useI18n()
+// The API reports epoch seconds, the formatter takes milliseconds: call sites pass `seconds * 1000`.
+const formatRecent = createRecencyFormatter({
+  locale: () => locale.value,
+  style: 'narrow',
+  maxUnit: 'day',
+  olderThanMs: 3_600_000,
+  older: createDateFormatter({ locale: () => locale.value, kind: 'time' }),
+})
 
 // #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
 const statusPoller = useDashboardPoller(throwIfFailed(fetchFallbackStatus, error), REFRESH_INTERVAL_MS)
@@ -217,7 +219,7 @@ onMounted(() => statusPoller.start(''))
                 </span>
               </td>
               <td class="px-4 py-3 text-xs text-gray-500">
-                {{ formatTime(fallback.timestamp) }}
+                {{ formatRecent(fallback.timestamp * 1000) }}
               </td>
             </tr>
           </tbody>

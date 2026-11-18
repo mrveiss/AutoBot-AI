@@ -18,15 +18,15 @@ It uses the existing argv builder (``ssh_utils.build_ssh_base_cmd``) and runner 
 from __future__ import annotations
 
 import asyncio
-import logging
 
 from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
 from models.database import Node
 from services.orchestrator_ssh import spawn_ssh
 from services.ssh_utils import InvalidSshDestination, build_ssh_base_cmd, ssh_options
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Ceiling on one probe; it runs inline in enrollment, so it must be short (killed at the ceiling).
 KEY_PROBE_TIMEOUT_SECONDS = env_float_clamped("AUTOBOT_SLM_KEY_PROBE_TIMEOUT_SECONDS", 10.0, 2.0, 60.0)
