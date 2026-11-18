@@ -396,7 +396,7 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
     if status_filter:
         query = query.where(Node.status == status_filter)
 
-    query = query.order_by(Node.hostname)
+    query = query.order_by(Node.hostname, Node.node_id)
 
     # Count the filtered set (the previous `query.whereclause or True`
     # always collapsed to True, silently dropping the filter -> wrong

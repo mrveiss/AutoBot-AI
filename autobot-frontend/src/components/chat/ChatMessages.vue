@@ -1543,7 +1543,7 @@ onUnmounted(() => {
 /* Issue #690: Overseer Agent Message Styles */
 .message-wrapper.type-overseer_plan::after {
   content: 'Plan';
-  @apply bg-autobot-primary text-white;
+  @apply bg-autobot-primary text-autobot-text-on-primary;
 }
 
 .message-wrapper.type-overseer_step::after {
@@ -2021,7 +2021,7 @@ onUnmounted(() => {
 }
 
 .citations-count {
-  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-white rounded-full;
+  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-autobot-text-on-primary rounded-full;
 }
 
 .citations-list {

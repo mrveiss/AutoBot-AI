@@ -48,21 +48,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
     ),
-    "*.conf.j2": (
-        {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
-        "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.j2": (
-        {
-            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
-            "repo_tests/browser_port_single_home_19324_test.py",
-            "repo_tests/nginx_internal_api_key_auth_gate_test.py",
-            "repo_tests/slm_admin_password_one_home_19318_test.py",
-            "repo_tests/slm_frontend_publish_contract_test.py",
-            "repo_tests/user_mode_values_19437_test.py",
-        },
-        "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
-    ),
     "*.json": (
         {"repo_tests/i18n_untranslated_ratchet_test.py", "repo_tests/user_mode_values_19437_test.py"},
         "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
@@ -96,10 +81,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
         },
         "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.service.j2": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
-        "root-relative `*.service.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.sh": (
         {

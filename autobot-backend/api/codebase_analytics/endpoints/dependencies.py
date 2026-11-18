@@ -13,7 +13,6 @@ from typing import Dict, List, Set
 
 import aiofiles
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.source_scope import (
@@ -29,6 +28,7 @@ from tasks.analytics_tasks import run_dependency_analysis
 from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
 from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, resolve_scan_root
 
@@ -341,7 +341,7 @@ def _build_visualization_graph(
         circular_deps: Detected circular dependencies
 
     Returns:
-        Complete response dictionary for JSONResponse
+        Complete response dictionary
     """
     nodes = []
     edges = []
@@ -456,6 +456,7 @@ async def _scan_filesystem_imports(
     operation="get_dependencies",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_dependencies(
     source_id: SourceIdQuery,
 ):
@@ -497,7 +498,7 @@ async def get_dependencies(
     module_index = _build_module_index(modules)
     circular_deps = _detect_circular_deps(runtime_rels, module_index)
     graph = _build_visualization_graph(modules, import_relationships, external_deps, circular_deps)
-    return JSONResponse({**graph, "source_id": source_id})
+    return {**graph, "source_id": source_id}
 
 
 # ------------------------------------------------------------------

@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 from autobot_shared import async_compat, worker_loop
+from autobot_shared.logging_once import reset_log_once
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "autobot-backend"))
 
@@ -268,7 +269,7 @@ def test_fallback_on_the_main_loop_thread_warns_once_per_call_site(monkeypatch):
     """The residue is visible: a fixed message plus the caller, once per site, and the work still runs."""
     logged: list[tuple] = []
     monkeypatch.setattr(async_compat, "_log_threadsafe", lambda level, msg, *a: logged.append((level, msg, a)))
-    monkeypatch.setattr(async_compat, "_FALLBACK_WARNED", set())
+    reset_log_once()
 
     def sync_caller():
         async def inner():

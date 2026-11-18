@@ -242,4 +242,44 @@ describe('step answer lock', () => {
     finishOlder(ok);
     expect((await older).success).toBe(false);
   });
+
+  it('a status refresh that rejects does not reject the answer: it resolves with the decision and warns (#21341)', async () => {
+    const state = useStepAnswerState();
+    await expect(state.answer('wf-1', 's1', async () => true, async () => { throw new Error('refresh blew up'); })).resolves.toBe(true);
+    expect(toast).toHaveBeenCalledWith('workflow.builder.stepStatusRefreshFailed', 'warning');
+    expect(state.isStepLocked('wf-1', 's1')).toBe(true); // decided locally until a refresh succeeds
+  });
+
+  it('a rejected refresh does not warn when a newer status already resolved the decision (#21341)', async () => {
+    const state = useStepAnswerState();
+    const decidedStatus = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'approved' }] } } };
+    await expect(state.answer('wf-1', 's1', async () => true, async () => {
+      await state.fetchStatus('wf-1', async () => decidedStatus);
+      throw new Error('refresh blew up');
+    })).resolves.toBe(true);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('a rejected refresh after an unconfirmed send still resolves with the decision result (#21341)', async () => {
+    const state = useStepAnswerState();
+    await expect(state.answer('wf-1', 's1', async () => 'unconfirmed', async () => { throw new Error('down'); })).resolves.toBe(false);
+    expect(toast).toHaveBeenCalledWith('workflow.builder.stepStatusRefreshFailed', 'warning');
+  });
+
+  it('forgetRemoved keeps the removal tombstone: an older in-flight success is not applied afterwards (#21341)', async () => {
+    const state = useStepAnswerState();
+    const ok = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'approved' }] } } };
+    let finishOlder!: (v: typeof ok) => void;
+    const older = state.fetchStatus('wf-1', () => new Promise<typeof ok>((r) => { finishOlder = r; }));
+    state.forgetRemoved([{ workflow_id: 'wf-1' }], []); // the workflow left the active list
+    finishOlder(ok);
+    expect((await older).success).toBe(false);
+  });
+
+  it('a removed workflow that reappears is read again: a status issued after the removal is applied (#21341)', async () => {
+    const state = useStepAnswerState();
+    state.forgetRemoved([{ workflow_id: 'wf-1' }], []);
+    const ok = { success: true, data: { workflow: { steps: [{ step_id: 's1', status: 'approved' }] } } };
+    expect((await state.fetchStatus('wf-1', async () => ok)).success).toBe(true);
+  });
 });

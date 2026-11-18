@@ -5,7 +5,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
+import { extractErrorMessage, isRequestTimeout, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
@@ -166,7 +166,7 @@ export class ChatController {
           return userMessageId // Success, exit retry loop
 
         } catch (error: unknown) {
-          lastError = error instanceof Error ? error : new Error(extractErrorMessage(error, 'Unknown error'))
+          lastError = error instanceof Error ? error : Object.assign(new Error(extractErrorMessage(error, 'Unknown error')), { cause: error }) // cause keeps a non-Error rejection's type
           logger.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, lastError.message)
 
           if (attempt < this.retryAttempts) {
@@ -258,7 +258,6 @@ export class ChatController {
 
   private getUserFriendlyErrorMessage(error: unknown): string {
     const status = (error as { status?: number }).status
-    const name = (error as { name?: string }).name
     const message = extractErrorMessage(error, 'Unknown error')
 
     if (status === 422) {
@@ -270,10 +269,11 @@ export class ChatController {
     if (status === 500) {
       return i18n.global.t('chat.errors.serverError')
     }
-    if (name === 'NetworkError') {
+    if ((error as { name?: string }).name === 'NetworkError') {
       return i18n.global.t('chat.errors.networkFailed')
     }
-    if (message.includes('timeout')) {
+    // By type only: the send path is native fetch / the kit client, no producer of ours words a timeout as text (#21581)
+    if (isRequestTimeout(error) || isRequestTimeout((error as { cause?: unknown } | null)?.cause)) {
       return i18n.global.t('chat.errors.timeout')
     }
 
