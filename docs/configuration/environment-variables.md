@@ -43,13 +43,13 @@ When the primary model hits a rate limit (429) or quota cap, AutoBot automatical
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_FALLBACK_CHAIN_<MODEL>` | _(none)_ | Comma-separated fallback models for `<MODEL>`. Use `provider:model` format to specify provider (e.g. `anthropic:claude-sonnet-4,openai:gpt-4o-mini`). Model suffix uses uppercase with underscores (hyphens are auto-converted). |
+| `AUTOBOT_FALLBACK_CHAIN_<MODEL>` | _(none)_ | Comma-separated fallback models for `<MODEL>`. Use `provider:model` format to specify provider (e.g. `anthropic:sonnet,openai:gpt-4o-mini`). Model suffix uses uppercase with underscores (hyphens are auto-converted). |
 
 **Examples:**
 
 ```bash
 # Claude Opus → Sonnet → GPT-4o-mini if Anthropic quota exhausted
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,openai:gpt-4o-mini
+AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o-mini
 
 # GPT-4o → mini → local Ollama as last resort
 AUTOBOT_FALLBACK_CHAIN_GPT_4O=openai:gpt-4o-mini,ollama:llama3

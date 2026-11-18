@@ -25,10 +25,18 @@ WHAT A CALLER IS
 
 WHAT THIS CANNOT SEE
 --------------------
-* **Static prefix resolution.** The route's mount path is the registry prefix and the router's
-  own prefix, combined every way the script combines them. The union is deliberately loose, so a
-  route whose real path differs from every candidate can read as called by an unrelated caller
-  (it errs toward "connected", never toward a false failure).
+* **Static prefix resolution.** A route is judged at ``mount + own prefix + path`` and nowhere else:
+  one candidate per mount, and the router's own ``APIRouter(prefix=...)`` is never dropped, since
+  FastAPI always applies it (#20910). The mounts are the registry's, including nested
+  ``include_router`` mounts and a package entry's router chain (``__init__`` -> ``router.py`` ->
+  ``endpoints/*.py``, followed by ``_unconnected_mounts``, #21428). A backend with no registry (the SLM)
+  is read from its app's ``include_router`` graph by ``_unconnected_app_mounts``: ``main.py``'s
+  ``prefix=`` and every nested include (``/api/monitoring`` + ``/gpu``), with what that cannot see listed
+  there. A router no mount reaches (unmounted, or a mount neither reader resolves) is judged at its own
+  prefix + path with ``/api`` toggled; a nested mount of such a router is missed. A form without the own
+  prefix used to be a candidate too, and let an unrelated caller of the same shape mark the route connected.
+* **Which router a decorator is on.** Only ``@router``/``@app``/``@api_router`` decorators are seen,
+  and the own prefix is the first ``APIRouter(prefix=...)`` in the file.
 * **A caller that builds its path at runtime** (``f"/api/{resource}/{id}"`` from a table) shows
   as a wildcard or not at all. A wildcard segment matches any single segment.
 * **A route whose mounted path starts with a parameter** (a router mounted at the root, ``/{id}/x``): no
@@ -43,6 +51,8 @@ WHAT THIS CANNOT SEE
 * **A call that is dead**: a frontend function that makes the call but nothing invokes.
 * **Method.** A caller of ``GET /x`` marks ``POST /x`` connected; paths are matched, not verbs.
 * Routes registered programmatically (``add_api_route``) have no decorator and are not seen.
+* A decorator is read from code only: one in a ``#`` comment is not a route (#20910), but one quoted in a
+  docstring or string literal still reads as one.
 """
 
 from __future__ import annotations
@@ -52,8 +62,13 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+from repo_tests._unconnected_app_mounts import app_mounts
 from repo_tests._unconnected_clients import client_calls
 from repo_tests._unconnected_common import Tree
+from repo_tests._unconnected_helper_calls import helper_calls, reached_by_helper
+from repo_tests._unconnected_mounts import package_mounts
+
+from tools.lint._comment_syntax import code_lines
 
 ROUTE_ROOTS = ("autobot-backend", "autobot-slm-backend")
 FRONTENDS = ("autobot-frontend/src", "autobot-slm-frontend/src")
@@ -61,7 +76,22 @@ _CALLER_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".ts", ".js", ".vue", 
 
 #: Prefixes whose callers live outside this repository or outside a browser, beyond the
 #: agent- and machine-facing ones ``scripts/dead_surface.py`` already declares. Value: who calls.
-EXTERNAL_CALLER_PREFIXES: dict[str, str] = {}
+EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
+    # #21048: the knowledge-wipe preview and proposal are called by an administrator over HTTP; there is no
+    # UI for it yet. The operator script raises the same proposal directly through the same service.
+    "/api/admin/knowledge-wipe": "an administrator, over HTTP (no UI yet)",
+    # #20910: SCIM 2.0 inbound provisioning (RFC 7644) is pushed by the identity provider's SCIM client;
+    # the SLM mounts it outside /api so the provider reaches it directly. Nothing in this repository calls it.
+    "/scim/v2": "an identity provider's SCIM client, over HTTP",
+    # #20910: the OAuth2 redirect URI (api/sso_auth.py GET /callback). The identity provider sends the user's browser
+    # here after sign-in; nothing in this repository requests it.
+    "/api/auth/sso/callback": "the identity provider's browser redirect after sign-in",
+}
+
+
+#: The mount of a router neither the registry nor the app's include graph reaches: judged at its own
+#: prefix + path, which ``_reached`` tries with and without ``/api``.
+_UNREGISTERED_MOUNT = ""
 
 
 def load_script(root: Path, name: str) -> ModuleType:
@@ -85,6 +115,12 @@ def load_script(root: Path, name: str) -> ModuleType:
     return module
 
 
+def _merge_prefixes(by_abs: dict[str, list[str]], file: Path, prefixes: list[str]) -> None:
+    """Add *prefixes* to the mounts known for *file*, keeping the order and dropping repeats."""
+    known = by_abs.setdefault(str(file), [])
+    known.extend(p for p in prefixes if p not in known)
+
+
 class Audit:
     """The audit script's grammar, bound to one tree root."""
 
@@ -106,13 +142,31 @@ class Audit:
         finally:
             self.mod.FRONTEND_SRC, self.mod.REPO_ROOT = saved
 
-    def registry_prefixes(self, backend: str) -> dict[str, str]:
-        """``{repo-relative served file: mount prefix}``; empty when the backend has no registry."""
+    def registry_prefixes(self, backend: str) -> dict[str, list[str]]:
+        """``{repo-relative served file: every mount prefix}``.
+
+        A router is served at its registry mount AND at every place another registry-mounted module
+        ``include_router``s it (nested mounts, #17325), so one file can have several prefixes. A backend
+        with no registry (the SLM) is read from its app's ``include_router`` graph instead (#20910).
+        """
         base = self.root / backend
-        if not (base / "initialization" / "router_registry").is_dir():
-            return {}
-        by_abs = self.mod._registry_module_prefixes(base)
-        return {Path(p).relative_to(self.root).as_posix(): prefix for p, prefix in by_abs.items()}
+        registry_dir = base / "initialization" / "router_registry"
+        routing = self.mod._routing
+        if not registry_dir.is_dir():
+            mounts = app_mounts(base, routing) if base.is_dir() else {}
+            return {Path(p).relative_to(self.root).as_posix(): ps for p, ps in mounts.items()}
+        entries = routing.registry_entries(registry_dir)
+        by_abs = {str(p): list(ps) for p, ps in routing.resolve_registry_target_prefixes(base, entries).items()}
+        for module_path, prefix in entries:  # the resolver lets a registry mount hide a nested one: add them back
+            module_file = base.joinpath(*module_path.split(".")).with_suffix(".py")
+            if not module_file.is_file():
+                continue
+            for child, prefixes in routing.module_included_router_files(base, module_file, prefix).items():
+                _merge_prefixes(by_abs, child, prefixes)
+        # a registry entry naming a package: its router is built by a module of the package, not its __init__ (#21428)
+        for child, prefixes in package_mounts(base, routing, entries).items():
+            _merge_prefixes(by_abs, child, prefixes)
+        return {Path(p).relative_to(self.root).as_posix(): ps for p, ps in by_abs.items()}
 
 
 def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str, ...]]]:
@@ -124,23 +178,30 @@ def route_sites(tree: Tree, audit: Audit) -> list[tuple[str, str, str, tuple[str
             text = tree.text(rel)
             if "@" not in text:
                 continue
-            found = mod.ROUTE_DECORATOR_RE.findall(text)
+            found = mod.ROUTE_DECORATOR_RE.findall(_code_text(rel, text))
             if not found:
                 continue
             own = mod.apirouter_prefix(text)
             own = own.rstrip("/") if own is not None else ""
-            reg = registry.get(rel)
+            regs = registry.get(rel) or [_UNREGISTERED_MOUNT]
             for method, raw in found:
-                out.append((rel, method.upper(), raw, _candidates(mod, raw, own, reg)))
+                out.append((rel, method.upper(), raw, _candidates(mod, raw, own, regs)))
     return out
 
 
-def _candidates(mod: ModuleType, raw: str, own: str, reg: str | None) -> tuple[str, ...]:
+def _code_text(rel: str, text: str) -> str:
+    """*text* without its comments, so ``# Handle @router.get("/path") style`` is not read as a route (#20910)."""
+    return "\n".join(line.text for line in code_lines(text, name=rel, strip_trailing=True))
+
+
+def _candidates(mod: ModuleType, raw: str, own: str, regs: list[str]) -> tuple[str, ...]:
+    """Every full path a route is served at: ``mount + own prefix + path``, one per mount (#20910).
+
+    A router can be mounted more than once. The router's own prefix is in every form: FastAPI applies
+    it wherever the router is mounted, so a form without it names a path nothing serves.
+    """
     glue = "" if (raw.startswith("/") or not raw) else "/"
-    forms = {raw, own + glue + raw}
-    if reg is not None:
-        forms.update({reg + glue + raw, reg + own + glue + raw})
-    return tuple(sorted({mod.norm_path(f) if f else mod.norm_path(own or reg or "/") for f in forms}))
+    return tuple(sorted({mod.norm_path(reg + own + glue + raw or "/") for reg in regs}))
 
 
 def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
@@ -155,7 +216,9 @@ def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
         text = tree.text(rel)
         if rel.startswith(skip) or "/api/" not in text:
             continue
-        for hit in mod.FE_API_RE.findall(mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text):
+        body = mod.ROUTE_DECORATOR_RE.sub("", text) if "@" in text else text
+        # a quoted `/api/..` or one behind a URL base (`$BASE/api/..`, `f"{base}/api/.."`, `host:8001/api/..`)
+        for hit in (*mod.FE_API_RE.findall(body), *mod.URL_BASE_API_RE.findall(body)):
             path = mod.norm_path(hit)
             if path.count("{") == path.count("}"):
                 calls.setdefault(path, set()).add(rel)
@@ -218,6 +281,12 @@ def _reached(mod: ModuleType, rel: str, cands: tuple[str, ...], index: _CallerIn
     return False
 
 
+def _reached_by_helper(rel: str, method: str, cands: tuple[str, ...], helpers) -> bool:
+    """The method-aware callers (#21307); a route whose first segment is a parameter is never reached by shape."""
+    mounted = tuple(c for c in cands if not _leads_with_parameter(c))
+    return reached_by_helper(rel, method, mounted, helpers, _toggle_api)
+
+
 def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str]:
     """Route keys ``"<file>:<METHOD> <raw path>"`` that no caller and no declared prefix reaches."""
     callers: dict[str, set[str]] = {}
@@ -229,11 +298,12 @@ def unconnected(tree: Tree, audit: Audit, sites: list | None = None) -> list[str
     for path, files in client_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS).items():
         callers.setdefault(path, set()).update(files)
     index = _CallerIndex(callers)
+    helpers = helper_calls(tree, FRONTENDS, audit.mod.norm_path, audit.mod.FE_EXCLUDE_PATTERNS)
     out: set[str] = set()
     for rel, method, raw, cands in route_sites(tree, audit) if sites is None else sites:
         if any(c.startswith(audit.external) or ("/api" + c).startswith(audit.external) for c in cands):
             continue
-        if not _reached(audit.mod, rel, cands, index):
+        if not _reached(audit.mod, rel, cands, index) and not _reached_by_helper(rel, method, cands, helpers):
             out.add(f"{rel}:{method} {raw}")
     return sorted(out)
 

@@ -66,6 +66,15 @@ const props = withDefaults(
 const emit = defineEmits<{ 'update:modelValue': [value: AccordionValue] }>()
 
 const direction = computed(() => resolveDirection(props.dir))
+/** Fit a value to `type`: a string for `single`, a string[] for `multiple` (#20382). */
+function fitToType(value?: AccordionValue): AccordionValue | undefined {
+  if (value === undefined) return undefined
+  if (props.type === 'multiple') return Array.isArray(value) ? value : [value]
+  return Array.isArray(value) ? (value[0] ?? '') : value
+}
+
+const openValue = computed(() => fitToType(props.modelValue))
+const initialValue = computed(() => fitToType(props.defaultValue))
 const heading = computed(() => `h${props.headingLevel}`)
 </script>
 
@@ -75,8 +84,8 @@ const heading = computed(() => `h${props.headingLevel}`)
     :class="[`aui-accordion--${variant}`, `aui-accordion--${size}`]"
     :type="type"
     :collapsible="collapsible"
-    :model-value="modelValue"
-    :default-value="defaultValue"
+    :model-value="openValue"
+    :default-value="initialValue"
     :orientation="orientation"
     :dir="direction"
     @update:model-value="emit('update:modelValue', $event as AccordionValue)"

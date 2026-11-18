@@ -52,9 +52,18 @@ async def _audit(approval: "Approval", result: str, **details: object) -> None:
     )
 
 
+async def _review_drop(approval: "Approval", session: "AsyncSession") -> bool:
+    """The four-eyes check on the drop, run before the decision commits and again before the drop."""
+    return await is_self_approval(approval, session, what="the drop")
+
+
 async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession") -> None:
-    """Drop the column an approved gate named; the audit entry is written before the schema changes."""
-    self_approval = await is_self_approval(approval, session, what="the drop")
+    """Drop the column an approved gate named; the audit entry is written before the schema changes.
+
+    The decider check re-runs here, after the commit, so an admin leaving in that window can still leave the row
+    approved and unapplied with a comment; that is accepted.
+    """
+    self_approval = await _review_drop(approval, session)
     was_present = await column_present(session)
     await _audit(approval, "attempted", stage="started", self_approval=self_approval, was_present=was_present)
     await session.execute(_DROP)
@@ -67,7 +76,9 @@ async def execute_tier_column_drop(approval: "Approval", session: "AsyncSession"
 
 def register_tier_column_action() -> None:
     """Idempotent: re-registering just replaces the same key with an equal handler."""
-    register_post_approval_action(ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY, server_only=True)
+    register_post_approval_action(
+        ACTION, execute_tier_column_drop, proposed_by=PROPOSED_BY, server_only=True, review=_review_drop
+    )
 
 
 __all__ = ["ACTION", "PROPOSED_BY", "column_present", "execute_tier_column_drop", "register_tier_column_action"]

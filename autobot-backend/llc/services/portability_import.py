@@ -18,8 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from llc.models.goal import LLCGoal
-from llc.models.sprint import LLCProject
-from llc.models.work_item import LLCWorkItem
+from llc.services.work_item_import import (
+    create_project,
+    create_work_item,
+    import_template_work,
+    import_work_items,
+    merge_report,
+    select_items,
+)
 
 logger = get_logger(__name__)
 
@@ -142,35 +148,38 @@ class PortabilityImportMixin:
         return new_id
 
     async def _import_project(self, project: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        obj = LLCProject(
-            id=new_id,
-            company_id=company_id,
-            name=project.get("name", "Imported Project"),
-            description=project.get("description"),
-            status=project.get("status", "planning"),
-        )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
+        return await create_project(self.session, project, company_id)
 
-    async def _import_work_item(self, item: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        identifier = f"IMP-{new_id.hex[:8].upper()}"
-        obj = LLCWorkItem(
-            id=new_id,
-            company_id=company_id,
-            type=item.get("type", "epic"),
-            identifier=identifier,
-            title=item.get("title", ""),
-            description=item.get("description"),
-            status="backlog",
-            priority=item.get("priority", "medium"),
-            labels=item.get("labels", []),
+    async def _import_work_item(
+        self, item: Dict[str, Any], company_id: uuid.UUID, project_id: Optional[str], parent_id: Optional[str] = None
+    ) -> Optional[uuid.UUID]:
+        return await create_work_item(self.session, item, company_id, project_id, parent_id)
+
+    async def _import_seed_items(
+        self,
+        template: Dict[str, Any],
+        company_id: uuid.UUID,
+        project_ids: Dict[str, str],
+        created_entities: Dict[str, Any],
+        skipped: Dict[str, Any],
+        warnings: List[str],
+    ) -> List[Dict[str, Any]]:
+        """The work items only, into already-imported projects; every skip is reported with a reason code."""
+        report = await import_work_items(select_items(template), company_id, project_ids, self._import_work_item)
+        return merge_report(report, created_entities, skipped, warnings)
+
+    async def _import_work(
+        self,
+        template: Dict[str, Any],
+        company_id: uuid.UUID,
+        created_entities: Dict[str, Any],
+        skipped: Dict[str, Any],
+        warnings: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Projects then work items, through the one shared import (#20472); returns the structured skips."""
+        return await import_template_work(
+            self.session, template, company_id, created_entities, skipped, warnings, self._import_work_item
         )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
 
     async def _goal_titles_exist(self, titles: List[str], company_id: Optional[uuid.UUID] = None) -> List[str]:
         if not titles:

@@ -36,7 +36,6 @@ export function mapConversationFile(raw: BackendConversationFile, base: string):
     size_bytes: raw.size,
     upload_timestamp: raw.uploaded_at,
     download_url: `${base}/download/${raw.file_id}`,
-    preview_url: `${base}/preview/${raw.file_id}`,
   }
 }
 
