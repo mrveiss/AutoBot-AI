@@ -25,7 +25,6 @@ Usage:
 
 import asyncio
 import json
-import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -33,15 +32,15 @@ from typing import Any, Dict, List
 import aiohttp
 import yaml
 
+from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.http_client import get_http_client
 from autobot_shared.service_registry_core import (
     SERVICE_DEFINITIONS,
     DeploymentMode,
     ServiceHealth,
     build_base_url,
-    detect_deployment_mode,
     join_service_path,
-    parse_deployment_mode,
+    resolve_deployment_mode,
 )
 
 # Import unified configuration system - NO HARDCODED VALUES
@@ -144,17 +143,16 @@ class ServiceRegistry:
         if config_file:
             self._load_config_file(config_file)
         self._load_environment_config()
+        self._pin_redis_to_endpoint()
 
         self.logger.info(f"Service registry initialized in {self.deployment_mode.value} mode")
 
     def _detect_deployment_mode(self) -> DeploymentMode:
-        """Detect current deployment mode"""
-        explicit = parse_deployment_mode(config.get("deployment.mode", "").lower(), self.logger, "deployment.mode")
-        return detect_deployment_mode(
-            explicit,
-            in_container=os.path.exists("/.dockerenv"),
-            kubernetes=bool(config.get("deployment.kubernetes.service_host", False)),
-            distributed=bool(config.get("deployment.distributed", False)),
+        """The shared resolver (#19372): the flat ``config.get("deployment.mode")`` never found the key."""
+        return resolve_deployment_mode(
+            self.logger,
+            kubernetes=bool(config.get_nested("deployment.kubernetes.service_host", False)),
+            distributed=bool(config.get_nested("deployment.distributed", False)),
         )
 
     def _load_default_services(self):
@@ -205,11 +203,8 @@ class ServiceRegistry:
     def _load_config_file(self, config_file: str):
         """Load services from configuration file"""
         try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                if config_file.endswith(".yaml") or config_file.endswith(".yml"):
-                    config = yaml.safe_load(f)
-                else:
-                    config = json.load(f)
+            parser = yaml.safe_load if config_file.endswith((".yaml", ".yml")) else json.load
+            config = load_config_file(config_file, dict, "Service registry", parser=parser).values
 
             services_config = config.get("services", {})
             for service_name, service_data in services_config.items():
@@ -260,6 +255,21 @@ class ServiceRegistry:
             service.path = config.get(f"services.{service_key}.path", service.path)
             service.health_endpoint = config.get(f"services.{service_key}.health_endpoint", service.health_endpoint)
 
+    def _pin_redis_to_endpoint(self) -> None:
+        """Report Redis where the canonical client dials it (#19232).
+
+        Redis has ONE resolution path, ``endpoint.resolve_redis_endpoint``; the
+        deployment-mode patterns and config overrides above would be a second.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        redis_service = self.services.get("redis")
+        if redis_service is None:
+            return
+        resolved = resolve_redis_endpoint()
+        redis_service.host, redis_service.port = resolved.host, resolved.port
+        redis_service.scheme = "rediss" if resolved.tls else "redis"
+
     def get_service_url(self, service_name: str, path: str = "") -> str:
         """
         Get full URL for a service
@@ -270,6 +280,12 @@ class ServiceRegistry:
 
         Returns:
             Full service URL
+
+        Raises:
+            ValueError: the service is not registered. A miss never falls back
+                to a default host (#18639); the SSOT lookup
+                ``autobot_shared.ssot_config`` ``get_service_url`` returns None
+                instead. Neither guesses an endpoint.
 
         Example:
             registry.get_service_url("redis")
@@ -420,11 +436,6 @@ def get_service_url(service_name: str, path: str = "") -> str:
 
 
 # Legacy compatibility functions
-def get_redis_url() -> str:
-    """Get Redis connection URL"""
-    return get_service_url("redis")
-
-
 def get_ai_stack_url(path: str = "") -> str:
     """Get AI stack URL"""
     return get_service_url("ai-stack", path)

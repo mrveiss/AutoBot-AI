@@ -44,6 +44,8 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.search_filters import caller_reader
+from knowledge_factory import peek_knowledge_base
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -72,6 +74,7 @@ async def query_knowledge_base(
     Returns:
         KBQueryResponse with search results and optional summary.
     """
+    user_id = caller_reader(current_user)  # #16665: 401 before the try below swallows it
     try:
         kb_librarian = get_kb_librarian()
 
@@ -89,7 +92,7 @@ async def query_knowledge_base(
             kb_librarian.auto_summarize = kb_query.auto_summarize
 
         # Process the query
-        result = await kb_librarian.process_query(kb_query.query)
+        result = await kb_librarian.process_query(kb_query.query, user_id=user_id)
 
         # Restore original settings
         if kb_query.max_results is not None:
@@ -129,7 +132,7 @@ async def get_kb_librarian_status(
             "similarity_threshold": kb_librarian.similarity_threshold,
             "max_results": kb_librarian.max_results,
             "auto_summarize": kb_librarian.auto_summarize,
-            "knowledge_base_active": kb_librarian.knowledge_base is not None,
+            "knowledge_base_active": (kb_librarian.knowledge_base or peek_knowledge_base()) is not None,
         }
 
     except Exception as e:

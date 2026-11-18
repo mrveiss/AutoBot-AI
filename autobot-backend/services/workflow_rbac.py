@@ -38,7 +38,7 @@ def _is_admin(user_data: dict) -> bool:
     """Return True when the user holds a system-wide admin role.
 
     #12786: this held its own ``{"admin"}`` set, so a superadmin was refused the
-    admin bypass that every ``require_role("admin", "superadmin")`` guard grants.
+    admin bypass that the one admin gate (``check_admin_permission``, #16333) grants.
     """
     return is_admin_role(user_data.get("role"))
 

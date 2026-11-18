@@ -37,6 +37,7 @@ from services.database import get_db
 from services.replication import replication_service
 from services.replication_jobs import setup_replication
 from services.secrets_store_snapshot import secrets_runner
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -173,16 +174,16 @@ async def restore_backup(
     backup = result.scalar_one_or_none()
 
     if not backup:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Backup not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
 
     if backup.status != BackupStatus.COMPLETED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot restore backup in status: {backup.status}",
-        )
+        detail = f"Cannot restore backup in status: {backup.status}"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    # #19455: refused before the job starts, since the restore stops Redis and replaces its dump.rdb.
+    if not BackupServiceType.is_restorable(backup.service_type):
+        detail = f"A {backup.service_type} backup is restored by the operator, not by this action"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Start async restore job
     job_id = str(uuid.uuid4())[:16]
@@ -601,11 +602,8 @@ async def _run_redis_ssh_check(host: str):
     """Helper for _verify_redis. Ref: #1088."""
     cmd = [
         "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        f"autobot@{host}",
+        *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10"),
+        *ssh_destination_args("autobot", host),
         "redis-cli PING && redis-cli INFO keyspace && redis-cli DBSIZE",
     ]
     process = await asyncio.create_subprocess_exec(

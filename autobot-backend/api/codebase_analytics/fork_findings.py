@@ -22,7 +22,15 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
-from autobot_shared.symbol_forks import FORK_ROOTS, ForkCluster, ForkScan, scan_symbol_forks
+from autobot_shared.symbol_forks import (
+    FORK_EXCEPTIONS_RELPATH,
+    FORK_ROOTS,
+    ForkCluster,
+    ForkScan,
+    fork_apply_exceptions,
+    fork_load_exceptions,
+    scan_symbol_forks,
+)
 
 from .chromadb_storage import make_problem_dict
 
@@ -96,7 +104,12 @@ def run_fork_pass(root_path: str) -> ForkPassOutcome:
     root = Path(root_path)
     try:
         scan = scan_symbol_forks(root, _roots_for(root))
-    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        exceptions = fork_load_exceptions(root / FORK_EXCEPTIONS_RELPATH)
+    except (RuntimeError, OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.warning("[#18067] Symbol-fork pass did not run for %s: %s", root_path, exc)
         return ForkPassOutcome(ran=False, reason=f"{type(exc).__name__}: {exc}")
+    # The CI ratchet's recorded per-service exceptions (#18688), so both report the same clusters.
+    scan.clusters, problems = fork_apply_exceptions(scan.clusters, exceptions)
+    for problem in problems:
+        logger.warning("[#18688] Symbol-fork exception record: %s", problem)
     return outcome_from_scan(scan)

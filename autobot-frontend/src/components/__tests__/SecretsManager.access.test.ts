@@ -26,7 +26,9 @@ vi.mock('@/utils/SecretsApiClient', () => ({
     transferSecrets: vi.fn(),
   },
 }))
-vi.mock('@/composables/security/useSecretsInfraApi', () => ({
+// The real module stays (infraHostToSecret is a pure mapper); only its network calls are faked.
+vi.mock('@/composables/security/useSecretsInfraApi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/security/useSecretsInfraApi')>()),
   useSecretsInfraApi: () => ({
     fetchInfraHosts: vi.fn().mockResolvedValue({ hosts: [] }),
     fetchSecretsUsage: vi.fn().mockResolvedValue({}),

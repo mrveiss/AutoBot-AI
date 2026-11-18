@@ -74,15 +74,15 @@
 # ---------------------------------------------------------------------------
 # Pre-cleanup: snapshot /opt/autobot/ on all nodes
 # ---------------------------------------------------------------------------
-- name: "Pre-cleanup: Record current /opt/autobot/ layout"
+- name: "Pre-cleanup: Record current {{ autobot.base_dir }}/ layout"
   hosts: slm_nodes
   gather_facts: false
   become: true
 
   tasks:
-    - name: "Snapshot | List /opt/autobot/ before cleanup"
+    - name: "Snapshot | List {{ autobot.base_dir }}/ before cleanup"
       ansible.builtin.command:
-        cmd: ls -1 /opt/autobot/
+        cmd: ls -1 {{ autobot.base_dir }}/
       register: pre_snapshot
       changed_when: false
       failed_when: false
@@ -112,7 +112,7 @@
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
         - {dir: autobot-npu-worker, why: "wrong node — the NPU worker does not run on the SLM manager"}
         - {dir: autobot-browser-worker, why: "wrong node — the browser worker does not run on the SLM manager"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -139,7 +139,7 @@
         - {dir: autobot-user-backend, why: "legacy pre-rename path for autobot-backend"}
         - {dir: autobot-slm-frontend, why: "wrong node — the SLM frontend does not run on the backend node"}
         - {dir: autobot-slm-backend, why: "wrong node — the SLM backend does not run on the backend node"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -148,9 +148,9 @@
         remove_dir_path: "{{ autobot.base_dir }}/{{ _cleanup_target.dir }}"
         remove_reason: "{{ _cleanup_target.why }}"
 
-    - name: "Backend | Find flat Python files at /opt/autobot root"
+    - name: "Backend | Find flat Python files at {{ autobot.base_dir }} root"
       ansible.builtin.find:
-        paths: /opt/autobot
+        paths: "{{ autobot.base_dir }}"
         patterns: "*.py"
         file_type: file
         depth: 1
@@ -165,7 +165,7 @@
     # Loose *.py files at the /opt/autobot root are not component directories —
     # nothing keeps state in them — so these do not go through the component
     # guard. `file_type: file` and `depth: 1` keep the match to exactly that.
-    - name: "Backend | Remove flat Python files at /opt/autobot root"
+    - name: "Backend | Remove flat Python files at {{ autobot.base_dir }} root"
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
@@ -189,7 +189,7 @@
         - {dir: autobot-backend, why: "wrong node — the user backend does not run on the frontend node"}
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -216,7 +216,7 @@
         - {dir: autobot-slm-backend, why: "wrong node — the SLM backend does not run on the NPU worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -243,7 +243,7 @@
         - {dir: autobot-slm-backend, why: "wrong node — the SLM backend does not run on the AI stack node"}
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -273,7 +273,7 @@
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: browser-service, why: "legacy pre-rename path for autobot-browser-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -300,7 +300,7 @@
         - {dir: autobot-slm-backend, why: "wrong node — the SLM backend does not run on the browser node"}
         - {dir: npu-worker, why: "legacy pre-rename path for autobot-npu-worker"}
         - {dir: ai-stack, why: "legacy pre-rename path for autobot-ai-stack"}
-        - {dir: scripts, why: "stale loose directory at the /opt/autobot root"}
+        - {dir: scripts, why: "stale loose directory at the {{ autobot.base_dir }} root"}
       loop_control:
         loop_var: _cleanup_target
         label: "{{ _cleanup_target.dir }}"
@@ -312,15 +312,15 @@
 # ---------------------------------------------------------------------------
 # Post-cleanup: snapshot /opt/autobot/ on all nodes + summary
 # ---------------------------------------------------------------------------
-- name: "Post-cleanup: Verify /opt/autobot/ layout"
+- name: "Post-cleanup: Verify {{ autobot.base_dir }}/ layout"
   hosts: slm_nodes
   gather_facts: false
   become: true
 
   tasks:
-    - name: "Verify | List /opt/autobot/ after cleanup"
+    - name: "Verify | List {{ autobot.base_dir }}/ after cleanup"
       ansible.builtin.command:
-        cmd: ls -1 /opt/autobot/
+        cmd: ls -1 {{ autobot.base_dir }}/
       register: post_snapshot
       changed_when: false
       failed_when: false

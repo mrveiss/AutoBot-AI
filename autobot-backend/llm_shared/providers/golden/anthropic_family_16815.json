@@ -1,0 +1,1352 @@
+{
+ "anthropic/content_blocks/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": [
+      {
+       "text": "look",
+       "type": "text"
+      },
+      {
+       "source": {
+        "data": "AAA",
+        "type": "base64"
+       },
+       "type": "image"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": [
+      {
+       "text": "ok",
+       "type": "text"
+      }
+     ],
+     "role": "assistant"
+    }
+   ],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/content_blocks/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": [
+      {
+       "text": "look",
+       "type": "text"
+      },
+      {
+       "source": {
+        "data": "AAA",
+        "type": "base64"
+       },
+       "type": "image"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": [
+      {
+       "text": "ok",
+       "type": "text"
+      }
+     ],
+     "role": "assistant"
+    }
+   ],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/empty_content/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "",
+     "role": "user"
+    }
+   ],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/empty_content/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/empty_list/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/empty_list/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/missing_keys/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "no role",
+     "role": "user"
+    },
+    {
+     "content": "",
+     "role": "user"
+    },
+    {
+     "content": "",
+     "role": "user"
+    }
+   ],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/missing_keys/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "no role",
+     "role": "user"
+    },
+    {
+     "content": "",
+     "role": "user"
+    },
+    {
+     "content": "",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/multi_turn/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "a",
+     "role": "user"
+    },
+    {
+     "content": "b",
+     "role": "assistant"
+    },
+    {
+     "content": "c",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "s",
+     "type": "text"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/multi_turn/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "a",
+     "role": "user"
+    },
+    {
+     "content": "b",
+     "role": "assistant"
+    },
+    {
+     "content": "c",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "s",
+     "type": "text"
+    }
+   ],
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/no_system/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "hi",
+     "role": "user"
+    }
+   ],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/no_system/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "hi",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/system_user/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "hi",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "be brief",
+     "type": "text"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/system_user/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "hi",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "be brief",
+     "type": "text"
+    }
+   ],
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/tool_messages/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": [
+      {
+       "id": "t1",
+       "input": {
+        "x": 1
+       },
+       "name": "f",
+       "type": "tool_use"
+      }
+     ],
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "content": "r",
+       "tool_use_id": "t1",
+       "type": "tool_result"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "raw",
+     "role": "tool"
+    }
+   ],
+   "model": "m"
+  },
+  "preserve": false
+ },
+ "anthropic/tool_messages/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": [
+      {
+       "id": "t1",
+       "input": {
+        "x": 1
+       },
+       "name": "f",
+       "type": "tool_use"
+      }
+     ],
+     "role": "assistant"
+    },
+    {
+     "content": [
+      {
+       "content": "r",
+       "tool_use_id": "t1",
+       "type": "tool_result"
+      }
+     ],
+     "role": "user"
+    },
+    {
+     "content": "raw",
+     "role": "tool"
+    }
+   ],
+   "model": "m",
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/two_systems_last_wins/plain": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "u",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "second",
+     "type": "text"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "anthropic/two_systems_last_wins/tools": {
+  "headers": {},
+  "kwargs": {
+   "extra_body": {
+    "temperature": 0.5
+   },
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "u",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "system": [
+    {
+     "cache_control": {
+      "type": "ephemeral"
+     },
+     "text": "second",
+     "type": "text"
+    }
+   ],
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "description": "d",
+     "input_schema": {
+      "type": "object"
+     },
+     "name": "f"
+    }
+   ]
+  },
+  "preserve": false
+ },
+ "bedrock/content_blocks/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "text": "look",
+      "type": "text"
+     },
+     {
+      "source": {
+       "data": "AAA",
+       "type": "base64"
+      },
+      "type": "image"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": [
+     {
+      "text": "ok",
+      "type": "text"
+     }
+    ],
+    "role": "assistant"
+   }
+  ],
+  "temperature": 0.5
+ },
+ "bedrock/content_blocks/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "text": "look",
+      "type": "text"
+     },
+     {
+      "source": {
+       "data": "AAA",
+       "type": "base64"
+      },
+      "type": "image"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": [
+     {
+      "text": "ok",
+      "type": "text"
+     }
+    ],
+    "role": "assistant"
+   }
+  ],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/empty_content/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5
+ },
+ "bedrock/empty_content/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/empty_list/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [],
+  "temperature": 0.5
+ },
+ "bedrock/empty_list/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/missing_keys/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "no role",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5
+ },
+ "bedrock/missing_keys/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "no role",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/multi_turn/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "a",
+    "role": "user"
+   },
+   {
+    "content": "b",
+    "role": "assistant"
+   },
+   {
+    "content": "c",
+    "role": "user"
+   }
+  ],
+  "system": "s",
+  "temperature": 0.5
+ },
+ "bedrock/multi_turn/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "a",
+    "role": "user"
+   },
+   {
+    "content": "b",
+    "role": "assistant"
+   },
+   {
+    "content": "c",
+    "role": "user"
+   }
+  ],
+  "system": "s",
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/no_system/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5
+ },
+ "bedrock/no_system/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/system_user/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "system": "be brief",
+  "temperature": 0.5
+ },
+ "bedrock/system_user/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "system": "be brief",
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/tool_messages/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "id": "t1",
+      "input": {
+       "x": 1
+      },
+      "name": "f",
+      "type": "tool_use"
+     }
+    ],
+    "role": "assistant"
+   },
+   {
+    "content": [
+     {
+      "content": "r",
+      "tool_use_id": "t1",
+      "type": "tool_result"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": "raw",
+    "role": "tool"
+   }
+  ],
+  "temperature": 0.5
+ },
+ "bedrock/tool_messages/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "id": "t1",
+      "input": {
+       "x": 1
+      },
+      "name": "f",
+      "type": "tool_use"
+     }
+    ],
+    "role": "assistant"
+   },
+   {
+    "content": [
+     {
+      "content": "r",
+      "tool_use_id": "t1",
+      "type": "tool_result"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": "raw",
+    "role": "tool"
+   }
+  ],
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "bedrock/two_systems_last_wins/plain": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "u",
+    "role": "user"
+   }
+  ],
+  "system": "second",
+  "temperature": 0.5
+ },
+ "bedrock/two_systems_last_wins/tools": {
+  "anthropic_version": "bedrock-2023-05-31",
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "u",
+    "role": "user"
+   }
+  ],
+  "system": "second",
+  "temperature": 0.5,
+  "tool_choice": {
+   "type": "auto"
+  },
+  "tools": [
+   {
+    "description": "d",
+    "input_schema": {
+     "type": "object"
+    },
+    "name": "f"
+   }
+  ]
+ },
+ "vertexai/content_blocks/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "text": "look",
+      "type": "text"
+     },
+     {
+      "source": {
+       "data": "AAA",
+       "type": "base64"
+      },
+      "type": "image"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": [
+     {
+      "text": "ok",
+      "type": "text"
+     }
+    ],
+    "role": "assistant"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/content_blocks/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "text": "look",
+      "type": "text"
+     },
+     {
+      "source": {
+       "data": "AAA",
+       "type": "base64"
+      },
+      "type": "image"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": [
+     {
+      "text": "ok",
+      "type": "text"
+     }
+    ],
+    "role": "assistant"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/empty_content/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/empty_content/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/empty_list/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [],
+  "model": "m"
+ },
+ "vertexai/empty_list/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [],
+  "model": "m"
+ },
+ "vertexai/missing_keys/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "no role",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/missing_keys/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "no role",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   },
+   {
+    "content": "",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/multi_turn/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "a",
+    "role": "user"
+   },
+   {
+    "content": "b",
+    "role": "assistant"
+   },
+   {
+    "content": "c",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "s"
+ },
+ "vertexai/multi_turn/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "a",
+    "role": "user"
+   },
+   {
+    "content": "b",
+    "role": "assistant"
+   },
+   {
+    "content": "c",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "s"
+ },
+ "vertexai/no_system/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/no_system/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/system_user/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "be brief"
+ },
+ "vertexai/system_user/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "hi",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "be brief"
+ },
+ "vertexai/tool_messages/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "id": "t1",
+      "input": {
+       "x": 1
+      },
+      "name": "f",
+      "type": "tool_use"
+     }
+    ],
+    "role": "assistant"
+   },
+   {
+    "content": [
+     {
+      "content": "r",
+      "tool_use_id": "t1",
+      "type": "tool_result"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": "raw",
+    "role": "tool"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/tool_messages/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": [
+     {
+      "id": "t1",
+      "input": {
+       "x": 1
+      },
+      "name": "f",
+      "type": "tool_use"
+     }
+    ],
+    "role": "assistant"
+   },
+   {
+    "content": [
+     {
+      "content": "r",
+      "tool_use_id": "t1",
+      "type": "tool_result"
+     }
+    ],
+    "role": "user"
+   },
+   {
+    "content": "raw",
+    "role": "tool"
+   }
+  ],
+  "model": "m"
+ },
+ "vertexai/two_systems_last_wins/plain": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "u",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "second"
+ },
+ "vertexai/two_systems_last_wins/tools": {
+  "extra_body": {
+   "temperature": 0.5
+  },
+  "max_tokens": 7,
+  "messages": [
+   {
+    "content": "u",
+    "role": "user"
+   }
+  ],
+  "model": "m",
+  "system": "second"
+ }
+}

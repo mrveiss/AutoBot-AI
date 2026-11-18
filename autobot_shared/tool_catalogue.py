@@ -82,6 +82,7 @@ BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
 #: #18430: browser tools that only observe the page (and hover), and the index-addressed form of the actions.
 BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
 BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
+BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
@@ -107,6 +108,11 @@ SENSITIVE_TOOLS = frozenset(
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
+
+#: Owner ruling 2026-11-17 (#17237, approval only): navigate is always available. It stays in "browser actions", a
+#: sensitive tool and a mutating effect, so a work item can still ask for approval and roles and the verifier still
+#: cover it; only the AI lines leave it unmanaged -- no baseline floor, no unset-line hold. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset({"navigate"})
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and

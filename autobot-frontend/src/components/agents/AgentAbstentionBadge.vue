@@ -52,7 +52,7 @@ const tooltipText = computed(() => {
   background-color: oklch(0.95 0.03 85); /* Warm yellow background */
   border: 1px solid oklch(0.75 0.12 85); /* Darker yellow border */
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: oklch(0.4 0.12 85); /* Dark yellow text */
   cursor: help;

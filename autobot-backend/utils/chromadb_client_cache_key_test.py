@@ -73,6 +73,7 @@ def _load_real_chromadb_modules() -> Tuple[ModuleType, ModuleType]:
 
 
 sync_mod, async_mod = _load_real_chromadb_modules()
+repairs_mod = importlib.import_module("utils.chromadb_store_repairs")
 
 
 def _stub_chromadb():
@@ -90,13 +91,21 @@ def local_chroma(tmp_path):
     """Force the local PersistentClient branch with migrations + chromadb stubbed."""
     fake = _stub_chromadb()
     with (
-        patch.dict(sys.modules, {"chromadb": fake, "chromadb.config": fake.config}),
+        patch.dict(
+            sys.modules,
+            {
+                "chromadb": fake,
+                "chromadb.config": fake.config,
+                # #18789: the async local path delegates to the sync client by name.
+                "utils.chromadb_client": sync_mod,
+            },
+        ),
         patch.object(sync_mod, "_CHROMADB_HOST", ""),
         patch.object(async_mod, "_CHROMADB_HOST", ""),
-        patch.object(sync_mod, "_migrate_legacy_collection_configs"),
-        patch.object(sync_mod, "_fix_segment_hnsw_space"),
-        patch.object(sync_mod, "_fix_seq_id_blob_type"),
-        patch.object(sync_mod, "_fix_hnsw_pickle_format"),
+        patch.object(repairs_mod, "_migrate_legacy_collection_configs"),
+        patch.object(repairs_mod, "_fix_segment_hnsw_space"),
+        patch.object(repairs_mod, "_fix_seq_id_blob_type"),
+        patch.object(repairs_mod, "_fix_hnsw_pickle_format"),
     ):
         sync_mod._sync_client_cache.clear()
         async_mod._async_client_cache.clear()

@@ -51,6 +51,7 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from utils.file_types import TEXT_FILE_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -828,46 +829,8 @@ class GiteaConnector(AbstractConnector):
 # ---------------------------------------------------------------------------
 
 
-_TEXT_EXTENSIONS = {
-    ".md",
-    ".rst",
-    ".txt",
-    ".py",
-    ".js",
-    ".ts",
-    ".go",
-    ".rb",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".hpp",
-    ".cs",
-    ".php",
-    ".sh",
-    ".yaml",
-    ".yml",
-    ".json",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".conf",
-    ".html",
-    ".htm",
-    ".xml",
-    ".csv",
-    ".sql",
-    ".kt",
-    ".swift",
-    ".rs",
-    ".scala",
-    ".ex",
-    ".exs",
-}
-
-
 def _is_text_file(path: str) -> bool:
     import os
 
     _, ext = os.path.splitext(path.lower())
-    return ext in _TEXT_EXTENSIONS
+    return ext in TEXT_FILE_EXTENSIONS

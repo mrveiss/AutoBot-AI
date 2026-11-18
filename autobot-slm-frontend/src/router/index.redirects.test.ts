@@ -27,14 +27,29 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createRouter, createMemoryHistory, type Router } from 'vue-router'
+import { createRouter, createMemoryHistory, type Router, type RouteRecordRaw } from 'vue-router'
 import appRouter from './index'
 
-/** A guard-free clone of the app's route table (redirect records included). */
+/** Navigation resolves each matched record's lazy `component`; importing the real views
+ * (the Orchestration tree) cost ~8 s of a 10 s budget (#18833). Redirects and
+ * `beforeEnter` are what this file asserts, so every view becomes an inert stub. */
+const Stub = { render: () => null }
+
+function withStubViews(routes: readonly RouteRecordRaw[]): RouteRecordRaw[] {
+  return routes.map((r) => {
+    const copy = { ...r } as RouteRecordRaw & { component?: unknown; components?: unknown }
+    if ('component' in copy && copy.component) copy.component = Stub
+    if ('components' in copy && copy.components) delete copy.components
+    if (r.children) copy.children = withStubViews(r.children)
+    return copy as RouteRecordRaw
+  })
+}
+
+/** A guard-free clone of the app's route table (redirect records and beforeEnter included). */
 function createRouteTableUnderTest(): Router {
   return createRouter({
     history: createMemoryHistory(),
-    routes: appRouter.options.routes,
+    routes: withStubViews(appRouter.options.routes),
   })
 }
 

@@ -18,7 +18,7 @@ from media.audio.diarization_service import SpeakerSegment, get_diarization_serv
 from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import Database, get_transcriber_db
 from transcriber.models import RecordingStatus
-from voice_processing.language_detection import detect_language
+from voice_processing.language_detection import detect_audio_language
 from voice_processing.providers import TranscriptionUnavailableError, TranscriptSegment, get_speech_provider_registry
 
 logger = get_logger(__name__)
@@ -69,7 +69,7 @@ class TranscriberOrchestrator:
             await self.db.update_recording_duration(recording_id, duration)
             logger.info("Recording %d: audio duration=%.2fs", recording_id, duration)
 
-            language = await detect_language(audio_path=tmp_wav_path, filename_hint=recording["filename"])
+            language = await detect_audio_language(audio_path=tmp_wav_path, filename_hint=recording["filename"])
             logger.info("Recording %d: detected language=%s", recording_id, language)
 
             transcribed = await self.provider_registry.transcribe_with_fallback(tmp_wav_path, language)

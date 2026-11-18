@@ -10,7 +10,7 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -192,7 +192,9 @@ class Secret(Base):
         """Check if secret has expired."""
         if self.expires_at is None:
             return False
-        return now_utc() > self.expires_at
+        # A driver without time-zone support (SQLite) hands back a naive value; it was stored as UTC.
+        expires = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
+        return now_utc() > expires
 
     def _grant_lookup(self, user_id: uuid.UUID, session_id: str | None) -> bool:
         """Secrets grant facts for ``is_visible`` (#11290).

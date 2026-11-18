@@ -160,3 +160,16 @@ def test_contrast_no_other_space_fallback_remains_in_the_engine():
     assert "generate_embedding_with_fallback" not in src and "active_embedding_model" not in src
     assert not hasattr(mod.NPUSemanticSearch, "_generate_fallback_embedding")
     assert not hasattr(mod.NPUSemanticSearch, "_generate_embedding_with_device")
+
+
+@pytest.mark.asyncio
+async def test_two_different_queries_reach_the_query_engine_as_two_different_strings_18218():
+    """#18218: the engine sees each caller's query, never a fixed literal such as "search query"."""
+    obj = _instance()
+    engine = MagicMock(query=MagicMock(return_value=MagicMock(source_nodes=[])))
+    obj.knowledge_base = MagicMock(vector_index=MagicMock(as_query_engine=lambda **_: engine))
+    await obj._search_with_llamaindex("how do I rotate keys", 3)
+    await obj._search_with_llamaindex("what is the backup schedule", 3)
+    sent = [call.args[0] for call in engine.query.call_args_list]
+    assert sent == ["how do I rotate keys", "what is the backup schedule"]
+    assert "search query" not in sent

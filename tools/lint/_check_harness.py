@@ -93,12 +93,13 @@ def _verdict(
     full_repo: bool,
     floor: int,
     summary: Callable[[int], str] | None,
+    unit: str,
 ) -> int:
     """Map a completed scan to ``0``/``1``/``2``: floor, nothing-reached, then findings."""
-    if enforce_reach(reached, floor, hook=name, full_repo=full_repo):
+    if enforce_reach(reached, floor, hook=name, full_repo=full_repo, unit=unit):
         return EXIT_VACUOUS
     if full_repo and reached == 0:
-        return _vacuous(log, name, "nothing was scanned (0 files reached in a full-repo sweep)")
+        return _vacuous(log, name, f"nothing was scanned (0 {unit} reached in a full-repo sweep)")
     for finding in findings:
         log.error("%s", finding)
     if findings and summary is not None:
@@ -116,6 +117,7 @@ def run_check(
     logger: logging.Logger | None = None,
     summary: Callable[[int], str] | None = None,
     full_repo_of: Callable[[Sequence[str]], bool] | None = None,
+    unit: str = "file(s)",
 ) -> int:
     """Run ``scan(argv, root) -> (reached, findings)`` and map it to ``0``/``1``/``2``.
 
@@ -143,6 +145,7 @@ def run_check(
         full_repo=(full_repo_of(argv) if full_repo_of else not argv),
         floor=floor,
         summary=summary,
+        unit=unit,
     )
 
 
@@ -156,6 +159,7 @@ def run_anchored(
     logger: logging.Logger | None = None,
     summary: Callable[[int], str] | None = None,
     full_repo_of: Callable[[Sequence[str]], bool] | None = None,
+    unit: str = "file(s)",
 ) -> int:
     """:func:`run_check` with the root resolved from *anchor* by :func:`resolve_root`.
 
@@ -168,4 +172,6 @@ def run_anchored(
         root = resolve_root(anchor)
     except VacuousScan as exc:
         return _vacuous(log, name, f"cannot anchor the scan: {exc}")
-    return run_check(name, scan, argv, root=root, floor=floor, logger=log, summary=summary, full_repo_of=full_repo_of)
+    return run_check(
+        name, scan, argv, root=root, floor=floor, logger=log, summary=summary, full_repo_of=full_repo_of, unit=unit
+    )
