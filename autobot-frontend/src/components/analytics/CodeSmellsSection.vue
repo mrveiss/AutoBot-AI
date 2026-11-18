@@ -1,6 +1,6 @@
 <template>
   <div class="code-smells-section analytics-section">
-    <div class="section-heading">
+    <div class="section-header">
       <h3>
         <Icon name="bug" /> {{ $t('analytics.codeSmells.title') }}
         <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
@@ -242,17 +242,9 @@ const getItemSeverityClass = (severity: string): string => {
   margin-bottom: var(--spacing-6);
 }
 
-.section-heading {
-  margin-bottom: var(--spacing-4);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
-  flex-wrap: wrap;
-}
-
 .code-smells-section h3 {
   color: var(--color-info);
-  margin: 0;
+  margin: 0 auto 0 0; /* the controls beside the heading sit at the far end of the shared .section-header row */
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
