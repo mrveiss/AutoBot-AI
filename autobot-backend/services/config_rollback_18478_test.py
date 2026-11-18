@@ -194,6 +194,7 @@ async def test_row_before_after_come_from_the_locked_live_read(live):
 
     async def _create(**kw):
         created.append(kw)
+        return SimpleNamespace(id=uuid.uuid4())
 
     async def _latest(*_a):
         raise AssertionError("row must not be built from a separate _get_latest read")
