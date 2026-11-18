@@ -352,9 +352,9 @@ def format_browser_action_text(
 ) -> str:
     """Build the tool-specific summary line for format_browser_result. Issue #1368/#11537."""
     if tool_name == "navigate":
-        url = inner.get("url", params.get("url", ""))
+        url = displayed_url(inner.get("url", params.get("url", "")))  # page-controlled: every use is the encoded form
         title = inner.get("title", "")
-        return f"Navigated to: {displayed_url(url)}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
+        return f"Navigated to: {url}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
             inner.get("text"), url
         )
 

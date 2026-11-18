@@ -63,3 +63,18 @@ def test_the_page_controlled_final_url_is_encoded_and_capped():
 
 def test_an_ordinary_url_is_shown_unchanged():
     assert bth.displayed_url("https://example.com/path?q=1&r=2#frag") == "https://example.com/path?q=1&r=2#frag"
+
+
+def test_the_trust_wrappers_get_the_encoded_url_as_their_source():
+    seen = []
+    real = bth.wrap_page_title
+
+    def spy_title(title, url):
+        seen.append(url)
+        return real(title, url)
+
+    inner = {"url": "https://evil.test/a b\nx", "title": "T", "text": "body"}
+    with patch.object(bth, "wrap_page_title", spy_title), patch.object(bth, "navigate_excerpt") as excerpt:
+        excerpt.return_value = ""
+        bth.format_browser_action_text("navigate", {}, inner, {"result": inner})
+    assert seen == ["https://evil.test/a%20b%0Ax"] and excerpt.call_args.args[1] == seen[0]
