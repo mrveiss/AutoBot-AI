@@ -752,15 +752,15 @@ class SessionMixin(SessionLockMixin):
         """Username of the session's owner, or None if it has no file or records none."""
         try:
             chat_file = await self._existing_chat_file(session_id)
-            if chat_file is None:
+            if chat_file is None:  # Inline below, so CodeQL sees the containment at the read (code_sync_paths.py)
                 return None
-            # Inline, so CodeQL sees the containment at the read (the shape in code_sync_paths.py)
             chat_file, root = os.path.realpath(chat_file), os.path.realpath(self._get_chats_directory())
             if not chat_file.startswith(root + os.sep):
                 raise ValueError("the chat file resolved outside the chats directory")
             async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
                 file_content = await f.read()
-            return owner_from_metadata(self._decrypt_data(file_content).get("metadata", {}))
+            decrypted = await run_in_chat_io_executor(self._decrypt_data, file_content)  # #21664: off the loop
+            return owner_from_metadata(decrypted.get("metadata", {}))
         except Exception as e:
             logger.warning("Failed to get session owner for %s: %s", session_id, e)
             raise SessionOwnerUnreadable(session_id) from e

@@ -9572,6 +9572,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * EnrollmentSkip
+         * @description One skipped node and why (the reason names the state).
+         */
+        EnrollmentSkip: {
+            /** Node Id */
+            node_id: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ErrorHealthResponse
          * @description Error subsystem health status.
          */
@@ -14790,6 +14802,11 @@ export interface components {
              * @default
              */
             created_at: string;
+            /**
+             * Enrollment Skipped Nodes
+             * @default []
+             */
+            enrollment_skipped_nodes: components["schemas"]["EnrollmentSkip"][];
             /**
              * Failed Fleet Nodes
              * @default 0

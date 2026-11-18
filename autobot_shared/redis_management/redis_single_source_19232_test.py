@@ -18,6 +18,7 @@ from urllib.parse import unquote, urlparse
 
 import pytest
 
+from autobot_shared.logging_once import reset_log_once
 from autobot_shared.redis_management import endpoint as _endpoint
 from autobot_shared.redis_management import types as _types
 from autobot_shared.redis_management.config import RedisConfigLoader
@@ -149,7 +150,7 @@ def test_url_and_client_agree_on_tls(monkeypatch, _reset_after):
 def _bare_env(monkeypatch):
     """No config-manager tier and no Redis port/TLS env, so each test names exactly what it sets."""
     monkeypatch.setattr(_endpoint, "config_manager_redis", lambda: {})
-    monkeypatch.setattr(_endpoint, "_warned_env_ports", set())
+    reset_log_once()
     for var in ("REDIS_PORT", "AUTOBOT_REDIS_PORT", "AUTOBOT_REDIS_TLS_ENABLED", "AUTOBOT_REDIS_TLS_PORT"):
         monkeypatch.delenv(var, raising=False)
 

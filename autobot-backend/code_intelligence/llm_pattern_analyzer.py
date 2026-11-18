@@ -73,7 +73,7 @@ from code_intelligence.llm_pattern_analysis.types import (
     PromptIssueType,
     UsagePatternType,
 )
-from code_intelligence.python_files import discover_files
+from code_intelligence.python_files import discover_files, matches_exclusion
 
 logger = get_logger(__name__)
 
@@ -317,7 +317,7 @@ class LLMPatternAnalyzer:
 
             for file_path in discover_files(directory, ("*.py",)):
                 # Issue #616: Use any() for O(1) early termination
-                if not any(file_path.match(pattern) for pattern in exclude_patterns):
+                if not matches_exclusion(file_path, exclude_patterns, directory):
                     files.append(file_path)
 
         return files

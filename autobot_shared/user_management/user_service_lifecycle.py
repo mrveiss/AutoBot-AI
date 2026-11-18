@@ -24,11 +24,16 @@ from typing import Any, NamedTuple
 
 from sqlalchemy import select
 
+from autobot_shared.after_commit import defer_until_commit
 from autobot_shared.audit_actions import spellings_of
-from autobot_shared.db_session import run_after_commit
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.membership_epoch import MembershipEpochBump
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.last_platform_admin import (
+    LastPlatformAdminError,
+    LastPlatformAdminRetry,
+    ensure_not_last_platform_admin,
+)
 from autobot_shared.user_management.models.audit import AuditLog, AuditResourceType, IdentityAuditAction
 from autobot_shared.user_management.models.team import Team, TeamMembership
 from autobot_shared.user_management.models.user import UserCore
@@ -125,12 +130,36 @@ class UserLifecycleMixin(UserServiceBase):
         after the commit.
         """
         mark = PasswordEpochMark(username, DEACTIVATION_EPOCH_LEAD_SECONDS, self.epoch_in_redis)
-        run_after_commit(self.session, mark)
+        defer_until_commit(self.session, mark, scope=True)
         return {"sessions_revocation": "queued_after_commit"}
+
+    async def _guard_last_admin(self, user_id: uuid.UUID, action: str, attempt: str) -> None:
+        """Refuse, auditing the refusal, if the change would leave no active platform admin (#21018).
+
+        Runs first, before any other effect, so a refusal changes nothing; the caller's route commits the
+        denied audit row (``refuse_last_platform_admin``) and so releases the admin-row locks. It is the
+        first lock the request takes (admin rows in id order, the target among them), see
+        :mod:`last_platform_admin`.
+        """
+        try:
+            await ensure_not_last_platform_admin(self.session, self.user_model, user_id)
+        except LastPlatformAdminError as exc:
+            outcome = "failure" if isinstance(exc, LastPlatformAdminRetry) else "denied"
+            await self._audit_log(
+                action, AuditResourceType.USER, user_id, {"attempt": attempt, "reason": exc.code}, outcome=outcome
+            )
+            await self.session.flush()
+            raise
+
+    async def guard_deactivation(self, user_id: uuid.UUID) -> None:
+        """Refuse a deactivation of the only active admin before a caller applies any other change (#21018)."""
+        await self._guard_last_admin(user_id, IdentityAuditAction.USER_DEACTIVATED, "deactivate")
 
     async def _set_active(self, user_id: uuid.UUID, active: bool) -> bool:
         """Set ``is_active`` and audit it; raises ``UserNotFoundError``."""
         user = await self._require_user(user_id)
+        if not active:
+            await self.guard_deactivation(user_id)
         handover = {} if active else await self.reassign_sessions(user_id)  # before the flip: a refusal changes nothing
         user.is_active = active
         user.updated_at = now_utc()
@@ -178,6 +207,9 @@ class UserLifecycleMixin(UserServiceBase):
         epoch = await get_password_epoch(user.username, in_redis=self.epoch_in_redis)
         return epoch is None or epoch < recorded + _admin_change_lead(is_admin)
 
+    async def _guard_demotion(self, user_id: uuid.UUID) -> None:
+        await self._guard_last_admin(user_id, IdentityAuditAction.PLATFORM_ADMIN_CHANGED, "demote")
+
     async def set_platform_admin(self, user_id: uuid.UUID, is_admin: bool) -> AdminStatusChange:
         """Make *user_id* a platform admin, or not -- the one place that changes it (#20670).
 
@@ -186,9 +218,12 @@ class UserLifecycleMixin(UserServiceBase):
         request. The row is locked for the read-modify-write, and each change takes the next per-user
         revision under that lock. A change to the value already held writes nothing, except that it
         finishes a revocation whose marker was never confirmed (:meth:`_admin_revocation_pending`),
-        so repeating the request after a 503 revokes. Raises ``UserNotFoundError``.
+        so repeating the request after a 503 revokes. Raises ``UserNotFoundError``, or
+        ``LastPlatformAdminError`` when demoting the only active admin (#21018).
         """
         user = await self._require_user(user_id)
+        if not is_admin:  # admin-row locks come BEFORE the target's own lock: one lock order everywhere (#21018)
+            await self._guard_demotion(user_id)
         await self.session.refresh(user, with_for_update=True)
         transitions = await self._admin_transitions(user)
         latest = self._latest_transition(transitions)
@@ -219,7 +254,7 @@ class UserLifecycleMixin(UserServiceBase):
     def _queue_admin_change_revocation(self, user: UserCore, is_admin: bool) -> None:
         """Queue the post-commit epoch write: lead 1 on a demotion, 0 on a promotion."""
         mark = PasswordEpochMark(user.username, _admin_change_lead(is_admin), self.epoch_in_redis)
-        run_after_commit(self.session, mark)
+        defer_until_commit(self.session, mark, scope=True)
 
     async def deactivate_user(self, user_id: uuid.UUID) -> bool:
         """Deactivate a user account; raises ``UserNotFoundError``."""
@@ -261,7 +296,7 @@ class UserLifecycleMixin(UserServiceBase):
         )
         org_ids = {user.org_id, *rows.scalars().all()} - {None}
         for org_id in sorted(org_ids, key=str):
-            run_after_commit(self.session, MembershipEpochBump(org_id))
+            defer_until_commit(self.session, MembershipEpochBump(org_id), scope=True)
 
     async def delete_user(
         self,
@@ -281,6 +316,7 @@ class UserLifecycleMixin(UserServiceBase):
             UserNotFoundError: the user does not exist.
         """
         user = await self._require_user(user_id, include_deleted=not hard_delete)
+        await self._guard_last_admin(user_id, IdentityAuditAction.USER_DELETED, "delete")
         details: dict[str, Any] = {"hard_delete": hard_delete}
         if reassign_to is not None:
             await self.check_session_reassign(user_id)  # a memory move cannot be undone, so a refusal comes first

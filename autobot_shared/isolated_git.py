@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -123,3 +124,15 @@ def make_repo(path: Path, *, default_branch: str = DEFAULT_BRANCH) -> Path:
     git(path, "config", "user.name", IDENTITY_NAME)
     git(path, "config", "user.email", IDENTITY_EMAIL)
     return path
+
+
+def sandbox_path(system: str = "/usr/bin:/bin") -> str:
+    """A minimal ``PATH`` for running a git hook or hook wrapper in a sandbox (#21163).
+
+    Every git hook resolves its Python through ``scripts/lib/hook-python.sh``, which refuses an
+    interpreter below the ``.python-version`` floor, and a system ``python3`` on the minimal path
+    is often older. The interpreter running the suite meets the floor by construction, so its
+    directory leads; the system directories stay for the tools the hooks shell out to. A sandbox
+    that wants to prove the no-interpreter failure builds its own path instead.
+    """
+    return f"{Path(sys.executable).parent}:{system}"
