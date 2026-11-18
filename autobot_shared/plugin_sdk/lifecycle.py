@@ -9,8 +9,10 @@ cleanup never depends on the plugin's own ``shutdown()``. Tools are not yet
 tracked per plugin; see #19302.
 """
 
+import importlib
 import logging
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .base import BasePlugin, PluginStatus
@@ -35,8 +37,19 @@ def _own_modules(entry_point: str) -> list[str]:
 
 
 def forget_module(entry_point: str) -> dict:
-    """Drop the plugin's own modules so the next import reads new code; return them for restore."""
-    return {m: sys.modules.pop(m) for m in _own_modules(entry_point)}
+    """Drop the plugin's own modules so the next import reads new code; return them for restore.
+
+    Bytecode is validated by source mtime (whole seconds) and size, so an edit made
+    within the same second with the same size would reuse a stale ``.pyc``. The
+    cached bytecode is removed and the finder caches invalidated so the source is re-read.
+    """
+    old = {m: sys.modules.pop(m) for m in _own_modules(entry_point)}
+    for module in old.values():
+        cached = getattr(module, "__cached__", None)
+        if cached:
+            Path(cached).unlink(missing_ok=True)
+    importlib.invalidate_caches()
+    return old
 
 
 async def reload_with_fresh_code(loader: "PluginLoader", plugin: BasePlugin) -> bool:
