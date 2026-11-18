@@ -12,6 +12,7 @@ import re
 import pytest
 
 from autobot_shared import secrets_envelope as env
+from autobot_shared.logging_once import reset_log_once
 
 _ROOT = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
 _SID = "secret:abc"  # a representative stable secret id used for AAD binding
@@ -28,14 +29,14 @@ class TestRootKeyFailureIsLogged:
 
     @pytest.fixture(autouse=True)
     def _fresh_once_cache(self):
-        env._log_root_key_reason_once.cache_clear()
+        reset_log_once(env.logger)
         yield
-        env._log_root_key_reason_once.cache_clear()
+        reset_log_once(env.logger)
 
     @staticmethod
     def _capture(monkeypatch) -> list:
         lines: list = []
-        monkeypatch.setattr(env.logger, "error", lambda msg, *args: lines.append(msg % args))
+        monkeypatch.setattr(env.logger, "log", lambda _level, msg, *args, **_kw: lines.append(msg % args))
         return lines
 
     @pytest.mark.parametrize(

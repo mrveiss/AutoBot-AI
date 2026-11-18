@@ -18,6 +18,7 @@ from datetime import timezone
 from typing import Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.auth.configured_users import load_hashed_users, verify_configured_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
 from autobot_shared.status_enums import CommandRisk
@@ -60,9 +61,9 @@ async def _layer_entries(flt: AuditFilter, limit: int) -> List[Dict[str, Any]]:
 class SecurityLayer:
     """Security layer with RBAC, audit logging, and command execution controls.
 
-    Combines role-based access control, authentication, and secure command execution
-    in a single cohesive class. Authentication is always derived from security_config;
-    there is no single-user bypass (#10713, #10636).
+    Combines RBAC, authentication, and secure command execution in one class. Authentication
+    is always derived from security_config; no single-user bypass (#10713, #10636).
+    ``allowed_users`` is a filtered snapshot (hashed entries only) taken at init.
     """
 
     def __init__(self):
@@ -78,7 +79,7 @@ class SecurityLayer:
         logger.info("Authentication enabled: %s", self.enable_auth)
 
         self.roles = self.security_config.get("roles", {})
-        self.allowed_users = self.security_config.get("allowed_users", {})
+        self.allowed_users = load_hashed_users(self.security_config.get("allowed_users", {}))
 
         # Command security settings (folded from enhanced layer per #10666 B6)
         self.enable_command_security = self.security_config.get("enable_command_security", True)
@@ -618,22 +619,14 @@ class SecurityLayer:
     # =========================================================================
 
     def authenticate_user(self, username: str, password: str) -> str | None:
-        """Authenticate user and return their role.
-
-        For demo purposes, uses a simple dictionary lookup.
-        In production, use proper password hashing (e.g., bcrypt).
-        """
+        """Authenticate user and return their role (hashes only, #21088)."""
         if not self.enable_auth:
             return "admin"
 
-        if username in self.allowed_users and self.allowed_users[username] == password:
-            user_roles = self.security_config.get("user_roles", {})
-            role = user_roles.get(username)
-            if role:
-                return role
-            return "admin" if username == "admin" else "user"
-
-        return None
+        if verify_configured_user(self.allowed_users, username, password) is None:
+            return None
+        role = self.security_config.get("user_roles", {}).get(username)
+        return role or ("admin" if username == "admin" else "user")
 
 
 # Test entry point

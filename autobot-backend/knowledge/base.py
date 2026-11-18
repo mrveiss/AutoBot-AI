@@ -2,11 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Knowledge Base Core Module
+"""Knowledge Base Core Module.
 
-Contains the core KnowledgeBaseCore class with initialization, configuration,
-and connection management functionality.
+The core KnowledgeBaseCore class: initialization, configuration and connection management.
 """
 
 from __future__ import annotations
@@ -35,6 +33,7 @@ from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
 from knowledge.backends import BaseCollection, get_async_default_client, get_default_client
 from knowledge.embedding_space_binding import initial_collection
+from knowledge.index_scope import configured_kb_index_name
 from services.provider_key_vault import resolve_provider_key
 from utils.knowledge_base_timeouts import kb_timeouts
 
@@ -83,7 +82,7 @@ class KnowledgeBaseCore:
         self.redis_port = ssot_config.port.redis
         self.redis_password = ssot_config.redis.password
         self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
-        self.redis_index_name = self.config_manager.get("redis.indexes.knowledge_base", "llama_index")
+        self.redis_index_name = configured_kb_index_name(self.config_manager)
 
     def _init_chromadb_config(self) -> None:
         """Initialize ChromaDB configuration (Issue #398: extracted)."""

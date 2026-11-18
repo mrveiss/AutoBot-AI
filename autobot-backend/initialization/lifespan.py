@@ -30,6 +30,7 @@ from config.manager import get_config_manager
 from initialization import agent_presence_sync
 from initialization import lifespan_shutdown as shutdown_steps
 from initialization.background_workers import start_background_workers
+from initialization.mesh_reembed_startup import start_mesh_reembed_consumer
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
 from initialization.system_knowledge_import import start_system_knowledge_import
@@ -1808,20 +1809,19 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
 async def _init_mesh_brain_scheduler(app: FastAPI) -> None:
     """Start MeshBrainScheduler when explicitly enabled (#12816).
 
-    The scheduler was registered, fully described, and never started — its own
-    registry entry admitted "currently inert". This wires it, but DEFAULT-OFF.
+    Registered, described and never started; this wires it, but DEFAULT-OFF.
 
     Off by default is deliberate, not timidity: of its five jobs, `mesh_pruner`
     DELETES data on a 7-day cadence, and `node_promoter`/`edge_discoverer`
     mutate node and edge state. Establishing what mesh_pruner removes and under
-    which retention rule is a data-retention decision, not a wiring change, so
-    it must not be switched on as a side effect of fixing the wiring.
+    which retention rule is a data-retention decision, not a wiring change.
 
     start() returns as soon as it has spawned its own per-job tasks, and only
     spawns jobs whose component is present, so it is safe to await directly.
     """
     from autobot_shared.ssot_config import config as _cfg
 
+    await start_mesh_reembed_consumer(app)  # #20535: independent of the flag below
     if not _cfg.misc.mesh_brain_scheduler_enabled:
         logger.info("MeshBrainScheduler: disabled (AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED not set)")
         app.state.mesh_brain_scheduler = None

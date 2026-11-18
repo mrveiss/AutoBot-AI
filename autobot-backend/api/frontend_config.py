@@ -159,16 +159,16 @@ def _build_fallback_config() -> Dict[str, Any]:
     Returns:
         Complete fallback frontend configuration dict
     """
-    from config import unified_config_manager
+    from config import config_manager
 
-    backend_config = unified_config_manager.get_backend_config()
+    backend_config = config_manager.get_backend_config()
 
     # Get defaults from config manager
-    api_config = unified_config_manager.get_config_section("api") or {}
-    websocket_config = unified_config_manager.get_config_section("websocket") or {}
-    features_config = unified_config_manager.get_config_section("features") or {}
-    ui_config = unified_config_manager.get_config_section("ui") or {}
-    performance_config = unified_config_manager.get_config_section("performance") or {}
+    api_config = config_manager.get_config_section("api") or {}
+    websocket_config = config_manager.get_config_section("websocket") or {}
+    features_config = config_manager.get_config_section("features") or {}
+    ui_config = config_manager.get_config_section("ui") or {}
+    performance_config = config_manager.get_config_section("performance") or {}
 
     return {
         "project": _build_project_config(),
