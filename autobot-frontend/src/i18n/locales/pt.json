@@ -4544,6 +4544,7 @@
       "stepApproved": "Etapa aprovada",
       "stepSkipped": "Etapa ignorada",
       "rerunNotFound": "Não foi possível encontrar o fluxo de trabalho para executar novamente",
+      "draftDiscardedOnCompanySwitch": "Empresa alterada: o rascunho de fluxo de trabalho não guardado foi descartado e o construtor recarregado",
       "rerunning": "Executando novamente \"{name}\"",
       "rerunFailed": "Falha ao executar o fluxo de trabalho novamente",
       "notificationsSaved": "Configurações de notificação salvas"

@@ -4544,6 +4544,7 @@
       "stepApproved": "Schritt genehmigt",
       "stepSkipped": "Schritt übersprungen",
       "rerunNotFound": "Workflow für die erneute Ausführung nicht gefunden",
+      "draftDiscardedOnCompanySwitch": "Unternehmen gewechselt: Der ungespeicherte Workflow-Entwurf wurde verworfen und der Builder neu geladen",
       "rerunning": "„{name}“ wird erneut ausgeführt",
       "rerunFailed": "Workflow konnte nicht erneut ausgeführt werden",
       "notificationsSaved": "Benachrichtigungseinstellungen gespeichert"

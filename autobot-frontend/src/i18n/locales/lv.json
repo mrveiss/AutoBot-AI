@@ -4544,6 +4544,7 @@
       "stepApproved": "Solis apstiprināts",
       "stepSkipped": "Solis izlaists",
       "rerunNotFound": "Neizdevās atrast darbplūsmu atkārtotai palaišanai",
+      "draftDiscardedOnCompanySwitch": "Uzņēmums mainīts: nesaglabātais darbplūsmas melnraksts tika atmests un veidotājs pārlādēts",
       "rerunning": "Atkārtoti palaiž “{name}”",
       "rerunFailed": "Neizdevās atkārtoti palaist darbplūsmu",
       "notificationsSaved": "Paziņojumu iestatījumi saglabāti"

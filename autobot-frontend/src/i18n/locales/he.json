@@ -3950,6 +3950,7 @@
       "stepApproved": "השלב אושר",
       "stepSkipped": "השלב דולג",
       "rerunNotFound": "לא נמצא תהליך עבודה להפעלה חוזרת",
+      "draftDiscardedOnCompanySwitch": "החברה הוחלפה: טיוטת תהליך העבודה שלא נשמרה נמחקה והבונה נטען מחדש",
       "rerunning": "מפעיל מחדש את \"{name}\"",
       "rerunFailed": "ההפעלה החוזרת של תהליך העבודה נכשלה",
       "notificationsSaved": "הגדרות ההתראות נשמרו"

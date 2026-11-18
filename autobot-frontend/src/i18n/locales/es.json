@@ -4544,6 +4544,7 @@
       "stepApproved": "Paso aprobado",
       "stepSkipped": "Paso omitido",
       "rerunNotFound": "No se encontró el flujo de trabajo para volver a ejecutarlo",
+      "draftDiscardedOnCompanySwitch": "Empresa cambiada: se descartó el borrador de flujo de trabajo sin guardar y se recargó el constructor",
       "rerunning": "Volviendo a ejecutar «{name}»",
       "rerunFailed": "No se pudo volver a ejecutar el flujo de trabajo",
       "notificationsSaved": "Configuración de notificaciones guardada"

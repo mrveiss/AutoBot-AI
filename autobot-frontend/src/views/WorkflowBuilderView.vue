@@ -694,6 +694,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
+import { useWorkflowCompanySwitch } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -782,6 +783,7 @@ const {
   activeWorkflows,
   completedWorkflows,
   currentWorkflow,
+  workflowPlan,
   pendingApproval,
   orchestrationStatus,
   executionStrategies,
@@ -804,21 +806,10 @@ const {
   createWorkflowFromNaturalLanguage,
   executeApiTemplate,
   startWorkflow,
-  pauseWorkflow,
-  resumeWorkflow,
-  cancelWorkflow,
+  pauseWorkflow, resumeWorkflow, cancelWorkflow,
   stepsAwaitingApproval,
-  approveStep,
-  skipStep,
-  approvePlan,
-  rejectPlan,
-  addNode,
-  removeNode,
-  updateNodePosition,
-  connectNodes,
-  disconnectNodes,
-  clearCanvas,
-  exportCanvasToSteps,
+  approveStep, skipStep, approvePlan, rejectPlan,
+  addNode, removeNode, updateNodePosition, connectNodes, disconnectNodes, clearCanvas, exportCanvasToSteps,
   getWorkflowStatus,
   connectWebSocket,
   disconnectWebSocket,
@@ -1231,6 +1222,12 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnectWebSocket();
+});
+
+useWorkflowCompanySwitch({ // keeps this instance on a company switch (#21520): drop the draft, reload
+  companyId: () => String(route.params.companyId ?? ''), reload: refreshAll,
+  draft: { naturalLanguageInput, selectedStrategy, workflowPlan, pendingApproval, currentWorkflow, workflowNodes, selectedNodeId },
+  onDraftDiscarded: () => showToast(t('workflow.builder.draftDiscardedOnCompanySwitch'), 'info'),
 });
 
 // Watch for active workflow changes

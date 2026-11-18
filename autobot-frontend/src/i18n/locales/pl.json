@@ -4544,6 +4544,7 @@
       "stepApproved": "Krok zatwierdzony",
       "stepSkipped": "Krok pominięty",
       "rerunNotFound": "Nie znaleziono przepływu pracy do ponownego uruchomienia",
+      "draftDiscardedOnCompanySwitch": "Zmieniono firmę: niezapisany szkic przepływu pracy został odrzucony, a kreator załadowany ponownie",
       "rerunning": "Ponowne uruchamianie „{name}”",
       "rerunFailed": "Nie udało się ponownie uruchomić przepływu pracy",
       "notificationsSaved": "Zapisano ustawienia powiadomień"

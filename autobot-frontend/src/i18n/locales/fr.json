@@ -4544,6 +4544,7 @@
       "stepApproved": "Étape approuvée",
       "stepSkipped": "Étape ignorée",
       "rerunNotFound": "Workflow à relancer introuvable",
+      "draftDiscardedOnCompanySwitch": "Entreprise changée : le brouillon de workflow non enregistré a été abandonné et le constructeur rechargé",
       "rerunning": "Relance de « {name} »",
       "rerunFailed": "Échec de la relance du workflow",
       "notificationsSaved": "Paramètres de notification enregistrés"

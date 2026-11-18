@@ -276,6 +276,32 @@ describe('the company layout remounts its routed view on a company switch (#2150
     expect(m.wrapper.text()).not.toContain('Alpha')
   })
 
+  // #21502 AC3: the people view reads agents (org chart), contacts and teams; with the new company's
+  // requests all in flight, opening it must not surface a single person of the previous company.
+  it('shows none of the previous company\'s people when the people view opens while the new company is in flight', async () => {
+    const m = await mountAt('llc-company-org-chart', 'c1')
+    await click(m, 'org-view-people')
+    expect(m.wrapper.text()).toContain(DATA.c1.contact)
+    const urls = [
+      '/api/llc/companies/c2/org-chart',
+      '/api/llc/contacts/c2/involved',
+      '/api/llc/companies/c2/teams',
+    ]
+    const holds = urls.map((url) => hold(url))
+
+    await switchTo(m, 'llc-company-org-chart', 'c2')
+    await click(m, 'org-view-people')
+
+    expect(m.wrapper.text()).not.toContain('Alpha')
+    const groups = m.wrapper.findComponent(OrgPeopleList).props('groups').map((g: { name: string }) => g.name)
+    expect(groups).not.toContain(DATA.c1.team)
+
+    holds.forEach((entry, i) => entry.resolve(tableAnswer(urls[i], 'c2')))
+    await flushPromises()
+    expect(m.wrapper.text()).toContain(DATA.c2.contact)
+    expect(m.wrapper.text()).not.toContain('Alpha')
+  })
+
   it('shows the failure, not the previous company, when the new company cannot be read', async () => {
     const m = await mountAt('llc-company-org-chart', 'c1')
     expect(m.wrapper.text()).toContain(DATA.c1.agent)

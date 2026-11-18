@@ -4801,6 +4801,7 @@
       "controlRefused": "Refused: only an administrator or the workflow's owner may control it",
       "stepSkipped": "Step skipped",
       "rerunNotFound": "Could not find workflow to re-run",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded and the builder reloaded",
       "rerunning": "Re-running \"{name}\"",
       "rerunFailed": "Failed to re-run workflow",
       "notificationsSaved": "Notification settings saved"
