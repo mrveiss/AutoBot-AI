@@ -58,6 +58,23 @@ branch_recently_pushed() {
     [ "$age_h" -lt "$BRANCH_MIN_AGE_HOURS" ]
 }
 
+# Return 0 (true) when <ref> has NO changes left to land on <base>: merging it
+# into <base> yields exactly <base>'s tree (#21798). A merged closing PR does
+# not prove this -- a branch can carry commits pushed after (or never part of)
+# that PR, and deleting it destroys them. Needs git >= 2.38 (`merge-tree
+# --write-tree`). A conflict (nonzero exit), an old git, or an unresolvable ref
+# all return 1 so the caller KEEPS the branch. Logs a SKIP line when kept.
+branch_has_no_unlanded_changes() {
+    local base="$1" ref="$2" merged base_tree
+    base_tree=$(git rev-parse --verify --quiet "${base}^{tree}" 2>/dev/null) || base_tree=""
+    merged=$(git merge-tree --write-tree "$base" "$ref" 2>/dev/null | head -1) || merged=""
+    if [ -n "$base_tree" ] && [ "$merged" = "$base_tree" ]; then
+        return 0
+    fi
+    echo "  SKIP (unlanded changes against ${base}, or merge not computable): ${ref}"
+    return 1
+}
+
 # Return 0 (true) when an open PR has this branch as its head. Requires an
 # authenticated `gh`. On any error it returns false (no open PR found) rather
 # than blocking cleanup -- callers combine it with other guards.
