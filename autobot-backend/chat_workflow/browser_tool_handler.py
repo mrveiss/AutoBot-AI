@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from typing import Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
@@ -309,6 +310,18 @@ def format_browser_result(
     return summary + state_block if state_block else summary
 
 
+_URL_SAFE_CHARS = ":/?#[]@!$&'()*+,;=%-._~"
+
+
+def displayed_url(url: Any) -> str:
+    """The post-redirect URL the page ended on, made safe to print: it is page-controlled (#21772).
+
+    Percent-encoding turns spaces, newlines and other non-URL characters into ``%XX``, so a crafted address cannot
+    carry a readable sentence or a line break into the prompt; the length is capped like the page text.
+    """
+    return urllib.parse.quote(str(url or ""), safe=_URL_SAFE_CHARS)[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS]
+
+
 def wrap_page_title(title: Any, url: str) -> str:
     """The page title behind the same trust boundary as page text: a page controls its own title (#21772)."""
     if not isinstance(title, str) or not title.strip():
@@ -341,7 +354,7 @@ def format_browser_action_text(
     if tool_name == "navigate":
         url = inner.get("url", params.get("url", ""))
         title = inner.get("title", "")
-        return f"Navigated to: {url}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
+        return f"Navigated to: {displayed_url(url)}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
             inner.get("text"), url
         )
 
