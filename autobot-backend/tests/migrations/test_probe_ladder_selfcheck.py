@@ -186,6 +186,8 @@ def test_observability_coverage():
         # that already exists, so the adoption re-run is a no-op
         "20261107_114",  # approvals pending internal-key-realign partial unique index (#20750): index-only,
         # the same category as 20261106_113; upgrade() returns early when the index exists
+        "20261118_115",  # approvals pending source-run-record-cleanup partial unique index (#21417): index-only,
+        # the same category as 20261107_114; upgrade() returns early when the index exists
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
