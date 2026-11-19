@@ -215,8 +215,11 @@ if [ ! -f "$PROJECT_ROOT/playwright-server.js" ]; then
     echo "⚠️  playwright-server.js not found in project root. Checking for it..."
     if [ -f "$PROJECT_ROOT/autobot-browser-worker/playwright-server.js" ]; then
         echo "📋 Copying playwright-server.js from autobot-browser-worker..."
-        cp "$PROJECT_ROOT/autobot-browser-worker/playwright-server.js" "$PROJECT_ROOT/playwright-server.js"
-        cp "$PROJECT_ROOT/autobot-browser-worker/session-store.js" "$PROJECT_ROOT/autobot-browser-worker/element-index.js" "$PROJECT_ROOT/"
+        # shellcheck source=scripts/lib/browser_worker_files.sh
+        source "$PROJECT_ROOT/scripts/lib/browser_worker_files.sh"
+        for f in $(browser_worker_files "$PROJECT_ROOT"); do
+            cp "$PROJECT_ROOT/autobot-browser-worker/$f" "$PROJECT_ROOT/"
+        done
     else
         echo "❌ playwright-server.js not found. Playwright container cannot start."
         echo "   Please ensure playwright-server.js exists in the project root."
