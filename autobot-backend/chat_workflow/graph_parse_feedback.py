@@ -62,3 +62,17 @@ def apply_parse_feedback(state: Dict[str, Any], update: Dict[str, Any], stream_c
         "parse_retries": retries + 1,
         "parse_retry_pending": True,
     }
+
+
+def inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages) -> dict:
+    """The state update of one inline (dispatching) generation pass of ``generate_response``."""
+    return {
+        "llm_response": llm_response or "",
+        "should_continue": should_continue,
+        "iteration_count": iteration,
+        "all_llm_responses": all_responses,
+        "tool_calls": parsed_tool_calls,
+        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
+        "workflow_messages": messages,
+        "tool_loop_warning": "",  # reset so a loop warning is only active for one cycle (#3254)
+    }

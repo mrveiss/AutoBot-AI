@@ -40,7 +40,7 @@ from chat_workflow.graph_hooks import (
     _emit_planned_agent_complete_hook,
     _emit_planned_agent_error_hooks,
 )
-from chat_workflow.graph_parse_feedback import INITIAL_PARSE_STATE, apply_parse_feedback
+from chat_workflow.graph_parse_feedback import INITIAL_PARSE_STATE, apply_parse_feedback, inline_update
 from chat_workflow.graph_planner import NO_PLAN, advance_after_tools, create_plan, with_plan_step
 from chat_workflow.graph_routes import route_after_judge  # noqa: F401  (re-exported: graph.route_after_judge)
 from chat_workflow.graph_tool_dispatch import (
@@ -598,20 +598,6 @@ def _carry_tool_results_into_prompt(manager, ctx, state: ChatState) -> None:
     ctx.initial_prompt = with_plan_step(prompt, state)  # #21023
 
 
-def _inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages) -> dict:
-    """The state update of one inline (dispatching) generation pass of ``generate_response``."""
-    return {
-        "llm_response": llm_response or "",
-        "should_continue": should_continue,
-        "iteration_count": iteration,
-        "all_llm_responses": all_responses,
-        "tool_calls": parsed_tool_calls,
-        "execution_history": list(ctx.execution_history),  # #19715: the next prompt is built from this
-        "workflow_messages": messages,
-        "tool_loop_warning": "",  # reset so a loop warning is only active for one cycle (#3254)
-    }
-
-
 async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     """Run one LLM iteration: call LLM, stream response, parse tool calls.
 
@@ -696,7 +682,7 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         session_id=session_id,
     )
 
-    update = _inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages)
+    update = inline_update(ctx, llm_response, should_continue, iteration, all_responses, parsed_tool_calls, messages)
     return apply_parse_feedback(state, update, stream_cb)  # #21843
 
 
