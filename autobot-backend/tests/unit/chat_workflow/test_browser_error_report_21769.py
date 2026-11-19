@@ -81,3 +81,10 @@ def test_an_echoed_url_carries_no_query_string_or_fragment():
 def test_a_malformed_url_is_still_stripped_of_its_query():
     report = build_browser_error_report("navigate", {"url": "http://[bad?token=zzz"}, TimeoutError("x"))
     assert "zzz" not in report["url"]
+
+
+def test_a_credential_in_the_username_position_is_masked():
+    report = build_browser_error_report(
+        "navigate", {"url": "https://opaque-token@example.test/path"}, TimeoutError("x")
+    )
+    assert "opaque-token" not in report["url"] and "example.test/path" in report["url"]

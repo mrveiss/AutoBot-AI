@@ -22,7 +22,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from autobot_shared.env_utils import env_int
-from autobot_shared.secret_redaction import redact_text, redact_url_credentials
+from autobot_shared.secret_redaction import redact_text, redact_url_credentials, redact_url_userinfo
 
 # Upper bound on the echoed selector/URL so a pathological parameter cannot bloat the prompt.
 BROWSER_ERROR_ECHO_MAX_CHARS = env_int("CHAT_BROWSER_ERROR_ECHO_MAX_CHARS", default=200)
@@ -82,7 +82,9 @@ def _echo(value: Any, *, is_url: bool) -> str | None:
     if not isinstance(value, str) or not value:
         return None
     cleaned = _CONTROL_RE.sub(" ", _without_query(value) if is_url else value)[:BROWSER_ERROR_ECHO_MAX_CHARS]
-    return redact_text(redact_url_credentials(cleaned) if is_url else cleaned)
+    if is_url:  # a credential can sit in the username position (https://<token>@host), so mask it too
+        cleaned = redact_url_credentials(redact_url_userinfo(cleaned, mask_username=True))
+    return redact_text(cleaned)
 
 
 def build_browser_error_report(tool_name: str, params: dict[str, Any], error: BaseException) -> dict[str, Any]:
