@@ -28,20 +28,26 @@ def _refuse(detail: str) -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, detail)
 
 
-async def request_kb_wipe(current_user: dict, session: "AsyncSession") -> dict:
-    """Propose (or reuse) the pending wipe approval for an admin user and return its reference. Deletes nothing.
+def require_attributed_admin(current_user: dict, what: str = "a knowledge wipe") -> str:
+    """The user id of an admin caller who is a person; 403 otherwise. Shared by every knowledge proposal (#21383).
 
-    403 for a caller that is not an admin, or whose id is not a user id (a service key or a run token): the
-    proposal must name a person, because the approver is checked against that person (four eyes).
+    The proposal must name a person, because the approver is checked against that person (four eyes). A service
+    key or a run token is refused before any plan is read or proposal row exists.
     """
     if not is_admin_role(current_user.get("role")):
-        raise _refuse("Requesting a knowledge wipe needs the admin role")
+        raise _refuse(f"Requesting {what} needs the admin role")
     requester = current_user.get("id") or current_user.get("user_id")
     if not requester:
         raise _refuse("The proposal cannot be attributed to a verified user")
-    if requester_id(str(requester)) is None:  # refused before any plan is read or proposal row exists
+    if requester_id(str(requester)) is None:
         raise _refuse("The proposal needs a requester that is a user id")
-    approval = await propose_kb_wipe(session, str(requester), await plan_kb_wipe())
+    return str(requester)
+
+
+async def request_kb_wipe(current_user: dict, session: "AsyncSession") -> dict:
+    """Propose (or reuse) the pending wipe approval for an admin user and return its reference. Deletes nothing."""
+    requester = require_attributed_admin(current_user)
+    approval = await propose_kb_wipe(session, requester, await plan_kb_wipe())
     return {"approval_id": str(approval.id), "status": approval.status, "action": ACTION}
 
 

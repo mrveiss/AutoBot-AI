@@ -8,6 +8,7 @@
  *
  * @author mrveiss
  */
+import type { CollectionDeleteProposal } from './collectionDeleteProposal'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -498,13 +499,11 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Bulk delete multiple documents
-   * Issue #552: Note - Backend uses collection-based bulk delete at
-   * POST /api/knowledge_base/collections/{collection_id}/bulk-delete
-   * This endpoint may need adjustment based on collection context
+   * Ask for a bulk delete (#21383): the backend only files a proposal for approval, it deletes nothing.
+   * Issue #552: collection-based, POST /api/knowledge_base/collections/{collection_id}/bulk-delete
    */
-  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<{ success: boolean; deleted_count: number }> {
-    const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
+  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<CollectionDeleteProposal> {
+    const response = await this.post<CollectionDeleteProposal>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
       fact_ids: documentIds
     })
     return response.data
