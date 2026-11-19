@@ -31,7 +31,7 @@ from services.approval_gate_service import ApprovalGateService
 from services.connector_credential_cleanup_action import ACTION as CONNECTOR_CREDENTIAL_STRIP
 from services.connector_credential_cleanup_action import register_connector_credential_strip
 from services.connector_credential_scan import CredentialFinding, CredentialScanReport, scan_connector_credentials
-from services.kb_cleanup_proposals import cleanup_proposal, find_pending_proposal, record_cleanup_proposed
+from services.kb_cleanup_proposals import cleanup_proposal, create_proposal_once, record_cleanup_proposed
 
 router = APIRouter(prefix="/knowledge_base/connector_credentials", dependencies=[Depends(check_admin_permission)])
 
@@ -114,9 +114,13 @@ async def propose_connector_credential_cleanup(
     """
     finding = await _removable_finding(body.connector_id)
     service = ApprovalGateService(session)
-    approval = await find_pending_proposal(service, CONNECTOR_CREDENTIAL_STRIP, "connector_id", finding.connector_id)
-    if approval is None:
-        approval = await _create_proposal(service, current_user, finding)
+    approval = await create_proposal_once(
+        service,
+        CONNECTOR_CREDENTIAL_STRIP,
+        "connector_id",
+        finding.connector_id,
+        lambda: _create_proposal(service, current_user, finding),
+    )
     return ConnectorCredentialCleanupResponse(
         approval_id=str(approval.id),
         status=approval.status,

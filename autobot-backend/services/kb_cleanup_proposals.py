@@ -14,9 +14,10 @@ here is what every such proposal and every handler outcome has in common.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
@@ -55,6 +56,25 @@ async def find_pending_proposal(service: "ApprovalGateService", action: str, key
         limit=1,
     )
     return found[0] if found else None
+
+
+async def create_proposal_once(
+    service: "ApprovalGateService", action: str, key: str, value: str, create: Callable[[], Awaitable["Approval"]]
+) -> "Approval":
+    """The pending proposal for the target, creating it with *create* when none is open.
+
+    The read-then-create can race; the partial unique index per action (``uq_approvals_pending_*``, #20992)
+    makes the loser's insert fail. That loser rolls back and returns the winner's proposal.
+    """
+    if (existing := await find_pending_proposal(service, action, key, value)) is not None:
+        return existing
+    try:
+        return await create()
+    except IntegrityError:  # a concurrent request created it first
+        await service.session.rollback()
+        if (winner := await find_pending_proposal(service, action, key, value)) is None:
+            raise
+        return winner
 
 
 async def record_cleanup_proposed(approval_id: uuid.UUID, current_user: dict, *, operation: str, resource: str) -> None:

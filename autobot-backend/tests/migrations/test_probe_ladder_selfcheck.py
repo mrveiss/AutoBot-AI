@@ -188,6 +188,8 @@ def test_observability_coverage():
         # the same category as 20261106_113; upgrade() returns early when the index exists
         "20261118_115",  # approvals pending source-run-record-cleanup partial unique index (#21417): index-only,
         # the same category as 20261107_114; upgrade() returns early when the index exists
+        "20261119_116",  # approvals pending connector-credential-strip and empty-collection-delete partial unique
+        # indexes (#20992): index-only, the same category as 20261118_115; an existing index is skipped
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

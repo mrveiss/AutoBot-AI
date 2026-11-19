@@ -72,6 +72,8 @@ async def scan_empty_collections() -> EmptyCollectionReport:
 
 async def delete_empty_collection(name: str) -> tuple[bool, str | None]:
     """Delete *name* if it exists and is still empty; (done, reason). Only the approval handler calls this."""
+    if not is_kb_collection(name):  # defence in depth: an approval's context is data, not a registry
+        return False, "the collection is not a knowledge-base collection; nothing deleted"
     client = await get_async_chromadb_client()
     collection = await client.get_collection_or_none(name)
     if collection is None:

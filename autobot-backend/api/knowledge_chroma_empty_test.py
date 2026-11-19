@@ -256,3 +256,12 @@ async def test_a_failed_outcome_audit_is_logged_and_shown_on_the_approval(chroma
 
 async def _noop():
     return None
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_collection_named_in_an_approval_is_never_deleted(chroma):
+    """Defence in depth (#20992): the deletion re-checks the registry, whatever the approval's context says."""
+    client = chroma({_FOREIGN: 0})
+    done, reason = await svc.delete_empty_collection(_FOREIGN)
+    assert done is False and "not a knowledge-base collection" in reason
+    assert client.deleted == [] and _FOREIGN in client.collections

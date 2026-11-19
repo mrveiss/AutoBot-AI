@@ -24,10 +24,11 @@ from api.schemas_knowledge_chroma import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
+from models.approval import Approval
 from services.approval_gate_service import ApprovalGateService
 from services.chroma_empty_collections import ACTION as EMPTY_COLLECTION_DELETE
 from services.chroma_empty_collections import register_empty_collection_delete, scan_empty_collections
-from services.kb_cleanup_proposals import cleanup_proposal, find_pending_proposal, record_cleanup_proposed
+from services.kb_cleanup_proposals import cleanup_proposal, create_proposal_once, record_cleanup_proposed
 
 router = APIRouter(prefix="/empty-collections", dependencies=[Depends(check_admin_permission)])
 
@@ -40,6 +41,26 @@ async def list_empty_collections() -> EmptyCollectionsResponse:
     """Collections holding zero vectors, plus those that could not be counted (read-only)."""
     report = await scan_empty_collections()
     return EmptyCollectionsResponse(total=report.total, empty=report.empty, unreadable=report.unreadable)
+
+
+async def _create_proposal(service: ApprovalGateService, current_user: dict, collection: str) -> Approval:
+    """Audit-log, then create, the pending proposal (the audit row names the approval it precedes)."""
+    approval_id = uuid.uuid4()
+    await record_cleanup_proposed(
+        approval_id,
+        current_user,
+        operation="chroma.empty_collection_delete_proposed",
+        resource=f"chroma:{collection}",
+    )
+    return await service.create_approval(
+        **cleanup_proposal(
+            current_user,
+            title=f"Delete empty vector collection: {collection}",
+            description="The collection holds zero vectors. Approving deletes it; it is re-checked first.",
+            context={"action": EMPTY_COLLECTION_DELETE, "collection": collection},
+            approval_id=approval_id,
+        )
+    )
 
 
 @router.post("/cleanup-requests", response_model=EmptyCollectionCleanupResponse, status_code=status.HTTP_201_CREATED)
@@ -56,24 +77,13 @@ async def propose_empty_collection_cleanup(
     if body.collection not in (await scan_empty_collections()).empty:
         raise HTTPException(status.HTTP_409_CONFLICT, "That collection is not an empty collection")
     service = ApprovalGateService(session)
-    approval = await find_pending_proposal(service, EMPTY_COLLECTION_DELETE, "collection", body.collection)
-    if approval is None:
-        approval_id = uuid.uuid4()
-        await record_cleanup_proposed(
-            approval_id,
-            current_user,
-            operation="chroma.empty_collection_delete_proposed",
-            resource=f"chroma:{body.collection}",
-        )
-        approval = await service.create_approval(
-            **cleanup_proposal(
-                current_user,
-                title=f"Delete empty vector collection: {body.collection}",
-                description="The collection holds zero vectors. Approving deletes it; it is re-checked first.",
-                context={"action": EMPTY_COLLECTION_DELETE, "collection": body.collection},
-                approval_id=approval_id,
-            )
-        )
+    approval = await create_proposal_once(
+        service,
+        EMPTY_COLLECTION_DELETE,
+        "collection",
+        body.collection,
+        lambda: _create_proposal(service, current_user, body.collection),
+    )
     return EmptyCollectionCleanupResponse(
         approval_id=str(approval.id),
         status=approval.status,
