@@ -41,7 +41,6 @@ from typing import Any
 
 from autobot_shared.env_utils import env_float, env_int, env_registered
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.spend_recording import report_spend
 from autobot_shared.time_utils import now_utc
 from autobot_shared.tool_catalogue import (
     CODE_EXEC_TOOLS,
@@ -64,13 +63,15 @@ from autobot_shared.verifier_degradation import (
     parse_probability,
     parse_rationale,
 )
-from autobot_shared.verifier_model import configured_verifier_model, resolve_and_chat
+from autobot_shared.verifier_model import (  # noqa: F401 - VERIFIER_SPEND_SITE is re-exported
+    VERIFIER_SPEND_SITE,
+    configured_verifier_model,
+    resolve_and_chat,
+)
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
 
-# Where the verifier's spend is attributed (#19650).
-VERIFIER_SPEND_SITE = "pre_action_verifier"
 
 # ---------------------------------------------------------------------------
 # Module-level threshold constants (all env-configurable, never hardcoded)
@@ -328,7 +329,7 @@ async def _call_verifier_once(
         import asyncio as _asyncio
 
         # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
-        request, response = await _asyncio.wait_for(
+        _request, response = await _asyncio.wait_for(
             resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
             timeout=VERIFIER_TIMEOUT_S,
         )
@@ -349,7 +350,6 @@ async def _call_verifier_once(
         )
         return observation
 
-    await report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata)
     return VerifierObservation.from_reply(
         response.content or "",
         provider_used=provider.provider_name,

@@ -22,8 +22,12 @@ from typing import Any
 
 from autobot_shared.env_utils import env_registered
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.spend_recording import report_spend
 
 logger = get_logger(__name__)
+
+#: Where the verifier's spend is attributed (#19650).
+VERIFIER_SPEND_SITE = "pre_action_verifier"
 
 #: Seconds a model-availability reading is reused before the provider is asked again.
 VERIFIER_MODEL_CHECK_TTL_S: int = env_registered("AUTOBOT_VERIFIER_MODEL_CHECK_TTL_SECONDS")
@@ -83,7 +87,7 @@ async def resolve_verifier_model(provider: Any) -> str | None:
 async def resolve_and_chat(
     provider: Any, system_prompt: str, user_prompt: str, tool_name: str, max_tokens: int, attempt: dict[str, Any]
 ) -> tuple[Any, Any]:
-    """Resolve the verifier model, record it in *attempt*, then run the chat call; returns (request, response)."""
+    """Resolve the model, record it in *attempt*, chat, and record the spend; returns (request, response)."""
     from autobot_shared.ssot_constants import CategoryDefaults
     from llm_shared.models import LLMRequest
 
@@ -98,7 +102,9 @@ async def resolve_and_chat(
         temperature=0.1,  # Low temperature for adversarial consistency
         metadata={"purpose": "pre_action_verifier", "tool": tool_name},
     )
-    return request, await provider.chat_completion(request)
+    response = await provider.chat_completion(request)
+    await report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata)  # #16924 the call records itself
+    return request, response
 
 
 def verifier_model_status() -> dict[str, Any]:
