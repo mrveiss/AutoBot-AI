@@ -153,6 +153,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_BROWSER_SEARCH_SNIPPET_MAX_CHARS",
+        type=int,
+        default=500,
+        description=(
+            "Cap on the snippet a web_search result carries from the browser worker's search-engine scrape; "
+            "whitespace runs are collapsed first (#21877). Read by the browser worker only."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_BROWSER_NAVIGATE_EXCERPT_TIMEOUT_MS",
         type=int,
         default=2000,
@@ -166,12 +179,27 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
+        name="AUTOBOT_RLM_EVAL_TIMEOUT_MS",
+        type=int,
+        default=10000,
+        description=(
+            "Milliseconds the RLM response-quality evaluator's LLM call may take (#21845). On expiry the "
+            "verdict is INDETERMINATE with no score, never a passing one."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_INVALID_CALL_LIMIT",
         type=int,
         default=2,
         description=(
-            "Times one chat turn tells the model its TOOL_CALL did not parse and asks again (#21843); "
-            "past it the user gets the readable no-answer fallback, never the raw markup."
+            "Invalid tool calls one chat turn tolerates (#20848, #21843): the times it tells the model its "
+            "TOOL_CALL did not parse and asks again, on the graph path and the legacy loop alike; past it the "
+            "user gets the readable no-answer fallback, never the raw markup. Replaces "
+            "AUTOBOT_CHAT_PARSE_RETRY_BUDGET."
         ),
         component="chat_workflow",
     )

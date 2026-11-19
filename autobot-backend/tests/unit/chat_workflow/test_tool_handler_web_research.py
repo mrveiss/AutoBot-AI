@@ -274,7 +274,7 @@ async def test_dispatch_web_search_all_backends_empty_returns_actionable_message
         ),
         patch(
             "chat_workflow.tool_handler._emit_after_tool_execute",
-            new=AsyncMock(side_effect=lambda _tool, result, *_rest: result),
+            new=AsyncMock(side_effect=lambda _tool, result, *_rest, **_kw: result),
         ),
     ):
         messages = await _drain_dispatch(

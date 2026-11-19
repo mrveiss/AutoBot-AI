@@ -8,6 +8,7 @@ const express = require('express');
 const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://localhost:5173';
 const { SessionStore } = require('./session-store');
 const { collectIndexedElements, resolveElementByIndex, pageExcerpt } = require('./element-index');
+const { extractSnippet } = require('./search-snippet');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
@@ -433,13 +434,13 @@ app.post('/search', async (req, res) => {
           if (titleElement) {
             const title = await titleElement.textContent();
             const url = await titleElement.getAttribute('href');
-            const snippet = '';
+            const snippet = await extractSnippet(element);
 
             if (url && title && title.trim()) {
               results.push({
                 title: title.trim(),
                 url: url.startsWith('http') ? url : 'https://duckduckgo.com' + url,
-                snippet: snippet.trim(),
+                snippet,
                 source: 'DuckDuckGo'
               });
             }

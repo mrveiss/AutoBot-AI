@@ -79,6 +79,7 @@ from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, disp
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
+from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -218,31 +219,6 @@ _SPILL_MISS_ADVICE: dict[str, str] = {
 _SPILL_MISS_UNKNOWN_ADVICE = (
     "The read did not report why it failed. This may be transient — retrying once is reasonable."
 )
-
-WEB_SEARCH_SCHEMA: dict = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "fetch_full": {
-            "type": "boolean",
-            "description": (
-                "When true, fetches the full markdown of each result page "
-                "in addition to returning search snippets. Default false."
-            ),
-        },
-        "max_pages": {
-            "type": "integer",
-            "description": (
-                "Maximum number of search results to return. Applies to both "
-                "snippet mode (fetch_full=false) and full-fetch mode "
-                "(fetch_full=true). Default 5 (#7479)."
-            ),
-            "minimum": 1,
-            "maximum": 10,
-        },
-    },
-    "required": ["query"],
-}
 
 # Issue #7509: Web research tool schemas — scrape, crawl, map, extract.
 # Agents have admin-grade power: no server-side caps on depth/pages/robots.
