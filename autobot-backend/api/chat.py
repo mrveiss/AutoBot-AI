@@ -64,7 +64,7 @@ from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
-from chat_history.deduplication import parse_message_timestamp
+from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
@@ -1632,7 +1632,7 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     final_merged = _process_streaming_groups(merged)
 
     # Sort by timestamp to maintain chronological order
-    final_merged.sort(key=lambda m: m.get("timestamp", ""))
+    final_merged.sort(key=timestamp_sort_key)  # #21846: old and new timestamp formats order together
 
     logger.debug(
         f"Merged messages: {len(existing)} existing + {len(new)} new = "
