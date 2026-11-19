@@ -1211,7 +1211,8 @@ def route_after_reflection(state: ChatState) -> str:
         return "inline_judge_response"
 
     # Use default config ceiling — the actual config is in the node
-    budget = state.get("reflection_max") or RLMConfig().max_reflections  # the limit the node ran under (#21845)
+    budget = state.get("reflection_max")  # the limit the node ran under, zero included (#21845)
+    budget = RLMConfig().max_reflections if budget is None else budget
     if wants_another_pass(history[-1], state.get("reflection_count", 0), budget):
         return "generate_response"
     return "inline_judge_response"

@@ -35,7 +35,8 @@ async def test_an_evaluator_failure_is_flagged_and_carries_a_hint():
 
 def test_a_failed_evaluator_does_not_send_the_turn_back_to_generation():
     history = [_failed().to_dict()]
-    assert route_after_reflection({"reflection_history": history, "reflection_count": 1}) == "inline_judge_response"
+    state = {"reflection_history": history, "llm_response": "an answer", "reflection_count": 1}
+    assert route_after_reflection(state) == "inline_judge_response"
 
 
 def test_a_real_indeterminate_judgement_is_still_accepted():
@@ -53,6 +54,7 @@ def test_the_router_reads_the_limit_the_reflect_node_ran_under():
     state = {"reflection_history": history, "llm_response": "an answer", "reflection_count": 2, "reflection_max": 2}
     assert route_after_reflection(state) == "inline_judge_response"
     assert route_after_reflection({**state, "reflection_max": 5}) == "generate_response"
+    assert route_after_reflection({**state, "reflection_count": 1, "reflection_max": 0}) == "inline_judge_response"
     update = reflection_update({"reflection_count": 0}, _failed(), history, 7)
     assert update["reflection_max"] == 7 and update["reflection_count"] == 1
 
