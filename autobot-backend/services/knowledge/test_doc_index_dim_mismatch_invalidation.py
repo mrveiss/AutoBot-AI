@@ -69,3 +69,20 @@ async def test_a_pending_reindex_flag_is_preserved_without_a_new_bump():
         await resolve_collection(indexer, "m", 8)
     bump.assert_not_awaited()
     assert indexer._needs_reindex is True
+
+
+@pytest.mark.asyncio
+async def test_a_failed_bump_does_not_replace_the_resolve_exception():
+    indexer = _Indexer(recreate=True, fail=True)
+    with patch(_BUMP, new=AsyncMock(side_effect=OSError("redis down"))):
+        with pytest.raises(RuntimeError, match="create failed"):
+            await resolve_collection(indexer, "m", 8)
+    assert indexer._needs_reindex is True
+
+
+@pytest.mark.asyncio
+async def test_a_failed_bump_after_a_good_resolve_still_raises():
+    indexer = _Indexer(recreate=True)
+    with patch(_BUMP, new=AsyncMock(side_effect=OSError("redis down"))):
+        with pytest.raises(OSError):
+            await resolve_collection(indexer, "m", 8)

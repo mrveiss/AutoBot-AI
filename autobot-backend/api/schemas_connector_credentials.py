@@ -16,7 +16,7 @@ class ConnectorCredentialFindingResponse(BaseModel):
     connector_id: str
     connector_type: str
     fields: list[str]
-    secret_backed: bool
+    has_secrets_store_copy: bool
 
 
 class ConnectorCredentialScanResponse(BaseModel):
@@ -24,8 +24,8 @@ class ConnectorCredentialScanResponse(BaseModel):
 
     scanned: int
     affected: int
-    with_secret_copy: int
-    without_secret_copy: int
+    with_store_copy_count: int
+    without_store_copy_count: int
     findings: list[ConnectorCredentialFindingResponse]
     unscannable_ids: list[str]
 

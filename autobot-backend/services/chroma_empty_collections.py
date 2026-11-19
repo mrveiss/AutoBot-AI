@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Zero-count Chroma collections: a read-only report and a removal that needs an approved request (#19725).
+"""Zero-count knowledge-base Chroma collections: a read-only report, removal only after approval (#19725).
 
 The knowledge health scan reads Redis facts only, so empty vector collections never showed up as a finding.
 ``scan_empty_collections`` lists them (and the collections it could not read, which are NOT reported as
@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.graph_buckets import FACT_VECTOR_COLLECTIONS, section_for
 from services.approval_execution import register_post_approval_action
 from services.kb_cleanup_proposals import record_cleanup_outcome, require_context
 from utils.async_chromadb_client import get_async_chromadb_client
@@ -34,6 +35,15 @@ ACTION = "chroma_empty_collection_delete"
 PROPOSED_BY = "api.knowledge_chroma_empty"
 
 
+def is_kb_collection(name: str) -> bool:
+    """True for a collection the knowledge base owns: a graph bucket section or the fact-vector collection.
+
+    The registry is ``knowledge.graph_buckets``; a collection outside it (another subsystem's, a cache, a
+    scratch benchmark) is never reported here, so it can never be proposed for deletion from this surface.
+    """
+    return section_for(name) is not None or name in FACT_VECTOR_COLLECTIONS
+
+
 @dataclass
 class EmptyCollectionReport:
     """``unreadable`` collections could not be counted: never read them as empty."""
@@ -44,10 +54,10 @@ class EmptyCollectionReport:
 
 
 async def scan_empty_collections() -> EmptyCollectionReport:
-    """Count every collection and name those holding zero vectors (read-only)."""
+    """Count every knowledge-base collection and name those holding zero vectors (read-only)."""
     client = await get_async_chromadb_client()
     report = EmptyCollectionReport()
-    for name in sorted(await client.list_collections()):
+    for name in sorted(n for n in await client.list_collections() if is_kb_collection(n)):
         report.total += 1
         try:
             count = await (await client.get_collection(name)).count()
@@ -89,5 +99,7 @@ async def execute_empty_collection_delete(approval: "Approval", session: "AsyncS
 
 
 def register_empty_collection_delete() -> None:
-    """Idempotent. Server-only: only the proposer route may create this approval."""
-    register_post_approval_action(ACTION, execute_empty_collection_delete, proposed_by=PROPOSED_BY, server_only=True)
+    """Idempotent. Server-only and admin-decided: this approves deleting a stored vector collection."""
+    register_post_approval_action(
+        ACTION, execute_empty_collection_delete, proposed_by=PROPOSED_BY, server_only=True, admin_only=True
+    )

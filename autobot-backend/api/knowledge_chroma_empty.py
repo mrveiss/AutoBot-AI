@@ -12,6 +12,8 @@ The POST creates a PENDING approval and deletes nothing; the deletion runs only 
 handler after a human approves (#17038).
 """
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +27,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from services.approval_gate_service import ApprovalGateService
 from services.chroma_empty_collections import ACTION as EMPTY_COLLECTION_DELETE
 from services.chroma_empty_collections import register_empty_collection_delete, scan_empty_collections
-from services.kb_cleanup_proposals import cleanup_proposal
+from services.kb_cleanup_proposals import cleanup_proposal, find_pending_proposal, record_cleanup_proposed
 
 router = APIRouter(prefix="/empty-collections", dependencies=[Depends(check_admin_permission)])
 
@@ -53,14 +55,25 @@ async def propose_empty_collection_cleanup(
     """
     if body.collection not in (await scan_empty_collections()).empty:
         raise HTTPException(status.HTTP_409_CONFLICT, "That collection is not an empty collection")
-    approval = await ApprovalGateService(session).create_approval(
-        **cleanup_proposal(
+    service = ApprovalGateService(session)
+    approval = await find_pending_proposal(service, EMPTY_COLLECTION_DELETE, "collection", body.collection)
+    if approval is None:
+        approval_id = uuid.uuid4()
+        await record_cleanup_proposed(
+            approval_id,
             current_user,
-            title=f"Delete empty vector collection: {body.collection}",
-            description="The collection holds zero vectors. Approving deletes the collection; it is re-checked first.",
-            context={"action": EMPTY_COLLECTION_DELETE, "collection": body.collection},
+            operation="chroma.empty_collection_delete_proposed",
+            resource=f"chroma:{body.collection}",
         )
-    )
+        approval = await service.create_approval(
+            **cleanup_proposal(
+                current_user,
+                title=f"Delete empty vector collection: {body.collection}",
+                description="The collection holds zero vectors. Approving deletes it; it is re-checked first.",
+                context={"action": EMPTY_COLLECTION_DELETE, "collection": body.collection},
+                approval_id=approval_id,
+            )
+        )
     return EmptyCollectionCleanupResponse(
         approval_id=str(approval.id),
         status=approval.status,

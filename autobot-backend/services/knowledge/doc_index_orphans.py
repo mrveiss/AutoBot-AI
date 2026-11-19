@@ -63,12 +63,30 @@ async def resolve_collection(indexer: Any, model_name: str, embed_dim: Any) -> A
     """
     prior, indexer._needs_reindex = indexer._needs_reindex, False
     try:
-        return await asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim)
-    finally:
-        recreated = indexer._needs_reindex
-        indexer._needs_reindex = prior or recreated
-        if recreated:
-            await _bump_after_recreate()
+        resolved = await asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim)
+    except BaseException:
+        await _bump_if_recreated(indexer, prior, keep_error=True)
+        raise
+    await _bump_if_recreated(indexer, prior, keep_error=False)
+    return resolved
+
+
+async def _bump_if_recreated(indexer: Any, prior: bool, *, keep_error: bool) -> None:
+    """Restore the reindex flag and invalidate if the resolve recreated the collection.
+
+    With *keep_error* the resolve itself failed: an invalidation failure is logged, never raised over the
+    resolve's own (root-cause) exception.
+    """
+    recreated = indexer._needs_reindex
+    indexer._needs_reindex = prior or recreated
+    if not recreated:
+        return
+    try:
+        await _bump_after_recreate()
+    except Exception:
+        if not keep_error:
+            raise
+        logger.exception("Cache invalidation after the docs-collection recreate failed")
 
 
 @invalidates_retrieval_caches("docs_collection_dropped")

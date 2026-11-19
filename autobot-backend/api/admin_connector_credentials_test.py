@@ -9,7 +9,7 @@ import uuid
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 import api.admin_connector_credentials as route
@@ -119,9 +119,9 @@ def test_the_scan_reports_counts_and_field_names_never_a_value(world):
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert (body["scanned"], body["affected"], body["with_secret_copy"]) == (3, 1, 1)
+    assert (body["scanned"], body["affected"], body["with_store_copy_count"]) == (3, 1, 1)
     assert body["findings"] == [
-        {"connector_id": "c1", "connector_type": "gitea", "fields": ["token"], "secret_backed": True}
+        {"connector_id": "c1", "connector_type": "gitea", "fields": ["token"], "has_secrets_store_copy": True}
     ]
     assert body["unscannable_ids"] == ["c3"], "an unregistered type is reported as unchecked, not as clean"
     assert _SECRET_VALUE not in response.text
@@ -139,10 +139,9 @@ def test_a_non_admin_is_refused_on_both_routes(world):
         assert client.post(f"{_URL}/cleanup-requests", json={"connector_id": "c1"}).status_code in (401, 403)
 
 
-def test_a_proposal_is_pending_names_rotation_and_rewrites_nothing(world, monkeypatch):
+def test_a_proposal_is_pending_names_rotation_and_rewrites_nothing(world, chain):
     redis = world({"c1": _record()})
     before = dict(redis.data)
-    monkeypatch.setattr(ApprovalGateService, "_notify", lambda self, event, approval: _noop())
     session = FakeAsyncSession(assign_ids=uuid.uuid4)
 
     with _as_admin():
@@ -231,6 +230,53 @@ async def test_an_approved_strip_is_refused_when_the_secrets_store_lost_the_cred
     done, reason = await scan.strip_sensitive_fields("c1")
     assert done is False and "secrets store" in reason
     assert _SECRET_VALUE in redis.data["connector:c1"], "the only remaining copy is never removed"
+
+
+@pytest.mark.asyncio
+async def test_a_proposal_is_audit_logged_when_created(world, chain, monkeypatch):
+    world({"c1": _record()})
+    rows = []
+
+    async def _record_row(operation, **kwargs):
+        rows.append((operation, kwargs))
+        return True
+
+    monkeypatch.setattr("services.kb_cleanup_proposals.audit_log", _record_row)
+    proposal = await _propose(ApprovalClaimSession())
+    operation, kwargs = rows[0]
+    assert operation == "connector_credentials.strip_proposed"
+    assert kwargs["details"] == {"approval_id": proposal.approval_id} and kwargs["durable"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_audit_row_means_no_proposal(world, chain, monkeypatch):
+    world({"c1": _record()})
+
+    async def _refused(operation, **kwargs):
+        raise OSError("audit store down")
+
+    monkeypatch.setattr("services.kb_cleanup_proposals.audit_log", _refused)
+    session = ApprovalClaimSession()
+    with pytest.raises(HTTPException) as caught:
+        await _propose(session)
+    assert caught.value.status_code == 503
+    assert not [o for o in session.added if isinstance(o, Approval)]
+
+
+@pytest.mark.asyncio
+async def test_a_second_proposal_for_the_same_connector_returns_the_pending_one(world, chain):
+    world({"c1": _record()})
+    session = ApprovalClaimSession()
+    first = await _propose(session)
+    second = await _propose(session)
+    assert second.approval_id == first.approval_id
+    assert len([a for a in chain if a.endswith("_proposed")]) == 1
+
+
+def test_a_record_deleted_before_the_rewrite_gives_a_reason_not_a_crash(world):
+    redis = world({"c1": _record()})
+    del redis.data["connector:c1"]
+    assert scan._rewrite("c1", ("token",)) == "the connector record is gone"
 
 
 async def _noop():

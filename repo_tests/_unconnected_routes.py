@@ -86,6 +86,10 @@ EXTERNAL_CALLER_PREFIXES: dict[str, str] = {
     # #20910: the OAuth2 redirect URI (api/sso_auth.py GET /callback). The identity provider sends the user's browser
     # here after sign-in; nothing in this repository requests it.
     "/api/auth/sso/callback": "the identity provider's browser redirect after sign-in",
+    # #20992: the two knowledge-cleanup surfaces. Each reports read-only and PROPOSES a removal as an approval-gate
+    # request (#17038); an administrator calls them over HTTP and decides in the approvals queue. No UI yet.
+    "/api/knowledge_base/connector_credentials": "an administrator, over HTTP (no UI yet)",
+    "/api/knowledge/chroma/empty-collections": "an administrator, over HTTP (no UI yet)",
 }
 
 

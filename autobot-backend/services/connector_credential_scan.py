@@ -130,7 +130,10 @@ def _rewrite(connector_id: str, fields: tuple[str, ...]) -> str | None:
     with redis.pipeline() as pipe:
         try:
             pipe.watch(key)
-            record = json.loads(pipe.get(key))
+            raw = pipe.get(key)
+            if raw is None:
+                return "the connector record is gone"
+            record = json.loads(raw)
             record["config"] = {k: v for k, v in record["config"].items() if k not in fields}
             pipe.multi()
             pipe.set(key, json.dumps(record, ensure_ascii=False))
