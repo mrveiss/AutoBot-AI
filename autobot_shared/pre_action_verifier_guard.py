@@ -336,7 +336,9 @@ async def _call_verifier_once(
         observation = replace(
             failure_observation(exc),
             provider_used=provider.provider_name,
-            model_used=attempt.get("model") or configured_verifier_model(provider),
+            model_used=(
+                attempt["model"] if "model" in attempt else configured_verifier_model(provider)
+            ),  # None = default
         )
         logger.warning(
             "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",

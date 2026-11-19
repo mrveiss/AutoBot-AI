@@ -153,3 +153,26 @@ async def test_the_health_probe_is_not_applicable_when_the_verifier_is_disabled(
     with patch.object(guard, "VERIFIER_ENABLED", False):
         health = await verifier_model_health._verifier_model_health_probe()
     assert health.status == "not_applicable"
+
+
+def test_a_long_tool_name_cannot_push_the_prompt_past_a_tight_limit():
+    limit = verifier_prompt._TEMPLATE_MIN_CHARS + 4
+    with patch.object(verifier_prompt, "VERIFIER_PROMPT_MAX_CHARS", limit):
+        _, user = verifier_prompt._build_verifier_prompt("execute_command", {"a": "b"}, "why")
+    assert len(user) <= limit
+
+
+@pytest.mark.asyncio
+async def test_a_provider_default_request_that_times_out_does_not_claim_the_configured_model():
+    from autobot_shared import pre_action_verifier_guard as guard
+    from autobot_shared.ssot_config import config
+
+    provider = _provider(["other:latest"])
+    provider.chat_completion = AsyncMock(side_effect=asyncio.TimeoutError())
+    verifier_model._readings.clear()
+    with (
+        patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=provider)),
+        patch.object(config, "verifier_model", "verifier-test:1b"),
+    ):
+        obs = await guard._call_verifier_once("bash", {}, "why", None)
+    assert obs.model_used is None

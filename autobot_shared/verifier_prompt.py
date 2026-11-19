@@ -93,6 +93,8 @@ def _build_verifier_prompt(
     reason: str,
 ) -> tuple[str, str]:
     """Return (system_prompt, user_prompt); the user prompt never exceeds ``VERIFIER_PROMPT_MAX_CHARS`` (#21844)."""
+    slack = VERIFIER_PROMPT_MAX_CHARS - _TEMPLATE_MIN_CHARS  # a quarter of it bounds the tool name
+    tool_name = _cap(tool_name, min(VERIFIER_ARG_MAX_CHARS, slack // 4))
     fixed = len(_VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block="", reason=""))
     remaining = max(VERIFIER_PROMPT_MAX_CHARS - fixed, 0)
     reason = _cap(reason or "No reason provided.", min(VERIFIER_ARG_MAX_CHARS, remaining // 2))
