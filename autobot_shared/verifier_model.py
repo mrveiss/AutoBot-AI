@@ -80,6 +80,27 @@ async def resolve_verifier_model(provider: Any) -> str | None:
     return None
 
 
+async def resolve_and_chat(
+    provider: Any, system_prompt: str, user_prompt: str, tool_name: str, max_tokens: int, attempt: dict[str, Any]
+) -> tuple[Any, Any]:
+    """Resolve the verifier model, record it in *attempt*, then run the chat call; returns (request, response)."""
+    from autobot_shared.ssot_constants import CategoryDefaults
+    from llm_shared.models import LLMRequest
+
+    attempt["model"] = await resolve_verifier_model(provider)
+    request = LLMRequest(
+        model_name=attempt["model"],
+        messages=[
+            {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
+            {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
+        ],
+        max_tokens=max_tokens,
+        temperature=0.1,  # Low temperature for adversarial consistency
+        metadata={"purpose": "pre_action_verifier", "tool": tool_name},
+    )
+    return request, await provider.chat_completion(request)
+
+
 def verifier_model_status() -> dict[str, Any]:
     """The last reading per model, for the health probe: ``{model: available}`` (None = unknown)."""
     return {model: reading[1] for model, reading in _readings.items()}

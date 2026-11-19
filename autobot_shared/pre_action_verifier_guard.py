@@ -34,7 +34,7 @@ precedent).
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -42,7 +42,6 @@ from typing import Any
 from autobot_shared.env_utils import env_float, env_int, env_registered
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.spend_recording import report_spend
-from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
 from autobot_shared.tool_catalogue import (
     CODE_EXEC_TOOLS,
@@ -65,7 +64,7 @@ from autobot_shared.verifier_degradation import (
     parse_probability,
     parse_rationale,
 )
-from autobot_shared.verifier_model import configured_verifier_model, resolve_verifier_model
+from autobot_shared.verifier_model import configured_verifier_model, resolve_and_chat
 from autobot_shared.verifier_prompt import _build_verifier_prompt  # noqa: F401  (re-export, #17306)
 
 logger = get_logger(__name__)
@@ -318,33 +317,27 @@ async def _call_verifier_once(
     switches it -- but the caller now resolves it through policy instead of
     comparing ``0.0`` to a threshold, and the result says which happened.
     """
-    from llm_shared.models import LLMRequest
-
     provider = await _select_verifier_provider(actor_provider)
     if provider is None:
         logger.warning("pre_action_verifier: no provider available — degraded (no_provider)")
         return VerifierObservation.failed(VerifierDegradation.NO_PROVIDER, "No verifier provider available.")
 
     system_prompt, user_prompt = _build_verifier_prompt(tool_name, args, reason)
-    request = LLMRequest(
-        model_name=await resolve_verifier_model(provider),
-        messages=[
-            {"role": CategoryDefaults.ROLE_SYSTEM, "content": system_prompt},
-            {"role": CategoryDefaults.ROLE_USER, "content": user_prompt},
-        ],
-        max_tokens=VERIFIER_MAX_TOKENS,
-        temperature=0.1,  # Low temperature for adversarial consistency
-        metadata={"purpose": "pre_action_verifier", "tool": tool_name},
-    )
+    attempt: dict[str, Any] = {}
     try:
         import asyncio as _asyncio
 
-        response = await _asyncio.wait_for(
-            provider.chat_completion(request),
+        # One deadline covers the model lookup (a cache miss lists models over the network) and the chat call.
+        request, response = await _asyncio.wait_for(
+            resolve_and_chat(provider, system_prompt, user_prompt, tool_name, VERIFIER_MAX_TOKENS, attempt),
             timeout=VERIFIER_TIMEOUT_S,
         )
     except Exception as exc:
-        observation = failure_observation(exc)
+        observation = replace(
+            failure_observation(exc),
+            provider_used=provider.provider_name,
+            model_used=attempt.get("model") or configured_verifier_model(provider),
+        )
         logger.warning(
             "pre_action_verifier: LLM call failed (%s: %r) — degraded (%s), fail_closed=%s",
             type(exc).__name__,

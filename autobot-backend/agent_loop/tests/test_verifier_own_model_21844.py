@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared import pre_action_verifier_guard as guard
+from autobot_shared import verifier_model
 from autobot_shared.ssot_config import config
 
 
@@ -23,7 +24,13 @@ def _provider(name: str, chat) -> MagicMock:
 
 
 def test_ollama_provider_gets_the_ssot_verifier_model():
-    assert guard._verifier_model_for(_provider("ollama", AsyncMock())) == config.verifier_model
+    with patch.object(config, "verifier_model", "verifier-test:1b"):
+        assert guard._verifier_model_for(_provider("ollama", AsyncMock())) == "verifier-test:1b"
+
+
+def test_an_empty_verifier_model_means_the_light_processing_model():
+    with patch.object(config, "verifier_model", ""):
+        assert guard._verifier_model_for(_provider("ollama", AsyncMock())) == (config.light_processing_model or None)
 
 
 def test_other_providers_keep_their_own_default():
@@ -42,7 +49,7 @@ async def test_request_carries_the_model_and_timeout_fails_open_and_is_logged():
     provider = _provider("ollama", slow)
     with (
         patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=provider)),
-        patch.object(guard, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
+        patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
         patch.object(guard, "VERIFIER_TIMEOUT_S", 0.01),
         patch.object(guard.logger, "warning") as warn,
     ):
@@ -63,7 +70,7 @@ async def test_verifier_request_names_the_verifier_model():
 
     with (
         patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=_provider("ollama", chat))),
-        patch.object(guard, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
+        patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
     ):
         await guard._call_verifier_once("bash", {}, "why", None)
     assert seen == [config.verifier_model]

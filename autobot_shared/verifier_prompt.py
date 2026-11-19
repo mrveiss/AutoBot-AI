@@ -37,16 +37,20 @@ _TRUNCATION_MARKER = "...[truncated %d chars]"
 
 
 def _cap(text: str, limit: int) -> str:
-    """*text* cut to *limit* characters with a marker saying how much was dropped."""
+    """*text* cut so the result, truncation marker included, is at most *limit* characters."""
+    limit = max(limit, 0)
     if len(text) <= limit:
         return text
-    return text[: max(limit, 0)] + _TRUNCATION_MARKER % (len(text) - max(limit, 0))
+    keep = limit - len(_TRUNCATION_MARKER % len(text))
+    if keep <= 0:  # no room for a marker: a plain cut still honours the limit
+        return text[:limit]
+    return text[:keep] + _TRUNCATION_MARKER % (len(text) - keep)
 
 
 def _args_block(args: dict[str, Any], budget: int) -> str:
     """One line per argument, each value and the whole block capped (#21844)."""
     lines = [f"  {k}: {_cap(repr(v), VERIFIER_ARG_MAX_CHARS)}" for k, v in args.items()]
-    return _cap("\n".join(lines), budget) if lines else "  (none)"
+    return _cap("\n".join(lines) if lines else "  (none)", budget)
 
 
 _VERIFIER_SYSTEM = (
@@ -75,15 +79,24 @@ RATIONALE: <two sentences maximum explaining your assessment>
 """
 
 
+_TEMPLATE_MIN_CHARS = len(_VERIFIER_USER_TMPL.format(tool_name="", args_block="", reason=""))
+if VERIFIER_PROMPT_MAX_CHARS < _TEMPLATE_MIN_CHARS:
+    raise ValueError(
+        f"AUTOBOT_VERIFIER_PROMPT_MAX_CHARS={VERIFIER_PROMPT_MAX_CHARS} cannot hold the verifier prompt template "
+        f"({_TEMPLATE_MIN_CHARS} characters)"
+    )
+
+
 def _build_verifier_prompt(
     tool_name: str,
     args: dict[str, Any],
     reason: str,
 ) -> tuple[str, str]:
-    """Return (system_prompt, user_prompt) for the verifier LLM call."""
-    reason = _cap(reason or "No reason provided.", VERIFIER_ARG_MAX_CHARS)
-    fixed = len(_VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block="", reason=reason))
-    args_block = _args_block(args, VERIFIER_PROMPT_MAX_CHARS - fixed)
+    """Return (system_prompt, user_prompt); the user prompt never exceeds ``VERIFIER_PROMPT_MAX_CHARS`` (#21844)."""
+    fixed = len(_VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block="", reason=""))
+    remaining = max(VERIFIER_PROMPT_MAX_CHARS - fixed, 0)
+    reason = _cap(reason or "No reason provided.", min(VERIFIER_ARG_MAX_CHARS, remaining // 2))
+    args_block = _args_block(args, remaining - len(reason))
     user = _VERIFIER_USER_TMPL.format(tool_name=tool_name, args_block=args_block, reason=reason)
     return _VERIFIER_SYSTEM, user
 
