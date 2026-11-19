@@ -42,12 +42,15 @@ async def test_request_carries_the_model_and_timeout_fails_open_and_is_logged():
     provider = _provider("ollama", slow)
     with (
         patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=provider)),
+        patch.object(guard, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
         patch.object(guard, "VERIFIER_TIMEOUT_S", 0.01),
         patch.object(guard.logger, "warning") as warn,
     ):
         obs = await guard._call_verifier_once("bash", {}, "why", None)
     assert obs.degradation is guard.VerifierDegradation.TIMEOUT
-    assert any("degraded (timeout)" in str(c.args[0]) for c in warn.call_args_list)
+    # logger.warning gets a %-template plus args: the skip is logged once rendered, not in the raw template
+    rendered = [str(c.args[0]) % c.args[1:] for c in warn.call_args_list]
+    assert any("degraded (timeout)" in line for line in rendered)
 
 
 @pytest.mark.asyncio
@@ -58,6 +61,9 @@ async def test_verifier_request_names_the_verifier_model():
         seen.append(request.model_name)
         raise RuntimeError("stop here")
 
-    with patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=_provider("ollama", chat))):
+    with (
+        patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=_provider("ollama", chat))),
+        patch.object(guard, "resolve_verifier_model", AsyncMock(return_value=config.verifier_model)),
+    ):
         await guard._call_verifier_once("bash", {}, "why", None)
     assert seen == [config.verifier_model]
