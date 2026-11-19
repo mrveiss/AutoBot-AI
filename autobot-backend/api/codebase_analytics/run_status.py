@@ -161,11 +161,24 @@ async def _write(collection, source_id: str, meta: dict) -> None:
     await collection.upsert(ids=[run_record_id(source_id)], documents=[document], metadatas=[meta])
 
 
+async def _source_exists(source_id: str) -> bool:
+    """Whether the source registry still holds ``source_id``; an unreadable registry counts as yes (fail open)."""
+    from .source_storage import get_source  # noqa: PLC0415
+
+    try:
+        return await get_source(source_id) is not None
+    except Exception as exc:  # noqa: BLE001 -- a status write must not be lost to a registry outage
+        logger.warning("Source registry unreadable for %s; run status is written anyway: %s", source_id, exc)
+        return True
+
+
 async def _update(source_id: str | None, change) -> bool:
     """Apply ``change(old_record) -> new_record | None``; True only if a record was written.
 
     A run with no source (the dev ``root_path`` mode) has no record: there is no
-    source for a reader to ask about.
+    source for a reader to ask about.  A record is never CREATED for a source that no longer exists
+    (#21417): a late report from a run of a deleted source would bring back the record an approved
+    cleanup removed.
     """
     if not source_id:
         return False
@@ -175,7 +188,11 @@ async def _update(source_id: str | None, change) -> bool:
         return False
     try:
         async with _UPDATE_LOCK:
-            new = change(await _read(collection, source_id))
+            old = await _read(collection, source_id)
+            if not old and not await _source_exists(source_id):
+                logger.warning("Run status not recorded for %s: the source no longer exists (#21417)", source_id)
+                return False
+            new = change(old)
             if new is not None:
                 await _write(collection, source_id, new)
         return new is not None

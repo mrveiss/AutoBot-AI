@@ -4,6 +4,10 @@
 # Author: mrveiss
 """#21417 a deleted source's run record leaves only through an approved proposal; #21621 every run orders."""
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -40,7 +44,11 @@ class _Collection:
 @pytest.fixture
 def collection():
     col = _Collection()
-    with patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=col)):
+    col.source_exists = AsyncMock(return_value=True)  # a test sets .return_value = False once the source is deleted
+    with (
+        patch.object(run_status, "get_code_collection_async", AsyncMock(return_value=col)),
+        patch.object(run_status, "_source_exists", col.source_exists),
+    ):
         yield col
 
 
@@ -143,14 +151,42 @@ class TestEveryRunStateOrders:
 
 
 class TestHandlersExistAtStartup:
-    def test_the_approvals_router_registers_both_cleanup_actions_without_the_proposers_loaded(self):
-        """After a restart nothing has imported a proposer yet; importing the router must be enough."""
-        from api import approval_gates  # noqa: F401
-        from services.approval_execution import is_registered_action
-        from services.conversation_file_cleanup_action import ACTION as FILE_ACTION
+    def test_importing_only_the_approvals_router_registers_both_cleanup_actions(self):
+        """A fresh interpreter that imports nothing but the router: no proposer module is there to register."""
+        code = (
+            "import api.approval_gates, sys\n"
+            "from services.approval_execution import is_registered_action\n"
+            "assert 'services.source_run_record_cleanup_proposals' not in sys.modules\n"
+            "assert 'services.conversation_file_cleanup_proposals' not in sys.modules\n"
+            "assert is_registered_action('source_run_record_cleanup')\n"
+            "assert is_registered_action('conversation_file_cleanup')\n"
+        )
+        backend = Path(__file__).resolve().parents[2]
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(backend), str(backend.parent)])}
+        done = subprocess.run(
+            [sys.executable, "-c", code], cwd=backend, env=env, capture_output=True, text=True, timeout=120
+        )
+        assert done.returncode == 0, done.stderr[-2000:]
 
-        assert is_registered_action(action_mod.ACTION)
-        assert is_registered_action(FILE_ACTION)
+
+class TestALateReportDoesNotBringTheRecordBack:
+    @pytest.mark.asyncio
+    async def test_delete_approve_then_a_late_finish_leaves_no_record(self, collection):
+        await record_run_started("src", "run-1")
+        collection.source_exists.return_value = False  # the source was deleted mid-index
+        approval = SimpleNamespace(
+            id="a4", context={"action": action_mod.ACTION, "source_id": "src"}, decided_by_user="u"
+        )
+        with patch.object(action_mod, "audit_log", AsyncMock(return_value=True)):
+            await action_mod.execute_source_run_record_cleanup(approval, MagicMock(add=MagicMock(), commit=AsyncMock()))
+        assert "codebase_run_src" not in collection.docs
+        assert await record_run_finished("src", "run-1", "killed", "exit -9") is False
+        assert await record_run_started("src", "run-2") is False
+        assert "codebase_run_src" not in collection.docs
+
+    @pytest.mark.asyncio
+    async def test_a_live_source_still_gets_its_record(self, collection):
+        assert await record_run_started("src", "run-1") is True
 
 
 class TestProposalHardening:

@@ -31,10 +31,22 @@ class _Collection:
         self.rows = rows
 
 
-def _patched(rows):
+def _patched(rows, root=Path(".")):
+    """Stand-ins that check their arguments: the collection read, the query shape and the validation root."""
+
+    def paginated(collection, where=None, include=None, **_kw):
+        assert isinstance(collection, _Collection) and collection.rows is rows, "the read must use the collection"
+        assert {"type": "problem"} in (where or {}).get("$and", [where]), "the query must select problem rows"
+        assert include == ["metadatas"]
+        return {"metadatas": rows}
+
+    def existing(problems, validation_root):
+        assert validation_root == root, "paths are validated against the source's own root"
+        return problems
+
     return (
-        patch.object(stats_mod, "get_all_paginated", lambda *a, **k: {"metadatas": rows}),
-        patch.object(stats_mod, "filter_problems_by_file_existence", lambda p, _r: p),
+        patch.object(stats_mod, "get_all_paginated", paginated),
+        patch.object(stats_mod, "filter_problems_by_file_existence", existing),
     )
 
 
@@ -89,9 +101,17 @@ class TestCategoryIsAppliedBeforeParsing:
         """#21782: a test-file row with a non-numeric line must not 503 a ``code`` request."""
         rows = [_row("long_function"), _row("debug_code", category="test", line="n/a")]
         p1, p2 = _patched(rows)
-        with p1, p2:
+        parsed = []
+        real = stats_mod._parse_problem_metadata
+
+        def spy(metadata):
+            parsed.append(metadata)
+            return real(metadata)
+
+        with p1, p2, patch.object(stats_mod, "_parse_problem_metadata", spy):
             out = stats_mod._fetch_problems_from_chromadb(_Collection(rows), None, "s", Path("."), "code")
         assert [p["type"] for p in out] == ["long_function"]
+        assert [m["problem_type"] for m in parsed] == ["long_function"], "only the code row is ever parsed"
 
     def test_a_non_numeric_line_is_no_line_when_every_category_is_read(self):
         rows = [_row("debug_code", line="n/a")]
