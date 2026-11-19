@@ -21,10 +21,12 @@ from typing_extensions import Annotated
 
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.ssot_constants import model_config
 from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data
+from services.llm_default_models import default_llm_models
 from services.playbook_executor import get_playbook_executor
 from user_management.services.llm_secrets import (
     MaskedKeySubmitted,
@@ -52,8 +54,8 @@ class LLMProviderConfig(BaseModel):
     api_key: str = ""
     endpoint: str = ""
     model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=2048, ge=1, le=128000)
+    temperature: float = Field(default=model_config.DEFAULT_TEMPERATURE, ge=0.0, le=2.0)  # #19730
+    max_tokens: int = Field(default=model_config.DEFAULT_MAX_TOKENS, ge=1, le=128000)  # #19730
 
 
 class SlmLLMConfig(BaseModel):
@@ -152,8 +154,9 @@ def _ollama_settings(rows: Dict[str, str]) -> dict:
             "0.0.0.0",  # nosec B104
         ),
         ollama_port=int(rows.get("llm_ollama_port", "11434")),
-        gpu_models=_json_list(rows, "llm_gpu_models"),
-        cpu_models=_json_list(rows, "llm_cpu_models"),
+        # #19862: no saved choice, or an empty one, means the role's defaults; Apply never sends an empty list.
+        gpu_models=_json_list(rows, "llm_gpu_models") or default_llm_models()[0],
+        cpu_models=_json_list(rows, "llm_cpu_models") or default_llm_models()[1],
         max_loaded_models=int(rows.get("llm_max_loaded_models", "5")),
         num_parallel=int(rows.get("llm_num_parallel", "4")),
         keep_alive=rows.get("llm_keep_alive", "10m"),

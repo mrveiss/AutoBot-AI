@@ -375,7 +375,7 @@ onMounted(async () => {
 .btn-run { width: 32px; height: 32px; background: var(--color-success); border: none; border-radius: var(--radius-md); color: white; cursor: pointer; }
 .btn-run:hover { filter: brightness(1.1); }
 
-.preview-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border-default); display: flex; flex-direction: column; z-index: 50; box-shadow: -4px 0 20px rgba(0,0,0,0.1); }
+.preview-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border-default); display: flex; flex-direction: column; z-index: var(--z-50); box-shadow: -4px 0 20px rgba(0,0,0,0.1); }
 .preview-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-5); border-bottom: 1px solid var(--border-default); }
 .preview-header h3 { margin: var(--spacing-0); font-size: var(--text-base); color: var(--text-primary); }
 .preview-header button { padding: var(--spacing-1-5); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
@@ -400,7 +400,7 @@ onMounted(async () => {
 
 .preview-steps { display: flex; flex-direction: column; gap: var(--spacing-3); }
 .preview-step { display: flex; gap: var(--spacing-3); padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); }
-.step-num { width: 24px; height: 24px; background: var(--color-primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; flex-shrink: 0; }
+.step-num { width: 24px; height: 24px; background: var(--color-primary); color: var(--text-on-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; flex-shrink: 0; }
 .step-content { flex: 1; min-width: 0; }
 .step-desc { display: block; font-size: var(--text-sm); color: var(--text-primary); margin-bottom: var(--spacing-1); }
 .step-content code { display: block; padding: var(--spacing-1-5) var(--spacing-2); background: var(--bg-primary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); overflow-x: auto; }

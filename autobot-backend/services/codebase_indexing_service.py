@@ -30,7 +30,7 @@ import aiofiles
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from knowledge_base_factory import get_knowledge_base
+from knowledge_base_factory import get_knowledge_base_or_none
 
 logger = get_logger(__name__)
 
@@ -872,7 +872,7 @@ class CodebaseIndexingService:
         self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
-            knowledge_base = await get_knowledge_base()
+            knowledge_base = await get_knowledge_base_or_none()
             if knowledge_base is None:
                 raise RuntimeError("Could not initialize knowledge base")
 
@@ -946,7 +946,7 @@ class CodebaseIndexingService:
         self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
-            knowledge_base = await get_knowledge_base()
+            knowledge_base = await get_knowledge_base_or_none()
             if knowledge_base is None:
                 raise RuntimeError("Could not initialize knowledge base")
 

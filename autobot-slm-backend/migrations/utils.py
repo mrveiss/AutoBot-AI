@@ -14,27 +14,35 @@ from typing import Set
 
 import psycopg2
 
+from autobot_shared import postgres_identity as pg
+
 logger = logging.getLogger(__name__)
+
+
+def parse_db_url(url: str) -> dict:
+    """Split a PostgreSQL URL into psycopg2 connect parameters (#786, #19320).
+
+    The one parser -- ``runner._parse_db_url`` delegates here. Missing parts fall
+    back to the SLM control-plane identity in ``autobot_shared.postgres_identity``.
+    """
+    from urllib.parse import unquote, urlparse
+
+    parsed = urlparse(url.replace("postgresql+asyncpg://", "postgresql://"))
+    return {
+        "host": parsed.hostname or pg.SLM_DB_HOST,
+        "port": parsed.port or pg.DB_PORT,
+        "database": parsed.path.lstrip("/") if parsed.path else pg.SLM_DB_NAME,
+        "user": unquote(parsed.username) if parsed.username else pg.SLM_DB_ROLE,
+        "password": unquote(parsed.password) if parsed.password else parsed.password,
+    }
 
 
 def get_connection(db_url: str, timeout: int = 10) -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection from URL (#786)."""
-    from urllib.parse import urlparse
-
-    # Convert async URL to sync URL if needed
-    url = db_url.replace("postgresql+asyncpg://", "postgresql://")
-    parsed = urlparse(url)
-
-    params = {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 5432,
-        "database": parsed.path.lstrip("/") if parsed.path else "slm",
-        "user": parsed.username or "slm_app",
-        "connect_timeout": timeout,
-    }
-    if parsed.password:
-        params["password"] = parsed.password
-
+    params = parse_db_url(db_url)
+    if params["password"] is None:
+        del params["password"]
+    params["connect_timeout"] = timeout
     return psycopg2.connect(**params)
 
 

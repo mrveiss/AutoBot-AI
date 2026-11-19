@@ -422,3 +422,27 @@ Two security constraints fell out of the design and are filed as `priority: high
 | #17605 | Fidelity report + pre-import preview (← #17604) | v0.13.0 |
 | #17606 | Credentials never carried across (← #17603) | v0.13.0 |
 | #17607 | Quarantine foreign code nodes (← #17603) | v0.13.0 |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #11064 — perf(rag): BM25 IDF uses query-local candidate set, not corpus stats (#11022 split)
+- #17590 — Umbrella: a workflow marketplace — public discovery for workflows we author ourselves
+- #17591 — feat(marketplace): generalise the catalogue from plugin-only to workflow entries
+- #17592 — feat(workflow): a publish-to-public transition beside the private share path
+- #17593 — feat(workflow-templates): trigger_type and integrations facets on WorkflowTemplate
+- #17594 — feat(marketplace): derive a description for published workflows that lack one
+- #17595 — feat(marketplace): FTS5-backed catalogue search with an input sanitiser
+- #17596 — feat(marketplace): static catalogue export for offline installs
+- #17597 — feat(workflow-templates): rank connector and subject demand from external corpus statistics
+- #17598 — feat(workflow-templates): author native templates for the top-ranked subjects
+- #17599 — tech-debt(rag): two hybrid-search implementations — one reachable only from a validator (closed)
+- #17600 — tech-debt(api-contract): marketplace search documents full-text, implements substring
+- #17601 — security(api): 11 handlers return raw exception text in the HTTPException detail
+- #17602 — Umbrella: import workflows from other platforms — a pluggable converter with an honest fidelity report
+- #17603 — feat(workflow-import): converter framework — source-adapter registry and canonical IR
+- #17604 — feat(workflow-import): node-mapping registry with unmapped nodes as a first-class outcome
+- #17605 — feat(workflow-import): fidelity report and pre-import preview
+- #17606 — feat(workflow-import): credentials are never carried across — re-declared as required_secrets
+- #17607 — feat(workflow-import): quarantine foreign code nodes — no silent conversion into executable steps

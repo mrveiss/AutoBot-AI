@@ -97,6 +97,8 @@ grafana_enable_cors: true
 
 ### Test Both Roles Produce Working Config
 
+Development dry runs (`--check` changes nothing); a deployed host is updated through the builtin updater.
+
 **Test 1: slm_manager Role**
 ```bash
 cd autobot-slm-backend/ansible
@@ -107,7 +109,7 @@ ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini \
 **Test 2: monitoring Role**
 ```bash
 cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-monitoring.yml -i inventory.ini \
+ansible-playbook deploy-monitoring.yml -i inventory.ini \
   -e monitoring_install_grafana=true --check
 ```
 
@@ -152,11 +154,11 @@ done
 ### Migration Path
 
 **If SLM server was manually configured:**
-```bash
-# Re-apply Ansible configuration to make it idempotent
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini --tags grafana
+**No builtin action applies this to the SLM host today.** The Roles page's **Redeploy** for `slm-monitoring` does not reach
+it (#20484), and Code Sync re-renders Prometheus configuration but has no Grafana step. Do not hand-run a playbook against
+the SLM host to get around that; follow #20484.
 
+```bash
 # Verify settings
 ssh autobot@<slm-manager-ip> "grep -E 'serve_from_sub_path|allow_embedding' /etc/grafana/grafana.ini"
 ```

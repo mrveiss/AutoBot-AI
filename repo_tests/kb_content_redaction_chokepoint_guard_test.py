@@ -82,6 +82,7 @@ from repo_tests._redaction_placement import (
     redacts_target_version_in_place,
 )
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -192,7 +193,6 @@ def _connector_module_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-content-redaction-chokepoint",
     discover=_connector_module_files,
-    floor=148,
     growth=10,
     skips=0,
     what="non-test files under knowledge/",
@@ -285,7 +285,7 @@ def _chromadb_upsert_writes_documents(name: str | None, keywords: list[ast.keywo
 
 def _sink_call_sites(source: str) -> list[tuple[str, int]]:
     """(enclosing_function_name, line) for every sink call in *source*."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     sites: list[tuple[str, int]] = []
 
     class _Visitor(ast.NodeVisitor):

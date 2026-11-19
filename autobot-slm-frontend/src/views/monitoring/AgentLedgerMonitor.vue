@@ -46,7 +46,7 @@
             <BaseCard v-for="(r, ri) in ledger.contention.value.rows" :key="r.scope" data-testid="slm-ledger-resource">
               <h3 class="m-0 mb-2 flex items-center gap-2 text-sm">
                 <code>{{ r.scope }}</code>
-                <BaseBadge :variant="r.contended ? 'warning' : 'neutral'" size="sm">{{ t('monitoring.agentLedger.waiting', { n: r.waiters.length }) }}</BaseBadge>
+                <BaseBadge :variant="r.contended ? 'warning' : 'neutral'" size="sm" tone="solid">{{ t('monitoring.agentLedger.waiting', { n: r.waiters.length }) }}</BaseBadge>
               </h3>
               <div v-for="(h, hi) in r.holders" :key="h.task_id" class="flex flex-wrap items-center gap-2">
                 <span>{{ t('monitoring.agentLedger.heldBy', { agent: h.agent_id, company: companyOf(h.company_id) }) }}</span>

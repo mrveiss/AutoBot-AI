@@ -78,6 +78,7 @@ async def persist_fact(
             for column, value in row_values.items():
                 setattr(row, column, value)
         await session.commit()
+    await _note_for_embedding_switch(fact_id)
 
 
 #: The metadata key carrying a filesystem locator, as `knowledge/source_liveness`
@@ -121,7 +122,8 @@ async def update_fact(fact_id: str, content: str, metadata: Dict[str, Any], *, h
             for column, value in _SOURCE_OBSERVATIONS.items():
                 setattr(row, column, value)
         await session.commit()
-        return True
+    await _note_for_embedding_switch(fact_id)
+    return True
 
 
 async def delete_fact(fact_id: str) -> bool:
@@ -130,7 +132,15 @@ async def delete_fact(fact_id: str) -> bool:
     async with factory() as session:
         result = await session.execute(sql_delete(KnowledgeFact).where(KnowledgeFact.id == fact_id))
         await session.commit()
-        return bool(result.rowcount)
+    await _note_for_embedding_switch(fact_id)
+    return bool(result.rowcount)
+
+
+async def _note_for_embedding_switch(fact_id: str) -> None:
+    """Every durable write, so a running embedding-model switch replays it before cutover (#19379)."""
+    from knowledge.embedding_switch import note_write
+
+    await note_write(fact_id)
 
 
 async def load_fact(fact_id: str) -> Dict[str, Any] | None:

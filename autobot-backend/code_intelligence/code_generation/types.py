@@ -96,7 +96,7 @@ class CodeContext:
 
 @dataclass
 class CodeRefactoringRequest:
-    """Request for code refactoring."""
+    """Which refactoring the code generator should apply, and to what code context (#17312)."""
 
     refactoring_type: CodeRefactoringType
     context: CodeContext

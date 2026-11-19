@@ -41,6 +41,8 @@ fi
 trap '[[ "${BASH_SOURCE[0]}" == ${COPY_PATTERN} ]] && rm -f "${BASH_SOURCE[0]}"' EXIT
 
 readonly AUTOBOT_BASE="/opt/autobot"
+# The monitoring role installs Alertmanager beside the base: {{ autobot.base_dir | dirname }}/alertmanager.
+readonly ALERTMANAGER_DIR="${AUTOBOT_BASE%/*}/alertmanager"
 readonly INSTALL_RECORD="/etc/autobot/install-record"
 readonly LOG_FILE="/var/tmp/autobot-uninstall-$(date +%Y%m%d-%H%M%S).log"
 # The `comment:` AutoBot's playbooks give the admin account they create
@@ -100,6 +102,12 @@ readonly PATHS=(
     /usr/local/bin/autobot-admin /usr/local/bin/autobot-time-sync /usr/local/bin/autobot-pg-backup.sh
     /usr/local/bin/check-time-sync.sh /var/lib/systemd/timers/stamp-autobot-pg-backup.timer
 )
+# Alertmanager's: a host may run its own on these same paths. Removed only when the install
+# record says the monitoring role created them (created_path=, written BEFORE it creates each,
+# and only for a path that was absent); an unrecorded one is kept and named (#18556).
+readonly RECORDED_PATHS=(
+    "${ALERTMANAGER_DIR}" /etc/alertmanager /var/lib/alertmanager /etc/systemd/system/alertmanager.service
+)
 readonly PATH_GLOBS=(
     "/etc/nginx/sites-available/autobot-*" "/etc/nginx/sites-enabled/autobot-*"
     "/etc/nginx/snippets/autobot-*" "/etc/logrotate.d/autobot-*"
@@ -111,15 +119,49 @@ readonly DATA_PATHS=(
     /root/autobot-credentials.txt /root/slm-credentials.txt
 )
 readonly DATABASES=(slm slm_users autobot_users)
-readonly DB_ROLES=(slm_app)
+readonly DB_ROLES=(slm_app autobot_app)  # every role provisioning creates (#19409)
 # PostgreSQL itself: only with --purge-data AND when it holds nothing but AutoBot's.
-readonly POSTGRES_PACKAGES=("postgresql-*" "postgresql-client-*" "postgresql-contrib-*" postgresql-common postgresql-client-common)
+readonly POSTGRES_PACKAGES=("postgresql-*" "postgresql-contrib-*" postgresql-common)
+# The client stays even then (KEPT_PACKAGES): other workloads use psql/pg_dump. `postgresql-*`
+# also matches postgresql-client-NN, so plan_packages drops this family from every plan (#18761).
+readonly POSTGRES_CLIENT_RE='^postgresql-client($|-)'
 # Removed only once EMPTY after pg_dropcluster: /var/lib/postgresql is the postgres user's
 # home (dumps, .pgpass, unregistered clusters live there).
 readonly POSTGRES_PATHS=(/var/lib/postgresql /etc/postgresql)
 readonly POSTGRES_APT_SOURCES=(pgdg)
 # Shared software with no install record: only with --purge-shared.
 readonly SHARED_PACKAGES=(python3-psycopg2 grafana prometheus "prometheus-node-exporter*" redis-stack-server)
+# Packages the roles install that NO uninstall removes: general-purpose software the host or
+# its operator may rely on, so taking it away could break something that is not AutoBot. Each
+# group states why. Removed instead: the install record's packages, SHARED_PACKAGES with
+# --purge-shared, POSTGRES_PACKAGES when PostgreSQL holds only AutoBot. The #18653 guard fails
+# on a package a role installs that is in none of these lists.
+readonly KEPT_PACKAGES=(
+    # base OS tools and package plumbing -- every admin and many services use them
+    apt-transport-https ca-certificates cron curl dnsutils git gnupg gzip htop iftop iotop iputils-ping
+    logrotate lsb-release lsof net-tools netcat-openbsd nethogs nmap openssh-server openssl rsync
+    software-properties-common strace sudo systemd tar traceroute tree unzip vim wget xz-utils zstd
+    # host services an operator may run for other workloads too
+    chkrootkit chrony containerd.io dnsmasq docker-buildx-plugin docker-ce docker-ce-cli
+    docker-compose-plugin duplicity fail2ban nginx ntp ntpdate rkhunter supervisor systemd-timesyncd
+    ufw unattended-upgrades xorgxrdp xrdp
+    # build toolchain and development headers -- other software on the host builds with them
+    build-essential cmake ninja-build pkg-config portaudio19-dev python3-dev tk-dev zlib1g-dev "lib*-dev"
+    # language runtimes and their distro libraries
+    python3 python3-opencv python3-pip python3-prometheus-client python3-redis
+    python3-tk python3-venv
+    # desktop, VNC and browser stack, with the runtime libraries browsers load
+    chromium-browser dbus-x11 firefox fluxbox tightvncserver "tigervnc-*" ubuntu-desktop-minimal
+    websockify x11-apps x11-utils x11vnc xauth xfce4 xfce4-goodies xfce4-terminal xterm xvfb
+    "libasound2*" "libatk*" libcups2 libdbus-1-3 libdrm2 libgbm1 libnspr4 libnss3 libxcomposite1
+    libxdamage1 libxfixes3 libxkbcommon0 libxrandr2
+    # media, speech and numeric libraries -- general purpose
+    espeak-ng espeak-ng-data ffmpeg libsndfile1 tesseract-ocr
+    # hardware drivers and vendor runtimes -- removing them can break the GPU or NPU for everything
+    intel-driver-compiler-npu intel-opencl-icd level-zero "openvino-*"
+    # clients of the shared services, and third-party CLIs from their own apt sources
+    claude-code gh postgresql-client redis-tools
+)
 readonly SHARED_PATHS=(/var/lib/grafana /etc/grafana /var/log/grafana /var/lib/prometheus /etc/prometheus /opt/prometheus)
 # Never removed: nginx and the base packages install.sh needs (git, curl, openssh-server, ...),
 # and the service accounts the roles create (no record tells them from pre-existing ones).
@@ -180,6 +222,7 @@ plan_units() {
     for unit in "${UNITS[@]}"; do
         [[ -e "/etc/systemd/system/${unit}" ]] && echo "${unit}"
     done
+    recorded_paths yes | sed -n 's|^/etc/systemd/system/||p'
     # No matching unit makes systemctl exit 1; that is an empty answer, not a failure.
     { systemctl list-unit-files --no-legend "${UNIT_GLOBS[@]}" 2>/dev/null || true; } | awk '{print $1}'
     return 0
@@ -193,7 +236,7 @@ plan_packages() {  # the installed packages this run would purge
     for pkg in "${wanted[@]}"; do
         # dpkg-query exits 1 for a package that is not known here: not installed, not a failure.
         { dpkg-query -W -f='${Package} ${Status}\n' "${pkg}" 2>/dev/null || true; } | awk '/ installed$/{print $1}'
-    done | sort -u
+    done | awk -v keep="${POSTGRES_CLIENT_RE}" '$0 !~ keep' | sort -u
 }
 
 plan_purge_extra() {  # what apt would remove beyond plan_packages (reverse-dependents)
@@ -218,7 +261,17 @@ plan_apt_sources() {
     done
     existing /usr/share/keyrings/grafana.gpg /usr/share/keyrings/grafana.key
     [[ "${POSTGRES_DECISION}" == "remove" ]] && existing /usr/share/keyrings/pgdg.asc
-    record_values apt_source | grep -qx nodesource && existing /usr/share/keyrings/nodesource.gpg
+    record_values apt_source | grep -x nodesource >/dev/null && existing /usr/share/keyrings/nodesource.gpg
+    return 0
+}
+
+recorded_paths() {  # recorded_paths <yes|no>: RECORDED_PATHS on this host the record does / does not list
+    local path listed
+    for path in $(existing "${RECORDED_PATHS[@]}"); do
+        listed=no
+        record_values created_path | grep -xF -- "${path}" >/dev/null && listed=yes  # no -q: an early exit SIGPIPEs sed under pipefail
+        [[ "${listed}" == "$1" ]] && echo "${path}"
+    done
     return 0
 }
 
@@ -289,6 +342,7 @@ plan_opt_kept() {  # what a default uninstall leaves in /opt/autobot
 
 plan_paths() {
     existing "${PATHS[@]}" "${PATH_GLOBS[@]}" "${UNIT_DROPINS[@]}"
+    recorded_paths yes | grep -v '^/etc/systemd/system/' || true  # the unit goes with remove_units
     plan_opt_code
     ${PURGE_DATA} && existing "${DATA_PATHS[@]}"
     ${PURGE_SHARED} && existing "${SHARED_PATHS[@]}"
@@ -331,9 +385,10 @@ print_plan() {
         log "  KEPT in ${AUTOBOT_BASE} (data, or not AutoBot code): $(plan_opt_kept | tr '\n' ' ')"
         log "  code removed AROUND the data kept inside: $(plan_opt_partial | tr '\n' ' ')"
     fi
+    log "  KEPT (no record that AutoBot created them): $(recorded_paths no | tr '\n' ' ')"
     ${PURGE_SHARED} || log "  KEPT (shared): ${SHARED_PACKAGES[*]} and their data -- add --purge-shared to remove"
     [[ -f "${INSTALL_RECORD}" ]] || log "  (no install record at ${INSTALL_RECORD}: no account, recorded package or recorded apt source is removed)"
-    log "Never removed: nginx, base packages, ${KEPT_UNITS[*]}, apt sources ${KEPT_APT_SOURCES[*]}, role service accounts."
+    log "Never removed: general-purpose packages (KEPT_PACKAGES in this script), ${KEPT_UNITS[*]}, apt sources ${KEPT_APT_SOURCES[*]}, role service accounts."
 }
 
 confirm() {

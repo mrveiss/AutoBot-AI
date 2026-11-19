@@ -282,11 +282,55 @@ def test_the_source_resolves_to_a_tree_containing_autobot_shared(playbook: Path)
 def test_an_explicit_code_source_dir_wins_and_a_missing_source_fails_clearly() -> None:
     assert _shared_parent(_PLAYBOOK, code_source_dir="/srv/cs") == "/srv/cs"
     tasks = _shared_block()["block"]
-    check = next(t for t in tasks if "ansible.builtin.assert" in t)
+    check = next(t for t in tasks if t.get("ansible.builtin.assert", {}).get("that") == "shared_src.stat.exists")
     assert "code_source_dir" in check["ansible.builtin.assert"]["fail_msg"]
     stat_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.stat" in t)
     tar_idx = next(i for i, t in enumerate(tasks) if "ansible.builtin.command" in t)
     assert stat_idx < tasks.index(check) < tar_idx
+
+
+def _anchor_holds(playbook_dir: str) -> bool:
+    """Evaluate the derived-tree anchor (#20509) for a playbook directory, as Ansible would.
+
+    The anchor stats a path under ``shared_parent`` (rendered from the block's own vars, the tree the
+    archive is built from); the assert passes when that file exists.
+    """
+    import jinja2
+
+    tasks = _shared_block()
+    locate = next(t for t in tasks["block"] if "Find this task file" in t["name"])
+    env = jinja2.Environment()
+    env.filters["dirname"] = os.path.dirname
+    parent = env.from_string(tasks["vars"]["shared_parent"]).render(playbook_dir=playbook_dir)
+    path = env.from_string(locate["ansible.builtin.stat"]["path"]).render(
+        playbook_dir=playbook_dir, shared_parent=parent
+    )
+    return Path(path).is_file()
+
+
+def test_the_anchor_holds_for_both_callers_fails_at_another_depth_and_skips_an_explicit_source() -> None:
+    tasks = _shared_block()["block"]
+    locate = next(t for t in tasks if "Find this task file" in t["name"])
+    anchor = next(t for t in tasks if "Fail when the derived source tree" in t["name"])
+    assert anchor["ansible.builtin.assert"]["that"] == "shared_anchor.stat.exists"
+    assert locate["register"] == "shared_anchor" and tasks.index(locate) < tasks.index(anchor)
+    assert locate["when"] == anchor["when"] == "(code_source_dir | default('', true)) == ''"
+    assert _anchor_holds(str(_PLAYBOOK.parent)) and _anchor_holds(str(_DEPLOY_PLAYBOOK.parent))
+    assert not _anchor_holds(str(_PLAYBOOK.parent / "nested"))
+    assert not _anchor_holds(str(_ANSIBLE))
+    path = locate["ansible.builtin.stat"]["path"]
+    assert path.startswith("{{ shared_parent }}/") and "playbook_dir" not in path
+    assert locate["delegate_to"] == "localhost" and locate["run_once"] is True
+
+
+def test_the_anchor_does_not_depend_on_the_checkout_directory_name(tmp_path: Path) -> None:
+    """A checkout whose root folder is named differently still anchors; a tree without the file does not."""
+    tree = tmp_path / "renamed-checkout" / "autobot-slm-backend" / "ansible"
+    (tree / "playbooks").mkdir(parents=True)
+    (tree / "roles" / "_shared" / "tasks").mkdir(parents=True)
+    assert not _anchor_holds(str(tree / "playbooks"))
+    (tree / "roles" / "_shared" / "tasks" / "install_agent_autobot_shared.yml").write_text("---\n", encoding="utf-8")
+    assert _anchor_holds(str(tree / "playbooks"))
 
 
 def test_the_play_notifies_only_handlers_the_slm_agent_role_defines() -> None:
@@ -347,8 +391,8 @@ def _inspect(path: Path) -> tuple[int, dict]:
     return stat.S_IMODE(os.stat(path).st_mode), yaml.load(path.read_text(encoding="utf-8"), Loader=_UnsafeLoader)
 
 
-def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int):
-    """Run _execute_enrollment_playbook with a fake subprocess; return (argv, file seen, mode seen)."""
+def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int, deploy: bool = False):
+    """Run the enrollment (or role deploy) playbook with a fake subprocess; return (argv, file seen, mode seen)."""
     import asyncio
 
     seen: dict = {}
@@ -358,7 +402,7 @@ def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int):
             self.returncode = returncode
 
         async def communicate(self):
-            return b"out", None
+            return b"out\nPLAY RECAP ***\nh : ok=1 changed=0 unreachable=0 failed=0 skipped=0\n", None
 
     async def fake_exec(*argv, **_kw):
         seen["argv"] = list(argv)
@@ -369,6 +413,7 @@ def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int):
     svc = deployment.DeploymentService()
     (tmp_path / "playbooks").mkdir()
     (tmp_path / deployment._ENROLLMENT_PLAYBOOK).write_text("---\n", encoding="utf-8")
+    (tmp_path / "deploy.yml").write_text("---\n", encoding="utf-8")
     svc.ansible_dir = tmp_path
 
     async def key() -> str:
@@ -379,15 +424,22 @@ def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int):
     monkeypatch.setattr(deployment.shutil, "which", lambda _n: "/usr/bin/sshpass")
     monkeypatch.setattr(deployment.asyncio, "create_subprocess_exec", fake_exec)
     try:
-        asyncio.run(svc._execute_enrollment_playbook("h", "n1", "u", 22, ssh_password=_SECRET))
+        if deploy:
+            asyncio.run(svc._execute_ansible_playbook("h", ["r"], "u", 22, ssh_password=_SECRET))
+        else:
+            asyncio.run(svc._execute_enrollment_playbook("h", "n1", "u", 22, ssh_password=_SECRET))
     except RuntimeError:
         seen["raised"] = True
     return seen
 
 
+@pytest.mark.parametrize("deploy", [False, True], ids=["enrollment", "role-deploy"])
 @pytest.mark.parametrize("returncode", [0, 1])
-def test_secrets_leave_argv_and_the_file_is_private_and_removed(deployment, monkeypatch, tmp_path, returncode) -> None:
-    seen = _run_enrollment(deployment, monkeypatch, tmp_path, returncode)
+def test_secrets_leave_argv_and_the_file_is_private_and_removed(
+    deployment, monkeypatch, tmp_path, returncode, deploy
+) -> None:
+    """Both playbook paths pass the SSH password via a 0600 file, never argv (role deploy: CodeQL #1182)."""
+    seen = _run_enrollment(deployment, monkeypatch, tmp_path, returncode, deploy)
     assert not any(_SECRET in arg for arg in seen["argv"])
     assert seen["argv"][-2] == "-e" and seen["argv"][-1].startswith("@")
     assert seen["mode"] == 0o600

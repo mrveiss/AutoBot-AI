@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- #18826 fixture: an excerpt (sections 0 and 1.1) of an AutoBot root-cause report, rendered from
+     document.md beside this file, wrapped in heavy site chrome. Every chrome string carries "MARKER". -->
+<html lang="en" data-theme="THEME-ATTR-MARKER">
+<head>
+<meta charset="utf-8">
+<title>AutoBot-AI: open bug &amp; tech-debt issues, root-cause map</title>
+<meta name="description" content="META-DESCRIPTION-MARKER">
+<link rel="stylesheet" href="/assets/STYLESHEET-MARKER.css">
+<style>.CSS-RULE-MARKER { color: #c00 } body { font-family: serif }</style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "JSONLD-MARKER"}</script>
+<script>window.SCRIPT_MARKER = function () { track("SCRIPT-BODY-MARKER"); };</script>
+</head>
+<body class="BODY-CLASS-MARKER" onload="ONLOAD-MARKER()">
+<div id="COOKIE-ID-MARKER" role="dialog" class="cookie-banner">COOKIE-BANNER-MARKER we use cookies <button onclick="ACCEPT-MARKER()">ACCEPT-BUTTON-MARKER</button></div>
+<header class="site-header HEADER-CLASS-MARKER"><a href="/" class="logo">HEADER-LOGO-MARKER</a>
+<svg viewBox="0 0 10 10" aria-label="SVG-LABEL-MARKER"><title>SVG-TITLE-MARKER</title><text x="1" y="5">SVG-TEXT-MARKER</text></svg></header>
+<nav id="NAV-ID-MARKER" class="top-nav"><ul><li><a href="/docs">NAV-LINK-MARKER</a></li><li><a href="/blog">NAV-BLOG-MARKER</a></li></ul></nav>
+<div class="layout LAYOUT-CLASS-MARKER" id="LAYOUT-ID-MARKER" data-track="DATA-ATTR-MARKER">
+<aside class="sidebar">ASIDE-MARKER related posts</aside>
+<div role="navigation">ROLE-NAV-MARKER breadcrumbs</div>
+<main id="MAIN-ID-MARKER" class="content-area">
+<div role="banner" class="promo">ROLE-BANNER-MARKER</div>
+<nav class="toc">IN-MAIN-NAV-MARKER table of contents</nav>
+<article class="ARTICLE-CLASS-MARKER" style="INLINE-STYLE-MARKER: 1" itemscope itemtype="https://schema.org/ITEMTYPE-MARKER">
+<header class="article-header"><h1 id="H1-ID-MARKER" class="entry-title">AutoBot-AI: open bug &amp; tech-debt issues, root-cause map</h1></header>
+<div class="md-body MDBODY-CLASS-MARKER" onclick="ONCLICK-MARKER()" data-section="DATA-SECTION-MARKER"><span class="lead SPAN-CLASS-MARKER">
+<p><strong>Companion:</strong> <a href="dedup-defork-report.md"><code>dedup-defork-report.md</code></a> (clusters <strong>F1–F23</strong>; the brief said F1–F21, but the delivered report has 23 clusters, and all are linked here).</p>
+<h2>0. Data collection and exact counts</h2>
+<p>The <strong>first-choice MCP connector was tried first</strong> and returned <code>scm_not_connected</code>. Collection then fell back to the <strong>unauthenticated public REST API</strong>, paged <strong>per label</strong> (<code>/repos/mrveiss/AutoBot-AI/issues?labels=&lt;label&gt;&amp;state=open&amp;per_page=100&amp;page=N</code>) until a short page. No label needed more than 6 pages, so the list endpoint's ~1,000-item cap was never reached. Pull requests (<code>pull_request</code> key) were excluded; there were 0.</p>
+<pre><code class="language-text">GET /repos/mrveiss/AutoBot-AI/issues?labels=&lt;label&gt;&amp;state=open&amp;per_page=100&amp;page=N
+</code></pre>
+<p>All 200 repo labels were listed (<code>raw/bugs/labels_p1..3.json</code>). These matched the bug/tech-debt family:</p>
+<table>
+<thead>
+<tr>
+<th>Label</th>
+<th style="text-align: right;">Open issues</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bug</code></td>
+<td style="text-align: right;">578</td>
+</tr>
+<tr>
+<td><code>tech-debt</code></td>
+<td style="text-align: right;">292</td>
+</tr>
+<tr>
+<td><code>technical-debt</code></td>
+<td style="text-align: right;">81</td>
+</tr>
+<tr>
+<td><code>refactor</code></td>
+<td style="text-align: right;">14</td>
+</tr>
+<tr>
+<td><code>refactoring</code></td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td><code>code-quality</code></td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td><code>dead-code</code></td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr>
+<td><code>cleanup</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>hardcoding-violation</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><code>hardcoding</code></td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td><strong>Union (distinct issues analysed)</strong></td>
+<td style="text-align: right;"><strong>937</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Note: <code>bug</code> ∩ <code>tech-debt</code> = 22. The labels <code>code-smell</code>, <code>maintainability</code> and <code>type:refactor</code> exist but have <strong>0</strong> open issues. No open issue carries <code>fixed</code> or <code>wontfix</code>; one (#17409) carries <code>duplicate</code>. The issues were created between 2025-12-07 and 2026-10-13.</p>
+<h2>1. Executive summary</h2>
+<ul>
+<li><strong>937 open issues</strong> were classified. <strong>20 root-cause codes</strong> were assigned by hand from each title, with the body consulted where the title was ambiguous. Subsystem and symptom were assigned by keyword rules (see §8, Limitations).</li>
+<li>The backlog is dominated by <strong>structural causes, not isolated feature bugs</strong>. Four causes account for <strong>434 of 937 issues (46%)</strong>:<ul>
+<li><strong>[B] guards and CI gates that pass without checking</strong> (132)</li>
+<li><strong>[A] forked/duplicated implementations</strong> (111)</li>
+<li><strong>[C] unwired/dead/half-migrated code</strong> (100)</li>
+<li><strong>[Q] process/backlog hygiene</strong> (91)</li>
+</ul>
+</li>
+<li>Isolated "real" domain bugs with no shared mechanism ([S]) are only <strong>47</strong>.</li>
+<li>B, C, D and G share one meta-pattern: <strong>the system claims something it never executes</strong>. Examples: a gate reports clean over an empty scan, a feature is built but never called, an error becomes a 200, a caller invokes a method that does not exist. Each fix below converts such a claim into an executed check.</li>
+<li><strong>Stale or already-fixed:</strong> 5 in-scope issues verified fixed in code (plus #18088 from task 1, which is open but labelled only <code>backend</code>/<code>security</code>, so outside this label set) and 3 partly superseded (§6). A further <strong>95</strong> open issues are named in the subject of at least one merged PR since they were opened, and <strong>9</strong> are named by a <code>fixes/closes #N</code> keyword in a merged commit. These are triage candidates.</li>
+<li><strong>Duplicates/overlaps:</strong> 30 groups (§5). 54 issue pairs have TF-IDF title+body cosine ≥ 0.38 (<code>raw/bugs/similar_pairs.tsv</code>).</li>
+</ul>
+<h3>1.1 Top 10 root causes, ranked by issues likely closed ÷ effort</h3>
+<p>Effort points: S=1, M=2, L=4. "Likely closes" is the subset the named single fix addresses directly (§4). "Total" counts every issue coded to that cause.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Rank</th>
+<th>Root cause</th>
+<th style="text-align: right;">Total issues</th>
+<th style="text-align: right;">Likely closes</th>
+<th style="text-align: center;">Effort</th>
+<th style="text-align: right;">Score</th>
+<th>Single fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td>[B] Vacuous/blind guards &amp; CI gates</td>
+<td style="text-align: right;">132</td>
+<td style="text-align: right;">82</td>
+<td style="text-align: center;">M</td>
+<td style="text-align: right;">41.0</td>
+<td>Guard contract: declare()+floor, fail-on-empty, no path-filter skip, planted test</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>[C] Unwired/dead/half-migrated code</td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">73</td>
+<td style="text-align: center;">L</td>
+<td style="text-align: right;">18.2</td>
+<td>Wire-or-retire reachability gate + retirement sweep</td>
+</tr>
+</tbody>
+</table>
+</span></div>
+<aside class="callout">IN-ARTICLE-ASIDE-MARKER</aside>
+<form action="/FORM-ACTION-MARKER"><label for="q">FORM-LABEL-MARKER</label><input id="q" value="INPUT-VALUE-MARKER">
+<select name="s"><option>OPTION-MARKER</option></select><textarea>TEXTAREA-MARKER</textarea></form>
+<noscript>NOSCRIPT-MARKER</noscript>
+<template><p>TEMPLATE-MARKER</p></template>
+<iframe src="https://ads.example.net/IFRAME-SRC-MARKER">IFRAME-TEXT-MARKER</iframe>
+<div hidden>HIDDEN-ATTR-MARKER</div><div aria-hidden="true">ARIA-HIDDEN-MARKER</div>
+<div style="display:none">STYLE-DISPLAY-NONE-MARKER</div>
+<p style="Visibility : Hidden !important">STYLE-VISIBILITY-HIDDEN-MARKER</p>
+<div style="visibility:collapse">STYLE-VISIBILITY-COLLAPSE-MARKER</div>
+<div style="color: #333; font-size: 0em">STYLE-FONT-SIZE-ZERO-MARKER</div>
+<div style="font: 0/0 a">STYLE-FONT-SHORTHAND-MARKER</div>
+<div style="opacity: 0.0">STYLE-OPACITY-ZERO-MARKER</div>
+<span style="position:absolute; clip: rect(0 0 0 0)">STYLE-CLIP-RECT-MARKER</span>
+<span style="clip:rect(0,0,0,0)">STYLE-CLIP-RECT-COMMA-MARKER</span>
+<div style="clip-path: inset(50%)">STYLE-CLIP-PATH-MARKER</div>
+<div style="width:1px;height:1px;overflow:hidden">STYLE-TINY-BOX-MARKER</div>
+<div style="position:absolute;left:-9999px">STYLE-OFFSCREEN-MARKER</div>
+<div style="text-indent:-9999px">STYLE-TEXT-INDENT-MARKER</div>
+<div style="display:none !important; display:block">STYLE-IMPORTANT-CASCADE-MARKER</div>
+<div style="display:block; DISPLAY: none">STYLE-LAST-WINS-MARKER</div>
+</article>
+</main>
+<div role="complementary">ROLE-COMPLEMENTARY-MARKER</div>
+</div>
+<footer class="FOOTER-CLASS-MARKER">FOOTER-MARKER copyright</footer>
+<div role="contentinfo">ROLE-CONTENTINFO-MARKER</div>
+<script>SCRIPT-TAIL-MARKER();</script>
+</body>
+</html>

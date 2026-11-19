@@ -74,11 +74,13 @@ echo "  VNC server started on :1 (port 5901, password-protected)"
 # roles/vnc removes (#13069) and which otherwise serves a stale pre-VeNCrypt
 # client (#13060). This script does not install noVNC itself; run the vnc role
 # (or an equivalent pinned install) first so /opt/novnc exists.
+# Node TLS dir: a pinned copy of env_registry_tls.DEFAULT_TLS_REMOTE_CERT_DIR (#19366).
+TLS_REMOTE_CERT_DIR="${AUTOBOT_TLS_REMOTE_CERT_DIR:-/etc/autobot/certs}"
 echo "[5/7] Starting websockify for noVNC..."
 run_on_browser_vm "nohup /usr/bin/websockify \
     --web ${AUTOBOT_NOVNC_PATH:-/opt/novnc} \
-    --cert=/etc/autobot/certs/server-cert.pem \
-    --key=/etc/autobot/certs/server-key.pem \
+    --cert=${TLS_REMOTE_CERT_DIR}/server-cert.pem \
+    --key=${TLS_REMOTE_CERT_DIR}/server-key.pem \
     --ssl-only \
     localhost:6080 \
     localhost:5901 \
@@ -117,6 +119,6 @@ echo "  - VNC Server: $BROWSER_VM_IP:5901"
 echo "  - noVNC Web:  http://$BROWSER_VM_IP:6080/vnc.html"
 echo ""
 echo "Playwright:"
-echo "  - API Server: http://$BROWSER_VM_IP:3000"
+echo "  - API Server: http://$BROWSER_VM_IP:${AUTOBOT_BROWSER_SERVICE_PORT}"
 echo "  - Mode: Headed (visible browser on VNC)"
 echo ""

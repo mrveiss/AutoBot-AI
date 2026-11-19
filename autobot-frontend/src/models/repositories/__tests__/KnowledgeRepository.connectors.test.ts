@@ -15,7 +15,8 @@ import { KnowledgeRepository } from '../KnowledgeRepository'
 import type { ConnectorConfig, ConnectorStatus } from '@/types/connectors'
 
 vi.mock('@/config/ssot-config', () => ({
-  getApiBase: () => '/api'
+  getApiBase: () => '/api',
+  getBackendUrl: () => '',
 }))
 
 function mkConfig(id: string, name = 'demo'): ConnectorConfig {

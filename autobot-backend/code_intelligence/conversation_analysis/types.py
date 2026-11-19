@@ -85,7 +85,7 @@ class BottleneckType(Enum):
     USER_FRUSTRATION = "user_frustration"
 
 
-class OptimizationType(Enum):
+class ConversationOptimizationType(Enum):
     """Types of optimization suggestions."""
 
     CACHING = "caching"
@@ -120,7 +120,7 @@ class ConversationMessage:
 
 
 @dataclass
-class ConversationFlow:
+class SessionConversationFlow:
     """A complete conversation flow."""
 
     session_id: str
@@ -172,7 +172,7 @@ class Bottleneck:
 class Optimization:
     """An optimization suggestion."""
 
-    optimization_type: OptimizationType
+    optimization_type: ConversationOptimizationType
     description: str
     impact: str  # "low", "medium", "high"
     effort: str  # "low", "medium", "high"

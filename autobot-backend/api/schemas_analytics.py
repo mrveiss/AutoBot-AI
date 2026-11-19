@@ -688,7 +688,7 @@ class PatternLearningHealthResponse(BaseModel):
 class PerformanceAnalyzeContentResponse(BaseModel):
     """Response for POST /performance/analyze-content.
 
-    Returns list[PerformanceIssue]; each item is a model_dump() dict.
+    Returns list[PerformancePatternIssue]; each item is a model_dump() dict.
     """
 
     model_config = {"extra": "allow"}
@@ -2478,7 +2478,7 @@ class PerformancePatternCategory(str, Enum):
     IO = "io"
 
 
-class PerformanceIssue(BaseModel):
+class PerformancePatternIssue(BaseModel):
     """A detected performance issue."""
 
     id: str
@@ -2504,7 +2504,7 @@ class PerformanceAnalysisResult(BaseModel):
     high_count: int
     medium_count: int
     low_count: int
-    issues: List[PerformanceIssue]
+    issues: List[PerformancePatternIssue]
     files_analyzed: int
     duration_ms: float
     timestamp: str
@@ -2530,7 +2530,7 @@ class PerformancePatternDefinition(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ReviewComment(BaseModel):
+class CodeReviewComment(BaseModel):
     """A single review comment."""
 
     id: str
@@ -2544,14 +2544,14 @@ class ReviewComment(BaseModel):
     pattern_id: str | None = None
 
 
-class ReviewResult(BaseModel):
+class CodeReviewReport(BaseModel):
     """Complete review result for a diff or PR."""
 
     id: str
     timestamp: datetime
     files_reviewed: int
     total_comments: int
-    comments: List[ReviewComment] = Field(default_factory=list)
+    comments: List[CodeReviewComment] = Field(default_factory=list)
     summary: Dict[str, Any] = Field(default_factory=dict)
     score: float = Field(..., ge=0, le=100)
 
@@ -2976,7 +2976,7 @@ class SinkType(str, Enum):
     RETURN_VALUE = "return_value"
 
 
-class VulnerabilityType(str, Enum):
+class DFAVulnerabilityType(str, Enum):
     """Types of security vulnerabilities."""
 
     SQL_INJECTION = "sql_injection"
@@ -3196,7 +3196,7 @@ class DebtSummary(BaseModel):
 # Imported above; keep module-level so Pydantic field annotations resolve.
 
 
-class RiskFactor(str, Enum):
+class BugRiskFactor(str, Enum):
     """Factors contributing to bug risk."""
 
     COMPLEXITY = "complexity"
@@ -3225,7 +3225,7 @@ class FileRisk(BaseModel):
     recommendation: str = ""
 
 
-class PredictionResult(BaseModel):
+class BugPredictionReport(BaseModel):
     """Bug prediction result for the codebase. Matches PredictionResult.to_dict()
     output from code_intelligence/bug_predictor.py."""
 

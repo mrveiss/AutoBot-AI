@@ -124,19 +124,17 @@ from .conversation_analysis import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,
-    ConversationFlow,
     ConversationFlowAnalyzer,
     ConversationIntentClassifier,
     ConversationMessage,
+    ConversationOptimizationType,
     FlowPattern,
     FlowState,
     IntentCategory,
     Optimization,
-)
-from .conversation_analysis import OptimizationType as ConversationOptimizationType
-from .conversation_analysis import (
     ResponseClassifier,
     ResponseType,
+    SessionConversationFlow,
     analyze_conversations,
     classify_intent,
     classify_response,
@@ -267,19 +265,19 @@ from .performance_analyzer import (
 )
 from .precommit_analyzer import (
     CheckCategory,
-    CheckDefinition,
-    CheckResult,
     CheckSeverity,
-    CommitCheckResult,
     PrecommitAnalyzer,
+    PrecommitCheckDefinition,
+    PrecommitCheckResult,
+    PrecommitCommitCheckResult,
     analyze_precommit,
     get_check_categories,
     get_precommit_checks,
 )
 from .redis_optimizer import (
-    OptimizationResult,
     OptimizationSeverity,
-    OptimizationType,
+    RedisOptimizationResult,
+    RedisOptimizationType,
     RedisOptimizer,
     analyze_redis_usage,
 )
@@ -315,8 +313,8 @@ __all__ = [
     "AntiPatternResult",
     # Redis optimization (Issue #220)
     "RedisOptimizer",
-    "OptimizationResult",
-    "OptimizationType",
+    "RedisOptimizationResult",
+    "RedisOptimizationType",
     "OptimizationSeverity",
     "analyze_redis_usage",
     # Security analysis (Issue #219)
@@ -336,10 +334,10 @@ __all__ = [
     # Pre-commit analysis (Issue #223)
     "PrecommitAnalyzer",
     "CheckCategory",
-    "CheckDefinition",
-    "CheckResult",
+    "PrecommitCheckDefinition",
+    "PrecommitCheckResult",
     "CheckSeverity",
-    "CommitCheckResult",
+    "PrecommitCommitCheckResult",
     "analyze_precommit",
     "get_precommit_checks",
     "get_check_categories",
@@ -389,7 +387,7 @@ __all__ = [
     "AnalysisResult",
     "Bottleneck",
     "BottleneckType",
-    "ConversationFlow",
+    "SessionConversationFlow",
     "ConversationFlowAnalyzer",
     "ConversationMessage",
     "FlowPattern",
