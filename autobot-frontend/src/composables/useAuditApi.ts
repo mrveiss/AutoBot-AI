@@ -20,7 +20,7 @@ import type {
   AuditQueryParams,
   AuditDashboardResponse,
   AuditStatisticsResponse,
-  AuditStatistics,
+  AuditServerStatistics,
   AuditCleanupRequest,
   AuditCleanupResponse,
   AuditOperationsResponse,
@@ -133,7 +133,7 @@ export function useAuditState() {
   const auditApi = useAuditApi()
 
   const entries = ref<AuditEntry[]>([])
-  const statistics = ref<AuditStatistics | null>(null)
+  const statistics = ref<AuditServerStatistics | null>(null)
   // Failed Operations rows live apart from `entries`: dashboard figures derive from the general log window.
   const failureEntries = ref<AuditEntry[]>([])
   // True when the last statistics request failed: the row-derived estimates are then NOT the server's figures.
