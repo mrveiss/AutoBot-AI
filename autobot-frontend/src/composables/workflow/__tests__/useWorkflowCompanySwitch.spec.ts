@@ -39,13 +39,13 @@ async function flush() {
 }
 
 describe('gateOnCompany (#21520)', () => {
-  it('runs the action while the company agrees and skips it (returning undefined) while it does not', () => {
-    const act = vi.fn((id: string) => `ran ${id}`)
+  it('runs the action while the company agrees and skips it (resolving undefined) while it does not', async () => {
+    const act = vi.fn(async (id: string) => `ran ${id}`)
     let agrees = true
     const gated = gateOnCompany(() => agrees, act)
-    expect(gated('a')).toBe('ran a')
+    await expect(gated('a')).resolves.toBe('ran a')
     agrees = false
-    expect(gated('b')).toBeUndefined()
+    await expect(gated('b')).resolves.toBeUndefined()
     expect(act).toHaveBeenCalledTimes(1)
   })
 })
