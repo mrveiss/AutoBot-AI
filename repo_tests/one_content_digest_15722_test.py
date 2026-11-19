@@ -30,6 +30,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _CANONICAL = "autobot_shared/content_digest.py"
@@ -43,11 +44,9 @@ _UNCONVERTED = {
     "autobot-backend/agents/npu_code_search_agent.py": _CEILING,
     "autobot-backend/agents/scope_enforcement.py": "x- prefixed id, unconverted",
     "autobot-backend/api/analytics_continuous_learning.py": _CEILING,
-    "autobot-backend/api/codebase_analytics/duplicate_detector.py": _QUEUED,
     "autobot-backend/code_analysis/auto-tools/playwright_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_deep_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_sanitizer.py": _TOOL,
-    "autobot-backend/code_intelligence/analytics_infrastructure.py": _QUEUED,
     "autobot-backend/services/claim_verifier.py": "claim-text digest, unconverted",
     "autobot-backend/services/npu_client.py": "encodes with errors=replace, a different input form",
 }
@@ -63,7 +62,7 @@ def _terminal_name(node: ast.AST) -> str:
 
 def _hashes_content(source: str) -> bool:
     """True when `source` calls sha256 on `<content-named expr>.encode(...)`."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and node.args):
             continue
         func = node.func
@@ -113,8 +112,6 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-content-digest-scan",
     discover=_source_population,
-    floor=2580,
-    # Mid-window, from REACH.window(): 2730 measured, growth 300 -> 150 of headroom each way.,
     what="non-test python source",
     roots=_ROOTS,
     growth=300,

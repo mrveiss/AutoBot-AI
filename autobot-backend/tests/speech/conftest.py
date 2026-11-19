@@ -9,15 +9,15 @@ consolidates the speech forks cannot change what a user hears without a test
 reddening. Nothing here asserts what the parameters SHOULD be.
 """
 
-import importlib.util
 import io
-import sys
 import wave
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+from testkit.module_stubs import StubSet
 
 _PERSONALITY_PATH = Path(__file__).resolve().parents[2] / "services" / "personality_service.py"
 _PRIVATE_NAME = "_speech_17778_personality_service"
@@ -51,19 +51,21 @@ def fixture_wav() -> bytes:
 
 
 @pytest.fixture
-def real_personality_service(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def real_personality_service() -> Iterator[ModuleType]:
     """The real ``services.personality_service``, loaded under a private name.
 
     The backend conftest registers a stub for that module (it only needs
     ``SUPPORTED_LANGUAGES``), so a plain import yields a MagicMock and
     ``resolve_voice_id`` could not be exercised. The stub is left in place for
-    everyone else; this loads the file separately and registers it in
-    ``sys.modules`` only for the duration of one test (``monkeypatch`` restores
-    the previous state), which keeps dataclass annotation lookup working.
+    everyone else; this loads the file separately through ``StubSet.real_load``
+    and registers it in ``sys.modules`` only for the duration of one test
+    (``restore`` puts the previous state back), which keeps dataclass annotation
+    lookup working.
     """
-    spec = importlib.util.spec_from_file_location(_PRIVATE_NAME, _PERSONALITY_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, _PRIVATE_NAME, module)
-    spec.loader.exec_module(module)
-    return module
+    stubs = StubSet()
+    try:
+        module = stubs.real_load(_PRIVATE_NAME, _PERSONALITY_PATH, reuse_if_loaded=False)
+        assert module is not None
+        yield module
+    finally:
+        stubs.restore()

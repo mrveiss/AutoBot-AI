@@ -24,7 +24,7 @@ from typing import Dict, List, Sequence, Tuple
 from autobot_shared.logging_manager import get_logger
 
 from .config import AutoResearchConfig
-from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, ScorerResult
+from .models import Experiment, ExperimentResult, ExperimentState, ExperimentTask, PromptScoreResult
 from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
@@ -76,7 +76,7 @@ def append_result(
     result_file: Path,
     experiment_id: str,
     prompt_id: str,
-    result: ScorerResult,
+    result: PromptScoreResult,
 ) -> None:
     """Append a single scored result to *result_file* as a JSONL record.
 
@@ -96,7 +96,7 @@ def append_result(
     logger.debug("Appended result for (%s, %s) error=%s", experiment_id, prompt_id, result.error)
 
 
-def reorg_results(result_file: Path) -> Dict[_ResultKey, ScorerResult]:
+def reorg_results(result_file: Path) -> Dict[_ResultKey, PromptScoreResult]:
     """Load *result_file*, de-duplicate by (experiment_id, prompt_id), and
     re-write the canonical, sorted JSONL back to the same path.
 
@@ -109,7 +109,7 @@ def reorg_results(result_file: Path) -> Dict[_ResultKey, ScorerResult]:
     if not result_file.exists():
         return {}
 
-    results: Dict[_ResultKey, ScorerResult] = {}
+    results: Dict[_ResultKey, PromptScoreResult] = {}
     with result_file.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -121,7 +121,7 @@ def reorg_results(result_file: Path) -> Dict[_ResultKey, ScorerResult]:
                 logger.warning("Skipping malformed JSONL line in %s", result_file)
                 continue
             key: _ResultKey = (record["experiment_id"], record["prompt_id"])
-            results[key] = ScorerResult.from_dict(record)
+            results[key] = PromptScoreResult.from_dict(record)
 
     # Sort by key for stable, deterministic output
     sorted_items = sorted(results.items(), key=lambda kv: kv[0])
@@ -155,7 +155,7 @@ def filter_prompts(
         result_file: Path to the JSONL result file written by ``append_result``.
         resume: When ``True``, skip prompts that already have a non-error result.
         retry_failures: When ``True``, re-queue prompts whose result is an error
-            sentinel (``ScorerResult.is_error``). Has no effect when *resume* is
+            sentinel (``PromptScoreResult.is_error``). Has no effect when *resume* is
             ``False``.
 
     Returns:

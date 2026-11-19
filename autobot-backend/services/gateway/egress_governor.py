@@ -188,37 +188,6 @@ class EgressGovernor:
         await self._record(verdict, platform, channel_id, message_id)
         return verdict
 
-    async def gate(
-        self,
-        *,
-        platform: str,
-        channel_id: str,
-        subject: str,
-        message_id: str = "",
-        require_approval: bool | None = None,
-    ) -> EgressVerdict:
-        """Evaluate one send and log the denial: the decision every send seam shares (#14901).
-
-        Four seams hand-wrote this evaluate-then-warn pair before it was extracted; a copy
-        is the guard the next seam omits. Response shaping stays at the call site, because
-        a transport returns a payload, a route raises 403 and a notifier returns quietly.
-        ``subject`` is the log phrase naming the send ("Telegram send to chat 42"); the
-        caller applies the channel-identity rule (#14540) to ``channel_id`` and ``subject``.
-        The warning carries ``verdict.reason`` (audit-facing); a response must carry
-        ``denial_payload``'s ``safe_reason`` instead (#14539).
-        """
-        verdict = await self.evaluate(
-            platform=platform, channel_id=channel_id, message_id=message_id, require_approval=require_approval
-        )
-        if not verdict.allowed:
-            logger.warning("%s blocked by egress governance (%s): %s", subject, verdict.rule, verdict.reason)
-        return verdict
-
-    @staticmethod
-    def denial_payload(verdict: EgressVerdict) -> dict[str, object]:
-        """The one response body for a denied transport send; ``safe_reason``, never ``reason``."""
-        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
-
 
 # Shared singleton, matching ingest_governor: holds only the per-platform
 # approver registry, never per-message state.

@@ -56,6 +56,20 @@ import { BaseButton } from '@autobot/ui'
 </template>
 ```
 
+## Loading states (one convention)
+
+| Where | Use |
+|---|---|
+| An action in flight (save, run, refresh button) | `<BaseButton :loading="busy">` — a bespoke-styled button not yet on BaseButton may carry `<BaseSpinner size="sm">` until it migrates |
+| A content area waiting for data of a known shape | `<BaseSkeleton>` (`shape`, `lines`, `width`, `height`) |
+| A content area of unknown shape, or an inline wait | `<BaseSpinner size label>` |
+| Existing content refreshing in place | the main app's `LoadingOverlay` (keeps the content visible) |
+
+Never hand-roll a spinner (`animate-spin`, `fa-spin`, a local `@keyframes spin`): the kit
+owns the one rotation keyframe. `repo_tests/kit_loading_ratchet_19906_test.py` pins the
+count of local `@keyframes spin` and may only go down. Pass a translated `label` to
+`BaseSpinner` when nothing visible names the wait; the kit hardcodes no text.
+
 ## Implementing the contract (each app supplies its own values)
 
 The kit ships ONE adapter, [`src/tokens/adapter.css`](./src/tokens/adapter.css), that maps
@@ -73,6 +87,32 @@ app kept its own copy of the adapter and mapped the contract onto names only it 
 
 Because the kit is Tailwind-v4-independent (scoped CSS + tokens), an app only needs to
 provide these values — no Tailwind config wiring for the package is required.
+
+## Brand mark, tooltip, announcer (#18240)
+
+```vue
+<script setup lang="ts">
+import { BrandMark, BaseTooltip, useAnnounce } from '@autobot/ui'
+const { announce } = useAnnounce()
+</script>
+<template>
+  <!-- decorative next to a visible name; pass `label` (translated by the app) to make it a labelled img -->
+  <BrandMark :size="32" />
+  <BrandMark :label="t('nav.home')" />
+
+  <BaseTooltip :text="t('nav.secrets')" placement="bottom">
+    <template #default="{ describedby }">
+      <button type="button" :aria-describedby="describedby">...</button>
+    </template>
+  </BaseTooltip>
+</template>
+```
+
+- `BrandMark` reads `--aui-brand-bg` / `--aui-brand-fg` (adapter: `--brand-bg` / `--brand-fg`).
+  `src/assets/brand/mark.svg` is the standalone copy of the same geometry for favicons.
+- `BaseTooltip` reads `--aui-tooltip-delay|hide-delay|offset|max` and `--aui-z-tooltip`
+  (adapter: `--tooltip-*`, `--z-tooltip`). The kit holds no strings; pass `text` or the `content` slot.
+- `useAnnounce()` is the single screen-reader announcer (body-level `aria-live` region).
 
 ## Token contract
 

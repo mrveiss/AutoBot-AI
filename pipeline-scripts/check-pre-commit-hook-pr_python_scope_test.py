@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from autobot_shared.isolated_git import sandbox_path
+
 _SIBLING = Path(__file__).with_name("check-pre-commit-hook-pr_test.py")
 _spec = importlib.util.spec_from_file_location("_wrapper_tests", _SIBLING)
 assert _spec is not None and _spec.loader is not None
@@ -35,7 +37,7 @@ def _run(tmp_path: Path, validator: Path, base: str, head: str, *flags: str) -> 
         cwd=tmp_path,
         capture_output=True,
         text=True,
-        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": "/usr/bin:/bin"},
+        env={"BASE_SHA": base, "HEAD_SHA": head, "PATH": sandbox_path()},
     )
 
 

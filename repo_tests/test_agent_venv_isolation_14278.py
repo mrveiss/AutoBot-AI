@@ -23,6 +23,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _REPO_ROOT = repo_root()
 _ROLES = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles"
 
@@ -128,11 +130,16 @@ def _agent_import_closure() -> set[str]:
     """
     import ast as _ast
 
-    agent_pkg = _ROLES / "slm_agent" / "files" / "slm" / "agent"
+    # The role deploys from the one source tree since #18548 (the Ansible mirror is gone).
+    agent_pkg = _REPO_ROOT / "autobot-slm-backend" / "slm" / "agent"
     shared = _REPO_ROOT / "autobot_shared"
     seen: set[str] = set()
     # Tests never run on the node; their imports are not runtime dependencies.
-    queue = [p for p in agent_pkg.rglob("*.py") if not (p.name.startswith("test_") or p.name.endswith("_test.py"))]
+    queue = [
+        p
+        for p in agent_pkg.glob("*.py")
+        if not (p.name.startswith("test_") or p.name.endswith("_test.py") or p.name == "conftest.py")
+    ]
     visited_files: set[Path] = set()
 
     while queue:
@@ -141,7 +148,7 @@ def _agent_import_closure() -> set[str]:
             continue
         visited_files.add(path)
         try:
-            tree = _ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:  # pragma: no cover
             continue
         for node in _ast.walk(tree):

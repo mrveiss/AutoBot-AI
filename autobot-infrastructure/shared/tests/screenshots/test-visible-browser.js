@@ -5,6 +5,8 @@
  * Test to verify visible browser windows are working
  */
 
+const BROWSER_PORT = process.env.AUTOBOT_BROWSER_SERVICE_PORT || '9001';  // port.browser (#19418)
+
 async function testVisibleBrowser() {
     console.log('🖼️  TESTING VISIBLE BROWSER WINDOWS');
     console.log('='.repeat(50));
@@ -14,7 +16,7 @@ async function testVisibleBrowser() {
         console.log('⏰ Browser windows should appear on your desktop now!');
         console.log('👀 Watch for Chromium browser windows opening...');
 
-        const response = await fetch('http://localhost:3000/test-frontend', {
+        const response = await fetch(`http://localhost:${BROWSER_PORT}/test-frontend`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

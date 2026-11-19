@@ -35,7 +35,7 @@ def tokenize(text: str) -> list[str]:
     return word_token_list(text, split_underscore=False)
 
 
-def content_hash(content: Any) -> str:
+def normalized_content_hash(content: Any) -> str:
     """Return a stable SHA-256 hex digest of normalized content."""
     return content_digest(normalize_content(content))
 

@@ -23,8 +23,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -199,7 +200,7 @@ async def _init_ssh_redis_client():
         Redis client or None if unavailable
     """
     try:
-        from dependencies import get_async_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         return await get_async_redis_client(database="main")
     except Exception as e:
@@ -256,8 +257,8 @@ async def _run_ssh_message_loop(websocket: WebSocket, terminal: "SSHTerminalWebS
             data = await websocket.receive_text()
             message = json.loads(data)
             await terminal.handle_message(message)
-    except WebSocketDisconnect:
-        logger.info("SSH WebSocket disconnected: %s", session_id)
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_run_ssh_message_loop")
     except Exception as e:
         logger.error("Error in SSH WebSocket handling: %s", e)
         await websocket.send_text(

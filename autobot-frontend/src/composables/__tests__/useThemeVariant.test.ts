@@ -8,7 +8,7 @@
  * VITE_DEFAULT_THEME_VARIANT. A saved user choice always wins. The composable is a
  * module-level singleton, so each test resets modules and imports a fresh instance.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 // Installed-theme registry is exercised by useThemeVariantRuntime.test.ts; here we
@@ -25,6 +25,18 @@ async function freshComposable() {
   const mod = await import('../useThemeVariant')
   return mod.useThemeVariant()
 }
+
+
+/**
+ * Each test resets modules and re-imports a fresh instance. The first import also
+ * pays the cold transform of the whole import graph, which under load outran the
+ * default 10 s test timeout (pre-push, #18254). Warm the transform once here, with
+ * its own budget, so every test measures only its own work.
+ */
+const COLD_IMPORT_MS = 60_000
+beforeAll(async () => {
+  await import('../useThemeVariant')
+}, COLD_IMPORT_MS)
 
 beforeEach(() => {
   localStorage.clear()

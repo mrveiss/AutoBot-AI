@@ -16,12 +16,12 @@ from autobot_shared.logging_manager import get_logger
 
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
     ComplexityHotspot,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternSeverity,
-    PatternType,
     RegexOpportunity,
 )
 
@@ -34,7 +34,7 @@ class RefactoringSuggestion:
 
     title: str
     description: str
-    pattern_type: PatternType
+    pattern_type: CodePatternType
     severity: PatternSeverity
     affected_locations: List[CodeLocation]
 
@@ -121,15 +121,15 @@ class {name}:
     def __init__(self):
         """Initialize the refactoring generator."""
         self._pattern_handlers = {
-            PatternType.DUPLICATE_CODE: self._handle_duplicate,
-            PatternType.REGEX_OPPORTUNITY: self._handle_regex,
-            PatternType.COMPLEXITY_HOTSPOT: self._handle_complexity,
-            PatternType.MODULARIZATION: self._handle_modularization,
-            PatternType.ERROR_HANDLING: self._handle_error_handling,
-            PatternType.VALIDATION_LOGIC: self._handle_validation,
+            CodePatternType.DUPLICATE_CODE: self._handle_duplicate,
+            CodePatternType.REGEX_OPPORTUNITY: self._handle_regex,
+            CodePatternType.COMPLEXITY_HOTSPOT: self._handle_complexity,
+            CodePatternType.MODULARIZATION: self._handle_modularization,
+            CodePatternType.ERROR_HANDLING: self._handle_error_handling,
+            CodePatternType.VALIDATION_LOGIC: self._handle_validation,
         }
 
-    def generate_suggestions(self, patterns: List[CodePattern]) -> List[RefactoringSuggestion]:
+    def generate_suggestions(self, patterns: List[DetectedCodePattern]) -> List[RefactoringSuggestion]:
         """Generate refactoring suggestions from detected patterns.
 
         Args:
@@ -221,7 +221,7 @@ class {name}:
         return RefactoringSuggestion(
             title=f"Extract {suggested_name} from {pattern.occurrence_count} duplicate occurrences",
             description=pattern.description,
-            pattern_type=PatternType.DUPLICATE_CODE,
+            pattern_type=CodePatternType.DUPLICATE_CODE,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type=refactoring_type,
@@ -265,7 +265,7 @@ def optimized_transform(text: str) -> str:
         return RefactoringSuggestion(
             title=f"Replace string operations with regex at {pattern.locations[0] if pattern.locations else 'unknown'}",
             description=pattern.description,
-            pattern_type=PatternType.REGEX_OPPORTUNITY,
+            pattern_type=CodePatternType.REGEX_OPPORTUNITY,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type="regex_optimization",
@@ -341,7 +341,7 @@ def optimized_transform(text: str) -> str:
         return RefactoringSuggestion(
             title=title,
             description=pattern.description,
-            pattern_type=PatternType.COMPLEXITY_HOTSPOT,
+            pattern_type=CodePatternType.COMPLEXITY_HOTSPOT,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type=refactoring_type,
@@ -380,7 +380,7 @@ class {pattern.pattern_name.replace(' ', '')}Handler:
         return RefactoringSuggestion(
             title=f"Create {pattern.pattern_name} module",
             description=pattern.description,
-            pattern_type=PatternType.MODULARIZATION,
+            pattern_type=CodePatternType.MODULARIZATION,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type="create_module",
@@ -396,7 +396,7 @@ class {pattern.pattern_name.replace(' ', '')}Handler:
             requires_changes_in=pattern.repeated_in_files,
         )
 
-    def _handle_error_handling(self, pattern: CodePattern) -> RefactoringSuggestion | None:
+    def _handle_error_handling(self, pattern: DetectedCodePattern) -> RefactoringSuggestion | None:
         """Generate suggestion for error handling patterns.
 
         Args:
@@ -430,7 +430,7 @@ class ErrorHandler:
         return RefactoringSuggestion(
             title="Centralize error handling logic",
             description=pattern.description,
-            pattern_type=PatternType.ERROR_HANDLING,
+            pattern_type=CodePatternType.ERROR_HANDLING,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type="create_error_handler",
@@ -447,7 +447,7 @@ class ErrorHandler:
             requires_changes_in=[loc.file_path for loc in pattern.locations],
         )
 
-    def _handle_validation(self, pattern: CodePattern) -> RefactoringSuggestion | None:
+    def _handle_validation(self, pattern: DetectedCodePattern) -> RefactoringSuggestion | None:
         """Generate suggestion for validation logic.
 
         Args:
@@ -474,7 +474,7 @@ class ValidatedInput(BaseModel):
         return RefactoringSuggestion(
             title="Consolidate validation logic",
             description=pattern.description,
-            pattern_type=PatternType.VALIDATION_LOGIC,
+            pattern_type=CodePatternType.VALIDATION_LOGIC,
             severity=pattern.severity,
             affected_locations=pattern.locations,
             refactoring_type="create_validator",

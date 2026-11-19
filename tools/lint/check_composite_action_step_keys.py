@@ -59,6 +59,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging (matching the other tools/lint/check_*.py modules in
 # this repo): runs inside `code-quality`, which installs linters only.
@@ -93,11 +95,6 @@ _STEP_START_RE = re.compile(r"^ {4}- ")
 _INLINE_KEY_RE = re.compile(r"^ {4}- ([A-Za-z][A-Za-z0-9_-]*):")
 _CONT_KEY_RE = re.compile(r"^ {6}([A-Za-z][A-Za-z0-9_-]*):")
 _RUNS_STEPS_RE = re.compile(r"^runs:\s*$")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def action_files(root: pathlib.Path | None = None) -> list[pathlib.Path]:
@@ -165,16 +162,6 @@ def audit_composite_actions(root: pathlib.Path | None = None) -> tuple[int, list
     return total_steps, problems
 
 
-def run_audit() -> int:
-    reached, problems = audit_composite_actions()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\ncomposite-action step-key audit FAILED over %d step(s) (#14550).", reached)
-        return 1
-    logger.info("composite-action step-key audit clean over %d step(s) (#14550).", reached)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -186,7 +173,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    reached, problems = audit_composite_actions()
+    return report_audit(
+        logger,
+        problems,
+        "\ncomposite-action step-key audit FAILED over %d step(s) (#14550).",
+        "composite-action step-key audit clean over %d step(s) (#14550).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

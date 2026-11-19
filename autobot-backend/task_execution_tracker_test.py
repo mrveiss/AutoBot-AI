@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from task_execution_tracker import TaskExecutionContext, TaskExecutionTracker
+from task_execution_tracker import TaskExecutionTracker, TrackedTaskContext
 
 
 def _make_tracker() -> TaskExecutionTracker:
@@ -79,7 +79,7 @@ async def test_finalize_task_uses_acomplete_task():
     tracker = _make_tracker()
     tracker.active_tasks["task-123"] = {"task_name": "x", "agent_type": None, "inputs": None}
 
-    task_context = TaskExecutionContext(tracker, "task-123")
+    task_context = TrackedTaskContext(tracker, "task-123")
     task_context.set_outputs({"result": "done"})
 
     await tracker._finalize_task("task-123", task_context)

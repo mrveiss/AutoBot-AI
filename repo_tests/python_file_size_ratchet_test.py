@@ -15,19 +15,24 @@ These tests pin the ratchet in **both** directions, because only one of them is
 obvious:
 
 * the list may not gain an entry, and no ceiling may be raised (the obvious one),
+* a file may not grow past ``min(ceiling, its length at the merge base)`` (#19673), so a shrink
+  needs no edit to the shared table and the lines it cut cannot be spent back,
 * an entry whose file has dropped to the limit must be *removed* — a list still
   naming a compliant file exempts nothing while looking authoritative.
 
-A shrink also has to be locked in, not merely recorded (#14498). ``RATCHET_BASELINE``
-below is re-lowered with every shrink and pinned to the files themselves, so the
-lines a decomposition removed cannot be spent back inside a stale tolerance.
+A shrink also has to be locked in, not merely recorded (#14498): ``KNOWN_LARGE`` is pinned to
+the files themselves, so the lines a decomposition removed cannot be spent back inside a
+stale tolerance. Since #19544 that table is the ONLY record of the ceilings; "no entry added"
+and "no ceiling raised" are checked against the same table at the base commit
+(``repo_tests/_ratchet_base.py``), which a hand-kept second copy only imitated.
 
 #14547 found the second half of the same defect: ``audit_ceilings`` re-checked
 every entry already in the dict, but had no way to discover a file that had
 grown past the limit and was never added — ``reconciler.py`` reached 2000+
 lines this way, invisible to every audit run that only ever iterated
 ``KNOWN_LARGE.items()``. The fix walks the tracked-file tree instead, which is
-why ``RATCHET_BASELINE`` below grew from 3 entries to hundreds: the walk found
+why ``KNOWN_LARGE`` grew from 3 entries to hundreds (it was then mirrored by a hand-kept
+``RATCHET_BASELINE``, retired in #19544 for the base-commit check): the walk found
 every other file already over the limit with no entry at all, and grandfathering
 all of them at their measured size is what makes turning the walk on possible
 without also triaging 512 files in the same change (that is #5060's campaign).
@@ -41,7 +46,6 @@ agreeing with a counter that shares its blind spot.
 from __future__ import annotations
 
 import ast
-import dataclasses
 import importlib.util
 import logging
 from pathlib import Path
@@ -49,51 +53,26 @@ from pathlib import Path
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, growth_over_base, raised_entries
 
-from tools.lint import file_size_engine as engine
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = repo_root()
 _SCRIPT = REPO_ROOT / "scripts" / "check_python_file_size.py"
-_BASELINE_SCRIPT = REPO_ROOT / "repo_tests" / "python_file_size_ratchet_baseline.py"
 _KNOWN_LARGE_SCRIPT = REPO_ROOT / "scripts" / "python_file_size_known_large.py"
 _PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 
 
-def _load_baseline_module():
-    """Load the sibling data module holding the baseline, by path.
-
-    Split out (#14547) so this test file stays well under MAX_LINES: 512
-    entries inline here would put the guard's own test over the limit it
-    enforces on everything else. See that module's docstring for why the
-    dict is deliberately a second copy, not read out of the hook.
-    """
-    spec = importlib.util.spec_from_file_location("python_file_size_ratchet_baseline", _BASELINE_SCRIPT)
+def _load_known_large_module():
+    """Load the data module holding ``KNOWN_LARGE`` (and ``ANNOTATED_AS_LIVE``), by path."""
+    spec = importlib.util.spec_from_file_location("python_file_size_known_large", _KNOWN_LARGE_SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-_BASELINE_MODULE = _load_baseline_module()
-RATCHET_BASELINE = _BASELINE_MODULE.RATCHET_BASELINE
-ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
-
-# Cardinality ceiling on KNOWN_LARGE itself (#14547 review). The per-file
-# ratchet stops any ONE entry from regrowing, but nothing stopped a NEW entry
-# appearing in both KNOWN_LARGE and RATCHET_BASELINE together — a two-sided
-# addition passes every other test here, which is how this PR added 509
-# entries in one change. At 3 entries a 4th was visible in a code review
-# diff; at 512 a 513th is not. Lower this by hand whenever KNOWN_LARGE loses
-# an entry; never raise it to let a new one in without that being the point
-# of the diff.
-#
-# 512 was the population the walk measured when this landed, and entries then
-# left without the number following them down: at 499 against 512 the slack
-# was room for thirteen silent additions, which is the slack this guard exists
-# to deny. #15641/#15642 re-pinned it to the measured population. It starts at
-# whatever the walk finds and only falls after, because an unlisted oversized
-# file now fails the audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 486
+ANNOTATED_AS_LIVE = _load_known_large_module().ANNOTATED_AS_LIVE
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
@@ -120,16 +99,6 @@ def _load():
 @pytest.fixture(scope="module")
 def hook():
     return _load()
-
-
-@pytest.fixture(scope="module")
-def cfg(hook) -> engine.GateConfig:
-    """The Python gate's REAL configuration, injected through the engine's seam (#17377 AC3).
-
-    Replaces ``monkeypatch.setattr(hook, ...)``, which asserted that the gate still read its
-    attributes, not that the ratchet works. Variants are built with ``dataclasses.replace``.
-    """
-    return hook._config()
 
 
 @pytest.fixture(scope="module")
@@ -169,7 +138,7 @@ def test_recorded_ceilings_match_the_files_today(hook):
 # --------------------------------------------------------------------------
 
 
-def test_audit_discovers_an_unlisted_oversized_file(hook, cfg, tmp_path):
+def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch):
     """The exact defect #14547 is for: a file over MAX_LINES with no entry.
 
     ``audit_ceilings`` used to iterate ``KNOWN_LARGE.items()``, so a file like
@@ -177,28 +146,32 @@ def test_audit_discovers_an_unlisted_oversized_file(hook, cfg, tmp_path):
     — was invisible to every audit run forever. Walking the tracked-file list
     instead of the dict is what makes this fail.
     """
-    config = dataclasses.replace(cfg, known_large={})
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
     unlisted = "autobot-slm-backend/services/never_added.py"
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [unlisted])
     target = tmp_path / unlisted
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * (hook.MAX_LINES + 50), encoding="utf-8")
 
-    reached, problems = engine.audit_tracked(config, tmp_path, [unlisted])
+    reached, problems = hook.audit_ceilings()
     assert reached == 1
     assert len(problems) == 1
     assert unlisted in problems[0]
-    assert engine.run_audit(config, hook.logger, lambda: engine.audit_tracked(config, tmp_path, [unlisted])) == 1
+    assert hook.run_audit() == 1
 
 
-def test_audit_is_clean_for_an_unlisted_compliant_file(cfg, tmp_path):
+def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path, monkeypatch):
     """A file the walk reaches but that was never over the limit stays silent."""
-    config = dataclasses.replace(cfg, known_large={})
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
     compliant = "autobot-slm-backend/services/small.py"
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [compliant])
     target = tmp_path / compliant
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * 10, encoding="utf-8")
 
-    reached, problems = engine.audit_tracked(config, tmp_path, [compliant])
+    reached, problems = hook.audit_ceilings()
     assert reached == 1
     assert problems == []
 
@@ -258,60 +231,48 @@ def test_the_discovery_walk_respects_excluded_prefixes(hook):
 # --------------------------------------------------------------------------
 
 
+def _base_known_large() -> dict[str, int]:
+    """``KNOWN_LARGE`` as the base commit had it; BaseUnavailable propagates (fail closed)."""
+    return base_table(REPO_ROOT, ("scripts/python_file_size_known_large.py",), "KNOWN_LARGE")
+
+
 def test_no_entry_may_be_added(hook):
-    added = set(hook.KNOWN_LARGE) - set(RATCHET_BASELINE)
+    added = set(hook.KNOWN_LARGE) - set(_base_known_large())
     assert added == set(), (
         f"new grandfathered files {sorted(added)} — the exemption list only "
         "shrinks (#14236). Split the file instead of exempting it."
     )
 
 
-def test_known_large_entry_count_may_not_grow(hook):
-    """Catches a two-sided addition ``test_no_entry_may_be_added`` cannot.
-
-    That test only compares KNOWN_LARGE against RATCHET_BASELINE, so an entry
-    added to both together — the actual shape of how this PR added 509 —
-    passes it. This pins the count itself against a recorded ceiling that
-    only ever moves down.
-    """
-    count = len(hook.KNOWN_LARGE)
-    assert count <= MAX_KNOWN_LARGE_ENTRIES, (
-        f"KNOWN_LARGE grew to {count} entries, over the recorded ceiling of "
-        f"{MAX_KNOWN_LARGE_ENTRIES} — lower MAX_KNOWN_LARGE_ENTRIES when entries "
-        "leave, never raise it to let a new one in."
-    )
-
-
 def test_an_entry_singled_out_as_live_keeps_its_note(hook):
-    """Both copies must still say WHY these two are exempt (#14630).
+    """The table must still say WHY these two are exempt (#14630).
 
     A re-measure emits `"path": count` and nothing else, erasing every
     hand-written line in the literal it rewrites -- which lost these once.
     Unguarded, the entries then read as anonymous legacy debt.
     """
-    for path in (_KNOWN_LARGE_SCRIPT, _BASELINE_SCRIPT):
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for rel, opened_under in ANNOTATED_AS_LIVE.items():
-            assert rel in hook.KNOWN_LARGE, f"{rel} is annotated but no longer grandfathered"
-            at = next(i for i, line in enumerate(lines) if line.strip().startswith(f'"{rel}":'))
-            above = "\n".join(lines[max(0, at - 3) : at])
-            assert "#14630" in above and opened_under in above, f"{path.name}: {rel} lost its annotation"
+    lines = _KNOWN_LARGE_SCRIPT.read_text(encoding="utf-8").splitlines()
+    for rel, opened_under in ANNOTATED_AS_LIVE.items():
+        assert rel in hook.KNOWN_LARGE, f"{rel} is annotated but no longer grandfathered"
+        at = next(i for i, line in enumerate(lines) if line.strip().startswith(f'"{rel}":'))
+        above = "\n".join(lines[max(0, at - 3) : at])
+        assert "#14630" in above and opened_under in above, f"{_KNOWN_LARGE_SCRIPT.name}: {rel} lost its annotation"
 
 
 def test_no_ceiling_may_exceed_its_baseline(hook):
-    """One direction, named as one. Renamed and explained: see the parity test (#17872)."""
-    exceeding = {
-        rel: (ceiling, RATCHET_BASELINE[rel])
-        for rel, ceiling in hook.KNOWN_LARGE.items()
-        if rel in RATCHET_BASELINE and ceiling > RATCHET_BASELINE[rel]
-    }
-    assert exceeding == {}, (
-        f"the hook's ceiling exceeds its baseline (hook, baseline): {exceeding}. Which "
-        "record moved is not established here -- ceiling_record_parity_17872_test.py "
-        "reports it symmetrically. In THIS direction the fix is to lower the hook to its "
-        "baseline, or find the raise that put it above -- lowering both would RECORD the "
-        "raise instead of undoing it."
+    """No ceiling is above what the base commit's ``KNOWN_LARGE`` recorded for it."""
+    base = _base_known_large()
+    raised = {rel: v for rel, v in raised_entries(dict(hook.KNOWN_LARGE), base).items() if rel in base}
+    assert raised == {}, (
+        f"ceilings raised against the base commit (base, now): {raised}. Split the file instead of "
+        "raising its ceiling -- the base commit is the fixed reference a raise cannot move."
     )
+
+
+def test_no_grandfathered_file_grows_past_the_base(hook):
+    """lines(F@HEAD) <= min(ceiling, lines(F@base)) for every entry; a file new at the base is blocked (#19673)."""
+    found = growth_over_base(REPO_ROOT, dict(hook.KNOWN_LARGE))
+    assert found == {}, f"grandfathered files grew, or are new, against the merge base: {found}"
 
 
 def test_growing_past_the_ceiling_fails(hook):
@@ -340,82 +301,63 @@ def test_an_entry_whose_file_is_now_compliant_fails(hook):
         assert "Delete its KNOWN_LARGE entry" in message
 
 
-def test_the_baseline_is_relowered_by_every_shrink():
-    """A shrink recorded only in the hook leaves the cut lines spendable.
+def test_a_shrunk_file_passes_without_a_table_edit(hook):
+    """#19673: a shrink needs no edit to the shared table.
 
-    ``test_a_shrunk_file_must_lower_its_ceiling`` makes a shrink lower the
-    hook's ceiling; without this, the baseline stays where it was and the gap
-    between the two is regrowth every later raise can claim while staying
-    "under the baseline" — the defect in #14498, worth 344 lines on
-    ``tool_handler.py``. Sizes are counted here rather than read out of the
-    hook: a second reference point derived from the thing it checks agrees with
-    it by construction.
-    """
-    stale = {}
-    for rel, baseline in RATCHET_BASELINE.items():
-        actual = _count_lines(rel)
-        assert actual is not None, (
-            f"{rel}: the baseline names a file that moved or was deleted — "
-            "drop the entry from RATCHET_BASELINE with the KNOWN_LARGE one."
-        )
-        if baseline > actual:
-            stale[rel] = (baseline, actual)
-    assert stale == {}, (
-        f"baseline above the file it names (baseline, actual): {stale}. Lower "
-        "RATCHET_BASELINE to the size achieved — a baseline left above the "
-        "file re-licenses every line the shrink removed (#14498)."
-    )
-
-
-def test_a_shrunk_file_must_lower_its_ceiling(hook):
-    """Otherwise the ceiling re-licenses every line that was just removed.
-
-    A ceiling of MAX_LINES + 1 shrinking by one lands exactly on MAX_LINES —
-    compliant, not merely lower — so that boundary gets the "delete the
-    entry" message instead of "lower the ceiling"; every other entry keeps
-    the original expectation.
+    The lines just cut cannot be spent back because ``test_no_grandfathered_file_grows_past_the_base``
+    bounds each file by its length at the merge base, not by the recorded ceiling.
     """
     for rel, ceiling in hook.KNOWN_LARGE.items():
         shrunk = ceiling - 1
         message = hook.verdict(rel, shrunk)
-        assert message is not None, f"{rel} keeps ceiling {ceiling} after shrinking"
         if shrunk <= hook.MAX_LINES:
-            assert "Delete its KNOWN_LARGE entry" in message
+            assert "Delete its KNOWN_LARGE entry" in message  # compliant: the entry must go
         else:
-            assert f"Lower the ceiling to {shrunk}" in message
+            assert message is None, f"{rel}: {message}"
 
 
-def test_the_audit_surfaces_a_ceiling_violation(hook, cfg, tmp_path):
+def test_a_vanished_file_tells_the_developer_to_drop_the_entry(hook, tmp_path):
+    """The one assertion the removed mirror test held that nothing else did: the message
+    for a file that moved or was deleted says to remove its ``KNOWN_LARGE`` entry."""
+    rel = next(iter(hook.KNOWN_LARGE))
+    assert f"Remove it from {hook.SELF_REL}" in hook._vanished_entry_problem(rel, tmp_path)
+
+
+def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path, monkeypatch):
     """Reaching a file is not the same as reporting on it.
 
     Today's tree is at its ceilings, so a clean audit run cannot distinguish
     "no violations" from "violations discarded". This stages a real breach.
     """
-    tracked = list(cfg.known_large)
-    for rel, ceiling in cfg.known_large.items():
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: list(hook.KNOWN_LARGE))
+    for rel, ceiling in hook.KNOWN_LARGE.items():
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("x\n" * (ceiling + 5), encoding="utf-8")
 
-    reached, problems = engine.audit_tracked(cfg, tmp_path, tracked)
+    reached, problems = hook.audit_ceilings()
     assert reached == len(hook.KNOWN_LARGE)
     assert len(problems) == len(hook.KNOWN_LARGE)
     assert all("over its recorded ceiling" in problem for problem in problems)
-    assert engine.run_audit(cfg, hook.logger, lambda: engine.audit_tracked(cfg, tmp_path, tracked)) == 1
+    assert hook.run_audit() == 1
 
 
-def test_run_audit_fails_when_the_scan_reached_nothing(hook, cfg):
+def test_run_audit_fails_when_the_scan_reached_nothing(hook, monkeypatch):
     """A scan of nothing must never read as a clean scan."""
-    assert engine.run_audit(cfg, hook.logger, lambda: (0, [])) == 1
+    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, []))
+    assert hook.run_audit() == 1
 
 
-def test_the_audit_reports_a_vanished_entry(hook, cfg, tmp_path):
+def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
     """A renamed or deleted file must be a hard error, not a silent no-op."""
-    reached, problems = engine.audit_tracked(cfg, tmp_path, [])
+    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [])
+    reached, problems = hook.audit_ceilings()
     assert reached == 0
     assert len(problems) == len(hook.KNOWN_LARGE)
     assert all("moved or was deleted" in problem for problem in problems)
-    assert engine.run_audit(cfg, hook.logger, lambda: engine.audit_tracked(cfg, tmp_path, [])) == 1
+    assert hook.run_audit() == 1
 
 
 # --------------------------------------------------------------------------
@@ -477,9 +419,10 @@ def test_findings_are_emitted_above_the_lastresort_threshold(hook, tmp_path, cap
     assert levels and min(levels) >= logging.WARNING
 
 
-def test_audit_problems_are_reported_to_the_developer(hook, cfg, caplog):
+def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog, monkeypatch):
+    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, ["ceiling drifted"]))
     with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
-        assert engine.run_audit(cfg, hook.logger, lambda: (0, ["ceiling drifted"])) == 1
+        assert hook.run_audit() == 1
     emitted = "\n".join(record.getMessage() for record in caplog.records)
     assert "ceiling drifted" in emitted
     assert min(record.levelno for record in caplog.records) >= logging.WARNING
@@ -502,7 +445,7 @@ def test_the_hook_has_no_stdout_calls_left(hook):
     """
     banned = "pri" "nt"
     assert len(banned) == 5 and banned.endswith("nt"), "needle assembly broke"
-    tree = ast.parse(_SCRIPT.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_SCRIPT.read_text(encoding="utf-8"))
     calls = [
         node.lineno
         for node in ast.walk(tree)

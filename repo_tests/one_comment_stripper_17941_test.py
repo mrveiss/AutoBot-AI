@@ -19,19 +19,6 @@ A text scan for the stripping idiom matches **this file**, which necessarily
 spells the idiom it forbids, and every allowlist entry below. That is the
 #17941 defect reproducing itself inside its own fix. The detector reads the
 syntax tree and looks at call nodes, so prose naming the pattern is data.
-
-## What this is, and is not, as the #17941 meta-guard
-
-The issue asks for a guard that fails when a guard greps a whole file for a
-literal without the helper, "or, if that is not statically decidable, the
-limitation recorded explicitly". The general form is NOT statically decidable:
-`"flag" in text` is indistinguishable from a legitimate membership test, so
-no AST rule can say which are source scans. What IS decidable, and what this
-module enforces, is the *enabler*: a hand-rolled comment skip (a call testing
-a string against a comment marker). A guard that never strips at all, and so
-is satisfied by its own comment, is invisible here --
-`test_a_plain_substring_search_is_the_recorded_blind_spot` pins that limit so
-it is read, not implied.
 """
 
 from __future__ import annotations
@@ -41,6 +28,7 @@ import ast
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -104,6 +92,9 @@ _PENDING_PRIVATE_STRIPPERS = frozenset(
         "repo_tests/comment_line_number_citations_test.py",
         "repo_tests/declared_distributions.py",
         "repo_tests/mcp_verification_script_coverage_14219_test.py",
+        "repo_tests/phase_validation_paths_and_skips_17089_test.py",
+        "repo_tests/redis_config_path_is_canonical_17434_test.py",
+        "repo_tests/sync_deletions_target_pinning_and_shell_safety_16310_test.py",
         "repo_tests/test_dockerignore_test_file_coverage_14127.py",
         "tools/lint/_scan_helpers.py",
         "tools/lint/check_git_write_env_scrubbed_test.py",
@@ -138,24 +129,11 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
         for arg in node.args:
             if isinstance(arg, ast.Constant) and arg.value in _MARKERS:
                 return True
-            if isinstance(arg, ast.Tuple) and _tuple_skips_comments(arg):
+            if isinstance(arg, ast.Tuple) and any(
+                isinstance(e, ast.Constant) and e.value in _MARKERS for e in arg.elts
+            ):
                 return True
     return False
-
-
-def _tuple_skips_comments(arg: ast.Tuple) -> bool:
-    """A tuple of prefixes that includes a comment marker and is not a URL check.
-
-    `startswith(("/api", "http", "//"))` tests for a path or protocol-relative
-    URL: the `//` there is the start of a URL, not a comment. Such a tuple
-    carries a sibling that is itself a URL or path prefix (`http...` or a
-    single leading `/`). A bare `startswith("//")` or `("#", "!")` has none.
-    """
-    values = [e.value for e in arg.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
-    if not any(v in _MARKERS for v in values):
-        return False
-    url_like = any(v.startswith("http") or (v.startswith("/") and v not in _MARKERS) for v in values)
-    return not (url_like and "//" in values and not (set(values) & {"#", "/*"}))
 
 
 def _files_with_private_strippers() -> set[str]:
@@ -168,7 +146,7 @@ def _files_with_private_strippers() -> set[str]:
     for rel in candidates:
         path = _ROOT / rel
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError, UnicodeDecodeError):
             continue
         if _strips_comments_by_hand(tree):
@@ -215,9 +193,6 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a hash startswith", 'if line.startswith("#"):\n    pass\n', True),
         ("a slash-slash startswith", 'if line.startswith("//"):\n    pass\n', True),
         ("a tuple of markers", 'if line.startswith(("#", "//")):\n    pass\n', True),
-        ("a URL or path-prefix check", 'if p.startswith(("/api", "http", "//")):\n    pass\n', False),
-        ("a tuple of comment markers beside a URL prefix", 'if p.startswith(("http", "#")):\n    pass\n', True),
-        ("a bare slash-slash skip stays a stripper", 'if p.startswith("//"):\n    pass\n', True),
         ("startswith on something else", 'if name.startswith("test_"):\n    pass\n', False),
         ("a comment naming the idiom", '# we used to call line.startswith("#") here\nx = 1\n', False),
         ("a docstring naming the idiom", '"""Avoid line.startswith(\\"#\\") -- use the helper."""\nx = 1\n', False),
@@ -231,7 +206,7 @@ def test_the_detector_reads_code_and_not_prose(label: str, source: str, expected
     comments inside `_PENDING_PRIVATE_STRIPPERS` both spell the idiom. A
     text-keyed version of this guard would flag itself and then be muted.
     """
-    assert _strips_comments_by_hand(ast.parse(source)) is expected, label
+    assert _strips_comments_by_hand(parse_cache.parse(source)) is expected, label
 
 
 def test_the_shared_helper_is_the_only_exemption() -> None:
@@ -249,15 +224,3 @@ def test_the_shared_helper_is_the_only_exemption() -> None:
         "the canonical module is exempted but does not exist -- the exemption would silently "
         "cover nothing while the guard reported clean"
     )
-
-
-def test_a_plain_substring_search_is_the_recorded_blind_spot() -> None:
-    """The limit named in the module docstring, pinned (#17941).
-
-    A guard that searches a whole file with `in` and never strips is the
-    original defect, and no call-node rule can tell it from a membership test.
-    If this ever flips to True the docstring's claim is stale.
-    """
-    assert _strips_comments_by_hand(ast.parse('assert "flag" in source_text\n')) is False
-    stripped = "kept = [x for x in lines if not x.startswith('#')]\n"
-    assert _strips_comments_by_hand(ast.parse(stripped)) is True

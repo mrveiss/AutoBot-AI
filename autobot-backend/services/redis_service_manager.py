@@ -27,7 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
-from services.redis_service_models import HealthStatus, ManagedServiceStatus, ServiceOperationResult
+from services.redis_service_models import ManagedServiceStatus, ServiceHealthReport, ServiceOperationResult
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -547,14 +547,14 @@ class RedisServiceManager:
             recommendations.append(f"High response time ({response_time_ms:.1f}ms) - check system load")
         return recommendations
 
-    async def get_health(self) -> HealthStatus:
+    async def get_health(self) -> ServiceHealthReport:
         """
         Get detailed health status.
 
         (Issue #398: refactored to use extracted helpers)
 
         Returns:
-            HealthStatus with comprehensive health information
+            ServiceHealthReport with comprehensive health information
         """
         try:
             status = await self.get_service_status(use_cache=False)
@@ -566,7 +566,7 @@ class RedisServiceManager:
                 service_running, connectivity, response_time_ms, status.status
             )
 
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status=overall_status,
                 service_running=service_running,
                 connectivity=connectivity,
@@ -579,7 +579,7 @@ class RedisServiceManager:
         except Exception as e:
             logger.error("Health check failed: %s", e)
             await self._record_error()
-            return HealthStatus(
+            return ServiceHealthReport(
                 overall_status="critical",
                 service_running=False,
                 connectivity=False,

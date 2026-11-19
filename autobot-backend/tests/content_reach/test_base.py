@@ -4,12 +4,12 @@
 # Author: mrveiss
 import pytest
 
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from source_attribution import SourceKind, SourceReliability
 
 
 def test_content_result_failure_factory():
-    r = ContentResult.failure(SourceKind.WEB_SEARCH, "boom")
+    r = ContentReachResult.failure(SourceKind.WEB_SEARCH, "boom")
     assert r.success is False
     assert r.source_type is SourceKind.WEB_SEARCH
     assert r.backend_used == "none"
@@ -37,8 +37,8 @@ async def test_concrete_backend_roundtrip():
         async def probe(self) -> bool:
             return True
 
-        async def fetch(self, request: ContentRequest) -> ContentResult:
-            return ContentResult(
+        async def fetch(self, request: ContentRequest) -> ContentReachResult:
+            return ContentReachResult(
                 success=True,
                 source_type=self.source_type,
                 backend_used=self.name,
