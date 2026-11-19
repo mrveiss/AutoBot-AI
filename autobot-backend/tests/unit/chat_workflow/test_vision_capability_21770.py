@@ -84,10 +84,21 @@ async def test_second_turn_makes_no_second_request() -> None:
     assert len(client.calls) == 1
 
 
-async def test_non_generate_endpoint_uses_names_without_request() -> None:
+@pytest.mark.parametrize(
+    "endpoint",
+    ["http://ollama.test:11434", "http://ollama.test:11434/", _ENDPOINT],
+)
+async def test_show_url_has_the_path_exactly_once(endpoint) -> None:
     client = _client({"capabilities": ["vision"]})
     with patch.object(vc, "get_http_client", return_value=client):
-        assert await vc.resolve_model_supports_vision("llava", "http://x/v1/chat/completions") is True
+        assert await vc.resolve_model_supports_vision("m", endpoint) is True
+    assert client.calls[0][0] == "http://ollama.test:11434/api/show"
+
+
+async def test_empty_endpoint_uses_names_without_request() -> None:
+    client = _client({"capabilities": ["vision"]})
+    with patch.object(vc, "get_http_client", return_value=client):
+        assert await vc.resolve_model_supports_vision("llava", "") is True
     assert client.calls == []
 
 

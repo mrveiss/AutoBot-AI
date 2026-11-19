@@ -23,12 +23,9 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import PATH_OLLAMA_GENERATE
+from autobot_shared.ollama_urls import PATH_OLLAMA_SHOW, ollama_api_url
 
 logger = get_logger(__name__)
-
-# Ollama model-details endpoint (ssot_constants is at its size ceiling).
-PATH_OLLAMA_SHOW = "/api/show"
 
 # Case-insensitive substrings of a model name that indicate vision support (fallback only).
 _DEFAULT_VISION_MODEL_PATTERNS = (
@@ -46,7 +43,7 @@ VISION_CAPABILITY_FAILURE_TTL_S = env_float("CHAT_VISION_CAPABILITY_FAILURE_TTL_
 VISION_CAPABILITY_LOOKUP_TIMEOUT_S = env_float("CHAT_VISION_CAPABILITY_LOOKUP_TIMEOUT_S", default=5.0)
 VISION_CAPABILITY_CACHE_MAX = env_int("CHAT_VISION_CAPABILITY_CACHE_MAX", default=256)
 
-# (base_url, model) -> (expires_at monotonic, capability or None when the lookup gave no answer)
+# (show_url, model) -> (expires_at monotonic, capability or None when the lookup gave no answer)
 _cache: dict[tuple[str, str], tuple[float, bool | None]] = {}
 
 
@@ -56,18 +53,11 @@ def model_name_suggests_vision(model_name: str) -> bool:
     return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
 
 
-def _base_url_of(endpoint: str) -> str | None:
-    """Runtime base URL from the generate endpoint the loop posts to, or None for any other endpoint."""
-    if endpoint and endpoint.endswith(PATH_OLLAMA_GENERATE):
-        return endpoint[: -len(PATH_OLLAMA_GENERATE)]
-    return None
-
-
-async def _fetch_vision_capability(base_url: str, model_name: str) -> bool | None:
+async def _fetch_vision_capability(show_url: str, model_name: str) -> bool | None:
     """Ask ``/api/show``; True/False when it lists capabilities, None when it cannot answer."""
     try:
         async with await get_http_client().post(
-            f"{base_url}{PATH_OLLAMA_SHOW}",
+            show_url,
             json={"model": model_name},
             timeout=aiohttp.ClientTimeout(total=VISION_CAPABILITY_LOOKUP_TIMEOUT_S),
             guard_egress=EGRESS_POLICY,
@@ -96,13 +86,13 @@ def _remember(key: tuple[str, str], value: bool | None) -> None:
 
 async def resolve_model_supports_vision(model_name: str, endpoint: str) -> bool:
     """True when *model_name* can take an image: runtime capabilities first, name patterns as fallback."""
-    base_url = _base_url_of(endpoint)
-    if not model_name or base_url is None:
+    if not model_name or not endpoint:
         return model_name_suggests_vision(model_name)
-    key = (base_url, model_name)
+    show_url = ollama_api_url(endpoint, PATH_OLLAMA_SHOW)
+    key = (show_url, model_name)
     cached = _cache.get(key)
     if cached is None or cached[0] <= time.monotonic():
-        _remember(key, await _fetch_vision_capability(base_url, model_name))
+        _remember(key, await _fetch_vision_capability(show_url, model_name))
         cached = _cache[key]
     return cached[1] if cached[1] is not None else model_name_suggests_vision(model_name)
 
