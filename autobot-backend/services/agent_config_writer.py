@@ -5,7 +5,9 @@
 """Agent-config read-modify-write under the one config write lock (#21742).
 
 Each writer holds ``services.config_write_lock.CONFIG_WRITE_LOCK`` for its whole
-read, write and save, so a concurrent edit or rollback cannot interleave. Synchronous
+read, write and save, so a concurrent edit or rollback cannot interleave. Kept apart from the generic
+set/merge-and-save in ``config_manager_writer`` because each reads the prior value and returns it
+inside the same locked body. Synchronous
 and lock-holding: never call these while holding an await point open.
 """
 
