@@ -47,6 +47,14 @@ describe('chat message formatter (#21771)', () => {
     expect(formatChatMessageHtml('array[1;2h] ok')).toContain('array[1;2h] ok')
   })
 
+  it('keeps inline emphasis and code delimiters outside a bare URL', () => {
+    expect(hrefs(formatChatMessageHtml('**https://example.com**'))).toEqual(['https://example.com'])
+    expect(formatChatMessageHtml('**https://example.com**')).toContain('</a></strong>')
+    expect(hrefs(formatChatMessageHtml('`https://example.com`'))).toEqual(['https://example.com'])
+    expect(formatChatMessageHtml('`https://example.com`')).toContain('</a></code>')
+    expect(hrefs(formatChatMessageHtml('see https://example.com/a*b now'))).toEqual(['https://example.com/a*b'])
+  })
+
   it('renders bold, italics and inline code', () => {
     const html = formatChatMessageHtml('**b** *i* `c`')
     expect(html).toContain('<strong>b</strong>')

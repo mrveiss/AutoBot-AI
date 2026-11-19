@@ -28,7 +28,8 @@ import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnc
 const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a\s*>)/i
 const PRE_RE = /(<pre\b[\s\S]*?<\/pre>)/
 const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
-const TRAILING_PUNCT_CHARS = '.,;:!?\'"'
+// `*` and the backtick close an inline emphasis / code span that wraps the URL; they belong to the markup, not the href.
+const TRAILING_PUNCT_CHARS = '.,;:!?\'"*`'
 
 // Control characters are built at runtime, never written as regex escapes (ESLint no-control-regex): a literal
 // control byte in a pattern is a lint error and unreadable besides.
