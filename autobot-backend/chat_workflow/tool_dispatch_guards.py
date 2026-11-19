@@ -29,6 +29,7 @@ from autobot_shared.ai_lines import (
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name, tool_effect
+from chat_workflow import limits
 from llc.agent_tools import LLC_TOOL_NAMES
 from services.verifier_audit import audit_verifier_degraded
 
@@ -408,7 +409,10 @@ def unknown_tool_error(
     consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
     error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
     logger.warning(
-        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)", tool_name, consecutive
+        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d of limit %d)",
+        tool_name,
+        consecutive,
+        limits.INVALID_CALL_LIMIT,
     )
     execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
     return WorkflowMessage(

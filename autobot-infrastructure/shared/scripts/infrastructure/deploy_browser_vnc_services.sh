@@ -38,7 +38,7 @@ copy_to_browser_vm "$SCRIPT_DIR/browser-vnc-websockify.service" "/tmp/browser-vn
 copy_to_browser_vm "$SCRIPT_DIR/browser-playwright.service" "/tmp/browser-playwright.service"
 # One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
 BROWSER_WORKER_DIR="${SCRIPT_DIR}/../../../../autobot-browser-worker"
-for f in playwright-server.js session-store.js element-index.js; do
+for f in playwright-server.js session-store.js element-index.js search-snippet.js; do
     copy_to_browser_vm "${BROWSER_WORKER_DIR}/${f}" "${f}"
 done
 echo "✓ Service files copied"

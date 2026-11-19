@@ -101,7 +101,7 @@ echo "  Playwright configured for headed mode on DISPLAY :1"
 echo "[7/7] Restarting Playwright server..."
 run_on_browser_vm "pkill -f playwright-server.js 2>/dev/null || true"
 # One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
-for f in playwright-server.js session-store.js element-index.js; do
+for f in playwright-server.js session-store.js element-index.js search-snippet.js; do
     scp -i "$SSH_KEY" "${SCRIPT_DIR}/../../../../autobot-browser-worker/${f}" "$BROWSER_USER@$BROWSER_VM_IP:${f}"
 done
 run_on_browser_vm "cd /home/autobot && mkdir -p logs && \
