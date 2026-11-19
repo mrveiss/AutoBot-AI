@@ -27,13 +27,15 @@ from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
+from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
-from chat_workflow.tool_call_args import clean_reply_text, record_parse_failure
+from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
     normalize_tool_call_text,
+    strip_unparsed_tool_tags,
 )
 from chat_workflow.tool_call_loop import framed_tool_output
 from constants.api_constants import PATH_OLLAMA_GENERATE
@@ -2415,10 +2417,27 @@ before summarizing.
                 iteration,
                 len(ctx.execution_history),
             )
+            if fallback := self._parse_exhausted_fallback(ctx, llm_response, iteration):
+                yield fallback
             yield (llm_response, tool_calls, True)
             return
 
         yield (llm_response, tool_calls, False)
+
+    @staticmethod
+    def _parse_exhausted_fallback(ctx, llm_response: str, iteration: int) -> WorkflowMessage | None:
+        """The readable fallback when the last permitted iteration left only an unparsed TOOL_CALL (#21843).
+
+        Cleaning removes the call, so without this the turn would store no reply at all; the graph path
+        substitutes the same ``NO_ANSWER_FALLBACK`` (``graph_parse_feedback``).
+        """
+        if clean_reply_text(llm_response) or parse_failure_step(llm_response, iteration) is None:
+            return None
+        message = WorkflowMessage(
+            type="response", content=NO_ANSWER_FALLBACK, metadata={"parse_fallback": True, "iteration": iteration}
+        )
+        ctx.workflow_messages.append(message)
+        return message
 
     def _parse_tool_result_tuple(
         self,
@@ -2997,7 +3016,10 @@ before summarizing.
             # final user-visible reply — strip any <TOOL_CALL ...> tag
             # that never matched the full grammar (genuinely unparsed)
             # so raw markup never renders. Guarded no-op otherwise.
-            content = clean_reply_text(wf_msg.content)
+            # Tool output is data, not a reply: only the guarded strip applies, never the reply cleaner (#21843).
+            content = (
+                clean_reply_text(wf_msg.content) if sender == "assistant" else strip_unparsed_tool_tags(wf_msg.content)
+            )
             # Issue #4448: Extract KB-only citations into top-level sources list.
             # metadata.citations includes the always-appended llm_training entry —
             # filter it out so sources contains only knowledge-base references.

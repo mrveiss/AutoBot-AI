@@ -94,3 +94,28 @@ def test_an_image_over_the_persisted_cap_is_not_stored_on_the_message(monkeypatc
     results: list = []
     msg = handler.record_browser_success("screenshot", {}, _SCREENSHOT, results)
     assert "image_payload" not in msg.metadata and results[0]["base64_image"] == _PNG
+
+
+def test_tool_output_is_not_run_through_the_reply_cleaner() -> None:
+    from async_chat_workflow import WorkflowMessage
+
+    output = "  <TOOL_CALL name=\"navigate\" params='{bad}'>example</TOOL_CALL>\n"
+    msg = WorkflowMessage(type="terminal_output", content=output, metadata={})
+    manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+
+    batch = manager._build_workflow_message_batch(MessagesMixin(), [msg])
+
+    assert batch[0]["text"] == output
+
+
+def test_the_last_iteration_with_only_an_unparsed_call_gets_the_readable_fallback() -> None:
+    from types import SimpleNamespace
+
+    from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
+
+    ctx = SimpleNamespace(workflow_messages=[])
+    bad = "<TOOL_CALL name=\"x\" params='{oops}'>go</TOOL_CALL>"
+    message = ChatWorkflowManager._parse_exhausted_fallback(ctx, bad, 9)
+    assert message.content == NO_ANSWER_FALLBACK and ctx.workflow_messages == [message]
+    assert message.metadata["iteration"] == 9
+    assert ChatWorkflowManager._parse_exhausted_fallback(SimpleNamespace(workflow_messages=[]), "plain", 9) is None
