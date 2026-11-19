@@ -97,15 +97,15 @@ async def _kb():
     return kb
 
 
-async def count_facts(kb, collection_id: str) -> int | None:
+async def count_collection_facts(kb, collection_id: str) -> int | None:
     """Facts in the collection now (the KB's own read-only preview); ``None`` when the collection does not exist."""
     preview = await kb.bulk_delete_collection_facts(collection_id=collection_id, confirm=False)
     return int(preview.get("facts_to_delete") or 0) if preview.get("success") else None
 
 
-async def plan_for(op: CollectionOp, kb, collection_id: str, delete_facts: bool = False) -> dict | None:
+async def plan_collection_delete(op: CollectionOp, kb, collection_id: str, delete_facts: bool = False) -> dict | None:
     """Read only: the selector and the fact count the approver sees. ``None`` when the collection is not found."""
-    facts = await count_facts(kb, collection_id)
+    facts = await count_collection_facts(kb, collection_id)
     return None if facts is None else {"selector": selector_for(op, collection_id, delete_facts), "facts": facts}
 
 
@@ -269,7 +269,7 @@ async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession
     self_approval = await _review(approval, session)
     selector = _check_scope(op, approval)
     kb = await _kb()
-    found = await count_facts(kb, selector["collection_id"])
+    found = await count_collection_facts(kb, selector["collection_id"])
     if found is None:
         raise ValueError(f"approval {approval.id}: collection {selector['collection_id']!r} no longer exists")
     await _refuse_more_than_approved(op, approval, selector, self_approval, found)

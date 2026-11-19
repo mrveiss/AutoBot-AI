@@ -503,10 +503,10 @@ export class KnowledgeRepository extends ApiRepository {
    * Issue #552: collection-based, POST /api/knowledge_base/collections/{collection_id}/bulk-delete
    */
   async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<CollectionDeleteProposal> {
-    const response = await this.post<CollectionDeleteProposal>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
+    const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
       fact_ids: documentIds
     })
-    return response.data
+    return response.data as unknown as CollectionDeleteProposal // the route answers a proposal now (#21383); this URL line is ratcheted as-is
   }
 
   /**

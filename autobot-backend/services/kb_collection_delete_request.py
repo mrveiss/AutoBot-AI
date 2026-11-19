@@ -20,8 +20,8 @@ from services.kb_collection_delete_action import (
     BULK_DELETE,
     DELETE,
     CollectionOp,
-    count_facts,
-    plan_for,
+    count_collection_facts,
+    plan_collection_delete,
     propose,
 )
 from services.kb_wipe_request import require_attributed_admin
@@ -52,7 +52,7 @@ async def _propose(
     delete_facts: bool,
 ) -> dict:
     requester = require_attributed_admin(current_user, "a knowledge collection deletion")
-    plan = await plan_for(op, kb, cid, delete_facts)
+    plan = await plan_collection_delete(op, kb, cid, delete_facts)
     if plan is None:
         raise HTTPException(404, f"Collection not found: {cid}")
     approval = await propose(session, op, requester, plan)
@@ -79,7 +79,7 @@ async def request_collection_bulk_delete(kb, current_user: dict, session: "Async
 
 async def preview_collection_bulk_delete(kb, cid: str) -> dict:
     """Read only: what a bulk delete would remove, for a call without ``confirm``; 404 for an unknown collection."""
-    facts = await count_facts(kb, cid)
+    facts = await count_collection_facts(kb, cid)
     if facts is None:
         raise HTTPException(404, f"Collection not found: {cid}")
     return {
