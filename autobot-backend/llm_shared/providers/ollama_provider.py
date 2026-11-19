@@ -27,8 +27,8 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_chat_url, ollama_generate_url, ollama_tags_url
 from autobot_shared.ssot_config import get_ollama_url
-from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.structured_output import StructuredOutputMode
 from llm_shared.types import ProviderType
@@ -121,65 +121,7 @@ class OllamaProvider(BaseProvider):
         try:
             chat_template = request.metadata.get("chat_template")
             if chat_template:
-                # Issue #4525: when a chat_template is set, render messages to a
-                # prompt string and POST to /api/generate directly.
-                # GH#11488: breaker accounting (Issue #6770) now lives at the
-                # BaseProvider._guarded_completion seam — wrapping the same
-                # "ollama_service" breaker here again double-counted failures.
-                base_url = self._resolve_base_url()
-                model = request.model_name or self._get_setting("default_model", "")
-                raw_messages = [
-                    (
-                        {"role": m["role"], "content": m["content"]}
-                        if isinstance(m, dict)
-                        else {"role": m.role, "content": m.content}
-                    )
-                    for m in request.messages
-                ]
-                prompt = render_chat_template(raw_messages, chat_template)
-                payload: Dict[str, Any] = {
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": request.temperature},
-                }
-                if request.max_tokens:
-                    payload["options"]["num_predict"] = request.max_tokens
-
-                async def _generate() -> Dict[str, Any]:
-                    http_client = get_http_client()
-                    timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
-                    async with await http_client.post(
-                        f"{base_url}{PATH_OLLAMA_GENERATE}",
-                        headers={"Content-Type": "application/json"},
-                        json=payload,
-                        timeout=timeout,
-                    ) as resp:
-                        if resp.status != 200:
-                            body = await resp.text()
-                            raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
-                        return await resp.json()
-
-                data = await _generate()
-                content = data.get("response", "")
-                usage = {
-                    "prompt_tokens": data.get("prompt_eval_count", 0),
-                    "completion_tokens": data.get("eval_count", 0),
-                    "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
-                }
-                return LLMResponse(
-                    content=content,
-                    model=model,
-                    provider=self.provider_name,
-                    processing_time=data.get("total_duration", 0) / 1e9,
-                    request_id=request.request_id,
-                    usage=usage,
-                    provider_metadata=self._build_provider_metadata(
-                        model_api_name=model,
-                        api_kwargs_applied=payload,
-                        total_tokens=usage["total_tokens"],
-                    ),
-                )
+                return await self._chat_completion_templated(request, chat_template)
 
             delegate = self._ensure_delegate()
             delegate.ollama_host = self._resolve_base_url()
@@ -209,6 +151,68 @@ class OllamaProvider(BaseProvider):
                 request_id=request.request_id,
                 error=str(exc),
             )
+
+    async def _chat_completion_templated(self, request: LLMRequest, chat_template: str) -> LLMResponse:
+        """Render ``chat_template`` and POST to /api/generate directly (#4525)."""
+        # Issue #4525: when a chat_template is set, render messages to a
+        # prompt string and POST to /api/generate directly.
+        # GH#11488: breaker accounting (Issue #6770) now lives at the
+        # BaseProvider._guarded_completion seam — wrapping the same
+        # "ollama_service" breaker here again double-counted failures.
+        base_url = self._resolve_base_url()
+        model = request.model_name or self._get_setting("default_model", "")
+        raw_messages = [
+            (
+                {"role": m["role"], "content": m["content"]}
+                if isinstance(m, dict)
+                else {"role": m.role, "content": m.content}
+            )
+            for m in request.messages
+        ]
+        prompt = render_chat_template(raw_messages, chat_template)
+        payload: Dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": request.temperature},
+        }
+        if request.max_tokens:
+            payload["options"]["num_predict"] = request.max_tokens
+
+        async def _generate() -> Dict[str, Any]:
+            http_client = get_http_client()
+            timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
+            async with await http_client.post(
+                ollama_generate_url(base_url),
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"Ollama generate returned HTTP {resp.status}: {body}")
+                return await resp.json()
+
+        data = await _generate()
+        content = data.get("response", "")
+        usage = {
+            "prompt_tokens": data.get("prompt_eval_count", 0),
+            "completion_tokens": data.get("eval_count", 0),
+            "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
+        }
+        return LLMResponse(
+            content=content,
+            model=model,
+            provider=self.provider_name,
+            processing_time=data.get("total_duration", 0) / 1e9,
+            request_id=request.request_id,
+            usage=usage,
+            provider_metadata=self._build_provider_metadata(
+                model_api_name=model,
+                api_kwargs_applied=payload,
+                total_tokens=usage["total_tokens"],
+            ),
+        )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream from Ollama by issuing an SSE-style request directly."""
@@ -243,14 +247,14 @@ class OllamaProvider(BaseProvider):
             }
         if request.max_tokens:
             payload["options"]["num_predict"] = request.max_tokens
-        endpoint = PATH_OLLAMA_GENERATE if chat_template else PATH_OLLAMA_CHAT
+        build_url = ollama_generate_url if chat_template else ollama_chat_url
         try:
             import json as _json
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
-                f"{base_url}{endpoint}",
+                build_url(base_url),
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=timeout,
@@ -279,7 +283,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
+                ollama_tags_url(self._resolve_base_url()),
                 timeout=timeout,
             ) as resp:
                 return resp.status == 200
@@ -292,7 +296,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=10.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
+                ollama_tags_url(self._resolve_base_url()),
                 timeout=timeout,
             ) as resp:
                 if resp.status == 200:

@@ -26,6 +26,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from config import config_manager
+from services.config_manager_writer import merge_nested_and_save
 from services.config_service import ConfigService
 from type_defs.common import Metadata
 
@@ -134,12 +135,7 @@ async def get_developer_config():
 async def update_developer_config(config: dict):
     """Update developer mode configuration"""
     # Update the configuration
-    current_config = config_manager.get_nested("developer", {})
-    current_config.update(config)
-
-    # Save to config file
-    config_manager.set_nested("developer", current_config)
-    config_manager.save_settings()
+    current_config = merge_nested_and_save(config_manager, "developer", config)
     ConfigService.clear_cache()
 
     logger.info("Developer configuration updated: %s", config)

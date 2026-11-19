@@ -22,6 +22,24 @@ function setup(approve = vi.fn().mockResolvedValue(true), reject = vi.fn().mockR
   return { ...api, approve, reject, notify, onApproved }
 }
 
+describe('usePlanDecision company guard (#21520)', () => {
+  it('sends neither decision while the company context disagrees', async () => {
+    const approve = vi.fn().mockResolvedValue(true)
+    const reject = vi.fn().mockResolvedValue(true)
+    const onApproved = vi.fn()
+    const api = usePlanDecision({
+      pendingApproval: ref({ workflow_id: 'wf-1' }), approvePlan: approve, rejectPlan: reject,
+      notify: vi.fn(), onApproved, companyAgrees: () => false,
+    })
+    await api.handleApprovePlan()
+    await api.handleRejectPlan()
+    expect(approve).not.toHaveBeenCalled()
+    expect(reject).not.toHaveBeenCalled()
+    expect(onApproved).not.toHaveBeenCalled()
+    expect(api.deciding.value).toBe(false)
+  })
+})
+
 describe('usePlanDecision', () => {
   it('does not send a second decision while one is in flight', async () => {
     let release!: (v: boolean) => void

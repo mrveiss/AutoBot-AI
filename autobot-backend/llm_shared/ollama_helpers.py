@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import httpx
 
+from autobot_shared.ollama_urls import ollama_generate_url
+
 
 async def call_ollama_generate(
     prompt: str,
@@ -46,7 +48,7 @@ async def call_ollama_generate(
         httpx.HTTPError: On transport failure or non-2xx HTTP status.
             Callers are expected to catch and fall back as appropriate.
     """
-    url = f"{base_url.rstrip('/')}/api/generate"
+    url = ollama_generate_url(base_url)
     payload = {
         "model": model,
         "prompt": prompt,
