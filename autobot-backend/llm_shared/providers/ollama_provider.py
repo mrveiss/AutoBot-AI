@@ -93,6 +93,10 @@ class OllamaProvider(BaseProvider):
         self._base_url = self._get_setting("base_url") or get_ollama_url()
         return self._base_url
 
+    def resolved_base_url(self) -> str:
+        """The Ollama base URL this provider talks to (settings, else the SSOT endpoint)."""
+        return self._resolve_base_url()
+
     def _ensure_delegate(self):
         """Lazily construct the llm_shared OllamaRequestExecutor delegate."""
         if self._delegate is not None:
