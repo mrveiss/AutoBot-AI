@@ -17,6 +17,7 @@
  */
 
 import { ref } from 'vue'
+import { isHttpError } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
@@ -349,6 +350,13 @@ export function useCommandApproval() {
 
       processingApproval.value = false
     } catch (error) {
+      if (isHttpError(error) && error.status === 409) {
+        // #19951: already decided - nothing ran again; this card is stale, not failed.
+        logger.warn('Approval already decided:', terminal_session_id)
+        processingApproval.value = false
+        chatStore.setPendingApproval(false, approvalChatId)
+        return
+      }
       logger.error('Error sending approval:', error)
       notify('Failed to process command approval', 'error')
       processingApproval.value = false
