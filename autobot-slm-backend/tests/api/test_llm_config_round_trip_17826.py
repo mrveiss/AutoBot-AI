@@ -99,12 +99,16 @@ def _module(monkeypatch, name: str, **attrs) -> types.ModuleType:
     return mod
 
 
-def _load(monkeypatch, alias: str, relative: str) -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location(alias, _BACKEND / relative)
+def _load_abs(monkeypatch, alias: str, path: Path) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(alias, path)
     mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     monkeypatch.setitem(sys.modules, alias, mod)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
+
+
+def _load(monkeypatch, alias: str, relative: str) -> types.ModuleType:
+    return _load_abs(monkeypatch, alias, _BACKEND / relative)
 
 
 async def _allow() -> dict:
@@ -131,6 +135,9 @@ def _install_stubs(monkeypatch, vault: SimpleNamespace) -> None:
     _module(monkeypatch, "autobot_shared.auth")
     permission = SimpleNamespace(ADMIN_CONFIG_READ="admin:config:read", ADMIN_CONFIG_WRITE="admin:config:write")
     _module(monkeypatch, "autobot_shared.auth.permissions", Permission=permission)
+    # The real URL rule, loaded by path: the stubbed package above has an empty
+    # __path__, so `autobot_shared.ollama_urls` is not otherwise importable.
+    _load_abs(monkeypatch, "autobot_shared.ollama_urls", _BACKEND.parent / "autobot_shared" / "ollama_urls.py")
     _module(monkeypatch, "autobot_shared.ssot_config", config=SimpleNamespace(llm=SimpleNamespace(ollama_endpoint="")))
     _module(monkeypatch, "user_management")
     _module(monkeypatch, "user_management.services")
