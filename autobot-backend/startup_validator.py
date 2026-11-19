@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.python_floor import declared_python_version, minimum_python_version
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
@@ -321,7 +322,7 @@ class StartupValidator:
             import aiohttp
 
             ollama_url = ssot_config.ollama_url
-            health_url = f"{ollama_url}/api/tags"
+            health_url = ollama_tags_url(ollama_url)
 
             # Use singleton HTTP client for connection pooling
             http_client = get_http_client()
