@@ -9,8 +9,8 @@ to lower case, markdown and punctuation reduced to word separators, whitespace c
 Then a model's narration is redundant when, after normalisation, it
 
 * equals an assistant entry already in the turn, or
-* is wholly contained in the text of a ``respond`` tool entry of the same iteration
-  (the narration says nothing the ``respond`` bubble does not).
+* is wholly contained, as a run of whole tokens, in the text of a ``respond`` tool entry of the same iteration
+  (the narration says nothing the ``respond`` bubble does not). "art" is not contained in "party".
 
 Narration that says something the ``respond`` text does not is kept. Narration that
 CONTAINS the ``respond`` text plus more (a lead-in, a trailing line) is kept too: it is
@@ -36,6 +36,11 @@ def normalize_reply(text: str | None) -> str:
     return " ".join(word_token_list(unicodedata.normalize("NFKC", text or "")))
 
 
+def contains_token_run(needle: str, haystack: str) -> bool:
+    """True when the normalised *needle* is a contiguous run of whole tokens of the normalised *haystack*."""
+    return f" {needle} " in f" {haystack} "
+
+
 def _assistant_entries(batch: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [e for e in batch if e.get("sender") == "assistant"]
 
@@ -54,7 +59,7 @@ def is_redundant_prose(content: str, batch: Iterable[Dict[str, Any]]) -> bool:
         answer = normalize_reply(entry.get("text"))
         if narration == answer:
             return True
-        if _is_respond_entry(entry) and narration in answer:
+        if _is_respond_entry(entry) and contains_token_run(narration, answer):
             return True
     return False
 

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -112,3 +114,16 @@ def test_an_unknown_model_is_recorded_as_unknown_never_empty():
     batch = _build([_respond("final", 2)], ["First.", ""], selected_model="")
     models = [e["metadata"]["model"] for e in batch if e["sender"] == "assistant"]
     assert models and set(models) == {UNKNOWN_MODEL}
+
+
+_CASES = json.loads(
+    (Path(__file__).resolve().parents[4] / "autobot-frontend/src/utils/replyRedundancyCases.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+@pytest.mark.parametrize("case", _CASES, ids=[c["name"] for c in _CASES])
+def test_the_shared_case_table_the_frontend_also_pins(case):
+    respond = {"sender": "assistant", "text": case["answer"], "metadata": {"message_type": "respond_tool"}}
+    assert is_redundant_prose(case["narration"], [respond]) is case["redundant"]

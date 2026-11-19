@@ -1,0 +1,11 @@
+[
+  {"name": "identical", "narration": "Riga is 4 degrees.", "answer": "Riga is 4 degrees.", "redundant": true},
+  {"name": "markdown and case", "narration": "> riga is _4 degrees_", "answer": "Riga is **4 degrees**.", "redundant": true},
+  {"name": "whitespace", "narration": "  Riga  is\n4 degrees  ", "answer": "Riga is 4 degrees", "redundant": true},
+  {"name": "contained whole tokens", "narration": "Riga is 4 degrees", "answer": "Here you go. Riga is 4 degrees and cloudy.", "redundant": true},
+  {"name": "substring of a token is not a match", "narration": "art", "answer": "The party starts at nine", "redundant": false},
+  {"name": "tokens not contiguous", "narration": "Riga cloudy", "answer": "Riga is 4 degrees and cloudy", "redundant": false},
+  {"name": "narration says more than the answer", "narration": "Checked two sources. Riga is 4 degrees.", "answer": "Riga is 4 degrees.", "redundant": false},
+  {"name": "unrelated", "narration": "Let me search the web.", "answer": "Riga is 4 degrees.", "redundant": false},
+  {"name": "empty after normalising", "narration": "...", "answer": "Riga is 4 degrees.", "redundant": false}
+]
