@@ -149,7 +149,7 @@ class ResponseQualityEvaluator:
             # genuine FAIL. The graph does not accept it (#21845): `evaluator_failed`
             # asks the evaluator once more, then keeps a plain-text reply unverified (reflection_gate).
             logger.warning(
-                "RLM evaluator failed (%s: %r) — no reading, response is not accepted",
+                "RLM evaluator failed (%s: %r) — verdict INDETERMINATE, no reading, response is not accepted",
                 type(exc).__name__,
                 exc,
                 exc_info=True,

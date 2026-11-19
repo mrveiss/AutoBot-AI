@@ -50,7 +50,7 @@ def test_a_scored_pass_is_accepted_and_a_scored_refine_still_loops():
 
 def test_the_router_reads_the_limit_the_reflect_node_ran_under():
     history = [{"verdict": "REFINE"}]
-    state = {"reflection_history": history, "reflection_count": 2, "reflection_max": 2}
+    state = {"reflection_history": history, "llm_response": "an answer", "reflection_count": 2, "reflection_max": 2}
     assert route_after_reflection(state) == "inline_judge_response"
     assert route_after_reflection({**state, "reflection_max": 5}) == "generate_response"
     update = reflection_update({"reflection_count": 0}, _failed(), history, 7)
