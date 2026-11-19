@@ -315,6 +315,7 @@ DECLARED_SCOPES = {
     "slm-node-enum-members-exist": ("autobot-slm-backend",),
     "one-playwright-server-scan": ("autobot-browser-worker", "autobot-infrastructure", "autobot-frontend"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "llm-quality-seam-scan": ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop"),
     "one-permission-gate-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "infra-backend-import-scan": ("autobot-infrastructure",),
     "captcha-type-fork-scan": ("autobot-backend", "autobot_shared"),
