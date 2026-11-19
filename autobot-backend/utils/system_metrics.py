@@ -20,6 +20,7 @@ from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.logging_once import log_once
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.redis_scan import cached_count, count_age_seconds
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -287,7 +288,7 @@ class SystemMetricsCollector:
             # itself during initialization creates circular deadlock.
             # Backend health is implicit: if metrics are being collected, backend is running.
             "redis": None,  # Special handling for Redis
-            "ollama": (f"{ssot_config.ollama_url}/api/tags"),
+            "ollama": (ollama_tags_url(ssot_config.ollama_url)),
         }
 
     async def _check_single_service(

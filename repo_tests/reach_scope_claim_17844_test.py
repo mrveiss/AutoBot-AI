@@ -50,6 +50,7 @@ import repo_tests.github_api_single_module_15411_test as _github_api_guard  # no
 import repo_tests.infra_scripts_no_backend_imports_18288_test as _infra_backend_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
 import repo_tests.knowledge_metadata_parse_canonical_18220_test as _metadata_parse_guard  # noqa: F401 -- registers its scope
+import repo_tests.llm_quality_seam_16133_test as _quality_seam_guard  # noqa: F401 -- registers its scope
 import repo_tests.migration_gate_filter_covers_what_its_tests_import_test as _migration_gate_guard  # noqa: F401 -- registers its scope
 import repo_tests.model_tier_single_definition_15502_test as _model_tier_guard  # noqa: F401 -- registers its scope
 import repo_tests.no_doubled_api_prefix_18722_test as _doubled_api_prefix_guard  # noqa: F401 -- registers its scope
@@ -83,6 +84,7 @@ import repo_tests.opt_autobot_literal_ratchet_18880_test as _opt_autobot_guard  
 import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
 import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F401 -- registers its scope
 import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
+import repo_tests.provider_tool_schema_single_source_16815_test as _provider_tool_schema_guard  # noqa: F401 -- registers its scope
 import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
 import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
 import repo_tests.script_module_names_unique_14873_test as _script_names_guard  # noqa: F401 -- registers its scope

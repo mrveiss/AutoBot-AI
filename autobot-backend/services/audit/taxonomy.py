@@ -72,6 +72,8 @@ class AuditAction(str, Enum):
     KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
     KNOWLEDGE_WIPE = "knowledge.wipe"  # #21048: the knowledge-base wipe, run after an approval
     KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
+    KNOWLEDGE_CLAUDE_MD_REINDEX_REFRESH = "knowledge.claude_md_reindex.refresh"  # #21383: a pending plan re-proposed
+    KNOWLEDGE_CLAUDE_MD_REINDEX = "knowledge.claude_md_reindex"  # #21383: CLAUDE.md chunks deleted after an approval
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
@@ -149,6 +151,7 @@ class AuditAction(str, Enum):
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.
