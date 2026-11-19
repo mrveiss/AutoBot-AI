@@ -5,10 +5,10 @@
 """Direct config_manager writes and a rollback serialise under the one config write lock (#21858)."""
 
 import config as config_pkg
-from api.config_write_lock_testing import ParkingStore, run_serialised
 from services import config_rollback
 from services.config_manager_writer import merge_nested_and_save, set_nested_and_save
 from services.config_rollback import rollback_locked
+from tests._config_write_lock_doubles import ParkingStore, run_serialised
 
 _ROLLBACK_AGENT = "orchestrator"
 

@@ -8,10 +8,10 @@ from types import SimpleNamespace
 
 import config as config_pkg
 from api.agent_config import DEFAULT_AGENT_CONFIGS
-from api.config_write_lock_testing import ParkingStore, run_serialised
 from services import config_rollback
 from services.agent_config_writer import write_agent_enabled, write_agent_model
 from services.config_rollback import rollback_locked
+from tests._config_write_lock_doubles import ParkingStore, run_serialised
 
 _AGENT = next(iter(DEFAULT_AGENT_CONFIGS))
 _BASE = DEFAULT_AGENT_CONFIGS[_AGENT]
