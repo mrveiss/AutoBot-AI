@@ -22,8 +22,8 @@
  *  - Bold, italics, inline code, code blocks, sanitising: identical.
  */
 import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
-import { sanitizeChatHtml } from '@/utils/sanitize'
-import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
+import { escapeHtml, sanitizeChatHtml } from '@/utils/sanitize'
+import { renderMarkdownLinks } from '@/composables/chat/useEntityAnchors'
 
 const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a\s*>)/i
 const PRE_RE = /(<pre\b[\s\S]*?<\/pre>)/

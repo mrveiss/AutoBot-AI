@@ -17,6 +17,7 @@
 
 import type { RouteLocationRaw } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
+import { escapeHtml } from '@/utils/sanitize'
 
 const logger = createLogger('useEntityAnchors')
 
@@ -79,15 +80,6 @@ export function resolveEntityRoute(anchor: ParsedEntityAnchor): RouteLocationRaw
     case 'knowledge':
       return { name: 'knowledge-graph-entities', query: { entity: anchor.id } }
   }
-}
-
-/** Escape the HTML-significant characters in plain text. */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 /**
