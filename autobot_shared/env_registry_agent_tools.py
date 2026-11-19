@@ -153,6 +153,19 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_BROWSER_NAVIGATE_EXCERPT_TIMEOUT_MS",
+        type=int,
+        default=2000,
+        description=(
+            "Deadline in milliseconds for reading the navigate excerpt (#21772); on expiry the excerpt is empty and "
+            "the navigation result is kept. Read by the browser worker."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
         type=int,
         default=2,

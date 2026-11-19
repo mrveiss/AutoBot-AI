@@ -6,7 +6,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { DEFAULT_EXCERPT_MAX_CHARS, excerptCap, pageExcerpt } = require('../element-index');
+const {
+  DEFAULT_EXCERPT_MAX_CHARS,
+  DEFAULT_EXCERPT_TIMEOUT_MS,
+  excerptCap,
+  excerptTimeoutMs,
+  pageExcerpt,
+} = require('../element-index');
 
 const VAR = 'AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS';
 
@@ -28,4 +34,15 @@ test('the excerpt is whitespace-collapsed and capped', async () => {
 test('a page that cannot be read gives an empty excerpt, never a thrown error', async () => {
   const page = { evaluate: async () => { throw new Error('Execution context was destroyed'); } };
   assert.strictEqual(await pageExcerpt(page, 100), '');
+});
+
+test('a read that never settles gives an empty excerpt once the deadline passes', async () => {
+  const page = { evaluate: () => new Promise(() => {}) };
+  assert.strictEqual(await pageExcerpt(page, 100, 20), '');
+});
+
+test('the deadline is the registered env var, with a default for a bad value', () => {
+  const name = 'AUTOBOT_BROWSER_NAVIGATE_EXCERPT_TIMEOUT_MS';
+  assert.strictEqual(excerptTimeoutMs({ [name]: '50' }), 50);
+  assert.strictEqual(excerptTimeoutMs({ [name]: 'x' }), DEFAULT_EXCERPT_TIMEOUT_MS);
 });

@@ -122,6 +122,7 @@ function resolveElementByIndex(elements, index, expectedCount) {
  * One cap, shared with the backend: AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS (registered once, read by both).
  */
 const DEFAULT_EXCERPT_MAX_CHARS = 1500;
+const DEFAULT_EXCERPT_TIMEOUT_MS = 2000;
 
 /** The cap from the environment; a non-numeric or non-positive value yields the default. */
 function excerptCap(env = process.env) {
@@ -129,10 +130,27 @@ function excerptCap(env = process.env) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXCERPT_MAX_CHARS;
 }
 
-/** Whitespace-collapsed visible text of the page, capped; '' when the page cannot be read. */
-async function pageExcerpt(page, cap = excerptCap()) {
+/** The deadline from the environment; a non-numeric or non-positive value yields the default. */
+function excerptTimeoutMs(env = process.env) {
+  const parsed = parseInt(env.AUTOBOT_BROWSER_NAVIGATE_EXCERPT_TIMEOUT_MS || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXCERPT_TIMEOUT_MS;
+}
+
+/** *work* settled within *ms*, else null: a page whose innerText getter never settles cannot hold the caller. */
+function withDeadline(work, ms) {
+  let timer;
+  const deadline = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Whitespace-collapsed visible text of the page, capped; '' when the page cannot be read in time. */
+async function pageExcerpt(page, cap = excerptCap(), timeoutMs = excerptTimeoutMs()) {
   try {
-    const text = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+    const read = page.evaluate(() => (document.body ? document.body.innerText : ''));
+    read.catch(() => {}); // a read that loses the race may still reject later; that must not go unhandled
+    const text = await withDeadline(read, timeoutMs);
     return String(text || '').replace(/\s+/g, ' ').trim().slice(0, cap);
   } catch (err) {
     // The excerpt is a convenience: a page that cannot be read must never fail the navigation itself.
@@ -142,7 +160,9 @@ async function pageExcerpt(page, cap = excerptCap()) {
 
 module.exports = {
   DEFAULT_EXCERPT_MAX_CHARS,
+  DEFAULT_EXCERPT_TIMEOUT_MS,
   excerptCap,
+  excerptTimeoutMs,
   pageExcerpt,
   DEFAULT_MAX_ELEMENTS,
   INDEX_ELEMENTS_SCRIPT,
