@@ -96,9 +96,19 @@ def tool_call_parse_error(text: str) -> str | None:
         return None
     matches = list(TOOL_CALL_PATTERN.finditer(text))
     failures = _param_failures(matches)
-    if len(TOOL_CALL_OPENING_RE.findall(text)) > len(matches):  # an opening beside complete calls never closed
+    if TOOL_CALL_OPENING_RE.search(_outside_calls(text, matches)):  # an opening beside complete calls never closed
         failures.append("a TOOL_CALL tag was not closed or is malformed, so no tool ran")
     return "; ".join(failures) or None
+
+
+def _outside_calls(text: str, matches: list[re.Match]) -> str:
+    """*text* with every complete call removed: a tag quoted inside a call's params is not an opening."""
+    pieces, pos = [], 0
+    for match in matches:
+        pieces.append(text[pos : match.start()])
+        pos = match.end()
+    pieces.append(text[pos:])
+    return " ".join(pieces)
 
 
 def _param_failures(matches: list[re.Match]) -> list[str]:

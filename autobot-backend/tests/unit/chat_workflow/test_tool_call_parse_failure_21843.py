@@ -100,3 +100,8 @@ def test_a_square_bracket_call_with_bad_args_is_dropped_and_prose_kept():
 def test_an_unclosed_fragment_beside_a_valid_call_is_removed_and_the_call_kept():
     cleaned = clean_reply_text("hi " + GOOD + ' tail <TOOL_CALL name="x" params=\'{"a": 1}\'> more')
     assert cleaned.count("<TOOL_CALL") == 1 and "execute_command" in cleaned and "hi" in cleaned and "more" in cleaned
+
+
+def test_a_tag_quoted_inside_a_complete_calls_params_is_not_an_unmatched_opening():
+    call = """<TOOL_CALL name="execute_command" params='{"command": "echo <tool_call x>"}'>say hi</TOOL_CALL>"""
+    assert tool_call_parse_error(call) is None
