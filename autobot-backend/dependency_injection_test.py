@@ -187,7 +187,7 @@ class TestDependencyInjection:
         assert hasattr(orchestrator, "diagnostics")
 
     def test_no_global_config_import_in_classes(self):
-        """Test that classes use injected config instead of importing global_config_manager"""
+        """Test that classes use injected config instead of importing config_manager"""
         # Create mock config
         mock_config = Mock(spec=ConfigManager)
         mock_config.get_llm_config.return_value = {

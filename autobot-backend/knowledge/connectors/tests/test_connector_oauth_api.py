@@ -4,7 +4,9 @@
 # Author: mrveiss
 """Endpoint tests for connector OAuth authorize + callback (ADR-007 / GH#9019)."""
 
+import html
 import json
+import re
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -171,6 +173,47 @@ def test_callback_rejects_missing_binding_cookie(client):
     assert "state_binding_mismatch" in resp.text
     # State NOT consumed — the CSRF check fires before touching redis.
     assert "connector:oauth:state:ghost" in fake_redis.store
+
+
+def _opener_message(resp) -> dict:
+    """Decode the postMessage payload the popup page hands to the opener."""
+    found = re.search(r'data-message="([^"]*)"', resp.text)
+    assert found, "result page carries no data-message payload"
+    return json.loads(html.unescape(found.group(1)))
+
+
+def test_callback_state_binding_uses_secure_compare(client, monkeypatch):
+    """#20761: cookie/state binding is constant time; match passes, mismatch and missing cookie fail."""
+    tc, fake_redis = client
+    state = tc.post(_AUTHZ.format(p="google"), json={"redirect_uri": "https://localhost/cb"}).json()["state"]
+    calls = []
+    real = mod.secure_compare
+
+    def _spy(a, b):
+        calls.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(mod, "secure_compare", _spy)
+    # Mismatch: replace (not add to) the authorize-set cookie, so the jar holds exactly
+    # one value; a second same-named cookie would let the real one win.
+    tc.cookies.clear()
+    tc.cookies.set("connector_oauth_state", "other-state", path="/api/knowledge_base/connectors/oauth/callback")
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert resp.status_code == 200
+    message = _opener_message(resp)
+    assert message["ok"] is False
+    assert message["error"] == "state_binding_mismatch"
+    assert calls == [("other-state", state)]
+    # Missing cookie: fails, and the state is not consumed.
+    tc.cookies.clear()
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert _opener_message(resp)["error"] == "state_binding_mismatch"
+    assert f"connector:oauth:state:{state}" in fake_redis.store
+    # Match (control): binding passes and the flow proceeds past the CSRF check.
+    tc.cookies.set("connector_oauth_state", state, path="/api/knowledge_base/connectors/oauth/callback")
+    resp = tc.get(f"{_CALLBACK}?state={state}&code=x")
+    assert _opener_message(resp)["error"] != "state_binding_mismatch"
+    assert calls[-1] == (state, state)
 
 
 def test_callback_expired_state_returns_error_page(client):

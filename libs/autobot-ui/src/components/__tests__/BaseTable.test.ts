@@ -201,6 +201,33 @@ describe('BaseTable', () => {
     expect(at('.aui-table__row--zebra {')).toBeLessThan(at('.aui-table__row--selected {'))
   })
 
+  it('tints a row by its rowVariant and leaves the others plain (#19640)', async () => {
+    const w = make({
+      zebra: true,
+      selectable: true,
+      selectAllLabel: 'All',
+      selectRowLabel: (n: number) => `Row ${n}`,
+      rowVariant: (row: Record<string, unknown>) => (row.count === 3 ? 'error' : row.count === 100 ? 'warning' : undefined),
+    })
+    const rows = w.findAll('tbody tr')
+    expect(rows[0].classes()).not.toContain('aui-table__row--undefined')
+    expect(rows[0].classes().filter((c) => /--(success|warning|error|info)$/.test(c))).toEqual([])
+    expect(rows[1].classes()).toEqual(expect.arrayContaining(['aui-table__row--error', 'aui-table__row--zebra']))
+    expect(rows[2].classes()).toContain('aui-table__row--warning')
+    await w.findAll('input[type="checkbox"]')[2].setValue(true)
+    expect(w.findAll('tbody tr')[1].classes()).toEqual(expect.arrayContaining(['aui-table__row--error', 'aui-table__row--selected']))
+  })
+
+  it('declares the row tints after zebra and before hover and selected, so those still win', () => {
+    // fails if a tint rule moves after the same-specificity hover or selected rule
+    const at = (sel: string) => tableSource.indexOf(sel)
+    for (const v of ['success', 'warning', 'error', 'info']) {
+      expect(at(`.aui-table__row--${v} {`)).toBeGreaterThan(at('.aui-table__row--zebra {'))
+      expect(at(`.aui-table__row--${v} {`)).toBeLessThan(at('.aui-table__row:hover {'))
+      expect(at(`.aui-table__row--${v} {`)).toBeLessThan(at('.aui-table__row--selected {'))
+    }
+  })
+
   it('opens a header tooltip for columns that declare one', () => {
     const w = make({ columns: [{ key: 'name', label: 'Name', tooltip: 'The name' }] })
     expect(w.find('[role="tooltip"]').text()).toBe('The name')

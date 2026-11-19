@@ -411,6 +411,17 @@ class BaseProvider(ABC):
             await get_degradation_store().clear(self.provider_name)
         return token
 
+    async def _signed_in_token(self) -> str | None:
+        """The signed-in OAuth token for the current call, or None to use the API key (#19241).
+
+        User's own token, then the org/system token; see
+        ``llm_shared.provider_oauth_credentials``. Always None for a provider
+        without sign-in, so callers can ask unconditionally.
+        """
+        from .provider_oauth_credentials import resolve_signed_in_token  # noqa: PLC0415  # lazy: DB stack
+
+        return await resolve_signed_in_token(self.provider_name)
+
     def _headroom_http_client(self, default_client_cls: Any) -> Any | None:
         """An SDK httpx client that harvests rate-limit headers off every response (#15026).
 

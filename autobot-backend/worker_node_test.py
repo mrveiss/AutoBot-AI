@@ -19,7 +19,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from llm_shared.models import LLMResponse
 from task_handlers import TaskExecutor
+from tests.helpers._llm_service_double import make_llm_service_double
 from worker_node import WorkerNode
 
 
@@ -32,7 +34,7 @@ class TestWorkerNodeRefactored:
         with patch("worker_node.get_redis_client", return_value=None):
             worker = WorkerNode()
             # Mock the modules to avoid dependencies
-            worker.llm_interface = MagicMock()
+            worker.llm_service = make_llm_service_double()  # #19649
             worker.knowledge_base = MagicMock()
             worker.gui_controller = MagicMock()
             worker.system_integration = MagicMock()
@@ -112,7 +114,7 @@ class TestWorkerNodeRefactored:
     @pytest.mark.asyncio
     async def test_llm_chat_completion_success(self, worker_node):
         """Test successful LLM chat completion task"""
-        worker_node.llm_interface.chat_completion = AsyncMock(return_value="Test response")
+        worker_node.llm_service.chat.return_value = LLMResponse(content="Test response", model="test_model")
 
         task_payload = {
             "type": "llm_chat_completion",
@@ -129,7 +131,7 @@ class TestWorkerNodeRefactored:
         assert result["status"] == "success"
         assert "data" in result
         assert "response" in result["data"]
-        worker_node.llm_interface.chat_completion.assert_called_once()
+        worker_node.llm_service.chat.assert_called_once()
         worker_node.security_layer.audit_log.assert_called()
 
     @pytest.mark.asyncio

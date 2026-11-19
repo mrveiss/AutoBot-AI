@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 
+from .collections import company_collection, company_id_of
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
 
 logger = get_logger(__name__)
@@ -56,7 +57,7 @@ class KbInheritanceResolver:
 
         Returns:
             List of (collection_name, weight) tuples, in order from company to root.
-            Example: [("comp-123:company", 1.0), ("comp-parent:company", 0.6), ("comp-root:company", 0.36)]
+            Example: [("company:comp-123", 1.0), ("company:comp-parent", 0.6), ("company:comp-root", 0.36)]
 
         Raises:
             ValueError: If company_id not found
@@ -81,7 +82,7 @@ class KbInheritanceResolver:
 
             while current:
                 weight_multiplier = current.kb_inheritance_weight
-                collections.append((f"{str(current.id)}:company", weight))
+                collections.append((company_collection(current.id), weight))
 
                 if current.parent_org_id:
                     if current.parent_org_id in visited:
@@ -146,12 +147,12 @@ class KbInheritanceResolver:
         coro_specs = [
             (
                 self.rag_assembler.assemble(
-                    company_id=collection_name.split(":")[0],
+                    company_id=company_id_of(collection_name),
                     profile=AssemblerProfile.HEARTBEAT,
                     query_text=query_text,
                     work_item_id=work_item_id,
                 ),
-                collection_name.split(":")[0],
+                company_id_of(collection_name),
                 weight,
             )
             for collection_name, weight in collections

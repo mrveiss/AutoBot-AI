@@ -61,8 +61,17 @@ class AuditAction(str, Enum):
     SESSION_CREATE = "session.create"
     SESSION_DELETE = "session.delete"
     SESSION_EXPORT = "session.export"
+    SESSION_OWNER_ASSIGN = "session.owner_assign"
+    SESSION_REASSIGN = "session.reassign"  # #20029: a removed user's chat session handed to a successor
     KNOWLEDGE_ADD = "knowledge.add"
     KNOWLEDGE_REMOVE = "knowledge.remove"
+    KNOWLEDGE_BACKUP_DELETE = "knowledge.backup.delete"
+    KNOWLEDGE_BACKUP_RESTORE = "knowledge.backup.restore"
+    KNOWLEDGE_UPLOAD_SESSION_REMOVE = "knowledge.upload_session.remove"  # #19713: an admin frees an abandoned upload
+    KNOWLEDGE_QUARANTINE_READ = "knowledge.quarantine.read"  # #19163: an opt-out read of the research quarantine
+    KNOWLEDGE_ADMIN_READ = "kb.admin_read"  # #16665: an admin's read of any fact through an explicit read API
+    KNOWLEDGE_WIPE = "knowledge.wipe"  # #21048: the knowledge-base wipe, run after an approval
+    KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
@@ -100,6 +109,8 @@ class AuditAction(str, Enum):
     CLAIMS_CREDENTIAL_MINT = "claims_credential.mint"  # #18811
     CLAIMS_CREDENTIAL_REVOKE = "claims_credential.revoke"  # #18811
     CLAIMS_CREDENTIAL_CHECK_FAILURES = "claims_credential.check_failures"  # #18811: one per source per window
+    # #19241: a provider sign-in disconnect (user / org system) or a superadmin's shared-token revoke.
+    PROVIDER_SIGNIN_REVOKE = "provider_signin.revoke"
     # identity vocabulary (#19035); IdentityAuditAction spellings map here through audit_actions.ACTION_ALIASES.
     # auth.mfa carries verified / failed / backup-code in the outcome column, like auth.login.
     AUTH_MFA = "auth.mfa"
@@ -114,6 +125,7 @@ class AuditAction(str, Enum):
     SSO_UNLINK = "sso.unlink"
     USER_ACTIVATE = "user.activate"
     USER_DEACTIVATE = "user.deactivate"
+    USER_PLATFORM_ADMIN_CHANGE = "user.platform_admin_change"  # #20670: the platform-admin flag was granted or revoked
     TEAM_CREATE = "team.create"
     TEAM_UPDATE = "team.update"
     TEAM_DELETE = "team.delete"
@@ -123,11 +135,35 @@ class AuditAction(str, Enum):
     ORG_CREATE = "org.create"
     ORG_UPDATE = "org.update"
     ORG_DELETE = "org.delete"
+    ORG_SUBSCRIPTION_TIER_DROP = "org.subscription_tier.drop"
+    NODE_SSH_PASSWORD_DELETE = (
+        "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
+    )
+    CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
     ROLE_DELETE = "role.delete"
     API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
     SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
+    CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
+    CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
+    CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
+    LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
+    # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.
+    AGENT_PAUSE = "agent.pause"
+    AGENT_RESUME = "agent.resume"
+    AGENT_TERMINATE = "agent.terminate"
+    # #16333: the internal service key was admitted on a route that names its caller (service_opt_in).
+    SERVICE_KEY_ADMITTED = "auth.service_key_admitted"  # pragma: allowlist secret -- an action name, not a key
+    # #20750: re-aligning the backend's AUTOBOT_INTERNAL_API_KEY to the SLM's, one record per step.
+    INTERNAL_KEY_REALIGN_PROPOSED = "credential.internal_key.realign_proposed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_CLAIMED = "credential.internal_key.realign_claimed"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLIED = "credential.internal_key.realign_applied"  # pragma: allowlist secret
+    INTERNAL_KEY_REALIGN_APPLY_FAILED = "credential.internal_key.realign_apply_failed"  # pragma: allowlist secret
+    # #20750: compensates a "proposed" row whose approval could not be created, same approval_id.
+    INTERNAL_KEY_REALIGN_PROPOSAL_FAILED = "credential.internal_key.realign_proposal_failed"  # pragma: allowlist secret
 
 
 class ComplianceEventType(str, Enum):

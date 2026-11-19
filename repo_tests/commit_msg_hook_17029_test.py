@@ -14,9 +14,11 @@ trailers. `tools/git-hooks/commit-msg` is now tracked, installed by
 Every test runs the real hook and the real lint script in a throwaway repository.
 """
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -36,7 +38,8 @@ _LINT_SCRIPT = "scripts/lint-conventions.sh"
 # broken. scripts/lint_conventions_test.py already derives its fixture this way
 # for exactly this reason (#15245); this file is the second fixture with the
 # same shape and did not.
-_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+# #19645: .py too -- the commit-msg mode runs lib/outward_wording.py.
+_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere|py))")
 
 
 def _lint_files() -> tuple[str, ...]:
@@ -56,15 +59,21 @@ def repo(tmp_path: Path) -> Path:
     for rel in _lint_files():
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_ROOT / rel, repo / rel)
+    shutil.copy2(_ROOT / ".python-version", repo / ".python-version")  # #21163: the resolver floor
     return make_repo(repo)
+
+
+def _hook_env() -> dict[str, str]:
+    """The isolated git env with the running interpreter dir on PATH (#21163 resolver)."""
+    env = isolated_git_env()
+    env["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}{env.get('PATH', '')}"
+    return env
 
 
 def _run_hook(repo: Path, message: str) -> tuple[subprocess.CompletedProcess, str]:
     msg = repo / "MSG"
     msg.write_text(message, encoding="utf-8")
-    result = subprocess.run(
-        ["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
-    )
+    result = subprocess.run(["bash", str(_HOOK), str(msg)], cwd=repo, capture_output=True, text=True, env=_hook_env())
     return result, msg.read_text(encoding="utf-8")
 
 
@@ -117,3 +126,23 @@ def test_a_real_commit_is_refused_then_accepted(repo: Path) -> None:
 
     assert refused.returncode != 0, refused.stdout + refused.stderr
     assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "ci(wording): queued by the trainmaster (#19645)",
+        "ci(wording): handed a0 → 4d (#19645)",
+        "ci(wording): agreed with the M3 owner (#19645)",
+        "ci(wording): picked up from autobot-ai-4d (#19645)",
+    ],
+)
+def test_a_subject_naming_a_session_or_internal_role_is_rejected(repo: Path, subject: str) -> None:
+    """#19645: the hook runs the one wording detector, scripts/lib/outward_wording.py."""
+    result, _ = _run_hook(repo, subject + "\n")
+    assert result.returncode != 0, result.stdout
+    assert "FAIL" in result.stdout and "maintainer decision (YYYY-MM-DD)" in result.stdout
+
+
+def test_a_subject_with_a_hex_sha_and_the_word_train_passes(repo: Path) -> None:
+    assert _run_hook(repo, "ci(wording): the merge train reverts a0b1c2d3e4 (#19645)\n")[0].returncode == 0

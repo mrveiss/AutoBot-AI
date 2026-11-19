@@ -12,7 +12,8 @@
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { formatDateTime } from '@/composables/useTimezone'
+import { useI18n } from 'vue-i18n'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
 import { getSlmApiBase } from '@/config/ssot-config'
 import {
@@ -31,7 +32,9 @@ import {
 } from '@/composables/useSsoApi'
 import PasswordChangeForm from '@shared/components/PasswordChangeForm.vue'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import PersonPushFailuresAlert from './PersonPushFailuresAlert.vue'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const autobotApi = useAutobotApi()
 const slmApi = useSlmUserApi()
@@ -94,7 +97,7 @@ const newProviderForm = reactive({
 // RBAC state
 const rbacStatus = reactive({
   initialized: false,
-  message: 'Checking RBAC status...',
+  message: t('settings.admin.userManagementSettings.checkingRbacStatus'),
 })
 const isInitializingRbac = ref(false)
 const rbacInitOptions = reactive({
@@ -145,7 +148,7 @@ async function loadSlmUsers(): Promise<void> {
     const response = await slmApi.getSlmUsers()
     slmUsers.value = response.users
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load SLM users'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadSlmUsers')
   }
 }
 
@@ -154,7 +157,7 @@ async function loadAutobotUsers(): Promise<void> {
     const response = await slmApi.getAutobotUsers()
     autobotUsers.value = response.users
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load AutoBot users'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadAutobotUsers')
   }
 }
 
@@ -163,7 +166,7 @@ async function loadTeams(): Promise<void> {
     const response = await slmApi.getTeams()
     teams.value = response.teams
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load teams'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadTeams')
   }
 }
 
@@ -172,7 +175,7 @@ async function loadSsoProviders(): Promise<void> {
     const response = await ssoApi.listProviders()
     ssoProviders.value = response.providers
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load SSO providers'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToLoadSsoProviders')
   }
 }
 
@@ -200,7 +203,7 @@ async function loadAllData(): Promise<void> {
 
 async function createUser(): Promise<void> {
   if (newUserForm.password !== newUserForm.confirmPassword) {
-    error.value = 'Passwords do not match'
+    error.value = t('settings.admin.userManagementSettings.passwordsDoNotMatch')
     return
   }
 
@@ -220,42 +223,42 @@ async function createUser(): Promise<void> {
       await slmApi.createAutobotUser(payload)
     }
 
-    showSuccess('User created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.userCreated'))
     showCreateUserModal.value = false
     resetNewUserForm()
     await refreshActiveTab()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateUser')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteSlmUser(userId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this SLM admin?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteSlmAdmin'))) return
 
   saving.value = true
   try {
     await slmApi.deleteSlmUser(userId)
-    showSuccess('SLM user deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.slmUserDeleted'))
     await loadSlmUsers()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteUser')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteAutobotUser(userId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this user?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteUser'))) return
 
   saving.value = true
   try {
     await slmApi.deleteAutobotUser(userId)
-    showSuccess('AutoBot user deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.autobotUserDeleted'))
     await loadAutobotUsers()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete user'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteUser')
   } finally {
     saving.value = false
   }
@@ -275,28 +278,28 @@ async function createTeam(): Promise<void> {
       description: newTeamForm.description || undefined,
     })
 
-    showSuccess('Team created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.teamCreated'))
     showCreateTeamModal.value = false
     newTeamForm.name = ''
     newTeamForm.description = ''
     await loadTeams()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create team'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateTeam')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteTeam(teamId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this team?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteTeam'))) return
 
   saving.value = true
   try {
     await slmApi.deleteTeam(teamId)
-    showSuccess('Team deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.teamDeleted'))
     await loadTeams()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete team'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteTeam')
   } finally {
     saving.value = false
   }
@@ -335,7 +338,7 @@ async function checkRbacStatus(): Promise<void> {
     rbacStatus.initialized = data.initialized
     rbacStatus.message = data.message
   } catch {
-    rbacStatus.message = 'Failed to check RBAC status'
+    rbacStatus.message = t('settings.admin.userManagementSettings.failedToCheckRbacStatus')
   }
 }
 
@@ -348,11 +351,11 @@ async function initializeRbac(): Promise<void> {
       create_admin: rbacInitOptions.createAdmin,
       admin_username: rbacInitOptions.adminUsername,
     })
-    showSuccess(data.message || 'RBAC initialized successfully')
+    showSuccess(data.message || t('settings.admin.userManagementSettings.rbacInitializedSuccessfully'))
     showRbacModal.value = false
     await checkRbacStatus()
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to initialize RBAC')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.userManagementSettings.failedToInitializeRbac'))
   } finally {
     isInitializingRbac.value = false
   }
@@ -397,27 +400,27 @@ async function createSsoProvider(): Promise<void> {
     }
 
     await ssoApi.createProvider(payload)
-    showSuccess('SSO provider created successfully')
+    showSuccess(t('settings.admin.userManagementSettings.ssoProviderCreated'))
     showCreateProviderModal.value = false
     resetNewProviderForm()
     await loadSsoProviders()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToCreateSsoProvider')
   } finally {
     saving.value = false
   }
 }
 
 async function deleteSsoProvider(providerId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this SSO provider?')) return
+  if (!confirm(t('settings.admin.userManagementSettings.confirmDeleteSsoProvider'))) return
 
   saving.value = true
   try {
     await ssoApi.deleteProvider(providerId)
-    showSuccess('SSO provider deleted successfully')
+    showSuccess(t('settings.admin.userManagementSettings.ssoProviderDeleted'))
     await loadSsoProviders()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToDeleteSsoProvider')
   } finally {
     saving.value = false
   }
@@ -427,12 +430,12 @@ async function testSsoProvider(providerId: string): Promise<void> {
   try {
     const result = await ssoApi.testProvider(providerId)
     if (result.success) {
-      showSuccess(result.message || 'SSO provider connection successful')
+      showSuccess(result.message || t('settings.admin.userManagementSettings.ssoConnectionSuccessful'))
     } else {
-      error.value = result.message || 'SSO provider connection test failed'
+      error.value = result.message || t('settings.admin.userManagementSettings.ssoConnectionFailed')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to test SSO provider'
+    error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToTestSsoProvider')
   }
 }
 
@@ -450,11 +453,6 @@ async function refreshActiveTab(): Promise<void> {
   else if (activeTab.value === 'autobot-users') await loadAutobotUsers()
   else if (activeTab.value === 'sso') await loadSsoProviders()
   else await loadTeams()
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never'
-  return formatDateTime(dateStr)
 }
 
 // ===========================================================================
@@ -479,49 +477,36 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
 <template>
   <div class="p-6 space-y-6">
-    <!-- Messages -->
+    <PersonPushFailuresAlert />
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.userManagementSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
-
+    <BaseAlert v-if="success" variant="success" :message="success" />
     <!-- Authentication Status -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.authenticationStatus') }}</h2>
 
-      <div v-if="authStore.isAuthenticated" class="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-        <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div class="flex-1">
-          <p class="font-medium text-green-800">{{ $t('settings.admin.userManagementSettings.authenticated') }}</p>
-          <p class="text-sm text-green-600">{{ authStore.user?.username }} ({{ isAdmin ? 'Admin' : 'User' }})</p>
-        </div>
-        <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          {{ $t('settings.admin.userManagementSettings.logout') }}
-        </button>
-      </div>
+      <BaseAlert
+        v-if="authStore.isAuthenticated"
+        variant="success"
+        :title="$t('settings.admin.userManagementSettings.authenticated')"
+      >
+        {{ authStore.user?.username }} ({{ isAdmin ? $t('common.sidebar.admin') : $t('common.sidebar.user') }})
+        <template #actions>
+          <button @click="logout" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            {{ $t('settings.admin.userManagementSettings.logout') }}
+          </button>
+        </template>
+      </BaseAlert>
 
-      <div v-else class="flex items-center gap-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <div class="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <div class="flex-1">
-          <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.notAuthenticated') }}</p>
-          <p class="text-sm text-yellow-600">{{ $t('settings.admin.userManagementSettings.pleaseLogInTo') }}</p>
-        </div>
-      </div>
+      <BaseAlert
+        v-else
+        variant="warning"
+        :title="$t('settings.admin.userManagementSettings.notAuthenticated')"
+        :message="$t('settings.admin.userManagementSettings.pleaseLogInTo')"
+      />
     </div>
 
     <!-- Preferences, session timeout and re-auth are hidden until a backend stores them (#18733). -->
@@ -648,7 +633,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -715,7 +700,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ user.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
                     <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
@@ -768,7 +753,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <tr v-for="team in teams" :key="team.id" class="border-b border-gray-100 hover:bg-gray-50">
                 <td class="py-3 px-4 text-sm font-medium text-gray-900">{{ team.name }}</td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ team.description || '-' }}</td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(team.created_at) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(team.created_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <button @click="deleteTeam(team.id)" class="text-red-600 hover:text-red-800 p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -824,7 +809,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ provider.is_active ? $t('settings.admin.userManagementSettings.active') : $t('settings.admin.userManagementSettings.inactive') }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatFleetDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
                     <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">
@@ -853,21 +838,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     <div v-if="isAdmin" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.userManagementSettings.roleBasedAccessControl') }}</h2>
 
-      <div class="p-4 rounded-lg mb-4" :class="rbacStatus.initialized ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
-        <div class="flex items-center gap-3">
-          <svg :class="['w-5 h-5', rbacStatus.initialized ? 'text-green-500' : 'text-yellow-500']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="rbacStatus.initialized ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' : 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'" />
-          </svg>
-          <div>
-            <p :class="['font-medium', rbacStatus.initialized ? 'text-green-800' : 'text-yellow-800']">
-              {{ rbacStatus.initialized ? $t('settings.admin.userManagementSettings.rBACInitialized') : $t('settings.admin.userManagementSettings.rBACNotInitialized') }}
-            </p>
-            <p :class="['text-sm', rbacStatus.initialized ? 'text-green-600' : 'text-yellow-600']">
-              {{ rbacStatus.message }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <BaseAlert
+        :variant="rbacStatus.initialized ? 'success' : 'warning'"
+        class="mb-4"
+        :title="rbacStatus.initialized ? $t('settings.admin.userManagementSettings.rBACInitialized') : $t('settings.admin.userManagementSettings.rBACNotInitialized')"
+        :message="rbacStatus.message"
+      />
 
       <div class="p-4 bg-gray-50 rounded-lg mb-4">
         <p class="text-sm text-gray-600"><strong>{{ $t('settings.admin.userManagementSettings.systemPermissions') }}</strong> {{ $t('settings.admin.userManagementSettings.23PermissionsAcross8') }}</p>
@@ -998,19 +974,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       size="sm"
       :close-label="$t('ui.modal.closeDialog')"
     >
-      <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-        <div class="flex gap-3">
-          <svg class="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div>
-            <p class="font-medium text-yellow-800">{{ $t('settings.admin.userManagementSettings.rBACInitialization') }}</p>
-            <p class="text-sm text-yellow-700">
-              {{ $t('settings.admin.userManagementSettings.thisWillCreateSystem') }}
-            </p>
-          </div>
-        </div>
-      </div>
+      <BaseAlert
+        variant="warning"
+        class="mb-4"
+        :title="$t('settings.admin.userManagementSettings.rBACInitialization')"
+        :message="$t('settings.admin.userManagementSettings.thisWillCreateSystem')"
+      />
 
       <div class="space-y-4">
         <div class="flex items-center gap-3">

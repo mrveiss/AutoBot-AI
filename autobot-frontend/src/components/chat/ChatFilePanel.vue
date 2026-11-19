@@ -182,7 +182,7 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-autobot-text-secondary">{{ formatFileSize(file.size_bytes) }}</span>
               <span class="text-xs text-autobot-text-muted">&middot;</span>
-              <span class="text-xs text-autobot-text-secondary">{{ formatDate(file.upload_timestamp) }}</span>
+              <span class="text-xs text-autobot-text-secondary">{{ formatTimeAgo(file.upload_timestamp) }}</span>
             </div>
             <StatusBadge
               v-if="file.file_type === 'generated'"
@@ -278,7 +278,7 @@
           ></textarea>
           <div class="flex justify-end gap-2">
             <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
+            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
           </div>
         </div>
       </div>
@@ -298,22 +298,27 @@
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
             <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
-            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
+            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-autobot-text-on-primary bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
           </div>
         </div>
       </div>
+    </Teleport>
+    <!-- Preview Pane: the server-built preview of a listed text attachment (#20906) -->
+    <Teleport to="body">
+      <FilePreviewPane v-if="preview || previewLoading" :preview="preview" @close="closePreview" />
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createRecencyFormatter } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { useLatestRequest } from '@/composables/useLatestRequest'
+import FilePreviewPane from '@/components/chat/FilePreviewPane.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 
@@ -325,7 +330,8 @@ defineEmits<{
   close: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const { confirm } = useConfirmDialog()
 
 // File management composable
@@ -333,6 +339,10 @@ const {
   stats,
   loading,
   error,
+  preview,
+  previewLoading,
+  closePreview,
+  resetForSession,
   uploadProgress,
   hasFiles,
   totalSizeFormatted,
@@ -362,7 +372,7 @@ const {
   isPreviewable,
   isEditable,
   clearError
-} = useConversationFiles(props.sessionId)
+} = useConversationFiles(() => props.sessionId)
 
 // Local state
 const fileInput = ref<HTMLInputElement>()
@@ -436,10 +446,14 @@ const handleRename = async () => {
   renameValue.value = ''
 }
 
+/** Only the latest edit-open may fill the editor; a session switch or a newer open revokes the one in flight (#21337). */
+const editOpen = useLatestRequest()
+
 const startEdit = async (fileId: string, filename: string) => {
   contextMenu.value = null
+  const token = editOpen.begin()
   const content = await getFileContent(fileId)
-  if (content !== null) {
+  if (content !== null && editOpen.isCurrent(token)) {
     editingFileId.value = fileId
     editingContent.value = content
     editingFileName.value = filename
@@ -495,9 +509,6 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 }
 
-// Use shared time formatting utility
-const formatDate = formatTimeAgo
-
 onMounted(() => {
   if (props.sessionId) loadFiles()
   document.addEventListener('keydown', handleKeydown)
@@ -510,6 +521,12 @@ onUnmounted(() => {
 })
 
 watch(() => props.sessionId, (newSessionId) => {
+  resetForSession()
+  // A draft belongs to the file of the previous conversation; saving it here would write into the new one (#21337).
+  editOpen.invalidate()
+  editingFileId.value = null
+  editingContent.value = ''
+  editingFileName.value = ''
   if (newSessionId) loadFiles()
 })
 </script>

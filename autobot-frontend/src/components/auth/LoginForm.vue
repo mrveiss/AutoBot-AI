@@ -73,7 +73,7 @@
           class="login-button"
           :disabled="isLoading || !isFormValid"
         >
-          <span v-if="isLoading" class="loading-spinner"></span>
+          <BaseSpinner v-if="isLoading" size="sm" />
           <span v-else>{{ $t('auth.login.signIn') }}</span>
         </button>
 
@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
-import { BaseAlert, BrandMark } from '@autobot/ui'
+import { BaseAlert, BrandMark, isHttpError, BaseSpinner } from '@autobot/ui'
 import type { Role } from '@/types/_generated/workflow'
 import { DEFAULT_ROLE } from '@/constants/roles'
 import { useI18n } from 'vue-i18n'
@@ -255,9 +255,8 @@ async function handleLogin() {
   } catch (error) {
     logger.error('Login error:', error)
 
-    // ApiClient throws Error with message like "HTTP 401: Invalid username or password"
-    const statusMatch = (error as Error).message?.match(/HTTP (\d+)/)
-    const status = statusMatch ? parseInt(statusMatch[1]) : 0
+    // ApiClient throws the kit HttpError, which carries the response status
+    const status = isHttpError(error) ? error.status : 0
     if (status === 401) {
       loginError.value = t('auth.login.invalidCredentials')
     } else if (status === 423) {
@@ -452,19 +451,6 @@ onMounted(async () => {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
-}
-
-.loading-spinner {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: var(--radius-full);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .login-footer {

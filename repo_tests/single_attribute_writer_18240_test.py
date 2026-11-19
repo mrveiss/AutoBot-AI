@@ -82,8 +82,6 @@ def _source_population(root):
 REACH = declare(
     "single-attribute-writer-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=721,
     what="user frontend source",
     roots=(_ROOT,),
     growth=300,

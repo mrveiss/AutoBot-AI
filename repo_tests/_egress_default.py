@@ -40,6 +40,8 @@ import re
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple
 
+from tools.lint import _parse_cache as parse_cache
+
 __all__ = ["Site", "outbound_sites", "scan_paths"]
 
 _VERBS = {"get", "post", "put", "delete", "patch", "head", "request", "stream", "ws_connect"}
@@ -351,7 +353,7 @@ def _calls(node: ast.AST, scope: ast.AST) -> Iterator[tuple[ast.Call, ast.AST]]:
 
 def outbound_sites(source: str) -> tuple[Site, ...]:
     """Every outbound call in *source*. Raises ``SyntaxError`` rather than returning ``()``."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     ctx = _build_ctx(tree, source)
     sites = []
     for call, scope in _calls(tree, tree):

@@ -16,6 +16,7 @@ import uuid
 from autobot_shared.logging_manager import get_logger
 
 from .tracing_config import LangSmithTracingConfig
+from .tracing_policy import trace_ident, trace_messages, trace_text
 
 logger = get_logger(__name__)
 
@@ -40,11 +41,11 @@ class LangSmithObserver:
             id=run_id,
             name="llm.inference",
             run_type="llm",
-            inputs={"messages": request.messages},
+            inputs={"messages": trace_messages(request.messages)},
             extra={
                 "metadata": {
-                    "agent_id": request.metadata.get("agent_id"),
-                    "run_id": request.metadata.get("run_id"),
+                    "agent_id": trace_ident(request.metadata.get("agent_id")),
+                    "run_id": trace_ident(request.metadata.get("run_id")),
                 }
             },
             project_name=self._project,
@@ -57,14 +58,14 @@ class LangSmithObserver:
             return
         self._client.update_run(
             run_id,
-            outputs={"content": response.content},
+            outputs={"content": trace_text(response.content)},
             extra={"usage": response.usage, "latency_ms": latency_ms},
         )
 
     async def on_error(self, exc: Exception, request) -> None:
         run_id = self._pending.pop(request.request_id, None)
         if run_id is not None:
-            self._client.update_run(run_id, error=str(exc))
+            self._client.update_run(run_id, error=trace_text(str(exc)))
 
     def flush(self) -> None:
         pass  # langsmith client flushes automatically

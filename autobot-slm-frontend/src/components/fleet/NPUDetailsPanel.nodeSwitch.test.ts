@@ -21,6 +21,9 @@ vi.mock('@/stores/fleet', () => ({
   useFleetStore: () => ({ fetchNpuWorkerConfig, fetchNpuNodeMetrics }),
 }))
 
+// The panel translates its save notice through useI18n; the tests mount without the plugin.
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
+
 import NPUDetailsPanel from './NPUDetailsPanel.vue'
 
 const nodeA = { node_id: 'node-a', hostname: 'npu-a' }

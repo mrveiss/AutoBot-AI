@@ -23,9 +23,17 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from utils.config_bootstrap import DEFAULT_WORKER_PORT
 from utils.local_ip import get_local_ip
 
 logger = logging.getLogger(__name__)
+
+#: Seconds between this worker's telemetry heartbeats to the main backend. Named apart from the
+#: SLM agent's ``DEFAULT_HEARTBEAT_INTERVAL`` (autobot_shared/fleet_constants.py) on purpose
+#: (#18094): a different channel and receiver -- the backend judges NPU workers by its own
+#: ``heartbeat_max_silence_seconds`` -- so the equal value is a coincidence, not a shared
+#: contract, and this bundle cannot import autobot_shared anyway (#5438).
+DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL = 30
 
 
 class BackendTelemetryClient:
@@ -47,7 +55,7 @@ class BackendTelemetryClient:
         worker_id: str,
         worker_url: str,
         platform: str = "windows",
-        heartbeat_interval: int = 30,
+        heartbeat_interval: int = DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL,
         service_id: str | None = None,
         service_key: str | None = None,
     ):
@@ -338,13 +346,6 @@ class BackendTelemetryClient:
             return False
 
 
-# =============================================================================
-# Constants (Issue #68 - Code smells fix: Extract magic numbers)
-# Note: No hardcoded IPs - backend host comes from config/environment
-# =============================================================================
-DEFAULT_WORKER_PORT = 8082
-DEFAULT_HEARTBEAT_INTERVAL = 30
-
 # Issue #255: Service authentication defaults
 DEFAULT_SERVICE_ID = "npu-worker"
 SERVICE_KEY_FILE_PATHS = [
@@ -500,7 +501,7 @@ async def get_telemetry_client(config: dict) -> BackendTelemetryClient | None:
             worker_id=worker_id,
             worker_url=worker_url,
             platform="windows",
-            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_HEARTBEAT_INTERVAL),
+            heartbeat_interval=backend_config.get("health_check_interval", DEFAULT_TELEMETRY_HEARTBEAT_INTERVAL),
             service_id=service_id,
             service_key=service_key,
         )

@@ -36,6 +36,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 CANONICAL_CREATOR = "autobot-backend/knowledge_factory.py"
@@ -81,37 +83,13 @@ BASELINE: dict[str, tuple[int, str]] = {
     ),
     # autobot-infrastructure: one-shot operator scripts are separate processes that cannot share
     # the backend's published singleton; they drain by calling `get_knowledge_base_async()`.
-    "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py": (
-        1,
-        f"{_DRAIN} (S4+): the embedded MCP server lazily builds its own KB; use knowledge_factory",
-    ),
-    "autobot-infrastructure/shared/scripts/direct_kb_populate.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/identity_config_utility.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/kb_dimension_utility.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_kb_fixed.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_knowledge_base.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/quick_populate_kb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/reset_kb_dimensions.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/setup/knowledge/fresh_kb_setup.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/sync_kb_docs.py": (2, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/integrate_system_knowledge.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py": (2, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/migrate_redis_to_chromadb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/quick_test_os_context.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/vectorize_existing_docs.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/verify_knowledge_consistency.py": (3, _SCRIPT),
 }
 
 
 def _is_test_path(rel: str) -> bool:
     """Decided on REPO-RELATIVE parts only (#18972: absolute paths blind worktrees)."""
     *dirs, name = rel.split("/")
-    return (
-        name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or bool(_TEST_DIRS & set(dirs))
-    )
+    return is_test_filename(name, include_js=False) or bool(_TEST_DIRS & set(dirs))
 
 
 def _from_source(module: str | None) -> bool:
@@ -170,7 +148,7 @@ def _bindings(tree: ast.Module, defines_it: bool) -> tuple[set[str], set[str]]:
 
 def _construction_lines(source: str, rel: str = "") -> list[int]:
     """Line numbers of calls that construct the real KnowledgeBase."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     classes, modules = _bindings(tree, rel == DEFINER)
     lines = []
     for node in ast.walk(tree):
@@ -198,8 +176,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "kb-construction-18122-scan",
     discover=_population,
-    # Mid-window from REACH.window(): population 3595, window [3295, 3595], pinned 3445.
-    floor=3445,
     what="non-test python source",
     roots=_SEARCH_ROOTS,
     growth=300,

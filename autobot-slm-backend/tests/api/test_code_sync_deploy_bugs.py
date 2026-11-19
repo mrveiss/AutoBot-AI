@@ -482,7 +482,7 @@ def test_ensure_target_python_uses_arg_list_and_target_from_map(tmp_path) -> Non
         captured.extend(cmd)
         proc = MagicMock()
         proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        proc.communicate = AsyncMock(return_value=(b"localhost : ok=1 changed=0 unreachable=0 failed=0", b""))
         return proc
 
     playbook = tmp_path / "provision-local-python.yml"
@@ -1494,7 +1494,7 @@ def test_provision_playbook_runs_from_ansible_dir_with_config() -> None:
         captured["kw"] = kw
         proc = MagicMock()
         proc.returncode = 0
-        proc.communicate = AsyncMock(return_value=(b"PLAY RECAP ok=11 changed=1 failed=0", b""))
+        proc.communicate = AsyncMock(return_value=(b"localhost : ok=1 changed=0 unreachable=0 failed=0", b""))
         return proc
 
     steps: list = []

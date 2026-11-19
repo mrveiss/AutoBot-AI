@@ -48,7 +48,6 @@ Two divergences are preserved deliberately rather than flattened:
 from __future__ import annotations
 
 import asyncio
-import os
 import socket
 import subprocess
 import sys
@@ -66,15 +65,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.service_registry_core import (  # noqa: E402 - follows the sys.path setup
     SERVICE_DEFINITIONS,
     DeploymentMode,
     ServiceHealth,
-    detect_deployment_mode,
     join_service_path,
-    parse_deployment_mode,
+    resolve_deployment_mode,
 )
-from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.status_enums import HealthStatus  # noqa: E402
 
 logger = get_logger(__name__)
@@ -88,7 +86,7 @@ __all__ = [
     "ServiceHealth",
     "ServiceRegistry",
     "ServiceStatus",
-    "get_service_registry",
+    "get_deployment_registry",
 ]
 
 
@@ -108,11 +106,8 @@ class ServiceRegistry:
 
     @staticmethod
     def _detect_deployment_mode() -> DeploymentMode:
-        """Detect deployment mode from env, falling back to container heuristic."""
-        explicit = parse_deployment_mode(os.environ.get("AUTOBOT_DEPLOYMENT_MODE", ""), logger, "AUTOBOT_DEPLOYMENT_MODE")
-        return detect_deployment_mode(
-            explicit, in_container=os.path.exists("/.dockerenv"), kubernetes=False, distributed=False
-        )
+        """The shared resolver: AUTOBOT_DEPLOYMENT_MODE when set and valid, else detection (#19316)."""
+        return resolve_deployment_mode(logger)
 
     @staticmethod
     def _probe(url: str, timeout: float = 5.0) -> bool:
@@ -178,7 +173,7 @@ class ServiceRegistry:
 _registries: Dict[Tuple[Optional[str], bool], ServiceRegistry] = {}
 
 
-def get_service_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
+def get_deployment_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
     """Get the process-wide ServiceRegistry for these arguments (#18964).
 
     One instance per ``(config_file, populate_services)`` pair, so the script that fills
