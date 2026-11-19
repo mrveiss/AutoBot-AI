@@ -5,7 +5,6 @@
 """An agent-config edit and a rollback serialise under the one config write lock (#21742)."""
 
 import threading
-import time
 from types import SimpleNamespace
 
 import config as config_pkg
@@ -18,62 +17,108 @@ _AGENT = next(iter(DEFAULT_AGENT_CONFIGS))
 _BASE = DEFAULT_AGENT_CONFIGS[_AGENT]
 
 
-class _SlowStore:
-    """Settings store whose writes yield, so an unlocked second writer would interleave."""
+#: Longest the test waits to see the second writer NOT enter. Only the negative check is bounded by time;
+#: the ordering itself comes from the events below.
+_NEGATIVE_WAIT_SECONDS = 0.3
+_PARK_TIMEOUT_SECONDS = 10
+
+
+class _ParkingStore:
+    """Settings store whose first write parks inside the locked operation until released."""
 
     def __init__(self):
         self.values = {}
-        self.events = []
+        self.owners = []
+        self.parked = threading.Event()
+        self.release = threading.Event()
+        self.second_entered = threading.Event()
+        self._first = None
 
     def get_nested(self, key, default=None):
         return self.values.get(key, default)
 
     def set_nested(self, key, value):
-        self.events.append((threading.current_thread().name, "set"))
-        time.sleep(0.02)
+        me = threading.current_thread().name
+        self.owners.append(me)
+        if self._first is None:
+            self._first = me
+            self.parked.set()
+            assert self.release.wait(_PARK_TIMEOUT_SECONDS), "writer A was never released"
+        elif me != self._first:
+            self.second_entered.set()
         self.values[key] = value
 
     def save_settings(self):
-        self.events.append((threading.current_thread().name, "save"))
+        pass
 
 
-def _run_concurrently(*targets):
-    threads = [threading.Thread(target=t, name=f"w{i}") for i, t in enumerate(targets)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+class _Workers:
+    """Threads that capture their exception and re-raise it from ``join``."""
+
+    def __init__(self):
+        self.errors = []
+        self.threads = []
+
+    def start(self, name, target):
+        def run():
+            try:
+                target()
+            except BaseException as exc:  # noqa: BLE001 - re-raised in join()
+                self.errors.append(exc)
+
+        thread = threading.Thread(target=run, name=name)
+        self.threads.append(thread)
+        thread.start()
+
+    def join(self):
+        for thread in self.threads:
+            thread.join(_PARK_TIMEOUT_SECONDS)
+            assert not thread.is_alive(), f"{thread.name} did not finish"
+        if self.errors:
+            raise self.errors[0]
 
 
-def _assert_no_interleave(events):
-    owners = [name for name, _ in events]
-    runs = [n for i, n in enumerate(owners) if i == 0 or owners[i - 1] != n]
-    assert len(runs) == len(set(runs)), f"writers interleaved: {events}"
+def _run_serialised(store, writer_a, writer_b):
+    """Park A inside its locked write, start B, prove B has not entered, release A, join both."""
+    workers = _Workers()
+    workers.start("writer-a", writer_a)
+    assert store.parked.wait(_PARK_TIMEOUT_SECONDS), "writer A never reached its write"
+    workers.start("writer-b", writer_b)
+    entered = store.second_entered.wait(_NEGATIVE_WAIT_SECONDS)
+    store.release.set()
+    workers.join()
+    assert not entered, "writer B entered its write while writer A held the config write lock"
 
 
 def test_agent_edit_and_rollback_do_not_lose_either_write(monkeypatch):
-    store = _SlowStore()
+    store = _ParkingStore()
     monkeypatch.setattr(config_pkg, "config_manager", store)
     monkeypatch.setattr(config_rollback.ConfigService, "clear_cache", lambda: None)
     update = SimpleNamespace(model="edited", provider="edited-provider")
     snapshot = {"model": "rolled-back", "provider": "rolled-provider", "enabled": False}
 
-    _run_concurrently(
+    _run_serialised(
+        store,
         lambda: write_agent_model(store, _AGENT, _BASE, update),
         lambda: rollback_locked("agent", _AGENT, snapshot),
     )
 
-    _assert_no_interleave(store.events)
+    assert store.owners.index("writer-b") > max(i for i, o in enumerate(store.owners) if o == "writer-a")
     assert store.values[f"agents.{_AGENT}.enabled"] is False
     pair = (store.values[f"agents.{_AGENT}.model"], store.values[f"agents.{_AGENT}.provider"])
-    assert pair in {("edited", "edited-provider"), ("rolled-back", "rolled-provider")}, f"mixed writers: {pair}"
+    assert pair == ("rolled-back", "rolled-provider"), f"B ran second, so its pair must win: {pair}"
 
 
 def test_two_agent_edits_do_not_interleave():
-    store = _SlowStore()
-    update = SimpleNamespace(model="m", provider=None)
-    _run_concurrently(
+    store = _ParkingStore()
+    update = SimpleNamespace(model="m", provider="p")
+    _run_serialised(
+        store,
         lambda: write_agent_model(store, _AGENT, _BASE, update),
         lambda: write_agent_enabled(store, _AGENT, False),
     )
-    _assert_no_interleave(store.events)
+    assert store.values == {
+        f"agents.{_AGENT}.model": "m",
+        f"agents.{_AGENT}.provider": "p",
+        f"agents.{_AGENT}.enabled": False,
+    }

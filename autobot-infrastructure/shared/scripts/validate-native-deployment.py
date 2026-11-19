@@ -60,7 +60,7 @@ def _build_service_definitions():
         ServiceCheck("RedisInsight", "10.0.0.4", 8002, "http", "/"),
         ServiceCheck("AI Stack", "10.0.0.5", 8080, "http", "/health", None, 15),
         # Issue #1214: Ollama runs on .20 (autobot-llm-gpu), not .24
-        ServiceCheck("Ollama", config.ollama_host, config.port.ollama, "http", PATH_OLLAMA_TAGS, None, 20),
+        ServiceCheck("Ollama", config.vm.ollama, config.port.ollama, "http", PATH_OLLAMA_TAGS, None, 20),
         ServiceCheck("Browser Service", "10.0.0.6", config.port.browser, "http", "/health"),  # #19324
     ]
 
@@ -210,7 +210,7 @@ class DeploymentValidator:
             ("AI Stack", "10.0.0.5", 8080, "/health"),
             ("NPU Worker", "10.0.0.3", 8081, "/health"),
             # Issue #1214: Ollama on .20 (autobot-llm-gpu)
-            ("Ollama", config.ollama_host, config.port.ollama, PATH_OLLAMA_TAGS),
+            ("Ollama", config.vm.ollama, config.port.ollama, PATH_OLLAMA_TAGS),
             ("Browser Service", "10.0.0.6", config.port.browser, "/health"),  # #19324
         ]
 

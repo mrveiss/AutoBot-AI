@@ -195,16 +195,51 @@ def _black_hook_text() -> str:
     return text[start : text.index("\n  # ", start)]
 
 
+_SHELL_OPERATORS = re.compile(r"\s*(\|\||&&|;|\||\n)")
+
+
+def gate_black_command(workflow_text: str) -> tuple[str, list[str]] | None:
+    """``(line_length_arg, targets)`` of the gate's ``black --check``, up to the first shell operator."""
+    match = re.search(r"black --check ([^\n]*)", workflow_text)
+    if not match:
+        return None
+    command = _SHELL_OPERATORS.split(match.group(1), maxsplit=1)[0]
+    tokens = command.split()
+    return next((t for t in tokens if t.startswith("--line-length=")), ""), [
+        t for t in tokens if not t.startswith("--")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {",
+            ("--line-length=120", list(GATE_BLACK_TARGETS)),
+        ),
+        (
+            "black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ scripts/ || {",
+            ("--line-length=120", [*GATE_BLACK_TARGETS, "scripts/"]),
+        ),
+        ("black --check --line-length=120 autobot_shared/ && echo ok", ("--line-length=120", ["autobot_shared/"])),
+    ],
+)
+def test_the_gate_black_parser_reads_the_whole_target_list(command, expected):
+    """Contrast: the current command parses to the pinned targets; an added target is seen, not dropped."""
+    assert gate_black_command(command) == expected
+
+
 def test_the_black_hook_and_gate_differ_in_targets_only_and_say_so():
     """The hook is repo-wide, the gate checks three package dirs; same args, difference documented (#21839)."""
-    gate = re.search(r"black --check (--line-length=\d+) ((?:\S+/ ?)+)", CODE_QUALITY.read_text(encoding="utf-8"))
+    gate = gate_black_command(CODE_QUALITY.read_text(encoding="utf-8"))
     assert gate, "the code-quality gate no longer runs `black --check --line-length=N <dirs>`"
-    assert tuple(gate.group(2).split()) == GATE_BLACK_TARGETS, (
-        f"gate black targets are {gate.group(2).split()}; update the hook comment in {PRE_COMMIT.name} and "
+    line_length, targets = gate
+    assert tuple(targets) == GATE_BLACK_TARGETS, (
+        f"gate black targets are {targets}; update the hook comment in {PRE_COMMIT.name} and "
         "GATE_BLACK_TARGETS here together"
     )
     hook = _black_hook_text()
-    assert f"args: [{gate.group(1)}]" in hook, f"black hook args differ from the gate's {gate.group(1)}"
+    assert f"args: [{line_length}]" in hook, f"black hook args differ from the gate's {line_length}"
     assert "exclude: ^autobot-infrastructure/" in hook
     assert (
         "the gate\n        # checks " + " ".join(GATE_BLACK_TARGETS) + " only" in hook

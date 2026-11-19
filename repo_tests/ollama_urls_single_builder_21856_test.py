@@ -40,7 +40,7 @@ OWNER_REL = "autobot_shared/ollama_urls.py"
 OLLAMA_PATH = re.compile(r"^/api/(generate|tags|pull|embeddings|embed|show|ps)(\?.*)?$")
 #: Measured: 3883 of 7317 tracked ``.py`` under ROOTS are scanned (0.53); 0.45 leaves room for a shift into tests.
 MIN_FRACTION = 0.45
-TEMPLATE = re.compile(r"(%s|\{\w*\})/api/(generate|tags|pull|embeddings|embed|show|ps)(\?.*)?$")
+TEMPLATE = re.compile(r"(%(\(\w+\))?s|\{[^{}]*\})/api/(generate|tags|pull|embeddings|embed|show|ps)(\?.*)?$")
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
 
 
@@ -116,6 +116,8 @@ def _is_format_call(node: ast.AST) -> bool:
         'f"http://{h}:{p}/api/embeddings"',
         '"%s/api/x" % base'.replace("x", "tags"),
         '"{}/api/tags".format(b)',
+        '"%(base)s/api/tags" % {"base": b}',
+        '"{base!s}/api/tags".format(base=b)',
         'f"{base}/api/generate?stream=1"',
     ],
 )
@@ -133,14 +135,16 @@ def test_the_detector_ignores_the_helper_other_routes_and_bare_paths(source):
 
 def test_no_hand_built_ollama_api_url_outside_ollama_urls():
     root = repo_root()
-    sources = REACH.examined(root)
-    offenders = []
-    for rel in sources:
+    offenders, unparsed, parsed = [], [], 0
+    for rel in REACH.examined(root):
         text = (root / rel).read_text(encoding="utf-8", errors="replace")
         try:
             tree = parse_cache.parse(text)
-        except SyntaxError:
+        except SyntaxError as exc:
+            unparsed.append(f"{rel}: {exc.msg} (line {exc.lineno})")
             continue
+        parsed += 1
         offenders += [f"{rel}:{line}" for line in hand_built_lines(tree)]
-    REACH.completed(len(sources), root)
+    assert not unparsed, "production modules the guard could not parse: " + "; ".join(unparsed)
+    REACH.completed(parsed, root)
     assert not offenders, "build Ollama URLs with autobot_shared.ollama_urls (ollama_api_url): " + ", ".join(offenders)

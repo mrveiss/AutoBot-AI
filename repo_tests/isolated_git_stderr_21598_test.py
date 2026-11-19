@@ -36,6 +36,6 @@ def test_check_false_returns_the_result_unchanged(tmp_path):
 
 def test_each_stream_in_the_message_is_capped():
     huge = "x" * (GIT_ERROR_STREAM_LIMIT * 3)
-    message = str(GitError(1, ["git"], output=huge, stderr=huge))
-    assert message.count("x") == 2 * GIT_ERROR_STREAM_LIMIT
-    assert message.count("[truncated]") == 2
+    said = str(GitError(1, ["git"], output=huge, stderr=huge)).split(" git said: ", 1)[1]
+    assert said.count("x") == 2 * GIT_ERROR_STREAM_LIMIT
+    assert said.count("[truncated]") == 2
