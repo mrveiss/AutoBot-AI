@@ -120,10 +120,14 @@ def _proposal_context(requested_by: str, channel: str, plan: dict) -> dict:
     }
 
 
-def _count_changes(old: object, new: dict) -> dict:
+#: The scope totals a wipe plan reports, and the words the refresh comment uses for them.
+WIPE_COUNT_LABELS = {"total_keys": "keys", "total_vectors": "vectors"}
+
+
+def _count_changes(old: object, new: dict, fields: tuple[str, ...] = tuple(WIPE_COUNT_LABELS)) -> dict:
     """Old and new scope totals, as ``[before, after]`` pairs; no document content."""
     old = old if isinstance(old, dict) else {}
-    return {k: [old.get(k), new.get(k)] for k in ("total_keys", "total_vectors")}
+    return {k: [old.get(k), new.get(k)] for k in fields}
 
 
 def _reviewed_fields(context: dict) -> dict:
@@ -131,32 +135,50 @@ def _reviewed_fields(context: dict) -> dict:
     return {k: v for k, v in context.items() if k not in ("plan", REFRESHED_BY_KEY)}
 
 
-async def _refresh_pending(session: "AsyncSession", pending: "Approval", requested_by: str, plan: dict) -> None:
-    """Re-propose a pending wipe: the plan is replaced, the refresh is recorded durably, the requester stays.
+async def refresh_pending_plan(
+    session: "AsyncSession",
+    pending: "Approval",
+    requested_by: str,
+    plan: dict,
+    *,
+    what: str,
+    audit_action: AuditAction,
+    count_labels: dict[str, str],
+) -> None:
+    """Re-propose a pending knowledge proposal: new plan, durable refresh record, same requester.
 
     The same freeze as a resubmit applies (``context_change_violation``): only ``plan`` and ``refreshed_by`` move.
     The refresher joins ``refreshed_by``, so four eyes treats them as a proposer. The durable audit entry comes
-    first; without it the plan is not changed.
+    first; without it the plan is not changed. Shared by every knowledge proposal (#21383).
     """
     old = pending.context or {}
     new = {**old, "plan": plan, REFRESHED_BY_KEY: [*(old.get(REFRESHED_BY_KEY) or []), requested_by]}
     if (changed := context_change_violation(_reviewed_fields(old), _reviewed_fields(new))) is not None:
-        raise ValueError(f"{_WHAT} proposal: {changed} cannot change on a refresh")
-    counts = _count_changes(old.get("plan"), plan)
+        raise ValueError(f"{what} proposal: {changed} cannot change on a refresh")
+    counts = _count_changes(old.get("plan"), plan, tuple(count_labels))
     details = {"approval_id": str(pending.id), "phase": "plan_refresh", "refreshed_by": requested_by, "counts": counts}
     if not await audit_log(
-        AuditAction.KNOWLEDGE_WIPE_REFRESH.value,
-        user_id=requested_by,
-        resource="knowledge_base",
-        durable=True,
-        details=details,
+        audit_action.value, user_id=requested_by, resource="knowledge_base", durable=True, details=details
     ):
         raise RuntimeError(f"the audit entry for refreshing approval {pending.id} could not be written; plan unchanged")
     pending.context = new
-    keys, vectors = counts["total_keys"], counts["total_vectors"]
-    body = f"Plan refreshed by {requested_by}: keys {keys}, vectors {vectors} (before, after)."
+    shown = ", ".join(f"{label} {counts[field]}" for field, label in count_labels.items())
+    body = f"Plan refreshed by {requested_by}: {shown} (before, after)."
     session.add(ApprovalComment(approval_id=pending.id, author="system", author_type="system", body=body))
     await session.commit()
+
+
+async def _refresh_pending(session: "AsyncSession", pending: "Approval", requested_by: str, plan: dict) -> None:
+    """Re-propose a pending wipe with its new plan."""
+    await refresh_pending_plan(
+        session,
+        pending,
+        requested_by,
+        plan,
+        what=_WHAT,
+        audit_action=AuditAction.KNOWLEDGE_WIPE_REFRESH,
+        count_labels=WIPE_COUNT_LABELS,
+    )
 
 
 async def propose_kb_wipe(
@@ -367,5 +389,7 @@ __all__ = [
     "plan_kb_wipe",
     "propose_kb_wipe",
     "register_kb_wipe_action",
+    "WIPE_COUNT_LABELS",
+    "refresh_pending_plan",
     "review_kb_proposal",
 ]

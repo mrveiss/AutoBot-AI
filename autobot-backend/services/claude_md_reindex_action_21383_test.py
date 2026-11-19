@@ -46,9 +46,11 @@ class FakeRedis:
 
 
 def _chunks() -> dict:
-    mine = {f"doc:claude-{i}": {"title": action.SELECTOR_VALUE} for i in range(3)}
+    mine = {f"doc:claude-{i}": {"title": action.SELECTOR_VALUE, "source": action.SOURCE_VALUE} for i in range(3)}
     return {
         **mine,
+        "doc:same-title-other-source": {"title": action.SELECTOR_VALUE, "source": "a_user_upload"},
+        "doc:same-title-no-source": {"title": action.SELECTOR_VALUE},
         "doc:other-1": {"title": OTHER_TITLE},
         "doc:untitled": {"text": "x"},
         "doc:version:abc": "7",
@@ -122,7 +124,14 @@ async def test_approval_deletes_exactly_the_scoped_chunks_and_others_survive(wor
     session = _session()
     await action.execute_claude_md_reindex_action(_approval(), session)
     assert sorted(world.redis.unlinked) == ["doc:claude-0", "doc:claude-1", "doc:claude-2"]
-    assert set(world.redis.data) == {"doc:other-1", "doc:untitled", "doc:version:abc", "fact:1"}
+    assert set(world.redis.data) == {
+        "doc:other-1",
+        "doc:untitled",
+        "doc:version:abc",
+        "fact:1",
+        "doc:same-title-other-source",
+        "doc:same-title-no-source",
+    }
     session.commit.assert_awaited_once()
 
 
@@ -162,7 +171,7 @@ async def test_a_scope_that_is_not_the_codes_is_refused_and_deletes_nothing(worl
 
 @pytest.mark.asyncio
 async def test_a_client_key_list_in_the_plan_is_never_used(world):
-    plan = {"selector": action._selector(), "indexes": [INDEX], "keys": ["fact:1", "doc:other-1"]}
+    plan = {"selector": action._selector(), "indexes": [INDEX], "chunks": 3, "keys": ["fact:1", "doc:other-1"]}
     await action.execute_claude_md_reindex_action(_approval(plan), _session())
     assert "fact:1" in world.redis.data and "doc:other-1" in world.redis.data
 
@@ -206,3 +215,57 @@ def test_importing_the_approvals_router_registers_the_handler_in_a_fresh_interpr
         [sys.executable, "-c", code], capture_output=True, text=True, timeout=300, check=False, cwd=_BACKEND
     )
     assert done.returncode == 0 and done.stdout.strip().endswith("True"), done.stderr[-800:]
+
+
+@pytest.mark.asyncio
+async def test_a_document_with_the_same_title_but_another_source_survives_the_approved_delete(world):
+    await action.execute_claude_md_reindex_action(_approval(), _session())
+    assert "doc:same-title-other-source" in world.redis.data and "doc:same-title-no-source" in world.redis.data
+    assert not any(k.startswith("doc:claude-") for k in world.redis.data)
+
+
+@pytest.mark.asyncio
+async def test_more_chunks_than_approved_is_refused_audited_and_deletes_nothing(world):
+    approval = _approval({"selector": action._selector(), "indexes": [INDEX], "chunks": 2})
+    with pytest.raises(ValueError, match="nothing was deleted"):
+        await action.execute_claude_md_reindex_action(approval, _session())
+    assert world.redis.unlinked == []
+    refusal = world.audit.await_args.kwargs
+    assert refusal["result"] == "failed" and refusal["details"]["phase"] == "refused"
+    assert refusal["details"]["approved_chunks"] == 2 and refusal["details"]["found_chunks"] == 3
+
+
+@pytest.mark.asyncio
+async def test_fewer_chunks_than_approved_still_deletes_what_remains(world):
+    approval = _approval({"selector": action._selector(), "indexes": [INDEX], "chunks": 9})
+    await action.execute_claude_md_reindex_action(approval, _session())
+    assert len(world.redis.unlinked) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_plan_without_a_count_is_refused(world):
+    with pytest.raises(ValueError):
+        await action.execute_claude_md_reindex_action(
+            _approval({"selector": action._selector(), "indexes": [INDEX]}), _session()
+        )
+    assert world.redis.unlinked == []
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_proposal_refreshes_the_pending_plan_durably(world, monkeypatch):
+    from services import kb_wipe_action
+
+    refresh_audit = AsyncMock(return_value=True)
+    monkeypatch.setattr(kb_wipe_action, "audit_log", refresh_audit)
+    pending = _approval({"selector": action._selector(), "indexes": [INDEX], "chunks": 1}, status="pending")
+    pending.context["requested_by"] = "operator"
+    monkeypatch.setattr(action, "_pending_proposal", AsyncMock(return_value=pending))
+    session = MagicMock()
+    session.execute, session.add, session.commit = AsyncMock(), MagicMock(), AsyncMock()
+    fresh = {"selector": action._selector(), "indexes": [INDEX], "chunks": 3}
+    assert await action.propose_claude_md_reindex(session, "second-operator", fresh) is pending
+    assert pending.context["plan"]["chunks"] == 3 and pending.context["refreshed_by"] == ["second-operator"]
+    kwargs = refresh_audit.await_args.kwargs
+    assert refresh_audit.await_args.args == ("knowledge.claude_md_reindex.refresh",) and kwargs["durable"] is True
+    assert kwargs["details"]["counts"] == {"chunks": [1, 3]}
+    session.commit.assert_awaited_once()

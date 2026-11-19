@@ -52,7 +52,7 @@ async def request(dry_run: bool) -> bool:
 async def reindex() -> int:
     """Add the current CLAUDE.md. Refuses while chunks with its title remain: approve the deletion first."""
     from knowledge import KnowledgeBase
-    from services.claude_md_reindex_action import SELECTOR_VALUE, plan_claude_md_reindex
+    from services.claude_md_reindex_action import SELECTOR_VALUE, SOURCE_VALUE, plan_claude_md_reindex
 
     if (stale := (await plan_claude_md_reindex())["chunks"]) > 0:
         logger.error("%s stale CLAUDE.md chunks remain; run --request and have an admin approve it first", stale)
@@ -66,7 +66,7 @@ async def reindex() -> int:
     await kb._ensure_redis_initialized()
     metadata = {
         "title": SELECTOR_VALUE,
-        "source": "autobot_docs",
+        "source": SOURCE_VALUE,
         "category": "autobot_documentation",
         "file_path": str(path),
         "file_size": len(content),

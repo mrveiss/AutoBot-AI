@@ -17,10 +17,23 @@ bash "$S" --reindex    # 4. index the current CLAUDE.md; it refuses while stale 
 
 ## What the approval deletes
 
-Only the chunks in the `knowledge` Redis database whose key starts with `doc:` and whose `title` field is
-`AutoBot Development Instructions & Project Reference`. The backend recomputes that list when the approval runs;
-nothing else is touched, and the search index is not dropped. CLAUDE.md is the source, so no chunk backup is
-needed to restore it.
+Only the chunks in the `knowledge` Redis database whose key starts with `doc:`, whose `title` field is
+`AutoBot Development Instructions & Project Reference` and whose `source` field is `autobot_docs` (what `--reindex`
+writes). A document with the same title from another source is not touched. The backend recomputes that list when
+the approval runs and refuses (deleting nothing, auditing the refusal) when more chunks match than the count the
+approver saw; re-run `--request` to refresh the count of a pending proposal. Fewer is fine.
+
+## Retry after a partial failure
+
+If the delete fails partway, the failure audit entry records how many chunks were already removed. Run
+`--request` again for a new proposal (the count is recomputed), have an admin approve it, then `--reindex`.
+
+## Why the search index is not dropped, and why there is no backup
+
+- The search index is left alone: RediSearch drops a hash's entry when its key is deleted, so no index rebuild is
+  needed and KB search keeps working throughout.
+- No file backup is taken: CLAUDE.md in the repository is the system of record and the chunks are a rebuildable
+  projection of it, so deleting them loses no data. `--reindex` regenerates them.
 
 ## Verification
 

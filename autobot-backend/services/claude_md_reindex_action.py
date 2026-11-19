@@ -34,7 +34,7 @@ from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalT
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
-from services.kb_wipe_action import CHANNEL_OPERATOR, decision_details, review_kb_proposal
+from services.kb_wipe_action import CHANNEL_OPERATOR, decision_details, refresh_pending_plan, review_kb_proposal
 from services.kb_wipe_redis import SCAN_BATCH, ClientFactory, default_client
 
 if TYPE_CHECKING:
@@ -50,32 +50,48 @@ PROPOSAL_TITLE = "Delete the stale CLAUDE.md knowledge chunks, then re-index"
 DATABASE = "knowledge"
 CHUNK_PREFIX = "doc:"
 SELECTOR_FIELD = "title"
+#: The second field: the re-index writes this source on every CLAUDE.md chunk, so a same-titled document of another
+#: source is not touched.
+SOURCE_FIELD = "source"
+SOURCE_VALUE = "autobot_docs"
 #: The title the re-index writes on every CLAUDE.md chunk; the selector, fixed in code.
 SELECTOR_VALUE = "AutoBot Development Instructions & Project Reference"
 _WHAT = "the CLAUDE.md chunk deletion"
 PROPOSAL_DESCRIPTION = (
-    f"Deletes the knowledge chunks whose {SELECTOR_FIELD!r} is {SELECTOR_VALUE!r} (keys under {CHUNK_PREFIX!r} in "
+    f"Deletes the knowledge chunks whose {SELECTOR_FIELD!r} is {SELECTOR_VALUE!r} and {SOURCE_FIELD!r} is "
+    f"{SOURCE_VALUE!r} (keys under {CHUNK_PREFIX!r} in "
     f"the {DATABASE!r} database). Nothing else is touched. The CLAUDE.md re-index is run by the operator afterwards."
 )
 
 
-def _title(client, key: str) -> str | None:
-    """The chunk's selector field; ``None`` for a key that is not a hash or has no such field."""
+def _field(client, key: str, field: str) -> str | None:
+    """A chunk's field; ``None`` for a key that is not a hash or has no such field."""
     try:
-        value = client.hget(key, SELECTOR_FIELD)
+        value = client.hget(key, field)
     except ResponseError:  # a doc:* key of another type (version counters, host sets)
         return None
     return None if value is None else decode_redis_value(value)
 
 
+def _is_claude_md_chunk(client, key: str) -> bool:
+    return _field(client, key, SELECTOR_FIELD) == SELECTOR_VALUE and _field(client, key, SOURCE_FIELD) == SOURCE_VALUE
+
+
 def matching_chunk_keys(client) -> list[str]:
     """The chunk keys the selector matches right now. The only place the delete scope is computed."""
     keys = (decode_redis_value(k) for k in client.scan_iter(match=f"{CHUNK_PREFIX}*", count=SCAN_BATCH))
-    return [key for key in keys if _title(client, key) == SELECTOR_VALUE]
+    return [key for key in keys if _is_claude_md_chunk(client, key)]
 
 
 def _selector() -> dict:
-    return {"database": DATABASE, "prefix": CHUNK_PREFIX, "field": SELECTOR_FIELD, "value": SELECTOR_VALUE}
+    return {
+        "database": DATABASE,
+        "prefix": CHUNK_PREFIX,
+        "field": SELECTOR_FIELD,
+        "value": SELECTOR_VALUE,
+        "source_field": SOURCE_FIELD,
+        "source_value": SOURCE_VALUE,
+    }
 
 
 async def plan_claude_md_reindex(client_factory: ClientFactory = default_client) -> dict:
@@ -96,13 +112,22 @@ async def _pending_proposal(session: "AsyncSession") -> "Approval | None":
 async def propose_claude_md_reindex(session: "AsyncSession", requested_by: str, plan: dict) -> "Approval":
     """Raise (or reuse) the one pending #17038 proposal. Deletes nothing.
 
-    An advisory lock held until the transaction commits serialises proposers. A pending proposal is reused as it
-    is: the executor recomputes the chunks, so the count the approver saw is information, not the scope.
+    An advisory lock held until the transaction commits serialises proposers. A pending proposal is reused with its
+    plan refreshed (durably audited, the refresher counted as a proposer), so the count the approver sees is current.
     """
     from services.approval_gate_service import ApprovalGateService
 
     await session.execute(text("SELECT pg_advisory_xact_lock(hashtext(:name))"), {"name": ACTION})
     if (pending := await _pending_proposal(session)) is not None:
+        await refresh_pending_plan(
+            session,
+            pending,
+            requested_by,
+            plan,
+            what=_WHAT,
+            audit_action=AuditAction.KNOWLEDGE_CLAUDE_MD_REINDEX_REFRESH,
+            count_labels={"chunks": "chunks"},
+        )
         return pending
     context = {"action": ACTION, "requested_by": requested_by, "channel": CHANNEL_OPERATOR, "plan": plan}
     return await ApprovalGateService(session).create_approval(
@@ -173,6 +198,17 @@ async def _audit_failure(approval: "Approval", self_approval: bool, deleted: int
     logger.error("CLAUDE.md chunk deletion: the failure audit for approval %s was not written", approval.id)
 
 
+async def _refuse_more_than_approved(approval: "Approval", self_approval: bool, found: int) -> None:
+    """Delete nothing when more chunks match now than the approver saw; fewer is fine (some may be gone already)."""
+    approved = ((approval.context or {}).get("plan") or {}).get("chunks")
+    if isinstance(approved, int) and not isinstance(approved, bool) and found <= approved:
+        return
+    await _audit(approval, "failed", self_approval, phase="refused", approved_chunks=approved, found_chunks=found)
+    raise ValueError(
+        f"approval {approval.id} approved {approved} chunks but {found} match now; nothing was deleted. Re-propose."
+    )
+
+
 async def execute_claude_md_reindex_action(approval: "Approval", session: "AsyncSession") -> None:
     """Delete the selector's chunks for an approved gate: intent entry first, then the delete, then the outcome."""
     _require_approved(approval)
@@ -181,6 +217,7 @@ async def execute_claude_md_reindex_action(approval: "Approval", session: "Async
     self_approval = await _review(approval, session)
     _check_scope(approval)
     keys = await asyncio.to_thread(lambda: matching_chunk_keys(default_client(DATABASE)))
+    await _refuse_more_than_approved(approval, self_approval, len(keys))
     if not await _audit(approval, "attempted", self_approval, phase="intent", chunks=len(keys)):
         raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
     deleted = await _delete_and_audit(approval, keys, self_approval)
