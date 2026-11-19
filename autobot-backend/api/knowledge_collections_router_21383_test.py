@@ -41,12 +41,12 @@ class _KB:
     async def get_collection(self, collection_id):
         return {"success": True, "collection": {"name": "Notes", "created_at": "t1"}}
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, max_facts=None):
         if confirm:
             self.mutations.append(("bulk", collection_id))
         return {"success": True, "facts_to_delete": 3, "deleted_count": 3 if confirm else 0}
 
-    async def delete_collection(self, collection_id, delete_facts=False):
+    async def delete_collection(self, collection_id, delete_facts=False, max_facts=None):
         self.mutations.append(("delete", collection_id))
         return {"success": True}
 
@@ -99,7 +99,8 @@ def test_a_non_admin_is_403_and_nothing_happens(client, method, path, _action) -
 @pytest.mark.parametrize(("method", "path", "_action"), _ROUTES.values(), ids=list(_ROUTES))
 def test_the_internal_key_alone_is_refused(client, method, path, _action) -> None:
     test_client, _, kb, create = client
-    assert test_client.request(method, path, headers=_INTERNAL_KEY).status_code in (401, 403)
+    # not opted in (service_opt_in) and no human behind it: AUTH_0002, which the error catalogue maps to 401
+    assert test_client.request(method, path, headers=_INTERNAL_KEY).status_code == 401
     assert kb.mutations == [] and create.await_count == 0
 
 

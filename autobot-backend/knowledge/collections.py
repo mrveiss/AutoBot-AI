@@ -27,12 +27,14 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+NOT_FOUND = "not_found"  # stable marker of the not-found answer: callers match it, not the text (#21383)
+
+
 def _not_found(collection_id: str) -> Dict[str, Any]:
-    return {"success": False, "message": f"Collection not found: {collection_id}"}
+    return {"success": False, "code": NOT_FOUND, "message": f"Collection not found: {collection_id}"}
 
 
 def _over_approved(found: int, approved: int) -> Dict[str, Any]:
-    """The refusal of a delete whose membership grew past the approved count (#21383); nothing was deleted."""
     return {"success": False, "message": f"{found} facts are in scope but {approved} were approved; nothing deleted"}
 
 

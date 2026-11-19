@@ -80,13 +80,13 @@ async def write_audit(
 
 async def audit_failure(audit: Audit, approval: "Approval", details: dict, label: str) -> None:
     """Record the failed outcome. Never raises, so the delete's own error stays the one that propagates."""
-    outcome = "returned False"
     try:
         if await audit("failed", details):
             return
-    except Exception as audit_exc:  # noqa: BLE001 -- logged below; it must not replace the original error
-        outcome = type(audit_exc).__name__
-    logger.error("%s: the failure audit entry for approval %s was not written (%s)", label, approval.id, outcome)
+    except Exception:  # noqa: BLE001 -- logged below with its traceback; it must not replace the original error
+        logger.error("%s: the failure audit for approval %s raised", label, approval.id, exc_info=True)
+        return
+    logger.error("%s: the failure audit entry for approval %s was not written", label, approval.id)
 
 
 async def refuse_more_than_approved(

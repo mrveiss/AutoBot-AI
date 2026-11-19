@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import text
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.collections import NOT_FOUND
 from models.approval import Approval, ApprovalComment, ApprovalType
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
@@ -113,8 +114,8 @@ async def _kb():
 
 
 def _is_missing(result: dict) -> bool:
-    """Whether a failed KB answer says the collection does not exist (and not that the store failed)."""
-    return "not found" in str(result.get("message", "")).lower()
+    """Whether a failed KB answer is the structured not-found one (and not that the store failed)."""
+    return result.get("code") == NOT_FOUND
 
 
 async def collection_state(kb, collection_id: str) -> tuple[dict, int] | None:

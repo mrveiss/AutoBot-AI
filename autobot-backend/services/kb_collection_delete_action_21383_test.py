@@ -43,7 +43,7 @@ class FakeKB:
 
     async def get_collection(self, collection_id):
         if collection_id not in self.collections:
-            return {"success": False, "message": f"Collection not found: {collection_id}"}
+            return {"success": False, "code": "not_found", "message": f"Collection not found: {collection_id}"}
         return {
             "success": True,
             "collection": {"name": f"Name {collection_id}", "created_at": self.created[collection_id]},
@@ -431,6 +431,14 @@ async def test_a_store_failure_is_raised_and_only_a_missing_collection_is_none(w
         await routes.delete_collection("c1", False, _req(), ADMIN, _session())
     assert world.created == {}
     assert await action.collection_state(FakeKB([]), "nope") is None
+
+
+@pytest.mark.asyncio
+async def test_an_error_whose_text_merely_says_not_found_still_raises(world, monkeypatch):
+    lookalike = AsyncMock(return_value={"success": False, "message": "Redis host not found: the store is down"})
+    monkeypatch.setattr(world.kb, "get_collection", lookalike)
+    with pytest.raises(RuntimeError, match="could not read the collection"):
+        await action.collection_state(world.kb, "c1")
 
 
 # -- registration -------------------------------------------------------------------------------------------
