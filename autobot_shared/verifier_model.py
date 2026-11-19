@@ -12,11 +12,12 @@ configured tag is kept then.
 
 Memory (owner decision on #21844): a verifier model different from the chat model needs room next to it, else Ollama
 evicts one of the two on every call and each pass pays a model load (a cold chat reload was measured at 74 s). So the
-dedicated model is used only when the provider is Ollama AND it is already loaded (``/api/ps``) or nothing else is
-loaded. Ollama's API reports no total or free VRAM (``/api/ps`` gives each loaded model's ``size``/``size_vram``,
-``/api/tags`` an installed model's size, nothing gives the card's capacity), so "fits beside the loaded models" cannot
-be measured and the rule stays conservative. Otherwise the loaded chat model answers, with the chat's ``num_ctx`` so the
-runner is not reloaded for a context change. An unreadable ``/api/ps`` keeps the configured model (the earlier rule).
+dedicated model is used only when the provider is Ollama AND it is already loaded (``/api/ps``, read on every pass) or
+nothing else is loaded. Ollama's API reports no total or free VRAM (``/api/ps`` gives each loaded model's
+``size``/``size_vram``, ``/api/tags`` an installed model's size, nothing gives the card's capacity), so "fits beside
+the loaded models" cannot be measured and the rule stays conservative. Otherwise the configured chat model answers when
+it is loaded (never an embedding model; else the verifier model), with the chat's ``num_ctx`` so the runner is not
+reloaded for a context change. An unreadable ``/api/ps`` keeps the configured model (the earlier rule).
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ _spend_tasks: set[asyncio.Task[Any]] = set()
 # model -> (monotonic time read, available: True / False / None when the list could not be read)
 _readings: dict[str, tuple[float, bool | None]] = {}
 
-# verifier model -> (monotonic time decided, model to ask or None for the configured one, reuses the chat model, reason)
+# verifier model -> (monotonic time, model to ask, reuses the chat model, reason); ONLY an unreadable /api/ps is kept
 _residency: dict[str, tuple[float, str, bool, str]] = {}
 
 
@@ -105,25 +106,42 @@ async def loaded_models(provider: Any) -> list[str] | None:
         return None
 
 
-def _residency_choice(model: str, loaded: list[str] | None) -> tuple[str, bool, str, bool]:
-    """``(model to ask, reuses the chat model, reason, cacheable)`` from what Ollama has loaded."""
+def _chat_model_loaded(loaded: list[str]) -> str | None:
+    """The configured chat model's loaded tag, never an embedding model; None when it is not resident."""
+    from autobot_shared.ssot_config import config
+
+    chat = config.default_llm_model
+    if not chat or model_listed(chat, [config.embedding_model]) or model_listed(config.embedding_model, [chat]):
+        return None
+    return next((name for name in loaded if model_listed(chat, [name]) or model_listed(name, [chat])), None)
+
+
+def _residency_choice(model: str, loaded: list[str] | None) -> tuple[str, bool, str]:
+    """``(model to ask, reuses the chat model, reason)`` from what Ollama has loaded."""
     if loaded is None:
-        return model, False, "loaded models unreadable: configured verifier model", True
+        return model, False, "loaded models unreadable: configured verifier model"
     if any(model_listed(model, [name]) or model_listed(name, [model]) for name in loaded):
-        return model, False, "verifier model already loaded", True
+        return model, False, "verifier model already loaded"
     if not loaded:
-        # Transient: the next chat load changes it, so it is never reused from the cache.
-        return model, False, "nothing else loaded", False
-    return loaded[0], True, f"verifier model not loaded and free VRAM is unknown: reusing loaded {loaded[0]!r}", True
+        return model, False, "nothing else loaded"
+    if (chat := _chat_model_loaded(loaded)) is not None:
+        return chat, True, f"verifier model not loaded and free VRAM is unknown: reusing loaded chat model {chat!r}"
+    return model, False, "other models loaded but not the chat model: configured verifier model"
 
 
 async def residency_decision(provider: Any, model: str) -> tuple[str, bool, str]:
-    """``(model to ask, reuses the chat model, reason)``; the decision is reused for the check TTL."""
+    """``(model to ask, reuses the chat model, reason)``, read from ``/api/ps`` on every pass.
+
+    Residency changes whenever the chat model loads or is evicted, so a reading is never reused: a stale "reuse chat
+    model X" or "verifier loaded" costs a cold reload (74 s measured). Only an UNREADABLE listing is remembered for
+    the check TTL, so a down Ollama does not add a timeout to every pass; a failed call forgets it.
+    """
     cached = _residency.get(model)
     if cached and time.monotonic() - cached[0] < VERIFIER_MODEL_CHECK_TTL_S:
         return cached[1], cached[2], cached[3]
-    chosen, reuses_chat, reason, cacheable = _residency_choice(model, await loaded_models(provider))
-    if cacheable:
+    loaded = await loaded_models(provider)
+    chosen, reuses_chat, reason = _residency_choice(model, loaded)
+    if loaded is None:
         _residency[model] = (time.monotonic(), chosen, reuses_chat, reason)
     logger.debug("pre_action_verifier model: %s (%s)", chosen, reason)
     return chosen, reuses_chat, reason
@@ -172,7 +190,13 @@ async def resolve_and_chat(
         temperature=0.1,  # Low temperature for adversarial consistency
         metadata={"purpose": "pre_action_verifier", "tool": tool_name, **options},
     )
-    response = await provider.chat_completion(request)
+    try:
+        response = await provider.chat_completion(request)
+    except BaseException:
+        _residency.pop(configured_verifier_model(provider) or "", None)  # a failed call forgets the remembered reading
+        raise
+    if getattr(response, "error", None):
+        _residency.pop(configured_verifier_model(provider) or "", None)
     # #16924 the call records itself. Not awaited: the completed reply is returned even when the verifier deadline
     # expires during accounting (awaiting would let the deadline cancel the caller and discard a reply that may block
     # the action, which fail-open then lets through). A strong reference keeps the task from being collected mid-run.

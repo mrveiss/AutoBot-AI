@@ -23,9 +23,10 @@ for _spec in (
         description=(
             "Ollama tag the pre-action verifier asks (#21844); empty means the light-processing model. "
             "Used only when the provider is Ollama AND the model is already loaded or nothing else is loaded "
-            "(/api/ps); Ollama reports no free VRAM, so otherwise the loaded chat model answers with the chat "
-            "num_ctx and is never evicted for the verifier. Must be pulled on the Ollama host, else the provider "
-            "default answers and a startup warning plus a verifier_model health degradation say so."
+            "(/api/ps, read every pass); Ollama reports no free VRAM, so otherwise the configured chat model "
+            "answers when it is loaded (never an embedding model), with the chat num_ctx, else this model is used. "
+            "Must be pulled on the Ollama host, else the provider default answers and a startup warning plus a "
+            "verifier_model health degradation say so."
         ),
         component=_COMPONENT,
     ),

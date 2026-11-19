@@ -26,7 +26,7 @@ _CHAT = "chat-test:8b"
 def _fresh_state():
     verifier_model._readings.clear()
     verifier_model._residency.clear()
-    with patch.object(config, "verifier_model", _OWN):
+    with patch.object(config, "verifier_model", _OWN), patch.object(config, "default_llm_model", _CHAT):
         yield
 
 
@@ -78,16 +78,47 @@ async def test_an_unreadable_listing_keeps_the_configured_model():
 
 
 @pytest.mark.asyncio
-async def test_the_decision_is_reused_for_the_ttl_then_read_again():
+async def test_residency_is_read_on_every_pass_never_reused_stale():
     provider = _provider()
-    ps = AsyncMock(return_value=[_CHAT])
+    ps = AsyncMock(side_effect=[[_CHAT], [_CHAT, _OWN], [_CHAT]])
     with patch.object(verifier_model, "loaded_models", ps):
-        for _ in range(3):
-            assert await verifier_model.resolve_verifier_model(provider) == _CHAT
-        assert ps.await_count == 1
-        with patch.object(verifier_model, "VERIFIER_MODEL_CHECK_TTL_S", 0):
-            await verifier_model.resolve_verifier_model(provider)
-    assert ps.await_count == 2
+        assert await verifier_model.resolve_verifier_model(provider) == _CHAT
+        assert await verifier_model.resolve_verifier_model(provider) == _OWN  # the verifier became resident
+        assert await verifier_model.resolve_verifier_model(provider) == _CHAT  # and was evicted again
+    assert ps.await_count == 3 and not verifier_model._residency
+
+
+@pytest.mark.asyncio
+async def test_only_an_unreadable_listing_is_remembered_and_a_failed_call_forgets_it():
+    provider = _provider()
+    ps = AsyncMock(return_value=None)
+    with patch.object(verifier_model, "loaded_models", ps):
+        await verifier_model.resolve_verifier_model(provider)
+        await verifier_model.resolve_verifier_model(provider)
+        assert ps.await_count == 1 and _OWN in verifier_model._residency
+        provider.chat_completion = AsyncMock(side_effect=OSError("down"))
+        with patch.object(verifier_model, "report_spend", AsyncMock()), pytest.raises(OSError):
+            await verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, {})
+        assert _OWN not in verifier_model._residency
+
+
+@pytest.mark.asyncio
+async def test_the_chat_model_is_picked_by_name_not_by_position_and_never_an_embedding_model():
+    embed = config.embedding_model
+    with patch.object(config, "default_llm_model", _CHAT):
+        request, _ = await _run([embed, _CHAT])
+        assert request.model_name == _CHAT
+        request, attempt = await _run([embed, "other:7b"])  # the chat model is not resident
+        assert request.model_name == _OWN and "num_ctx" not in request.metadata
+        assert "not the chat model" in attempt["model_reason"]
+
+
+@pytest.mark.asyncio
+async def test_an_embedding_model_configured_as_chat_is_never_reused():
+    embed = config.embedding_model
+    with patch.object(config, "default_llm_model", embed):
+        request, _ = await _run([embed])
+    assert request.model_name == _OWN
 
 
 @pytest.mark.asyncio
