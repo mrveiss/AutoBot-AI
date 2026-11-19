@@ -1,39 +1,30 @@
 # CLAUDE.md Re-indexing Quick Start
 
-## 🚨 Problem
-CLAUDE.md vector database is **15+ hours OUT OF SYNC**
-- Current file: 2025-10-05 09:38:36 (TODAY)
-- Vector DB: 2025-10-04 18:48:15 (YESTERDAY)
-- **120 outdated chunks** need updating
+The knowledge base keeps CLAUDE.md as chunks. When the file changes, the stale chunks are deleted and the current
+file is indexed again. The deletion is a data deletion, so the script only **proposes** it: an admin approves it
+in the Approvals inbox, the backend deletes exactly the stale chunks and writes a durable audit entry, and only
+then does the script re-index (#21383, #17038). The script deletes nothing itself.
 
-## ⚡ Quick Solution
+## Steps
 
-### One-Command Fix
 ```bash
-bash scripts/database/reindex_claude_md.sh
+S=autobot-infrastructure/shared/scripts/database/reindex_claude_md.sh
+bash "$S"              # 1. preview: how many stale chunks the deletion would remove (deletes nothing)
+bash "$S" --request    # 2. raise the approval proposal (deletes nothing)
+# 3. an admin approves "Delete the stale CLAUDE.md knowledge chunks, then re-index" in the Approvals inbox
+bash "$S" --reindex    # 4. index the current CLAUDE.md; it refuses while stale chunks remain
 ```
 
-**Time:** ~10 minutes | **Risk:** Low (auto-backup)
+## What the approval deletes
 
-## 📋 What It Does
-1. Backs up 120 old chunks to `backups/database/`
-2. Deletes outdated CLAUDE.md chunks from Redis
-3. Rebuilds search index
-4. Re-indexes current CLAUDE.md (43.8 KB)
-5. Verifies new chunks created
+Only the chunks in the `knowledge` Redis database whose key starts with `doc:` and whose `title` field is
+`AutoBot Development Instructions & Project Reference`. The backend recomputes that list when the approval runs;
+nothing else is touched, and the search index is not dropped. CLAUDE.md is the source, so no chunk backup is
+needed to restore it.
 
-## ✅ Verification
+## Verification
+
 ```bash
-# Check stats
-curl https://<backend-ip>:8443/api/knowledge_base/stats | jq
-
-# Test search for new content
-curl "https://<backend-ip>:8443/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1"
+curl https://<backend-host>:8443/api/knowledge_base/stats | jq
+curl "https://<backend-host>:8443/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1"
 ```
-
-## 📚 Full Documentation
-- **Complete Report:** `docs/database/CLAUDE_MD_REINDEX_REPORT.md`
-- **Summary:** `docs/database/VECTOR_DB_RESEARCH_SUMMARY.md`
-
----
-*Run the script above to fix immediately*

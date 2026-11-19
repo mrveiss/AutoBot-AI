@@ -51,14 +51,26 @@ def log_plan(plan: dict) -> None:
     logger.info("   Total keys: %s, total vectors: %s", plan["total_keys"], plan["total_vectors"])
 
 
-async def propose_wipe(plan: dict) -> str:
-    """Raise (or reuse) the human-approval proposal for the wipe; return its approval id. Deletes nothing."""
-    from services.kb_wipe_action import CHANNEL_OPERATOR, propose_kb_wipe
+async def file_proposal(propose, plan: dict) -> str:
+    """Raise (or reuse) the human-approval proposal with a backend ``propose(session, requester, plan)``; return its id.
+
+    The requester is the operator's login name on the operator channel. Deletes nothing.
+    """
     from user_management.database import get_async_session_factory
 
     async with get_async_session_factory()() as db:
-        approval = await propose_kb_wipe(db, getpass.getuser(), plan, channel=CHANNEL_OPERATOR)
+        approval = await propose(db, getpass.getuser(), plan)
     return str(approval.id)
+
+
+async def propose_wipe(plan: dict) -> str:
+    """Raise (or reuse) the human-approval proposal for the wipe; return its approval id. Deletes nothing."""
+    from services.kb_wipe_action import CHANNEL_OPERATOR, propose_kb_wipe
+
+    async def propose(db, requester, plan):
+        return await propose_kb_wipe(db, requester, plan, channel=CHANNEL_OPERATOR)
+
+    return await file_proposal(propose, plan)
 
 
 async def request_wipe(dry_run: bool) -> bool:

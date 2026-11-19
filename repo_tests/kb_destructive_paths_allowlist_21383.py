@@ -22,5 +22,4 @@ ALLOWLIST: dict[str, str] = {
     "autobot-infrastructure/shared/scripts/utilities/init_memory_graph_redis.py": (
         "NOT_KNOWLEDGE: rebuilds the memory-graph entity indexes without deleting documents"
     ),
-    "autobot-infrastructure/shared/scripts/database/reindex_claude_md.sh": _GAP,
 }
