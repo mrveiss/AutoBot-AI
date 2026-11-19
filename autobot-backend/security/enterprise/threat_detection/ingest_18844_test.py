@@ -166,3 +166,16 @@ def test_each_row_timestamp_is_parsed_once_across_counter_calls() -> None:
             history.count_recent_actions("alice", "agent_action", 1)
             history.get_recent_action_frequency("alice", "agent_action")
     assert parse.call_count == len(stamps)
+
+
+def test_rows_without_a_timestamp_count_as_current_and_never_enter_the_epoch_cache() -> None:
+    from collections import deque
+
+    from security.enterprise.threat_detection.models import EventHistory, _epoch
+
+    _epoch.cache_clear()
+    rows = deque({"action": "authentication", "outcome": "failure", "user_id": "u"} for _ in range(5))
+    history = EventHistory(events=rows)
+    assert history.count_recent_failures("u", "ip", 5) == 5
+    assert history.count_recent_failures("u", "ip", 5) == 5
+    assert _epoch.cache_info().currsize == 0

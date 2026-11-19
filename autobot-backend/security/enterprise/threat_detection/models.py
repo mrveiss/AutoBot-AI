@@ -174,7 +174,10 @@ class EventHistory:
         """
         cutoff = cutoff_time.timestamp()
         for event in self.events:
-            if _epoch(event.get("timestamp") or utc_timestamp()) >= cutoff:
+            stamp = event.get("timestamp")
+            # No timestamp = current; use "now" directly, a fresh string per call must not enter the cache.
+            epoch = _epoch(stamp) if stamp else time.time()
+            if epoch >= cutoff:
                 yield event
 
     def count_recent_failures(self, user_id: str, source_ip: str, window_minutes: int) -> int:
