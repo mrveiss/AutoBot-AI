@@ -238,7 +238,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1211,
     "autobot-backend/llc/api/work_items.py": 1253,  # #21559: was 1284; #18978: 1302 -> 1287; #19582: wake moved
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 979,  # #19240 (run key moved out)
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 961,  # #19240, #20533 (terminal-status raises moved out)
     "autobot-backend/llc/services/template.py": 642,
     "autobot-backend/llc/services/work_item_service.py": 995,  # #18978: -19; #20102, #20930: code moved out
     "autobot-backend/llc/tests/conftest.py": 832,
