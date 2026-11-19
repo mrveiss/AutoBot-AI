@@ -79,6 +79,14 @@ class ConversationHandlerMixin:
 
         return await load_turn_pairs(session_id)
 
+    async def _cache_is_stale(self, session_id: str, history: List[Dict[str, str]]) -> bool:
+        """True when the cached copy differs from *history*; an unreadable cache is not a reason to drop *history*."""
+        try:
+            return await self._try_redis_history(session_id) != history
+        except Exception as e:  # noqa: BLE001 - Redis down / invalid cached JSON: the durable projection still serves
+            logger.warning("Conversation history cache comparison failed for session %s: %r", session_id, e)
+            return False
+
     async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
         """LLM context: projected from chat_sessions (the system of record), else the cache, else nothing (#18293).
 
@@ -90,7 +98,7 @@ class ConversationHandlerMixin:
             history = await self._project_from_chat_sessions(session_id)
             if history is None:  # unreadable: a cached projection is better than none, never a legacy transcript
                 return await self._try_redis_history(session_id) or []
-            if history and self.redis_client is not None and await self._try_redis_history(session_id) != history:
+            if history and self.redis_client is not None and await self._cache_is_stale(session_id, history):
                 fire_and_forget(  # #21847: no Redis write per turn when the cache already equals the projection
                     self._save_conversation_history(session_id, history),
                     name="conversation-history-cache-refill",
