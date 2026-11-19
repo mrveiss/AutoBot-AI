@@ -4371,14 +4371,14 @@
     "knowledge": {
       "credentials": {
         "action": "Action",
-        "connector": "Connector",
+        "connector": "Connecteur",
         "empty": "No connector records hold a clear-text credential copy.",
         "fields": "Fields",
         "loadErrorFallback": "Failed to scan connector credentials",
         "noStoreCopy": "No secrets-store copy; cannot be proposed",
         "subtitle": "Connector records that keep a clear-text copy of a credential beside the secrets-store copy. Only the record's copy is ever proposed for removal; rotate the credential at the provider.",
         "title": "Stored connector credentials",
-        "type": "Type",
+        "type": "Taper",
         "unscannable": "These records could not be checked and are not reported clean: {ids}"
       },
       "collections": {
@@ -4390,11 +4390,10 @@
         "title": "Empty vector collections",
         "unreadable": "These collections could not be counted and are not reported empty: {names}"
       },
-      "loading": "Loading…",
+      "loading": "Chargement…",
       "propose": "Propose cleanup",
       "proposeErrorFallback": "Failed to create the approval request",
       "proposed": "Proposed (approval {id}) — decide it in the Approvals inbox",
-      "proposing": "Proposing…",
       "subtitle": "Read-only findings. Each row only creates an approval request; nothing is removed until a human approves it in the Approvals inbox.",
       "title": "Knowledge cleanup"
     },

@@ -59,22 +59,51 @@ async def find_pending_proposal(service: "ApprovalGateService", action: str, key
 
 
 async def create_proposal_once(
-    service: "ApprovalGateService", action: str, key: str, value: str, create: Callable[[], Awaitable["Approval"]]
+    service: "ApprovalGateService",
+    action: str,
+    key: str,
+    value: str,
+    create: Callable[[uuid.UUID], Awaitable["Approval"]],
+    *,
+    current_user: dict,
+    resource: str,
 ) -> "Approval":
-    """The pending proposal for the target, creating it with *create* when none is open.
+    """The pending proposal for the target, creating it with ``create(approval_id)`` when none is open.
 
     The read-then-create can race; the partial unique index per action (``uq_approvals_pending_*``, #20992)
-    makes the loser's insert fail. That loser rolls back and returns the winner's proposal.
+    makes the loser's insert fail. The audit store commits on its own (it does not share the approval's
+    transaction), so the loser's creation row cannot be rolled back with its insert: the loser instead leaves a
+    ``proposal_lost_race`` row naming both ids, and returns the winner's proposal (#17038).
     """
     if (existing := await find_pending_proposal(service, action, key, value)) is not None:
         return existing
+    approval_id = uuid.uuid4()
     try:
-        return await create()
+        return await create(approval_id)
     except IntegrityError:  # a concurrent request created it first
         await service.session.rollback()
         if (winner := await find_pending_proposal(service, action, key, value)) is None:
             raise
+        await _record_lost_race(approval_id, winner.id, current_user, resource)
         return winner
+
+
+async def _record_lost_race(lost_id: uuid.UUID, winner_id: uuid.UUID, current_user: dict, resource: str) -> None:
+    """Durable row saying the creation row naming *lost_id* never became an approval; *winner_id* did."""
+    try:
+        written = await audit_log(
+            "cleanup.proposal_lost_race",
+            result="success",
+            user_id=current_user.get("username"),
+            resource=resource,
+            details={"approval_id": str(lost_id), "winner_approval_id": str(winner_id)},
+            durable=True,
+        )
+    except Exception:
+        logger.exception("Cleanup proposal %s: the lost-race audit write raised", lost_id)
+        written = False
+    if not written:
+        logger.error("Cleanup proposal %s lost the race to %s and could not be annotated", lost_id, winner_id)
 
 
 async def record_cleanup_proposed(approval_id: uuid.UUID, current_user: dict, *, operation: str, resource: str) -> None:

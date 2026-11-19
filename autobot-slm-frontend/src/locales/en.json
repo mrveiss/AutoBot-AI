@@ -4394,7 +4394,6 @@
       "propose": "Propose cleanup",
       "proposeErrorFallback": "Failed to create the approval request",
       "proposed": "Proposed (approval {id}) — decide it in the Approvals inbox",
-      "proposing": "Proposing…",
       "subtitle": "Read-only findings. Each row only creates an approval request; nothing is removed until a human approves it in the Approvals inbox.",
       "title": "Knowledge cleanup"
     },

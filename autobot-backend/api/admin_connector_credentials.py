@@ -67,9 +67,10 @@ async def _removable_finding(connector_id: str) -> CredentialFinding:
     return finding
 
 
-async def _create_proposal(service: ApprovalGateService, current_user: dict, finding: CredentialFinding) -> Approval:
+async def _create_proposal(
+    service: ApprovalGateService, current_user: dict, finding: CredentialFinding, approval_id: uuid.UUID
+) -> Approval:
     """Audit-log, then create, the pending proposal (the audit row names the approval it precedes)."""
-    approval_id = uuid.uuid4()
     await record_cleanup_proposed(
         approval_id,
         current_user,
@@ -119,7 +120,9 @@ async def propose_connector_credential_cleanup(
         CONNECTOR_CREDENTIAL_STRIP,
         "connector_id",
         finding.connector_id,
-        lambda: _create_proposal(service, current_user, finding),
+        lambda approval_id: _create_proposal(service, current_user, finding, approval_id),
+        current_user=current_user,
+        resource=f"connector:{finding.connector_id}",
     )
     return ConnectorCredentialCleanupResponse(
         approval_id=str(approval.id),

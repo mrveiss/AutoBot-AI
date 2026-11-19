@@ -43,9 +43,10 @@ async def list_empty_collections() -> EmptyCollectionsResponse:
     return EmptyCollectionsResponse(total=report.total, empty=report.empty, unreadable=report.unreadable)
 
 
-async def _create_proposal(service: ApprovalGateService, current_user: dict, collection: str) -> Approval:
+async def _create_proposal(
+    service: ApprovalGateService, current_user: dict, collection: str, approval_id: uuid.UUID
+) -> Approval:
     """Audit-log, then create, the pending proposal (the audit row names the approval it precedes)."""
-    approval_id = uuid.uuid4()
     await record_cleanup_proposed(
         approval_id,
         current_user,
@@ -82,7 +83,9 @@ async def propose_empty_collection_cleanup(
         EMPTY_COLLECTION_DELETE,
         "collection",
         body.collection,
-        lambda: _create_proposal(service, current_user, body.collection),
+        lambda approval_id: _create_proposal(service, current_user, body.collection, approval_id),
+        current_user=current_user,
+        resource=f"chroma:{body.collection}",
     )
     return EmptyCollectionCleanupResponse(
         approval_id=str(approval.id),
