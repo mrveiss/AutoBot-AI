@@ -157,7 +157,9 @@ timeout. Set them in your own environment; they are never committed. Prepare or 
 to ready, reads the Python floor from `.python-version`, installs a matching interpreter through `uv` when the base
 has none, and verifies the result). Each run pushes only the commits the branch adds into a mirror on the node,
 checks them out into a private directory and removes it, and the commit ref, on success, failure, timeout and
-signal; a stale-directory sweep covers a hard kill. Not remote: `repin_reach_floors.py --check` still runs locally.
+signal; a stale-directory sweep covers a hard kill. The node's mirror is garbage-collected weekly.
+Host-key trust is trust-on-first-use (`StrictHostKeyChecking=accept-new`) unless `AUTOBOT_TEST_NODE_KNOWN_HOSTS` pins a
+known_hosts file; `--provision` needs passwordless `sudo -n` on the node when packages are missing. Not remote: `repin_reach_floors.py --check` still runs locally.
 
 Measured concurrency (12-core, 14 GB node; fast-guard suite, 1,383 tests; wall per job / peak load / lowest free memory):
 1 job at `-n 1/2/4/8`: 104/89/114/136 s. At `-n 4`: 2 jobs 200 s (load 13.7, 5.5 GB), 3 jobs 261 s (19.4, 2.8 GB),

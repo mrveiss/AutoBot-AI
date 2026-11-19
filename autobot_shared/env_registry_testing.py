@@ -262,6 +262,29 @@ for _name, _type, _default, _desc, _range in (
         "The ssh executable used to reach the node (tests substitute a stand-in).",
         None,
     ),
+    (
+        "AUTOBOT_TEST_NODE_KNOWN_HOSTS",
+        str,
+        "",
+        "Path to a known_hosts file that pins the test node's host key. Set: the connection is made with "
+        "StrictHostKeyChecking=yes against that file only. Empty: the key is trusted on first use "
+        "(StrictHostKeyChecking=accept-new) and later changes are refused.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_UV_VERSION",
+        str,
+        "0.9.0",
+        "Version of uv that --provision installs from PyPI on the node when the base has no Python at the floor.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_PIP_VERSION",
+        str,
+        "25.3",
+        "Version of pip that --provision upgrades the node's venv to before installing the test requirements.",
+        None,
+    ),
 ):
     register_env_var(
         EnvVarSpec(name=_name, type=_type, default=_default, description=_desc, component="testing", range=_range)

@@ -4,7 +4,10 @@
 # Takes a fresh install of the remote test node to ready (#20935). Idempotent: every step checks before it
 # acts and the last step VERIFIES the result, so a second run changes nothing and a broken node fails loudly.
 # Runs ON the node; `run.py --provision` sends it. Nothing done to the node by hand is assumed.
-#   provision.sh <base> <origin-url> <python-floor, e.g. 3.14> < requirements
+#   provision.sh <base> <origin-url> <python-floor, e.g. 3.14> <uv-version> <pip-version> < requirements
+#
+# Prerequisite: the SSH user can run `sudo -n` (passwordless sudo) for apt-get / dnf when the base lacks git,
+# flock, setsid or a usable Python; with everything present no sudo is used. Without it the run fails loudly.
 #
 # Base systems: Debian family (apt: Debian, Ubuntu, elementary OS ...) and Fedora family (dnf). The distro is
 # read from /etc/os-release (ID, ID_LIKE), never assumed. Python: the base's own interpreter when it meets the
@@ -43,6 +46,7 @@ check_floor_or_die() {
 }
 
 pkg_install() {
+  sudo -n true 2>/dev/null || die "installing packages needs passwordless sudo (sudo -n) for the SSH user"
   case "$(detect_pkg_manager)" in
     apt) sudo -n apt-get install -y --no-install-recommends "$@" ;;
     dnf) sudo -n dnf install -y "$@" ;;
@@ -82,7 +86,7 @@ ensure_python() {
 }
 
 install_python_with_uv() {
-  local floor="$1" tools="$base/uv-tools" ver="${AUTOBOT_TEST_NODE_UV_VERSION:-0.9.0}"
+  local floor="$1" tools="$base/uv-tools" ver="${AUTOBOT_TEST_NODE_UV_VERSION:?set by run.py --provision}"
   info "the base has no Python $floor: installing it with uv $ver"
   python3 -c 'import ensurepip' 2>/dev/null || pkg_install python3-venv >&2
   [ -x "$tools/bin/uv" ] || { python3 -m venv "$tools" && "$tools/bin/python" -m pip install --quiet "uv==$ver"; } >&2
@@ -112,13 +116,18 @@ sync_mirror() {
   git --git-dir="$base/mirror.git" fetch --quiet --no-tags origin '+refs/heads/main:refs/heads/main'
 }
 
+split_payload() {
+  # stdin: the requirement lines, a "#--constraints--" line, then the shared constraints (run.py builds it).
+  awk -v r="$reqs" -v c="$cons" '/^#--constraints--$/ { out = c; next } { print > (out ? out : r) }'
+}
+
 install_requirements() {
   local want have
-  want=$(sha256sum "$reqs" | cut -c1-64)
+  want=$(cat "$reqs" "$cons" | sha256sum | cut -c1-64)
   have=$(cat "$base/venv/.requirements.sha256" 2>/dev/null || true)
   [ "$want" = "$have" ] && return 0
-  "$base/venv/bin/python" -m pip install --quiet --upgrade pip
-  "$base/venv/bin/python" -m pip install --quiet -r "$reqs"
+  "$base/venv/bin/python" -m pip install --quiet "pip==${AUTOBOT_TEST_NODE_PIP_VERSION:?set by run.py --provision}"
+  "$base/venv/bin/python" -m pip install --quiet -r "$reqs" -c "$cons"
   printf '%s\n' "$want" > "$base/venv/.requirements.sha256"
 }
 
@@ -134,9 +143,10 @@ verify_node() {
 
 main() {
   base="$1"; origin="$2"; local floor="$3" py
-  reqs=$(mktemp)
-  trap 'rm -f -- "$reqs"' EXIT
-  cat > "$reqs"
+  export AUTOBOT_TEST_NODE_UV_VERSION="$4" AUTOBOT_TEST_NODE_PIP_VERSION="$5"
+  reqs=$(mktemp); cons=$(mktemp)
+  trap 'rm -f -- "$reqs" "$cons"' EXIT
+  split_payload
   mkdir -p "$base"; base=$(cd "$base" && pwd)
   info "distribution package manager: $(detect_pkg_manager)"
   install_base_tools

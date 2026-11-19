@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _ROOT = repo_root()
 _TOOL = _ROOT / "tools/remote_test_node"
@@ -29,6 +29,7 @@ _spec = importlib.util.spec_from_file_location("remote_test_node_run", _TOOL / "
 run = importlib.util.module_from_spec(_spec)
 sys.modules["remote_test_node_run"] = run
 _spec.loader.exec_module(run)
+sys.modules.pop("remote_test_node_run", None)  # needed only while the dataclass is built
 
 _FAKE_SSH = """#!/usr/bin/env bash
 # Stand-in for ssh: ignores the options and the destination, runs the remote command in $FAKE_HOME.
@@ -40,14 +41,7 @@ bash -c "$last"
 
 
 def _git(cwd: Path, *args: str) -> str:
-    env = dict(
-        scrubbed_git_env(),
-        GIT_AUTHOR_NAME="t",
-        GIT_AUTHOR_EMAIL="t@t",
-        GIT_COMMITTER_NAME="t",
-        GIT_COMMITTER_EMAIL="t@t",
-    )
-    return subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()
+    return git(cwd, *args).stdout.strip()
 
 
 @pytest.fixture()
@@ -56,7 +50,7 @@ def node(tmp_path: Path):
     home, src = tmp_path / "home", tmp_path / "src"
     home.mkdir()
     src.mkdir()
-    _git(src, "init", "-q", "-b", "main")
+    make_repo(src, default_branch="main")
     (src / "hello.txt").write_text("hi\n", encoding="utf-8")
     _git(src, "add", "-A")
     _git(src, "commit", "-q", "-m", "first")
@@ -288,7 +282,7 @@ def test_a_remote_test_failure_is_a_failure_not_a_fallback(tmp_path):
     assert "handled=0 rc=1" in _call_hook_fn(tmp_path, 1).stdout
 
 
-_TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh", "requirements.txt")
+_TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh")
 
 
 def test_no_address_or_credential_is_written_into_the_tooling():
@@ -306,3 +300,98 @@ def test_shipping_a_commit_does_not_run_the_repos_own_pre_push_hook(node):
     proc = _run(node, "true")
     out, _ = proc.communicate(timeout=60)
     assert proc.returncode == 0 and "hook-ran" not in out
+
+
+_BASE_ENV = {"AUTOBOT_TEST_NODE_HOST": "h", "AUTOBOT_TEST_NODE_USER": "u"}
+
+
+def _expire(*_args, **_kwargs):
+    raise subprocess.TimeoutExpired("ssh", 1)
+
+
+def test_a_missing_ssh_executable_is_unavailable_not_a_failure(capfd):
+    env = {**_BASE_ENV, "AUTOBOT_TEST_NODE_SSH_BIN": "/nonexistent/ssh"}
+    assert run.probe(run.load_config(env)) == "ssh to the test node could not start (FileNotFoundError)"
+    assert run.main(["--sha", "HEAD", "--", "true"], env=env) == run.UNAVAILABLE
+    assert "UNAVAILABLE" in capfd.readouterr().err
+
+
+def test_a_hung_probe_is_unavailable_not_a_failure(monkeypatch, capfd):
+    monkeypatch.setattr(run.subprocess, "run", _expire)
+    assert run.probe(run.load_config(_BASE_ENV)) == "ssh to the test node timed out"
+    assert run.main(["--sha", "HEAD", "--", "true"], env=_BASE_ENV) == run.UNAVAILABLE
+    assert "UNAVAILABLE" in capfd.readouterr().err
+
+
+def test_a_hung_ship_is_unavailable_not_124(monkeypatch):
+    monkeypatch.setattr(run.subprocess, "run", _expire)
+    cfg = run.load_config(_BASE_ENV)
+    assert "timed out" in run.ship_commit(cfg, "abc", "job")
+    monkeypatch.setattr(run, "probe", lambda _cfg: None)
+    assert run.main(["--sha", "HEAD", "--", "true"], env=_BASE_ENV) == run.UNAVAILABLE
+
+
+def test_a_hung_cleanup_cannot_mask_the_result(monkeypatch):
+    monkeypatch.setattr(run.subprocess, "run", _expire)
+    run.remote_cleanup(run.load_config(_BASE_ENV), "job")  # does not raise
+    monkeypatch.setattr(run, "ship_commit", lambda *_a: None)
+    monkeypatch.setattr(run, "_script_command", lambda *_a: "true")
+    monkeypatch.setattr(
+        run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": lambda s, timeout: 7, "poll": lambda s: 7})()
+    )
+    assert run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 30) == 7
+
+
+@pytest.mark.parametrize(
+    "name,value,attr,expected",
+    [
+        ("AUTOBOT_TEST_NODE_SLOTS", "0", "slots", 3),
+        ("AUTOBOT_TEST_NODE_SLOTS", "99", "slots", 3),
+        ("AUTOBOT_TEST_NODE_SLOTS", "abc", "slots", 3),
+        ("AUTOBOT_TEST_NODE_SLOTS", "5", "slots", 5),
+        ("AUTOBOT_TEST_NODE_TIMEOUT", "1", "timeout", 600),
+        ("AUTOBOT_TEST_NODE_CONNECT_TIMEOUT", "0", "connect_timeout", 10),
+    ],
+)
+def test_env_ints_are_validated_against_the_registered_ranges(name, value, attr, expected):
+    assert getattr(run.load_config({**_BASE_ENV, name: value}), attr) == expected
+
+
+def test_host_key_trust_is_first_use_unless_pinned():
+    assert "StrictHostKeyChecking=accept-new" in run.ssh_argv(run.load_config(_BASE_ENV))
+    pinned = run.ssh_argv(run.load_config({**_BASE_ENV, "AUTOBOT_TEST_NODE_KNOWN_HOSTS": "/pins/kh"}))
+    assert "StrictHostKeyChecking=yes" in pinned and "UserKnownHostsFile=/pins/kh" in pinned
+    assert "StrictHostKeyChecking=accept-new" not in pinned
+
+
+def test_the_stale_sweep_ttl_follows_the_effective_timeout(monkeypatch):
+    sent = []
+    monkeypatch.setattr(run, "ship_commit", lambda *_a: None)
+    monkeypatch.setattr(run, "remote_cleanup", lambda *_a: None)
+    monkeypatch.setattr(run, "_script_command", lambda *a: sent.append(a) or "true")
+    monkeypatch.setattr(
+        run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": lambda s, timeout: 0, "poll": lambda s: 0})()
+    )
+    run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 3600)
+    assert sent[0][4] == "90"  # 3600 s -> 60 min + 30
+
+
+def test_the_hook_ignores_an_invalid_worker_count(tmp_path):
+    stub = tmp_path / "tools/remote_test_node"
+    stub.mkdir(parents=True)
+    (stub / "run.py").write_text("import sys\nprint(' '.join(sys.argv))\n", encoding="utf-8")
+    for bad in ("0", "abc", "99", ""):
+        script = (
+            f'REPO_ROOT="{tmp_path}"; PYTEST_PYTHON="{sys.executable}"; local_sha=abc; MAX_BUDGET=5\n'
+            f'warn() {{ :; }}; export AUTOBOT_TEST_NODE_WORKERS="{bad}"\n{_hook_fn()}\n'
+            'rc=0; guard_output=""; remote_guard_pytest "a.py" ""; echo "$guard_output"'
+        )
+        out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False).stdout
+        assert " -n 2 " in out, (bad, out)
+
+
+def test_the_node_collects_its_mirror_and_pins_what_it_installs():
+    job = (_TOOL / "remote_job.sh").read_text(encoding="utf-8")
+    assert "gc_mirror" in job and 'git --git-dir="$mirror" gc' in job
+    prov = (_TOOL / "provision.sh").read_text(encoding="utf-8")
+    assert "pip==${AUTOBOT_TEST_NODE_PIP_VERSION" in prov and "--upgrade pip" not in prov

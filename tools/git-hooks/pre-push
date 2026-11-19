@@ -489,9 +489,13 @@ fast_guard_tests() {
 remote_guard_pytest() {
   local run="$REPO_ROOT/tools/remote_test_node/run.py"
   [ -f "$run" ] || return 1
+  local workers="${AUTOBOT_TEST_NODE_WORKERS:-2}"  # registered range 1-12; anything else reads as the default
+  case "$workers" in ''|*[!0-9]*) workers=2 ;; esac
+  { [ "$workers" -ge 1 ] && [ "$workers" -le 12 ]; } || workers=2
+  local node_py=python  # resolved ON the node, where remote_job.sh puts the provisioned venv first on PATH
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list is intended
   guard_output=$(cd "$REPO_ROOT" && exec 9>&- && "$PYTEST_PYTHON" "$run" --sha "$local_sha" --timeout "$MAX_BUDGET" -- \
-    python -m pytest -q -p no:cacheprovider -m "not reach_floor" -n "${AUTOBOT_TEST_NODE_WORKERS:-2}" --dist loadscope --tb=line \
+    "$node_py" -m pytest -q -p no:cacheprovider -m "not reach_floor" -n "$workers" --dist loadscope --tb=line \
     $(printf '%s\n' "$1" | grep -vxF -f <(printf '%s\n' "$2")) 2>&1) && rc=0 || rc=$?
   [ "$rc" = "75" ] || return 0
   warn "$(printf '%s\n' "$guard_output" | grep -m1 'UNAVAILABLE' || echo 'remote test node unavailable'); running the fast guards locally under the machine slot"

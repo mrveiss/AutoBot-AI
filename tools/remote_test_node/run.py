@@ -27,11 +27,15 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent))  # run as a script: the repo root is not on the path
 
+from autobot_shared.env_registry import REGISTRY  # noqa: E402
+from autobot_shared.env_utils import within_range  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 UNAVAILABLE = 75
 TIMEOUT_RC = 124
-REQUIREMENTS = ("requirements-ci-test.txt", "tools/remote_test_node/requirements.txt")
+REQUIREMENTS = ("requirements-ci-test.txt", "requirements-remote-test-node.txt")
+CONSTRAINTS = "constraints/shared.txt"
+CONSTRAINTS_MARKER = "#--constraints--"  # provision.sh splits its stdin here
 
 
 @dataclass(frozen=True)
@@ -45,7 +49,21 @@ class RemoteNodeSettings:
     connect_timeout: int
     base: str
     ssh_bin: str
-    ttl_min: int
+    known_hosts: str
+
+
+def _int_setting(env: "os._Environ[str] | dict[str, str]", name: str) -> int:
+    """An integer setting checked against the registry's spec; a malformed or out-of-range value reads as the default."""
+    spec = REGISTRY[name]
+    raw = env.get(name)
+    if raw is None or raw == "":
+        return spec.default
+    try:
+        value = int(raw)
+    except ValueError:
+        sys.stderr.write(f"[remote-test-node] {name} is not an integer; using the default {spec.default}\n")
+        return spec.default
+    return value if within_range(name, value, spec.range) else spec.default
 
 
 def load_config(env: "os._Environ[str] | dict[str, str]") -> "RemoteNodeSettings | str":
@@ -56,18 +74,17 @@ def load_config(env: "os._Environ[str] | dict[str, str]") -> "RemoteNodeSettings
     host, user = get("AUTOBOT_TEST_NODE_HOST", ""), get("AUTOBOT_TEST_NODE_USER", "")
     if not host or not user:
         return "AUTOBOT_TEST_NODE_HOST / AUTOBOT_TEST_NODE_USER are not set"
-    timeout = int(get("AUTOBOT_TEST_NODE_TIMEOUT", "600"))
     return RemoteNodeSettings(
         host=host,
         user=user,
         key=get("AUTOBOT_TEST_NODE_SSH_KEY", ""),
         port=get("AUTOBOT_TEST_NODE_PORT", "22"),
-        slots=int(get("AUTOBOT_TEST_NODE_SLOTS", "3")),
-        timeout=timeout,
-        connect_timeout=int(get("AUTOBOT_TEST_NODE_CONNECT_TIMEOUT", "10")),
+        slots=_int_setting(env, "AUTOBOT_TEST_NODE_SLOTS"),
+        timeout=_int_setting(env, "AUTOBOT_TEST_NODE_TIMEOUT"),
+        connect_timeout=_int_setting(env, "AUTOBOT_TEST_NODE_CONNECT_TIMEOUT"),
         base=get("AUTOBOT_TEST_NODE_BASE", ".autobot-test-node"),
         ssh_bin=get("AUTOBOT_TEST_NODE_SSH_BIN", "ssh"),
-        ttl_min=timeout // 60 + 30,
+        known_hosts=get("AUTOBOT_TEST_NODE_KNOWN_HOSTS", ""),
     )
 
 
@@ -85,9 +102,11 @@ def node_ssh_options(cfg: RemoteNodeSettings) -> list[str]:
         "ServerAliveInterval=15",
         "-o",
         "ServerAliveCountMax=3",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
     ]
+    if cfg.known_hosts:  # pinned: only the keys in this file are trusted
+        argv += ["-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={os.path.expanduser(cfg.known_hosts)}"]
+    else:  # trust on first use: a later change of the node's key is refused
+        argv += ["-o", "StrictHostKeyChecking=accept-new"]
     if cfg.key:
         argv += ["-i", os.path.expanduser(cfg.key), "-o", "IdentitiesOnly=yes"]
     return argv
@@ -105,9 +124,14 @@ def _script_command(script: str, *args: str) -> str:
 
 def probe(cfg: RemoteNodeSettings) -> "str | None":
     """None when the node answers over SSH, else why not."""
-    done = subprocess.run(
-        ssh_argv(cfg) + ["true"], capture_output=True, text=True, check=False, timeout=cfg.connect_timeout + 10
-    )
+    try:
+        done = subprocess.run(
+            ssh_argv(cfg) + ["true"], capture_output=True, text=True, check=False, timeout=cfg.connect_timeout + 10
+        )
+    except subprocess.TimeoutExpired:
+        return "ssh to the test node timed out"
+    except OSError as exc:  # the ssh executable is missing or not runnable
+        return f"ssh to the test node could not start ({exc.__class__.__name__})"
     return None if done.returncode == 0 else f"ssh to the test node failed (exit {done.returncode})"
 
 
@@ -116,7 +140,10 @@ def remote_cleanup(cfg: RemoteNodeSettings, job: str) -> None:
     mirror = shlex.quote(f"{cfg.base}/mirror.git")
     path = shlex.quote(f"{cfg.base}/runs/job.{job}")
     drop = f"rm -rf -- {path}; git --git-dir={mirror} update-ref -d refs/runs/{job}"
-    subprocess.run(ssh_argv(cfg) + [drop], capture_output=True, check=False, timeout=60)
+    try:
+        subprocess.run(ssh_argv(cfg) + [drop], capture_output=True, check=False, timeout=60)
+    except (subprocess.TimeoutExpired, OSError) as exc:  # never mask the run's own result; the node's sweep covers it
+        sys.stderr.write(f"[remote-test-node] cleanup of job {job} did not finish ({exc.__class__.__name__})\n")
 
 
 def ship_commit(cfg: RemoteNodeSettings, sha: str, job: str) -> "str | None":
@@ -124,6 +151,15 @@ def ship_commit(cfg: RemoteNodeSettings, sha: str, job: str) -> "str | None":
 
     ``send-pack``, not ``push``: a push would run this repo's pre-push hook, which calls this tool.
     """
+    try:
+        return _refresh_and_send(cfg, sha, job)
+    except subprocess.TimeoutExpired:
+        return "shipping the commit to the node timed out"
+    except OSError as exc:
+        return f"shipping the commit to the node could not start ({exc.__class__.__name__})"
+
+
+def _refresh_and_send(cfg: RemoteNodeSettings, sha: str, job: str) -> "str | None":
     mirror = shlex.quote(f"{cfg.base}/mirror.git")
     refresh = f"git --git-dir={mirror} fetch --quiet --no-tags origin +refs/heads/main:refs/heads/main"
     if subprocess.run(ssh_argv(cfg) + [refresh], capture_output=True, check=False, timeout=600).returncode != 0:
@@ -149,7 +185,7 @@ def run_remote(cfg: RemoteNodeSettings, sha: str, cmd: list[str], timeout: int) 
         if why:
             return report_unavailable(why)
         remote = _script_command(
-            "remote_job.sh", cfg.base, str(cfg.slots), str(timeout), str(cfg.ttl_min), job, "--", *cmd
+            "remote_job.sh", cfg.base, str(cfg.slots), str(timeout), str(timeout // 60 + 30), job, "--", *cmd
         )
         ssh = subprocess.Popen(ssh_argv(cfg) + [remote], stdin=subprocess.DEVNULL, start_new_session=True)
         return ssh.wait(timeout=timeout + 120)
@@ -194,11 +230,30 @@ def _origin_url() -> str:
     return done.stdout.strip()
 
 
+def _pins() -> list[str]:
+    """The uv and pip versions the node installs, from the registry (the node's own environment is not read)."""
+    return [
+        os.environ.get(n) or REGISTRY[n].default
+        for n in ("AUTOBOT_TEST_NODE_UV_VERSION", "AUTOBOT_TEST_NODE_PIP_VERSION")
+    ]
+
+
+def _requirements_payload(root: Path) -> str:
+    """The requirement files with their relative ``-c`` lines dropped, then the shared constraints after a marker."""
+    lines: list[str] = []
+    for name in REQUIREMENTS:
+        if (root / name).is_file():
+            lines += (root / name).read_text(encoding="utf-8").splitlines()
+    kept = [line for line in lines if not line.lstrip().startswith("-c ")]
+    constraints = (root / CONSTRAINTS).read_text(encoding="utf-8")
+    return "\n".join([*kept, CONSTRAINTS_MARKER, constraints])
+
+
 def provision(cfg: RemoteNodeSettings, root: Path) -> int:
     """Send provision.sh and the CI test requirements; safe to run again."""
-    reqs = "\n".join((root / name).read_text(encoding="utf-8") for name in REQUIREMENTS if (root / name).is_file())
+    reqs = _requirements_payload(root)
     done = subprocess.run(
-        ssh_argv(cfg) + [_script_command("provision.sh", cfg.base, _origin_url(), python_floor(root))],
+        ssh_argv(cfg) + [_script_command("provision.sh", cfg.base, _origin_url(), python_floor(root), *_pins())],
         input=reqs.encode("utf-8"),
         check=False,
         timeout=1800,
@@ -221,10 +276,19 @@ def main(argv: "list[str] | None" = None, env: "dict[str, str] | None" = None) -
     cfg = load_config(os.environ if env is None else env)
     if isinstance(cfg, str):
         return report_unavailable(f"not configured ({cfg})")
+    if not args.provision and (not args.sha or not args.cmd):
+        parser.error("--sha and a command are required")
+    try:
+        return _dispatch(cfg, args)
+    except subprocess.TimeoutExpired:
+        return report_unavailable("a step of the remote run timed out before the command started")
+    except OSError as exc:  # ssh / git missing or not runnable
+        return report_unavailable(f"the remote run could not start ({exc.__class__.__name__})")
+
+
+def _dispatch(cfg: RemoteNodeSettings, args: argparse.Namespace) -> int:
     if args.provision:
         return provision(cfg, Path.cwd())
-    if not args.sha or not args.cmd:
-        parser.error("--sha and a command are required")
     reason = probe(cfg)
     if reason:
         return report_unavailable(reason)

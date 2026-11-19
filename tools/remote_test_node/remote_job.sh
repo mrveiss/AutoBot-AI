@@ -5,7 +5,7 @@
 # into a private work dir, runs the command, and removes the work dir and the ref on success,
 # failure, timeout and every signal (EXIT INT TERM HUP), including the loss of the SSH session. Usage:
 #   remote_job.sh <base> <slots> <timeout_s> <ttl_min> <job-id> -- <command...>
-# Exit: the command's status, 124 timeout, 75 node not provisioned.
+# <ttl_min> is derived from the effective --timeout by run.py. Exit: the command's status, 124 timeout, 75 node not provisioned.
 set -uo pipefail
 
 base="$1"; slots="$2"; limit="$3"; ttl="$4"; job="$5"; shift 6
@@ -33,6 +33,17 @@ sweep_stale() {
   find "$base/runs" -mindepth 1 -maxdepth 1 -type d -mmin "+$ttl" -exec rm -rf -- {} + 2>/dev/null
 }
 
+gc_mirror() {
+  # Runs refs/runs/* are deleted per job, so their objects turn unreachable; collect them once a week (git's
+  # default 2-week prune grace keeps anything a concurrent job still reads), one collector at a time.
+  local stamp="$base/mirror.gc-stamp"
+  [ -n "$(find "$stamp" -mtime -7 2>/dev/null)" ] && return 0
+  (
+    flock -n 8 || exit 0
+    git --git-dir="$mirror" gc --quiet 2>/dev/null && touch "$stamp"
+  ) 8>>"$base/mirror.gc-lock"
+}
+
 take_slot() {
   local i
   mkdir -p "$base/slots"
@@ -58,6 +69,7 @@ wait_child() {
 mkdir -p "$base/runs"
 { [ -x "$base/venv/bin/python" ] && [ -d "$mirror" ]; } || { echo "remote test node is not provisioned" >&2; exit 75; }
 sweep_stale
+gc_mirror
 take_slot
 workdir="$base/runs/job.$job"; mkdir -p "$workdir/tree"
 checkout_commit() {
