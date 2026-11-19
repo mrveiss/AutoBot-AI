@@ -36,9 +36,18 @@ class FakeKB:
 
     def __init__(self, events: list):
         self.collections = {"c1": {"f1", "f2", "f3"}, "c2": {"g1"}}
+        self.created = {"c1": "t1", "c2": "t2"}
         self.facts = {"f1", "f2", "f3", "g1", "loose"}
         self.mutations: list = []
         self.events = events
+
+    async def get_collection(self, collection_id):
+        if collection_id not in self.collections:
+            return {"success": False, "message": f"Collection not found: {collection_id}"}
+        return {
+            "success": True,
+            "collection": {"name": f"Name {collection_id}", "created_at": self.created[collection_id]},
+        }
 
     async def bulk_delete_collection_facts(self, collection_id, confirm=False):
         if collection_id not in self.collections:
@@ -117,7 +126,7 @@ def _req():
     return types.SimpleNamespace(app=object())
 
 
-def _approval(op, selector, facts, status="approved"):
+def _approval(op, selector, facts, status="approved", created_at="t1"):
     approval = types.SimpleNamespace(
         id=uuid.uuid4(),
         status=status,
@@ -284,7 +293,7 @@ async def test_a_failed_delete_is_audited_as_failed(world, monkeypatch):
 @pytest.mark.asyncio
 async def test_more_facts_than_approved_is_refused_audited_and_deletes_nothing(world):
     approval = _approval(action.BULK_DELETE, action.selector_for(action.BULK_DELETE, "c1"), 2)
-    with pytest.raises(ValueError, match="nothing deleted"):
+    with pytest.raises(ValueError, match="nothing was deleted"):
         await _run(action.BULK_DELETE, approval)
     refusal = world.audit.await_args.kwargs
     assert world.kb.mutations == [] and refusal["details"]["phase"] == "refused"
@@ -338,6 +347,53 @@ async def test_a_selector_the_code_does_not_build_is_refused(world, selector):
     with pytest.raises(ValueError, match="different selector"):
         await _run(action.DELETE, _approval(action.DELETE, selector, 3))
     assert world.kb.mutations == []
+
+
+# -- the count check applies only where facts go; identity; the display name -------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_collection_delete_without_facts_ignores_the_fact_count(world):
+    selector = action.selector_for(action.DELETE, "c1", False)
+    await _run(action.DELETE, _approval(action.DELETE, selector, 0))  # 3 facts now, 0 approved: none are deleted
+    assert world.kb.mutations == [("delete", "c1", False)] and {"f1", "f2", "f3"} <= world.kb.facts
+
+
+@pytest.mark.asyncio
+async def test_a_collection_delete_with_facts_still_refuses_a_higher_count(world):
+    with pytest.raises(ValueError, match="nothing was deleted"):
+        await _run(action.DELETE, _approval(action.DELETE, action.selector_for(action.DELETE, "c1", True), 2))
+    assert world.kb.mutations == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", action.OPS)
+async def test_a_collection_recreated_under_the_same_id_is_refused(world, op):
+    approval = _approval(op, action.selector_for(op, "c1", True), 3)
+    world.kb.created["c1"] = "t-later"  # deleted and re-created after the approval
+    with pytest.raises(ValueError, match="changed since it was approved"):
+        await _run(op, approval)
+    refusal = world.audit.await_args.kwargs["details"]
+    assert world.kb.mutations == [] and refusal["phase"] == "refused" and refusal["found_created_at"] == "t-later"
+
+
+@pytest.mark.asyncio
+async def test_a_plan_without_the_identity_marker_is_refused(world):
+    approval = _approval(action.BULK_DELETE, action.selector_for(action.BULK_DELETE, "c1"), 3, created_at=None)
+    with pytest.raises(ValueError, match="changed since it was approved"):
+        await _run(action.BULK_DELETE, approval)
+    assert world.kb.mutations == []
+
+
+@pytest.mark.asyncio
+async def test_the_name_is_display_only_and_never_part_of_the_scope(world):
+    reply = await routes.delete_collection("c1", False, _req(), ADMIN, _session())
+    plan = world.created["context"]["plan"]
+    assert plan["name"] == "Name c1" and "name" not in plan["selector"] and reply["facts_in_collection"] == 3
+    approval = _approval(action.DELETE, action.selector_for(action.DELETE, "c1", False), 3)
+    approval.context["plan"]["name"] = "Another name"  # a different display name changes nothing
+    await _run(action.DELETE, approval)
+    assert world.kb.mutations == [("delete", "c1", False)]
 
 
 # -- registration -------------------------------------------------------------------------------------------

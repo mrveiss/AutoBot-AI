@@ -35,8 +35,9 @@ ALLOWLIST: dict[str, str] = {
         "GATED: the collection and bulk fact delete executor, run only after a #17038 approval (#21383)"
     ),
     "autobot-backend/knowledge/index.py": (
-        "UNWIRED: rebuild_chromadb_index has no caller and deletes only its migration target (<collection>_optimized); "
-        "a caller added later must propose through services.kb_collection_delete_action (#21383)"
+        "UNWIRED: rebuild_chromadb_index deletes the caller-named target collection; refuses the live collection; "
+        "no caller today (a new caller is not detected by this guard); one must propose through "
+        "services.kb_collection_delete_action (#21383)"
     ),
     "autobot-backend/knowledge/backends/async_chromadb_adapter.py": _ADAPTER,
     "autobot-backend/knowledge/backends/async_memory_adapter.py": _ADAPTER,
@@ -54,7 +55,9 @@ ALLOWLIST: dict[str, str] = {
         "NOT_KNOWLEDGE: deletes only the <collection>_migration_test collection of a dry run"
     ),
     "autobot-backend/llc/kb/collections.py": (
-        "ARCHIVE: copies a collection into an archived one, then removes the original"
+        "TRACKED_GAP #21383: drop_collection deletes an entity's KB collection with no copy and no proposal (callers "
+        "llc/api/work_items.py, sprints.py, companies.py, llc/services/project_disposal.py; entity lifecycle, needs a "
+        "decision); the archive path in the same file is ARCHIVE (copies, then removes the original)"
     ),
     "autobot-backend/services/knowledge/doc_index_orphans.py": _GAP,
     "autobot-backend/services/knowledge/doc_indexer.py": _GAP,

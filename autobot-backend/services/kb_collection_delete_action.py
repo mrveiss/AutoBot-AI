@@ -15,6 +15,13 @@ approved context, refuses a proposal whose selector is not one this module build
 server and refuses a count above the approved one. The knowledge base's own ``delete_collection`` and
 ``bulk_delete_collection_facts`` do the deleting, so the behaviour is theirs and not a second copy.
 
+Identity and staleness. The plan records the collection's ``created_at`` and the executor refuses when it changed, so
+a collection deleted and re-created under the same id after the approval is not deleted. Between the approval and the
+execution there is no other window: the executor runs right after the approval commits, and an approval carries no
+expiry of its own (``expires_at`` is unset on these proposals). The plan also carries the collection ``name`` for the
+approver to read; it is display only, never part of the selector and never used for scope. The "more than approved"
+refusal applies only where facts are deleted (a bulk delete, or a collection delete with ``delete_facts``).
+
 The paper trail comes first: a durable "intent" entry is committed before the delete, and no committed entry means
 nothing is deleted; the outcome (completion or failure) is recorded after.
 """
@@ -25,13 +32,21 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 
 from autobot_shared.logging_manager import get_logger
-from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
+from models.approval import Approval, ApprovalComment, ApprovalType
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import AuditResult, audit_log
+from services.kb_approved_delete import (
+    Audit,
+    pending_approval,
+    refuse_more_than_approved,
+    require_approved,
+    run_audited_delete,
+    write_audit,
+)
 from services.kb_wipe_action import (
     CHANNEL_API,
     decision_details,
@@ -97,32 +112,40 @@ async def _kb():
     return kb
 
 
-async def count_collection_facts(kb, collection_id: str) -> int | None:
-    """Facts in the collection now (the KB's own read-only preview); ``None`` when the collection does not exist."""
+async def collection_state(kb, collection_id: str) -> tuple[dict, int] | None:
+    """The collection record and its fact count now (read only); ``None`` when the collection does not exist."""
+    found = await kb.get_collection(collection_id=collection_id)
+    if not found.get("success"):
+        return None
     preview = await kb.bulk_delete_collection_facts(collection_id=collection_id, confirm=False)
-    return int(preview.get("facts_to_delete") or 0) if preview.get("success") else None
+    return (found.get("collection") or {}), int(preview.get("facts_to_delete") or 0)
+
+
+async def count_collection_facts(kb, collection_id: str) -> int | None:
+    """Facts in the collection now; ``None`` when the collection does not exist."""
+    state = await collection_state(kb, collection_id)
+    return None if state is None else state[1]
 
 
 async def plan_collection_delete(op: CollectionOp, kb, collection_id: str, delete_facts: bool = False) -> dict | None:
-    """Read only: the selector and the fact count the approver sees. ``None`` when the collection is not found."""
-    facts = await count_collection_facts(kb, collection_id)
-    return None if facts is None else {"selector": selector_for(op, collection_id, delete_facts), "facts": facts}
+    """Read only: what the approver sees. ``None`` when the collection is not found.
+
+    ``created_at`` is the identity the executor re-checks; ``name`` is display only.
+    """
+    state = await collection_state(kb, collection_id)
+    if state is None:
+        return None
+    collection, facts = state
+    return {
+        "selector": selector_for(op, collection_id, delete_facts),
+        "facts": facts,
+        "created_at": collection.get("created_at"),
+        "name": collection.get("name"),
+    }
 
 
 async def _pending_proposal(session: "AsyncSession", op: CollectionOp, selector: dict) -> "Approval | None":
-    query = (
-        select(Approval)
-        .where(
-            Approval.status == ApprovalStatus.PENDING.value,
-            Approval.context["action"].astext == op.action,
-        )
-        .with_for_update()
-    )
-    pending = (await session.execute(query)).scalars().all()
-    return next(
-        (a for a in pending if ((a.context or {}).get("plan") or {}).get("selector") == selector),
-        None,
-    )
+    return await pending_approval(session, op.action, lambda ctx: (ctx.get("plan") or {}).get("selector") == selector)
 
 
 async def propose(session: "AsyncSession", op: CollectionOp, requested_by: str, plan: dict) -> "Approval":
@@ -143,16 +166,11 @@ async def propose(session: "AsyncSession", op: CollectionOp, requested_by: str, 
             count_labels={"facts": "facts"},
         )
         return pending
-    context = {
-        "action": op.action,
-        "requested_by": requested_by,
-        "channel": CHANNEL_API,
-        "plan": plan,
-    }
+    context = {"action": op.action, "requested_by": requested_by, "channel": CHANNEL_API, "plan": plan}
     return await ApprovalGateService(session).create_approval(
         title=op.title,
         approval_type=ApprovalType.DESTRUCTIVE_ACTION.value,
-        description=f"{op.description} Collection: {selector['collection_id']!r}.",
+        description=f"{op.description} Collection: {plan.get('name') or selector['collection_id']!r}.",
         requested_by_agent=f"kb-collection-delete:{requested_by}",
         context=context,
     )
@@ -160,11 +178,6 @@ async def propose(session: "AsyncSession", op: CollectionOp, requested_by: str, 
 
 async def _review(approval: "Approval", session: "AsyncSession") -> bool:
     return await review_kb_proposal(approval, session, _WHAT)
-
-
-def _require_approved(op: CollectionOp, approval: "Approval") -> None:
-    if (approval.context or {}).get("action") != op.action or approval.status != ApprovalStatus.APPROVED.value:
-        raise ValueError(f"approval {approval.id} is not an approved {op.action} proposal; the deletion is refused")
 
 
 def _check_scope(op: CollectionOp, approval: "Approval") -> dict:
@@ -178,42 +191,31 @@ def _check_scope(op: CollectionOp, approval: "Approval") -> dict:
     return selector
 
 
-async def _audit(
-    op: CollectionOp,
-    approval: "Approval",
-    result: AuditResult,
-    self_approval: bool,
-    **extra: object,
-) -> bool:
-    """Whether the durable entry was committed."""
-    return await audit_log(
-        op.audit.value,
-        result=result,
-        user_id=approval.decided_by_user,
-        resource="knowledge_base",
-        durable=True,
-        details=decision_details(approval, self_approval, **extra),
-    )
+def _auditor(op: CollectionOp, approval: "Approval", self_approval: bool, selector: dict) -> Audit:
+    async def audit(result: AuditResult, details: dict) -> bool:
+        merged = decision_details(approval, self_approval, selector=selector, **details)
+        return await write_audit(audit_log, op.audit, approval, result, merged)
+
+    return audit
 
 
-async def _refuse_more_than_approved(
-    op: CollectionOp, approval: "Approval", selector: dict, self_ok: bool, found: int
-) -> None:
-    """Delete nothing when more facts are in scope now than the approver saw; fewer is fine."""
-    approved = ((approval.context or {}).get("plan") or {}).get("facts")
-    if isinstance(approved, int) and not isinstance(approved, bool) and found <= approved:
+def _deletes_facts(op: CollectionOp, selector: dict) -> bool:
+    """A bulk delete always deletes facts; a collection delete only when asked to."""
+    return op is BULK_DELETE or bool(selector.get("delete_facts"))
+
+
+async def _refuse_recreated(approval: "Approval", audit: Audit, collection: dict) -> None:
+    """Delete nothing when the collection is not the one that was approved (deleted and re-created under its id)."""
+    approved = ((approval.context or {}).get("plan") or {}).get("created_at")
+    if approved is not None and approved == collection.get("created_at"):
         return
-    await _audit(
-        op,
-        approval,
+    await audit(
         "failed",
-        self_ok,
-        selector=selector,
-        phase="refused",
-        approved=approved,
-        found=found,
+        {"phase": "refused", "approved_created_at": approved, "found_created_at": collection.get("created_at")},
     )
-    raise ValueError(f"approval {approval.id} approved {approved} facts but {found} are in scope; nothing deleted")
+    raise ValueError(
+        f"approval {approval.id} names a collection that changed since it was approved; nothing was deleted"
+    )
 
 
 async def _run_delete(op: CollectionOp, kb, selector: dict) -> int:
@@ -228,72 +230,42 @@ async def _run_delete(op: CollectionOp, kb, selector: dict) -> int:
     return int(result.get("facts_deleted" if op is DELETE else "deleted_count") or 0)
 
 
-async def _delete_and_audit(op: CollectionOp, approval: "Approval", kb, selector: dict, self_approval: bool) -> int:
-    try:
-        return await _run_delete(op, kb, selector)
-    except Exception as exc:
-        await _audit_failure(op, approval, self_approval, selector, exc)
-        raise
-
-
-async def _audit_failure(
-    op: CollectionOp,
-    approval: "Approval",
-    self_ok: bool,
-    selector: dict,
-    exc: BaseException,
-) -> None:
-    """Record the failed outcome; never raises, so the deletion's own error stays the one that propagates."""
-    try:
-        if await _audit(
-            op,
+async def _guarded_state(op: CollectionOp, approval: "Approval", kb, selector: dict, audit: Audit) -> int:
+    """The facts in scope now, after the identity and the count checks; refuses (deleting nothing) otherwise."""
+    state = await collection_state(kb, selector["collection_id"])
+    if state is None:
+        raise ValueError(f"approval {approval.id}: collection {selector['collection_id']!r} no longer exists")
+    await _refuse_recreated(approval, audit, state[0])
+    if _deletes_facts(op, selector):
+        await refuse_more_than_approved(
+            audit,
             approval,
-            "failed",
-            self_ok,
-            selector=selector,
-            phase="failure",
-            error=type(exc).__name__,
-        ):
-            return
-    except Exception:  # noqa: BLE001 -- logged below; it must not replace the original error
-        logger.exception("%s: the failure audit for approval %s raised", op.action, approval.id)
-        return
-    logger.error("%s: the failure audit for approval %s was not written", op.action, approval.id)
+            state[1],
+            count_key="facts",
+            unit="facts",
+            refused_details=lambda approved, found: {"approved": approved, "found": found},
+        )
+    return state[1]
 
 
 async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession") -> None:
     """Delete the approved scope: intent entry first, then the delete, then the outcome."""
-    _require_approved(op, approval)
+    require_approved(approval, op.action, "the deletion")
     if verified_decider(approval) is None:
         raise ValueError(f"approval {approval.id} has no verified decider; the deletion is refused")
     self_approval = await _review(approval, session)
     selector = _check_scope(op, approval)
-    kb = await _kb()
-    found = await count_collection_facts(kb, selector["collection_id"])
-    if found is None:
-        raise ValueError(f"approval {approval.id}: collection {selector['collection_id']!r} no longer exists")
-    await _refuse_more_than_approved(op, approval, selector, self_approval, found)
-    if not await _audit(
-        op,
+    kb, audit = await _kb(), _auditor(op, approval, self_approval, selector)
+    facts = await _guarded_state(op, approval, kb, selector, audit)
+    deleted = await run_audited_delete(
         approval,
-        "attempted",
-        self_approval,
-        selector=selector,
-        phase="intent",
-        facts=found,
-    ):
-        raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
-    deleted = await _delete_and_audit(op, approval, kb, selector, self_approval)
-    if not await _audit(
-        op,
-        approval,
-        "success",
-        self_approval,
-        selector=selector,
-        phase="completion",
-        deleted=deleted,
-    ):
-        raise RuntimeError(f"the deletion for approval {approval.id} ran but its audit record could not be written")
+        audit,
+        what="the deletion",
+        intent={"facts": facts},
+        delete=lambda: _run_delete(op, kb, selector),
+        failure=lambda exc: {"error": type(exc).__name__},
+        completion=lambda count: {"deleted": count},
+    )
     suffix = " (self-approved by the only admin)." if self_approval else "."
     body = f"Ran {op.operation}: {deleted} facts deleted{suffix}"
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))

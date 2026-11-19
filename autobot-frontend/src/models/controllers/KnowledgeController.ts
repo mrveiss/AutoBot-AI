@@ -246,7 +246,7 @@ export class KnowledgeController {
       this.appStore.addSystemNotification({ title: i18n.global.t('knowledge.entries.deleteTitle'), message: i18n.global.t(key), severity: 'info' })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.appStore.setGlobalError(`Failed to propose the deletion: ${errorMessage}`)
+      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.deleteProposeFailed', { message: errorMessage }))
       throw error
     }
   }

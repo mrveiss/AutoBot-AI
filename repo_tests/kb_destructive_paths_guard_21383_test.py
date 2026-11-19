@@ -5,11 +5,22 @@
 """A new code path that deletes knowledge-base data must be classified (#21383, #17038).
 
 Knowledge-base deletes go through the approval gate (``services/kb_wipe_action.py``,
-``services/claude_md_reindex_action.py``, ``services/kb_collection_delete_action.py``). This guard fails when a
-tracked, non-test source file drops an index or flushes a database, deletes a knowledge collection or its facts
-(``delete_collection``, ``bulk_delete_collection_facts``) or unlinks keys on the knowledge database, and is not in
-``kb_destructive_paths_allowlist_21383.ALLOWLIST``; and when an allowlist entry no longer matches. The detectors
-live in ``_kb_destructive_detect.py``.
+``services/claude_md_reindex_action.py``, ``services/kb_collection_delete_action.py``, one skeleton in
+``services/kb_approved_delete.py``). This guard fails when a tracked, non-test source file drops an index or flushes
+a database, deletes a knowledge collection or its facts (``delete_collection``, ``bulk_delete_collection_facts``) or
+unlinks keys on the knowledge database, and is not in ``kb_destructive_paths_allowlist_21383.ALLOWLIST``; and when an
+allowlist entry no longer matches. The detectors live in ``_kb_destructive_detect.py``.
+
+BLIND SPOTS (what a green run does not prove)
+    * ``repo_tests/``, ``docs/`` and ``tools/`` are not swept (the population and ``roots=`` say so);
+    * a single-key delete (``delete("fact:1")``) is not a hit: only collection verbs, ``unlink`` and a starred
+      ``delete(*keys)`` are;
+    * a delete through a pipeline (``pipe.delete(...)``) or through ``getattr(obj, "delete_collection")`` is not seen
+      unless the file also matches another kind;
+    * ``key-delete`` is a FILE-level heuristic: a file that opens the knowledge database anywhere and unlinks or
+      bulk-deletes anywhere is a hit, whether or not the two touch the same client;
+    * an allowlisted file is classified as a whole: a NEW caller of an allowlisted function, such as
+      ``knowledge/index.py::rebuild_chromadb_index`` (no caller today), is not detected.
 """
 
 from pathlib import Path
@@ -37,9 +48,10 @@ _NAMES_ONLY = (
 
 
 def _discover(root: Path) -> list[str]:
-    """Every tracked .py/.sh path; an empty tree yields [] so the floor raises the typed refusal."""
+    """Every tracked .py/.sh path outside the skipped trees; an empty tree yields [] so the floor raises."""
     try:
-        return [p for p in tracked_paths(Path(root), ".") if p.endswith(_SUFFIXES)]
+        paths = tracked_paths(Path(root), ".")
+        return [p for p in paths if p.endswith(_SUFFIXES) and not p.startswith(_SKIP_PREFIXES)]
     except EmptyEnumeration:
         return []
 
@@ -63,44 +75,33 @@ _ROOTS = (
     "data",
     "debug",
     "docker",
-    "docs",
     "install.sh",
     "libs",
     "main.py",
     "pipeline-scripts",
     "plugins",
-    "repo_tests",
     "run_agent.sh",
     "scripts",
     "site",
     "sync-frontend.sh",
-    "tools",
     "verify_causal_extractor.py",
 )
-#: Non-vacuity: the sweep must have read a real tree. Measured 8986 tracked .py/.sh files (2026-11-19); the pin stays
-#: at the earlier 8800 with growth 400 until it lands on the base (#19676).
+#: Non-vacuity: the sweep must have read a real tree. Measured 7894 tracked .py/.sh files outside repo_tests/,
+#: docs/ and tools/ (2026-11-19); the pin sits below it with growth 400 until it lands on the base (#19676).
 REACH = declare(
     "kb-destructive-paths",
     discover=_discover,
     roots=_ROOTS,
-    floor=8800,
+    floor=7800,
     growth=400,
-    what="tracked .py/.sh files",
+    what="tracked .py/.sh files outside repo_tests/, docs/ and tools/",
 )
 
 
 def _candidates() -> list[str]:
     paths = _discover(repo_root())
     REACH.completed(paths, repo_root())
-    return [
-        p
-        for p in paths
-        if p.endswith(_SUFFIXES)
-        and not p.startswith(_SKIP_PREFIXES)
-        and "/tests/" not in p
-        and p not in _NAMES_ONLY
-        and not is_test_filename(p)
-    ]
+    return [p for p in paths if "/tests/" not in p and p not in _NAMES_ONLY and not is_test_filename(p)]
 
 
 def _kinds_by_file() -> dict[str, set[str]]:

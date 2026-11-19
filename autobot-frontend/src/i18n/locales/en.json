@@ -2008,6 +2008,7 @@
         "currentlySharedWith": "Currently shared with",
         "updateAccess": "Update Access"
       },
+      "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "deleteTitle": "Delete",
       "indexingRunning": "Indexing running",
       "removeFromQueue": "Remove from queue",
