@@ -146,8 +146,8 @@ class RateLimiter:
         When set, ``acquire_window`` logs a warning (label, limit, window --
         never the key) on each rejection; the default keeps it silent.
     window_failure_policy:
-        What ``acquire_window`` does when Redis cannot answer: ``OPEN`` (default,
-        allow), ``LOCAL`` (enforce per process) or ``CLOSED`` (deny) (#18087).
+        What ``acquire_window`` does when Redis cannot answer: ``FAIL_OPEN`` (default,
+        allow), ``LOCAL`` (enforce per process) or ``FAIL_CLOSED`` (deny) (#18087).
     """
 
     def __init__(
@@ -158,7 +158,7 @@ class RateLimiter:
         requests_per_hour: int | None = None,
         redis_database: str = "main",
         log_label: str | None = None,
-        window_failure_policy: WindowFailurePolicy = WindowFailurePolicy.OPEN,
+        window_failure_policy: WindowFailurePolicy = WindowFailurePolicy.FAIL_OPEN,
     ) -> None:
         self._prefix = scope_prefix
         self._window_policy = window_failure_policy
@@ -490,11 +490,11 @@ class RateLimiter:
 
     def _window_unavailable(self, key: str, max_requests: int, window_seconds: int, reason: str) -> tuple[bool, float]:
         """Apply ``window_failure_policy`` when Redis could not answer (#18087)."""
-        if self._window_policy is WindowFailurePolicy.OPEN:
+        if self._window_policy is WindowFailurePolicy.FAIL_OPEN:
             self._warn_fail_open(reason)
             return True, 0.0
         logger.warning("rate_limiter: %s for '%s'; policy=%s", reason, self._log_scope, self._window_policy.value)
-        if self._window_policy is WindowFailurePolicy.CLOSED:
+        if self._window_policy is WindowFailurePolicy.FAIL_CLOSED:
             return False, float(window_seconds)
         return self._local_windows.try_acquire(f"{self._prefix}:{key}", max_requests, window_seconds)
 
@@ -540,10 +540,10 @@ class RateLimiter:
 
     def _remaining_unavailable(self, key: str, max_requests: int, window_seconds: int, reason: str) -> int:
         """Remaining quota when Redis could not answer, per ``window_failure_policy``."""
-        if self._window_policy is WindowFailurePolicy.OPEN:
+        if self._window_policy is WindowFailurePolicy.FAIL_OPEN:
             self._warn_fail_open(reason)
             return max_requests
-        if self._window_policy is WindowFailurePolicy.CLOSED:
+        if self._window_policy is WindowFailurePolicy.FAIL_CLOSED:
             return 0
         used, _ = self._local_windows.usage(f"{self._prefix}:{key}", window_seconds)
         return max(0, max_requests - used)

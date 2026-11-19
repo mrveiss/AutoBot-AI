@@ -20,15 +20,15 @@ Why the policy is a parameter and not a decision made here
 Three behaviours existed across the forks, and each is security- or
 availability-relevant, so none is silently chosen for every caller:
 
-    OPEN    Redis down -> allow. Never blocks traffic, but switches the control
-            off for the outage. The default, and what every ``acquire_window``
-            caller had before this module.
-    LOCAL   Redis down -> keep enforcing, per process. The limit is then
-            multiplied by the worker count, but the control never turns off.
-            What ``IPRateLimiter`` (public OpenAI/A2A endpoints) and the four
-            in-process MCP counters effectively did.
-    CLOSED  Redis down -> deny. For controls where over-admitting is worse than
-            an outage. With ``wait=True`` this blocks until Redis returns.
+    FAIL_OPEN    Redis down -> allow. Never blocks traffic, but switches the control
+                 off for the outage. The default, and what every ``acquire_window``
+                 caller had before this module.
+    LOCAL        Redis down -> keep enforcing, per process. The limit is then
+                 multiplied by the worker count, but the control never turns off.
+                 What ``IPRateLimiter`` (public OpenAI/A2A endpoints) and the four
+                 in-process MCP counters effectively did.
+    FAIL_CLOSED  Redis down -> deny. For controls where over-admitting is worse than
+                 an outage. With ``wait=True`` this blocks until Redis returns.
 
 One further difference is NOT a parameter: ``IPRateLimiter`` recorded a request
 *before* counting it, so a rejected request extended the window and a client
@@ -61,9 +61,9 @@ LOCAL_WINDOW_MAX_KEYS = env_int("AUTOBOT_RATE_LIMIT_LOCAL_MAX_KEYS", 10_000)
 class WindowFailurePolicy(str, Enum):
     """What a single-window acquire does when Redis cannot answer."""
 
-    OPEN = "open"
+    FAIL_OPEN = "fail_open"
     LOCAL = "local"
-    CLOSED = "closed"
+    FAIL_CLOSED = "fail_closed"
 
 
 class LocalWindowCounter:
@@ -148,7 +148,7 @@ class WindowQuota:
         cls,
         scope: str,
         *,
-        policy: WindowFailurePolicy = WindowFailurePolicy.OPEN,
+        policy: WindowFailurePolicy = WindowFailurePolicy.FAIL_OPEN,
         log_rejections: bool = True,
         **quota: Any,
     ) -> WindowQuota:

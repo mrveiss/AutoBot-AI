@@ -41,6 +41,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -97,8 +98,7 @@ DISTINCT_CONCEPTS: dict[str, str] = {
 
 
 def _is_test_path(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in path
+    return is_test_filename(path.rsplit("/", 1)[-1]) or "/tests/" in path
 
 
 def _scanned_modules(root: Path) -> list[str]:
@@ -178,7 +178,7 @@ _rate_limit_lock = asyncio.Lock()
 _FORK_ZSET = """
 async def check(redis, key, now):
     redis.zremrangebyscore(key, 0, now - 60)
-    redis.zadd(key, {str(now): now})
+    redis.zadd(key, dict.fromkeys([str(now)], now))
     return redis.zcard(key)
 """
 

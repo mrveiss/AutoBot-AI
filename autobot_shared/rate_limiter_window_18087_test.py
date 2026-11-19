@@ -57,7 +57,7 @@ class FakeWindowRedis:
         return [(b"m", t) for t in live]
 
 
-def _quota(policy=WindowFailurePolicy.OPEN, limit=3, **kw) -> WindowQuota:
+def _quota(policy=WindowFailurePolicy.FAIL_OPEN, limit=3, **kw) -> WindowQuota:
     return WindowQuota.for_scope("t18087", policy=policy, max_requests=limit, window_seconds=60, **kw)
 
 
@@ -106,7 +106,7 @@ class TestRejectDoesNotExtendTheWindow:
 class TestFailurePolicy:
     @pytest.mark.parametrize("fault", ["none", "raises"])
     def test_open_allows_everything(self, fault):
-        quota = _quota(WindowFailurePolicy.OPEN)
+        quota = _quota(WindowFailurePolicy.FAIL_OPEN)
         patched = AsyncMock(return_value=None) if fault == "none" else AsyncMock(side_effect=ConnectionError("down"))
         with patch(_REDIS, patched):
             assert all(_run(_burst(quota, 10)))
@@ -120,13 +120,13 @@ class TestFailurePolicy:
 
     @pytest.mark.parametrize("fault", ["none", "raises"])
     def test_closed_denies_everything(self, fault):
-        quota = _quota(WindowFailurePolicy.CLOSED)
+        quota = _quota(WindowFailurePolicy.FAIL_CLOSED)
         patched = AsyncMock(return_value=None) if fault == "none" else AsyncMock(side_effect=ConnectionError("down"))
         with patch(_REDIS, patched):
             assert not any(_run(_burst(quota, 3)))
 
     def test_default_policy_is_open(self):
-        assert RateLimiter("x")._window_policy is WindowFailurePolicy.OPEN
+        assert RateLimiter("x")._window_policy is WindowFailurePolicy.FAIL_OPEN
 
     def test_local_policy_is_per_key(self):
         quota = _quota(WindowFailurePolicy.LOCAL, limit=1)
