@@ -40,7 +40,7 @@ PATH_OLLAMA_GENERATE = "/api/generate"
 PATH_OLLAMA_CHAT = "/api/chat"
 PATH_OLLAMA_TAGS = "/api/tags"
 PATH_OLLAMA_PULL = "/api/pull"
-
+PATH_OLLAMA_EMBEDDINGS = "/api/embeddings"
 
 # ============================================================================
 # ERROR CONSTANTS
