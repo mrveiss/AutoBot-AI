@@ -133,6 +133,7 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
         if isinstance(node, ast.Assert):
             asserted.update(id(child) for child in ast.walk(node))
 
+    line_vars = _source_line_vars(tree)
     for node in ast.walk(tree):
         if id(node) in asserted:
             continue
@@ -143,13 +144,52 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
         for arg in node.args:
             if isinstance(arg, ast.Constant) and arg.value in _MARKERS:
                 return True
-            if isinstance(arg, ast.Tuple) and _tuple_skips_comments(arg):
+            if isinstance(arg, ast.Tuple) and _tuple_skips_comments(arg, _is_source_line(node.func.value, line_vars)):
                 return True
     return False
 
 
-def _tuple_skips_comments(arg: ast.Tuple) -> bool:
+#: Names whose appearance in an iterable marks the loop variable as a line or text drawn from source.
+_SOURCE_TEXT_HINTS = ("line", "splitlines", "read_text", "readlines", "text", "source", "content")
+
+
+def _names_in(expr: ast.AST) -> list[str]:
+    """Every identifier and attribute name mentioned inside an expression."""
+    names = []
+    for n in ast.walk(expr):
+        if isinstance(n, ast.Name):
+            names.append(n.id)
+        elif isinstance(n, ast.Attribute):
+            names.append(n.attr)
+    return names
+
+
+def _source_line_vars(tree: ast.AST) -> set[str]:
+    """Loop or comprehension targets that iterate lines or text drawn from source."""
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.For, ast.comprehension)) and any(
+            hint in name.lower() for name in _names_in(node.iter) for hint in _SOURCE_TEXT_HINTS
+        ):
+            found.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+    return found
+
+
+def _is_source_line(receiver: ast.AST, line_vars: set[str]) -> bool:
+    """True if the startswith receiver is a source line: a loop variable over lines, or named as one."""
+    root = receiver
+    while isinstance(root, (ast.Attribute, ast.Call, ast.Subscript)):
+        root = root.func if isinstance(root, ast.Call) else root.value
+    if not isinstance(root, ast.Name):
+        return False
+    return root.id in line_vars or "line" in root.id.lower()
+
+
+def _tuple_skips_comments(arg: ast.Tuple, on_source_line: bool = False) -> bool:
     """A tuple of prefixes that includes a comment marker and is not a URL check.
+
+    A startswith applied to a line drawn from source is a comment filter whatever URL siblings
+    the tuple has (`on_source_line`); only a check on a URL or path value is exempt.
 
     `startswith(("/api", "http", "//"))` tests for a path or protocol-relative
     URL: the `//` there is the start of a URL, not a comment. Such a tuple
@@ -159,6 +199,8 @@ def _tuple_skips_comments(arg: ast.Tuple) -> bool:
     values = [e.value for e in arg.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
     if not any(v in _MARKERS for v in values):
         return False
+    if on_source_line:
+        return True
     url_like = any(v.startswith("http") or v in _URL_PATH_PREFIXES for v in values)
     return not (url_like and "//" in values and not (set(values) & {"#", "/*"}))
 
@@ -222,6 +264,21 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a tuple of markers", 'if line.startswith(("#", "//")):\n    pass\n', True),
         ("a URL or path-prefix check", 'if p.startswith(("/api", "http", "//")):\n    pass\n', False),
         ("a tuple of comment markers beside a URL prefix", 'if p.startswith(("http", "#")):\n    pass\n', True),
+        (
+            "a line filter with an api sibling",
+            'k = [l for l in lines if not l.lstrip().startswith(("//", "/api"))]\n',
+            True,
+        ),
+        (
+            "a line filter with an http sibling",
+            'k = [l for l in text.splitlines() if not l.startswith(("//", "http"))]\n',
+            True,
+        ),
+        (
+            "the phase-validation path check",
+            'ok = joined and not joined.startswith(("/api", "http", "//"))\n',
+            False,
+        ),
         ("a block-doc marker beside slash-slash", 'if p.startswith(("//", "/**")):\n    pass\n', True),
         ("a triple slash beside slash-slash", 'if p.startswith(("//", "///")):\n    pass\n', True),
         ("a bare slash-slash skip stays a stripper", 'if p.startswith("//"):\n    pass\n', True),
