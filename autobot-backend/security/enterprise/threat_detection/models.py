@@ -15,6 +15,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Dict, Iterator, List
 
 from autobot_shared.logging_manager import get_logger
@@ -149,6 +150,16 @@ class SecurityEvent:
         return f"{prefix}_{int(time.time())}_{event_hash}"
 
 
+#: Parsed rows kept hot: one entry per retained history row (the engine keeps 10k), so the window scan compares
+#: floats instead of re-parsing every timestamp on every counter call (#18844).
+_EPOCH_CACHE_SIZE = 16384
+
+
+@lru_cache(maxsize=_EPOCH_CACHE_SIZE)
+def _epoch(timestamp: str) -> float:
+    return parse_utc_iso(timestamp).timestamp()
+
+
 @dataclass
 class EventHistory:
     """Encapsulates event history and provides query methods to reduce Feature Envy"""
@@ -161,8 +172,9 @@ class EventHistory:
         Analysis order is not timestamp order, so an expired row is skipped,
         never treated as the end of the window (#18844).
         """
+        cutoff = cutoff_time.timestamp()
         for event in self.events:
-            if parse_utc_iso(event.get("timestamp", utc_timestamp())) >= cutoff_time:
+            if _epoch(event.get("timestamp") or utc_timestamp()) >= cutoff:
                 yield event
 
     def count_recent_failures(self, user_id: str, source_ip: str, window_minutes: int) -> int:

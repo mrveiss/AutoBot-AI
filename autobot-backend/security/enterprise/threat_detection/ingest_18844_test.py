@@ -149,3 +149,20 @@ def test_failure_count_skips_an_expired_row_instead_of_stopping() -> None:
 def test_endpoint_usage_skips_an_expired_row_instead_of_stopping() -> None:
     h = _history_with_expired_row_between(action="api_request", resource="/x")
     assert h.get_recent_endpoint_usage("alice", "/x", 1) == 2
+
+
+def test_each_row_timestamp_is_parsed_once_across_counter_calls() -> None:
+    from collections import deque
+    from unittest.mock import patch
+
+    from security.enterprise.threat_detection import models
+
+    models._epoch.cache_clear()
+    stamps = [f"2030-01-01T00:00:{i:02d}+00:00" for i in range(30)]
+    rows = [{"timestamp": s, "user_id": "alice", "action": "agent_action"} for s in stamps]
+    history = models.EventHistory(events=deque(rows))
+    with patch.object(models, "parse_utc_iso", wraps=models.parse_utc_iso) as parse:
+        for _ in range(5):
+            history.count_recent_actions("alice", "agent_action", 1)
+            history.get_recent_action_frequency("alice", "agent_action")
+    assert parse.call_count == len(stamps)
