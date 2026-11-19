@@ -29,6 +29,7 @@ import aiohttp
 
 from autobot_shared.env_utils import env_registered
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_ps_url
 from autobot_shared.spend_recording import report_spend
@@ -93,7 +94,8 @@ async def loaded_models(provider: Any) -> list[str] | None:
     """Names of the models Ollama has resident now (``/api/ps``); None when that cannot be read."""
     try:
         timeout = aiohttp.ClientTimeout(total=_PS_TIMEOUT_S)
-        async with await get_http_client().get(ollama_ps_url(provider.resolved_base_url()), timeout=timeout) as resp:
+        url = ollama_ps_url(provider.resolved_base_url())
+        async with await get_http_client().get(url, timeout=timeout, guard_egress=EGRESS_POLICY) as resp:
             if resp.status != 200:
                 return None
             data = await resp.json()
