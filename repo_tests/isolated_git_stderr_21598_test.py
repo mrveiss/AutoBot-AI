@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from autobot_shared.isolated_git import git, make_repo
+from autobot_shared.isolated_git import GIT_ERROR_STREAM_LIMIT, GitError, git, make_repo
 
 
 def test_an_empty_commit_error_carries_gits_stderr(tmp_path):
@@ -32,3 +32,10 @@ def test_check_false_returns_the_result_unchanged(tmp_path):
     repo = make_repo(tmp_path / "scratch")
     result = git(repo, "rev-parse", "--verify", "no-such-ref", check=False)
     assert result.returncode != 0
+
+
+def test_each_stream_in_the_message_is_capped():
+    huge = "x" * (GIT_ERROR_STREAM_LIMIT * 3)
+    message = str(GitError(1, ["git"], output=huge, stderr=huge))
+    assert message.count("x") == 2 * GIT_ERROR_STREAM_LIMIT
+    assert message.count("[truncated]") == 2

@@ -56,7 +56,7 @@ def test_agent_edit_and_rollback_do_not_lose_either_write(monkeypatch):
     monkeypatch.setattr(config_pkg, "config_manager", store)
     monkeypatch.setattr(config_rollback.ConfigService, "clear_cache", lambda: None)
     update = SimpleNamespace(model="edited", provider="edited-provider")
-    snapshot = {"model": "rolled-back", "provider": None, "enabled": False}
+    snapshot = {"model": "rolled-back", "provider": "rolled-provider", "enabled": False}
 
     _run_concurrently(
         lambda: write_agent_model(store, _AGENT, _BASE, update),
@@ -65,7 +65,8 @@ def test_agent_edit_and_rollback_do_not_lose_either_write(monkeypatch):
 
     _assert_no_interleave(store.events)
     assert store.values[f"agents.{_AGENT}.enabled"] is False
-    assert store.values[f"agents.{_AGENT}.model"] in {"edited", "rolled-back"}
+    pair = (store.values[f"agents.{_AGENT}.model"], store.values[f"agents.{_AGENT}.provider"])
+    assert pair in {("edited", "edited-provider"), ("rolled-back", "rolled-provider")}, f"mixed writers: {pair}"
 
 
 def test_two_agent_edits_do_not_interleave():

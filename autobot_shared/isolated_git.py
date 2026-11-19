@@ -98,6 +98,17 @@ def isolated_git_env(
     return env
 
 
+#: Longest slice of each git stream kept in a :class:`GitError` message.
+GIT_ERROR_STREAM_LIMIT = 2000
+
+
+def _clip(text: str) -> str:
+    text = text.strip()
+    if len(text) <= GIT_ERROR_STREAM_LIMIT:
+        return text
+    return text[:GIT_ERROR_STREAM_LIMIT] + "... [truncated]"
+
+
 class GitError(subprocess.CalledProcessError):
     """A failed ``git()`` call whose message carries git's own stderr (and stdout) (#21598).
 
@@ -106,7 +117,7 @@ class GitError(subprocess.CalledProcessError):
 
     def __str__(self) -> str:
         # ``git commit`` reports "nothing to commit" on stdout, so the explanation is kept from both streams.
-        said = " ".join(part.strip() for part in (self.stderr, self.stdout) if part and part.strip())
+        said = " ".join(_clip(part) for part in (self.stderr, self.stdout) if part and part.strip())
         return f"{super().__str__()} git said: {said}" if said else super().__str__()
 
 
