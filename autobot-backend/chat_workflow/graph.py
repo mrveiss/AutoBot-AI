@@ -132,7 +132,7 @@ class ChatState(TypedDict, total=False):
     approval_decision: Dict[str, Any] | None
     parse_retries: int  # #21843: re-asks after an unparsed TOOL_CALL this turn
     parse_retry_pending: bool  # #21843: the last reply's TOOL_CALL did not parse; generate again
-    plan_id: str  # #19951: one per plan; names the hold's card and survives the resume
+    approval_plan_id: str  # #19951: minted per planned pass; seeds the hold's card id (not the planner's plan_id)
 
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
@@ -581,7 +581,7 @@ async def _generate_response_planned(
             # #18430: a yes belongs to the batch it was given for; a new plan starts with none.
             "approval_decision": None,
             "pending_approval": None,
-            "plan_id": uuid.uuid4().hex,
+            "approval_plan_id": uuid.uuid4().hex,
         },
         stream_cb,
     )

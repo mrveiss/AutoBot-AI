@@ -51,12 +51,12 @@ def _card_command(pending: Mapping[str, Any], calls: Sequence[Mapping[str, Any]]
 def card_id(state: Mapping[str, Any], shown: Sequence[Mapping[str, Any]]) -> str:
     """A card id stable across re-emission: the session, the plan that held the calls and what was shown (#19951).
 
-    ``plan_id`` is minted per plan and checkpointed, so a resume re-derives the same id while the same calls held
-    in another pass or turn get a new one (the pass counter alone restarts every turn). The stream keeps it as the
-    message id, so a decided card is never shown again.
+    ``approval_plan_id`` is minted per planned pass (never the planner's ``plan_id``) and checkpointed, so a resume
+    re-derives the same id while the same calls held in another pass or turn get a new one (the pass counter alone
+    restarts every turn). The stream keeps it as the message id, so a decided card is never shown again.
     """
     prints = sorted(shown_call_fingerprint(tc.get("name", ""), _params(tc)) for tc in shown)
-    seed = json.dumps([state["session_id"], state.get("plan_id", ""), prints])
+    seed = json.dumps([state["session_id"], state.get("approval_plan_id", ""), prints])
     return "approval-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
 
 

@@ -181,7 +181,7 @@ async def test_the_card_id_follows_the_plan_and_what_was_shown():
     state = _input(plan_id="p1")
     shown = [dict(CLICK)]
     assert card_id(state, shown) == card_id(state, [dict(CLICK)])
-    assert card_id({**state, "plan_id": "p2"}, shown) != card_id(state, shown)
+    assert card_id({**state, "approval_plan_id": "p2"}, shown) != card_id(state, shown)
     assert card_id(state, [{"name": "click", "params": {"selector": "#other"}}]) != card_id(state, shown)
 
 
