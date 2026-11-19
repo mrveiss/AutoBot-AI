@@ -48,8 +48,9 @@ describe('company switch: lists and X-Organization-Id agree (#21520)', () => {
     const activeWorkflows = ref<W[]>([])
     const completedWorkflows = ref<W[]>([])
     const read = async () => {
-      const r = await client.get('/workflow-automation/active_workflows')
-      return { success: true, data: (await r.json()) as { workflows: W[] } }
+      // ApiClient.get resolves the parsed body, not a Response.
+      const data = await client.get<{ workflows: W[] }>('/workflow-automation/active_workflows')
+      return { success: true, data }
     }
     const loaders = useWorkflowListLoaders<W>({
       activeWorkflows, completedWorkflows, fetchActive: read, fetchCompleted: read,
