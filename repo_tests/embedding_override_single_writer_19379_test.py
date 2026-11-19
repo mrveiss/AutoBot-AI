@@ -14,6 +14,7 @@ import re
 
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._scan_helpers import tracked_paths
 
 #: The defining module and the one sanctioned caller.
@@ -29,8 +30,7 @@ def _uses(source: str) -> bool:
 
 
 def _is_test(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return name.endswith("_test.py") or name.startswith("test_") or "/tests/" in path
+    return is_test_filename(path, include_js=False, include_conftest=False) or "/tests/" in path
 
 
 def _callers(paths) -> list[str]:

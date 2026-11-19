@@ -263,9 +263,22 @@
         - name: "Setup NPU Worker"
           when: node_role == 'npu-worker'
           block:
+            - name: "Install target Python interpreter (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                public: true
+
+            - name: "Enforce venv target Python version (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                tasks_from: ensure_venv_version
+              vars:
+                venv_path: "{{ autobot_home }}/venv"
+                venv_python: "{{ python_interpreter_binary }}"
+
             - name: "Create Python virtual environment"
               become_user: "{{ autobot_user }}"
-              command: python3 -m venv {{ autobot_home }}/venv
+              command: "{{ python_interpreter_binary }} -m venv {{ autobot_home }}/venv"
               args:
                 creates: "{{ autobot_home }}/venv/bin/activate"
 
@@ -280,9 +293,22 @@
         - name: "Setup AI Stack"
           when: node_role == 'ai-stack'
           block:
+            - name: "Install target Python interpreter for AI (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                public: true
+
+            - name: "Enforce venv target Python version (#20932)"
+              ansible.builtin.include_role:
+                name: python_interpreter
+                tasks_from: ensure_venv_version
+              vars:
+                venv_path: "{{ autobot_home }}/venv"
+                venv_python: "{{ python_interpreter_binary }}"
+
             - name: "Create Python virtual environment for AI"
               become_user: "{{ autobot_user }}"
-              command: python3 -m venv {{ autobot_home }}/venv
+              command: "{{ python_interpreter_binary }} -m venv {{ autobot_home }}/venv"
               args:
                 creates: "{{ autobot_home }}/venv/bin/activate"
 

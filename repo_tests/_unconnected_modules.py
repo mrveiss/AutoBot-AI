@@ -89,14 +89,19 @@ def _package_parts(rel: str) -> list[str]:
 
 
 def _statements(text: str):
-    """Import statements of *text*, one string each; a parenthesised list is joined across its lines."""
+    """Import statements of *text*, one string each; a parenthesised list is joined across its lines.
+
+    A trailing comment on any line of the list (``from a import (  # noqa``) is cut before joining, so
+    it never swallows the names after it when ``import_refs`` cuts the joined string at ``#``.
+    """
     lines = iter(text.split("\n"))
     for line in lines:
         stripped = line.lstrip()
         if not stripped.startswith(("from ", "import ")):
             continue
+        stripped = stripped.split("#", 1)[0].strip()
         while "(" in stripped and ")" not in stripped:
-            stripped += " " + next(lines, ")").strip()
+            stripped += " " + next(lines, ")").split("#", 1)[0].strip()
         yield stripped
 
 
@@ -105,7 +110,6 @@ def import_refs(rel: str, text: str) -> set[str]:
     refs: set[str] = set()
     pkg = _package_parts(rel)
     for stmt in _statements(text):
-        stmt = stmt.split("#", 1)[0]
         if stmt.startswith("import "):
             for item in stmt[len("import ") :].split(","):
                 word = item.strip().split(" ")[0]

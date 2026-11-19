@@ -39,6 +39,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from autobot_shared.testfile_names import is_test_filename
+
 AGENT_REL = "autobot-slm-backend/slm/agent"
 ROLE_REL = "autobot-slm-backend/ansible/roles/slm_agent"
 ROLES_REL = "autobot-slm-backend/ansible/roles"
@@ -53,8 +55,7 @@ def _yaml(path: Path):
 
 
 def _is_test(rel: Path) -> bool:
-    name = rel.name
-    return name.endswith("_test.py") or name.startswith("test_") or name == "conftest.py" or "tests" in rel.parts
+    return is_test_filename(rel.name, include_js=False) or "tests" in rel.parts
 
 
 def expected_modules(root: Path) -> set[str]:

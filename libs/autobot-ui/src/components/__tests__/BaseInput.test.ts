@@ -37,6 +37,13 @@ describe('BaseInput', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['abc'])
   })
 
+  it('emits the typed string, leading zeros kept, from a number input', async () => {
+    // fails if a number input coerces its value: consumers parse '001' themselves and BaseInput must not lose it
+    const wrapper = mount(BaseInput, { props: { type: 'number' } })
+    await wrapper.get('input').setValue('001')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['001'])
+  })
+
   it('ties <label for> to the input id when label is given', () => {
     // fails if the label's `for` and the input's `id` diverge (click-to-focus and the accessible name break)
     const wrapper = mount(BaseInput, { props: { label: 'Name' } })

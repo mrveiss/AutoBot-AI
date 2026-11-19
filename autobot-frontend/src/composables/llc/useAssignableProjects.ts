@@ -3,7 +3,7 @@
 //
 // #18978: the projects a work item can go in, for the backlog's filter, form and sprint picker.
 // A failed request is kept apart from an empty result, so a company is not told it has no project.
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -43,6 +43,17 @@ export function useAssignableProjects(companyId: Readonly<Ref<string>>) {
       if (current()) isLoadingProjects.value = false
     }
   }
+
+  // A different company has different projects: drop the old list and any load still in flight, then load again.
+  // Whoever holds a selection (`projects` is what it must be one of) re-validates it against the new list.
+  watch(companyId, (next, previous) => {
+    if (next === previous) return
+    loadSeq++
+    projects.value = []
+    projectsFailed.value = false
+    isLoadingProjects.value = false
+    if (next) void loadProjects()
+  })
 
   return { projects, isLoadingProjects, projectsFailed, loadProjects }
 }

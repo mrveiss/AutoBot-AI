@@ -9,9 +9,9 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseAlert, BaseBadge, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, createRecencyFormatter } from '@autobot/ui'
 import { useConnectorJob, fetchConnectorHistory } from '@/composables/knowledge/useConnectorJob'
-import { formatTimeAgo, formatDuration } from '@/utils/formatHelpers'
+import { formatDuration } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import type { ConnectorHistoryEntry } from '@/types/knowledgeBase'
 
@@ -31,7 +31,8 @@ const history = ref<ConnectorHistoryEntry[]>([])
 const historyLoading = ref(false)
 const expandedRows = ref<Set<number>>(new Set())
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const { jobState, isPolling, pollFailed, start: startPoll, stop: stopPoll } = useConnectorJob()
 
 let latestHistoryRequest = 0

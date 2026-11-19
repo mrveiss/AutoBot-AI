@@ -7,16 +7,21 @@ import {
   formatDateTime,
   formatISOString,
   formatTime,
-  formatTimeAgo,
   formatRelativeTime,
   formatLocalTime,
-  createRecencyFormatter
+  createRecencyFormatter,
+  isoDateStamp,
+  isoTimestampStamp,
+  toDateTimeLocalValue
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
 const UTC = { timeZone: 'UTC' } as const
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('createDateFormatter (#19905)', () => {
   it('formats the part asked for, in the locale asked for', () => {
@@ -26,6 +31,14 @@ describe('createDateFormatter (#19905)', () => {
     expect(date(ISO)).toBe('10/30/2025')
     expect(time(ISO)).toBe('14:30:15')
     expect(both(ISO)).toBe('10/30/2025, 2:30:15 PM')
+  })
+
+  it('reads the locale on every call', () => {
+    let locale = 'en-US'
+    const fmt = createDateFormatter({ kind: 'date', locale: () => locale, intl: { ...UTC, month: 'long' } })
+    expect(fmt(ISO)).toBe('October')
+    locale = 'de'
+    expect(fmt(ISO)).toBe('Oktober')
   })
 
   it('reads a number as milliseconds, or as seconds when told', () => {
@@ -102,25 +115,6 @@ describe('formatDate / formatDateTime / formatISOString / formatTime (#19905)', 
     expect(formatTime(ISO, true)).toBe(
       new Date(ISO).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
     )
-  })
-})
-
-describe('formatTimeAgo (#19905)', () => {
-  it('walks the tiers from just now to years', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
-    const ago = (seconds: number) => formatTimeAgo(Date.now() - seconds * 1000)
-    expect(ago(30)).toBe('just now')
-    expect(ago(120)).toBe('2 minutes ago')
-    expect(ago(7200)).toBe('2 hours ago')
-    expect(ago(172800)).toBe('2 days ago')
-    expect(ago(1209600)).toBe('2 weeks ago')
-    expect(ago(5184000)).toBe('2 months ago')
-    expect(ago(63072000)).toBe('2 years ago')
-  })
-
-  it('reads an invalid value as unknown', () => {
-    expect(formatTimeAgo('nope')).toBe('unknown')
   })
 })
 
@@ -225,6 +219,15 @@ describe('createRecencyFormatter (#19606)', () => {
     expect(g(at(2 * day))).toBe('long ago')
   })
 
+  it('shows a time of day past the cutoff when the older text is a time formatter', () => {
+    const hour = 3_600_000
+    const older = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false } })
+    const f = createRecencyFormatter({ olderThanMs: hour, older, locale: 'en', style: 'narrow', now })
+    expect(f(at(hour - 1))).toBe('59m ago')
+    expect(f(at(hour))).toBe('11:00')
+    expect(f(at(2 * hour))).toBe('10:00')
+  })
+
   it('caps the unit and answers a missing or unparseable moment with the invalid text', () => {
     const f = createRecencyFormatter({ locale: 'en', maxUnit: 'day', now, invalidText: '—' })
     expect(f(at(45 * 86_400_000))).toBe('45 days ago')
@@ -256,5 +259,48 @@ describe('createRecencyFormatter (#19606)', () => {
     const f = createRecencyFormatter({ locale: 'en', style: 'narrow', maxUnit: 'day', olderThanMs: cutoff, older: () => 'older', now })
     expect(f(at(cutoff - 60_000))).toBe(justUnder)
     expect(f(at(cutoff))).toBe('older')
+  })
+})
+
+describe('isoDateStamp and toDateTimeLocalValue (#19905)', () => {
+  it('isoDateStamp is the UTC day, now by default, and empty for a bad value', () => {
+    expect(isoDateStamp('2025-10-30T23:59:59Z')).toBe('2025-10-30')
+    expect(isoDateStamp(new Date(Date.UTC(2025, 0, 2)))).toBe('2025-01-02')
+    expect(isoDateStamp(Date.UTC(2025, 5, 7))).toBe('2025-06-07')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:00:00Z'))
+    expect(isoDateStamp()).toBe('2026-11-08')
+    expect(isoDateStamp('nope')).toBe('')
+    expect(isoDateStamp(null)).toBe('')
+  })
+
+  it('isoTimestampStamp is the filename-safe UTC second, now by default, empty for a bad value', () => {
+    expect(isoTimestampStamp('2025-10-30T14:05:59.123Z')).toBe('2025-10-30T14-05-59')
+    expect(isoTimestampStamp(new Date(Date.UTC(2025, 0, 2, 3, 4, 5)))).toBe('2025-01-02T03-04-05')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-08T12:30:45Z'))
+    expect(isoTimestampStamp()).toBe('2026-11-08T12-30-45')
+    expect(isoTimestampStamp('nope')).toBe('')
+  })
+
+  it('toDateTimeLocalValue shifts by the zone offset in force at that instant, and is empty for a bad value', () => {
+    const offset = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const noon = '2025-10-30T12:00:00Z'
+    offset.mockReturnValue(-120) // UTC+2
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T14:00')
+    offset.mockReturnValue(300) // UTC-5
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T07:00')
+    offset.mockReturnValue(0)
+    expect(toDateTimeLocalValue(noon)).toBe('2025-10-30T12:00')
+    // A DST transition: the offset the instant carries is the one used (spring forward at 01:00Z).
+    const jump = Date.UTC(2025, 2, 30, 1, 0, 0)
+    offset.mockImplementation(function (this: Date) {
+      return this.getTime() < jump ? -60 : -120
+    })
+    expect(toDateTimeLocalValue(jump - 1000)).toBe('2025-03-30T01:59')
+    expect(toDateTimeLocalValue(jump)).toBe('2025-03-30T03:00')
+    offset.mockRestore()
+    expect(toDateTimeLocalValue('nope')).toBe('')
+    expect(toDateTimeLocalValue(undefined)).toBe('')
   })
 })

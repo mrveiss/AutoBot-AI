@@ -32,6 +32,7 @@ from ..models.role_tool import LLCRoleTool
 from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 from .tool_registry_ref import ToolRegistryUnavailable, require_registered_tool
 
 #: Re-exported. ``llc/api/roles.py`` imports ``ToolRegistryUnavailable`` from
@@ -87,14 +88,14 @@ class RoleToolService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleTool:
         if company_id is None or role_id is None:
-            raise ValueError("company_id and role_id are both required")
+            raise CompanyOsError("company_id and role_id are both required")
 
         await require_company_admin(session, company_id, actor_user_id)
         await self._require_role(session, company_id, role_id)
         cleaned = self._require_registered_tool(tool_name)
 
         if await self.get(session, company_id, role_id, cleaned) is not None:
-            raise ValueError(f"tool {cleaned!r} is already attached to role {role_id}")
+            raise CompanyOsError(f"tool {cleaned!r} is already attached to role {role_id}")
 
         attachment = LLCRoleTool(company_id=company_id, role_id=role_id, tool_name=cleaned)
         session.add(attachment)
