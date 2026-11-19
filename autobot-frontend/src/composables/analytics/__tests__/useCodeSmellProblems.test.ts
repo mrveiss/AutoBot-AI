@@ -30,20 +30,20 @@ describe('useCodeSmellProblems category wiring (#20493)', () => {
   it('loads production code by default, sending file_category', async () => {
     const s = useCodeSmellProblems((u) => u)
     await s.loadSmellProblems()
-    expect(load).toHaveBeenCalledWith({ file_category: 'code' })
+    expect(load).toHaveBeenCalledWith({ file_category: 'code' }, { category: expect.any(String), seq: expect.any(Number) })
   })
 
   it('selecting a category reloads with that category', async () => {
     const s = useCodeSmellProblems((u) => u)
     await s.selectSmellCategory('test')
     expect(s.smellCategory.value).toBe('test')
-    expect(load).toHaveBeenCalledWith({ file_category: 'test' })
+    expect(load).toHaveBeenCalledWith({ file_category: 'test' }, { category: expect.any(String), seq: expect.any(Number) })
   })
 
   it('the all category sends no file_category', async () => {
     const s = useCodeSmellProblems((u) => u)
     await s.selectSmellCategory('all')
-    expect(load).toHaveBeenCalledWith(undefined)
+    expect(load).toHaveBeenCalledWith(undefined, { category: expect.any(String), seq: expect.any(Number) })
   })
 
   it('a failed load clears the previous findings', async () => {

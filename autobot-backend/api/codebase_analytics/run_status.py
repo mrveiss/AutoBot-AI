@@ -162,14 +162,14 @@ async def _write(collection, source_id: str, meta: dict) -> None:
 
 
 async def _source_exists(source_id: str) -> bool:
-    """Whether the source registry still holds ``source_id``; an unreadable registry counts as yes (fail open)."""
+    """Whether the source registry still holds ``source_id``.
+
+    An unreadable registry raises ``RegistryUnavailable``: it is not read as "no such source". ``_update``
+    logs it and records nothing, so a status write is never made on a guess.
+    """
     from .source_storage import get_source  # noqa: PLC0415
 
-    try:
-        return await get_source(source_id) is not None
-    except Exception as exc:  # noqa: BLE001 -- a status write must not be lost to a registry outage
-        logger.warning("Source registry unreadable for %s; run status is written anyway: %s", source_id, exc)
-        return True
+    return await get_source(source_id) is not None
 
 
 async def _update(source_id: str | None, change) -> bool:
