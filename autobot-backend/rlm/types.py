@@ -78,16 +78,22 @@ class ReflectionResult:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize for event stream / logging."""
-        return {
+        """Serialize for event stream / logging.
+
+        ``evaluator_failed`` is emitted only when True, so a scored result keeps the shape pinned in
+        ``llm_shared/quality_judgment_test.py`` (#16133); readers of the history use ``.get``.
+        """
+        data: Dict[str, Any] = {
             "verdict": self.verdict.name,
             "quality_score": self.quality_score,
             "critique": self.critique,
             "refinement_hint": self.refinement_hint,
             "iteration": self.iteration,
-            "evaluator_failed": self.evaluator_failed,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.evaluator_failed:
+            data["evaluator_failed"] = True
+        return data
 
 
 @dataclass
