@@ -28,8 +28,9 @@ import { escapeHtml, renderMarkdownLinks } from '@/composables/chat/useEntityAnc
 const ANCHOR_RE = /(<a\b[^>]*>[\s\S]*?<\/a\s*>)/i
 const PRE_RE = /(<pre\b[\s\S]*?<\/pre>)/
 const BARE_URL_RE = /https?:\/\/[^\s<>"']+/g
-// `*` and the backtick close an inline emphasis / code span that wraps the URL; they belong to the markup, not the href.
-const TRAILING_PUNCT_CHARS = '.,;:!?\'"*`'
+const TRAILING_PUNCT_CHARS = '.,;:!?\'"'
+// A trailing `*` or backtick belongs to the markup only when it closes a delimiter opened right before the URL.
+const DELIMITER_CHARS = '*`'
 
 // Control characters are built at runtime, never written as regex escapes (ESLint no-control-regex): a literal
 // control byte in a pattern is a lint error and unreadable besides.
@@ -73,7 +74,9 @@ function stripAnsi(content: string): string {
 }
 
 /** Split a matched URL into [href, trailing text that is not part of it]. */
-function splitTrailing(raw: string): [string, string] {
+function splitTrailing(raw: string, before = ''): [string, string] {
+  const open: Record<string, number> = {}
+  for (const d of DELIMITER_CHARS) open[d] = before.length - before.replace(new RegExp(`[${d}]+$`), '').length
   let end = raw.length
   let opens = 0
   let closes = 0
@@ -84,7 +87,10 @@ function splitTrailing(raw: string): [string, string] {
   while (end > 0) {
     const ch = raw[end - 1]
     if (TRAILING_PUNCT_CHARS.includes(ch)) end--
-    else if (ch === ')' && closes > opens) {
+    else if (DELIMITER_CHARS.includes(ch) && open[ch] > 0) {
+      open[ch]--
+      end--
+    } else if (ch === ')' && closes > opens) {
       closes--
       end--
     } else break
@@ -98,8 +104,8 @@ export function linkifyBareUrls(html: string): string {
     .split(ANCHOR_RE)
     .map((part, i) => {
       if (i % 2 === 1) return part
-      return part.replace(BARE_URL_RE, (raw) => {
-        const [url, tail] = splitTrailing(raw)
+      return part.replace(BARE_URL_RE, (raw, offset: number) => {
+        const [url, tail] = splitTrailing(raw, part.slice(0, offset))
         if (!/^https?:\/\/./i.test(url)) return raw
         return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${tail}`
       })

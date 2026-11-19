@@ -55,6 +55,12 @@ describe('chat message formatter (#21771)', () => {
     expect(hrefs(formatChatMessageHtml('see https://example.com/a*b now'))).toEqual(['https://example.com/a*b'])
   })
 
+  it('keeps an asterisk that belongs to the URL', () => {
+    expect(hrefs(formatChatMessageHtml('see https://example.com/search?q=foo* now'))).toEqual([
+      'https://example.com/search?q=foo*',
+    ])
+  })
+
   it('renders bold, italics and inline code', () => {
     const html = formatChatMessageHtml('**b** *i* `c`')
     expect(html).toContain('<strong>b</strong>')
