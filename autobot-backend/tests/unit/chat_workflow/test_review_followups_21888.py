@@ -32,20 +32,20 @@ async def test_concurrent_calls_of_one_tool_in_one_session_each_read_their_own_d
     assert slow >= 0.2 and fast < 0.15  # a shared queue would hand the slow call the fast one's start
 
 
-def test_a_token_closes_exactly_its_own_call():
+def test_a_call_id_closes_exactly_its_own_call():
     first = tool_timing.mark_tool_started("t", "x")
     second = tool_timing.mark_tool_started("t", "x")
     assert first != second
-    assert tool_timing.take_tool_elapsed("t", "x", token=second) is not None
-    assert tool_timing.take_tool_elapsed("t", "x", token=second) is None  # already closed
-    assert tool_timing.take_tool_elapsed("t", "x", token=first) is not None
+    assert tool_timing.take_tool_elapsed("t", "x", call_id=second) is not None
+    assert tool_timing.take_tool_elapsed("t", "x", call_id=second) is None  # already closed
+    assert tool_timing.take_tool_elapsed("t", "x", call_id=first) is not None
 
 
 def test_a_start_older_than_the_max_age_is_dropped(monkeypatch):
     token = tool_timing.mark_tool_started("u", "x")
     monkeypatch.setattr(tool_timing, "TOOL_TIMING_MAX_AGE_SECONDS", -1.0)
     tool_timing.mark_tool_started("u", "other")  # any new mark expires the stale one
-    assert tool_timing.take_tool_elapsed("u", "x", token=token) is None
+    assert tool_timing.take_tool_elapsed("u", "x", call_id=token) is None
 
 
 def test_a_call_that_never_marked_has_no_duration():

@@ -5,7 +5,7 @@
 """Measured duration of a tool call, from the end of its BEFORE hook to its AFTER hook (#21879).
 
 Every tool site emits ``BEFORE_TOOL_EXECUTE``, runs the tool, then emits ``AFTER_TOOL_EXECUTE`` (or ``TOOL_ERROR``).
-``mark_tool_started`` returns a token naming THAT call; the token rides a ``ContextVar`` of the task running the
+``mark_tool_started`` returns an id naming THAT call; the id rides a ``ContextVar`` of the task running the
 call, so two concurrent calls of one tool in one session each read their own start (a shared first-in-first-out
 queue swapped their durations). A start that is never closed (an after-hook that never fired) is dropped once it is
 older than ``TOOL_TIMING_MAX_AGE_SECONDS``. A call with no start has no duration: ``None``, never ``0``.
@@ -27,41 +27,41 @@ TOOL_TIMING_MAX_AGE_SECONDS: float = env_float("AUTOBOT_TOOL_TIMING_MAX_AGE_SECO
 #: Open starts, oldest first; also bounded in count (a cancelled turn closes nothing).
 _MAX_OPEN_CALLS = 1024
 
-_tokens = itertools.count(1)
+_call_ids = itertools.count(1)
 _open_calls: "OrderedDict[int, float]" = OrderedDict()
-#: (session, tool) -> token, as seen by the task that marked the call.
+#: (session, tool) -> call_id, as seen by the task that marked the call.
 _current: "contextvars.ContextVar[Dict[Tuple[str, str], int]]" = contextvars.ContextVar("tool_timing_current")
 
 
 def _expire(now: float) -> None:
     while _open_calls:
-        token, started = next(iter(_open_calls.items()))
+        call_id, started = next(iter(_open_calls.items()))
         if now - started <= TOOL_TIMING_MAX_AGE_SECONDS and len(_open_calls) <= _MAX_OPEN_CALLS:
             break
-        del _open_calls[token]
+        del _open_calls[call_id]
 
 
 def mark_tool_started(session_id: str | None, tool_name: str) -> int:
-    """Record that *tool_name* began executing in *session_id* just now; returns the call's token."""
+    """Record that *tool_name* began executing in *session_id* just now; returns the call's id."""
     now = time.monotonic()
     _expire(now)
-    token = next(_tokens)
-    _open_calls[token] = now
-    _current.set({**_current.get({}), (session_id or "", tool_name): token})
-    return token
+    call_id = next(_call_ids)
+    _open_calls[call_id] = now
+    _current.set({**_current.get({}), (session_id or "", tool_name): call_id})
+    return call_id
 
 
-def take_tool_elapsed(session_id: str | None, tool_name: str, token: int | None = None) -> float | None:
+def take_tool_elapsed(session_id: str | None, tool_name: str, call_id: int | None = None) -> float | None:
     """Seconds since the call's start, closing it; None when it was never marked or its start expired.
 
-    *token* names the call; without one the token the calling task marked for this session and tool is used.
+    *call_id* names the call; without one the id the calling task marked for this session and tool is used.
     """
     key = (session_id or "", tool_name)
-    if token is None:
-        token = _current.get({}).get(key)
-    if token is not None:
-        _current.set({k: v for k, v in _current.get({}).items() if v != token})
-    started = _open_calls.pop(token, None) if token is not None else None
+    if call_id is None:
+        call_id = _current.get({}).get(key)
+    if call_id is not None:
+        _current.set({k: v for k, v in _current.get({}).items() if v != call_id})
+    started = _open_calls.pop(call_id, None) if call_id is not None else None
     return None if started is None else time.monotonic() - started
 
 
