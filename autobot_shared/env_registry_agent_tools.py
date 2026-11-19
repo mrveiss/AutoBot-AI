@@ -179,6 +179,32 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
+        type=int,
+        default=2,
+        description=(
+            "DEPRECATED, read for one release: the old name of AUTOBOT_CHAT_INVALID_CALL_LIMIT (#21843). Used "
+            "only as that variable's default when it is unset; set AUTOBOT_CHAT_INVALID_CALL_LIMIT instead."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TOOL_TIMING_MAX_AGE_SECONDS",
+        type=float,
+        default=3600.0,
+        description=(
+            "Seconds after which a tool call's recorded start is discarded if its after-hook never fired, so a "
+            "missed hook leaves no stale entry (#21879)."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RLM_EVAL_TIMEOUT_MS",
         type=int,
         default=10000,
@@ -199,7 +225,7 @@ register_env_var(
             "Invalid tool calls one chat turn tolerates (#20848, #21843): the times it tells the model its "
             "TOOL_CALL did not parse and asks again, on the graph path and the legacy loop alike; past it the "
             "user gets the readable no-answer fallback, never the raw markup. Replaces "
-            "AUTOBOT_CHAT_PARSE_RETRY_BUDGET."
+            "AUTOBOT_CHAT_PARSE_RETRY_BUDGET, which is still read as the default for one release."
         ),
         component="chat_workflow",
     )
