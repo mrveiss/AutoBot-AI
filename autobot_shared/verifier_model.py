@@ -44,6 +44,9 @@ VERIFIER_MODEL_CHECK_TTL_S: int = env_registered("AUTOBOT_VERIFIER_MODEL_CHECK_T
 #: Seconds ``/api/ps`` may take; it is a local, in-memory listing.
 _PS_TIMEOUT_S = 2.0
 
+#: Strong references to in-flight spend recordings.
+_spend_tasks: set[asyncio.Task[Any]] = set()
+
 # model -> (monotonic time read, available: True / False / None when the list could not be read)
 _readings: dict[str, tuple[float, bool | None]] = {}
 
@@ -168,23 +171,13 @@ async def resolve_and_chat(
         metadata={"purpose": "pre_action_verifier", "tool": tool_name, **options},
     )
     response = await provider.chat_completion(request)
-    _record_spend_detached(response, request.metadata)
-    return request, response
-
-
-#: Strong references to in-flight spend recordings; a task nobody references can be garbage-collected mid-run.
-_spend_tasks: set[asyncio.Task[Any]] = set()
-
-
-def _record_spend_detached(response: Any, metadata: dict[str, Any]) -> None:
-    """Record the spend (#16924) without making the verdict wait for it.
-
-    The completed reply is returned even when the verifier deadline expires during accounting: awaiting here would let
-    the deadline cancel the caller and discard a reply that may block the action (fail-open then lets it through).
-    """
-    task = asyncio.ensure_future(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=metadata))
+    # #16924 the call records itself. Not awaited: the completed reply is returned even when the verifier deadline
+    # expires during accounting (awaiting would let the deadline cancel the caller and discard a reply that may block
+    # the action, which fail-open then lets through). A strong reference keeps the task from being collected mid-run.
+    task = asyncio.ensure_future(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata))
     _spend_tasks.add(task)
     task.add_done_callback(_spend_tasks.discard)
+    return request, response
 
 
 def verifier_model_status() -> dict[str, Any]:
