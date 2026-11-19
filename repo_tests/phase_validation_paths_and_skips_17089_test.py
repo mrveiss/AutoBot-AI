@@ -138,7 +138,7 @@ def _lambda_paths(source: str | None = None) -> list[tuple[int, str]]:
             if not (isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Div)):
                 continue
             joined_path = _joined_path(inner, constants)
-            # No `"/" in joined` requirement: that silently dropped every
+            # No `"/" in joined_path` requirement: that silently dropped every
             # single-segment path, and `src`/`tests` are exactly the roots this
             # guard exists to catch. Only `root / ...` chains reach here, so a
             # non-path string cannot be collected by accident.
