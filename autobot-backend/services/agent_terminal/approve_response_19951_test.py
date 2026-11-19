@@ -109,3 +109,21 @@ async def test_the_route_turns_that_refusal_into_a_409(redis):
 async def test_other_results_pass_through_unchanged():
     for result in ({"status": "approved"}, {"status": "error", "error": "Session not found"}):
         assert decision_response(result) is result
+
+
+async def test_the_websocket_twin_carries_the_same_already_decided_semantics(redis, monkeypatch):
+    from api import agent_terminal_access as access
+
+    worker = _worker(redis)
+    await _raise_pending(worker)
+    service = _service(worker)
+    monkeypatch.setattr(access, "get_agent_terminal_service", lambda redis_client=None: service)
+    monkeypatch.setattr(access, "get_redis_client", lambda: redis)
+    monkeypatch.setattr(access, "require_interactive_human", lambda *a, **k: None)
+    monkeypatch.setattr(access, "require_session_access", AsyncMock())
+    user = {"username": "alice"}
+    first = await access.approve_over_websocket({"terminal_session_id": SID, "approved": True}, user)
+    second = await access.approve_over_websocket({"terminal_session_id": SID, "approved": True}, user)
+    assert first == {"status": "approved"}
+    assert second["status"] == "error" and second["status_code"] == 409
+    service._execute_approved_command.assert_awaited_once()

@@ -95,3 +95,15 @@ def test_mixed_format_streaming_groups_do_not_raise():
         {"messageType": "llm_response", "text": "longer", "timestamp": message_timestamp(EARLY)},
     ]
     DeduplicationMixin()._dedupe_streaming_messages(mixed)  # naive vs aware subtraction was a TypeError
+
+
+def test_a_repost_with_the_original_timestamps_keys_to_the_same_messages_as_the_stored_batch():
+    """``session_merge.message_keys`` keys a message by its id; the timestamp counts only for an id-less one."""
+    from chat_history.session_merge import message_keys
+
+    batch = [_entry(f"step {i}") for i in range(3)]
+    reposted = [dict(m) for m in batch]  # what a client re-sends: the original (equal) timestamps
+    distinct_ordered_times(batch)  # what was stored
+    assert [m["timestamp"] for m in batch] != [m["timestamp"] for m in reposted]
+    assert message_keys(batch) == message_keys(reposted)
+    assert all(key[0] == "id" for key in message_keys(batch))

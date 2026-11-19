@@ -16,7 +16,7 @@ This module is organized into the following components:
 - service.py: Main service class that composes all functionality
 """
 
-from .decision_session import decision_response
+from .decision_session import ALREADY_DECIDED, decision_response
 from .models import AgentSessionState, AgentTerminalSession
 from .service import AgentTerminalService
 
@@ -25,5 +25,6 @@ __all__ = [
     "AgentTerminalService",
     "AgentTerminalSession",
     "AgentSessionState",
+    "ALREADY_DECIDED",
     "decision_response",
 ]

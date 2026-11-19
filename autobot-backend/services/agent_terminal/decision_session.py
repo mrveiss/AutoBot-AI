@@ -37,8 +37,13 @@ _RELEASE_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 #: The refusal of a decision on an approval that is not pending: already decided by someone, or never raised.
 NO_PENDING_APPROVAL = "No pending approval"
 
+#: OpenAPI ``responses`` entry for a decision route: the approval was already decided and nothing ran again.
+ALREADY_DECIDED = {409: {"description": "The approval was already decided; nothing ran again (#19951)"}}
+
 __all__ = [
+    "ALREADY_DECIDED",
     "NO_PENDING_APPROVAL",
+    "already_decided",
     "claim_for_decision",
     "decision_response",
     "mark_queued_approved",
@@ -72,13 +77,18 @@ async def _rebuilt_for_decision(manager, session_id: str, cached) -> AgentTermin
     return await manager._rebuild_session_from_pending_approval(session_id)  # records it before returning it
 
 
+def already_decided(result: Metadata) -> bool:
+    """True when *result* is the refusal of a decision on an approval that is not pending (#19951)."""
+    return result.get("status") == "error" and result.get("error") == NO_PENDING_APPROVAL
+
+
 def decision_response(result: Metadata) -> Metadata:
     """*result* for the approve route, or HTTP 409 when the approval was already decided (#19951).
 
     A second approve (or deny) of a decided approval is refused and nothing runs again: the decision claim
     (``claim_for_decision``) is taken once. The client is told with a conflict status, not a 200 that reads as success.
     """
-    if result.get("status") == "error" and result.get("error") == NO_PENDING_APPROVAL:
+    if already_decided(result):
         raise HTTPException(status_code=409, detail=NO_PENDING_APPROVAL)
     return result
 
