@@ -6,10 +6,11 @@
 
 Held for the whole read-modify-write of ``ConfigService.update_llm_config``,
 ``update_redis_config``, ``save_full_config`` and ``update_backend_settings``,
-and by the config rollback across its live read, apply and read. Reentrant, so
-the inner ``_save_config_to_file`` takes it again on the same thread. It does
-not cover writes made straight through ``config_manager`` (for example the
-agent-config routes), and is a threading lock: never hold it across an await.
+the agent-config writes (model/provider update, enable, disable; #21742), and by
+the config rollback across its live read, apply and read. Reentrant, so the inner
+``_save_config_to_file`` takes it again on the same thread. It does not cover
+writes made straight through ``config_manager`` by other routes (developer,
+embeddings, auth; #21858), and is a threading lock: never hold it across an await.
 """
 
 import functools

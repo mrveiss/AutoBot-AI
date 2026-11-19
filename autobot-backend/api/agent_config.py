@@ -39,6 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import parse_utc_iso
+from services.agent_config_writer import write_agent_enabled, write_agent_model
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
@@ -1053,17 +1054,7 @@ async def _apply_agent_model_update(
 
     Returns the ``updated_config`` dict ready for the API response.
     """
-    base = DEFAULT_AGENT_CONFIGS[agent_id]
-    before_config = {
-        "model": config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
-        "provider": config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
-    }
-
-    # Persist changes
-    config_manager.set_nested(f"agents.{agent_id}.model", update.model)
-    if update.provider:
-        config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
-    config_manager.save_settings()
+    before_config = write_agent_model(config_manager, agent_id, DEFAULT_AGENT_CONFIGS[agent_id], update)
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
@@ -1157,9 +1148,7 @@ async def enable_agent(
 
     from config import config_manager
 
-    before_enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-    config_manager.set_nested(f"agents.{agent_id}.enabled", True)
-    config_manager.save_settings()
+    before_enabled = write_agent_enabled(config_manager, agent_id, True)
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
@@ -1206,9 +1195,7 @@ async def disable_agent(
 
     from config import config_manager
 
-    before_enabled = config_manager.get_nested(f"agents.{agent_id}.enabled", True)
-    config_manager.set_nested(f"agents.{agent_id}.enabled", False)
-    config_manager.save_settings()
+    before_enabled = write_agent_enabled(config_manager, agent_id, False)
     ConfigService.clear_cache()
 
     # Issue #1747: Record audit revision
