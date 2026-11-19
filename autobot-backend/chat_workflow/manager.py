@@ -15,7 +15,6 @@ Composes all functionality through mixins:
 import asyncio
 import functools
 import json
-import os
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
@@ -25,7 +24,12 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
+from chat_workflow.persisted_metadata import persisted_metadata
+from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
+from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
+from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
@@ -62,6 +66,7 @@ from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
 from .turn_control import CHAT_LLM_CALL_TIMEOUT_SECONDS, stream_graph_turn, stream_legacy_turn
+from .vision_capability import image_fits_budget, model_name_suggests_vision, resolve_model_supports_vision
 
 logger = get_logger(__name__)
 
@@ -104,27 +109,9 @@ VISION_TOOL_LOOKBACK_MESSAGES = env_int("CHAT_VISION_TOOL_LOOKBACK_MESSAGES", de
 # representative default, env-overridable — never hardcode a tunable).
 VISION_IMAGE_TOKEN_ESTIMATE = env_int("CHAT_VISION_IMAGE_TOKEN_ESTIMATE", default=1100)
 
-# Case-insensitive substrings of a model name that indicate vision support.
-# Ollama exposes no per-tag capability registry (unlike the fixed AIProvider
-# registry in modern_ai_integration.py), so this is the pragmatic gate.
-_DEFAULT_VISION_MODEL_PATTERNS = (
-    "llava,vision,gpt-4o,gpt-4-vision,claude-3,claude-4,gemini,qwen-vl,qwen2-vl,qwen2.5-vl,pixtral,bakllava"
-)
-VISION_MODEL_NAME_PATTERNS = tuple(
-    p.strip().lower()
-    for p in os.getenv("CHAT_VISION_MODEL_PATTERNS", _DEFAULT_VISION_MODEL_PATTERNS).split(",")
-    if p.strip()
-)
-
-
-def _model_supports_vision(model_name: str) -> bool:
-    """Heuristic vision-capability gate for the chat continuation loop (#11538).
-
-    Ollama exposes no per-tag capability registry, so this matches known
-    vision-model name substrings (env-overridable via CHAT_VISION_MODEL_PATTERNS).
-    """
-    name = (model_name or "").lower()
-    return any(pattern in name for pattern in VISION_MODEL_NAME_PATTERNS)
+# Vision gate (#21770): the runtime's reported capabilities decide; the name patterns are only the
+# fallback. Both live in vision_capability.py; this alias keeps the historical import name.
+_model_supports_vision = model_name_suggests_vision
 
 
 def _filter_step_output(cmd: str, output_text: str, *, is_shell: bool) -> str:
@@ -1803,21 +1790,7 @@ class ChatWorkflowManager(
             "You MUST use ONLY the following tool names:\n"
             "- execute_command: Run shell commands\n"
             "- web_search: Search the web for information\n"
-            "- navigate: Browse to a URL\n"
-            "- click: Click an element on a web page\n"
-            "- fill: Fill a form field on a web page\n"
-            "- select: Select an option on a web page\n"
-            "- hover: Hover over an element\n"
-            "- screenshot: Capture the current page\n"
-            "- evaluate: Evaluate JavaScript on a web page\n"
-            "- get_text: Get text from an element\n"
-            "- get_attribute: Get an attribute from an element\n"
-            "- wait_for_selector: Wait for an element to appear\n"
-            "- browser_state: Get the current page's numbered interactive-element menu\n"
-            "- click_index: Click an element by its numbered index\n"
-            "- fill_index: Fill an element by its numbered index\n"
-            "- select_index: Select an option on an element by its numbered index\n"
-            "- hover_index: Hover over an element by its numbered index\n"
+            f"{render_tool_name_reminder_lines()}"
             "- delegate: Delegate a subtask to a subordinate agent\n"
             "- respond: Signal task completion with a final message\n"
             "Do NOT invent new tool names. Use ONLY the names listed above.\n\n"
@@ -1895,20 +1868,6 @@ before summarizing.
 ---
 {instructions}"""
 
-    def _image_fits_budget(self, prompt: str, model_name: str) -> bool:
-        """Gate image attachment on the context budget (#11538).
-
-        Uses ContextWindowManager's token estimate plus the fixed per-image
-        token cost (VISION_IMAGE_TOKEN_ESTIMATE) so a screenshot never
-        silently blows the model's max-history-token budget.
-        """
-        from context_window_manager import ContextWindowManager
-
-        mgr = ContextWindowManager()
-        prompt_tokens = mgr.estimate_tokens(prompt)
-        max_tokens = mgr.get_max_history_tokens(model_name)
-        return (prompt_tokens + VISION_IMAGE_TOKEN_ESTIMATE) <= max_tokens
-
     def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict]:
         """Build the OpenAI-style image content block for an OpenAI-compatible
         /chat/completions payload. Issue #11538.
@@ -1948,6 +1907,7 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
         ollama_endpoint: str = "",
+        vision_capable: bool | None = None,
     ) -> dict:
         """Build LLM request payload.
 
@@ -1971,8 +1931,9 @@ before summarizing.
             payload["system"] = system_prompt
         if api_kwargs:
             payload.update(api_kwargs)
-        vision_ready = image_b64 and _model_supports_vision(selected_model)
-        if vision_ready and self._image_fits_budget(current_prompt, selected_model):
+        supports_vision = vision_capable if vision_capable is not None else _model_supports_vision(selected_model)
+        vision_ready = image_b64 and supports_vision
+        if vision_ready and image_fits_budget(current_prompt, selected_model, VISION_IMAGE_TOKEN_ESTIMATE):
             self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
 
@@ -2069,6 +2030,7 @@ before summarizing.
             yield refusal
             yield (None, None)
             return
+        vision_capable = await resolve_model_supports_vision(selected_model, ollama_endpoint) if image_b64 else None
         payload = self._get_llm_request_payload(
             selected_model,
             current_prompt,
@@ -2076,6 +2038,7 @@ before summarizing.
             api_kwargs=api_kwargs,
             image_b64=image_b64,
             ollama_endpoint=ollama_endpoint,
+            vision_capable=vision_capable,
         )
         llm_response = ""
 
@@ -2402,6 +2365,8 @@ before summarizing.
                 # Don't persist streaming chunks - they're for live display only
                 # The final complete response is persisted in _persist_workflow_messages
                 is_streaming_chunk = hasattr(item, "metadata") and item.metadata.get("streaming", False)
+                if marker := stream_identity_marker(item, iteration, ctx.workflow_messages):  # #21846
+                    ctx.workflow_messages.append(marker)
                 if not is_streaming_chunk:
                     # Issue #13295: stamp the iteration that produced this
                     # message so _build_persist_batch can interleave it with
@@ -2442,16 +2407,37 @@ before summarizing.
             yield (None, None, True)
             return
 
+        if not tool_calls and record_parse_failure(ctx, llm_response, iteration, self.MAX_CONTINUATION_ITERATIONS):
+            yield (llm_response, tool_calls, False)  # #21843: the parse error is fed back, the turn continues
+            return
+
         if not tool_calls:
             logger.info(
                 "[Issue #651] Iteration %d: No tool calls in response - task complete after %d step(s)",
                 iteration,
                 len(ctx.execution_history),
             )
+            if fallback := self._parse_exhausted_fallback(ctx, llm_response, iteration):
+                yield fallback
             yield (llm_response, tool_calls, True)
             return
 
         yield (llm_response, tool_calls, False)
+
+    @staticmethod
+    def _parse_exhausted_fallback(ctx, llm_response: str, iteration: int) -> WorkflowMessage | None:
+        """The readable fallback when the last permitted iteration left only an unparsed TOOL_CALL (#21843).
+
+        Cleaning removes the call, so without this the turn would store no reply at all; the graph path
+        substitutes the same ``NO_ANSWER_FALLBACK`` (``graph_parse_feedback``).
+        """
+        if clean_reply_text(llm_response) or parse_failure_step(llm_response, iteration) is None:
+            return None
+        message = WorkflowMessage(
+            type="response", content=NO_ANSWER_FALLBACK, metadata={"parse_fallback": True, "iteration": iteration}
+        )
+        ctx.workflow_messages.append(message)
+        return message
 
     def _parse_tool_result_tuple(
         self,
@@ -2555,10 +2541,10 @@ before summarizing.
             )
             return False
 
-        # Issue #651: Log decision to continue
+        # #19951: a terminal approval is decided in-line; a hold that cannot be already ended the loop (break_loop).
         logger.info(
             "[Issue #651] Iteration %d: Completed with %d new result(s), "
-            "pending_approval=%s - continuing to next iteration",
+            "pending_approval=%s (decided in-line) - continuing to next iteration",
             iteration,
             len(new_results),
             has_pending_approval,
@@ -2940,6 +2926,7 @@ before summarizing.
         llm_response: str,
         batch: List[Dict[str, Any]],
         iteration: int | None = None,
+        streamed: tuple = (None, None),
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for one iteration's completed prose (#13214).
 
@@ -2966,7 +2953,7 @@ before summarizing.
         to assistant entries so that a ``terminal_output`` or other system message
         echoing the reply cannot suppress the assistant turn.
         """
-        content = strip_unparsed_tool_tags(llm_response or "").strip()
+        content = clean_reply_text(llm_response or "")
         if not content:
             return None
         assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
@@ -2984,6 +2971,8 @@ before summarizing.
             },
             None,
             sources=[],
+            message_id=streamed[0],
+            created_at=streamed[1],
         )
 
     def _attach_model_and_citations(
@@ -3018,8 +3007,7 @@ before summarizing.
         """
         batch = []
         for wf_msg in workflow_messages:
-            # Skip segment_complete markers — internal stream control
-            # messages with empty content (Issue #1141).
+            # Skip segment_complete markers: internal stream control, empty content (Issue #1141).
             if wf_msg.type == "segment_complete":
                 continue
 
@@ -3028,7 +3016,10 @@ before summarizing.
             # final user-visible reply — strip any <TOOL_CALL ...> tag
             # that never matched the full grammar (genuinely unparsed)
             # so raw markup never renders. Guarded no-op otherwise.
-            content = strip_unparsed_tool_tags(wf_msg.content)
+            # Tool output is data, not a reply: only the guarded strip applies, never the reply cleaner (#21843).
+            content = (
+                clean_reply_text(wf_msg.content) if sender == "assistant" else strip_unparsed_tool_tags(wf_msg.content)
+            )
             # Issue #4448: Extract KB-only citations into top-level sources list.
             # metadata.citations includes the always-appended llm_training entry —
             # filter it out so sources contains only knowledge-base references.
@@ -3039,9 +3030,11 @@ before summarizing.
                     sender,
                     content,
                     wf_msg.type,
-                    wf_msg.metadata,
+                    persisted_metadata(wf_msg),
                     None,
                     sources=_kb_sources_from_citations(kb_citations),
+                    message_id=wf_msg.id,
+                    created_at=wf_msg.timestamp,
                 )
             )
         return batch
@@ -3077,6 +3070,7 @@ before summarizing.
             response_text,
             batch + tool_entries,
             iteration=iteration,
+            streamed=streamed_prose_identity(iter_messages),  # #21846
         )
         entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)

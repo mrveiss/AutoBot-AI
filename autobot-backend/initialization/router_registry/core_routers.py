@@ -13,6 +13,7 @@ and are imported at module level to fail fast if missing.
 import api.embedding_model_health  # noqa: F401 — registers KnownProbes.EMBEDDING_MODEL (#18834)
 import api.pricing_health  # noqa: F401 — registers KnownProbes.PRICING probe (GH#6480)
 import api.secrets_store_health  # noqa: F401 — registers KnownProbes.SECRETS_STORE probe (#14126)
+import api.verifier_model_health  # noqa: F401 — registers KnownProbes.VERIFIER_MODEL (#21844)
 import content_reach.health  # noqa: F401 — registers KnownProbes.CONTENT_REACH probe (#10932)
 
 # Core router imports - these are required for basic functionality

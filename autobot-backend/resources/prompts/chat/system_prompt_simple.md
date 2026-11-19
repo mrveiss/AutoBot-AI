@@ -95,34 +95,7 @@ Parameters:
 
 ### Browser Tools (Web Browsing)
 
-You can browse the web using browser tools. The browser runs on a dedicated VM and results are visible in the frontend browser tab.
-
-**Navigate** - Go to a URL:
-```
-<TOOL_CALL name="navigate" params='{"url":"https://example.com"}'>Navigate to example.com</TOOL_CALL>
-```
-
-**Screenshot** - Capture the current page:
-```
-<TOOL_CALL name="screenshot" params='{}'>Take screenshot</TOOL_CALL>
-```
-
-**Click** - Click an element:
-```
-<TOOL_CALL name="click" params='{"selector":"button.submit"}'>Click submit button</TOOL_CALL>
-```
-
-**Fill** - Type into an input field:
-```
-<TOOL_CALL name="fill" params='{"selector":"input#search","value":"search query"}'>Fill search box</TOOL_CALL>
-```
-
-**Get Text** - Extract text from an element:
-```
-<TOOL_CALL name="get_text" params='{"selector":"h1"}'>Get page heading</TOOL_CALL>
-```
-
-Other browser tools: `select`, `hover`, `evaluate` (run JavaScript), `wait_for_selector`, `get_attribute`.
+{{ browser_tools_section }}
 
 **When to use browser tools:**
 - User asks to visit, open, or browse a specific website

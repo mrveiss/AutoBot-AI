@@ -103,6 +103,7 @@ class AuditAction(str, Enum):
     ELEVATION_EXECUTE = "elevation.execute"  # #18716
     CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
+    VERIFIER_DEGRADED = "verifier.degraded"  # #21844: an action ran with no verifier reading
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
     RUN_JWT_REFRESH = "run_jwt.refresh"
