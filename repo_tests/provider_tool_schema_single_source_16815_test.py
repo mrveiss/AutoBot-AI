@@ -19,7 +19,6 @@ adapters) plus exactly three request builders outside it, listed in `_EXTRA_FILE
 Out of scope: MCP tool registries and tool-definition modules (they define tools, they do not build
 provider requests) including `api/browser_mcp.py`, and any other module not named above. See
 `_inlined_formatters` for the shapes the matcher cannot see.
-shapes this cannot see.
 """
 
 from __future__ import annotations
