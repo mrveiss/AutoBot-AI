@@ -184,6 +184,23 @@ class RoleCredentialService(LLCServiceBase):
         )
         return list(result.scalars().all())
 
+    async def active_secrets_for_role(
+        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> List[tuple]:
+        """``(secret_id, name)`` of what :meth:`list_active_for_role` reaches, ordered by id."""
+        result = await session.execute(
+            select(LLCSecret.id, LLCSecret.name)
+            .join(LLCRoleCredential, LLCSecret.id == LLCRoleCredential.secret_id)
+            .where(
+                LLCRoleCredential.company_id == company_id,
+                LLCRoleCredential.role_id == role_id,
+                LLCSecret.company_id == _secret_company_key(company_id),
+                LLCSecret.revoked_at.is_(None),
+            )
+            .order_by(LLCSecret.id)
+        )
+        return [(row[0], row[1]) for row in result.all()]
+
     async def detach(
         self,
         session: AsyncSession,

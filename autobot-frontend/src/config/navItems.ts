@@ -111,7 +111,7 @@ export function filterByFeatureFlag(
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
 // Data-driven navigation items: single source of truth for desktop + mobile nav
 export const navItems: NavItem[] = [
-  { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconViewBox: '0 0 24 24', iconRule: 'evenodd' },
+  { to: '/home', labelKey: 'nav.home', iconPaths: [ICONS.home], iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
   // GH#8757: AI Documents and the Transcriber moved into the Knowledge sidebar
   // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;

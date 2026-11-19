@@ -17,6 +17,7 @@ import logging
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.logging_once import log_once
+from autobot_shared.ollama_urls import ollama_chat_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
@@ -135,7 +136,7 @@ class LocalLLM:
 
             timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
             async with get_http_client().tracked_request(
-                "POST", f"{self._ollama_url}/api/chat", json=data, timeout=timeout
+                "POST", ollama_chat_url(self._ollama_url), json=data, timeout=timeout
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()
