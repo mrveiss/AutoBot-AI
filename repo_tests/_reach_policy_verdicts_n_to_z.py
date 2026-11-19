@@ -127,6 +127,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Tracked scripts (.py, .sh, .bash, .js) under one scripts root, a subset of all tracked files; "
         "the count drifts as scripts are added.",
     ),
+    "provider-tool-schema-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source under the LLM package plus three named builders; the test-file share of that tree drifts.",
+    ),
     "post-commit-seed-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
