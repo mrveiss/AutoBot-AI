@@ -149,16 +149,20 @@ class WindowQuota:
         scope: str,
         *,
         policy: WindowFailurePolicy = WindowFailurePolicy.OPEN,
+        log_rejections: bool = True,
         **quota: Any,
     ) -> WindowQuota:
         """Build a quota on its own canonical ``RateLimiter`` for *scope*.
 
         *quota* is the keyword set of ``__init__`` after the limiter. The
         limiter import is deferred because ``rate_limiter`` imports this module.
+        ``log_rejections=False`` keeps a refusal silent (anonymous routes, where
+        a flood would otherwise amplify into the log).
         """
         from autobot_shared.rate_limiter import RateLimiter  # noqa: PLC0415
 
-        return cls(RateLimiter(scope, log_label=scope, window_failure_policy=policy), **quota)
+        limiter = RateLimiter(scope, log_label=scope if log_rejections else None, window_failure_policy=policy)
+        return cls(limiter, **quota)
 
     @property
     def max_requests(self) -> int:

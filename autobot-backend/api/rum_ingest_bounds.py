@@ -41,6 +41,7 @@ _RATE_ENV = "AUTOBOT_RUM_INGEST_RATE_LIMIT"
 _ingest_limiter = WindowQuota.for_scope(
     "rum_ingest",
     policy=WindowFailurePolicy.LOCAL,
+    log_rejections=False,  # anonymous: a flood must not amplify into the log
     max_requests=REGISTRY[_RATE_ENV].default,
     window_seconds=60,
     limit_env=_RATE_ENV,
