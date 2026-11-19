@@ -23,6 +23,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -45,8 +46,9 @@ def _calls(source: str, name: str) -> bool:
 
 
 def _is_source_python(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return rel.endswith(".py") and not (name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel)
+    return rel.endswith(".py") and not (
+        is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
+    )
 
 
 def _population(root: Path) -> list[str]:
