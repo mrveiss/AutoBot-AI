@@ -22,6 +22,7 @@ REPO = Path(__file__).resolve().parent.parent
 ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 OWNER = REPO / "autobot_shared" / "ollama_urls.py"
 OLLAMA_PATH = re.compile(r"^/api/(generate|chat|tags|pull|embeddings|embed|show|ps)$")
+MIN_SOURCES = 2500  # the three roots hold ~3800 first-party modules
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
 
 
@@ -65,9 +66,11 @@ def test_the_detector_ignores_the_helper_other_routes_and_bare_paths(source):
 
 
 def test_no_hand_built_ollama_api_url_outside_ollama_urls():
+    sources = list(_sources())
+    assert len(sources) >= MIN_SOURCES, f"scanned only {len(sources)} modules; the guard no longer reaches the tree"
     offenders = [
         f"{path.relative_to(REPO)}:{line}"
-        for path in _sources()
+        for path in sources
         for line in hand_built_lines(ast.parse(path.read_text(encoding="utf-8")))
     ]
     assert not offenders, "build Ollama URLs with autobot_shared.ollama_urls (ollama_api_url): " + ", ".join(offenders)
