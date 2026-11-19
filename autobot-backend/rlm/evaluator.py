@@ -156,9 +156,9 @@ class ResponseQualityEvaluator:
             )
             return ReflectionResult(
                 verdict=ReflectionVerdict.INDETERMINATE,
-                # #21845: a failed evaluation (timeout, transport, unreadable reply) is NO reading, so it
-                # carries no passing score; a made-up 0.7 cleared the threshold and passed the response.
-                quality_score=0.0,
+                # #21845: a failed evaluation (timeout, transport, unreadable reply) is NO reading: it carries
+                # no score at all (a made-up 0.7 cleared the threshold; a made-up 0.0 reads as a real failing grade).
+                quality_score=None,
                 critique=f"Evaluation error ({type(exc).__name__}): {exc!r}",
                 refinement_hint=EVALUATOR_FAILED_HINT,
                 iteration=iteration,
