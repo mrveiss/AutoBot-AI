@@ -50,7 +50,7 @@ async def test_the_loser_writes_exactly_one_lost_race_row_naming_both_ids():
     await _once([[], [winner]], SimpleNamespace(rollback=AsyncMock()), create, audit)
     lost_id = create.await_args.args[0]
     audit.assert_awaited_once()
-    assert audit.await_args.args == ("cleanup.proposal_lost_race",)
+    assert audit.await_args.args == ("cleanup.proposal_lost_race",)  # the str-enum member
     details = audit.await_args.kwargs["details"]
     assert details == {"approval_id": str(lost_id), "winner_approval_id": "w"}
     assert audit.await_args.kwargs["durable"] is True

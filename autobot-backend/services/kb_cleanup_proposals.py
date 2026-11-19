@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalComment, ApprovalStatus, ApprovalType
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 
 if TYPE_CHECKING:
@@ -92,7 +93,7 @@ async def _record_lost_race(lost_id: uuid.UUID, winner_id: uuid.UUID, current_us
     """Durable row saying the creation row naming *lost_id* never became an approval; *winner_id* did."""
     try:
         written = await audit_log(
-            "cleanup.proposal_lost_race",
+            AuditAction.CLEANUP_PROPOSAL_LOST_RACE,
             result="success",
             user_id=current_user.get("username"),
             resource=resource,
