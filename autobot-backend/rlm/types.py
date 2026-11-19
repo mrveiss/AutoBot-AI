@@ -20,6 +20,7 @@ from typing import Any, Dict
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_constants import AgentThresholds
 from autobot_shared.time_utils import now_utc
+from llm_shared.quality_judgment import QualityAssessment
 
 
 class ReflectionVerdict(Enum):
@@ -32,6 +33,17 @@ class ReflectionVerdict(Enum):
     # Routing treats this like ACCEPT (graph branches only on REFINE), but
     # callers can distinguish "evaluator broke" from "response was bad."
     INDETERMINATE = auto()
+
+
+#: The judges' ``recommendation`` string for each reflection verdict (#16133):
+#: one vocabulary, two spellings. ``INDETERMINATE`` has no recommendation --
+#: nothing was judged -- and the judges' error judgment is a REJECT with zero
+#: confidence, which is deliberately not the same thing.
+VERDICT_RECOMMENDATION: Dict[ReflectionVerdict, str] = {
+    ReflectionVerdict.ACCEPT: "APPROVE",
+    ReflectionVerdict.REFINE: "REVISE",
+    ReflectionVerdict.FAIL: "REJECT",
+}
 
 
 @dataclass
@@ -52,6 +64,15 @@ class ReflectionResult:
     refinement_hint: str = ""
     iteration: int = 1
     timestamp: datetime = field(default_factory=now_utc)
+
+    def assessment(self, threshold: float | None = None) -> QualityAssessment:
+        """Project onto the shared quality view (#16133)."""
+        return QualityAssessment(
+            score=self.quality_score,
+            critique=self.critique,
+            hint=self.refinement_hint,
+            threshold=threshold,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for event stream / logging."""

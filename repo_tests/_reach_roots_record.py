@@ -213,6 +213,11 @@ REACH_ROOTS = {
     ),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
     "repo_tests/llc_acting_identity_from_credential_20521_test.py": ("autobot-backend/llc/api",),
+    "repo_tests/llm_quality_seam_16133_test.py": (
+        "autobot-backend/agent_loop",
+        "autobot-backend/judges",
+        "autobot-backend/rlm",
+    ),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (
         "autobot-backend",
@@ -372,6 +377,12 @@ REACH_ROOTS = {
         "autobot-backend",
         "autobot_shared",
         "plugins",
+    ),
+    "repo_tests/provider_tool_schema_single_source_16815_test.py": (
+        "autobot-backend/api/llm.py",
+        "autobot-backend/chat_workflow/manager.py",
+        "autobot-backend/llm_shared",
+        "autobot-backend/modern_ai_integration.py",
     ),
     "repo_tests/redaction_placeholder_one_home_19337_test.py": (
         "autobot-backend",
