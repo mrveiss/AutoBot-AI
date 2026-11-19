@@ -130,7 +130,7 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     "provider-tool-schema-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
-        "Non-test source under one provider directory; the test-file share of that directory drifts.",
+        "Non-test source under the LLM package plus three named builders; the test-file share of that tree drifts.",
     ),
     "post-commit-seed-scan": (
         ABSOLUTE,

@@ -26,7 +26,7 @@ from llm_shared.providers.bedrock import BedrockProvider
 from llm_shared.providers.cache_utils import sorted_for_cache
 from llm_shared.providers.message_formatting import anthropic_tool_schemas, openai_function_tool_schemas
 from llm_shared.providers.mistral import MistralProvider
-from llm_shared.providers.ollama import OllamaProvider
+from llm_shared.providers.ollama import OllamaRequestExecutor
 from llm_shared.providers.openai import OpenAIProvider
 from llm_shared.providers.vertexai import VertexAIProvider
 
@@ -176,7 +176,7 @@ def test_ollama_payload(messages, tools) -> None:
     tools, choice = tools
     manager = MagicMock()
     manager.should_use_streaming.return_value = False
-    provider = OllamaProvider(settings=LLMSettings(), streaming_manager=manager)
+    provider = OllamaRequestExecutor(settings=LLMSettings(), streaming_manager=manager)
     data = provider.build_request_data(_request(messages, tools, choice), "llama3.1:8b", use_streaming=False)
     assert _j(data["messages"]) == _j(messages)
     assert _j(data.get("tools")) == _j(_legacy_openai_tools(tools) if tools else None)

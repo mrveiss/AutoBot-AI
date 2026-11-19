@@ -31,6 +31,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT_DIR = "autobot-backend/llm_shared"
@@ -76,7 +78,7 @@ def _inlined_formatters(source: str) -> list[str]:
     comprehension, and a tool dict whose `name` is added after the schema in a separate statement.
     """
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Dict) and _ANTHROPIC_KEYS <= _dict_keys(node):
             found.append("anthropic tool schema dict")
         elif isinstance(node, ast.Dict) and _is_function_tool(node):
@@ -113,8 +115,9 @@ def test_the_matcher_tells_an_inlined_formatter_from_a_use(label: str, source: s
 
 
 def _is_source_python(rel: str) -> bool:
-    name = rel.rsplit("/", 1)[-1]
-    return rel.endswith(".py") and not (name.endswith("_test.py") or name.startswith("test_") or "/tests/" in rel)
+    return rel.endswith(".py") and not (
+        is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
+    )
 
 
 def _provider_population(root: Path) -> list[str]:
