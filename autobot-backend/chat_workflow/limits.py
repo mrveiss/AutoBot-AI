@@ -29,6 +29,11 @@ from autobot_shared.env_utils import env_int
 #: literal cannot be changed without a deploy, and this one is a safety limit.
 MAX_CONTINUATION_ITERATIONS: int = env_int("AUTOBOT_MAX_CONTINUATION_ITERATIONS", default=5)
 
+#: Invalid tool calls one turn tolerates before it stops with an honest failure (#20848, #21843). ONE bound: a reply
+#: whose TOOL_CALL did not parse is re-asked this many times on both the graph path and the legacy loop, and the
+#: unknown-tool counter (#20848) is to read the same constant. Past it the user gets ``NO_ANSWER_FALLBACK``.
+INVALID_CALL_LIMIT: int = env_int("AUTOBOT_CHAT_INVALID_CALL_LIMIT", default=2)
+
 #: Seconds the chat planner may take to write a plan (#21023). Past it the turn runs with no plan, never blocked.
 PLANNER_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_PLANNER_TIMEOUT_SECONDS", default=30)
 

@@ -16,9 +16,11 @@ from __future__ import annotations
 import ast
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
+from chat_workflow import limits
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
@@ -91,22 +93,48 @@ def parse_tool_args(raw: str) -> dict:
     raise first_error
 
 
-def tool_call_parse_error(text: str) -> str | None:
-    """Describe why *text*'s TOOL_CALL did not parse, or None if it has no failed call. (#21843)
+@dataclass(frozen=True)
+class ParseReport:
+    """What the parser found in one reply: a TOOL_CALL tag present, how many calls parsed, how many failed. (#21843)
+
+    ``failures`` holds one description per failed call; ``failed`` is their count.
+    """
+
+    tag_present: bool
+    parsed: int
+    failures: tuple[str, ...] = ()
+
+    @property
+    def failed(self) -> int:
+        return len(self.failures)
+
+    def summary(self) -> str:
+        """``tag present, N parsed, M failed`` (``no tag`` when the reply has none)."""
+        return f"tag present, {self.parsed} parsed, {self.failed} failed" if self.tag_present else "no tag"
+
+
+def parse_report(text: str) -> ParseReport:
+    """Parse *text*'s TOOL_CALL tags and report ``tag present, N parsed, M failed`` to the caller. (#21843)
 
     Covers a well-formed tag whose args are invalid, and an opening tag that never
-    matched the full grammar. A tag that parses cleanly returns None.
+    matched the full grammar. A tag that parses cleanly counts as parsed.
     """
     if not text or not (TOOL_CALL_OPENING_RE.search(text) or TOOL_CALL_TRUNCATED_OPENING_RE.search(text)):
-        return None
+        return ParseReport(False, 0)
     matches = list(TOOL_CALL_PATTERN.finditer(text))
     failures = _param_failures(matches)
+    parsed = len(matches) - len(failures)
     outside = _outside_calls(text, matches)
     if TOOL_CALL_OPENING_RE.search(outside):  # an opening beside complete calls never closed
         failures.append("a TOOL_CALL tag was not closed or is malformed, so no tool ran")
     elif TOOL_CALL_TRUNCATED_OPENING_RE.search(outside):  # generation stopped before the tag's `>`
         failures.append("a TOOL_CALL tag was cut off before its closing '>', so no tool ran")
-    return "; ".join(failures) or None
+    return ParseReport(True, parsed, tuple(failures))
+
+
+def tool_call_parse_error(text: str) -> str | None:
+    """Describe why *text*'s TOOL_CALL did not parse, or None if it has no failed call. (#21843)"""
+    return "; ".join(parse_report(text).failures) or None
 
 
 def _outside_calls(text: str, matches: list[re.Match]) -> str:
@@ -139,25 +167,37 @@ def parse_failure_step(text: str, iteration: int) -> dict | None:
     """
     if iteration == 1 and "[planning]" in (text or "").lower():
         return None
-    if (error := tool_call_parse_error(text)) is None:
+    report = parse_report(text)
+    if not report.failures:
         return None
+    error = "; ".join(report.failures)
     advice = "Re-emit the call with params as strict JSON using double quotes; escape any quote inside a value."
     return {
         "tool": "tool_call_parse",
         "status": "error",
-        "error": f"Your TOOL_CALL was not executed: {error}. {advice}",
+        "error": f"Your TOOL_CALL was not executed ({report.summary()}): {error}. {advice}",
+        "parsed": report.parsed,
+        "failed": report.failed,
     }
 
 
 def record_parse_failure(ctx: Any, text: str, iteration: int, max_iterations: int) -> bool:
     """Append the parse-error step to ``ctx.execution_history``; True when the turn should continue. (#21843)
 
-    Bounded by *max_iterations*: the last iteration ends the turn (the reply is still cleaned).
+    Bounded by *max_iterations* and by ``limits.INVALID_CALL_LIMIT`` (the same bound the graph path uses):
+    past either, the turn ends and the reply is still cleaned.
     """
-    step = parse_failure_step(text, iteration) if iteration < max_iterations else None
+    spent = iteration >= max_iterations or ctx.parse_failures >= limits.INVALID_CALL_LIMIT
+    step = None if spent else parse_failure_step(text, iteration)
     if step is None:
         return False
-    logger.warning("[Issue #21843] Iteration %d: TOOL_CALL did not parse - feeding error back", iteration)
+    ctx.parse_failures += 1
+    logger.warning(
+        "[Issue #21843] Iteration %d: TOOL_CALL did not parse (%d parsed, %d failed) - feeding error back",
+        iteration,
+        step["parsed"],
+        step["failed"],
+    )
     ctx.execution_history.append(step)
     return True
 
