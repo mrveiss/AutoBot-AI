@@ -33,7 +33,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 | `AUTOBOT_ROUTING_MODEL` | `llama3.2:1b` | Routing | Orchestrator, request routing |
 | `AUTOBOT_CLASSIFICATION_MODEL` | `gemma2:2b` | Classification | Intent detection, category assignment |
 | `AUTOBOT_LIGHT_PROCESSING_MODEL` | `phi3:mini` | Light Processing | Extraction, formatting |
-| `AUTOBOT_VERIFIER_MODEL` | `phi3:mini` | Verifier | Pre-action verifier (own small model; #21844). Must be pulled on the Ollama host, else the provider default answers and a startup warning plus a `verifier_model` health degradation say so. It loads next to the chat model: with `OLLAMA_MAX_LOADED_MODELS=1` (or too little VRAM) Ollama evicts one of the two on every call, so each verifier pass pays a load and degrades as `timeout`. Set `OLLAMA_MAX_LOADED_MODELS` to at least 2 and size VRAM for both. |
+| `AUTOBOT_VERIFIER_MODEL` | `""` (the light-processing model) | Verifier | Pre-action verifier (own small model; #21844). Must be pulled on the Ollama host, else the provider default answers and a startup warning plus a `verifier_model` health degradation say so. It loads next to the chat model: with `OLLAMA_MAX_LOADED_MODELS=1` (or too little VRAM) Ollama evicts one of the two on every call, so each verifier pass pays a load and degrades as `timeout`. Set `OLLAMA_MAX_LOADED_MODELS` to at least 2 and size VRAM for both. |
 | `AUTOBOT_INSTRUCTION_MODEL` | `mistral:7b-instruct` | Instruction | RAG, step execution |
 | `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
 | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |

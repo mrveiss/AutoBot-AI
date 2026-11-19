@@ -19,7 +19,7 @@ for _spec in (
     EnvVarSpec(
         name="AUTOBOT_VERIFIER_MODEL",
         type=str,
-        default="",  # empty: the SSOT light-processing model (ssot_config.verifier_model owns the value)
+        default="",  # empty: the light-processing model, resolved by verifier_model.configured_verifier_model
         description=(
             "Ollama tag the pre-action verifier asks (#21844); empty means the light-processing model. "
             "Must be pulled on the Ollama host, else the provider "

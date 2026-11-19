@@ -240,7 +240,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
     instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
-    verifier_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_VERIFIER_MODEL")  # #21844 own fast model
+    verifier_model: str = Field(default="", alias="AUTOBOT_VERIFIER_MODEL")  # #21844 empty: light-processing model
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
