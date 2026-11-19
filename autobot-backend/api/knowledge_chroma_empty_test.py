@@ -58,6 +58,12 @@ class _Client:
         self.deleted.append(name)
         del self.collections[name]
 
+    async def delete_collection_if_empty(self, name):
+        count = await self.collections[name].count()
+        if count == 0:
+            await self.delete_collection(name)
+        return count
+
 
 @pytest.fixture
 def chroma(monkeypatch):

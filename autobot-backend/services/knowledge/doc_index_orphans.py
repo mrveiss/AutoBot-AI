@@ -62,13 +62,29 @@ async def resolve_collection(indexer: Any, model_name: str, embed_dim: Any) -> A
     create then failed) and regardless of how many files the forced re-index later finds.
     """
     prior, indexer._needs_reindex = indexer._needs_reindex, False
+    worker = asyncio.ensure_future(asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim))
     try:
-        resolved = await asyncio.to_thread(indexer._resolve_collection, model_name, embed_dim)
+        resolved = await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        await _await_worker(worker)  # a thread cannot be interrupted: read the flag only once it has stopped
+        await _bump_if_recreated(indexer, prior, keep_error=True)
+        raise
     except BaseException:
         await _bump_if_recreated(indexer, prior, keep_error=True)
         raise
     await _bump_if_recreated(indexer, prior, keep_error=False)
     return resolved
+
+
+async def _await_worker(worker: "asyncio.Future[Any]") -> None:
+    """Wait for the worker thread to finish, ignoring its outcome and any further cancellation."""
+    while not worker.done():
+        try:
+            await asyncio.wait({worker})
+        except asyncio.CancelledError:
+            continue
+    if not worker.cancelled():
+        worker.exception()  # mark retrieved; the cancelled resolve's own error is not this caller's
 
 
 async def _bump_if_recreated(indexer: Any, prior: bool, *, keep_error: bool) -> None:

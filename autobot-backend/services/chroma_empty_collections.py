@@ -7,7 +7,7 @@
 The knowledge health scan reads Redis facts only, so empty vector collections never showed up as a finding.
 ``scan_empty_collections`` lists them (and the collections it could not read, which are NOT reported as
 empty). ``delete_empty_collection`` is reachable only from the post-approval handler, and re-checks at that
-moment that the collection is still empty. A collection with no vectors cannot change a retrieval result, so
+moment that the collection is still empty, atomically with the delete (a collection filled in between is kept). A collection with no vectors cannot change a retrieval result, so
 no retrieval-cache invalidation is needed.
 """
 
@@ -78,10 +78,13 @@ async def delete_empty_collection(name: str) -> tuple[bool, str | None]:
     collection = await client.get_collection_or_none(name)
     if collection is None:
         return False, "the collection no longer exists"
-    count = await collection.count()
+    try:
+        count = await client.delete_collection_if_empty(name)
+    except Exception as exc:  # a failed fence/count/delete leaves the collection (restored) in place
+        logger.warning("Empty-collection delete of %s did not run: %s", name, exc)
+        return False, f"the delete did not run ({type(exc).__name__}); nothing deleted"
     if count != 0:
         return False, f"the collection now holds {count} vector(s); nothing deleted"
-    await client.delete_collection(name)
     return True, None
 
 
