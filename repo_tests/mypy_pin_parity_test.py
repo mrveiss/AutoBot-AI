@@ -183,3 +183,29 @@ def test_the_isort_hook_reads_the_project_settings_like_the_gate():
     ]
     assert "--settings-path=." in args, f"isort hook args {args} lack --settings-path=."
     assert "--settings-path=." in CODE_QUALITY.read_text(encoding="utf-8")
+
+
+GATE_BLACK_TARGETS = ("autobot-backend/", "autobot-slm-backend/", "autobot_shared/")
+
+
+def _black_hook_text() -> str:
+    """The black hook's block in the pre-commit config, comments included."""
+    text = PRE_COMMIT.read_text(encoding="utf-8")
+    start = text.index("repo: https://github.com/psf/black")
+    return text[start : text.index("\n  # ", start)]
+
+
+def test_the_black_hook_and_gate_differ_in_targets_only_and_say_so():
+    """The hook is repo-wide, the gate checks three package dirs; same args, difference documented (#21839)."""
+    gate = re.search(r"black --check (--line-length=\d+) ((?:\S+/ ?)+)", CODE_QUALITY.read_text(encoding="utf-8"))
+    assert gate, "the code-quality gate no longer runs `black --check --line-length=N <dirs>`"
+    assert tuple(gate.group(2).split()) == GATE_BLACK_TARGETS, (
+        f"gate black targets are {gate.group(2).split()}; update the hook comment in {PRE_COMMIT.name} and "
+        "GATE_BLACK_TARGETS here together"
+    )
+    hook = _black_hook_text()
+    assert f"args: [{gate.group(1)}]" in hook, f"black hook args differ from the gate's {gate.group(1)}"
+    assert "exclude: ^autobot-infrastructure/" in hook
+    assert (
+        "the gate\n        # checks " + " ".join(GATE_BLACK_TARGETS) + " only" in hook
+    ), f"the black hook in {PRE_COMMIT.name} must record why its targets differ from the gate's (#21839)"

@@ -98,19 +98,35 @@ def isolated_git_env(
     return env
 
 
+class GitError(subprocess.CalledProcessError):
+    """A failed ``git()`` call whose message carries git's own stderr (and stdout) (#21598).
+
+    Still a :class:`subprocess.CalledProcessError`, so ``except`` and ``pytest.raises`` sites match.
+    """
+
+    def __str__(self) -> str:
+        # ``git commit`` reports "nothing to commit" on stdout, so the explanation is kept from both streams.
+        said = " ".join(part.strip() for part in (self.stderr, self.stdout) if part and part.strip())
+        return f"{super().__str__()} git said: {said}" if said else super().__str__()
+
+
 def git(repo: str | os.PathLike[str], *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """Run ``git -C <repo> <args>`` under :func:`isolated_git_env`; text output captured.
 
+    With ``check=True`` a failure raises :class:`GitError`, whose ``str()`` includes git's stderr (and stdout).
     There is no ``env`` parameter on purpose: a caller needing extra variables builds
     ``{**isolated_git_env(), ...}`` and calls ``subprocess.run`` itself.
     """
-    return subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "-C", os.fspath(repo), *args],
         capture_output=True,
         text=True,
-        check=check,
+        check=False,
         env=isolated_git_env(),
     )
+    if check and result.returncode:
+        raise GitError(result.returncode, result.args, output=result.stdout, stderr=result.stderr)
+    return result
 
 
 def make_repo(path: Path, *, default_branch: str = DEFAULT_BRANCH) -> Path:
