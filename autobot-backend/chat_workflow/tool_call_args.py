@@ -20,6 +20,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.tool_call_grammar import (
+    TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
     TOOL_CALL_PATTERN,
     normalize_tool_call_brackets,
@@ -158,4 +159,16 @@ def clean_reply_text(text: str) -> str:
         return match.group(0)
 
     normalized = normalize_tool_call_brackets(text or "")  # `[TOOL_CALL ...]` must meet the same parse check
-    return strip_unparsed_tool_tags(TOOL_CALL_PATTERN.sub(_drop_if_failed, normalized)).strip()
+    kept = TOOL_CALL_PATTERN.sub(_drop_if_failed, normalized)
+    return strip_unparsed_tool_tags(_drop_unmatched_fragments(kept)).strip()
+
+
+def _drop_unmatched_fragments(text: str) -> str:
+    """*text* without opening/closing tag fragments that sit outside every complete call (kept calls untouched)."""
+    out, pos = [], 0
+    for match in TOOL_CALL_PATTERN.finditer(text):
+        out.append(TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos : match.start()])))
+        out.append(match.group(0))
+        pos = match.end()
+    out.append(TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos:])))
+    return "".join(out)

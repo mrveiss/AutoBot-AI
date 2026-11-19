@@ -95,3 +95,8 @@ def test_a_square_bracket_call_with_bad_args_is_dropped_and_prose_kept():
     text = f"before [TOOL_CALL name=\"browser_evaluate\" params='{_JS}']run[/TOOL_CALL] after"
     cleaned = clean_reply_text(text)
     assert "TOOL_CALL" not in cleaned and "before" in cleaned and "after" in cleaned
+
+
+def test_an_unclosed_fragment_beside_a_valid_call_is_removed_and_the_call_kept():
+    cleaned = clean_reply_text("hi " + GOOD + ' tail <TOOL_CALL name="x" params=\'{"a": 1}\'> more')
+    assert cleaned.count("<TOOL_CALL") == 1 and "execute_command" in cleaned and "hi" in cleaned and "more" in cleaned
