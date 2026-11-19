@@ -16,9 +16,9 @@ from typing import Any, Dict, List
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
 from middleware.base import HookContext
@@ -525,7 +525,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
+        return _normalize_outbound_url(ollama_generate_url(_ssot_config.ollama_url))
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -536,10 +536,7 @@ class LLMHandlerMixin:
         try:
             endpoint = provide_config_manager().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
-                # Ensure /api/generate path is included
-                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(endpoint)
+                return _normalize_outbound_url(ollama_generate_url(endpoint))
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
@@ -555,9 +552,7 @@ class LLMHandlerMixin:
         try:
             base_url = provide_config_manager().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith(PATH_OLLAMA_GENERATE):
-                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(base_url)
+                return _normalize_outbound_url(ollama_generate_url(base_url))
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
@@ -836,9 +831,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
-                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
-            ollama_endpoint = slm_base
+            ollama_endpoint = ollama_generate_url(slm_base)
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
 
@@ -973,7 +966,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         http_client = get_http_client()
         response_data = await http_client.post_json(
-            f"{ollama_endpoint}/api/generate",
+            ollama_generate_url(ollama_endpoint),
             json_data={
                 "model": selected_model,
                 "prompt": interpretation_prompt,
@@ -1016,7 +1009,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         full_response = ""
         try:
             async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
+                ollama_generate_url(ollama_endpoint),
                 json={
                     "model": selected_model,
                     "prompt": interpretation_prompt,
