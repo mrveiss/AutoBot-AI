@@ -310,6 +310,7 @@ REACH_ROOTS = {
         "autobot-frontend",
         "autobot-infrastructure",
     ),
+    "repo_tests/one_rate_limiter_18087_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/one_semantic_chunker_14485_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_serving_predicate_18820_test.py": ("autobot-backend", "autobot_shared", "libs", "plugins"),
     "repo_tests/one_session_ownership_validator_14016_test.py": (
