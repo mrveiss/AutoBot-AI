@@ -239,6 +239,12 @@ REACH_ROOTS = {
         "install.sh",
     ),
     "repo_tests/oauth_bundle_no_app_secret_13630_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/ollama_urls_single_builder_21856_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/one_actor_id_15754_test.py": ("autobot-backend/llc",),
     "repo_tests/one_admin_gate_16333_test.py": ("autobot-backend",),
     "repo_tests/one_aead_core_17981_test.py": ("autobot_shared",),
