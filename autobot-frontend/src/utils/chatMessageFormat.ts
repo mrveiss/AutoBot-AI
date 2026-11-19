@@ -73,10 +73,17 @@ function stripAnsi(content: string): string {
   return out.trim()
 }
 
-/** Split a matched URL into [href, trailing text that is not part of it]. */
-function splitTrailing(raw: string, before = ''): [string, string] {
+/** Length of the run of `d` ending `text` at index `to` (exclusive), scanned backwards without slicing the prefix. */
+function trailingRun(text: string, to: number, d: string): number {
+  let n = 0
+  while (n < to && text[to - 1 - n] === d) n++
+  return n
+}
+
+/** Split a matched URL into [href, trailing text that is not part of it]; `before` is `text` up to `beforeEnd`. */
+function splitTrailing(raw: string, text = '', beforeEnd = 0): [string, string] {
   const open: Record<string, number> = {}
-  for (const d of DELIMITER_CHARS) open[d] = before.length - before.replace(new RegExp(`[${d}]+$`), '').length
+  for (const d of DELIMITER_CHARS) open[d] = trailingRun(text, beforeEnd, d)
   let end = raw.length
   let opens = 0
   let closes = 0
@@ -105,7 +112,7 @@ export function linkifyBareUrls(html: string): string {
     .map((part, i) => {
       if (i % 2 === 1) return part
       return part.replace(BARE_URL_RE, (raw, offset: number) => {
-        const [url, tail] = splitTrailing(raw, part.slice(0, offset))
+        const [url, tail] = splitTrailing(raw, part, offset)
         if (!/^https?:\/\/./i.test(url)) return raw
         return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>${tail}`
       })
