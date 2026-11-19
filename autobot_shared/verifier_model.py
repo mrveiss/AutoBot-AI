@@ -104,9 +104,23 @@ async def resolve_and_chat(
         metadata={"purpose": "pre_action_verifier", "tool": tool_name},
     )
     response = await provider.chat_completion(request)
-    # #16924 the call records itself; shielded so a deadline expiring mid-recording cannot discard the response
-    await asyncio.shield(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata))
+    _record_spend_detached(response, request.metadata)
     return request, response
+
+
+#: Strong references to in-flight spend recordings; a task nobody references can be garbage-collected mid-run.
+_spend_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _record_spend_detached(response: Any, metadata: dict[str, Any]) -> None:
+    """Record the spend (#16924) without making the verdict wait for it.
+
+    The completed reply is returned even when the verifier deadline expires during accounting: awaiting here would let
+    the deadline cancel the caller and discard a reply that may block the action (fail-open then lets it through).
+    """
+    task = asyncio.ensure_future(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=metadata))
+    _spend_tasks.add(task)
+    task.add_done_callback(_spend_tasks.discard)
 
 
 def verifier_model_status() -> dict[str, Any]:

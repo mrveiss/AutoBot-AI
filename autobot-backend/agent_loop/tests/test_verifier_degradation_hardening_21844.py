@@ -186,8 +186,8 @@ async def test_a_provider_default_request_that_times_out_does_not_claim_the_conf
 
 
 @pytest.mark.asyncio
-async def test_a_deadline_expiring_during_spend_recording_keeps_the_response_and_records_once():
-    """A cancellation mid-recording neither discards the response nor records twice (#21844)."""
+async def test_slow_spend_recording_never_delays_or_discards_the_reply_and_records_once():
+    """Accounting that outlives the deadline neither blocks nor discards the completed reply (#21844)."""
     started, release, calls = asyncio.Event(), asyncio.Event(), []
 
     async def slow_report(response, **kwargs):
@@ -198,16 +198,38 @@ async def test_a_deadline_expiring_during_spend_recording_keeps_the_response_and
     response = MagicMock()
     provider = _provider([])
     provider.chat_completion = AsyncMock(return_value=response)
-    attempt: dict = {}
     with (
         patch.object(verifier_model, "report_spend", slow_report),
         patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value="m")),
     ):
-        task = asyncio.ensure_future(verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, attempt))
+        # a deadline far shorter than the (never-finishing) accounting: the reply must still come back
+        _request, got = await asyncio.wait_for(
+            verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, {}), timeout=1.0
+        )
         await started.wait()
-        task.cancel()  # what wait_for does when the deadline expires
-        with pytest.raises(asyncio.CancelledError):
-            await task
         release.set()
         await asyncio.sleep(0)
+    assert got is response
     assert calls == [response]
+
+
+@pytest.mark.asyncio
+async def test_the_guard_returns_the_completed_verdict_when_accounting_never_finishes():
+    """The completed reply blocks the action even though spend recording hangs past the deadline (#21844)."""
+    from autobot_shared import pre_action_verifier_guard as guard
+
+    async def hung_report(response, **kwargs):
+        await asyncio.Event().wait()
+
+    response = MagicMock(content="REFUTATION_PROBABILITY: 0.95\nREASON: unsafe", model="m")
+    provider = _provider([])
+    provider.chat_completion = AsyncMock(return_value=response)
+    with (
+        patch.object(verifier_model, "report_spend", hung_report),
+        patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value="m")),
+        patch.object(guard, "_select_verifier_provider", AsyncMock(return_value=provider)),
+        patch.object(guard, "VERIFIER_TIMEOUT_S", 0.5),
+    ):
+        obs = await guard._call_verifier_once("bash", {}, "why", None)
+    assert obs.degradation is VerifierDegradation.NONE and obs.probability == 0.95
+    assert obs.model_used == "m"
