@@ -11,7 +11,6 @@ and approval workflows.
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import html
 import inspect
@@ -58,6 +57,7 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
@@ -778,25 +778,7 @@ _REPAIRABLE_ERROR_PATTERNS = (
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
 
 
-def _parse_tool_args(raw: str) -> dict:
-    """Parse tool call JSON args with a safe literal-parser fallback. (#4483)
-
-    LLMs occasionally produce near-valid JSON with trailing commas, single
-    quotes, or Python boolean/None literals that json.loads() rejects.
-    ast.literal_eval is safe: it only accepts Python literal structures and
-    raises ValueError/SyntaxError on anything else.
-    """
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        try:
-            result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
-            if isinstance(result, dict):
-                logger.warning("Tool args parsed via ast.literal_eval fallback" " — LLM produced near-valid JSON")
-                return result
-        except (ValueError, SyntaxError):
-            pass
-        raise
+_parse_tool_args = parse_tool_args  # canonical parser lives in tool_call_args.py (#21843)
 
 
 def _detect_and_store_security_output(command: str, output: str, session_id: str) -> None:
