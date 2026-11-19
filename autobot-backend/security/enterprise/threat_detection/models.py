@@ -15,7 +15,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, Iterator, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
@@ -155,81 +155,65 @@ class EventHistory:
 
     events: deque
 
+    def _recent(self, cutoff_time: datetime) -> Iterator[Dict]:
+        """Yield events at or after *cutoff_time*.
+
+        Analysis order is not timestamp order, so an expired row is skipped,
+        never treated as the end of the window (#18844).
+        """
+        for event in self.events:
+            if parse_utc_iso(event.get("timestamp", utc_timestamp())) >= cutoff_time:
+                yield event
+
     def count_recent_failures(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent authentication failures"""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
-        count = 0
-
-        for event in reversed(self.events):
-            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
-            if event_time < cutoff_time:
-                break
-            if (
-                event.get("action") == "authentication"
-                and event.get("outcome") == "failure"
-                and (event.get("user_id") == user_id or event.get("source_ip") == source_ip)
-            ):
-                count += 1
-
-        return count
+        return sum(
+            1
+            for event in self._recent(cutoff_time)
+            if event.get("action") == "authentication"
+            and event.get("outcome") == "failure"
+            and (event.get("user_id") == user_id or event.get("source_ip") == source_ip)
+        )
 
     def count_recent_api_requests(self, user_id: str, source_ip: str, window_minutes: int) -> int:
         """Count recent API requests"""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
-        count = 0
-
-        for event in reversed(self.events):
-            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
-            if event_time < cutoff_time:
-                break
-            if event.get("action") == "api_request" and (
-                event.get("user_id") == user_id or event.get("source_ip") == source_ip
-            ):
-                count += 1
-
-        return count
+        return sum(
+            1
+            for event in self._recent(cutoff_time)
+            if event.get("action") == "api_request"
+            and (event.get("user_id") == user_id or event.get("source_ip") == source_ip)
+        )
 
     def count_recent_actions(self, user_id: str, action: str, window_minutes: int) -> int:
         """Count a user's events of *action* inside the last *window_minutes* (#18844)."""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
-        count = 0
-        for event in self.events:  # analysis order is not timestamp order: an expired row ends nothing
-            if parse_utc_iso(event.get("timestamp", utc_timestamp())) < cutoff_time:
-                continue
-            count += event.get("user_id") == user_id and event.get("action") == action
-        return count
+        return sum(
+            1
+            for event in self._recent(cutoff_time)
+            if event.get("user_id") == user_id and event.get("action") == action
+        )
 
     def get_recent_action_frequency(self, user_id: str, action: str, hours: int = 1) -> int:
         """Count recent action frequency for a user"""
         cutoff_time = now_utc() - timedelta(hours=hours)
-        count = 0
-
-        for event in reversed(self.events):
-            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
-            if event_time < cutoff_time:
-                break
-            if event.get("user_id") == user_id and event.get("action") == action:
-                count += 1
-
-        return count
+        return sum(
+            1
+            for event in self._recent(cutoff_time)
+            if event.get("user_id") == user_id and event.get("action") == action
+        )
 
     def get_recent_endpoint_usage(self, user_id: str, endpoint: str, hours: int = 24) -> int:
         """Get recent endpoint usage count"""
         cutoff_time = now_utc() - timedelta(hours=hours)
-        count = 0
-
-        for event in reversed(self.events):
-            event_time = parse_utc_iso(event.get("timestamp", utc_timestamp()))
-            if event_time < cutoff_time:
-                break
-            if (
-                event.get("user_id") == user_id
-                and event.get("action") == "api_request"
-                and event.get("resource") == endpoint
-            ):
-                count += 1
-
-        return count
+        return sum(
+            1
+            for event in self._recent(cutoff_time)
+            if event.get("user_id") == user_id
+            and event.get("action") == "api_request"
+            and event.get("resource") == endpoint
+        )
 
     def filter_by_user(self, user_id: str) -> List[Dict]:
         """Get all events for a specific user"""

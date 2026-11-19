@@ -117,3 +117,35 @@ def test_an_expired_row_analysed_late_does_not_end_the_count() -> None:
     rows += [{"timestamp": old, "user_id": "alice", "action": "agent_action"}]  # analysed after the in-window rows
     rows += [{"timestamp": now, "user_id": "alice", "action": "agent_action"}]
     assert EventHistory(events=deque(rows)).count_recent_actions("alice", "agent_action", 1) == 3
+
+
+def _history_with_expired_row_between(**fresh):
+    from collections import deque
+    from datetime import timedelta
+
+    from autobot_shared.time_utils import now_utc, utc_timestamp
+    from security.enterprise.threat_detection.models import EventHistory
+
+    old = (now_utc() - timedelta(days=2)).isoformat()
+    fresh_row = {"timestamp": utc_timestamp(), "user_id": "alice", **fresh}
+    return EventHistory(events=deque([dict(fresh_row), {**fresh_row, "timestamp": old}, dict(fresh_row)]))
+
+
+def test_api_request_count_skips_an_expired_row_instead_of_stopping() -> None:
+    h = _history_with_expired_row_between(action="api_request", source_ip="1.2.3.4")
+    assert h.count_recent_api_requests("alice", "1.2.3.4", 5) == 2
+
+
+def test_action_frequency_skips_an_expired_row_instead_of_stopping() -> None:
+    h = _history_with_expired_row_between(action="file_read")
+    assert h.get_recent_action_frequency("alice", "file_read", 1) == 2
+
+
+def test_failure_count_skips_an_expired_row_instead_of_stopping() -> None:
+    h = _history_with_expired_row_between(action="authentication", outcome="failure")
+    assert h.count_recent_failures("alice", "9.9.9.9", 5) == 2
+
+
+def test_endpoint_usage_skips_an_expired_row_instead_of_stopping() -> None:
+    h = _history_with_expired_row_between(action="api_request", resource="/x")
+    assert h.get_recent_endpoint_usage("alice", "/x", 1) == 2
