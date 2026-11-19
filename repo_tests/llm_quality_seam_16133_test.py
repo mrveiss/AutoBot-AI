@@ -23,6 +23,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop")
@@ -35,7 +36,7 @@ _SEAM_CALLERS = (
 
 def _calls(source: str, name: str) -> bool:
     """True when `source` calls `name(...)` or `<x>.name(...)`."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if isinstance(node, ast.Call):
             fn = node.func
             if (isinstance(fn, ast.Name) and fn.id == name) or (isinstance(fn, ast.Attribute) and fn.attr == name):

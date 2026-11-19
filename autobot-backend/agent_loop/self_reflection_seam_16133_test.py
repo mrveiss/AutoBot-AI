@@ -8,14 +8,25 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from agent_loop.think_tool import _REFLECTION_SCHEMA, REFLECTION_JUDGE_FAILED, ThinkTool
 from agent_loop.types import ThinkCategory
+
+
+def _patch_seam(seam):
+    """Patch `judge_validated` in the globals `ThinkTool` actually resolves it from.
+
+    `autobot-backend/conftest.py` and `tests/agent_loop/conftest.py` real-load `agent_loop.think_tool`
+    more than once, so `sys.modules["agent_loop.think_tool"]` (what `patch("agent_loop.think_tool.X")`
+    resolves) can be a different module object from the one this file's `ThinkTool` came from.
+    """
+    return patch.dict(ThinkTool._reflect.__globals__, {"judge_validated": seam})
 
 
 @pytest.mark.asyncio
 async def test_self_reflection_routes_through_judge_validated():
     seam = AsyncMock(return_value={"score": 0.4, "critique": "misses the second question"})
-    with patch("agent_loop.think_tool.judge_validated", seam):
+    with _patch_seam(seam):
         result = await ThinkTool(llm_client=object()).think(ThinkCategory.SELF_REFLECTION, "q/a", task_id="t1")
 
     seam.assert_awaited_once()
@@ -40,7 +51,8 @@ async def test_self_reflection_completer_uses_the_llm_client():
 async def test_other_categories_do_not_use_the_seam():
     client = AsyncMock()
     client.generate.return_value = "## Conclusion\nok"
-    with patch("agent_loop.think_tool.judge_validated", AsyncMock()) as seam:
+    seam = AsyncMock()
+    with _patch_seam(seam):
         await ThinkTool(llm_client=client).think(ThinkCategory.GENERAL, "ctx")
     seam.assert_not_awaited()
 
