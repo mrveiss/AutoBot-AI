@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -339,7 +340,7 @@ const hasApprovalRequest = computed(() => {
   return props.message.metadata?.approval_status || props.message.metadata?.requires_approval
 })
 
-const formattedContent = computed(() => formatChatMessageHtml(props.message.content))
+const formattedContent = computed(() => sanitizeChatHtml(formatChatMessageHtml(props.message.content)))
 </script>
 
 <style scoped src="@/design-system/styles/chat-message-shared.css"></style>

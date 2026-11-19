@@ -879,7 +879,8 @@ const formatMessageContent = (content: string, messageId?: string): string => {
   const cached = formatCache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const result = formatMessageContentRaw(content)
+  // Sanitise at the sink: every v-html binding reads this function (#19118, #21771).
+  const result = sanitizeChatHtml(formatMessageContentRaw(content))
 
   // Evict oldest entries when cache is full
   if (formatCache.size >= FORMAT_CACHE_MAX) {
