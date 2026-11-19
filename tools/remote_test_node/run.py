@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -36,6 +37,9 @@ TIMEOUT_RC = 124
 REQUIREMENTS = ("requirements-ci-test.txt", "requirements-remote-test-node.txt")
 CONSTRAINTS = "constraints/shared.txt"
 CONSTRAINTS_MARKER = "#--constraints--"  # provision.sh splits its stdin here
+_CONSTRAINT_LINE = re.compile(r"^\s*(?:-c\s*=?\s*|--constraint(?:\s+|=))\S+\s*$")
+_INCLUDE_LINE = re.compile(r"^\s*(?:-r|--requirement)(?:\s|=|$)|^\s*-r\S")
+_VERSION = re.compile(r"^\d+(?:\.\d+)*$")
 
 
 @dataclass(frozen=True)
@@ -232,28 +236,45 @@ def _origin_url() -> str:
 
 def _pins() -> list[str]:
     """The uv and pip versions the node installs, from the registry (the node's own environment is not read)."""
-    return [
+    pins = [
         os.environ.get(n) or REGISTRY[n].default
         for n in ("AUTOBOT_TEST_NODE_UV_VERSION", "AUTOBOT_TEST_NODE_PIP_VERSION")
     ]
+    for pin in pins:
+        if not _VERSION.match(pin):
+            raise ValueError(f"not a version number: {pin!r}")
+    return pins
 
 
 def _requirements_payload(root: Path) -> str:
-    """The requirement files with their relative ``-c`` lines dropped, then the shared constraints after a marker."""
-    lines: list[str] = []
+    """The requirement files with their relative constraint lines dropped, then the shared constraints after a marker.
+
+    Every form pip accepts (``-c X``, ``-cX``, ``-c=X``, ``--constraint X``, ``--constraint=X``) is dropped, because
+    the constraints travel after the marker. A ``-r`` line would pull in a file the node does not have: reject it.
+    """
+    kept: list[str] = []
     for name in REQUIREMENTS:
-        if (root / name).is_file():
-            lines += (root / name).read_text(encoding="utf-8").splitlines()
-    kept = [line for line in lines if not line.lstrip().startswith("-c ")]
-    constraints = (root / CONSTRAINTS).read_text(encoding="utf-8")
-    return "\n".join([*kept, CONSTRAINTS_MARKER, constraints])
+        if not (root / name).is_file():
+            continue
+        for line in (root / name).read_text(encoding="utf-8").splitlines():
+            if _INCLUDE_LINE.match(line):
+                raise ValueError(f"{name}: a -r/--requirement line cannot be sent to the node: {line.strip()!r}")
+            if not _CONSTRAINT_LINE.match(line):
+                kept.append(line)
+    constraints = (root / CONSTRAINTS).read_text(encoding="utf-8").splitlines()
+    return "\n".join([*kept, CONSTRAINTS_MARKER, *constraints]) + "\n"
 
 
 def provision(cfg: RemoteNodeSettings, root: Path) -> int:
     """Send provision.sh and the CI test requirements; safe to run again."""
-    reqs = _requirements_payload(root)
+    try:
+        reqs = _requirements_payload(root)
+        pins = _pins()
+    except ValueError as exc:
+        print(f"[remote-test-node] provision refused: {exc}", file=sys.stderr)
+        return 1
     done = subprocess.run(
-        ssh_argv(cfg) + [_script_command("provision.sh", cfg.base, _origin_url(), python_floor(root), *_pins())],
+        ssh_argv(cfg) + [_script_command("provision.sh", cfg.base, _origin_url(), python_floor(root), *pins)],
         input=reqs.encode("utf-8"),
         check=False,
         timeout=1800,

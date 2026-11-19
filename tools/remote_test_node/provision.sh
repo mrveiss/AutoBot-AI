@@ -118,7 +118,10 @@ sync_mirror() {
 
 split_payload() {
   # stdin: the requirement lines, a "#--constraints--" line, then the shared constraints (run.py builds it).
-  awk -v r="$reqs" -v c="$cons" '/^#--constraints--$/ { out = c; next } { print > (out ? out : r) }'
+  # A payload without the marker has no constraints: fail rather than install unconstrained.
+  awk -v r="$reqs" -v c="$cons" '{ sub(/\r$/, "") } /^#--constraints--$/ { out = c; next } { print > (out ? out : r) }'
+  [ -s "$reqs" ] || die "the payload carries no requirements"
+  [ -s "$cons" ] || die "the payload carries no constraints (the #--constraints-- marker is missing)"
 }
 
 install_requirements() {

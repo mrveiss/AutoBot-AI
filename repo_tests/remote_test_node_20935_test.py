@@ -395,3 +395,71 @@ def test_the_node_collects_its_mirror_and_pins_what_it_installs():
     assert "gc_mirror" in job and 'git --git-dir="$mirror" gc' in job
     prov = (_TOOL / "provision.sh").read_text(encoding="utf-8")
     assert "pip==${AUTOBOT_TEST_NODE_PIP_VERSION" in prov and "--upgrade pip" not in prov
+
+
+def _split(tmp_path: Path, payload: bytes) -> tuple[subprocess.CompletedProcess, str, str]:
+    body = 'reqs="$PWD/reqs.out"; cons="$PWD/cons.out"; : > "$reqs"; : > "$cons"\n' 'split_payload; echo "rc=$?"'
+    script = f'PROVISION_SOURCE_ONLY=1 . "{_TOOL}/provision.sh"; set +e\n{body}'
+    done = subprocess.run(["bash", "-c", script], input=payload, capture_output=True, cwd=tmp_path, check=False)
+    read = lambda n: (tmp_path / n).read_text(encoding="utf-8") if (tmp_path / n).exists() else ""  # noqa: E731
+    return done, read("reqs.out"), read("cons.out")
+
+
+def test_the_payload_splits_into_requirements_and_exactly_the_shared_constraints(tmp_path):
+    payload = run._requirements_payload(_ROOT)
+    done, reqs, cons = _split(tmp_path, payload.encode("utf-8"))
+    assert "rc=0" in done.stdout.decode()
+    assert cons == (_ROOT / run.CONSTRAINTS).read_text(encoding="utf-8")
+    assert reqs.strip()
+    assert not re.search(r"^\s*(-c|--constraint)", reqs, re.MULTILINE)
+
+
+def test_a_payload_without_the_marker_fails_instead_of_installing_unconstrained(tmp_path):
+    done, _reqs, cons = _split(tmp_path, b"pytest==9.0.0\nrequests\n")
+    assert done.returncode != 0 and b"marker is missing" in done.stderr
+    assert cons == ""
+
+
+def test_a_crlf_payload_still_splits_at_the_marker(tmp_path):
+    done, reqs, cons = _split(tmp_path, b"pytest==9.0.0\r\n#--constraints--\r\nfoo==1.0\r\n")
+    assert "rc=0" in done.stdout.decode()
+    assert reqs == "pytest==9.0.0\n" and cons == "foo==1.0\n"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "-c constraints/shared.txt",
+        "-c=constraints/shared.txt",
+        "-cconstraints/shared.txt",
+        "--constraint constraints/shared.txt",
+        "--constraint=constraints/shared.txt",
+        "  -c  ../x.txt  ",
+    ],
+)
+def test_every_relative_constraint_form_is_stripped(tmp_path, line):
+    root = _payload_root(tmp_path, f"pytest==9.0.0\n{line}\n")
+    head, marker, tail = run._requirements_payload(root).partition(run.CONSTRAINTS_MARKER)
+    assert marker and head == "pytest==9.0.0\n"
+    assert tail.strip() == "foo==1.0"
+
+
+@pytest.mark.parametrize("line", ["-r base.txt", "-rbase.txt", "--requirement base.txt", "--requirement=base.txt"])
+def test_a_requirement_include_line_is_rejected(tmp_path, line):
+    root = _payload_root(tmp_path, f"pytest==9.0.0\n{line}\n")
+    with pytest.raises(ValueError, match="cannot be sent"):
+        run._requirements_payload(root)
+
+
+def _payload_root(tmp_path: Path, text: str) -> Path:
+    (tmp_path / "constraints").mkdir()
+    (tmp_path / "constraints/shared.txt").write_text("foo==1.0\n", encoding="utf-8")
+    (tmp_path / run.REQUIREMENTS[0]).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_malformed_version_pin_is_refused(monkeypatch):
+    assert all(re.match(r"^\d+(\.\d+)*$", pin) for pin in run._pins())
+    monkeypatch.setenv("AUTOBOT_TEST_NODE_PIP_VERSION", "25.3; rm -rf ~")
+    with pytest.raises(ValueError, match="not a version number"):
+        run._pins()
