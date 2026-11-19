@@ -10,25 +10,25 @@ from types import SimpleNamespace
 
 from chat_workflow import limits
 from chat_workflow.graph_parse_feedback import apply_parse_feedback
-from chat_workflow.tool_call_args import parse_failure_step, parse_report, record_parse_failure
+from chat_workflow.tool_call_args import parse_failure_step, record_parse_failure, tool_call_parse_report
 
 GOOD = """<TOOL_CALL name="execute_command" params='{"command": "ls"}'>list</TOOL_CALL>"""
 BAD = """<TOOL_CALL name="browser_evaluate" params='{oops}'>run</TOOL_CALL>"""
 
 
 def test_a_reply_with_no_tag_reports_no_tag():
-    report = parse_report("just prose")
+    report = tool_call_parse_report("just prose")
     assert (report.tag_present, report.parsed, report.failed) == (False, 0, 0)
 
 
 def test_one_good_and_one_bad_call_are_counted():
-    report = parse_report(f"{GOOD}\n{BAD}")
+    report = tool_call_parse_report(f"{GOOD}\n{BAD}")
     assert (report.tag_present, report.parsed, report.failed) == (True, 1, 1)
     assert report.summary() == "tag present, 1 parsed, 1 failed"
 
 
 def test_an_unclosed_tag_is_a_failure_with_nothing_parsed():
-    report = parse_report('<TOOL_CALL name="x" params=\'{"a": 1}\'')
+    report = tool_call_parse_report('<TOOL_CALL name="x" params=\'{"a": 1}\'')
     assert (report.tag_present, report.parsed, report.failed) == (True, 0, 1)
 
 

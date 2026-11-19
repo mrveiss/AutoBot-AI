@@ -94,7 +94,7 @@ def parse_tool_args(raw: str) -> dict:
 
 
 @dataclass(frozen=True)
-class ParseReport:
+class ToolCallParseReport:
     """What the parser found in one reply: a TOOL_CALL tag present, how many calls parsed, how many failed. (#21843)
 
     ``failures`` holds one description per failed call; ``failed`` is their count.
@@ -113,14 +113,14 @@ class ParseReport:
         return f"tag present, {self.parsed} parsed, {self.failed} failed" if self.tag_present else "no tag"
 
 
-def parse_report(text: str) -> ParseReport:
+def tool_call_parse_report(text: str) -> ToolCallParseReport:
     """Parse *text*'s TOOL_CALL tags and report ``tag present, N parsed, M failed`` to the caller. (#21843)
 
     Covers a well-formed tag whose args are invalid, and an opening tag that never
     matched the full grammar. A tag that parses cleanly counts as parsed.
     """
     if not text or not (TOOL_CALL_OPENING_RE.search(text) or TOOL_CALL_TRUNCATED_OPENING_RE.search(text)):
-        return ParseReport(False, 0)
+        return ToolCallParseReport(False, 0)
     matches = list(TOOL_CALL_PATTERN.finditer(text))
     failures = _param_failures(matches)
     parsed = len(matches) - len(failures)
@@ -129,12 +129,12 @@ def parse_report(text: str) -> ParseReport:
         failures.append("a TOOL_CALL tag was not closed or is malformed, so no tool ran")
     elif TOOL_CALL_TRUNCATED_OPENING_RE.search(outside):  # generation stopped before the tag's `>`
         failures.append("a TOOL_CALL tag was cut off before its closing '>', so no tool ran")
-    return ParseReport(True, parsed, tuple(failures))
+    return ToolCallParseReport(True, parsed, tuple(failures))
 
 
 def tool_call_parse_error(text: str) -> str | None:
     """Describe why *text*'s TOOL_CALL did not parse, or None if it has no failed call. (#21843)"""
-    return "; ".join(parse_report(text).failures) or None
+    return "; ".join(tool_call_parse_report(text).failures) or None
 
 
 def _outside_calls(text: str, matches: list[re.Match]) -> str:
@@ -167,7 +167,7 @@ def parse_failure_step(text: str, iteration: int) -> dict | None:
     """
     if iteration == 1 and "[planning]" in (text or "").lower():
         return None
-    report = parse_report(text)
+    report = tool_call_parse_report(text)
     if not report.failures:
         return None
     error = "; ".join(report.failures)

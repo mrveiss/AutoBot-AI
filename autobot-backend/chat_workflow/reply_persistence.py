@@ -22,19 +22,18 @@ streamed chunk of its own iteration, else the turn's selected model, else ``unkn
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from typing import Any, Dict, Iterable, List
 
+from autobot_shared.text_tokens import word_token_list
+
 UNKNOWN_MODEL = "unknown"
 RESPOND_TOOL_TYPE = "respond_tool"
-_SEPARATORS = re.compile(r"[\W_]+", re.UNICODE)
 
 
 def normalize_reply(text: str | None) -> str:
     """*text* folded for comparison: no markdown, no punctuation, no case, single spaces."""
-    folded = unicodedata.normalize("NFKC", text or "").casefold()
-    return _SEPARATORS.sub(" ", folded).strip()
+    return " ".join(word_token_list(unicodedata.normalize("NFKC", text or "")))
 
 
 def _assistant_entries(batch: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
