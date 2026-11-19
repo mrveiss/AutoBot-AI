@@ -7,7 +7,7 @@ const express = require('express');
 // Default frontend for the /test-frontend* routes; one place, env-overridable.
 const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://localhost:5173';
 const { SessionStore } = require('./session-store');
-const { collectIndexedElements, resolveElementByIndex } = require('./element-index');
+const { collectIndexedElements, resolveElementByIndex, pageExcerpt } = require('./element-index');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
@@ -1002,6 +1002,7 @@ app.post('/state', async (req, res) => {
 });
 // --- End indexed interactive-element state (#11537) ---
 
+
 app.post('/automation', async (req, res) => {
   const { action, params = {} } = req.body;
   const sessionId = sessionIdFromRequest(req);
@@ -1018,6 +1019,8 @@ app.post('/automation', async (req, res) => {
         const waitUntil = params.wait_until || 'domcontentloaded';
         await page.goto(params.url, { waitUntil, timeout });
         result = { title: await page.title(), url: page.url() };
+        // #21772: a bounded visible-text excerpt so the model can read the page it just opened.
+        result.text = await pageExcerpt(page);
         break;
       }
       case 'click': {

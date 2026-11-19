@@ -30,8 +30,9 @@ class ReflectionVerdict(Enum):
     REFINE = auto()  # Response needs improvement — recurse
     FAIL = auto()  # Hard failure (unused; retained for backwards-compat).
     # #6697: evaluator infrastructure error (LLM down, parse error, etc.).
-    # Routing treats this like ACCEPT (graph branches only on REFINE), but
-    # callers can distinguish "evaluator broke" from "response was bad."
+    # Callers can distinguish "evaluator broke" from "response was bad"; the graph
+    # does NOT score it -- a result with ``evaluator_failed`` is evaluated once more, then the reply
+    # is kept unverified (#21845, ``chat_workflow/reflection_gate.py``).
     INDETERMINATE = auto()
 
 
@@ -64,6 +65,8 @@ class ReflectionResult:
     refinement_hint: str = ""
     iteration: int = 1
     timestamp: datetime = field(default_factory=now_utc)
+    #: The evaluator broke (transport, timeout, unreadable reply): there is NO reading of the response (#21845).
+    evaluator_failed: bool = False
 
     def assessment(self, threshold: float | None = None) -> QualityAssessment:
         """Project onto the shared quality view (#16133)."""
@@ -75,8 +78,12 @@ class ReflectionResult:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize for event stream / logging."""
-        return {
+        """Serialize for event stream / logging.
+
+        ``evaluator_failed`` is emitted only when True, so a scored result keeps the shape pinned in
+        ``llm_shared/quality_judgment_test.py`` (#16133); readers of the history use ``.get``.
+        """
+        data: Dict[str, Any] = {
             "verdict": self.verdict.name,
             "quality_score": self.quality_score,
             "critique": self.critique,
@@ -84,6 +91,9 @@ class ReflectionResult:
             "iteration": self.iteration,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.evaluator_failed:
+            data["evaluator_failed"] = True
+        return data
 
 
 @dataclass
