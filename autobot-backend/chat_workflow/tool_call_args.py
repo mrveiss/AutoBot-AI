@@ -19,7 +19,12 @@ import re
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
-from chat_workflow.tool_call_grammar import TOOL_CALL_OPENING_RE, TOOL_CALL_PATTERN, strip_unparsed_tool_tags
+from chat_workflow.tool_call_grammar import (
+    TOOL_CALL_OPENING_RE,
+    TOOL_CALL_PATTERN,
+    normalize_tool_call_brackets,
+    strip_unparsed_tool_tags,
+)
 
 logger = get_logger(__name__)
 
@@ -29,6 +34,8 @@ _LITERAL_EVAL_ERRORS = (ValueError, SyntaxError, TypeError, RecursionError, Memo
 # `'key': '` at the start of a dict, or `', 'key': '` between entries.
 _QUOTED_KEY_START_RE = re.compile(r"(?:^\{\s*|'\s*,\s*)'(\w+)'\s*:\s*'")
 _QUOTED_DICT_END_RE = re.compile(r"'\s*\}\s*$")
+# A quoted key inside a recovered value: the entry after it is not a quoted string, so it cannot be split off.
+_NON_STRING_ENTRY_RE = re.compile(r"'\s*,\s*'\w+'\s*:")
 
 
 def _split_quoted_entries(raw: str) -> dict | None:
@@ -46,7 +53,10 @@ def _split_quoted_entries(raw: str) -> dict | None:
     out: dict = {}
     for i, m in enumerate(starts):
         stop = starts[i + 1].start() if i + 1 < len(starts) else end.start()
-        out[m.group(1)] = text[m.end() : stop]
+        value = text[m.end() : stop]
+        if _NON_STRING_ENTRY_RE.search(value):  # e.g. `'timeout': 10` swallowed into the previous value
+            return None
+        out[m.group(1)] = value
     return out
 
 
@@ -83,18 +93,23 @@ def tool_call_parse_error(text: str) -> str | None:
     """
     if not text or not TOOL_CALL_OPENING_RE.search(text):
         return None
+    matches = list(TOOL_CALL_PATTERN.finditer(text))
+    failures = _param_failures(matches)
+    if len(TOOL_CALL_OPENING_RE.findall(text)) > len(matches):  # an opening beside complete calls never closed
+        failures.append("a TOOL_CALL tag was not closed or is malformed, so no tool ran")
+    return "; ".join(failures) or None
+
+
+def _param_failures(matches: list[re.Match]) -> list[str]:
+    """One message per complete call whose params do not parse."""
     failures = []
-    for match in TOOL_CALL_PATTERN.finditer(text):
+    for match in matches:
         try:
             parse_tool_args(match.group(3))
         except json.JSONDecodeError as err:
             snippet = match.group(3)[:_PARSE_ERROR_SNIPPET_CHARS]
             failures.append(f"tool '{match.group(1)}': params are not valid JSON ({err.msg}): {snippet}")
-    if failures:
-        return "; ".join(failures)
-    if not TOOL_CALL_PATTERN.search(text):
-        return "a TOOL_CALL tag was not closed or is malformed, so no tool ran"
-    return None
+    return failures
 
 
 def parse_failure_step(text: str, iteration: int) -> dict | None:
@@ -142,4 +157,5 @@ def clean_reply_text(text: str) -> str:
             return ""
         return match.group(0)
 
-    return strip_unparsed_tool_tags(TOOL_CALL_PATTERN.sub(_drop_if_failed, text or "")).strip()
+    normalized = normalize_tool_call_brackets(text or "")  # `[TOOL_CALL ...]` must meet the same parse check
+    return strip_unparsed_tool_tags(TOOL_CALL_PATTERN.sub(_drop_if_failed, normalized)).strip()

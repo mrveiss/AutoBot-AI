@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from chat_workflow.tool_call_args import (
+    _split_quoted_entries,
     clean_reply_text,
     parse_failure_step,
     parse_tool_args,
@@ -77,3 +78,20 @@ def test_lenient_parser_keeps_every_entry_key_as_the_models_own_text():
     """A value that spells `', 'key': '` becomes a sibling key; the dispatcher validates keys against the tool."""
     raw = "{'a': 'it's', 'injected': 'x', 'b': 'y'}"
     assert parse_tool_args(raw) == {"a": "it's", "injected": "x", "b": "y"}
+
+
+def test_a_mixed_value_dict_is_not_recovered_as_one_corrupted_string():
+    raw = "{'command': 'printf '%s' ok', 'timeout': 10, 'cwd': '/tmp'}"
+    assert _split_quoted_entries(raw) is None
+    assert _split_quoted_entries("{'a': 'it's', 'b': 'x'}") == {"a": "it's", "b": "x"}
+
+
+def test_an_unclosed_call_beside_a_valid_one_is_reported():
+    error = tool_call_parse_error(GOOD + '\n<TOOL_CALL name="x" params=\'{"a": 1}\'>')
+    assert error is not None and "not closed" in error and "not valid JSON" not in error
+
+
+def test_a_square_bracket_call_with_bad_args_is_dropped_and_prose_kept():
+    text = f"before [TOOL_CALL name=\"browser_evaluate\" params='{_JS}']run[/TOOL_CALL] after"
+    cleaned = clean_reply_text(text)
+    assert "TOOL_CALL" not in cleaned and "before" in cleaned and "after" in cleaned
