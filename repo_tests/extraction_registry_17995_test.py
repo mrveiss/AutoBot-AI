@@ -69,13 +69,21 @@ REACH = declare(
 )
 
 
-def _offenders() -> list[str]:
+#: Tracked files the sweep may not parse, each with a reason. Empty on purpose: a file that is
+#: not read is "did not look", never "clean" (#17995).
+_UNPARSABLE: dict[str, str] = {}
+
+
+def _sweep() -> tuple[list[str], list[str]]:
+    """``(offenders, unreadable)``: files carrying a private copy, and files that could not be parsed."""
     root = repo_root()
     found: list[str] = []
+    unreadable: list[str] = []
     for rel in REACH.examined(root):
         try:
             tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
+            unreadable.append(rel)
             continue
         for entry in (e for e in REGISTRY if e.status == GUARDED):
             allowed = {entry.canonical, *(p for p, _ in entry.allowed)}
@@ -85,7 +93,23 @@ def _offenders() -> list[str]:
                 continue
             if rel not in allowed and entry.detector(tree):
                 found.append(f"{rel}: carries its own copy of '{entry.concept}' (canonical: {entry.canonical})")
-    return found
+    return found, unreadable
+
+
+def _offenders() -> list[str]:
+    return _sweep()[0]
+
+
+def test_every_swept_file_was_actually_parsed() -> None:
+    """A file the sweep cannot read was not checked; it fails unless allowlisted with a reason."""
+    unreadable = _sweep()[1]
+    unlisted = [rel for rel in unreadable if rel not in _UNPARSABLE]
+    assert not unlisted, (
+        f"{len(unlisted)} swept file(s) could not be parsed, so no registered concept was checked in them:\n  "
+        + "\n  ".join(unlisted)
+    )
+    stale = [rel for rel in _UNPARSABLE if rel not in unreadable]
+    assert not stale and all(_UNPARSABLE.values()), f"stale or reasonless _UNPARSABLE entries: {stale}"
 
 
 def test_every_entrys_roots_are_swept_and_non_trivially() -> None:
@@ -103,6 +127,19 @@ def test_no_module_outside_the_canonical_site_carries_a_registered_concept() -> 
         + "\n  ".join(offenders)
         + "\n\nCall the canonical symbol instead (#17995)."
     )
+
+
+def test_every_allowance_still_matches_its_detector() -> None:
+    """An `allowed` file that no longer matches is a stale exemption that would hide a later copy."""
+    root = repo_root()
+    stale = [
+        f"{e.concept}: {path}"
+        for e in REGISTRY
+        if e.status == GUARDED
+        for path, _ in e.allowed
+        if not e.detector(parse_cache.parse((root / path).read_text(encoding="utf-8")))
+    ]
+    assert not stale, "allowances that no longer match their detector (drop them):\n  " + "\n  ".join(stale)
 
 
 def test_every_entry_is_well_formed_and_its_canonical_symbol_exists() -> None:
@@ -143,11 +180,41 @@ _SOURCE_ROOT_LOOKALIKE = "async def r(sid):\n    s = await get_source(sid)\n    
         (inlines_source_root, _SOURCE_ROOT_COPY, True),
         (inlines_source_root, _SOURCE_ROOT_LOOKALIKE, False),
         (inlines_source_root, "def r(p):\n    return Path(p.clone_path)\n", False),
+        (
+            inlines_source_root,
+            "async def r(i):\n    s = await get_source(i)\n    root = Path(s.clone_path)\n    return root\n",
+            True,
+        ),
+        (
+            inlines_source_root,
+            "async def r(i):\n    s = await get_source(i)\n    root = Path(s.clone_path)\n    root = other()\n    return root\n",
+            False,
+        ),
+        (
+            inlines_source_root,
+            "async def r(i):\n    s = await get_source(i)\n    root = Path(s.clone_path)\n    return scan(root)\n",
+            False,
+        ),
         (inlines_wav_duration, "def d(w):\n    return w.getnframes() / float(w.getframerate())\n", True),
         (inlines_wav_duration, "def d(w):\n    return w.readframes(w.getnframes())\n", False),
         (inlines_egress_decision, "async def s():\n    v = await egress_governor.evaluate(platform='x')\n", True),
         (inlines_egress_decision, "def s():\n    return {'error': 'egress_denied'}\n", True),
         (inlines_egress_decision, "async def s():\n    v = await egress_governor.gate(platform='x')\n", False),
+        (
+            inlines_egress_decision,
+            "from a import egress_governor as eg\nasync def s():\n    await eg.evaluate(p=1)\n",
+            True,
+        ),
+        (inlines_egress_decision, "from a import other as eg\nasync def s():\n    await eg.evaluate(p=1)\n", False),
+        (
+            inlines_egress_decision,
+            "class C:\n    async def s(self):\n        await self._egress_governor.evaluate(p=1)\n",
+            True,
+        ),
+        (inlines_egress_decision, "class C:\n    async def s(self):\n        await self.cache.evaluate(p=1)\n", False),
+        (inlines_egress_decision, "def s(r):\n    return r['error'] == 'egress_denied'\n", False),
+        (inlines_egress_decision, "def s(r):\n    return r['error'] in ('egress_denied', 'x')\n", False),
+        (inlines_egress_decision, "def s(r):\n    return dict(error='egress_denied')\n", True),
         (seeds_post_commit_list, 'session.info["_post_commit_cbs"] = []\n', True),
         (seeds_post_commit_list, "session.info[POST_COMMIT_CALLBACKS] = []\n", True),
         (seeds_post_commit_list, 'cbs = session.info.get("_post_commit_cbs")\ncbs.append(f)\n', False),

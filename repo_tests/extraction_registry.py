@@ -50,22 +50,48 @@ def _calls(fn: ast.AST) -> set[str]:
     return names
 
 
+def _is_path_of_clone_path(v: ast.AST | None) -> bool:
+    """``Path(<x>.clone_path)``."""
+    return (
+        isinstance(v, ast.Call)
+        and getattr(v.func, "id", None) == "Path"
+        and any(isinstance(a, ast.Attribute) and a.attr == "clone_path" for a in v.args)
+    )
+
+
+def _names_bound_once_to_clone_path(fn: ast.AST) -> set[str]:
+    """Names whose ONLY assignment in *fn* is ``Path(<x>.clone_path)`` (a single-assignment flow)."""
+    count: dict[str, int] = {}
+    hits: set[str] = set()
+    for n in ast.walk(fn):
+        if isinstance(n, (ast.Assign, ast.AnnAssign)):
+            targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+            for t in (t for t in targets if isinstance(t, ast.Name)):
+                count[t.id] = count.get(t.id, 0) + 1
+                if _is_path_of_clone_path(n.value):
+                    hits.add(t.id)
+        elif isinstance(n, (ast.AugAssign, ast.NamedExpr)) and isinstance(n.target, ast.Name):
+            count[n.target.id] = count.get(n.target.id, 0) + 2
+    return {name for name in hits if count[name] == 1}
+
+
 def inlines_source_root(tree: ast.AST) -> bool:
     """A function that looks a source up and RETURNS ``Path(<x>.clone_path)`` (#2760, #17982).
 
     Keyed on the return, not on reading ``clone_path``: the indexing paths legitimately
-    read it, and only a function that hands back the path is a second resolver.
+    read it, and only a function that hands back the path is a second resolver. Follows
+    one hop: ``root = Path(x.clone_path); return root`` (the name assigned exactly once in
+    the same function). Limit, by design: reassignment, tuple unpacking, attribute targets
+    and flows across functions are not followed, because chasing them needs real dataflow
+    and a wrong guess would flag the legitimate indexing paths.
     """
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or "get_source" not in _calls(fn):
             continue
+        via_name = _names_bound_once_to_clone_path(fn)
         for ret in (n for n in ast.walk(fn) if isinstance(n, ast.Return)):
             v = ret.value
-            if (
-                isinstance(v, ast.Call)
-                and getattr(v.func, "id", None) == "Path"
-                and any(isinstance(a, ast.Attribute) and a.attr == "clone_path" for a in v.args)
-            ):
+            if _is_path_of_clone_path(v) or (isinstance(v, ast.Name) and v.id in via_name):
                 return True
     return False
 
@@ -81,15 +107,51 @@ def inlines_wav_duration(tree: ast.AST) -> bool:
     )
 
 
+_GOVERNOR = "egress_governor"
+_DENIAL = "egress_denied"
+
+
+def _governor_names(tree: ast.AST) -> set[str]:
+    """``egress_governor`` plus every alias it is imported under (``... import egress_governor as eg``)."""
+    names = {_GOVERNOR}
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Import, ast.ImportFrom)):
+            names.update(a.asname for a in n.names if a.asname and a.name.rsplit(".", 1)[-1] == _GOVERNOR)
+    return names
+
+
+def _is_governor_receiver(v: ast.AST, names: set[str]) -> bool:
+    """A bare governor name, or an attribute holding one (``self._egress_governor``, ``self.governor``)."""
+    if isinstance(v, ast.Name):
+        return v.id in names
+    return isinstance(v, ast.Attribute) and (v.attr in names or ("egress" in v.attr and "governor" in v.attr))
+
+
+def _denial_constants_outside_comparisons(tree: ast.AST) -> bool:
+    """An ``"egress_denied"`` literal that is not an operand of a comparison.
+
+    ``x["error"] == "egress_denied"`` or ``code in ("egress_denied", ...)`` CONSUMES the
+    payload; a dict value, keyword, return or assignment BUILDS it. Only builders are copies.
+    """
+    consumed = {id(c) for cmp in ast.walk(tree) if isinstance(cmp, ast.Compare) for c in ast.walk(cmp)}
+    return any(isinstance(n, ast.Constant) and n.value == _DENIAL and id(n) not in consumed for n in ast.walk(tree))
+
+
 def inlines_egress_decision(tree: ast.AST) -> bool:
-    """An ``egress_governor.evaluate(...)`` call or an ``egress_denied`` payload (#14901)."""
+    """A governor ``.evaluate(...)`` call or a built ``egress_denied`` payload (#14901).
+
+    Follows ``from ... import egress_governor as eg`` and ``self.<...governor>.evaluate``.
+    Limits, by design: a governor reached through an arbitrary local (``g = get_gov();
+    g.evaluate()``) is not followed, and a literal compared via a variable
+    (``tag = "egress_denied"; if x == tag``) reads as a producer; both would need real
+    dataflow and are rare enough that a false flag is cheaper than a silent miss.
+    """
+    names = _governor_names(tree)
     for n in ast.walk(tree):
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "evaluate":
-            if getattr(n.func.value, "id", None) == "egress_governor":
+            if _is_governor_receiver(n.func.value, names):
                 return True
-        if isinstance(n, ast.Constant) and n.value == "egress_denied":
-            return True
-    return False
+    return _denial_constants_outside_comparisons(tree)
 
 
 _POST_COMMIT_KEY = "_post_commit_cbs"
