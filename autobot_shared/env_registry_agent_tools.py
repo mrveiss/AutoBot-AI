@@ -13,6 +13,7 @@ registered in ``env_registry_agent_runtime.py`` (one registration).
 from __future__ import annotations
 
 from autobot_shared import env_registry_approvals  # noqa: F401  (registers the approval gate's vars, #18412)
+from autobot_shared import env_registry_verifier  # noqa: F401  (registers the pre-action verifier's vars, #21844)
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
@@ -133,5 +134,71 @@ register_env_var(
             "(#21023). Default 24 hours."
         ),
         component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS",
+        type=int,
+        default=1500,
+        description=(
+            "Cap on the visible-text excerpt a navigate result carries after the URL and "
+            "title; whitespace runs are collapsed first (#21772). The browser worker reads the same variable, so the "
+            "worker and the backend share one cap."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_NAVIGATE_EXCERPT_TIMEOUT_MS",
+        type=int,
+        default=2000,
+        description=(
+            "Deadline in milliseconds for reading the navigate excerpt (#21772); on expiry the excerpt is empty and "
+            "the navigation result is kept. Read by the browser worker."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_PARSE_RETRY_BUDGET",
+        type=int,
+        default=2,
+        description=(
+            "Times one chat turn tells the model its TOOL_CALL did not parse and asks again (#21843); "
+            "past it the user gets the readable no-answer fallback, never the raw markup."
+        ),
+        component="chat_workflow",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_THREAT_AGENT_ACTION_RATE_LIMIT_PER_MINUTE",
+        type=int,
+        default=120,
+        description=(
+            "Agent tool calls per minute for one verified user before threat detection flags a volume anomaly "
+            "(#18844); overridden by thresholds.agent_action_rate_limit_per_minute in the threat-detection config."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_BROWSER_IMAGE_PERSIST_MAX_CHARS",
+        type=int,
+        default=1_500_000,
+        description=(
+            "Largest browser screenshot data URL (characters) stored on a chat message (#21847). The session "
+            "document is read whole on every turn, so a larger image is shown this turn but not persisted."
+        ),
+        component="backend",
     )
 )

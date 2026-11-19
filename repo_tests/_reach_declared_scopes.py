@@ -61,6 +61,7 @@ DECLARED_SCOPES = {
     ),
     "ci-requirements-one-install-workflows": (".github/workflows",),
     "no_partial_key_mask_18221.sources": ("autobot_shared", "autobot-backend", "autobot-slm-backend"),
+    "analytics-callers-scope-to-source-20513": ("autobot-frontend/src",),
     "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "icon-font-size-rule-vue-files": ("autobot-frontend/src",),

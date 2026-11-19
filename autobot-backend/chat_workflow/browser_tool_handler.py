@@ -22,12 +22,15 @@ runs.
 from __future__ import annotations
 
 import json
+import re
+import urllib.parse
 from typing import Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.browser_error_report import build_browser_error_report, format_browser_error_text
 from chat_workflow.llm_handler import (
     _emit_after_tool_execute,
     _emit_before_tool_execute,
@@ -40,6 +43,13 @@ logger = get_logger(__name__)
 # block per browser tool result (the browser-worker itself caps the raw list
 # via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
 BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
+
+# Issue #21772: how much of the page's visible text a navigate result carries after URL and title.
+#: Characters of one screenshot data URL kept on the persisted message (#21847). The chat history is read and parsed
+#: whole on every turn (``ChatHistoryManager.load_session``), so a stored image is paid for on each later turn; a larger
+#: one is not stored as an image (the vision loop still gets the raw bytes this turn).
+BROWSER_IMAGE_PERSIST_MAX_CHARS = env_int("AUTOBOT_BROWSER_IMAGE_PERSIST_MAX_CHARS", default=1_500_000)
+BROWSER_NAVIGATE_EXCERPT_MAX_CHARS = env_int("AUTOBOT_BROWSER_NAVIGATE_EXCERPT_MAX_CHARS", default=1500)
 
 # Issue #11537: text formatters for the four indexed-element tool results,
 # keyed by tool name so format_browser_action_text stays a flat dispatch.
@@ -171,17 +181,13 @@ async def handle_browser_tool(
         # Issue #4261: Wire TOOL_ERROR hook for browser tools
         await _emit_tool_error(tool_name, e, session_id, {})
         logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
-        execution_results.append(
-            {
-                "tool": tool_name,
-                "status": "error",
-                "error": "Browser tool execution failed",
-            }
-        )
+        report = build_browser_error_report(tool_name, params, e)
+        text = format_browser_error_text(report)
+        execution_results.append({"tool": tool_name, "status": "error", "error": text, "error_detail": report})
         yield WorkflowMessage(
             type="error",
-            content=f"Browser tool '{tool_name}' execution failed",
-            metadata={"tool": tool_name, "error": True},
+            content=text,
+            metadata={"tool": tool_name, "error": True, "error_class": report["error_class"]},
         )
 
 
@@ -203,16 +209,53 @@ def record_browser_success(
     if base64_image:
         entry["base64_image"] = base64_image
     execution_results.append(entry)
-    return WorkflowMessage(
-        type="command_output",
-        content=summary,
-        metadata={
-            "tool": tool_name,
-            "params": params,
-            "result": result,
-            "status": "success",
-        },
-    )
+    metadata: dict[str, Any] = {
+        "tool": tool_name,
+        "params": params,
+        "result": persisted_result(result, PAGE_TEXT_KEYS),  # #21772: the wrapped excerpt is in ``content``
+        "status": "success",
+    }
+    if base64_image:
+        metadata.update(browser_image_metadata(result, base64_image))
+    return WorkflowMessage(type="command_output", content=summary, metadata=metadata)
+
+
+#: Result keys that hold untrusted page text; the trust-wrapped excerpt is in the message content, so the raw copy
+#: is not persisted next to it (#21772).
+PAGE_TEXT_KEYS = ("text",)
+
+
+def persisted_result(result: dict[str, Any], drop: tuple[str, ...]) -> dict[str, Any]:
+    """A copy of a browser *result* without the *drop* keys, at the top level and under ``result``."""
+    inner = result.get("result", result)
+    stripped_inner = {k: v for k, v in inner.items() if k not in drop} if isinstance(inner, dict) else inner
+    return {**result, "result": stripped_inner} if "result" in result else stripped_inner
+
+
+#: The only data URLs the chat view is handed as an image (#13424); svg and html can carry script.
+#: ImageCell holds the same list.
+SAFE_DATA_IMAGE_RE = re.compile(r"^data:image/(png|jpeg|webp);base64,")
+
+
+def browser_image_metadata(result: dict[str, Any], base64_image: str) -> dict[str, Any]:
+    """Metadata that makes a screenshot render in chat through ImageCell (#13424).
+
+    ``image_payload`` is the shape ImageCell already consumes; the message is
+    persisted verbatim, so it survives reload. The raw bytes are dropped from
+    the ``result`` copy so the history does not store the screenshot twice.
+    """
+    url = base64_image if base64_image.startswith("data:") else f"data:image/png;base64,{base64_image}"
+    if len(url) > BROWSER_IMAGE_PERSIST_MAX_CHARS:
+        logger.warning("[#21847] browser screenshot is %d chars, over the persisted-image cap; not stored", len(url))
+        return {}
+    if not SAFE_DATA_IMAGE_RE.match(url):
+        logger.warning("[#13424] browser result image is not an allowed data URL; it is not rendered")
+        return {}
+    return {
+        "display_type": "image",
+        "image_payload": {"images": [{"url": url}], "provider": "browser"},
+        "result": persisted_result(result, ("image", "screenshot", *PAGE_TEXT_KEYS)),
+    }
 
 
 def extract_browser_image(result: dict[str, Any]) -> str | None:
@@ -267,6 +310,40 @@ def format_browser_result(
     return summary + state_block if state_block else summary
 
 
+_URL_SAFE_CHARS = ":/?#[]@!$&'()*+,;=%-._~"
+
+
+def displayed_url(url: Any) -> str:
+    """The post-redirect URL the page ended on, made safe to print: it is page-controlled (#21772).
+
+    Percent-encoding turns spaces, newlines and other non-URL characters into ``%XX``, so a crafted address cannot
+    carry a readable sentence or a line break into the prompt; the length is capped like the page text.
+    """
+    return urllib.parse.quote(str(url or ""), safe=_URL_SAFE_CHARS)[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS]
+
+
+def wrap_page_title(title: Any, url: str) -> str:
+    """The page title behind the same trust boundary as page text: a page controls its own title (#21772)."""
+    if not isinstance(title, str) or not title.strip():
+        return ""
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return sanitize_and_wrap_web_content(" ".join(title.split())[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS], url)
+
+
+def navigate_excerpt(text: Any, url: str) -> str:
+    """Whitespace-collapsed, capped, trust-wrapped visible-text excerpt for a navigate result. Issue #21772."""
+    if not isinstance(text, str):
+        return ""
+    excerpt = " ".join(text.split())[:BROWSER_NAVIGATE_EXCERPT_MAX_CHARS]
+    if not excerpt:
+        return ""
+    # Page text is untrusted third-party content (#12757): same boundary as get_text.
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return "\nPage text: " + sanitize_and_wrap_web_content(excerpt, url)
+
+
 def format_browser_action_text(
     tool_name: str,
     params: dict[str, Any],
@@ -275,9 +352,11 @@ def format_browser_action_text(
 ) -> str:
     """Build the tool-specific summary line for format_browser_result. Issue #1368/#11537."""
     if tool_name == "navigate":
-        url = inner.get("url", params.get("url", ""))
+        url = displayed_url(inner.get("url", params.get("url", "")))  # page-controlled: every use is the encoded form
         title = inner.get("title", "")
-        return f"Navigated to: {url}\nPage title: {title}"
+        return f"Navigated to: {url}\nPage title: {wrap_page_title(title, url)}" + navigate_excerpt(
+            inner.get("text"), url
+        )
 
     if tool_name == "screenshot":
         has_image = bool(inner.get("image") or inner.get("screenshot"))
