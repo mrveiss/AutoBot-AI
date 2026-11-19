@@ -149,6 +149,7 @@ class AuditAction(str, Enum):
     CODE_ROLLBACK = "code.rollback"  # #20214: the SLM updater deploys an earlier commit the operator chose
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
+    CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.
