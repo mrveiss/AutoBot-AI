@@ -31,6 +31,8 @@ export interface CodebaseRunState {
   partial: boolean
   reason: string
   started_at: string
+  /** When the newest run happened, never empty: the start, else the end (#21621). Orders runs of one source. */
+  ordered_at: string
   finished_at: string
   last_completed_at: string
 }
@@ -81,9 +83,9 @@ export function endedRunOutcome(
   return { status: 'failed', error: run.reason || run.status }
 }
 
-/** Milliseconds of an ISO start time, or null when the record has none (a run whose start was lost). */
-const startedMs = (state: CodebaseRunState): number | null => {
-  const ms = Date.parse(state.started_at)
+/** Milliseconds of the run's ordering time, or null when the answer carries none (an older backend). */
+const orderedMs = (state: CodebaseRunState): number | null => {
+  const ms = Date.parse(state.ordered_at)
   return Number.isNaN(ms) ? null : ms
 }
 
@@ -91,15 +93,16 @@ const startedMs = (state: CodebaseRunState): number | null => {
  * True when `incoming` is older than the run state already known, so applying it would go back.
  * The requests are not ordered, so a snapshot can arrive after a newer one:
  * - the same run, `running`, after that run was known to have ended (the first terminal status is final);
- * - another run that STARTED earlier than the known one (#21474): run ids are uuid4s with no order, so
- *   the generation is `started_at`. A run with no recorded start cannot be ordered and is applied.
+ * - another run that happened earlier than the known one (#21474): run ids are uuid4s with no order, so
+ *   the generation is `ordered_at`, which the backend always sets (a run whose start was lost is ordered
+ *   by its end, #21621). Only an answer without the field cannot be ordered, and is applied.
  */
 export function isStaleSnapshot(known: CodebaseRunState | null, incoming: CodebaseRunState | null): boolean {
   if (!known || !incoming) return false
   if (known.run_id === incoming.run_id) return known.status !== 'running' && incoming.status === 'running'
-  const knownStart = startedMs(known)
-  const incomingStart = startedMs(incoming)
-  return knownStart !== null && incomingStart !== null && incomingStart < knownStart
+  const knownAt = orderedMs(known)
+  const incomingAt = orderedMs(incoming)
+  return knownAt !== null && incomingAt !== null && incomingAt < knownAt
 }
 
 /**
