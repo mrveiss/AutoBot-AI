@@ -13,7 +13,7 @@ import json
 import pytest
 
 from judges import BaseLLMJudge, JudgmentConfidence, JudgmentDimension
-from llm_shared.quality_judgment import QualityAssessment, clamp_score, meets_threshold
+from llm_shared.quality_judgment import QualityAssessment, clamp_score, finite_score, meets_threshold
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import VERDICT_RECOMMENDATION, ReflectionVerdict, RLMConfig
 
@@ -127,3 +127,25 @@ def test_verdict_and_recommendation_are_one_vocabulary():
 def test_score_arithmetic():
     assert clamp_score(-1) == 0.0 and clamp_score(2) == 1.0
     assert meets_threshold(0.7, 0.7) and not meets_threshold(0.6999, 0.7)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_score_raises_instead_of_clamping(bad):
+    with pytest.raises(ValueError):
+        clamp_score(bad)
+    with pytest.raises(ValueError):
+        finite_score(bad)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+async def test_rlm_non_finite_score_is_indeterminate(bad):
+    result = await _FakeEvaluator({"score": bad}).evaluate("q", "a")
+    assert result.verdict is ReflectionVerdict.INDETERMINATE
+
+
+@pytest.mark.asyncio
+async def test_judges_plane_non_finite_score_becomes_the_error_judgment():
+    bad = dict(_JUDGMENT, overall_score=float("nan"))
+    result = await _FakeJudge(bad).make_judgment("s", [JudgmentDimension.QUALITY], {})
+    assert result.llm_model_used == "error" and result.recommendation == "REJECT"

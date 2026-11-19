@@ -17,9 +17,11 @@ thresholds; what they share lives here:
 * :class:`QualityAssessment` -- the common (score, critique, hint, threshold
   outcome) view both result types project onto. It is a *view*: the serialized
   ``ReflectionResult`` / ``JudgmentResult`` shapes are unchanged.
-* :func:`clamp_score` / :func:`meets_threshold` -- the score arithmetic.
+* :func:`finite_score` / :func:`clamp_score` / :func:`meets_threshold` -- the score
+  arithmetic; a NaN/inf score raises, which every caller already treats as a judge failure.
 """
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -39,9 +41,22 @@ async def judge_validated(
     return payload if isinstance(payload, dict) else payload.model_dump()
 
 
+def finite_score(score: float) -> float:
+    """Return *score* as a float, or raise ``ValueError`` for NaN/inf.
+
+    A non-finite score is a judge failure, not a judgment: NaN would slip past
+    every comparison and ``min``/``max`` clamp, and inf would clamp to a score
+    the judge never gave.
+    """
+    value = float(score)
+    if not math.isfinite(value):
+        raise ValueError(f"judge returned a non-finite score: {value!r}")
+    return value
+
+
 def clamp_score(score: float) -> float:
-    """Clamp a judge-supplied score into 0.0-1.0."""
-    return max(0.0, min(1.0, float(score)))
+    """Clamp a judge-supplied score into 0.0-1.0; a non-finite score raises ``ValueError``."""
+    return max(0.0, min(1.0, finite_score(score)))
 
 
 def meets_threshold(score: float, threshold: float) -> bool:

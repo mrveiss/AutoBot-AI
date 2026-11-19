@@ -24,7 +24,7 @@ from typing import Any, Dict, List
 from autobot_shared.env_utils import env_flag
 from autobot_shared.logging_manager import get_logger
 from llm_shared.json_utils import extract_json_object as _extract_json_object  # Issue #11520
-from llm_shared.quality_judgment import QualityAssessment, judge_validated
+from llm_shared.quality_judgment import QualityAssessment, finite_score, judge_validated
 from llm_shared.types import LLMType
 from llm_shared.validated_llm import Completer, validate_against
 
@@ -339,7 +339,7 @@ Be precise, objective, and helpful in your judgments."""
         criterion_scores = [
             CriterionScore(
                 dimension=JudgmentDimension(item["dimension"]),
-                score=float(item["score"]),
+                score=finite_score(item["score"]),
                 confidence=JudgmentConfidence(item["confidence"]),
                 reasoning=item["reasoning"],
                 evidence=item.get("evidence", []),
@@ -350,7 +350,7 @@ Be precise, objective, and helpful in your judgments."""
             subject_id=str(hash(str(subject))),
             judge_type=self.judge_type,
             timestamp=datetime.now(tz=timezone.utc),
-            overall_score=float(payload["overall_score"]),
+            overall_score=finite_score(payload["overall_score"]),
             recommendation=payload["recommendation"],
             confidence=JudgmentConfidence(payload["confidence"]),
             criterion_scores=criterion_scores,

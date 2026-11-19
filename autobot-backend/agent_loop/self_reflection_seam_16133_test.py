@@ -82,3 +82,14 @@ async def test_a_judge_failure_is_distinguishable_from_a_low_score():
     assert REFLECTION_JUDGE_FAILED in failed.risks_identified
     assert judged.confidence == pytest.approx(0.3)
     assert judged.risks_identified == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["NaN", "Infinity", "-Infinity"])
+async def test_a_non_finite_judge_score_is_a_judge_failure(raw):
+    client = AsyncMock()
+    client.generate.return_value = '{"score": %s}' % raw
+    result = await ThinkTool(llm_client=client).think(ThinkCategory.SELF_REFLECTION, "q/a")
+
+    assert result.confidence == 0.0
+    assert REFLECTION_JUDGE_FAILED in result.risks_identified
