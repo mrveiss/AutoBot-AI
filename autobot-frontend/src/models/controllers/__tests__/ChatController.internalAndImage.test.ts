@@ -75,9 +75,12 @@ describe('internal messages (#21846)', () => {
     controller().handleJsonResponse({
       workflow_messages: [marker, { type: 'thought', content: 'thinking', metadata: {} }]
     })
-    const all = useChatStore().currentMessages
-    expect(all).toHaveLength(2)
-    expect(visibleMessages(all).map((m) => m.type)).toEqual(['thought'])
+    const store = useChatStore()
+    const raw = store.currentSession?.messages ?? []
+    expect(raw).toHaveLength(2)
+    expect(raw.some((m) => isInternalMessage(m))).toBe(true)
+    expect(store.currentMessages.map((m) => m.type)).toEqual(['thought'])
+    expect(visibleMessages(raw).map((m) => m.type)).toEqual(['thought'])
   })
 
   it('the predicate flags only metadata.internal === true', () => {
