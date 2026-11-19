@@ -115,13 +115,20 @@ def test_the_whole_prompt_stays_within_a_limit_the_reason_alone_would_exceed():
     assert len(user) <= 1000 and len(with_args) <= 1000
 
 
-def test_a_limit_that_cannot_hold_the_template_is_rejected():
+def test_a_tiny_limit_imports_and_the_prompt_is_still_valid():
     import importlib
 
     with patch.dict("os.environ", {"AUTOBOT_VERIFIER_PROMPT_MAX_CHARS": "10"}):
-        with pytest.raises(ValueError):
-            importlib.reload(verifier_prompt)
+        importlib.reload(verifier_prompt)  # must not raise
     importlib.reload(verifier_prompt)
+    with patch.object(verifier_prompt, "VERIFIER_PROMPT_MAX_CHARS", 10):
+        _, user = verifier_prompt._build_verifier_prompt("bash", {"a": "b"}, "why")
+    assert "Proposed agent action" in user and "REFUTATION_PROBABILITY" in user
+
+
+def test_a_huge_tool_name_is_capped_inside_the_prompt_limit():
+    _, user = verifier_prompt._build_verifier_prompt("t" * 100_000, {"a": "b"}, "why")
+    assert len(user) <= verifier_prompt.VERIFIER_PROMPT_MAX_CHARS
 
 
 @pytest.mark.asyncio

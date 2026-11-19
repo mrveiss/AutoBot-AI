@@ -59,9 +59,12 @@ for _spec in (
         name="AUTOBOT_VERIFIER_PROMPT_MAX_CHARS",
         type=int,
         default=8000,
-        description="Characters of the whole user prompt sent to the verifier; arguments are cut to fit (#21844).",
+        description=(
+            "Characters of the whole user prompt sent to the verifier; arguments are cut to fit (#21844). "
+            "A value below the prompt template's own size is raised to it."
+        ),
         component=_COMPONENT,
-        range=(1, 1_000_000),
+        range=(1024, 1_000_000),
     ),
     EnvVarSpec(
         name="AUTOBOT_VERIFIER_MODEL_CHECK_TTL_SECONDS",
