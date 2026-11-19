@@ -334,6 +334,12 @@ async def _call_verifier_once(
             timeout=VERIFIER_TIMEOUT_S,
         )
     except Exception as exc:
+        if "response" in attempt:  # the deadline hit during accounting: the reply is complete, so it decides (#21844)
+            return VerifierObservation.from_reply(
+                attempt["response"].content or "",
+                provider_used=provider.provider_name,
+                model_used=getattr(attempt["response"], "model", None),
+            )
         observation = replace(
             failure_observation(exc),
             provider_used=provider.provider_name,

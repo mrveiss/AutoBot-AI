@@ -197,12 +197,16 @@ async def resolve_and_chat(
         raise
     if getattr(response, "error", None):
         _residency.pop(configured_verifier_model(provider) or "", None)
-    # #16924 the call records itself. Not awaited: the completed reply is returned even when the verifier deadline
-    # expires during accounting (awaiting would let the deadline cancel the caller and discard a reply that may block
-    # the action, which fail-open then lets through). A strong reference keeps the task from being collected mid-run.
+    # The completed reply is kept in *attempt* BEFORE accounting starts: the caller's deadline may cancel this await
+    # (the cancellation propagates, it is never swallowed), and the caller then still holds the reply and uses it
+    # rather than degrading to fail-open on an action the reply would have blocked.
+    attempt["response"] = response
+    # #16924 the call records itself, before returning in the normal case, exactly once. The task is referenced and
+    # shielded: a cancellation cannot abort it half-recorded, and it is never started twice.
     task = asyncio.ensure_future(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata))
     _spend_tasks.add(task)
     task.add_done_callback(_spend_tasks.discard)
+    await asyncio.shield(task)
     return request, response
 
 

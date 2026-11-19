@@ -186,8 +186,8 @@ async def test_a_provider_default_request_that_times_out_does_not_claim_the_conf
 
 
 @pytest.mark.asyncio
-async def test_slow_spend_recording_never_delays_or_discards_the_reply_and_records_once():
-    """Accounting that outlives the deadline neither blocks nor discards the completed reply (#21844)."""
+async def test_a_deadline_during_spend_recording_keeps_the_reply_in_attempt_and_records_once():
+    """The cancellation propagates, the completed reply survives in *attempt*, spend is recorded once (#21844)."""
     started, release, calls = asyncio.Event(), asyncio.Event(), []
 
     async def slow_report(response, **kwargs):
@@ -198,18 +198,19 @@ async def test_slow_spend_recording_never_delays_or_discards_the_reply_and_recor
     response = MagicMock()
     provider = _provider([])
     provider.chat_completion = AsyncMock(return_value=response)
+    attempt: dict = {}
     with (
         patch.object(verifier_model, "report_spend", slow_report),
         patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value="m")),
     ):
-        # a deadline far shorter than the (never-finishing) accounting: the reply must still come back
-        _request, got = await asyncio.wait_for(
-            verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, {}), timeout=1.0
-        )
+        task = asyncio.ensure_future(verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, attempt))
         await started.wait()
+        task.cancel()  # what wait_for does when the deadline expires
+        with pytest.raises(asyncio.CancelledError):
+            await task
         release.set()
         await asyncio.sleep(0)
-    assert got is response
+    assert attempt["response"] is response
     assert calls == [response]
 
 

@@ -153,16 +153,12 @@ async def test_loaded_models_reads_api_ps_and_an_unreachable_ollama_is_none():
 async def test_shutdown_drains_in_flight_spend_recordings():
     done = []
 
-    async def slow(response, **kwargs):
+    async def slow():
         await asyncio.sleep(0.01)
-        done.append(response)
+        done.append(1)
 
-    provider = _provider()
-    with (
-        patch.object(verifier_model, "report_spend", slow),
-        patch.object(verifier_model, "loaded_models", AsyncMock(return_value=[])),
-    ):
-        await verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, {})
-        assert not done
-        await verifier_model.drain_spend_tasks()
-    assert len(done) == 1 and not verifier_model._spend_tasks
+    task = asyncio.ensure_future(slow())
+    verifier_model._spend_tasks.add(task)
+    task.add_done_callback(verifier_model._spend_tasks.discard)
+    await verifier_model.drain_spend_tasks()
+    assert done == [1] and not verifier_model._spend_tasks
