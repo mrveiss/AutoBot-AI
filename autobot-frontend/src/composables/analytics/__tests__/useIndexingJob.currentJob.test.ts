@@ -185,7 +185,7 @@ describe('a tracked job that left the task slot answers idle: its outcome is rea
   const QUEUED = { has_active_job: true, task_id: null, source_id: 'autobot', status: 'queued', position: 1 }
   const RUNNING = { has_active_job: true, task_id: 't9', source_id: 'autobot', status: 'running', progress: {} }
   const record = (over: Partial<CodebaseRunState>): CodebaseRunState => ({
-    run_id: 't9', status: 'completed', partial: false, reason: '', started_at: 's', finished_at: 'f', last_completed_at: 'f', ...over,
+    run_id: 't9', status: 'completed', partial: false, reason: '', started_at: 's', ordered_at: 's', finished_at: 'f', last_completed_at: 'f', ...over,
   })
   /** The run-state read answers `answer`; `failed` makes it a read that failed (what was known stays). */
   function reading(answer: CodebaseRunState | null, failed = false) {
