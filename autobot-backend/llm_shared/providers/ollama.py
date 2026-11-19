@@ -117,7 +117,7 @@ class OllamaRequestExecutor:
                 "top_k": self.settings.top_k,
                 "top_p": self.settings.top_p,
                 "repeat_penalty": self.settings.repeat_penalty,
-                "num_ctx": self.settings.num_ctx,
+                "num_ctx": request.metadata.get("num_ctx", self.settings.num_ctx),
             },
         }
         if tools_will_be_sent:

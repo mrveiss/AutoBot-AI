@@ -126,9 +126,9 @@ class TrajectoryReplayer:
 
         # The evaluator distinguishes "scored badly" from "could not score" via
         # INDETERMINATE, and until now this dropped that and kept only the
-        # number. Its pass-through default is 0.7, which against a 0.9 baseline
-        # is arithmetically a regression — so an evaluator outage reported as
-        # quality drift (#16157).
+        # number. A failed evaluation scores 0.0 (no reading, #21845), which against
+        # a 0.9 baseline is arithmetically a regression — so an evaluator outage
+        # would be reported as quality drift (#16157).
         indeterminate = reflection.verdict == ReflectionVerdict.INDETERMINATE
         if indeterminate and not detail:
             detail = "evaluator returned no verdict; quality score not measured"
