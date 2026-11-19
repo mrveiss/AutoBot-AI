@@ -191,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { saveTextFile } from '@autobot/ui'
+import { httpErrorText, saveTextFile } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { formatFileSize, formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onUnmounted } from 'vue';
@@ -199,11 +199,9 @@ import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import { useThumbnailWorker } from '@/composables/useThumbnailWorker';
-import {
-  visionMultimodalApiClient,
-  type ProcessingIntent,
-  type MultiModalResponse,
-} from '@/utils/VisionMultimodalApiClient';
+import { processImage } from '@/composables/useVisionApi';
+import { calculateFrameTimestamps, type FrameExtractionMode } from '@/utils/videoFrameTimestamps';
+import type { ProcessingIntent, MultiModalResponse } from '@/types/visionMultimodal';
 
 // Extended type for frame results that includes timestamp
 interface FrameResult extends MultiModalResponse {
@@ -237,7 +235,7 @@ const isDragging = ref(false);
 const videoDuration = ref(0);
 
 // Processing options
-const extractionMode = ref<'keyframes' | 'interval' | 'all'>('interval');
+const extractionMode = ref<FrameExtractionMode>('interval');
 const frameInterval = ref(2);
 const maxFrames = ref(10);
 const processingIntent = ref<ProcessingIntent>('analysis');
@@ -328,27 +326,24 @@ const processVideo = async () => {
 
   try {
     // Calculate frame timestamps based on extraction mode
-    const timestamps = calculateFrameTimestamps();
+    const timestamps = calculateFrameTimestamps(extractionMode.value, videoDuration.value, frameInterval.value, maxFrames.value);
     totalFrames.value = Math.min(timestamps.length, maxFrames.value);
 
     // Extract and process frames
+    let failedFrames = 0;
     for (let i = 0; i < totalFrames.value; i++) {
       const timestamp = timestamps[i];
       const frameBlob = await extractFrame(timestamp);
 
-      if (frameBlob) {
+      try {
+        if (!frameBlob) throw new Error('frame could not be extracted');
         const file = new File([frameBlob], `frame_${i}.jpg`, { type: 'image/jpeg' });
-        const response = await visionMultimodalApiClient.processImage(
-          file,
-          processingIntent.value
-        );
-
-        if (response.success && response.data) {
-          frameResults.value.push({
-            ...response.data,
-            timestamp,
-          } as FrameResult);
-        }
+        const response = await processImage(file, processingIntent.value);
+        frameResults.value.push({ ...response, timestamp } as FrameResult);
+      } catch (frameErr) {
+        // One unextractable or rejected frame is skipped and counted; the rest still complete the run.
+        failedFrames += 1;
+        logger.warn(`Frame ${i} failed, skipping:`, frameErr);
       }
 
       processedFrames.value = i + 1;
@@ -361,41 +356,18 @@ const processVideo = async () => {
         results: frameResults.value,
       });
       showToast(t('vision.videoProcessor.toastProcessed', { count: frameResults.value.length }), 'success');
+      if (failedFrames > 0) {
+        showToast(t('vision.videoProcessor.toastFramesSkipped', { count: failedFrames }, failedFrames), 'warning');
+      }
     } else {
       error.value = t('vision.videoProcessor.errorNoFrames');
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Video processing failed';
+    error.value = httpErrorText(err, t('vision.videoProcessor.errorProcessingFailed'));
     logger.error('Video processing error:', err);
   } finally {
     processing.value = false;
   }
-};
-
-const calculateFrameTimestamps = (): number[] => {
-  const timestamps: number[] = [];
-
-  if (extractionMode.value === 'interval') {
-    for (let t = 0; t < videoDuration.value; t += frameInterval.value) {
-      timestamps.push(t);
-    }
-  } else if (extractionMode.value === 'keyframes') {
-    // Simple keyframe estimation - beginning, quarters, end
-    const keyPoints = [0, 0.25, 0.5, 0.75, 1];
-    keyPoints.forEach(p => {
-      const t = p * videoDuration.value;
-      if (t < videoDuration.value) {
-        timestamps.push(t);
-      }
-    });
-  } else {
-    // All frames - every 0.5 seconds
-    for (let t = 0; t < videoDuration.value; t += 0.5) {
-      timestamps.push(t);
-    }
-  }
-
-  return timestamps.slice(0, maxFrames.value);
 };
 
 const extractFrame = async (timestamp: number): Promise<Blob | null> => {
@@ -413,7 +385,7 @@ const extractFrame = async (timestamp: number): Promise<Blob | null> => {
       );
 
       if (dataUrl) {
-        // Convert data URL to Blob
+        // eslint-disable-next-line no-restricted-syntax -- data: URL to a Blob, no network request
         const response = await fetch(dataUrl);
         const blob = await response.blob();
         logger.debug(`Thumbnail generated successfully (${blob.size} bytes)`);

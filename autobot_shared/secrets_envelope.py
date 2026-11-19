@@ -42,12 +42,13 @@ from __future__ import annotations
 
 import base64
 import binascii
-import functools
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 
 logger = get_logger(__name__)
 
@@ -148,13 +149,8 @@ def load_root_key() -> bytes:
 
 def _root_key_unusable(reason: str, cause: Exception | None = None) -> None:
     """Log *reason* (never the key) once per process, then raise it."""
-    _log_root_key_reason_once(reason)
+    log_once(logger, logging.ERROR, reason, "System vault unavailable in this process: %s", reason)
     raise RuntimeError(reason) from cause
-
-
-@functools.lru_cache(maxsize=None)
-def _log_root_key_reason_once(reason: str) -> None:
-    logger.error("System vault unavailable in this process: %s", reason)
 
 
 def _hkdf(root_key: bytes, info: bytes) -> bytes:

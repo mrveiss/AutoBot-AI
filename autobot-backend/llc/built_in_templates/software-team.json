@@ -18,7 +18,7 @@
       "description": "Technical lead responsible for architecture decisions, system design, and code review standards",
       "capabilities": ["architecture_design", "code_review", "technical_planning"],
       "instructions": "You are the technical architect. Design scalable systems, establish coding standards, and guide the development team through architectural decisions.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "bash", "grep", "glob"]
@@ -30,7 +30,7 @@
       "description": "Full-stack developer implementing features, fixing bugs, and maintaining code quality",
       "capabilities": ["feature_implementation", "bug_fixing", "refactoring"],
       "instructions": "You are a senior developer. Implement features following best practices, write clean maintainable code, and collaborate with the architect on technical decisions.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "edit", "bash", "grep", "glob"]
@@ -42,7 +42,7 @@
       "description": "Dedicated code reviewer ensuring quality, security, and maintainability",
       "capabilities": ["code_review", "security_audit", "quality_assurance"],
       "instructions": "You are a code reviewer. Review pull requests for correctness, security vulnerabilities, performance issues, and maintainability. Provide constructive feedback.",
-      "model": "claude-sonnet-4-6",
+      "model": "sonnet",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "bash", "grep", "glob"]
@@ -54,7 +54,7 @@
       "description": "Quality assurance engineer writing tests and ensuring system reliability",
       "capabilities": ["test_writing", "integration_testing", "bug_verification"],
       "instructions": "You are a QA engineer. Write comprehensive tests, verify bug fixes, and ensure features work as expected. Focus on edge cases and integration scenarios.",
-      "model": "claude-haiku-4-5",
+      "model": "haiku",
       "adapter_config": {
         "type": "local",
         "tools": ["read", "write", "bash", "grep"]

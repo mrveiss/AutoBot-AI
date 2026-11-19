@@ -11,7 +11,8 @@ const get = vi.fn()
 vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ rawRequest, get }) }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 
-import { PREVIEW_BLOB_REVOKE_MS, previewBlobType, useConversationFiles } from '../useConversationFiles'
+import { useConversationFiles } from '../useConversationFiles'
+import { PREVIEW_BLOB_REVOKE_MS, previewBlobType } from '../useConversationFilePreview'
 
 const listed = (mime: string) => ({
   files: [{ file_id: 'f1', filename: 'a.bin', original_filename: 'a.bin', size: 3, mime_type: mime, uploaded_at: '2026-10-31T10:00:00Z', uploaded_by: 'alice' }],

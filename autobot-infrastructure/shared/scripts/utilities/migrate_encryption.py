@@ -37,7 +37,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):  # the backend, and `
 from autobot_shared.ssot_config import config as ssot_config  # noqa: E402
 from chat_history import ChatHistoryManager  # noqa: E402
 
-from config import config as global_config_manager  # noqa: E402
+from config import config as config_instance  # noqa: E402
 from encryption_service import (  # noqa: E402
     get_encryption_service,
     is_encryption_enabled,
@@ -64,7 +64,7 @@ class ChatEncryptionMigrator:
 
     def get_chats_directory(self) -> str:
         """Get the chats directory path from configuration."""
-        data_config = global_config_manager.get("data", {})
+        data_config = config_instance.get("data", {})
         return data_config.get(
             "chats_directory",
             ssot_config.misc.chats_directory or "data/chats",
