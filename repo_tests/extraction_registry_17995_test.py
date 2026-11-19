@@ -215,6 +215,7 @@ _SOURCE_ROOT_LOOKALIKE = "async def r(sid):\n    s = await get_source(sid)\n    
         (inlines_egress_decision, "def s(r):\n    return r['error'] == 'egress_denied'\n", False),
         (inlines_egress_decision, "def s(r):\n    return r['error'] in ('egress_denied', 'x')\n", False),
         (inlines_egress_decision, "def s(r):\n    return dict(error='egress_denied')\n", True),
+        (inlines_egress_decision, "def s(x):\n    return x == {'error': 'egress_denied'}\n", True),
         (seeds_post_commit_list, 'session.info["_post_commit_cbs"] = []\n', True),
         (seeds_post_commit_list, "session.info[POST_COMMIT_CALLBACKS] = []\n", True),
         (seeds_post_commit_list, 'cbs = session.info.get("_post_commit_cbs")\ncbs.append(f)\n', False),

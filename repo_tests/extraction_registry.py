@@ -127,13 +127,26 @@ def _is_governor_receiver(v: ast.AST, names: set[str]) -> bool:
     return isinstance(v, ast.Attribute) and (v.attr in names or ("egress" in v.attr and "governor" in v.attr))
 
 
+def _direct_operands(cmp: ast.Compare) -> list[ast.AST]:
+    """Operands of ``cmp`` themselves, plus the elements of a tuple/list/set literal operand.
+
+    Deeper nodes (a dict value, a ternary arm) are not operands: they build a payload.
+    """
+    out: list[ast.AST] = []
+    for operand in [cmp.left, *cmp.comparators]:
+        out.append(operand)
+        if isinstance(operand, (ast.Tuple, ast.List, ast.Set)):
+            out.extend(operand.elts)
+    return out
+
+
 def _denial_constants_outside_comparisons(tree: ast.AST) -> bool:
-    """An ``"egress_denied"`` literal that is not an operand of a comparison.
+    """An ``"egress_denied"`` literal that is not a direct operand of a comparison.
 
     ``x["error"] == "egress_denied"`` or ``code in ("egress_denied", ...)`` CONSUMES the
     payload; a dict value, keyword, return or assignment BUILDS it. Only builders are copies.
     """
-    consumed = {id(c) for cmp in ast.walk(tree) if isinstance(cmp, ast.Compare) for c in ast.walk(cmp)}
+    consumed = {id(o) for cmp in ast.walk(tree) if isinstance(cmp, ast.Compare) for o in _direct_operands(cmp)}
     return any(isinstance(n, ast.Constant) and n.value == _DENIAL and id(n) not in consumed for n in ast.walk(tree))
 
 
