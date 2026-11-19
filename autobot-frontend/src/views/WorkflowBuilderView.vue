@@ -696,7 +696,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
-import { useWorkflowCompanySwitch, companyContextAgrees } from '@/composables/workflow/useWorkflowCompanySwitch';
+import { useWorkflowCompanySwitch, companyContextAgrees, gateOnCompany } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -810,7 +810,9 @@ const {
 const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
   t, showToast, navigateToRunner: () => navigateTo('runner'),
   activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+  companyAgrees: () => companyAgrees(),
 });
+const companyAgrees = (): boolean => companyContextAgrees(String(route.params.companyId ?? '')) || (showToast(t('workflow.builder.companySwitching'), 'warning'), false); // #21520: Save/Start wait for the route to follow the sidebar
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -987,7 +989,7 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
-  if (!companyContextAgrees(String(route.params.companyId ?? ''))) { showToast(t('workflow.builder.companySwitching'), 'warning'); return; }
+  if (!companyAgrees()) return;
 
   const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
@@ -1013,6 +1015,7 @@ const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
   approvePlan,
   rejectPlan,
   notify: (key, kind) => showToast(t(key), kind),
+  companyAgrees: () => companyAgrees(),
   onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
@@ -1049,16 +1052,12 @@ function handleNodesDisconnected(sourceId: string, targetId: string): void {
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
+  if (!companyAgrees()) return;
   // #2182: Warn when unsupported node types will be dropped on save
-  const unsupportedNodes = workflowNodes.value.filter(
-    (n) => n.type !== 'step',
-  );
+  const unsupportedNodes = workflowNodes.value.filter((n) => n.type !== 'step');
   if (unsupportedNodes.length > 0) {
     const types = [...new Set(unsupportedNodes.map((n) => n.type))];
-    showToast(
-      t('workflow.builder.unsupportedNodes', { types: types.join(', ') }),
-      'warning',
-    );
+    showToast(t('workflow.builder.unsupportedNodes', { types: types.join(', ') }), 'warning');
   }
   const steps = exportCanvasToSteps();
   if (steps.length === 0) {
@@ -1108,6 +1107,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
+  if (!companyAgrees()) return;
   const result = await executeApiTemplate(template.id);
   if (result?.success) {
     showToast(t('workflow.builder.templateStarted', { name: template.name }), 'success');
@@ -1118,30 +1118,20 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
   }
 }
 
-async function handlePauseWorkflow(workflowId: string): Promise<void> {
-  const success = await pauseWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.paused'), 'info');
-  }
-}
-
-async function handleResumeWorkflow(workflowId: string): Promise<void> {
-  const success = await resumeWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.resumed'), 'success');
-  }
-}
-
-async function handleCancelWorkflow(workflowId: string): Promise<void> {
-  const success = await cancelWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.cancelled'), 'info');
-  }
-}
+// #21520: run controls act on a workflow loaded for the company on screen, so they wait for the route to follow a switch.
+const handlePauseWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await pauseWorkflow(id)) showToast(t('workflow.builder.paused'), 'info');
+});
+const handleResumeWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await resumeWorkflow(id)) showToast(t('workflow.builder.resumed'), 'success');
+});
+const handleCancelWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await cancelWorkflow(id)) showToast(t('workflow.builder.cancelled'), 'info');
+});
 
 const { answerWithToast } = useStepAnswerToast();
-const handleApproveStep = (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve');
-const handleSkipStep = (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip');
+const handleApproveStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve'));
+const handleSkipStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip'));
 
 /**
  * Open a workflow named in the URL (#13963).
@@ -1161,6 +1151,7 @@ async function openWorkflowFromQuery(): Promise<void> {
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {
+  if (!companyAgrees()) return;
   const existing =
     activeWorkflows.value.find((wf) => wf.workflow_id === workflowId) ??
     (await getWorkflowStatus(workflowId));
