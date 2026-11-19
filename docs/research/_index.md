@@ -93,6 +93,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[RES_agent-governance-guards-budget-audit-loop]] | Agent governance guards — pre-request dollar budget, tier-aware pricing, tamper-evident audit hash chain, cycle-aware loop guard and publish-validated versioned agent spec, compared with AutoBot; adoptable patterns filed as #21635, #21636, #21637, #21638, #21639 |
 | [[RES_agent-web-data-api-fetch-waterfall]] | Agent web-data API — fetch waterfall, per-connection browser egress check and local-only mode, compared with AutoBot's web_fetch path; filed #21850, #21851, witness on #16562 |
 | [[RES_ternary-weight-cpu-inference]] | Ternary-weight ("1.58-bit") CPU inference — local serving, embeddings and CPU-only nodes compared with AutoBot; measurement filed as #21775 |
+| [[RES_agent-loop-budget-framing-stop-reasons]] | Agent-loop budgets, untrusted-data framing and typed stop reasons — nested budgets with a wrap-up round, nonce-framed untrusted data, failover context-window skip and typed provider stop reasons, compared with AutoBot; adoptable patterns filed as #21863, #21864, #21865 |
 
 ## Related Sections
 
