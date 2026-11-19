@@ -125,5 +125,9 @@ _CASES = json.loads(
 
 @pytest.mark.parametrize("case", _CASES, ids=[c["name"] for c in _CASES])
 def test_the_shared_case_table_the_frontend_also_pins(case):
+    if case.get("scope") == "later_iteration":  # the persisted batch must agree with the frontend's turn-wide rule
+        batch = _build([_respond(case["answer"], 2)], [case["narration"], ""])
+        assert (case["narration"] in _texts(batch)) is not case["redundant"]
+        return
     respond = {"sender": "assistant", "text": case["answer"], "metadata": {"message_type": "respond_tool"}}
     assert is_redundant_prose(case["narration"], [respond]) is case["redundant"]

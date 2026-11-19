@@ -28,7 +28,7 @@ from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
-from chat_workflow.reply_persistence import is_redundant_prose, model_or_unknown, stamp_model
+from chat_workflow.reply_persistence import is_redundant_prose, later_respond_entries, model_or_unknown, stamp_model
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
@@ -3055,7 +3055,7 @@ before summarizing.
         final_entry = self._build_final_response_entry(
             chat_mgr,
             response_text,
-            batch + tool_entries,
+            batch + tool_entries + later_respond_entries(workflow_messages, iteration),
             iteration=iteration,
             streamed=streamed_prose_identity(iter_messages),  # #21846
             model=model,

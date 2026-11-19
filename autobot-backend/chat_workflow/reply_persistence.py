@@ -41,6 +41,22 @@ def contains_token_run(needle: str, haystack: str) -> bool:
     return f" {needle} " in f" {haystack} "
 
 
+def later_respond_entries(workflow_messages: Iterable[Any], iteration: int) -> List[Dict[str, Any]]:
+    """Minimal ``respond`` entries of iterations AFTER *iteration*, so an earlier narration is judged against them.
+
+    The frontend hides narration that any later ``respond`` of the turn repeats; the persisted batch is built
+    iteration by iteration, so without these a reload would keep what the live view hid.
+    """
+    found = []
+    for message in workflow_messages:
+        meta = getattr(message, "metadata", None) or {}
+        if meta.get("message_type") == RESPOND_TOOL_TYPE and (meta.get("iteration") or 0) > iteration:
+            found.append(
+                {"sender": "assistant", "text": message.content, "metadata": {"message_type": RESPOND_TOOL_TYPE}}
+            )
+    return found
+
+
 def _assistant_entries(batch: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [e for e in batch if e.get("sender") == "assistant"]
 
