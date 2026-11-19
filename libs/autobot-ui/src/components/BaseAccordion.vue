@@ -2,26 +2,33 @@
   Copyright 2025-2026 mrveiss
   SPDX-License-Identifier: Apache-2.0
 
-  BaseAccordion — stacked sections that expand and collapse (#14779), on Reka UI's Accordion.
+  BaseAccordion — a stack of collapsible sections on the kit tokens (#14779).
 
-  Reka supplies the WAI-ARIA accordion pattern: each header is a heading wrapping a button
-  with aria-expanded / aria-controls, the panel is a region labelled by it, and Arrow / Home
-  / End move between headers (mirrored in RTL). The kit adds the token styling and a list
-  API. The kit ships no text; item labels come in translated.
+  The behaviour (heading + button triggers, aria-expanded, aria-controls, region panels labelled
+  by their trigger, Arrow/Home/End focus movement, single or multiple open) comes from the
+  headless Reka UI accordion. This wrapper supplies the structure and the `--aui-*` styling.
+  The kit holds no strings: every heading is `items[].label`, translated by the app.
 
-    props : modelValue (v-model: the open value for type single, the open values for
-            multiple), items ({ value, label, disabled? }[]), type (single | multiple),
-            collapsible (single only: the open item can close), level (heading level of
-            each header, 2-6; default 3), dir (ltr | rtl; defaults to the document's)
-    slots : label ({ item, open }: the header content), panel ({ item }: the item's content)
-    emits : update:modelValue
+    props  : items, type (single | multiple), modelValue (v-model) | defaultValue, collapsible,
+             variant (default | flush), size (sm | md), orientation, headingLevel (2-6), dir
+    slots  : `panel-<value>` — the content of the section with that value
+    emits  : update:modelValue (a string for `single`, a string[] for `multiple`)
 -->
 <script setup lang="ts">
-import { toRef } from 'vue'
-import { AccordionContent, AccordionHeader, AccordionItem, AccordionRoot, AccordionTrigger } from 'reka-ui'
-import { useDocumentDirection, type Direction } from '../composables/useDocumentDirection'
+import {
+  AccordionContent,
+  AccordionHeader,
+  AccordionItem,
+  AccordionRoot,
+  AccordionTrigger,
+} from 'reka-ui'
+import { computed } from 'vue'
+import { resolveDirection, type KitDirection } from '../utils/direction'
 
-export interface AccordionEntry {
+export type AccordionVariant = 'default' | 'flush'
+export type AccordionSize = 'sm' | 'md'
+export type AccordionValue = string | string[]
+export interface AccordionItemSpec {
   value: string
   label: string
   disabled?: boolean
@@ -29,33 +36,59 @@ export interface AccordionEntry {
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string | string[]
-    items: AccordionEntry[]
+    items: AccordionItemSpec[]
     type?: 'single' | 'multiple'
+    modelValue?: AccordionValue
+    defaultValue?: AccordionValue
+    /** `single` only: allow the open section to be closed again. */
     collapsible?: boolean
-    level?: 2 | 3 | 4 | 5 | 6
-    dir?: Direction
+    variant?: AccordionVariant
+    size?: AccordionSize
+    /** The heading level the section titles are exposed as (keep the page outline valid). */
+    headingLevel?: 2 | 3 | 4 | 5 | 6
+    /** `horizontal` moves focus with Left/Right (mirrored under RTL) instead of Up/Down. */
+    orientation?: 'vertical' | 'horizontal'
+    dir?: KitDirection
   }>(),
-  { modelValue: undefined, type: 'single', collapsible: true, level: 3, dir: undefined },
+  {
+    type: 'single',
+    modelValue: undefined,
+    defaultValue: undefined,
+    collapsible: true,
+    variant: 'default',
+    size: 'md',
+    headingLevel: 3,
+    orientation: 'vertical',
+    dir: undefined,
+  },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [value: string | string[] | undefined] }>()
-const direction = useDocumentDirection(toRef(props, 'dir'))
+const emit = defineEmits<{ 'update:modelValue': [value: AccordionValue] }>()
 
-function isOpen(value: string): boolean {
-  const open = props.modelValue
-  return Array.isArray(open) ? open.includes(value) : open === value
+const direction = computed(() => resolveDirection(props.dir))
+/** Fit a value to `type`: a string for `single`, a string[] for `multiple` (#20382). */
+function fitToType(value?: AccordionValue): AccordionValue | undefined {
+  if (value === undefined) return undefined
+  if (props.type === 'multiple') return Array.isArray(value) ? value : [value]
+  return Array.isArray(value) ? (value[0] ?? '') : value
 }
+
+const openValue = computed(() => fitToType(props.modelValue))
+const initialValue = computed(() => fitToType(props.defaultValue))
+const heading = computed(() => `h${props.headingLevel}`)
 </script>
 
 <template>
   <AccordionRoot
     class="aui-accordion"
+    :class="[`aui-accordion--${variant}`, `aui-accordion--${size}`]"
     :type="type"
     :collapsible="collapsible"
-    :model-value="modelValue"
+    :model-value="openValue"
+    :default-value="initialValue"
+    :orientation="orientation"
     :dir="direction"
-    @update:model-value="emit('update:modelValue', $event as string | string[] | undefined)"
+    @update:model-value="emit('update:modelValue', $event as AccordionValue)"
   >
     <AccordionItem
       v-for="item in items"
@@ -64,18 +97,30 @@ function isOpen(value: string): boolean {
       :value="item.value"
       :disabled="item.disabled"
     >
-      <AccordionHeader class="aui-accordion__header" :as="`h${level}`">
+      <AccordionHeader :as="heading" class="aui-accordion__header">
         <AccordionTrigger class="aui-accordion__trigger">
-          <span class="aui-accordion__label">
-            <slot name="label" :item="item" :open="isOpen(item.value)">{{ item.label }}</slot>
-          </span>
-          <svg class="aui-accordion__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <span class="aui-accordion__label">{{ item.label }}</span>
+          <svg
+            class="aui-accordion__chevron"
+            viewBox="0 0 20 20"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M5 8l5 5 5-5" />
           </svg>
         </AccordionTrigger>
       </AccordionHeader>
-      <AccordionContent class="aui-accordion__panel">
-        <div class="aui-accordion__body"><slot name="panel" :item="item" /></div>
+      <AccordionContent class="aui-accordion__content">
+        <div class="aui-accordion__panel">
+          <slot :name="`panel-${item.value}`" />
+        </div>
       </AccordionContent>
     </AccordionItem>
   </AccordionRoot>
@@ -83,6 +128,11 @@ function isOpen(value: string): boolean {
 
 <style scoped>
 .aui-accordion {
+  color: var(--aui-color-text);
+  font-family: var(--aui-font-sans);
+}
+
+.aui-accordion--default {
   border: 1px solid var(--aui-color-border);
   border-radius: var(--aui-radius-md);
   background: var(--aui-color-surface);
@@ -94,33 +144,37 @@ function isOpen(value: string): boolean {
 
 .aui-accordion__header {
   margin: 0;
-  font-size: inherit;
+  font: inherit;
 }
 
 .aui-accordion__trigger {
   display: flex;
-  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: var(--aui-space-3);
+  width: 100%;
   padding: var(--aui-space-3) var(--aui-space-4);
-  border: none;
-  background: none;
-  color: var(--aui-color-text);
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
-  font-size: var(--aui-text-sm);
+  font-size: var(--aui-text-base);
   font-weight: var(--aui-font-weight-medium);
   text-align: start;
   cursor: pointer;
 }
 
-.aui-accordion__trigger:hover:not([data-disabled]) {
-  background: var(--aui-color-surface-raised);
+.aui-accordion--sm .aui-accordion__trigger {
+  padding: var(--aui-space-2) var(--aui-space-3);
+  font-size: var(--aui-text-sm);
 }
 
-.aui-accordion__trigger[data-disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+.aui-accordion--flush .aui-accordion__trigger {
+  padding-inline: 0;
+}
+
+.aui-accordion__trigger:hover:not(:disabled) {
+  background: var(--aui-color-surface-raised);
 }
 
 .aui-accordion__trigger:focus-visible {
@@ -128,9 +182,12 @@ function isOpen(value: string): boolean {
   outline-offset: -2px;
 }
 
+.aui-accordion__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .aui-accordion__chevron {
-  width: 1rem;
-  height: 1rem;
   flex-shrink: 0;
   color: var(--aui-color-text-muted);
   transition: transform var(--aui-transition-fast);
@@ -140,15 +197,12 @@ function isOpen(value: string): boolean {
   transform: rotate(180deg);
 }
 
-.aui-accordion__body {
-  padding: 0 var(--aui-space-4) var(--aui-space-4);
-  color: var(--aui-color-text);
+.aui-accordion__panel {
+  padding: var(--aui-space-2) var(--aui-space-4) var(--aui-space-4);
   font-size: var(--aui-text-sm);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .aui-accordion__chevron {
-    transition: none;
-  }
+.aui-accordion--flush .aui-accordion__panel {
+  padding-inline: 0;
 }
 </style>

@@ -18,6 +18,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.password_weakness import check_guessable
 from autobot_shared.ssot_config import get_config
 from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.models import Role, User
@@ -29,7 +30,7 @@ logger = get_logger(__name__)
 _ADMIN_ROLE_NAME = "admin"
 
 
-async def _find_admin_role_id(session: AsyncSession):
+async def find_admin_role_id(session: AsyncSession):
     """Return the UUID of the system 'admin' role, or None if not yet seeded."""
     result = await session.execute(select(Role).where(Role.name == _ADMIN_ROLE_NAME, Role.is_system.is_(True)))
     role = result.scalar_one_or_none()
@@ -87,7 +88,12 @@ async def seed_default_admin(session: AsyncSession) -> None:
         )
         return
 
-    admin_role_id = await _find_admin_role_id(session)
+    reason = check_guessable(password)
+    if reason:  # #16299: no account rather than one anyone can guess. The value is never logged.
+        logger.error("Admin seed: AUTOBOT_ADMIN_PASSWORD was refused, so no admin was created: %s", reason)
+        return
+
+    admin_role_id = await find_admin_role_id(session)
     role_ids = [admin_role_id] if admin_role_id is not None else None
     if admin_role_id is None:
         logger.warning(

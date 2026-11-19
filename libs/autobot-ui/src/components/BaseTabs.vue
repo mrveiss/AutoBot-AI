@@ -2,27 +2,26 @@
   Copyright 2025-2026 mrveiss
   SPDX-License-Identifier: Apache-2.0
 
-  BaseTabs — a tab bar with its panels (#14779), on Reka UI's Tabs primitive.
+  BaseTabs — a tabbed panel set on the kit tokens (#14779).
 
-  Reka supplies the WAI-ARIA tabs pattern: roving tabindex, Arrow / Home / End (mirrored in
-  RTL), aria-selected / aria-controls / aria-labelledby. The kit adds the token styling and
-  the API derived from the user app's useTabs call sites (ChatTabs, ProfileModal,
-  KnowledgeHealth, ...): a list of tabs and one panel per tab. The kit ships no text; tab
-  labels and the list's accessible name come in translated.
+  The behaviour (tablist/tab/tabpanel roles, aria-selected, aria-controls, roving focus,
+  Arrow/Home/End keys, RTL arrow direction) comes from the headless Reka UI tabs; this
+  wrapper only supplies the structure and the `--aui-*` styling. The kit holds no strings:
+  `label` names the tablist and every tab's text comes from `items[].label`, translated by
+  the app.
 
-    props : modelValue (v-model, the active tab's value), tabs ({ value, label, disabled? }[]),
-            label (names the tablist), orientation (horizontal | vertical),
-            activation (automatic: focus selects | manual: Enter / Space selects),
-            dir (ltr | rtl; defaults to the document's)
-    slots : tab ({ tab, selected }: the trigger content, e.g. an icon or a count),
-            panel ({ tab }: the content of each tab's panel)
-    emits : update:modelValue
+    props  : items, label, modelValue (v-model) | defaultValue, variant (underline | pill),
+             size (sm | md), orientation, activationMode, dir
+    slots  : `panel-<value>` — the content of the tab with that value
+    emits  : update:modelValue
 -->
 <script setup lang="ts">
-import { toRef } from 'vue'
+import { computed, ref } from 'vue'
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
-import { useDocumentDirection, type Direction } from '../composables/useDocumentDirection'
+import { resolveDirection, type KitDirection } from '../utils/direction'
 
+export type TabsVariant = 'underline' | 'pill'
+export type TabsSize = 'sm' | 'md'
 export interface TabItem {
   value: string
   label: string
@@ -31,134 +30,179 @@ export interface TabItem {
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string
-    tabs: TabItem[]
+    items: TabItem[]
+    /** Accessible name of the tablist (translated by the app). */
     label: string
+    modelValue?: string
+    defaultValue?: string
+    variant?: TabsVariant
+    size?: TabsSize
     orientation?: 'horizontal' | 'vertical'
-    activation?: 'automatic' | 'manual'
-    dir?: Direction
+    /** `automatic` selects a tab as it takes focus; `manual` waits for Enter or Space. */
+    activationMode?: 'automatic' | 'manual'
+    dir?: KitDirection
   }>(),
-  { orientation: 'horizontal', activation: 'automatic', dir: undefined },
+  {
+    modelValue: undefined,
+    defaultValue: undefined,
+    variant: 'underline',
+    size: 'md',
+    orientation: 'horizontal',
+    activationMode: 'automatic',
+    dir: undefined,
+  },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
-const direction = useDocumentDirection(toRef(props, 'dir'))
 
-function onUpdate(value: string | number) {
-  emit('update:modelValue', String(value))
+const direction = computed(() => resolveDirection(props.dir))
+// Uncontrolled use keeps the chosen tab here, so items that arrive after mount still get a
+// selection and a default never lands on a disabled first item (#20382).
+const chosen = ref(props.defaultValue)
+const active = computed(() => {
+  if (props.modelValue !== undefined) return props.modelValue
+  const kept = props.items.some((item) => item.value === chosen.value)
+  return kept ? chosen.value : props.items.find((item) => !item.disabled)?.value
+})
+
+function onSelect(value: string | number): void {
+  chosen.value = String(value)
+  emit('update:modelValue', chosen.value)
 }
 </script>
 
 <template>
   <TabsRoot
     class="aui-tabs"
-    :class="`aui-tabs--${orientation}`"
-    :model-value="modelValue"
+    :class="[`aui-tabs--${variant}`, `aui-tabs--${size}`, `aui-tabs--${orientation}`]"
+    :model-value="active"
     :orientation="orientation"
-    :activation-mode="activation"
+    :activation-mode="activationMode"
     :dir="direction"
-    @update:model-value="onUpdate"
+    @update:model-value="onSelect"
   >
     <TabsList class="aui-tabs__list" :aria-label="label">
       <TabsTrigger
-        v-for="tab in tabs"
-        :key="tab.value"
-        class="aui-tabs__tab"
-        :value="tab.value"
-        :disabled="tab.disabled"
+        v-for="item in items"
+        :key="item.value"
+        class="aui-tabs__trigger"
+        :value="item.value"
+        :disabled="item.disabled"
       >
-        <slot name="tab" :tab="tab" :selected="tab.value === modelValue">{{ tab.label }}</slot>
+        {{ item.label }}
       </TabsTrigger>
     </TabsList>
-    <TabsContent v-for="tab in tabs" :key="tab.value" class="aui-tabs__panel" :value="tab.value">
-      <slot name="panel" :tab="tab" />
+    <TabsContent
+      v-for="item in items"
+      :key="item.value"
+      class="aui-tabs__panel"
+      :value="item.value"
+    >
+      <slot :name="`panel-${item.value}`" />
     </TabsContent>
   </TabsRoot>
 </template>
 
 <style scoped>
-.aui-tabs--vertical {
+.aui-tabs {
   display: flex;
-  gap: var(--aui-space-4);
+  flex-direction: column;
+  gap: var(--aui-space-3);
+  color: var(--aui-color-text);
+  font-family: var(--aui-font-sans);
+}
+
+.aui-tabs--vertical {
+  flex-direction: row;
 }
 
 .aui-tabs__list {
   display: flex;
+  flex-shrink: 0;
   gap: var(--aui-space-1);
-  border-bottom: 1px solid var(--aui-color-border);
-  overflow-x: auto;
 }
 
 .aui-tabs--vertical .aui-tabs__list {
   flex-direction: column;
-  border-bottom: none;
-  border-inline-end: 1px solid var(--aui-color-border);
-  overflow-x: visible;
 }
 
-.aui-tabs__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--aui-space-2);
-  padding: var(--aui-space-2) var(--aui-space-4);
-  margin-bottom: -1px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
+.aui-tabs--underline.aui-tabs--horizontal .aui-tabs__list {
+  border-bottom: 1px solid var(--aui-color-border);
+}
+
+.aui-tabs--underline.aui-tabs--vertical .aui-tabs__list {
+  border-inline-end: 1px solid var(--aui-color-border);
+}
+
+.aui-tabs__trigger {
+  --aui-tabs-pad-y: var(--aui-space-2);
+  --aui-tabs-pad-x: var(--aui-space-4);
+  padding: var(--aui-tabs-pad-y) var(--aui-tabs-pad-x);
+  border: 0;
+  background: transparent;
   color: var(--aui-color-text-muted);
   font: inherit;
   font-size: var(--aui-text-sm);
   font-weight: var(--aui-font-weight-medium);
-  white-space: nowrap;
   cursor: pointer;
-  transition: color var(--aui-transition-fast), border-color var(--aui-transition-fast);
+  transition: color var(--aui-transition-fast), background-color var(--aui-transition-fast);
 }
 
-.aui-tabs--vertical .aui-tabs__tab {
-  margin-bottom: 0;
-  margin-inline-end: -1px;
-  border-bottom: none;
-  border-inline-end: 2px solid transparent;
-  justify-content: flex-start;
+.aui-tabs--sm .aui-tabs__trigger {
+  --aui-tabs-pad-y: var(--aui-space-1);
+  --aui-tabs-pad-x: var(--aui-space-3);
+  font-size: var(--aui-text-xs);
 }
 
-.aui-tabs__tab:hover:not([data-disabled]) {
+.aui-tabs__trigger:hover:not(:disabled) {
   color: var(--aui-color-text);
 }
 
-.aui-tabs__tab[data-state='active'] {
+.aui-tabs__trigger[data-state='active'] {
   color: var(--aui-color-primary);
-  border-color: var(--aui-color-primary);
 }
 
-.aui-tabs__tab[data-disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+.aui-tabs--underline.aui-tabs--horizontal .aui-tabs__trigger {
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
 }
 
-.aui-tabs__tab:focus-visible {
-  outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
-  outline-offset: -2px;
-  border-radius: var(--aui-radius-sm);
+.aui-tabs--underline.aui-tabs--horizontal .aui-tabs__trigger[data-state='active'] {
+  border-bottom-color: var(--aui-color-primary);
 }
 
-.aui-tabs__panel {
-  padding-top: var(--aui-space-4);
+.aui-tabs--underline.aui-tabs--vertical .aui-tabs__trigger {
+  margin-inline-end: -1px;
+  border-inline-end: 2px solid transparent;
+  text-align: start;
 }
 
-.aui-tabs--vertical .aui-tabs__panel {
-  flex: 1;
-  padding-top: 0;
+.aui-tabs--underline.aui-tabs--vertical .aui-tabs__trigger[data-state='active'] {
+  border-inline-end-color: var(--aui-color-primary);
 }
 
+.aui-tabs--pill .aui-tabs__trigger {
+  border-radius: var(--aui-radius-md);
+}
+
+.aui-tabs--pill .aui-tabs__trigger[data-state='active'] {
+  background: var(--aui-color-primary);
+  color: var(--aui-color-primary-contrast);
+}
+
+.aui-tabs__trigger:focus-visible,
 .aui-tabs__panel:focus-visible {
   outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .aui-tabs__tab {
-    transition: none;
-  }
+.aui-tabs__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.aui-tabs__panel {
+  flex: 1;
+  min-width: 0;
 }
 </style>

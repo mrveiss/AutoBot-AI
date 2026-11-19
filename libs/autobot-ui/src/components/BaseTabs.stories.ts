@@ -8,31 +8,37 @@ const meta = {
   title: 'Kit/BaseTabs',
   component: BaseTabs,
   argTypes: {
-    orientation: { control: { type: 'select' }, options: ['horizontal', 'vertical'] },
-    activation: { control: { type: 'select' }, options: ['automatic', 'manual'] },
-    dir: { control: { type: 'select' }, options: [undefined, 'ltr', 'rtl'] },
+    variant: { control: 'select', options: ['underline', 'pill'] },
+    size: { control: 'select', options: ['sm', 'md'] },
+    orientation: { control: 'select', options: ['horizontal', 'vertical'] },
+    activationMode: { control: 'select', options: ['automatic', 'manual'] },
+    dir: { control: 'select', options: [undefined, 'ltr', 'rtl'] },
   },
 } as Meta<typeof BaseTabs>
 
 export default meta
 type Story = StoryObj<Record<string, unknown>>
 
-const tabs = [
+const items = [
   { value: 'overview', label: 'Overview' },
-  { value: 'logs', label: 'Logs' },
-  { value: 'locked', label: 'Locked', disabled: true },
+  { value: 'activity', label: 'Activity' },
+  { value: 'archived', label: 'Archived', disabled: true },
   { value: 'settings', label: 'Settings' },
 ]
 
 const render = (args: Record<string, unknown>) => ({
   components: { BaseTabs },
-  setup: () => ({ args, active: ref('overview'), tabs }),
-  template: `<BaseTabs v-bind="args" v-model="active" :tabs="tabs" label="Sections">
-    <template #panel="{ tab }"><p>{{ tab.label }} panel</p></template>
+  setup: () => ({ args, items, current: ref('overview') }),
+  template: `<BaseTabs v-model="current" v-bind="args" :items="items" label="Project sections">
+    <template #panel-overview>Overview panel</template>
+    <template #panel-activity>Activity panel</template>
+    <template #panel-settings>Settings panel</template>
   </BaseTabs>`,
 })
 
-export const Horizontal: Story = { args: {}, render }
+export const Underline: Story = { args: { variant: 'underline' }, render }
+export const Pill: Story = { args: { variant: 'pill' }, render }
+export const Small: Story = { args: { size: 'sm' }, render }
 export const Vertical: Story = { args: { orientation: 'vertical' }, render }
-export const ManualActivation: Story = { args: { activation: 'manual' }, render }
+export const ManualActivation: Story = { args: { activationMode: 'manual' }, render }
 export const RightToLeft: Story = { args: { dir: 'rtl' }, render }

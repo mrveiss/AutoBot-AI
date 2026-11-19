@@ -50,18 +50,15 @@ now-unshallowed history, before it is upgraded to the versioned format.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git_capture
 from services.host_state_filter import kept_reason
 
-# Plain stdlib logging, deliberately -- see services/git_subprocess.py's
-# comment: get_logger() crashes at creation time under a MagicMock `config`,
-# the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

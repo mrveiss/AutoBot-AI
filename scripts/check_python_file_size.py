@@ -21,11 +21,14 @@ lives only in a comment is not an assertion.
 The ratchet turns one way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-Every lowering is mirrored in ``RATCHET_BASELINE`` in the ratchet test, so the
-shrink is locked in rather than left as headroom to regrow into (#14498).
+A shrink is locked in by the merge base, not by editing this table (#19673): the ratchet test
+requires ``lines(F@HEAD) <= min(ceiling, lines(F@base))``, so the lines a PR cut cannot be spent
+back. Nothing else needs to change for a file to shrink. ``--repin-ceilings`` is a manual tidy
+that rewrites the recorded ints to the files' current lengths (and drops entries at or under the
+limit); nothing runs it automatically. Locked in rather than left as headroom (#14498).
 
 A file the hook cannot open is a violation too, not a skip (#14975). ``None``
 from ``count_lines`` means "never measured", which is a different thing from
@@ -88,14 +91,6 @@ MAX_LINES = 600
 #: Repo-relative path of this hook, quoted in the messages that ask for an edit.
 SELF_REL = "scripts/check_python_file_size.py"
 
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: Every message that asks for an edit here names it too: a ceiling lowered in
-#: one file alone leaves the other holding the old size (#14498).
-RATCHET_REL = "repo_tests/python_file_size_ratchet_baseline.py"  # the DATA module, not the
-#: test that re-exports it (#17377): a developer told to lower "the matching RATCHET_BASELINE
-#: entry" in the test file opens a file whose RATCHET_BASELINE is one re-export line, with no
-#: entries to edit -- the wrong-copy failure #17872 exists to prevent, emitted by the gate.
-
 #: Repo-relative path prefixes the guard does not cover, mirrored from this
 #: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``,
 #: currently ``^(\.worktrees/|autobot-infrastructure/|autobot-backend/code_analysis/)``).
@@ -123,11 +118,12 @@ MIN_TRACKED_PY_FILES = 3000
 # mapped to the line count recorded for each. THIS MAPPING ONLY SHRINKS —
 # entries leave when the file reaches MAX_LINES, and a ceiling may be lowered
 # but never raised. Never add an entry to make a new file pass; split the
-# file instead. See ``python_file_size_known_large.py`` for the full dict and
-# ``repo_tests/python_file_size_ratchet_baseline.py`` for its mirror: lower
-# an entry in both in the same commit (#14498), or the lines just cut stay
-# spendable in the gap between the two.
+# file instead. See ``python_file_size_known_large.py`` for the full dict, the ONE
+# place a ceiling is recorded (#19544): ``python_file_size_ratchet_test.py`` checks it
+# against the same table at the base commit, so no second copy is kept.
 KNOWN_LARGE: dict[str, int] = load_known_large(__file__, "python_file_size_known_large.py")
+#: The file ``--repin-ceilings`` rewrites (#19673).
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve().with_name("python_file_size_known_large.py")
 
 
 #: In-scope, git-tracked ``*.py`` paths under *root*, relative to it.
@@ -155,6 +151,8 @@ run_audit = GUARD.run_audit
 def main(argv: list[str]) -> int:
     """Entry point: ``--audit-ceilings`` anywhere in *argv*, else rule on each path as given."""
     configure_logging(logger)
+    if "--repin-ceilings" in argv:
+        return GUARD.repin_ceilings()
     if "--audit-ceilings" in argv:
         return run_audit()
     findings = [GUARD.rule_on(normalise(arg), pathlib.Path(arg)) for arg in argv]

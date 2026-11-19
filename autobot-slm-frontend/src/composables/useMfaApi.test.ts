@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { HttpError } from '@autobot/ui'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
@@ -113,14 +114,14 @@ describe('useMfaApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
   })
 
   it('logs out and re-throws on a 401 (client opts out for /mfa/, composable preserves it)', async () => {
-    mockGet.mockRejectedValue(new Error('HTTP 401: Unauthorized'))
+    mockGet.mockRejectedValue(new HttpError(401, 'Unauthorized'))
 
     await expect(useMfaApi().getMFAStatus()).rejects.toThrow('HTTP 401')
     expect(mockLogout).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT log out on a non-401 error (e.g. wrong code → 400)', async () => {
-    mockPost.mockRejectedValue(new Error('HTTP 400: Invalid code'))
+    mockPost.mockRejectedValue(new HttpError(400, 'Invalid code'))
 
     await expect(useMfaApi().verifySetup('000000')).rejects.toThrow('HTTP 400')
     expect(mockLogout).not.toHaveBeenCalled()

@@ -82,12 +82,13 @@ EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
     }
 )
 
-#: Floor for a full-repo ``*.py`` sweep. 5,319 files were tracked when this
-#: landed, so this sits ~25% below the real count: low enough that ordinary
-#: churn (or a subtree moving out) never trips it, high enough that a sweep
-#: which lost its reach — wrong root, wrong CWD, a filter inverted — cannot
-#: land under it and still look clean.
-PY_FLOOR = 4000
+#: Floor for a full-repo ``*.py`` sweep, kept ~25% below the real count: low
+#: enough that ordinary churn (or a subtree moving out) never trips it, high
+#: enough that a sweep which lost its reach — wrong root, wrong CWD, a filter
+#: inverted — cannot land under it and still look clean. 5,319 files were
+#: tracked when this landed (floor 4000); re-measured at 8,003 on 2026-11-03,
+#: when the vacuity test's "at least half the tree" bound tripped (#20650).
+PY_FLOOR = 6000
 
 
 def _looks_like_a_pattern(entry: str) -> bool:

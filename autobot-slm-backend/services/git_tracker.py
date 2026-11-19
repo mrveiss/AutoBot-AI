@@ -17,6 +17,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.fleet_constants import FLEET_CODE_SOURCE_DIR
 from models.database import NodeCodeSource, Setting
 from services.git_subprocess import GIT_TIMEOUT_S, GIT_TRANSPORT_TIMEOUT_S, run_git_capture
 
@@ -31,7 +32,9 @@ except ImportError:
 
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
-DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
+# The code_source CHECKOUT root, never the install root (FLEET_INSTALL_ROOT). SLM_REPO_PATH is documented in
+# autobot_shared/env_registry_npu.py; this is its one read, and every SLM module imports it from here (#15708).
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", FLEET_CODE_SOURCE_DIR)
 DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "main")
 
 # Log the "no local code source" condition once, not every interval (#9716).
@@ -299,6 +302,26 @@ async def update_latest_version_setting(
 
     await db.commit()
     logger.info("Updated slm_agent_latest_commit to: %s", commit_hash[:12])
+
+
+async def refresh_latest_for_source(db: AsyncSession, repo_path: str, branch: str) -> None:
+    """Point slm_agent_latest_commit at the head of the branch just assigned as code source (#18663).
+
+    Until a source is assigned the version checker tracks DEFAULT_BRANCH, so a node stamped from a
+    checkout of another branch reads outdated until the next poll. This reads the remote-tracking
+    ref of the assigned branch WITHOUT a fetch: the caller is an HTTP request with a short client
+    timeout, and the periodic check does the fetching. An unresolvable ref, or a path that is not a
+    local git checkout, writes nothing. The refresh is best-effort: the assignment is already saved,
+    so a failure here is logged with its traceback and never fails the request.
+    """
+    if not _is_git_repo(repo_path):
+        return
+    try:
+        commit = await get_git_tracker(repo_path=repo_path, branch=branch).get_remote_commit()
+        if commit:
+            await update_latest_version_setting(db, commit)
+    except Exception:
+        logger.exception("Could not refresh slm_agent_latest_commit for %s@%s", repo_path, branch)
 
 
 async def version_check_task(

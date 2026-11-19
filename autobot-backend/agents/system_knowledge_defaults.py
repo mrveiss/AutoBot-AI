@@ -311,6 +311,11 @@ class DefaultKnowledgeMixin:
         else:
             logger.info("Imported %s: %s", kind, name)
 
+    @property
+    def import_failures(self) -> List[str]:
+        """Items the last import failed to store; they are retried on the next start (#19347)."""
+        return list(self._import_failures)
+
     def _record_import_failure(self, kind: str, name: str, error: Exception) -> None:
         """Count a failed item; it is retried on the next import because nothing marks it done."""
         logger.error("Failed to import %s %s: %s", kind, name, error)

@@ -2380,64 +2380,6 @@ class TerminalHostSelectionResponse(BaseModel):
     connection_info: Dict | None = Field(None, description="Connection details (host, port, username)")
 
 
-class HeartbeatConfigRequest(BaseModel):
-    """Request body to configure heartbeat for an agent."""
-
-    heartbeat_enabled: bool = False
-    heartbeat_interval_seconds: int = Field(default=300, ge=10)
-    max_run_duration_seconds: int = Field(default=600, ge=10)
-
-
-class HeartbeatConfigResponse(BaseModel):
-    """Response for agent heartbeat config / runtime state (GH#6476)."""
-
-    agent_id: str
-    heartbeat_enabled: bool
-    status: str
-    paused_reason: str | None = None
-    paused_at: str | None = None
-    paused_by: str | None = None
-    error_detail: str | None = None
-    error_at: str | None = None
-    error_code: str | None = None
-    heartbeat_interval_seconds: int
-    max_run_duration_seconds: int
-    current_task_id: str | None
-    last_heartbeat_at: str | None
-    session_params: Dict[str, Any] | None
-    extra: Dict[str, Any] | None
-    created_at: str | None
-    updated_at: str | None
-
-
-class AgentPauseRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/pause (GH#6476)."""
-
-    reason: str | None = None
-    paused_by: str | None = None
-
-
-class AgentResumeRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/resume (GH#6476)."""
-
-
-class AgentTerminateRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/terminate (GH#6476)."""
-
-    reason: str | None = None
-
-
-class AgentErrorRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/error (MVA-1411)."""
-
-    error_detail: str | None = None
-    error_code: str | None = None
-
-
-class AgentRecoverRequest(BaseModel):
-    """Request body for POST /heartbeat/{agent_id}/recover (MVA-1411)."""
-
-
 class WakeupRequestCreate(BaseModel):
     """Request body to queue a wakeup for an agent."""
 
@@ -2906,16 +2848,6 @@ class AuditQueryRequest(BaseModel):
     offset: int = Field(0, ge=0, description="Pagination offset")
 
 
-class AuditQueryResponse(BaseModel):
-    """Audit log query response."""
-
-    success: bool
-    total_returned: int
-    has_more: bool
-    entries: List[dict]
-    query: dict
-
-
 class AuditStatisticsResponse(BaseModel):
     """Audit statistics response."""
 
@@ -3380,12 +3312,8 @@ class SecretCreateRequest(BaseModel):
     org_id: str | None = Field(None, max_length=128, description="Organization ID for org-level secrets")
     team_ids: List[str] = Field(default_factory=list, description="Team IDs for group-level secrets")
     shared_with: List[str] = Field(default_factory=list, description="User IDs to share with")
-    # #17099: the UI has offered "System" here since #685, but this field never
-    # existed -- Pydantic silently dropped it (no extra="forbid"), so every
-    # choice, System included, went through the legacy per-user file store
-    # unrouted. Only "system" gets special handling in create_secret(); every
-    # other value's current (unrouted) behaviour is unchanged by this field's
-    # mere existence.
+    # #17099: Pydantic used to drop this field silently, so "System" landed in the
+    # legacy file store. Only "system" is routed (to the vault) by create_secret().
     visibility: Literal["private", "shared", "group", "organization", "system"] | None = Field(
         None, description="A typo here must 422, not silently fall through to the legacy store (#16428 review)"
     )
@@ -3458,6 +3386,9 @@ class SecretUpdateRequest(BaseModel):
     tags: List[str] | None = None
     expires_at: datetime | None = None
     metadata: Metadata | None = None
+    # #17731: the new value for a SYSTEM-vault secret (rotated through the
+    # envelope coordinator); #20557: for a legacy secret it re-encrypts the stored value.
+    value: str | None = Field(None, min_length=1, max_length=65536)
     # #16428: rotates a connector-bridged secret's credential in
     # ConnectorCredentialStore. Ignored for a non-bridged secret -- legacy
     # secrets have never supported value rotation via this endpoint.

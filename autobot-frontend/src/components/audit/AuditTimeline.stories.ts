@@ -10,7 +10,8 @@ const makeEntry = (
   overrides: Record<string, unknown> = {}
 ) => ({
   id,
-  timestamp: new Date(Date.now() - parseInt(id) * 300000).toISOString(),
+  date: '2026-10-31',
+  timestamp: (Date.now() - parseInt(id) * 300000) / 1000,
   operation,
   result,
   user_id: 'alice',
@@ -18,7 +19,9 @@ const makeEntry = (
   vm_name: 'vm-worker-01',
   vm_source: 'proxmox',
   ip_address: '192.168.1.10',
-  error_message: null,
+  user_role: null,
+  resource: null,
+  performance_ms: null,
   details: {},
   ...overrides,
 });
@@ -27,7 +30,7 @@ const sessionEntries = [
   makeEntry('1', 'user_login', 'success'),
   makeEntry('2', 'file_read', 'success', { details: { path: '/home/alice/config.yaml' } }),
   makeEntry('3', 'vm_start', 'success', { user_id: 'bob' }),
-  makeEntry('4', 'vm_snapshot', 'denied', { error_message: 'Permission denied: snapshot on protected VM' }),
+  makeEntry('4', 'vm_snapshot', 'denied', { details: { reason: 'Permission denied: snapshot on protected VM' } }),
   makeEntry('5', 'user_logout', 'success'),
 ];
 
@@ -36,11 +39,11 @@ const userEntries = [
   makeEntry('2', 'token_refresh', 'success', { session_id: 'sess-aaa11111' }),
   makeEntry('3', 'file_write', 'failed', {
     session_id: 'sess-bbb22222',
-    error_message: 'Disk quota exceeded',
+    details: { reason: 'Disk quota exceeded' },
   }),
   makeEntry('4', 'connection_open', 'error', {
     session_id: 'sess-ccc33333',
-    error_message: 'Network unreachable',
+    details: { reason: 'Network unreachable' },
     ip_address: '10.0.0.5',
   }),
 ];
@@ -118,12 +121,11 @@ export const WithErrors: Story = {
     entityId: 'sess-err00001',
     entries: [
       makeEntry('1', 'user_login', 'success'),
-      makeEntry('2', 'vm_delete', 'denied', { error_message: 'Unauthorized: VM is protected' }),
+      makeEntry('2', 'vm_delete', 'denied', { details: { reason: 'Unauthorized: VM is protected' } }),
       makeEntry('3', 'firewall_rule_add', 'error', {
-        error_message: 'Internal error: firewall daemon unreachable',
-        details: { rule: 'DENY tcp 0.0.0.0/0 22', attempt: 3 },
+        details: { reason: 'Internal error: firewall daemon unreachable', rule: 'DENY tcp 0.0.0.0/0 22', attempt: 3 },
       }),
-      makeEntry('4', 'user_logout', 'failed', { error_message: 'Session already expired' }),
+      makeEntry('4', 'user_logout', 'failed', { details: { reason: 'Session already expired' } }),
     ],
     loading: false,
   },

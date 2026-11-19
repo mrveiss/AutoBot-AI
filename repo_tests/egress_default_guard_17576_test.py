@@ -101,7 +101,6 @@ def _site_total(root: Path) -> int:
 REACH = declare(
     "egress-default-outbound-call-sweep",
     discover=_files_with_outbound_calls,
-    floor=150,
     growth=60,
     what="python files making outbound HTTP calls",
     roots=("autobot-", "autobot_shared/", "debug/", "plugins/", "scripts/", "pipeline-scripts/"),
@@ -115,11 +114,10 @@ def _outbound_call_sites(root: Path) -> list[str]:
 
 #: Outbound call SITES (not files) the sweep must find -- the files floor alone cannot see a detector
 #: that lost a client kind but still finds one call per file. Migrated from a hand-rolled
-#: ``SITE_FLOOR = 400`` (#16147); pinned mid-window from the measured population.
+#: ``SITE_FLOOR = 400`` (#16147).
 SITES = declare(
     "egress-default-outbound-call-sites",
     discover=_outbound_call_sites,
-    floor=443,  # measured: 473 sites, window [413, 473]
     growth=60,
     what="outbound HTTP call sites (detected + declared) in the egress sweep",
     roots=("autobot-", "autobot_shared/", "debug/", "plugins/", "scripts/", "pipeline-scripts/"),

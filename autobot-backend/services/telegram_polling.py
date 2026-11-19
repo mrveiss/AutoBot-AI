@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.env_utils import env_float_clamped, env_int_clamped
+from autobot_shared.field_encryption import FieldDecryptionError
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.leader_lease import DEFAULT_TTL_MS, LeaderLease
@@ -165,6 +166,27 @@ async def fetch_updates(
     return await _call_bot_api(service, "getUpdates", payload, timeout=_POLL_HTTP_TIMEOUT) or []
 
 
+_token_unreadable_reported = False
+
+
+async def _service_or_none() -> Optional[TelegramBotService]:
+    """The bot service, or None while its stored token cannot be read (#17981).
+
+    One structured error when the token first becomes unreadable, not one per tick;
+    the poller idles until the token is re-entered or its key restored.
+    """
+    global _token_unreadable_reported
+    try:
+        service = await TelegramBotService.from_redis()
+    except FieldDecryptionError as exc:
+        if not _token_unreadable_reported:
+            logger.error("Telegram poller idle: stored bot token unreadable (%s)", exc)
+            _token_unreadable_reported = True
+        return None
+    _token_unreadable_reported = False
+    return service
+
+
 async def poll_once(app: "FastAPI") -> Optional[int]:
     """Fetch and dispatch one batch; the count dispatched, or None when not polling.
 
@@ -181,8 +203,8 @@ async def poll_once(app: "FastAPI") -> Optional[int]:
     if await get_ingest_mode() != INGEST_MODE_POLLING:
         return None
     redis = await get_redis_client(async_client=True)
-    service = await TelegramBotService.from_redis()
-    if redis is None or not service.bot_token:
+    service = await _service_or_none()
+    if redis is None or service is None or not service.bot_token:
         return None
     dispatcher = _dispatcher_for(app)
     room = MAX_PENDING_REPLIES - len(dispatcher.tasks)

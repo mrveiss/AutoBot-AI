@@ -88,9 +88,7 @@ onMounted(load)
       </p>
 
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        {{ $t('settings.findingsPolicySettings.policySavedSuccessfully') }}
-      </div>
+      <BaseAlert v-if="saved" variant="success" class="mb-4" :message="$t('settings.findingsPolicySettings.policySavedSuccessfully')" />
 
       <div class="space-y-6">
         <!-- Enabled -->

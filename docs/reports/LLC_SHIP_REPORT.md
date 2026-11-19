@@ -77,7 +77,7 @@ Both backends shipped in #9861 (PR #10034) and were wired up in #10040; the
   gate one module while pre-existing repo-wide findings stay tracked separately.
   `--openapi … --only-prefix /api/llc --fail-on-unwired` → **exit 0** (0 unwired
   `/api/llc` calls).
-- **Blocking CI**: `.github/workflows/llc-contract.yml` — job 1 dumps the real
+- **Blocking CI**: `.github/workflows/company-os-contract.yml` — job 1 dumps the real
   OpenAPI and fails on any unwired `/api/llc` call; job 2 runs the e2e test. Both
   blocking (the repo-wide `api-wiring.yml` stays non-blocking for its tracked
   false-positives). Uses absolute `--openapi`/`--dump-openapi` paths to avoid the

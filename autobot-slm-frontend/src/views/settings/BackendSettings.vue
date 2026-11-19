@@ -11,6 +11,7 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
@@ -19,6 +20,7 @@ import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 // summary row): it reports the SLM API base the operator is pointed at. Every
 // transport call goes through the canonical client (#13140). #15761 replaces
 // the former `authStore.getApiUrl()`, which diverged from this resolver in DEV.
+const { t } = useI18n()
 const autobotApi = useAutobotApi()
 const loading = ref(false)
 const saving = ref(false)
@@ -65,7 +67,7 @@ async function fetchSettings(): Promise<void> {
       settings.value.api_endpoint = getSlmApiBase()
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.backendSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -102,13 +104,13 @@ async function saveSetting(key: string, value: string | number | boolean): Promi
     const ok = await upsertSetting(key, { value: String(value) })
 
     if (!ok) {
-      throw new Error('Failed to save setting')
+      throw new Error(t('settings.backendSettings.failedToSaveSetting'))
     }
 
-    success.value = 'Setting saved successfully'
+    success.value = t('settings.monitoringSettings.settingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save setting'
+    error.value = e instanceof Error ? e.message : t('settings.backendSettings.failedToSaveSetting')
   } finally {
     saving.value = false
   }
@@ -133,9 +135,7 @@ onMounted(() => {
     <template v-else>
       <!-- Messages -->
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="success" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Connection Status -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">

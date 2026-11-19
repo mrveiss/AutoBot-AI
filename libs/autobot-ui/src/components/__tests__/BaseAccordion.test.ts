@@ -1,119 +1,191 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 //
-// BaseAccordion (#14779): the WAI-ARIA accordion pattern through Reka UI — each header is a
-// heading wrapping a button with aria-expanded / aria-controls, its panel a region labelled
-// by it; single and multiple modes; Arrow / Home / End move between headers.
+// BaseAccordion (#14779): heading + button structure, aria-expanded/aria-controls, region panels,
+// single vs multiple, collapsible, Arrow/Home/End focus movement, disabled skip, and the
+// mirrored Left/Right arrows of a horizontal accordion under dir="rtl".
 
-import { describe, it, expect, afterEach } from 'vitest'
-import { nextTick } from 'vue'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import BaseAccordion from '../BaseAccordion.vue'
+import { installRekaDomStubs, press } from './rekaTestEnv'
 
-const items = [
-  { value: 'a', label: 'General' },
-  { value: 'b', label: 'Network' },
-  { value: 'c', label: 'Danger zone', disabled: true },
+const ITEMS = [
+  { value: 'a', label: 'Alpha' },
+  { value: 'b', label: 'Beta', disabled: true },
+  { value: 'c', label: 'Gamma' },
+  { value: 'd', label: 'Delta' },
 ]
 
 let wrapper: VueWrapper | undefined
 
-function render(props: Record<string, unknown> = {}) {
+async function render(props: Record<string, unknown> = {}) {
   wrapper = mount(BaseAccordion, {
-    props: {
-      items,
-      'onUpdate:modelValue': (v: unknown) => wrapper?.setProps({ modelValue: v }),
-      ...props,
-    },
-    slots: { panel: '<template #panel="{ item }"><p class="body">{{ item.label }} body</p></template>' },
+    props: { items: ITEMS, ...props },
+    slots: { 'panel-a': 'Body A', 'panel-c': 'Body C', 'panel-d': 'Body D' },
     attachTo: document.body,
   })
+  await flushPromises()
   return wrapper
 }
 
-const triggers = (w: VueWrapper) => w.findAll('button.aui-accordion__trigger')
-// Reka records the focused header and moves focus on a timer, not a microtask
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
-const focusOn = async (el: Element) => {
-  ;(el as HTMLElement).focus()
-  await settle()
-}
-const press = async (el: Element, key: string) => {
-  el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
-  await settle()
+const triggers = () => Array.from(document.querySelectorAll<HTMLElement>('button[aria-expanded]'))
+const expanded = () => triggers().map((t) => t.getAttribute('aria-expanded') === 'true')
+const regions = () => Array.from(document.querySelectorAll<HTMLElement>('[role="region"]'))
+
+async function toggle(index: number) {
+  triggers()[index].click()
+  await flushPromises()
 }
 
+beforeEach(installRekaDomStubs)
 afterEach(() => {
   wrapper?.unmount()
   wrapper = undefined
+  document.body.innerHTML = ''
+  document.documentElement.removeAttribute('dir')
 })
 
-describe('BaseAccordion', () => {
-  it('wraps each trigger in a heading at the given level', () => {
-    const w = render({ level: 4 })
-    expect(w.findAll('h4 > button.aui-accordion__trigger')).toHaveLength(3)
+describe('BaseAccordion roles and aria', () => {
+  it('exposes each section title as a heading containing a button', async () => {
+    await render()
+    const headings = Array.from(document.querySelectorAll('h3'))
+    expect(headings).toHaveLength(ITEMS.length)
+    expect(headings[0].querySelector('button')?.textContent).toContain('Alpha')
   })
 
-  it('a click opens an item: aria-expanded flips and its region is labelled by the trigger', async () => {
-    const w = render()
-    const t = triggers(w)[0]
-    expect(t.attributes('aria-expanded')).toBe('false')
-    await t.trigger('click')
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['a'])
-    await nextTick()
-    expect(t.attributes('aria-expanded')).toBe('true')
-    const region = w.find(`#${t.attributes('aria-controls')}`)
-    expect(region.attributes('role')).toBe('region')
-    expect(region.attributes('aria-labelledby')).toBe(t.attributes('id'))
-    expect(region.text()).toBe('General body')
+  it('headingLevel changes the heading element', async () => {
+    await render({ headingLevel: 2 })
+    expect(document.querySelectorAll('h2')).toHaveLength(ITEMS.length)
+    expect(document.querySelectorAll('h3')).toHaveLength(0)
   })
 
-  it('single mode keeps one item open; collapsible lets it close', async () => {
-    const w = render({ modelValue: 'a' })
-    await triggers(w)[1].trigger('click')
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual(['b'])
-    await nextTick()
-    await triggers(w)[1].trigger('click')
-    expect(w.emitted('update:modelValue')?.at(-1)?.[0] ?? '').toBe('')
+  it('starts collapsed, and opening sets aria-expanded and shows a region labelled by its trigger', async () => {
+    await render()
+    expect(expanded()).toEqual([false, false, false, false])
+    await toggle(0)
+    expect(expanded()[0]).toBe(true)
+    const region = regions()[0]
+    expect(region.textContent).toContain('Body A')
+    expect(triggers()[0].getAttribute('aria-controls')).toBe(region.id)
+    expect(region.getAttribute('aria-labelledby')).toBe(triggers()[0].id)
   })
 
-  it('multiple mode keeps several open', async () => {
-    const w = render({ type: 'multiple', modelValue: ['a'] })
-    await triggers(w)[1].trigger('click')
-    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['a', 'b']])
+  it('marks a disabled section disabled', async () => {
+    await render()
+    expect(triggers()[1].hasAttribute('disabled')).toBe(true)
   })
 
-  it('ArrowDown moves focus to the next header, skipping a disabled one and wrapping', async () => {
-    const w = render()
-    await focusOn(triggers(w)[0].element)
-    await press(triggers(w)[0].element, 'ArrowDown')
-    expect(document.activeElement).toBe(triggers(w)[1].element)
-    await press(triggers(w)[1].element, 'ArrowDown')
-    expect(document.activeElement).toBe(triggers(w)[0].element)
+  it('applies the variant and size classes', async () => {
+    const w = await render({ variant: 'flush', size: 'sm' })
+    expect(w.classes()).toEqual(expect.arrayContaining(['aui-accordion--flush', 'aui-accordion--sm']))
+  })
+})
+
+describe('BaseAccordion open state', () => {
+  it('single: opening one section closes the other', async () => {
+    await render({ defaultValue: 'a' })
+    await toggle(2)
+    expect(expanded()).toEqual([false, false, true, false])
   })
 
-  it('Home and End jump to the first and last header', async () => {
-    const w = render({ items: items.slice(0, 2).concat({ value: 'd', label: 'Storage' }) })
-    await focusOn(triggers(w)[0].element)
-    await press(triggers(w)[0].element, 'End')
-    expect(document.activeElement).toBe(triggers(w)[2].element)
-    await press(triggers(w)[2].element, 'Home')
-    expect(document.activeElement).toBe(triggers(w)[0].element)
+  it('single + collapsible: clicking the open section closes it', async () => {
+    await render({ defaultValue: 'a' })
+    await toggle(0)
+    expect(expanded()[0]).toBe(false)
   })
 
-  it('a disabled item is marked and does not open', async () => {
-    const w = render()
-    const t = triggers(w)[2]
-    expect(t.attributes('disabled')).toBeDefined()
-    await t.trigger('click')
-    expect(w.emitted('update:modelValue')).toBeUndefined()
+  it('single without collapsible: the open section stays open', async () => {
+    await render({ defaultValue: 'a', collapsible: false })
+    await toggle(0)
+    expect(expanded()[0]).toBe(true)
   })
 
-  it('takes header content from the label slot with its open state', async () => {
-    wrapper = mount(BaseAccordion, {
-      props: { items, modelValue: 'b' },
-      slots: { label: '<template #label="{ item, open }">{{ item.label }}{{ open ? " (open)" : "" }}</template>' },
-    })
-    expect(triggers(wrapper).map((t) => t.text())).toEqual(['General', 'Network (open)', 'Danger zone'])
+  it('multiple: several sections can be open and v-model is an array', async () => {
+    const w = await render({ type: 'multiple', defaultValue: [] })
+    await toggle(0)
+    await toggle(2)
+    expect(expanded()).toEqual([true, false, true, false])
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([['a', 'c']])
+  })
+
+  it('follows a controlled modelValue', async () => {
+    await render({ modelValue: 'd' })
+    expect(expanded()).toEqual([false, false, false, true])
+  })
+})
+
+describe('BaseAccordion keyboard', () => {
+  it('ArrowDown moves focus to the next enabled trigger, skipping a disabled one', async () => {
+    await render()
+    triggers()[0].focus()
+    await press(triggers()[0], 'ArrowDown')
+    expect(document.activeElement).toBe(triggers()[2])
+  })
+
+  it('ArrowUp from the first trigger wraps to the last', async () => {
+    await render()
+    triggers()[0].focus()
+    await press(triggers()[0], 'ArrowUp')
+    expect(document.activeElement).toBe(triggers()[3])
+  })
+
+  it('End focuses the last trigger and Home the first', async () => {
+    await render()
+    triggers()[0].focus()
+    await press(triggers()[0], 'End')
+    expect(document.activeElement).toBe(triggers()[3])
+    await press(triggers()[3], 'Home')
+    expect(document.activeElement).toBe(triggers()[0])
+  })
+})
+
+describe('BaseAccordion RTL', () => {
+  it('horizontal + dir="ltr": ArrowRight moves to the next trigger', async () => {
+    await render({ orientation: 'horizontal', dir: 'ltr' })
+    triggers()[0].focus()
+    await press(triggers()[0], 'ArrowRight')
+    expect(document.activeElement).toBe(triggers()[2])
+  })
+
+  it('horizontal + dir="rtl": ArrowRight moves to the previous trigger and ArrowLeft to the next', async () => {
+    await render({ orientation: 'horizontal', dir: 'rtl', defaultValue: 'c' })
+    triggers()[2].focus()
+    await press(triggers()[2], 'ArrowRight')
+    expect(document.activeElement).toBe(triggers()[0])
+    await press(triggers()[0], 'ArrowLeft')
+    expect(document.activeElement).toBe(triggers()[2])
+  })
+
+  it('horizontal: follows the document direction when no dir prop is passed', async () => {
+    document.documentElement.dir = 'rtl'
+    await render({ orientation: 'horizontal' })
+    triggers()[2].focus()
+    await press(triggers()[2], 'ArrowRight')
+    expect(document.activeElement).toBe(triggers()[0])
+  })
+
+  it('vertical + dir="rtl": ArrowDown is still next', async () => {
+    await render({ dir: 'rtl' })
+    triggers()[0].focus()
+    await press(triggers()[0], 'ArrowDown')
+    expect(document.activeElement).toBe(triggers()[2])
+  })
+})
+
+describe('BaseAccordion value shape (#20382)', () => {
+  it('type="single" opens the section when given a one-element array', async () => {
+    await render({ type: 'single', modelValue: ['c'] })
+    expect(expanded()).toEqual([false, false, true, false])
+  })
+
+  it('type="multiple" opens the section when given a bare string', async () => {
+    await render({ type: 'multiple', modelValue: 'c' })
+    expect(expanded()).toEqual([false, false, true, false])
+  })
+
+  it('fits defaultValue to type as well', async () => {
+    await render({ type: 'single', defaultValue: ['d'] })
+    expect(expanded()).toEqual([false, false, false, true])
   })
 })

@@ -18,13 +18,13 @@ Audit of the role->group map for tokens granting a service they do not run:
   backend/main: already withheld from detection by ``_DECLARED_ONLY_GROUPS``.
 """
 
-import logging
 from collections.abc import Callable
 from typing import Any
 
-# stdlib logging (as inventory_builder.py / setup_wizard.py): get_logger builds a RotatingFileHandler
-# from config values (logging.rotation.max_bytes) that the SLM test harness mocks, so it raises at import.
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import first_time
+
+logger = get_logger(__name__)
 
 GROUP_OWNERS: dict[str, frozenset] = {
     "redis": frozenset({"redis"}),
@@ -42,9 +42,6 @@ def withhold_unowned_groups(groups: set[str], detected_tokens: Any) -> set[str]:
     return {g for g in groups if not GROUP_OWNERS.get(g) or GROUP_OWNERS[g] & present}
 
 
-_WARNED: set[tuple[str, frozenset]] = set()
-
-
 def warn_stale_detected_roles(node: Any, groups_of: Callable[[list[str]], set[str]] | None = None) -> list[str]:
     """Log (once per node and stale set) roles a node runs but does not declare; return them.
 
@@ -54,19 +51,21 @@ def warn_stale_detected_roles(node: Any, groups_of: Callable[[list[str]], set[st
     detected = normalise_tokens(getattr(node, "detected_roles", None))
     stale = sorted(detected - declared)
     node_id = getattr(node, "node_id", "?")
-    key = (str(node_id), frozenset(stale))
-    if stale and key not in _WARNED:
-        _WARNED.add(key)
+    key = f"{node_id}:{','.join(stale)}"  # stale is sorted: one key per (node, stale set)
+    if stale and first_time(__name__, key):
         withheld = ""
         if groups_of is not None:
             granted = groups_of(stale)
             gated = sorted(granted - withhold_unowned_groups(granted, detected))
             withheld = f"; withheld until their own service runs: {', '.join(gated)}" if gated else ""
+        # flood_exempt: first_time already bounds this to one line per (node, stale set). The flood
+        # guard keys on the template, so it would drop the sixth DIFFERENT node in a window.
         logger.warning(
             "node %s runs roles it does not declare: %s -- assign or remove them%s (#19197)",
             node_id,
             ", ".join(stale),
             withheld,
+            extra={"flood_exempt": True},
         )
     return stale
 

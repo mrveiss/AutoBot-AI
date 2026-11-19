@@ -103,16 +103,9 @@ async def get_code_analysis_status(
 
     Issue #744: Requires admin authentication.
     """
-    # Issue #619: Parallelize independent file existence checks
-    code_analysis_exists, code_index_exists = await asyncio.gather(
-        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
-        asyncio.to_thread(analytics_controller.code_index_path.exists),
-    )
+    tools_available = await analytics_controller.code_tools_available()
     status = {
-        "tools_available": {
-            "code_analysis_suite": code_analysis_exists,
-            "code_index_mcp": code_index_exists,
-        },
+        "tools_available": tools_available,
         "last_analysis_time": analytics_state.get("last_analysis_time"),
         "cache_status": {
             "has_cached_results": bool(analytics_state.get("code_analysis_cache")),
@@ -123,7 +116,7 @@ async def get_code_analysis_status(
 
     # Add tool details if available
     # Issue #358 - avoid blocking (reuse exists checks from above)
-    if code_analysis_exists:
+    if tools_available["code_analysis_suite"]:
         # Issue #358 - use lambda to defer glob execution to thread
         scripts_available = await asyncio.to_thread(
             lambda: list(analytics_controller.code_analysis_path.glob("scripts/*.py"))
@@ -133,7 +126,7 @@ async def get_code_analysis_status(
             "scripts_available": scripts_available,
         }
 
-    if code_index_exists:
+    if tools_available["code_index_mcp"]:
         # Issue #358 - avoid blocking
         config_path = analytics_controller.code_index_path / "pyproject.toml"
         config_available = await asyncio.to_thread(config_path.exists)

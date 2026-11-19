@@ -9,6 +9,9 @@
 # backend_workers is deliberately NOT set here (#17856): roles/backend/defaults owns it (4) and
 # inventory/group_vars/slm.yml overrides it for the co-located box; a play-level include_vars
 # would shadow both.
+# backend_app_log_dir is deliberately NOT set here either (#20894): a vars file outranks the inventory, so an
+# operator's override would be lost; deploy-backend-env.yml derives it only when undefined, and the update
+# path takes it from the role defaults (include_role puts them in scope).
 ---
 backend_user: autobot
 backend_group: autobot
@@ -23,7 +26,7 @@ backend_redis_port: 6379
 backend_redis_password: ""
 backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
 backend_llm_provider: "ollama"
-backend_llm_endpoint: "http://127.0.0.1:11434"
+backend_llm_endpoint: "http://{{ backend_ollama_host | default('127.0.0.1') }}:{{ backend_ollama_port | default(11434) }}"  # #19861: backend_ollama_host from the wizard
 # 6-tier model mapping (#2553) — defaults from SSOT, overridable via env
 backend_llm_model: "{{ lookup('env', 'AUTOBOT_DEFAULT_LLM_MODEL') | default('qwen3.5:9b', true) }}"
 backend_routing_model: "{{ lookup('env', 'AUTOBOT_ROUTING_MODEL') | default('llama3.2:1b', true) }}"

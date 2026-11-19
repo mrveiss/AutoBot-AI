@@ -34,7 +34,7 @@ from multimodal_processor import (  # noqa: E402
     MultimodalResult,
 )
 from multimodal_processor import processor as multimodal_processor  # noqa: E402
-from tests.test_helpers import get_test_backend_url  # noqa: E402
+from tests.test_helpers import live_backend_url  # noqa: E402
 from voice_processing_system import AudioInput, get_voice_processing_system  # noqa: E402
 
 voice_processing_system = get_voice_processing_system()
@@ -47,7 +47,7 @@ def demo_api_connectivity():
     try:
         import requests
 
-        response = requests.get(get_test_backend_url() + "/api/system/health", timeout=5)
+        response = requests.get(live_backend_url() + "/api/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
             print(f"✅ API accessible - Status: {health_data.get('status', 'unknown')}")  # noqa: print  # noqa: print
@@ -57,7 +57,7 @@ def demo_api_connectivity():
             return False
     except requests.exceptions.ConnectionError:
         print(  # noqa: print
-            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} " "(not required for multimodal tests)"
+            f"⚠️ Cannot connect to backend API at {live_backend_url()} " "(not required for multimodal tests)"
         )
         return False
     except Exception as e:

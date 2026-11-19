@@ -252,8 +252,8 @@ output of a comparative audit is often not the thing you adopt.
   and drift.
 - **#13250** (tool approval gated twice) — partial static answer to its open "can any flow
   reach execution with neither gate firing" question. Path A fail-opens twice:
-  `AUTOBOT_CHAT_APPROVAL_GATE` reads as `False` when unset
-  (`chat_workflow/session_role.py:34`), and `_tool_call_needs_approval`
+  `AUTOBOT_CHAT_APPROVAL_GATE` read as `False` when unset when this was written
+  (`chat_workflow/session_role.py`; it is on by default since #19957), and `_tool_call_needs_approval`
   (`chat_workflow/graph.py:494`) returns `False` whenever no categories are declared. A third
   route to the same place: a declared category outside the valid set matches no tools and
   silently disables the gate (`tool_catalogue.py:90` docstring). Labelled `needs-decision`

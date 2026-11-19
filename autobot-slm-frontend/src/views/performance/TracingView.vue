@@ -11,11 +11,11 @@
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { ref, onMounted, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
-import { BaseAlert, usePagination, BasePagination } from '@autobot/ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, usePagination, BasePagination, formatDuration } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type {
   TraceItem,
   TraceDetail,
@@ -57,12 +57,14 @@ const expandedTraceId = ref<string | null>(null)
 const expandedDetail = ref<TraceDetail | null>(null)
 const detailLoading = ref(false)
 
-const timeRangeOptions = [
-  { label: '1h', value: '1' },
-  { label: '6h', value: '6' },
-  { label: '24h', value: '24' },
-  { label: '7d', value: '168' },
-]
+const { t } = useI18n()
+
+const timeRangeOptions = computed(() => [
+  { label: t('performance.tracingView.range.1h'), value: '1' },
+  { label: t('performance.tracingView.range.6h'), value: '6' },
+  { label: t('performance.tracingView.range.24h'), value: '24' },
+  { label: t('performance.tracingView.range.7d'), value: '168' },
+])
 
 const statusOptions = [
   { label: 'All', value: 'all' },
@@ -201,10 +203,6 @@ function spanBarColor(status: string): string {
 /**
  * Format duration for display.
  */
-
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
 
 // Watch for filter changes that require immediate reload
 watch([timeRange, statusFilter], () => {
@@ -356,7 +354,7 @@ onMounted(() => {
                   {{ trace.source_node_id ?? '-' }}
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
-                  {{ formatDate(trace.created_at) }}
+                  {{ formatFleetDateTime(trace.created_at) }}
                 </td>
               </tr>
 
