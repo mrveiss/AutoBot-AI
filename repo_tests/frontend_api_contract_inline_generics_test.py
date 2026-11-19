@@ -1,3 +1,7 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
 """Inline-generic counting in the frontend API-contract ratchet reads code, not prose (#15771, #17377).
 
 Split out of ``frontend_api_contract_ratchet_test`` to keep that module under the line ceiling.
