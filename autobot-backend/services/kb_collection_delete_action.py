@@ -112,12 +112,24 @@ async def _kb():
     return kb
 
 
+def _is_missing(result: dict) -> bool:
+    """Whether a failed KB answer says the collection does not exist (and not that the store failed)."""
+    return "not found" in str(result.get("message", "")).lower()
+
+
 async def collection_state(kb, collection_id: str) -> tuple[dict, int] | None:
-    """The collection record and its fact count now (read only); ``None`` when the collection does not exist."""
+    """The collection record and its fact count now (read only).
+
+    ``None`` only when the collection does not exist; any other failure (store unavailable) raises.
+    """
     found = await kb.get_collection(collection_id=collection_id)
     if not found.get("success"):
-        return None
+        if _is_missing(found):
+            return None
+        raise RuntimeError(f"the knowledge base could not read the collection: {found.get('message')}")
     preview = await kb.bulk_delete_collection_facts(collection_id=collection_id, confirm=False)
+    if not preview.get("success"):
+        raise RuntimeError(f"the knowledge base could not count the facts: {preview.get('message')}")
     return (found.get("collection") or {}), int(preview.get("facts_to_delete") or 0)
 
 
@@ -199,6 +211,12 @@ def _auditor(op: CollectionOp, approval: "Approval", self_approval: bool, select
     return audit
 
 
+def _approved_facts(op: CollectionOp, approval: "Approval", selector: dict) -> int | None:
+    """The count the approver saw, where facts are deleted; ``None`` (no bound) where none are."""
+    approved = ((approval.context or {}).get("plan") or {}).get("facts")
+    return approved if _deletes_facts(op, selector) else None
+
+
 def _deletes_facts(op: CollectionOp, selector: dict) -> bool:
     """A bulk delete always deletes facts; a collection delete only when asked to."""
     return op is BULK_DELETE or bool(selector.get("delete_facts"))
@@ -218,13 +236,19 @@ async def _refuse_recreated(approval: "Approval", audit: Audit, collection: dict
     )
 
 
-async def _run_delete(op: CollectionOp, kb, selector: dict) -> int:
-    """Run the knowledge base's own delete; returns the number of facts deleted."""
+async def _run_delete(op: CollectionOp, kb, selector: dict, approved: int | None) -> int:
+    """Run the knowledge base's own delete; returns the number of facts deleted.
+
+    ``approved`` bounds the membership the delete itself reads, so a fact added after the count check cannot be
+    deleted with the approved ones: the knowledge base refuses (deleting nothing) when its own read is larger.
+    """
     cid = selector["collection_id"]
     if op is DELETE:
-        result = await kb.delete_collection(collection_id=cid, delete_facts=selector["delete_facts"])
+        result = await kb.delete_collection(
+            collection_id=cid, delete_facts=selector["delete_facts"], max_facts=approved
+        )
     else:
-        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True)
+        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True, max_facts=approved)
     if not result.get("success"):
         raise RuntimeError(f"the knowledge base refused the deletion: {result.get('message')}")
     return int(result.get("facts_deleted" if op is DELETE else "deleted_count") or 0)
@@ -262,7 +286,7 @@ async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession
         audit,
         what="the deletion",
         intent={"facts": facts},
-        delete=lambda: _run_delete(op, kb, selector),
+        delete=lambda: _run_delete(op, kb, selector, _approved_facts(op, approval, selector)),
         failure=lambda exc: {"error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
     )

@@ -152,6 +152,11 @@ def test_planted_destructive_call_is_detected():
     assert INDEX_OR_FLUSH in _kinds("redis_conn.flushdb()")
 
 
+def test_index_or_flush_detector_controls_do_not_fire():
+    clean = "r = get_redis_client(database='main')\nr.set('a', 1)\nprint('index flushed later')\n"
+    assert INDEX_OR_FLUSH not in _kinds(clean) and INDEX_OR_FLUSH not in _kinds("echo hello\n", "planted.sh")
+
+
 def test_planted_collection_deletes_are_detected():
     assert COLLECTION_DELETE in _kinds("async def f(kb):\n    await kb.delete_collection(collection_id='c')\n")
     assert COLLECTION_DELETE in _kinds("await kb.bulk_delete_collection_facts(collection_id=c, confirm=True)")
@@ -168,13 +173,19 @@ def test_planted_key_deletes_on_the_knowledge_db_are_detected():
     unlink = "r = get_redis_client(database='knowledge')\nr.unlink(*keys)\n"
     bulk = "r = default_client('knowledge')\nr.delete(*keys)\n"
     const = "DATABASE = 'knowledge'\nr = make(DATABASE)\nr.unlink('doc:1')\n"
+    annotated = "DATABASE: str = 'knowledge'\nr = make(DATABASE)\nr.delete(*keys)\n"
     enum = "r = get_redis_client(RedisDatabase.KNOWLEDGE)\nr.unlink(*keys)\n"
-    assert all(KEY_DELETE in _kinds(src) for src in (unlink, bulk, const, enum))
+    assert all(KEY_DELETE in _kinds(src) for src in (unlink, bulk, const, annotated, enum))
 
 
 def test_key_delete_detector_controls_do_not_fire():
     other_db = "r = get_redis_client(database='main')\nr.unlink(*keys)\n"
     single_key = "r = get_redis_client(database='knowledge')\nr.delete('fact:1')\n"
     file_unlink = "p = Path('x')\np.unlink(missing_ok=True)\nr = get_redis_client(database='knowledge')\n"
+    bare_path_unlink = "p = Path('x')\np.unlink()\nr = get_redis_client(database='knowledge')\n"
+    other_annotated = "DATABASE: str = 'main'\nr = make(DATABASE)\nr.delete(*keys)\n"
     os_unlink = "import os\nos.unlink(tmp)\nr = get_redis_client(database='knowledge')\n"
-    assert not any(KEY_DELETE in _kinds(src) for src in (other_db, single_key, file_unlink, os_unlink))
+    assert not any(
+        KEY_DELETE in _kinds(src)
+        for src in (other_db, single_key, file_unlink, bare_path_unlink, other_annotated, os_unlink)
+    )

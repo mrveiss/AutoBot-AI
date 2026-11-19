@@ -49,7 +49,7 @@ class FakeKB:
             "collection": {"name": f"Name {collection_id}", "created_at": self.created[collection_id]},
         }
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, max_facts=None):
         if collection_id not in self.collections:
             return {
                 "success": False,
@@ -62,6 +62,8 @@ class FakeKB:
                 "facts_to_delete": len(ids),
                 "confirm_required": True,
             }
+        if max_facts is not None and len(ids) > max_facts:
+            return {"success": False, "message": "more facts than approved; nothing deleted"}
         self.mutations.append(("bulk", collection_id))
         self.events.append("delete")
         deleted = len(ids)
@@ -73,12 +75,14 @@ class FakeKB:
             "deleted_count": deleted,
         }
 
-    async def delete_collection(self, collection_id, delete_facts=False):
+    async def delete_collection(self, collection_id, delete_facts=False, max_facts=None):
         if collection_id not in self.collections:
             return {
                 "success": False,
                 "message": f"Collection not found: {collection_id}",
             }
+        if delete_facts and max_facts is not None and len(self.collections[collection_id]) > max_facts:
+            return {"success": False, "message": "more facts than approved; nothing deleted"}
         self.mutations.append(("delete", collection_id, delete_facts))
         self.events.append("delete")
         ids = self.collections.pop(collection_id)
@@ -394,6 +398,39 @@ async def test_the_name_is_display_only_and_never_part_of_the_scope(world):
     approval.context["plan"]["name"] = "Another name"  # a different display name changes nothing
     await _run(action.DELETE, approval)
     assert world.kb.mutations == [("delete", "c1", False)]
+
+
+# -- the count is bound to the snapshot that is deleted; a store failure is not "not found" ------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", action.OPS)
+async def test_a_fact_added_after_the_count_check_is_not_deleted_with_the_approved_ones(world, op):
+    approval = _approval(op, action.selector_for(op, "c1", True), 3)
+    real = world.audit.side_effect
+
+    def grow_during_the_intent_audit(*args, **kwargs):
+        if kwargs["details"].get("phase") == "intent":
+            world.kb.collections["c1"].add("f4")  # a member joins after the count check, before the delete
+        return real(*args, **kwargs)
+
+    world.audit.side_effect = grow_during_the_intent_audit
+    with pytest.raises(RuntimeError, match="refused the deletion"):
+        await _run(op, approval)
+    assert world.kb.mutations == [] and "f4" in world.kb.collections["c1"]
+    assert world.audit.await_args.kwargs["result"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_store_failure_is_raised_and_only_a_missing_collection_is_none(world, monkeypatch):
+    unavailable = AsyncMock(return_value={"success": False, "message": "Redis not available"})
+    monkeypatch.setattr(world.kb, "get_collection", unavailable)
+    with pytest.raises(RuntimeError, match="could not read the collection"):
+        await action.collection_state(world.kb, "c1")
+    with pytest.raises(Exception):
+        await routes.delete_collection("c1", False, _req(), ADMIN, _session())
+    assert world.created == {}
+    assert await action.collection_state(FakeKB([]), "nope") is None
 
 
 # -- registration -------------------------------------------------------------------------------------------

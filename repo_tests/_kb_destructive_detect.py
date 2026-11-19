@@ -35,10 +35,16 @@ def _is_knowledge_name(node: ast.AST) -> bool:
 
 
 def _names_database_constant(node: ast.AST) -> bool:
-    """``DATABASE = "knowledge"``: a module constant a client factory is later called with."""
-    if not (isinstance(node, ast.Assign) and _is_knowledge_name(node.value)):
+    """``DATABASE = "knowledge"`` or ``DATABASE: str = "knowledge"``: a constant a client factory is called with."""
+    if isinstance(node, ast.Assign):
+        targets = node.targets
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+        targets = [node.target]
+    else:
         return False
-    return any(isinstance(t, ast.Name) and ("DATABASE" in t.id or t.id.endswith("_DB")) for t in node.targets)
+    if not _is_knowledge_name(node.value):
+        return False
+    return any(isinstance(t, ast.Name) and ("DATABASE" in t.id or t.id.endswith("_DB")) for t in targets)
 
 
 def _opens_knowledge_db(node: ast.AST) -> bool:
@@ -58,8 +64,9 @@ def _is_os_module(node: ast.AST) -> bool:
 def _deletes_keys(node: ast.AST) -> bool:
     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
         return False
-    if node.func.attr == "unlink":  # a Redis UNLINK, not ``Path.unlink`` / ``os.unlink`` on a file
-        return not any(k.arg == "missing_ok" for k in node.keywords) and not _is_os_module(node.func.value)
+    if node.func.attr == "unlink":  # a Redis UNLINK names keys; ``Path.unlink()`` / ``os.unlink(p)`` is a file
+        named_keys = bool(node.args) and not any(k.arg == "missing_ok" for k in node.keywords)
+        return named_keys and not _is_os_module(node.func.value)
     return node.func.attr == "delete" and any(isinstance(a, ast.Starred) for a in node.args)
 
 
