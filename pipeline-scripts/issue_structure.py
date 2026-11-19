@@ -50,8 +50,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
 from issue_api import IssueApiError, IssueClient, ensure_label, list_issues, load_upsert  # noqa: E402
+
+from autobot_shared.env_utils import env_int  # noqa: E402  # the one env integer reader (#15691)
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +72,9 @@ SWEEP_MAX_CHECKS = 100
 TRIAGE_WORKFLOW_FILE = "issue-triage.yml"
 # Issues one run checks from the changed set (each costs 2-4 API calls here plus the triage and
 # wording jobs against the same 1,000/hour token budget); the rest wait for the next run.
-CHANGED_MAX = int(os.environ.get("ISSUE_TRIAGE_MAX_CHANGED", "50"))
+CHANGED_MAX = env_int("ISSUE_TRIAGE_MAX_CHANGED", 50)
 CURSOR_JOB_PREFIX = "Window cursor "
-FALLBACK_WINDOW_HOURS = int(os.environ.get("ISSUE_TRIAGE_FALLBACK_WINDOW_HOURS", "24"))
+FALLBACK_WINDOW_HOURS = env_int("ISSUE_TRIAGE_FALLBACK_WINDOW_HOURS", 24)
 
 ACTION_NONE = "none"
 ACTION_LINK = "link"

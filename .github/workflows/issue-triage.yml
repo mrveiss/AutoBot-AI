@@ -30,7 +30,7 @@
 #   event-level `if`: a run whose jobs all skip would still take the pending slot and
 #   displace a run that did the work. Nothing needs to stay per-issue-immediate: with no
 #   run in flight the first event starts a run at once, and `opened`'s one-time comment is
-#   decided by the issue's age (ASK_MAX_AGE_HOURS) plus an already-asked check.
+#   decided by the issue's age (ASK_MAX_AGE_HOURS) plus the shared upsert, whose marker keeps it to one ask per issue (asks posted before the marker existed are not recognised, so a young issue asked earlier may be asked once more).
 #   The window advances only through the final `cursor` job (its name carries the cursor `<updated_at>#<issue number>`), so
 #   a failed job never advances it. The changed set is capped (ISSUE_TRIAGE_MAX_CHANGED in
 #   issue_structure.py, oldest first) and the cursor then stops at the last processed issue;
@@ -88,6 +88,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
+            autobot_shared
 
       - name: Set up Python from .python-version
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -114,6 +115,7 @@ jobs:
           persist-credentials: false
 
       - name: Triage issue
+        id: triage
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           # A deferral lasts at most a few runs (events and the 2h schedule); a week bounds it.
@@ -125,11 +127,14 @@ jobs:
             // so it is a pure function with unit tests, instead of untestable
             // inline substring matching that mislabelled #13032-#13036.
             const { selectLabels } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-triage-labels.js`);
-            // #21854: the one-time ask is decided by age and by the already-asked check, never by
+            // #21854: the one-time ask is decided by age and posted through the marker upsert, never by
             // the window: a capped window can defer an issue past its own creation time.
             const askAfter = Date.now() - Number(process.env.ASK_MAX_AGE_HOURS) * 3600 * 1000;
             const numbers = process.env.CHANGED.split(' ').filter(Boolean).map(Number);
             const ASK = 'Auto-triage could not confidently classify this issue';
+            const ASK_MARKER = '<!-- issue-triage:ask -->';
+            const fs = require('fs');
+            const asked = [];
             const { owner, repo } = context.repo;
 
             const failed = [];
@@ -146,14 +151,13 @@ jobs:
                   // it. A failed run is re-covered by the next window, so also skip an issue
                   // that already carries our question.
                   if (!suppressed && new Date(issue.created_at).getTime() >= askAfter) {
-                    const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number });
-                    if (comments.some(c => c.body.includes(ASK))) continue;
-                    await github.rest.issues.createComment({
-                      owner, repo, issue_number: number,
-                      body: `👋 ${ASK} (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
-                    });
-                  }
-                  continue;
+                  // The shared upsert posts it once and updates it in place (marker), so a
+                  // re-covered window or a later edit never adds a second ask.
+                  const body = `${ASK_MARKER}\n👋 ${ASK} (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`;
+                  fs.writeFileSync(`${process.env.RUNNER_TEMP}/ask-${number}.md`, body);
+                  asked.push(number);
+                }
+                continue;
                 }
 
                 await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels });
@@ -164,7 +168,23 @@ jobs:
                 failed.push(number);
               }
             }
+            core.setOutput('asked', asked.join(' '));
             if (failed.length) core.setFailed(`triage failed for: ${failed.join(', ')}`);
+
+      - name: Post or update the one-time ask
+        if: ${{ !cancelled() && steps.triage.outputs.asked != '' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          ASKED: ${{ steps.triage.outputs.asked }}
+        run: |
+          failed=""
+          for number in $ASKED; do
+            python3 .github/actions/upsert-pr-comment/upsert_pr_comment.py --marker '<!-- issue-triage:ask -->' \
+              --body-file "$RUNNER_TEMP/ask-$number.md" --number "$number" --repo "$REPO" --api-url "$API_URL" || failed="$failed #$number"
+          done
+          if [ -n "$failed" ]; then echo "ask failed for:$failed"; exit 1; fi
 
   structure:
     name: Issue structure (milestone, phase, parent)
@@ -180,6 +200,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             pipeline-scripts
+            autobot_shared
             .github/actions/upsert-pr-comment
 
       # #20903: the repo scripts import autobot_shared, which refuses an interpreter
