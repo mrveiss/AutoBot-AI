@@ -1101,6 +1101,13 @@ async def _fetch_pages_concurrent(entries: list[dict], max_pages: int) -> list[d
     return list(await asyncio.gather(*(_fetch_single_page(e) for e in capped)))
 
 
+def _wrap_untrusted_search_text(text: str, query: str) -> str:
+    """*text* sanitised and wrapped as untrusted web content for the model (``scrape_url`` does the same)."""
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return sanitize_and_wrap_web_content(text, query)
+
+
 def _format_full_search_results(query: str, entries: list[dict]) -> str:
     """Format enriched search entries (with markdown) into a human-readable string.
 
@@ -2430,6 +2437,8 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 # with fetch_full mode).
                 results = await self._execute_web_search(query, max_pages, session_id)
 
+            # Search snippets and fetched pages are untrusted web text: wrapped as data, like scrape_url (#21877)
+            results = _wrap_untrusted_search_text(results, query)
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {}, success=True)
 
