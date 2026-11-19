@@ -23,6 +23,7 @@ from chat_workflow.tool_call_grammar import (
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
     TOOL_CALL_PATTERN,
+    TOOL_CALL_TRUNCATED_OPENING_RE,
     normalize_tool_call_brackets,
     strip_unparsed_tool_tags,
 )
@@ -96,12 +97,15 @@ def tool_call_parse_error(text: str) -> str | None:
     Covers a well-formed tag whose args are invalid, and an opening tag that never
     matched the full grammar. A tag that parses cleanly returns None.
     """
-    if not text or not TOOL_CALL_OPENING_RE.search(text):
+    if not text or not (TOOL_CALL_OPENING_RE.search(text) or TOOL_CALL_TRUNCATED_OPENING_RE.search(text)):
         return None
     matches = list(TOOL_CALL_PATTERN.finditer(text))
     failures = _param_failures(matches)
-    if TOOL_CALL_OPENING_RE.search(_outside_calls(text, matches)):  # an opening beside complete calls never closed
+    outside = _outside_calls(text, matches)
+    if TOOL_CALL_OPENING_RE.search(outside):  # an opening beside complete calls never closed
         failures.append("a TOOL_CALL tag was not closed or is malformed, so no tool ran")
+    elif TOOL_CALL_TRUNCATED_OPENING_RE.search(outside):  # generation stopped before the tag's `>`
+        failures.append("a TOOL_CALL tag was cut off before its closing '>', so no tool ran")
     return "; ".join(failures) or None
 
 
@@ -184,5 +188,6 @@ def _drop_unmatched_fragments(text: str) -> str:
         out.append(TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos : match.start()])))
         out.append(match.group(0))
         pos = match.end()
-    out.append(TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos:])))
+    tail = TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos:]))
+    out.append(TOOL_CALL_TRUNCATED_OPENING_RE.sub("", tail))  # a tag cut off before its `>` (#21843)
     return "".join(out)

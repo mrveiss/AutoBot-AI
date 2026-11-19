@@ -118,3 +118,19 @@ def test_valid_json_that_is_not_an_object_is_a_parse_failure(raw):
     call = f"""<TOOL_CALL name="browser_evaluate" params='{raw}'>x</TOOL_CALL>"""
     assert "tool args must be a JSON object" in tool_call_parse_error(call)
     assert parse_tool_args("{}") == {}
+
+
+_CUT = """I will check.\n<TOOL_CALL name="browser_evaluate" params='{"expression": "document."""
+
+
+def test_an_opening_tag_cut_off_before_its_close_is_reported_and_removed():
+    assert "cut off" in tool_call_parse_error(_CUT)
+    assert clean_reply_text(_CUT) == "I will check."
+    assert "cut off" in tool_call_parse_error(GOOD + '\n<TOOL_CALL name="x" params=\'{"a"')
+    assert clean_reply_text(GOOD + '\n<TOOL_CALL name="x" par') == GOOD
+
+
+def test_prose_mentioning_the_tag_is_neither_reported_nor_stripped():
+    prose = "Use the <TOOL_CALL tag only when needed, then continue."
+    assert tool_call_parse_error(prose) is None
+    assert clean_reply_text(prose) == prose
