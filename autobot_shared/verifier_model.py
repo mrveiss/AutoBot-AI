@@ -206,6 +206,12 @@ async def resolve_and_chat(
     return request, response
 
 
+async def drain_spend_tasks(timeout: float = 5.0) -> None:
+    """Wait (bounded) for in-flight spend recordings, so shutdown does not drop a verifier call's accounting."""
+    if _spend_tasks:
+        await asyncio.wait(set(_spend_tasks), timeout=timeout)
+
+
 def verifier_model_status() -> dict[str, Any]:
     """The last reading per model, for the health probe: ``{model: available}`` (None = unknown)."""
     return {model: reading[1] for model, reading in _readings.items()}

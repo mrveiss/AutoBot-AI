@@ -9,6 +9,7 @@ Otherwise the loaded chat model answers, asked with the chat's ``num_ctx`` so Ol
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -146,3 +147,22 @@ async def test_loaded_models_reads_api_ps_and_an_unreachable_ollama_is_none():
         assert client.get.await_args.args[0] == ollama_ps_url("http://ollama.example:11434")
         client.get = AsyncMock(side_effect=OSError("down"))
         assert await verifier_model.loaded_models(provider) is None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_drains_in_flight_spend_recordings():
+    done = []
+
+    async def slow(response, **kwargs):
+        await asyncio.sleep(0.01)
+        done.append(response)
+
+    provider = _provider()
+    with (
+        patch.object(verifier_model, "report_spend", slow),
+        patch.object(verifier_model, "loaded_models", AsyncMock(return_value=[])),
+    ):
+        await verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, {})
+        assert not done
+        await verifier_model.drain_spend_tasks()
+    assert len(done) == 1 and not verifier_model._spend_tasks
