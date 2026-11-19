@@ -183,3 +183,31 @@ async def test_a_provider_default_request_that_times_out_does_not_claim_the_conf
     ):
         obs = await guard._call_verifier_once("bash", {}, "why", None)
     assert obs.model_used is None
+
+
+@pytest.mark.asyncio
+async def test_a_deadline_expiring_during_spend_recording_keeps_the_response_and_records_once():
+    """A cancellation mid-recording neither discards the response nor records twice (#21844)."""
+    started, release, calls = asyncio.Event(), asyncio.Event(), []
+
+    async def slow_report(response, **kwargs):
+        calls.append(response)
+        started.set()
+        await release.wait()
+
+    response = MagicMock()
+    provider = _provider([])
+    provider.chat_completion = AsyncMock(return_value=response)
+    attempt: dict = {}
+    with (
+        patch.object(verifier_model, "report_spend", slow_report),
+        patch.object(verifier_model, "resolve_verifier_model", AsyncMock(return_value="m")),
+    ):
+        task = asyncio.ensure_future(verifier_model.resolve_and_chat(provider, "s", "u", "bash", 10, attempt))
+        await started.wait()
+        task.cancel()  # what wait_for does when the deadline expires
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+        await asyncio.sleep(0)
+    assert calls == [response]

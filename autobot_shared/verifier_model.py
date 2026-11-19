@@ -17,6 +17,7 @@ up as ``timeout`` degradations.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -103,7 +104,8 @@ async def resolve_and_chat(
         metadata={"purpose": "pre_action_verifier", "tool": tool_name},
     )
     response = await provider.chat_completion(request)
-    await report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata)  # #16924 the call records itself
+    # #16924 the call records itself; shielded so a deadline expiring mid-recording cannot discard the response
+    await asyncio.shield(report_spend(response, site=VERIFIER_SPEND_SITE, metadata=request.metadata))
     return request, response
 
 
