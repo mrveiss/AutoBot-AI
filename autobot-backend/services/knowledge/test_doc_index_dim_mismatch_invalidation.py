@@ -117,7 +117,8 @@ async def test_a_cancelled_resolve_bumps_only_after_the_thread_has_finished():
         task = asyncio.ensure_future(resolve_collection(indexer, "m", 8))
         await asyncio.to_thread(indexer.started.wait, 5)
         task.cancel()
-        await asyncio.sleep(0.05)
+        _, pending = await asyncio.wait({task}, timeout=0.2)
+        assert pending, "the resolve cannot finish while its thread is still running"
         bump.assert_not_awaited()  # the thread is still running: nothing may be invalidated yet
         indexer.release.set()
         with pytest.raises(asyncio.CancelledError):
