@@ -295,6 +295,12 @@ DECLARED_SCOPES = {
     "backoff-formula-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "doubled-api-prefix-scan": ("autobot-backend/api", "autobot-slm-backend/api"),
     "script-module-name-scan": ("autobot-infrastructure/shared/scripts",),
+    "provider-tool-schema-scan": (
+        "autobot-backend/llm_shared",
+        "autobot-backend/api/llm.py",
+        "autobot-backend/chat_workflow/manager.py",
+        "autobot-backend/modern_ai_integration.py",
+    ),
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "redis-direct-constructor-scan": (
         "autobot-backend",

@@ -83,6 +83,7 @@ import repo_tests.opt_autobot_literal_ratchet_18880_test as _opt_autobot_guard  
 import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
 import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F401 -- registers its scope
 import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
+import repo_tests.provider_tool_schema_single_source_16815_test as _provider_tool_schema_guard  # noqa: F401 -- registers its scope
 import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
 import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
 import repo_tests.script_module_names_unique_14873_test as _script_names_guard  # noqa: F401 -- registers its scope

@@ -377,6 +377,12 @@ REACH_ROOTS = {
         "autobot_shared",
         "plugins",
     ),
+    "repo_tests/provider_tool_schema_single_source_16815_test.py": (
+        "autobot-backend/api/llm.py",
+        "autobot-backend/chat_workflow/manager.py",
+        "autobot-backend/llm_shared",
+        "autobot-backend/modern_ai_integration.py",
+    ),
     "repo_tests/redaction_placeholder_one_home_19337_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
