@@ -88,3 +88,9 @@ def test_a_credential_in_the_username_position_is_masked():
         "navigate", {"url": "https://opaque-token@example.test/path"}, TimeoutError("x")
     )
     assert "opaque-token" not in report["url"] and "example.test/path" in report["url"]
+
+
+def test_a_long_username_credential_is_redacted_before_the_cap():
+    url = "https://" + "A" * 220 + "@example.test/path"
+    report = build_browser_error_report("navigate", {"url": url}, TimeoutError("x"))
+    assert "A" * 20 not in report["url"]

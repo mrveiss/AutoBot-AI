@@ -81,10 +81,10 @@ def _without_query(url: str) -> str:
 def _echo(value: Any, *, is_url: bool) -> str | None:
     if not isinstance(value, str) or not value:
         return None
-    cleaned = _CONTROL_RE.sub(" ", _without_query(value) if is_url else value)[:BROWSER_ERROR_ECHO_MAX_CHARS]
-    if is_url:  # a credential can sit in the username position (https://<token>@host), so mask it too
+    cleaned = _CONTROL_RE.sub(" ", _without_query(value) if is_url else value)
+    if is_url:  # a credential can sit in the username position (https://<token>@host); redact BEFORE the cap
         cleaned = redact_url_credentials(redact_url_userinfo(cleaned, mask_username=True))
-    return redact_text(cleaned)
+    return redact_text(cleaned[:BROWSER_ERROR_ECHO_MAX_CHARS])
 
 
 def build_browser_error_report(tool_name: str, params: dict[str, Any], error: BaseException) -> dict[str, Any]:
