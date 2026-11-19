@@ -10,8 +10,11 @@ the agent-config writes (model/provider update, enable, disable; #21742), the di
 ``config_manager`` writes of the developer, embeddings and auth routes, the model-list
 sync, the web-research settings save and ``update_llm_model`` (#21858), and by the
 config rollback across its live read, apply and read. Reentrant, so the inner
-``_save_config_to_file`` takes it again on the same thread. Nothing is known to be
-uncovered. It is a threading lock: never hold it across an await.
+``_save_config_to_file`` takes it again on the same thread. Every
+``config_manager.save_settings()`` caller is locked (swept in #21858: ``model_config.py``,
+``agent_config_writer``, ``config_manager_writer``, ``config_rollback.py``,
+``config_service.py``, ``web_research_config.py``); that sweep covers ``save_settings`` only, not other
+store writes. It is a threading lock: never hold it across an await.
 """
 
 import functools

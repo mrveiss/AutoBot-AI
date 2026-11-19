@@ -6,7 +6,8 @@
 
 Each helper holds ``services.config_write_lock.CONFIG_WRITE_LOCK`` for its whole
 read, write and save, so it cannot interleave with a ``ConfigService`` write or a
-rollback. Synchronous: never call these while holding an await point open.
+rollback. The agent-config variants that return the prior value live in
+``agent_config_writer``. Synchronous: never call these while holding an await point open.
 """
 
 from services.config_write_lock import locked_config_write
