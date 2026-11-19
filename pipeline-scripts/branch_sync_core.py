@@ -4,8 +4,8 @@
 # Author: mrveiss
 """Pure decisions for the branch sync (#19548): no git, no network, no clock.
 
-``branch_sync.py`` merges main into every open same-repo PR branch and every
-PR-less branch, pushing with ``AUTOBOT_PUSH_TOKEN``; every merge commit ends with
+``branch_sync.py`` merges main into every open same-repo ``land-next`` PR branch,
+pushing with ``AUTOBOT_PUSH_TOKEN``; every merge commit ends with
 `` [skip ci]`` so a sync starts no push or pull_request workflow run.
 Every judgement it makes lives here, so each one is pinned by a fixture test
 rather than trusted: which branches are targets, how a merge or a push ended,
@@ -38,6 +38,11 @@ NEVER_TARGET = frozenset({"main", "release", "master", "develop", "HEAD"})
 #: suite. Whoever builds the train merges main into it with CI (#19724).
 EXCLUDED_PREFIXES = ("rescued/", "dependabot/", "automation/", "train-")
 
+#: The cross-session PR coordinator adds this label when a PR is admitted to CI and removes it when the
+#: slot is released (safe-merge also removes it on merge). It is the ONLY thing that selects a PR for the
+#: push-to-main and scheduled syncs: "we sync only the ones that have next slot" (owner rule 2026-11-18).
+LABEL_LAND_NEXT = "land-next"
+
 LABEL_CONFLICT = "sync-conflict"
 LABEL_WORKFLOW = "sync-needs-workflow-token"
 SYNC_LABELS = (LABEL_CONFLICT, LABEL_WORKFLOW)
@@ -59,6 +64,7 @@ SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workf
 HEAD_MOVED, FORK, ERROR, UNREACHABLE = "head-moved", "fork-skipped", "error", "unreachable"
 OTHER_BASE, POLICY = "other-base", "excluded-by-policy"
 NO_OPEN_PR = "no-open-pr"
+NO_SLOT = "no-ci-slot"
 PUSH_IN_PROGRESS = "push-in-progress"
 
 #: A pre-push hook marks its branch under here while its gate runs (#20260).
@@ -202,6 +208,16 @@ def _pr_target(pull: Dict[str, Any]) -> SyncTarget:
     return SyncTarget(head.get("ref", ""), int(pull["number"]), head.get("sha", ""), labels, bool(pull.get("draft")))
 
 
+def has_next_slot(target: SyncTarget) -> bool:
+    """True when the PR carries ``land-next``: it holds a CI slot, so it is worth a sync (owner rule 2026-11-18).
+
+    The label alone decides. A DRAFT that carries it is synced too: the coordinator only labels a PR it
+    admitted to CI, and a draft it admitted is about to run there. Any other PR is not moved at all: a sync
+    only puts a ``[skip ci]`` head on it and invalidates its reviews.
+    """
+    return LABEL_LAND_NEXT in target.labels
+
+
 def _policy_bucket(branch: str) -> Optional[str]:
     if branch in NEVER_TARGET or branch.startswith(EXCLUDED_PREFIXES):
         return POLICY
@@ -228,13 +244,17 @@ def _plan_pulls(plan: Plan, pulls: Sequence[Dict[str, Any]], repository: str, ba
             plan.skip(bucket, target.name)
         elif (pull.get("base") or {}).get("ref") != base:
             plan.skip(OTHER_BASE, target.name)
+        elif not has_next_slot(target):
+            plan.skip(NO_SLOT, target.name)
         else:
             plan.targets.append(target)
     return claimed
 
 
 def plan_run(pulls: Sequence[Dict[str, Any]], branches: Iterable[str], repository: str, base: str = "main") -> Plan:
-    """Every target for one run: same-repo PRs into ``base``, oldest first. Nothing else (#20261).
+    """Every target for one run: same-repo PRs into ``base`` that carry ``land-next``, oldest first.
+
+    Nothing else: a PR without the label is skipped as ``no-ci-slot`` (owner rule 2026-11-18, #21806).
 
     A branch with no open PR is skipped: merging main into one whose PR had closed made it look
     ahead of main forever with nothing of its own. A same-repo PR into another base is never merged
