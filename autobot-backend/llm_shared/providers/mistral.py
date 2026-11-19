@@ -43,6 +43,7 @@ from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -132,13 +133,7 @@ class MistralProvider(BaseProvider):
         if response_format:
             params["response_format"] = response_format
         if not stream and request.tools:
-            params["tools"] = [
-                {
-                    "type": "function",
-                    "function": {"name": t.name, "description": t.description, "parameters": t.input_schema},
-                }
-                for t in request.tools
-            ]
+            params["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 params["tool_choice"] = request.tool_choice
         return params

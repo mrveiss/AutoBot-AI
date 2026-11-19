@@ -295,6 +295,12 @@ DECLARED_SCOPES = {
     "backoff-formula-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
     "doubled-api-prefix-scan": ("autobot-backend/api", "autobot-slm-backend/api"),
     "script-module-name-scan": ("autobot-infrastructure/shared/scripts",),
+    "provider-tool-schema-scan": (
+        "autobot-backend/llm_shared",
+        "autobot-backend/api/llm.py",
+        "autobot-backend/chat_workflow/manager.py",
+        "autobot-backend/modern_ai_integration.py",
+    ),
     "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "redis-direct-constructor-scan": (
         "autobot-backend",
@@ -315,6 +321,7 @@ DECLARED_SCOPES = {
     "slm-node-enum-members-exist": ("autobot-slm-backend",),
     "one-playwright-server-scan": ("autobot-browser-worker", "autobot-infrastructure", "autobot-frontend"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "llm-quality-seam-scan": ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop"),
     "one-permission-gate-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "infra-backend-import-scan": ("autobot-infrastructure",),
     "captcha-type-fork-scan": ("autobot-backend", "autobot_shared"),

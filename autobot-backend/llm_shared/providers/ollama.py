@@ -24,6 +24,7 @@ from autobot_shared.ssot_config import get_ollama_url
 
 from ..models import LLMRequest, LLMResponse, LLMSettings, ToolCall
 from ..streaming import StreamingManager
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -120,17 +121,7 @@ class OllamaRequestExecutor:
             },
         }
         if tools_will_be_sent:
-            data["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    },
-                }
-                for t in request.tools
-            ]
+            data["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 data["tool_choice"] = request.tool_choice
         return data

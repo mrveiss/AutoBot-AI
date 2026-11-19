@@ -14,7 +14,8 @@ Issue #1373: Initial RLM prototype.
 """
 
 from autobot_shared.logging_manager import get_logger
-from llm_shared.validated_llm import Completer, complete_validated
+from llm_shared.quality_judgment import clamp_score, judge_validated, meets_threshold
+from llm_shared.validated_llm import Completer
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
 logger = get_logger(__name__)
@@ -132,14 +133,13 @@ class ResponseQualityEvaluator:
         prompt = _EVAL_PROMPT.format(query=query, response=response)
 
         try:
-            payload = await complete_validated(
+            data = await judge_validated(
                 "",
                 prompt,
                 _EVAL_SCHEMA,
                 completer=self._completer(),
                 label="rlm.evaluator",
             )
-            data = payload if isinstance(payload, dict) else payload.model_dump()
             return self._result_from_payload(data, iteration)
         except Exception as exc:
             # #6697: previous log claimed "accepting response" while returning
@@ -208,7 +208,7 @@ class ResponseQualityEvaluator:
         ``score`` is required by the schema, so the threshold compare below
         always acts on a number the evaluator actually produced.
         """
-        score = max(0.0, min(1.0, float(payload["score"])))
+        score = clamp_score(payload["score"])
         critique = str(payload.get("critique") or "").strip()
         hint = str(payload.get("hint") or "").strip()
         if critique.lower() == "none":
@@ -216,7 +216,11 @@ class ResponseQualityEvaluator:
         if hint.lower() == "none":
             hint = ""
 
-        verdict = ReflectionVerdict.ACCEPT if score >= self.config.quality_threshold else ReflectionVerdict.REFINE
+        verdict = (
+            ReflectionVerdict.ACCEPT
+            if meets_threshold(score, self.config.quality_threshold)
+            else ReflectionVerdict.REFINE
+        )
         return ReflectionResult(
             verdict=verdict,
             quality_score=score,
