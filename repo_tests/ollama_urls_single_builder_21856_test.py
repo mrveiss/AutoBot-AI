@@ -26,29 +26,53 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-REPO = Path(__file__).resolve().parent.parent
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
+
 ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure")
 #: Scripts that run before the repo (and so ``autobot_shared``) exists on the host. Empty today.
 CANNOT_IMPORT_SHARED: frozenset[str] = frozenset()
-OWNER = REPO / "autobot_shared" / "ollama_urls.py"
+OWNER_REL = "autobot_shared/ollama_urls.py"
 OLLAMA_PATH = re.compile(r"^/api/(generate|tags|pull|embeddings|embed|show|ps)(\?.*)?$")
-MIN_SOURCES = 2500  # the three roots hold ~3800 first-party modules
+#: Measured: 3883 of 7317 tracked ``.py`` under ROOTS are scanned (0.53); 0.45 leaves room for a shift into tests.
+MIN_FRACTION = 0.45
 TEMPLATE = re.compile(r"(%s|\{\w*\})/api/(generate|tags|pull|embeddings|embed|show|ps)(\?.*)?$")
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
 
 
-def _sources():
-    for root in ROOTS:
-        for path in sorted((REPO / root).rglob("*.py")):
-            if (
-                SKIP_PARTS & set(path.parts)
-                or path.name.endswith("_test.py")
-                or path == OWNER
-                or path.relative_to(REPO).as_posix() in CANNOT_IMPORT_SHARED
-            ):
-                continue
-            yield path
+def _is_scanned(rel: str) -> bool:
+    """A production ``.py`` under ``ROOTS``. The ``tests`` directory skip stays: ``is_test_filename`` sees names only."""
+    parts = set(rel.split("/"))
+    name = rel.rsplit("/", 1)[-1]
+    return not (SKIP_PARTS & parts or is_test_filename(name) or rel == OWNER_REL or rel in CANNOT_IMPORT_SHARED)
+
+
+def _source_population(root: Path) -> list[str]:
+    try:
+        return [rel for rel in tracked_paths(root, *ROOTS) if rel.endswith(".py") and _is_scanned(rel)]
+    except EmptyEnumeration:
+        return []
+
+
+def _all_python(root: Path) -> int:
+    try:
+        return sum(1 for rel in tracked_paths(root, *ROOTS) if rel.endswith(".py"))
+    except EmptyEnumeration:
+        return 0
+
+
+REACH = declare(
+    "ollama-urls-single-builder",
+    discover=_source_population,
+    reference=_all_python,
+    min_fraction=MIN_FRACTION,
+    what="production python",
+    roots=ROOTS,
+)
 
 
 def _is_path(node: ast.AST) -> bool:
@@ -96,7 +120,7 @@ def _is_format_call(node: ast.AST) -> bool:
     ],
 )
 def test_the_detector_sees_a_hand_built_ollama_url(source):
-    assert hand_built_lines(ast.parse(source))
+    assert hand_built_lines(parse_cache.parse(source))
 
 
 @pytest.mark.parametrize(
@@ -104,15 +128,19 @@ def test_the_detector_sees_a_hand_built_ollama_url(source):
     ["ollama_generate_url(base)", 'f"{base}/api/chat/sessions"', '"/api/generate"'],
 )
 def test_the_detector_ignores_the_helper_other_routes_and_bare_paths(source):
-    assert not hand_built_lines(ast.parse(source))
+    assert not hand_built_lines(parse_cache.parse(source))
 
 
 def test_no_hand_built_ollama_api_url_outside_ollama_urls():
-    sources = list(_sources())
-    assert len(sources) >= MIN_SOURCES, f"scanned only {len(sources)} modules; the guard no longer reaches the tree"
-    offenders = [
-        f"{path.relative_to(REPO)}:{line}"
-        for path in sources
-        for line in hand_built_lines(ast.parse(path.read_text(encoding="utf-8")))
-    ]
+    root = repo_root()
+    sources = REACH.examined(root)
+    offenders = []
+    for rel in sources:
+        text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = parse_cache.parse(text)
+        except SyntaxError:
+            continue
+        offenders += [f"{rel}:{line}" for line in hand_built_lines(tree)]
+    REACH.completed(len(sources), root)
     assert not offenders, "build Ollama URLs with autobot_shared.ollama_urls (ollama_api_url): " + ", ".join(offenders)
