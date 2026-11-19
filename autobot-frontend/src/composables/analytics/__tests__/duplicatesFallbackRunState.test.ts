@@ -29,6 +29,7 @@ const KILLED_RUN = {
   partial: true,
   reason: 'killed by the hard timeout: run exceeded 1800s',
   started_at: '2026-11-15T10:00:00+00:00',
+  ordered_at: '2026-11-15T10:00:00+00:00',
   finished_at: '2026-11-15T10:30:00+00:00',
   last_completed_at: '2026-11-14T10:30:00+00:00',
 }
