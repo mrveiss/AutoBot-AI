@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import kb_wipe_cli  # noqa: E402
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
 logger = get_logger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -51,7 +51,7 @@ async def request(dry_run: bool) -> bool:
 
 async def reindex() -> int:
     """Add the current CLAUDE.md. Refuses while chunks with its title remain: approve the deletion first."""
-    from knowledge import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
     from services.claude_md_reindex_action import SELECTOR_VALUE, SOURCE_VALUE, plan_claude_md_reindex
 
     if (stale := (await plan_claude_md_reindex())["chunks"]) > 0:
@@ -62,8 +62,10 @@ async def reindex() -> int:
         logger.error("CLAUDE.md not found at %s; nothing was re-indexed", path)
         return 1
     content = path.read_text(encoding="utf-8")
-    kb = KnowledgeBase()
-    await kb._ensure_redis_initialized()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        logger.error("Knowledge base unavailable: initialization failed or retry cooldown active")
+        return 1
     metadata = {
         "title": SELECTOR_VALUE,
         "source": SOURCE_VALUE,
@@ -95,4 +97,5 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     sys.exit(main())

@@ -191,11 +191,13 @@ def _discover(root) -> list[str]:
     ]
 
 
-#: The frontend sources this scan reads; the floor is computed from the base commit (#19676).
+#: The frontend sources this scan reads (1262 measured at the base). A declaration new in this PR has no base
+#: declaration to compute a floor from, so it pins ``floor=`` until it lands; the pin can go after merge (#19676).
 REACH = declare(
     "analytics-callers-scope-to-source-20513",
     discover=_discover,
     what="frontend .ts/.vue sources",
+    floor=1260,
     growth=400,
     roots=(FRONTEND_SRC,),
 )

@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import kb_wipe_cli  # noqa: E402
-from autobot_shared.logging_manager import get_logger  # noqa: E402
+from autobot_shared.logging_manager import get_logger, setup_logging  # noqa: E402
 
 logger = get_logger(__name__)
 
@@ -40,5 +40,6 @@ def _parse_args(argv=None) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     args = _parse_args()
     sys.exit(0 if asyncio.run(reset_knowledge_base_index(dry_run=args.dry_run)) else 1)

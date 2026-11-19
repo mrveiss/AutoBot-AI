@@ -5,6 +5,7 @@
 Fakes only: no real Redis or database is touched.
 """
 
+import os
 import subprocess
 import sys
 import types
@@ -211,8 +212,9 @@ def test_importing_the_approvals_router_registers_the_handler_in_a_fresh_interpr
         "import api.approval_gates, services.approval_execution as e; "
         f"print({action.ACTION!r} in e._REGISTRY and {action.ACTION!r} in e._SERVER_ONLY)"
     )
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(_BACKEND), str(_BACKEND.parent)])}
     done = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, timeout=300, check=False, cwd=_BACKEND
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=300, check=False, cwd=_BACKEND, env=env
     )
     assert done.returncode == 0 and done.stdout.strip().endswith("True"), done.stderr[-800:]
 
