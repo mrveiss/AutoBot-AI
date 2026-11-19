@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi } from 'vitest'
 
-const post = vi.fn()
+const { post } = vi.hoisted(() => ({ post: vi.fn() }))
 vi.mock('@/utils/ApiClient', () => ({ default: { post } }))
 vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
 vi.mock('@/utils/debugUtils', () => ({
