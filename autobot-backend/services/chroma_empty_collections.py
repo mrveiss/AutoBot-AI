@@ -7,8 +7,9 @@
 The knowledge health scan reads Redis facts only, so empty vector collections never showed up as a finding.
 ``scan_empty_collections`` lists them (and the collections it could not read, which are NOT reported as
 empty). ``delete_empty_collection`` is reachable only from the post-approval handler, and re-checks at that
-moment that the collection is still empty, atomically with the delete (a collection filled in between is kept). A collection with no vectors cannot change a retrieval result, so
-no retrieval-cache invalidation is needed.
+moment that the collection is still empty, atomically with the delete (a collection filled in between is
+kept). A collection with no vectors cannot change a retrieval result, so no retrieval-cache invalidation is
+needed.
 """
 
 from __future__ import annotations
