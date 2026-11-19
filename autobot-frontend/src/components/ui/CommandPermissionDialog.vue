@@ -132,7 +132,7 @@ import { useI18n } from 'vue-i18n'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useModal } from '@/composables/useModal'
-import { useFocusTrap, useFocusRestore, BaseButton, isHttpError } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandPermissions } from '@/composables/useCommandPermissions'
 import { approvalErrorMessage } from '@/utils/approvalResult'
@@ -196,12 +196,6 @@ const handleAllow = async () => {
       logger.error('Command approval error:', data.error)
     }
   } catch (err) {
-    if (isHttpError(err) && err.status === 409) {
-      // #19951: the server refuses a second decision on an already-decided approval with a 409.
-      logger.warn('Approval already decided - stale dialog, closing')
-      closeDialog()
-      return
-    }
     errorApprove.value = err instanceof Error ? err : new Error(String(err))
     logger.error('Command approval error:', err)
   }
@@ -229,11 +223,6 @@ const handleDeny = async () => {
     emit('denied', { command: props.command ?? '', reason: 'User denied permission' })
     closeDialog()
   } catch (err) {
-    if (isHttpError(err) && err.status === 409) {
-      logger.warn('Approval already decided when denying - stale dialog, closing')
-      closeDialog()
-      return
-    }
     logger.error('Command denial error:', err)
     // The request failed, not necessarily the denial: the server may have recorded it before the reply was lost.
     const detail = err instanceof Error ? err.message : String(err)
