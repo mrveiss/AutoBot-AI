@@ -4,6 +4,7 @@
 
 REACH_ROOTS = {
     "repo_tests/ai_line_single_policy_18430_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/analytics_callers_scope_to_source_20513_test.py": ("autobot-frontend/src",),
     "repo_tests/ansible_concept_forks_17856_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/ansible_credentials_never_logged_19764_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/ansible_secret_renders_diff_and_root_key_20941_test.py": ("autobot-slm-backend/ansible",),
