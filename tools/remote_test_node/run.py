@@ -37,7 +37,7 @@ TIMEOUT_RC = 124
 REQUIREMENTS = ("requirements-ci-test.txt", "requirements-remote-test-node.txt")
 CONSTRAINTS = "constraints/shared.txt"
 CONSTRAINTS_MARKER = "#--constraints--"  # provision.sh splits its stdin here
-_CONSTRAINT_LINE = re.compile(r"^\s*(?:-c\s*=?\s*|--constraint(?:\s+|=))\S+\s*$")
+_CONSTRAINT_LINE = re.compile(r"^\s*(?:-c\s*=?\s*|--constraint(?:\s+|=))\S+\s*(?:#.*)?$")
 _INCLUDE_LINE = re.compile(r"^\s*(?:-r|--requirement)(?:\s|=|$)|^\s*-r\S")
 _VERSION = re.compile(r"^\d+(?:\.\d+)*$")
 

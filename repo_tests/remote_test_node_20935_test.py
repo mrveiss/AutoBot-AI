@@ -435,6 +435,7 @@ def test_a_crlf_payload_still_splits_at_the_marker(tmp_path):
         "--constraint constraints/shared.txt",
         "--constraint=constraints/shared.txt",
         "  -c  ../x.txt  ",
+        "-c constraints/shared.txt  # the shared pins",
     ],
 )
 def test_every_relative_constraint_form_is_stripped(tmp_path, line):
@@ -463,3 +464,22 @@ def test_a_malformed_version_pin_is_refused(monkeypatch):
     monkeypatch.setenv("AUTOBOT_TEST_NODE_PIP_VERSION", "25.3; rm -rf ~")
     with pytest.raises(ValueError, match="not a version number"):
         run._pins()
+
+
+def _no_ship(*_args, **_kwargs):
+    raise AssertionError("a refused provision must not reach the node")
+
+
+@pytest.mark.parametrize("bad", ["requirements", "pin"])
+def test_provision_refuses_before_touching_the_node(tmp_path, monkeypatch, capfd, bad):
+    root = _payload_root(tmp_path, "pytest==9.0.0\n-r base.txt\n" if bad == "requirements" else "pytest==9.0.0\n")
+    if bad == "pin":
+        monkeypatch.setenv("AUTOBOT_TEST_NODE_UV_VERSION", "1.0; echo x")
+    monkeypatch.setattr(run.subprocess, "run", _no_ship)
+    assert run.provision(run.load_config(_BASE_ENV), root) == 1
+    assert "provision refused" in capfd.readouterr().err
+
+
+def test_a_payload_with_constraints_but_no_requirements_fails(tmp_path):
+    done, _reqs, _cons = _split(tmp_path, b"#--constraints--\nfoo==1.0\n")
+    assert done.returncode != 0 and b"carries no requirements" in done.stderr
