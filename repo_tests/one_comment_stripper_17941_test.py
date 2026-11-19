@@ -265,6 +265,6 @@ def test_a_plain_substring_search_is_the_recorded_blind_spot() -> None:
     original defect, and no call-node rule can tell it from a membership test.
     If this ever flips to True the docstring's claim is stale.
     """
-    assert _strips_comments_by_hand(ast.parse('assert "flag" in source_text\n')) is False
+    assert _strips_comments_by_hand(parse_cache.parse('assert "flag" in source_text\n')) is False
     stripped = "kept = [x for x in lines if not x.startswith('#')]\n"
-    assert _strips_comments_by_hand(ast.parse(stripped)) is True
+    assert _strips_comments_by_hand(parse_cache.parse(stripped)) is True
