@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Rate-limit AUTOBOT_* environment variable registrations (#18087).
 
-Sibling module chained from ``env_registry_backend_services`` because
-``env_registry.py`` is closed to new entries. Registration contract (import
-side effect, ordering): see ``env_registry`` (#16415).
+Sibling module imported by ``env_registry`` and also chained from
+``env_registry_backend_services``, because ``env_registry.py`` is closed to new
+entries. Registration contract (import side effect, ordering): see
+``env_registry`` (#16415).
 """
 
 from __future__ import annotations
