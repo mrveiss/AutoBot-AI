@@ -120,6 +120,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "Every tracked .py and .md file minus changelogs, archives and the guard itself (#21526); files are "
         "added in every PR, so an exact floor would fail any new file.",
     ),
+    "analytics-callers-scope-to-source-20513": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The .ts/.vue sources of one frontend (#21463), a subset of tracked files; every new composable grows "
+        "it, and the rest of the tree grows at its own rate.",
+    ),
     "autobot-has-no-pro-name": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
