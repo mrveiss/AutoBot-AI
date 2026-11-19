@@ -39,13 +39,16 @@ def _where(action: str) -> str:
     return f"status = 'pending' AND context ->> 'action' = '{action}'"
 
 
+_DUPLICATES_SQL = (
+    "SELECT context ->> :key AS target, count(*) AS pending FROM approvals "
+    "WHERE status = :status AND context ->> :action_key = :action "
+    "GROUP BY 1 HAVING count(*) > 1 ORDER BY target LIMIT 20"
+)
+
+
 def _duplicates(bind, action: str, key: str) -> list:
-    return bind.execute(
-        sa.text(
-            f"SELECT context ->> '{key}' AS target, count(*) AS pending FROM approvals "  # noqa: S608 - constants
-            f"WHERE {_where(action)} GROUP BY context ->> '{key}' HAVING count(*) > 1 ORDER BY target LIMIT 20"
-        )
-    ).all()
+    stmt = sa.text(_DUPLICATES_SQL).bindparams(key=key, status="pending", action_key="action", action=action)
+    return bind.execute(stmt).all()
 
 
 def upgrade() -> None:

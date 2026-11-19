@@ -23,6 +23,7 @@ from pathlib import Path
 import alembic.script  # noqa: F401
 
 from migrations.baseline import (  # noqa: E402 — after the alembic import by design
+    INDEX_MARKERS,
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
@@ -77,7 +78,7 @@ def test_create_table_calls_are_all_literal():
             "the probe ladder cannot see it; use a string literal"
         )
         if len(art.columns) != _count_calls(path, "add_column"):
-            observable = art.tables or art.columns or sc.revision in TIMESTAMPTZ_MARKERS
+            observable = art.tables or art.columns or sc.revision in TIMESTAMPTZ_MARKERS or sc.revision in INDEX_MARKERS
             assert observable, (
                 f"{path.name}: add_column calls the ladder cannot extract AND "
                 "no other artifact makes this revision observable — use "
@@ -116,7 +117,9 @@ def test_observability_coverage():
     script = _script_directory()
     artifacts = extract_artifacts(script)
     unobservable = {
-        rev for rev, art in artifacts.items() if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS
+        rev
+        for rev, art in artifacts.items()
+        if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS and rev not in INDEX_MARKERS
     }
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run
@@ -188,8 +191,6 @@ def test_observability_coverage():
         # the same category as 20261106_113; upgrade() returns early when the index exists
         "20261118_115",  # approvals pending source-run-record-cleanup partial unique index (#21417): index-only,
         # the same category as 20261107_114; upgrade() returns early when the index exists
-        "20261119_116",  # approvals pending connector-credential-strip and empty-collection-delete partial unique
-        # indexes (#20992): index-only, the same category as 20261118_115; an existing index is skipped
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
