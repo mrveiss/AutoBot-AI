@@ -52,6 +52,18 @@ describe('useWorkflowListLoaders', () => {
     expect(activeWorkflows.value).toEqual([{ workflow_id: 'kept' }])
   })
 
+  it('lets a throwing fetcher propagate and leaves the lists untouched (#21807)', async () => {
+    const { loadActive, loadCompleted, activeWorkflows, completedWorkflows, restoreWaiting } = setup(
+      vi.fn(async () => { throw new Error('network') }), vi.fn(async () => { throw new Error('network') }),
+    )
+    activeWorkflows.value = [{ workflow_id: 'kept' }]
+    await expect(loadActive()).rejects.toThrow('network')
+    await expect(loadCompleted()).rejects.toThrow('network')
+    expect(activeWorkflows.value).toEqual([{ workflow_id: 'kept' }])
+    expect(completedWorkflows.value).toEqual([])
+    expect(restoreWaiting).not.toHaveBeenCalled()
+  })
+
   it('drops a superseded read so a late older reply cannot overwrite the newer rows', async () => {
     const first = deferred()
     const second = deferred()
