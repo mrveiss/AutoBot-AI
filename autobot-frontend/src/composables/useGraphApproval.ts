@@ -50,6 +50,11 @@ export class ResumeRejectedError extends Error {
 /** Thrown when the server accepted a resume (HTTP 200) but its stream reported an error: the graph did not move on. */
 export class ResumeStreamError extends Error {}
 
+/** #21357: the chat a card belongs to: the id its metadata names, else the chat open when it is answered. */
+function cardChatId(message: ChatMessage, openChatId: string | null): string {
+  return String((message.metadata as Record<string, unknown> | undefined)?.session_id || openChatId || '')
+}
+
 /** The one POST to `/chats/{id}/resume`, whose SSE reply the chat controller's stream consumer renders. */
 function useResumePost() {
   const store = useChatStore()
@@ -60,29 +65,30 @@ function useResumePost() {
     body: ResumeBody,
     hooks: { onAccepted?: () => void; onStreamError?: () => void } = {}
   ): Promise<void> {
-    const chatId = String((message.metadata as Record<string, unknown>)?.session_id || store.currentSessionId || '')
-    store.setTyping(true)
+    const chatId = cardChatId(message, store.currentSessionId)
+    if (store.currentSessionId === chatId) store.setTyping(true) // #21357: only the chat resumed shows typing
     let accepted = false
     try {
-      const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+      // #21357: counted as streaming from the POST on, so switching away and back mid-request keeps the indicator
+      await controller.withActiveStream(chatId, async () => {
+        const response = await fetchWithAuth(`${getApiBase()}/chats/${encodeURIComponent(chatId)}/resume`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!response.ok) throw new ResumeRejectedError(response.status)
+        accepted = true
+        hooks.onAccepted?.()
+        if ((await controller.handleStreamingResponse(response, chatId, true)) === true) {
+          hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
+          throw new ResumeStreamError('resume stream reported an error')
+        }
       })
-      if (!response.ok) throw new ResumeRejectedError(response.status)
-      accepted = true
-      hooks.onAccepted?.()
-      if ((await controller.handleStreamingResponse(response)) === true) {
-        hooks.onStreamError?.() // HTTP 200 is not the graph resuming: the question is still open
-        throw new ResumeStreamError('resume stream reported an error')
-      }
     } catch (error) {
       logger.error('Resuming the chat failed:', error)
       // A stream that reported an error already restored the card; a read that threw has not (#21022).
       if (accepted && !(error instanceof ResumeStreamError)) hooks.onStreamError?.()
       throw error
-    } finally {
-      store.setTyping(false)
     }
   }
 }
@@ -93,10 +99,11 @@ export function useStallAnswer() {
   const postResume = useResumePost()
   return async function answerStallQuestion(message: ChatMessage, answer: string): Promise<void> {
     const questionId = (message.metadata as Record<string, unknown> | undefined)?.question_id
+    const cardChat = cardChatId(message, store.currentSessionId)
     const body: ResumeBody = { answer, ...(typeof questionId === 'string' ? { question_id: questionId } : {}) }
     await postResume(message, body, {
-      onAccepted: () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer }),
-      onStreamError: () => store.updateMessageMetadata(message.id, { answered: false, answer_text: '' }),
+      onAccepted: () => store.updateMessageMetadata(message.id, { answered: true, answer_text: answer }, cardChat),
+      onStreamError: () => store.updateMessageMetadata(message.id, { answered: false, answer_text: '' }, cardChat),
     })
   }
 }
@@ -113,15 +120,16 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
   async function resumeGraph(message: ChatMessage, approved: boolean, comment?: string): Promise<void> {
     const before = message.metadata as Record<string, unknown> | undefined
     const previous = { approval_status: before?.approval_status, approval_comment: before?.approval_comment }
-    const wasPending = store.hasPendingApproval
-    store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment })
-    store.setPendingApproval(false)
+    const cardChat = cardChatId(message, store.currentSessionId)
+    const wasPending = store.isPendingApproval(cardChat)
+    store.updateMessageMetadata(message.id, { approval_status: approved ? 'approved' : 'denied', approval_comment: comment }, cardChat)
+    store.setPendingApproval(false, cardChat) // #21357: the card's chat, whichever is open
     try {
       await postResume(message, { approved, reason: comment || '' })
     } catch (error) {
       // The graph is still waiting: give the person the controls back so the decision can be retried (#21022).
-      store.updateMessageMetadata(message.id, previous)
-      store.setPendingApproval(wasPending)
+      store.updateMessageMetadata(message.id, previous, cardChat)
+      store.setPendingApproval(wasPending, cardChat)
       throw error
     }
   }
