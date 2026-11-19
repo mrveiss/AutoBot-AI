@@ -137,13 +137,13 @@ def _lambda_paths(source: str | None = None) -> list[tuple[int, str]]:
         for inner in ast.walk(node):
             if not (isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Div)):
                 continue
-            joined = _joined_path(inner, constants)
+            joined_path = _joined_path(inner, constants)
             # No `"/" in joined` requirement: that silently dropped every
             # single-segment path, and `src`/`tests` are exactly the roots this
             # guard exists to catch. Only `root / ...` chains reach here, so a
             # non-path string cannot be collected by accident.
-            if joined and not joined.startswith(("/api", "http", "//")):
-                found.append((inner.lineno, joined))
+            if joined_path and not joined_path.startswith(("/api", "http", "//")):
+                found.append((inner.lineno, joined_path))
     # A nested chain yields its prefix as well as the whole; keep only the
     # longest path per line, which is the one the code actually opens.
     longest: dict[int, str] = {}

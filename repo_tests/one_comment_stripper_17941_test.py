@@ -37,6 +37,7 @@ it is read, not implied.
 from __future__ import annotations
 
 import ast
+import re
 
 import pytest
 from repo_tests._paths import repo_root
@@ -48,10 +49,6 @@ _ROOT = repo_root()
 
 #: Comment markers a hand-rolled stripper tests for.
 _MARKERS = frozenset({"#", "//", "/*"})
-
-#: Path prefixes that mark a `startswith` tuple as a URL/path check rather than a comment skip. Explicit, not a
-#: generic leading `/`: `/**` and `///` also start with `/` and are comment-adjacent markers.
-_URL_PATH_PREFIXES = frozenset({"/api"})
 
 #: Files that still carry their own comment skip, pending migration to
 #: `tools.lint._comment_syntax`. **This list only ever shrinks.** An entry is
@@ -133,7 +130,7 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
         if isinstance(node, ast.Assert):
             asserted.update(id(child) for child in ast.walk(node))
 
-    line_vars = _source_line_vars(tree)
+    path_vars = _path_valued_names(tree)
     for node in ast.walk(tree):
         if id(node) in asserted:
             continue
@@ -144,65 +141,77 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
         for arg in node.args:
             if isinstance(arg, ast.Constant) and arg.value in _MARKERS:
                 return True
-            if isinstance(arg, ast.Tuple) and _tuple_skips_comments(arg, _is_source_line(node.func.value, line_vars)):
+            if (
+                isinstance(arg, ast.Tuple)
+                and _tuple_has_marker(arg)
+                and not _is_url_or_path(node.func.value, path_vars)
+            ):
                 return True
     return False
 
 
-#: Names whose appearance in an iterable marks the loop variable as a line or text drawn from source.
-_SOURCE_TEXT_HINTS = ("line", "splitlines", "read_text", "readlines", "text", "source", "content")
+#: Name tokens that make a receiver provably a URL or a path.
+_URL_PATH_HINTS = ("url", "href", "path", "uri", "link", "route")
+#: Constructors and attributes whose result is a URL or a path.
+_URL_PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "PureWindowsPath", "urlparse", "urlsplit"})
+_URL_PATH_ATTRS = frozenset({"path", "url"})
 
 
-def _names_in(expr: ast.AST) -> list[str]:
-    """Every identifier and attribute name mentioned inside an expression."""
-    names = []
-    for n in ast.walk(expr):
-        if isinstance(n, ast.Name):
-            names.append(n.id)
-        elif isinstance(n, ast.Attribute):
-            names.append(n.attr)
-    return names
+def _name_is_url_or_path(name: str) -> bool:
+    """True if a `_`/camelCase token of the name starts or ends with a URL/path hint.
+
+    Token edges, not raw substrings: `during` contains `uri` and `pathology` is not a path.
+    """
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
+    return any(t.startswith(h) or t.endswith(h) for t in spaced.split("_") for h in _URL_PATH_HINTS)
 
 
-def _source_line_vars(tree: ast.AST) -> set[str]:
-    """Loop or comprehension targets that iterate lines or text drawn from source."""
+def _is_path_valued(value: ast.AST) -> bool:
+    """True if an assigned value comes from a Path/urlparse call or a `.path`/`.url` attribute."""
+    if isinstance(value, ast.Attribute) and value.attr in _URL_PATH_ATTRS:
+        return True
+    for n in ast.walk(value):
+        if isinstance(n, ast.Call):
+            fn = n.func
+            if (isinstance(fn, ast.Name) and fn.id in _URL_PATH_CALLS) or (
+                isinstance(fn, ast.Attribute) and fn.attr in _URL_PATH_CALLS
+            ):
+                return True
+    return False
+
+
+def _path_valued_names(tree: ast.AST) -> set[str]:
+    """Names assigned (anywhere in the module) from a provable URL or path value."""
     found: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.For, ast.comprehension)) and any(
-            hint in name.lower() for name in _names_in(node.iter) for hint in _SOURCE_TEXT_HINTS
-        ):
-            found.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+        if isinstance(node, ast.Assign) and _is_path_valued(node.value):
+            found.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and node.value is not None and _is_path_valued(node.value):
+            if isinstance(node.target, ast.Name):
+                found.add(node.target.id)
     return found
 
 
-def _is_source_line(receiver: ast.AST, line_vars: set[str]) -> bool:
-    """True if the startswith receiver is a source line: a loop variable over lines, or named as one."""
-    root = receiver
-    while isinstance(root, (ast.Attribute, ast.Call, ast.Subscript)):
-        root = root.func if isinstance(root, ast.Call) else root.value
-    if not isinstance(root, ast.Name):
-        return False
-    return root.id in line_vars or "line" in root.id.lower()
-
-
-def _tuple_skips_comments(arg: ast.Tuple, on_source_line: bool = False) -> bool:
-    """A tuple of prefixes that includes a comment marker and is not a URL check.
-
-    A startswith applied to a line drawn from source is a comment filter whatever URL siblings
-    the tuple has (`on_source_line`); only a check on a URL or path value is exempt.
-
-    `startswith(("/api", "http", "//"))` tests for a path or protocol-relative
-    URL: the `//` there is the start of a URL, not a comment. Such a tuple
-    carries a sibling that is itself a URL (`http...`) or a path prefix from
-    `_URL_PATH_PREFIXES`; any other leading `/` is not enough. A bare `startswith("//")` or `("#", "!")` has none.
-    """
-    values = [e.value for e in arg.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
-    if not any(v in _MARKERS for v in values):
-        return False
-    if on_source_line:
+def _is_url_or_path(receiver: ast.AST, path_vars: set[str]) -> bool:
+    """True if the startswith receiver is provably a URL or path; anything else is unproven."""
+    if _is_path_valued(receiver):
         return True
-    url_like = any(v.startswith("http") or v in _URL_PATH_PREFIXES for v in values)
-    return not (url_like and "//" in values and not (set(values) & {"#", "/*"}))
+    for n in ast.walk(receiver):
+        if isinstance(n, ast.Name) and (n.id in path_vars or _name_is_url_or_path(n.id)):
+            return True
+        if isinstance(n, ast.Attribute) and (n.attr in _URL_PATH_ATTRS or _name_is_url_or_path(n.attr)):
+            return True
+    return False
+
+
+def _tuple_has_marker(arg: ast.Tuple) -> bool:
+    """A tuple of prefixes that includes a comment marker (`#`, `//`, `/*`...).
+
+    The default is unsafe-to-ignore: sibling prefixes such as `http` or `/api` do not exempt
+    the tuple, because a line filter `("//", "http")` carries them too. Only a receiver that is
+    provably a URL or path is exempt, decided by `_is_url_or_path`.
+    """
+    return any(isinstance(e, ast.Constant) and e.value in _MARKERS for e in arg.elts)
 
 
 def _files_with_private_strippers() -> set[str]:
@@ -262,7 +271,7 @@ def test_the_pending_list_only_shrinks() -> None:
         ("a hash startswith", 'if line.startswith("#"):\n    pass\n', True),
         ("a slash-slash startswith", 'if line.startswith("//"):\n    pass\n', True),
         ("a tuple of markers", 'if line.startswith(("#", "//")):\n    pass\n', True),
-        ("a URL or path-prefix check", 'if p.startswith(("/api", "http", "//")):\n    pass\n', False),
+        ("a URL or path-prefix check", 'if url.startswith(("/api", "http", "//")):\n    pass\n', False),
         ("a tuple of comment markers beside a URL prefix", 'if p.startswith(("http", "#")):\n    pass\n', True),
         (
             "a line filter with an api sibling",
@@ -276,9 +285,34 @@ def test_the_pending_list_only_shrinks() -> None:
         ),
         (
             "the phase-validation path check",
-            'ok = joined and not joined.startswith(("/api", "http", "//"))\n',
+            'ok = joined_path and not joined_path.startswith(("/api", "http", "//"))\n',
             False,
         ),
+        (
+            "a line variable bound through an alias",
+            'ls = text.splitlines()\nfor s in ls:\n    if s.startswith(("//", "http")):\n        pass\n',
+            True,
+        ),
+        (
+            "a loop over a split of data",
+            'for s in data.split("\\n"):\n    if s.startswith(("//", "/api")):\n        pass\n',
+            True,
+        ),
+        ("a url receiver", 'if url.startswith(("//", "http")):\n    pass\n', False),
+        ("a Path chain receiver", 'if Path(p).as_posix().startswith(("//",)):\n    pass\n', False),
+        (
+            "a receiver assigned from urlparse",
+            'u = urlparse(x)\nif u.netloc.startswith(("//", "#")):\n    pass\n',
+            False,
+        ),
+        (
+            "a receiver assigned from a .path attribute",
+            'q = req.path\nif q.startswith(("//", "#")):\n    pass\n',
+            False,
+        ),
+        ("a context name is not a url", 'if context.startswith(("//", "http")):\n    pass\n', True),
+        ("a name merely containing uri is not a url", 'if during.startswith(("//", "http")):\n    pass\n', True),
+        ("the href link filter", 'if not href or href.startswith(("#", "javascript:", "mailto:")):\n    pass\n', False),
         ("a block-doc marker beside slash-slash", 'if p.startswith(("//", "/**")):\n    pass\n', True),
         ("a triple slash beside slash-slash", 'if p.startswith(("//", "///")):\n    pass\n', True),
         ("a bare slash-slash skip stays a stripper", 'if p.startswith("//"):\n    pass\n', True),

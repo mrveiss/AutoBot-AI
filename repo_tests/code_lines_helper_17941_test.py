@@ -325,6 +325,16 @@ def test_a_vue_line_with_a_closing_tag_a_html_comment_and_a_line_comment_is_read
     assert 'href="/x/y">t</a>' in text and "banned_token" not in text and "<!-- n -->" in text
 
 
+@pytest.mark.xfail(strict=True, reason="an apostrophe in .vue template prose desyncs the quote scanner -- see #21571")
+def test_a_vue_apostrophe_in_template_prose_does_not_hide_a_following_line_comment() -> None:
+    """Pins the live defect (#21571): today the `//` line below survives as code.
+
+    Strict, so the fix flips this to XPASS-fail and the marker must then be removed.
+    """
+    text = code_text("<template>\n<p>don't do this</p>\n</template>\n// banned_token\nconst k = 1\n", name="x.vue")
+    assert "banned_token" not in text, text
+
+
 #: Lines where the scanner and the older quote-only trailing strip must cut at the same place.
 _AGREED = [
     ("const a = 1 // c", "const a = 1 "),
