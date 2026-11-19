@@ -57,7 +57,10 @@ class RemoteNodeSettings:
 
 
 def _int_setting(env: "os._Environ[str] | dict[str, str]", name: str) -> int:
-    """An integer setting checked against the registry's spec; a malformed or out-of-range value reads as the default."""
+    """An integer setting checked against the registry's spec.
+
+    A malformed or out-of-range value reads as the default.
+    """
     spec = REGISTRY[name]
     raw = env.get(name)
     if raw is None or raw == "":
