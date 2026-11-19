@@ -87,6 +87,27 @@ BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOL
 #: BROWSER_TOOLS; the chat prompt teaches the union below.
 PAGE_READING_TOOLS = ("extract_content", "scrape_url", "extract_structured_data")
 BROWSER_PROMPT_TOOLS = BROWSER_TOOLS + PAGE_READING_TOOLS
+#: tool name -> (params hint, one-line description). Prompt wording per tool; membership is BROWSER_PROMPT_TOOLS.
+BROWSER_PROMPT_WORDING: "dict[str, tuple[str, str]]" = {
+    "navigate": ('{"url": ...}', "go to a URL"),
+    "screenshot": ("{}", "capture the current page"),
+    "click": ('{"selector": ...}', "click an element by CSS selector"),
+    "fill": ('{"selector": ..., "value": ...}', "type into an input by CSS selector"),
+    "select": ('{"selector": ..., "value": ...}', "choose an option in a dropdown"),
+    "hover": ('{"selector": ...}', "hover over an element"),
+    "evaluate": ('{"script": ...}', "run JavaScript on the page"),
+    "get_text": ('{"selector": ...}', "text of ONE element you already know the selector of"),
+    "get_attribute": ('{"selector": ..., "attribute": ...}', "an attribute of an element"),
+    "wait_for_selector": ('{"selector": ...}', "wait for an element to appear"),
+    "browser_state": ("{}", "URL, title and a numbered menu of the page's interactive elements"),
+    "click_index": ('{"index": N}', "click an element by its menu number"),
+    "fill_index": ('{"index": N, "value": ...}', "fill an element by its menu number"),
+    "select_index": ('{"index": N, "value": ...}', "select an option by its menu number"),
+    "hover_index": ('{"index": N}', "hover an element by its menu number"),
+    "extract_content": ('{"goal": ...}', "READ the live page you are on, guided by a goal (no selector needed)"),
+    "scrape_url": ('{"url": ...}', "fetch a URL and read it as markdown without driving the browser"),
+    "extract_structured_data": ('{"url": ..., "schema": {...}}', "fetch a URL and return data matching a JSON schema"),
+}
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
