@@ -1778,7 +1778,7 @@ class ChatWorkflowManager(
         Returns a non-empty string only when the LLM has made 2+ consecutive invalid
         tool calls (Issue #2310), so the reminder is injected into the next prompt.
         """
-        if consecutive_invalid_tool_calls < 2:
+        if consecutive_invalid_tool_calls < limits.INVALID_CALL_LIMIT:  # #21843: the one invalid-call bound
             return ""
         logger.warning(
             "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
