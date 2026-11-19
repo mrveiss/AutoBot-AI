@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -224,22 +225,28 @@ def test_a_missing_log_reports_no_figure_rather_than_a_guessed_one() -> None:
     assert "OVER BY" not in output, "reported an overage with no log to measure from"
 
 
+@pytest.mark.xdist_group("tmp_main_dup_log")
 def test_a_stray_tmp_log_cannot_change_the_verdict() -> None:
     """#17377: a leftover ``/tmp/main-dup.log`` from a local scan must not be read.
 
     The stray file holds a real jscpd row over the pin; were the step to read it, the
     output would carry a measured overage instead of "no captured log".
+
+    The path is shared with the CI duplication job and concurrent test processes, so it
+    is created with ``O_EXCL`` (never overwritten; skipped when present) and only the
+    file this test created is removed.
     """
     stray = Path("/tmp/main-dup.log")
-    previous = stray.read_bytes() if stray.exists() else None
-    stray.write_text(_REAL_JSCPD_TOTAL_ROW + "\n", encoding="utf-8")
     try:
+        fd = os.open(stray, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        pytest.skip(f"{stray} already exists (a live scan or another test owns it); never overwritten")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(_REAL_JSCPD_TOTAL_ROW + "\n")
         output = _run_explain(main_outcome="failure", slm_outcome="success")
     finally:
-        if previous is None:
-            stray.unlink(missing_ok=True)
-        else:
-            stray.write_bytes(previous)
+        stray.unlink(missing_ok=True)
     assert "no captured log" in output
     assert "OVER BY" not in output, "the explain step read the real /tmp log"
 
