@@ -1053,7 +1053,7 @@ async def _try_mcp_dispatch(
         result_text = str(raw_result)
 
         # Issue #4261: Wire AFTER_TOOL_EXECUTE hook to allow result modification
-        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
+        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {}, success=bool(success))
 
         execution_results.append(
             {
@@ -2042,7 +2042,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
             if result.get("status") == "success":
                 stdout = result.get("stdout", "")
-                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
+                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {}, success=True)
 
             # The card binds to the session this execution ran in, not the mapping another request can change.
             terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id, result)
@@ -2455,7 +2455,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 results = await self._execute_web_search(query, max_pages, session_id)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
-            results = await _emit_after_tool_execute("web_search", results, session_id, {})
+            results = await _emit_after_tool_execute("web_search", results, session_id, {}, success=True)
 
             execution_results.append({"tool": "web_search", "status": "success", "output": results})
             yield WorkflowMessage(
