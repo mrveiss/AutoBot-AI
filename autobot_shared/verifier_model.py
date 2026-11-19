@@ -10,9 +10,13 @@ list (``OllamaProvider.list_models``, the ``/api/tags`` listing): a missing mode
 back to the provider default instead of failing every time. A list that cannot be read proves nothing, so the
 configured tag is kept then.
 
-Memory: a verifier model different from the chat model needs room next to it. When ``OLLAMA_MAX_LOADED_MODELS`` (or
-VRAM) is too small, Ollama evicts one of the two on every call and each verifier pass pays a model load, which shows
-up as ``timeout`` degradations.
+Memory (owner decision on #21844): a verifier model different from the chat model needs room next to it, else Ollama
+evicts one of the two on every call and each pass pays a model load (a cold chat reload was measured at 74 s). So the
+dedicated model is used only when the provider is Ollama AND it is already loaded (``/api/ps``) or nothing else is
+loaded. Ollama's API reports no total or free VRAM (``/api/ps`` gives each loaded model's ``size``/``size_vram``,
+``/api/tags`` an installed model's size, nothing gives the card's capacity), so "fits beside the loaded models" cannot
+be measured and the rule stays conservative. Otherwise the loaded chat model answers, with the chat's ``num_ctx`` so the
+runner is not reloaded for a context change. An unreadable ``/api/ps`` keeps the configured model (the earlier rule).
 """
 
 from __future__ import annotations
@@ -21,8 +25,12 @@ import asyncio
 import time
 from typing import Any
 
+import aiohttp
+
 from autobot_shared.env_utils import env_registered
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_ps_url
 from autobot_shared.spend_recording import report_spend
 
 logger = get_logger(__name__)
@@ -33,8 +41,14 @@ VERIFIER_SPEND_SITE = "pre_action_verifier"
 #: Seconds a model-availability reading is reused before the provider is asked again.
 VERIFIER_MODEL_CHECK_TTL_S: int = env_registered("AUTOBOT_VERIFIER_MODEL_CHECK_TTL_SECONDS")
 
+#: Seconds ``/api/ps`` may take; it is a local, in-memory listing.
+_PS_TIMEOUT_S = 2.0
+
 # model -> (monotonic time read, available: True / False / None when the list could not be read)
 _readings: dict[str, tuple[float, bool | None]] = {}
+
+# verifier model -> (monotonic time decided, model to ask or None for the configured one, reuses the chat model, reason)
+_residency: dict[str, tuple[float, str, bool, str]] = {}
 
 
 def configured_verifier_model(provider: Any) -> str | None:
@@ -72,27 +86,77 @@ async def verifier_model_available(provider: Any, model: str) -> bool | None:
     return available
 
 
-async def resolve_verifier_model(provider: Any) -> str | None:
-    """The model to request: the configured one, or None (provider default) when it is not installed."""
+async def loaded_models(provider: Any) -> list[str] | None:
+    """Names of the models Ollama has resident now (``/api/ps``); None when that cannot be read."""
+    try:
+        timeout = aiohttp.ClientTimeout(total=_PS_TIMEOUT_S)
+        async with await get_http_client().get(ollama_ps_url(provider.resolved_base_url()), timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+        return [str(m.get("name") or m.get("model")) for m in data.get("models", [])]
+    except Exception as exc:  # noqa: BLE001 - an unreadable listing proves nothing about residency
+        logger.warning("verifier residency check could not read loaded models (%s: %r)", type(exc).__name__, exc)
+        return None
+
+
+def _residency_choice(model: str, loaded: list[str] | None) -> tuple[str, bool, str, bool]:
+    """``(model to ask, reuses the chat model, reason, cacheable)`` from what Ollama has loaded."""
+    if loaded is None:
+        return model, False, "loaded models unreadable: configured verifier model", True
+    if any(model_listed(model, [name]) or model_listed(name, [model]) for name in loaded):
+        return model, False, "verifier model already loaded", True
+    if not loaded:
+        # Transient: the next chat load changes it, so it is never reused from the cache.
+        return model, False, "nothing else loaded", False
+    return loaded[0], True, f"verifier model not loaded and free VRAM is unknown: reusing loaded {loaded[0]!r}", True
+
+
+async def residency_decision(provider: Any, model: str) -> tuple[str, bool, str]:
+    """``(model to ask, reuses the chat model, reason)``; the decision is reused for the check TTL."""
+    cached = _residency.get(model)
+    if cached and time.monotonic() - cached[0] < VERIFIER_MODEL_CHECK_TTL_S:
+        return cached[1], cached[2], cached[3]
+    chosen, reuses_chat, reason, cacheable = _residency_choice(model, await loaded_models(provider))
+    if cacheable:
+        _residency[model] = (time.monotonic(), chosen, reuses_chat, reason)
+    logger.debug("pre_action_verifier model: %s (%s)", chosen, reason)
+    return chosen, reuses_chat, reason
+
+
+async def resolve_verifier_model(provider: Any, decision: dict[str, Any] | None = None) -> str | None:
+    """The model to request: the configured one when installed AND resident-or-fitting, else None / the chat model.
+
+    *decision*, when given, receives ``reason`` and ``reuses_chat`` so the caller can record and act on the choice.
+    """
     model = configured_verifier_model(provider)
-    if model is None or await verifier_model_available(provider, model) is not False:
-        return model
-    logger.error(
-        "pre_action_verifier: configured verifier model %r is NOT installed on the provider -- using the provider "
-        "default; pull the model or change AUTOBOT_VERIFIER_MODEL",
-        model,
-    )
-    return None
+    if model is None:
+        return None
+    if await verifier_model_available(provider, model) is False:
+        logger.error(
+            "pre_action_verifier: configured verifier model %r is NOT installed on the provider -- using the "
+            "provider default; pull the model or change AUTOBOT_VERIFIER_MODEL",
+            model,
+        )
+        return None
+    chosen, reuses_chat, reason = await residency_decision(provider, model)
+    if decision is not None:
+        decision.update(reason=reason, reuses_chat=reuses_chat)
+    return chosen
 
 
 async def resolve_and_chat(
     provider: Any, system_prompt: str, user_prompt: str, tool_name: str, max_tokens: int, attempt: dict[str, Any]
 ) -> tuple[Any, Any]:
     """Resolve the model, record it in *attempt*, chat, and record the spend; returns (request, response)."""
-    from autobot_shared.ssot_constants import CategoryDefaults
+    from autobot_shared.ssot_constants import CategoryDefaults, ModelConfig
     from llm_shared.models import LLMRequest
 
-    attempt["model"] = await resolve_verifier_model(provider)
+    decision: dict[str, Any] = {}
+    attempt["model"] = await resolve_verifier_model(provider, decision)
+    attempt["model_reason"] = decision.get("reason")
+    # The chat model is asked with the chat's own context size: a different num_ctx makes Ollama reload the runner.
+    options = {"num_ctx": ModelConfig.CHAT_NUM_CTX} if decision.get("reuses_chat") else {}
     request = LLMRequest(
         model_name=attempt["model"],
         messages=[
@@ -101,7 +165,7 @@ async def resolve_and_chat(
         ],
         max_tokens=max_tokens,
         temperature=0.1,  # Low temperature for adversarial consistency
-        metadata={"purpose": "pre_action_verifier", "tool": tool_name},
+        metadata={"purpose": "pre_action_verifier", "tool": tool_name, **options},
     )
     response = await provider.chat_completion(request)
     _record_spend_detached(response, request.metadata)

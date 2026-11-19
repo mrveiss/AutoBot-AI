@@ -22,9 +22,10 @@ for _spec in (
         default="",  # empty: the light-processing model, resolved by verifier_model.configured_verifier_model
         description=(
             "Ollama tag the pre-action verifier asks (#21844); empty means the light-processing model. "
-            "Must be pulled on the Ollama host, else the provider "
-            "default answers and a startup warning plus a verifier_model health degradation say so. It loads next to "
-            "the chat model, so OLLAMA_MAX_LOADED_MODELS must be at least 2 or each pass pays a model load."
+            "Used only when the provider is Ollama AND the model is already loaded or nothing else is loaded "
+            "(/api/ps); Ollama reports no free VRAM, so otherwise the loaded chat model answers with the chat "
+            "num_ctx and is never evicted for the verifier. Must be pulled on the Ollama host, else the provider "
+            "default answers and a startup warning plus a verifier_model health degradation say so."
         ),
         component=_COMPONENT,
     ),
