@@ -142,3 +142,13 @@ def test_tool_call_examples_are_not_entity_encoded():
     rendered = _render("system_prompt_simple")
     assert '<TOOL_CALL name="navigate"' in rendered
     assert "&lt;TOOL_CALL" not in rendered
+
+
+def test_the_whole_reminder_has_no_hand_written_browser_tool():
+    """The reminder function in full, not just the slice between two phrases (#21772)."""
+    import inspect
+
+    from chat_workflow.manager import ChatWorkflowManager
+
+    source = inspect.getsource(ChatWorkflowManager._build_tools_reminder)
+    assert [t for t in tool_catalogue.BROWSER_PROMPT_TOOLS if re.search(rf"\b{t}\b", source)] == []
