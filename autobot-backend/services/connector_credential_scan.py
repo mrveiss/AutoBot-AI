@@ -22,12 +22,12 @@ from redis.exceptions import WatchError
 from api._connector_keys import _REDIS_KEY_PREFIX, is_config_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.security.constant_time import secure_compare
 from knowledge.connectors.credential_store import get_credential_store
 from knowledge.connectors.registry import ConnectorRegistry
 
 logger = get_logger(__name__)
 
-OAUTH_AUTH_TYPE = "OAuthRefreshAuth"
 _DATABASE = "knowledge"
 
 
@@ -82,11 +82,8 @@ def _read_records() -> list[tuple[str, dict[str, Any]]]:
     for key in redis.scan_iter(match="%s*" % _REDIS_KEY_PREFIX):
         key_str = key.decode("utf-8") if isinstance(key, bytes) else key
         raw = redis.get(key_str) if is_config_key(key_str) else None
-        try:
-            record = json.loads(raw) if raw else None
-        except (TypeError, ValueError):
-            record = None
-        if isinstance(record, dict) and record.get("connector_type"):
+        record = _parse(raw)
+        if record is not None:
             records.append((key_str[len(_REDIS_KEY_PREFIX) :], record))
     return records
 
@@ -109,22 +106,45 @@ async def scan_connector_credentials() -> CredentialScanReport:
 
 
 async def _secret_holds(record: dict[str, Any], fields: tuple[str, ...]) -> str | None:
-    """None when the secrets store still holds what is about to be stripped; otherwise why not."""
+    """None when the secrets store holds, per field, a value EQUAL to the record's; otherwise why not.
+
+    A field is stripped only if its stored copy matches, compared in constant time: a different or missing
+    stored value means the record's value may be the only copy of what it holds, so it is kept (#17038).
+    """
     klass = ConnectorRegistry.get_registered_class(record["connector_type"])
-    sanitized = {k: v for k, v in (record.get("config") or {}).items() if k not in fields}
+    config = record.get("config") or {}
+    sanitized = {k: v for k, v in config.items() if k not in fields}
     try:
         merged = await get_credential_store().load(
             record["secret_id"], sanitized, klass.auth_schema(), record.get("owner_id") or "system"
         )
     except (LookupError, PermissionError) as exc:
         return f"secrets store cannot supply the credential ({type(exc).__name__})"
-    if record.get("auth_type") != OAUTH_AUTH_TYPE and not all(merged.get(f) for f in fields):
-        return "secrets store does not hold every field that would be removed"
+    unequal = [name for name in fields if not secure_compare(merged.get(name), config.get(name))]
+    if unequal:
+        return "secrets store does not hold an equal value for: %s; nothing removed" % ", ".join(unequal)
     return None
 
 
-def _rewrite(connector_id: str, fields: tuple[str, ...]) -> str | None:
-    """Drop *fields* from the stored record if it is unchanged since it was read; blocking, run in a thread."""
+def _read_raw(connector_id: str) -> Any:
+    """The stored record exactly as Redis holds it (``None`` when absent); blocking, run in a thread."""
+    return get_redis_client(database=_DATABASE).get("%s%s" % (_REDIS_KEY_PREFIX, connector_id))
+
+
+def _parse(raw: Any) -> dict[str, Any] | None:
+    try:
+        record = json.loads(raw) if raw else None
+    except (TypeError, ValueError):
+        return None
+    return record if isinstance(record, dict) and record.get("connector_type") else None
+
+
+def _rewrite(connector_id: str, fields: tuple[str, ...], validated_raw: Any) -> str | None:
+    """Drop *fields* from the stored record, only if it is byte-for-byte the one that was validated.
+
+    The compare runs inside the WATCH, so a write between the validation and the MULTI/EXEC is refused
+    either way: by the equality check here, or by WatchError at EXEC. Blocking, run in a thread.
+    """
     redis = get_redis_client(database=_DATABASE)
     key = "%s%s" % (_REDIS_KEY_PREFIX, connector_id)
     with redis.pipeline() as pipe:
@@ -133,6 +153,8 @@ def _rewrite(connector_id: str, fields: tuple[str, ...]) -> str | None:
             raw = pipe.get(key)
             if raw is None:
                 return "the connector record is gone"
+            if raw != validated_raw:
+                return "the record changed after it was checked; propose again"
             record = json.loads(raw)
             record["config"] = {k: v for k, v in record["config"].items() if k not in fields}
             pipe.multi()
@@ -146,17 +168,19 @@ def _rewrite(connector_id: str, fields: tuple[str, ...]) -> str | None:
 async def strip_sensitive_fields(connector_id: str) -> tuple[bool, str | None]:
     """Remove the clear-text copies from one record; (done, reason). Only the approval handler calls this.
 
-    Refused unless the record still holds them and the secrets store holds the same credential, so the
-    rewrite can never be the only copy's loss.
+    Refused unless the record still holds them and the secrets store holds an EQUAL value for each field,
+    so the rewrite can never be the only copy's loss. The record that is validated is the record that is
+    rewritten: the WATCH transaction refuses it if it is not the same bytes.
     """
-    found = [r for cid, r in await asyncio.to_thread(_read_records) if cid == connector_id]
-    sensitive = sensitive_fields_for(found[0]["connector_type"]) if found else None
-    if not found or sensitive is None:
+    raw = await asyncio.to_thread(_read_raw, connector_id)
+    record = _parse(raw)
+    sensitive = sensitive_fields_for(record["connector_type"]) if record else None
+    if record is None or sensitive is None:
         return False, "connector record not found or its type is not registered"
-    fields = held_fields(found[0], sensitive)
+    fields = held_fields(record, sensitive)
     if not fields:
         return False, "the record no longer holds a sensitive value"
-    if not found[0].get("secret_id"):
+    if not record.get("secret_id"):
         return False, "no secrets-store copy exists; removing the value would lose the only copy"
-    reason = await _secret_holds(found[0], fields) or await asyncio.to_thread(_rewrite, connector_id, fields)
+    reason = await _secret_holds(record, fields) or await asyncio.to_thread(_rewrite, connector_id, fields, raw)
     return reason is None, reason

@@ -59,13 +59,16 @@ class _Redis:
 
 
 class _Store:
-    def __init__(self, held=True):
+    def __init__(self, held=True, value=_SECRET_VALUE):
         self.held = held
+        self.value = value
 
     async def load(self, secret_id, sanitized, auth_cls, owner_id):
         if not self.held:
             raise LookupError("gone")
-        return {**sanitized, "token": "from-secrets-store"}
+        if self.value is None:
+            return dict(sanitized)  # the store holds nothing for this field
+        return {**sanitized, "token": self.value}
 
 
 def _record(connector_type="gitea", **overrides):
@@ -82,10 +85,10 @@ def _record(connector_type="gitea", **overrides):
 
 @pytest.fixture
 def world(monkeypatch):
-    def build(records, held=True):
+    def build(records, held=True, value=_SECRET_VALUE):
         redis = _Redis(records)
         monkeypatch.setattr(scan, "get_redis_client", lambda database=None: redis)
-        monkeypatch.setattr(scan, "get_credential_store", lambda: _Store(held))
+        monkeypatch.setattr(scan, "get_credential_store", lambda: _Store(held, value))
         monkeypatch.setattr(
             scan.ConnectorRegistry,
             "get_registered_class",
@@ -233,6 +236,48 @@ async def test_an_approved_strip_is_refused_when_the_secrets_store_lost_the_cred
 
 
 @pytest.mark.asyncio
+async def test_an_equal_secrets_store_value_lets_the_field_be_stripped(world):
+    redis = world({"c1": _record()})
+    assert await scan.strip_sensitive_fields("c1") == (True, None)
+    assert "token" not in json.loads(redis.data["connector:c1"])["config"]
+
+
+@pytest.mark.asyncio
+async def test_a_different_secrets_store_value_refuses_and_keeps_the_record_value(world):
+    redis = world({"c1": _record()}, value="a-different-credential")  # pragma: allowlist secret
+    done, reason = await scan.strip_sensitive_fields("c1")
+    assert done is False and "token" in reason and "equal value" in reason
+    assert json.loads(redis.data["connector:c1"])["config"]["token"] == _SECRET_VALUE
+
+
+@pytest.mark.asyncio
+async def test_a_missing_secrets_store_value_refuses_and_keeps_the_record_value(world):
+    redis = world({"c1": _record()}, value=None)
+    done, reason = await scan.strip_sensitive_fields("c1")
+    assert done is False and "token" in reason
+    assert json.loads(redis.data["connector:c1"])["config"]["token"] == _SECRET_VALUE
+
+
+@pytest.mark.asyncio
+async def test_a_write_between_the_validation_and_the_rewrite_is_not_overwritten(world, monkeypatch):
+    """The record validated is the record rewritten: a concurrent edit makes the strip refuse, not clobber."""
+    redis = world({"c1": _record()})
+    real_holds = scan._secret_holds
+
+    async def _holds_then_a_writer_edits(record, fields):
+        reason = await real_holds(record, fields)
+        edited = {**record, "name": "edited-by-a-concurrent-writer"}
+        redis.data["connector:c1"] = json.dumps(edited)
+        return reason
+
+    monkeypatch.setattr(scan, "_secret_holds", _holds_then_a_writer_edits)
+    done, reason = await scan.strip_sensitive_fields("c1")
+    assert done is False and "changed" in reason
+    stored = json.loads(redis.data["connector:c1"])
+    assert stored["name"] == "edited-by-a-concurrent-writer" and stored["config"]["token"] == _SECRET_VALUE
+
+
+@pytest.mark.asyncio
 async def test_a_proposal_is_audit_logged_when_created(world, chain, monkeypatch):
     world({"c1": _record()})
     rows = []
@@ -276,7 +321,7 @@ async def test_a_second_proposal_for_the_same_connector_returns_the_pending_one(
 def test_a_record_deleted_before_the_rewrite_gives_a_reason_not_a_crash(world):
     redis = world({"c1": _record()})
     del redis.data["connector:c1"]
-    assert scan._rewrite("c1", ("token",)) == "the connector record is gone"
+    assert scan._rewrite("c1", ("token",), "stale") == "the connector record is gone"
 
 
 async def _noop():
