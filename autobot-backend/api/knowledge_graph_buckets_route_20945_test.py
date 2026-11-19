@@ -11,7 +11,7 @@ import pytest
 from api.knowledge_search_aggregator import get_multi_source_graph, get_multi_source_graph_simple
 from api.schemas_knowledge import KnowledgeMultiSourceGraphResponse
 from api.schemas_knowledge_graph import GraphRequest
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
 
 _RECORDS = {
     "trajectories": [
@@ -56,11 +56,11 @@ async def test_a_user_gets_their_own_records_and_visible_totals_only():
 
 
 @pytest.mark.asyncio
-async def test_an_admin_read_of_facts_and_buckets_is_audited_and_bound_to_their_tenant():
+async def test_an_admin_read_of_facts_and_buckets_is_audited_and_not_narrowed_to_their_unit():
     result, audit = await _call(_user("adm", role="admin"), _body())
     ids = audit.await_args.kwargs["details"]["fact_ids"]
     assert "bucket:trajectories:t-bob" in ids and "bucket:company:tenant-a:ca" in ids and "f-bob" in ids
-    assert not any("tenant-b" in i for i in ids) and "tenant-b" not in repr(result)
+    assert "bucket:company:tenant-b:cb" in ids and "tenant-b" in repr(result), "no graph-only unit rule (check_access)"
     assert audit.await_args.kwargs["durable"] is True
 
 
@@ -69,6 +69,20 @@ async def test_an_unaudited_admin_bucket_read_is_withheld():
     from fastapi import HTTPException
 
     kb = await _kb()
+    with (
+        patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=False)),
+        pytest.raises(HTTPException) as refused,
+    ):
+        await get_multi_source_graph(MagicMock(), _body(), _user("adm", role="admin"))
+    assert refused.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_an_unaudited_admin_read_with_bucket_records_only_is_withheld():
+    from fastapi import HTTPException
+
+    kb = ListingKB([], await client_with(_RECORDS))
     with (
         patch("api.knowledge_search_aggregator.get_or_create_knowledge_base", new=AsyncMock(return_value=kb)),
         patch("services.audit_logger.audit_log", new=AsyncMock(return_value=False)),
@@ -92,6 +106,7 @@ async def test_post_offset_pages_buckets_and_facts_together():
     sections = {s["key"]: s for s in result["stats"]["sections"]}
     assert (sections["facts"]["returned"], sections["facts"]["limited"]) == (1, False)
     assert (sections["research"]["total"], sections["research"]["returned"]) == (2, 1)
+    assert {n["id"] for n in result["data"]["entities"]} >= {"f-bob", "bucket:trajectories:t-mine"}
 
 
 @pytest.mark.asyncio
@@ -102,7 +117,13 @@ async def test_get_graph_accepts_offset():
         patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
     ):
         result = await get_multi_source_graph_simple(
-            MagicMock(), max_facts=1, include_categories=False, offset=1, current_user=_user("adm", role="admin")
+            MagicMock(),
+            max_facts=1,
+            include_categories=False,
+            offset=1,
+            cursor=None,
+            current_user=_user("adm", role="admin"),
         )
     sections = {s["key"]: s for s in result["stats"]["sections"]}
     assert sections["facts"]["returned"] == 1 and sections["research"]["returned"] == 1
+    assert {n["id"] for n in result["data"]["entities"]} >= {"f-bob", "bucket:trajectories:t-mine"}

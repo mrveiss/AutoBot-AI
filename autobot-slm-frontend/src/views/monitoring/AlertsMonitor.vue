@@ -114,7 +114,7 @@ const formatTimestamp = createRecencyFormatter({
   style: 'narrow',
   maxUnit: 'day',
   olderThanMs: 86_400_000,
-  older: createDateFormatter({ kind: 'date' }),
+  older: createDateFormatter({ locale: () => locale.value, kind: 'date' }),
 })
 
 function acknowledgeAlert(index: number) {

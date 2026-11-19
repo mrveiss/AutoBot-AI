@@ -20,8 +20,8 @@ from api.codebase_analytics.endpoints.call_graph import _get_cached_call_graph
 from api.codebase_analytics.endpoints.dependencies import _REDIS_PREFIX as DEPENDENCIES_PREFIX
 from api.codebase_analytics.endpoints.shared import _caller_owner_id, resolve_scan_root
 from api.codebase_analytics.source_models import CodeSource, SourceStatus
-from api.codebase_analytics.source_scope import cached_task_result
-from api.codebase_analytics.source_storage import RegistryUnavailable, get_default_source_id, list_sources
+from api.source_scope import cached_task_result
+from api.codebase_analytics.source_storage import RegistryUnavailable, list_sources
 from autobot_shared.logging_manager import get_logger
 from knowledge.graph_bucket_visibility import Viewer
 from knowledge.graph_buckets import section_report
@@ -35,14 +35,13 @@ DEPENDENCY_SUMMARY_FIELDS = ("total_modules", "total_import_relationships", "cir
 
 
 async def indexed_codebases(user: Dict[str, Any] | None) -> List[CodeSource]:
-    """Indexed sources the caller may see, the default (AutoBot's own code) first."""
-    default_id = await get_default_source_id()
+    """Indexed sources the caller may see, newest-synced first (there is no default source, #20513)."""
     visible = [s for s in await list_sources(_caller_owner_id(user)) if s.status == SourceStatus.READY]
-    return sorted(visible, key=lambda s: (s.id != default_id, -_stamp(s)))
+    return sorted(visible, key=lambda s: -_stamp(s))
 
 
 def _stamp(source: CodeSource) -> float:
-    """Newest-synced first among the non-default sources (ISO strings compare lexically)."""
+    """Sort key: the digits of the last-synced stamp, so a later sync sorts as a larger number."""
     return float("".join(c for c in (source.last_synced or "") if c.isdigit()) or 0)
 
 
@@ -73,7 +72,7 @@ async def dependencies_summary(source_id: str) -> Dict[str, Any] | None:
     return _pick(cached.get("dependency_data", {}).get("summary", {}), DEPENDENCY_SUMMARY_FIELDS)
 
 
-async def _codebase_node(source: CodeSource, is_default: bool) -> Dict[str, Any]:
+async def _codebase_node(source: CodeSource) -> Dict[str, Any]:
     """One codebase node; the call graph leads the metadata, dependencies are second (#20945)."""
     try:
         call_graph = await call_graph_summary(source.id)
@@ -92,7 +91,6 @@ async def _codebase_node(source: CodeSource, is_default: bool) -> Dict[str, Any]
         "section": CODEBASE_SECTION_KEY,
         "metadata": {
             "source_id": source.id,
-            "is_autobot": is_default,
             "last_synced": source.last_synced,
             "call_graph": call_graph,
             "dependencies": dependencies,
@@ -109,7 +107,7 @@ async def codebase_section_for_graph(
     follows ``list_sources`` exactly as the analytics endpoints do. Every codebase shown is
     recorded in the request's ``AdminReadLedger`` (#19860), as the admin bucket reads are.
     """
-    if not viewer.is_admin:
+    if not viewer.admin_read:
         return []
     try:
         sources = await indexed_codebases(user)
@@ -118,8 +116,7 @@ async def codebase_section_for_graph(
         return []
     if not sources:
         return []
-    default_id = await get_default_source_id()
-    children = [await _codebase_node(s, s.id == default_id) for s in sources]
+    children = [await _codebase_node(s) for s in sources]
     section = {
         "id": f"section:{CODEBASE_SECTION_KEY}",
         "name": CODEBASE_SECTION_LABEL,

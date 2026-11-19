@@ -9,8 +9,9 @@ There is no second filter. A bucket record is shaped like a fact (``owner_id`` f
 and goes through ``filter_search_results_by_permission``, the one filter the facts path uses. A record
 without an owner is therefore hidden from non-admins. An admin read passes ``is_admin``, and the records
 on the returned page are recorded in the request's ``AdminReadLedger`` (``record_page``), so the
-``kb.admin_read`` entry the route commits names every record the admin is shown. An admin is bound to
-the caller's own tenant; only a superadmin crosses tenants.
+``kb.admin_read`` entry the route commits names every record the admin is shown. There is no graph-only
+organisational-unit rule: ``KnowledgeOwnership.check_access`` returns True for an admin read, so an admin
+sees in the graph what an admin sees everywhere else in the KB.
 
 Access by section kind: ``public`` is the product's own documentation and code analysis (no per-user
 owner, api/knowledge_search_documentation.py module docstring), ``owner`` holds per-user records, and
@@ -23,7 +24,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from knowledge.quarantine import not_quarantined
-from knowledge.root_read import is_superadmin_user
 from knowledge.search_filters import extract_user_context_from_request, filter_search_results_by_permission
 
 PUBLIC = "public"
@@ -31,27 +31,30 @@ OWNER = "owner"
 TENANT_ADMIN = "tenant_admin"
 _OWNER_KEYS = ("owner_id", "user_id")
 _TENANT_KEYS = ("organization_id", "company_id", "tenant_id")
+UNSCOPED_SOURCE = (
+    "default"  # the source_id the code indexers write for AutoBot's own code (pattern_analysis/storage.py)
+)
 
 
 @dataclass(frozen=True)
 class Viewer:
-    """The caller of one graph read: identity, tenant, and the admin ledger (False for a non-admin)."""
+    """The caller of one graph read: identity, organisational unit, and the admin ledger (False for a non-admin)."""
 
     user_id: str
     company_id: str | None
     group_ids: tuple
-    is_superadmin: bool
     ledger: Any = False
 
     @property
-    def is_admin(self) -> bool:
+    def admin_read(self) -> bool:
+        """The route passed an ``AdminReadLedger``: an admin read decided upstream, not a second admin check."""
         return bool(self.ledger)
 
 
 def viewer_for(current_user, ledger) -> Viewer:
     """The :class:`Viewer` of an authenticated caller; *ledger* is the route's ``admin_read_audit`` value."""
     user_id, org_id, group_ids = extract_user_context_from_request(current_user)
-    return Viewer(user_id, org_id, tuple(group_ids), is_superadmin_user(current_user), ledger)
+    return Viewer(user_id, org_id, tuple(group_ids), ledger)
 
 
 def first_of(meta: Dict[str, Any], keys: tuple) -> str | None:
@@ -61,7 +64,7 @@ def first_of(meta: Dict[str, Any], keys: tuple) -> str | None:
 
 
 def tenant_of(meta: Dict[str, Any]) -> str | None:
-    """The tenant a record names, or None for an untenanted record."""
+    """The organisational unit a record names, or None for a unit-less record."""
     return first_of(meta, _TENANT_KEYS)
 
 
@@ -73,42 +76,65 @@ def as_fact(collection: str, record_id: str, meta: Dict[str, Any]) -> Dict[str, 
     return {"id": f"bucket:{collection}:{record_id}", "metadata": metadata}
 
 
-def _within_tenant(kind: str, collection: str, fact: Dict[str, Any], viewer: Viewer) -> bool:
-    """An admin (not a superadmin) sees their own tenant: untenanted ``owner`` records, never another tenant's.
+async def _may_read_source(source_id: str, viewer: Viewer) -> bool:
+    """Whether the viewer may read code source *source_id*: the codebase-analytics source authorisation (#12358).
 
-    A ``company:<id>`` collection is already tenant-scoped by its name (:func:`collection_in_scope`); the other
-    per-entity buckets name no tenant, so their records must carry the caller's.
+    Not found or not visible is False; an unreachable registry (503) propagates, so the collection reads as unreadable.
     """
-    if viewer.is_superadmin or not viewer.is_admin or collection.startswith("company:"):
-        return True
-    tenant = fact["metadata"]["organization_id"]
-    return tenant == viewer.company_id if tenant or kind == TENANT_ADMIN else True
+    from fastapi import HTTPException  # noqa: PLC0415
+
+    from api.codebase_analytics.endpoints.shared import authorize_source_access  # noqa: PLC0415 -- heavy router stack
+
+    try:
+        await authorize_source_access(source_id, {"id": viewer.user_id})
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return False
+        raise
+    return True
 
 
-def collection_in_scope(kind: str, collection: str, viewer: Viewer) -> bool:
-    """False for a ``company:<id>`` collection of another tenant, before any record is read."""
-    from llc.kb.collections import company_id_of  # noqa: PLC0415 -- keeps the LLC stack off this import
+async def _readable_sources(named: set, viewer: Viewer, decided: Dict[str, bool]) -> set:
+    """The sources of *named* the viewer may read; each is asked once into *decided* (a registry read per source)."""
+    for sid in named - decided.keys():
+        decided[sid] = await _may_read_source(sid, viewer)  # a fault propagates and is never cached
+    return {sid for sid in named if decided[sid]}
 
-    if kind != TENANT_ADMIN or viewer.is_superadmin or not collection.startswith("company:"):
-        return True
-    return company_id_of(collection) == viewer.company_id
+
+async def _readable_public(
+    collection: str, rows: List[Dict[str, Any]], viewer: Viewer, decided: Dict[str, bool]
+) -> List[Dict[str, Any]]:
+    """Public rows minus quarantined ones, and minus those of a code source the viewer may not read."""
+    rows = [r for r in rows if not_quarantined(as_fact(collection, r["id"], r.get("metadata") or {}))]
+    named = {(r.get("metadata") or {}).get("source_id") for r in rows} - {None, "", UNSCOPED_SOURCE}
+    allowed = await _readable_sources(named, viewer, decided)
+    return [r for r in rows if (r.get("metadata") or {}).get("source_id") in allowed | {None, "", UNSCOPED_SOURCE}]
 
 
 async def visible_records(
-    kind: str, collection: str, rows: List[Dict[str, Any]], viewer: Viewer, ownership_manager
+    kind: str,
+    collection: str,
+    rows: List[Dict[str, Any]],
+    viewer: Viewer,
+    ownership_manager,
+    decided_sources: Dict[str, bool] | None = None,
 ) -> List[Dict[str, Any]]:
-    """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger."""
+    """The *rows* (``id``, ``metadata``) the viewer may read; an admin's are recorded in the ledger.
+
+    *decided_sources* carries the code-source decisions of one viewer across the windows of one scan, so a source
+    is authorised once per scan, not once per window; the row filter itself still runs on every row.
+    """
     if kind == PUBLIC:
-        return rows
+        return await _readable_public(collection, rows, viewer, {} if decided_sources is None else decided_sources)
     facts = [as_fact(collection, r["id"], r.get("metadata") or {}) for r in rows]
-    facts = [f for f in facts if not_quarantined(f) and _within_tenant(kind, collection, f, viewer)]
+    facts = [f for f in facts if not_quarantined(f)]
     kept = await filter_search_results_by_permission(
         facts,
         viewer.user_id,
         viewer.company_id,
         list(viewer.group_ids),
         ownership_manager=ownership_manager,
-        is_admin=viewer.is_admin,  # the ledger records only the page the route returns
+        is_admin=viewer.admin_read,  # the ledger records only the page the route returns
     )
     allowed = {f["id"] for f in kept}
     return [r for r in rows if f"bucket:{collection}:{r['id']}" in allowed]
@@ -116,5 +142,5 @@ async def visible_records(
 
 def record_page(viewer: Viewer, section_access: str, page: List[tuple]) -> None:
     """Record the admin-gated records of a returned page (``(collection, id, metadata)``) in the ledger (#19860)."""
-    if viewer.is_admin and section_access != PUBLIC:
+    if viewer.admin_read and section_access != PUBLIC:
         viewer.ledger.record([{"id": f"bucket:{name}:{rid}"} for name, rid, _ in page])

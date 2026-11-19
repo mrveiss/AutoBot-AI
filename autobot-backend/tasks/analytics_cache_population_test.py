@@ -16,17 +16,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tasks.analytics_cache_population import _build_modules, _dispatch, _populate_all
+from api.codebase_analytics.endpoints.dependencies import _REDIS_PREFIX as _DEP
+from api.codebase_analytics.endpoints.duplicates import _REDIS_PREFIX as _DUP
+from api.codebase_analytics.endpoints.import_tree import _REDIS_PREFIX as _IMP
+from api.source_scope import source_scoped_prefix
+from tasks.analytics_cache_population import _WINDOW_SECONDS, _build_modules, _dispatch, _populate_all
 
 
 class TestBuildModules:
     def test_returns_all_six_modules_in_dispatch_order(self):
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         names = [m[0] for m in modules]
         assert names == [
-            "dependencies",
-            "duplicates",
-            "import_tree",
+            "dependencies:s1",
+            "duplicates:s1",
+            "import_tree:s1",
             "bug_prediction",
             "security_score",
             "anti_pattern",
@@ -35,16 +39,16 @@ class TestBuildModules:
     def test_anti_pattern_has_no_redis_prefix(self):
         """AntiPatternDetector.analyze() writes its own cache directly --
         no latest_task_id pointer needed, unlike the other 5 modules."""
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         assert by_name["anti_pattern"][3] is None
 
     def test_other_five_modules_have_distinct_redis_prefixes(self):
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         prefixes = {
             by_name[name][3]
-            for name in ("dependencies", "duplicates", "import_tree", "bug_prediction", "security_score")
+            for name in ("dependencies:s1", "duplicates:s1", "import_tree:s1", "bug_prediction", "security_score")
         }
         assert None not in prefixes
         assert len(prefixes) == 5  # all distinct -- no cross-module cache collisions
@@ -53,47 +57,43 @@ class TestBuildModules:
         """bug_prediction, security_score, and anti_pattern take an explicit
         path argument (their Celery tasks have no source/cwd-relative
         default); dependencies/duplicates/import_tree self-resolve internally."""
-        modules = _build_modules("/fake/project/root")
+        modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
         assert by_name["bug_prediction"][2][0] == "/fake/project/root"
         assert by_name["security_score"][2] == ("/fake/project/root",)
         assert by_name["anti_pattern"][2] == ("/fake/project/root",)
-        assert by_name["dependencies"][2] == ()
-        assert by_name["duplicates"][2] == ()
-        assert by_name["import_tree"][2] == ()
+        # The source-scoped tasks are handed the source, never run unscoped (#20513).
+        assert by_name["dependencies:s1"][2] == ("s1",)
+        assert by_name["duplicates:s1"][2] == ("s1",)
+        assert by_name["import_tree:s1"][2] == ("s1",)
+        for module, prefix in (("dependencies", _DEP), ("duplicates", _DUP), ("import_tree", _IMP)):
+            assert by_name[f"{module}:s1"][3] == source_scoped_prefix(prefix, "s1")
+
+    def test_without_sources_only_the_root_scoped_modules_are_built(self):
+        names = [m[0] for m in _build_modules("/fake/project/root")]
+        assert names == ["bug_prediction", "security_score", "anti_pattern"]
 
 
 class TestDispatch:
     @pytest.mark.asyncio
-    async def test_dispatch_stores_latest_task_id_when_prefix_given(self):
-        mock_result = MagicMock(id="task-abc")
+    async def test_dispatch_moves_the_pointer_only_after_the_task_succeeds(self):
         mock_task = MagicMock()
-        mock_task.apply_async.return_value = mock_result
 
-        with patch(
-            "tasks.analytics_cache_population.store_latest_task_id",
-            AsyncMock(),
-        ) as mock_store:
-            task_id = await _dispatch(mock_task, (), "some_prefix:", countdown=120)
+        task_id = await _dispatch(mock_task, (), "some_prefix:", countdown=120)
 
-        assert task_id == "task-abc"
-        mock_task.apply_async.assert_called_once_with(args=(), countdown=120)
-        mock_store.assert_awaited_once_with("some_prefix:", "task-abc")
+        kwargs = mock_task.apply_async.call_args.kwargs
+        assert kwargs["task_id"] == task_id and kwargs["countdown"] == 120
+        # The pointer is a success callback, not written at dispatch: the previous completed
+        # result stays readable while the new scan is queued or running.
+        assert kwargs["link"].args == ("some_prefix:", task_id)
 
     @pytest.mark.asyncio
-    async def test_dispatch_skips_store_when_no_prefix(self):
-        mock_result = MagicMock(id="task-anti")
+    async def test_dispatch_links_nothing_when_no_prefix(self):
         mock_task = MagicMock()
-        mock_task.apply_async.return_value = mock_result
 
-        with patch(
-            "tasks.analytics_cache_population.store_latest_task_id",
-            AsyncMock(),
-        ) as mock_store:
-            task_id = await _dispatch(mock_task, ("/root",), None, countdown=0)
+        await _dispatch(mock_task, ("/root",), None, countdown=0)
 
-        assert task_id == "task-anti"
-        mock_store.assert_not_awaited()
+        assert mock_task.apply_async.call_args.kwargs["link"] is None
 
 
 class TestPopulateAll:
@@ -117,9 +117,18 @@ class TestPopulateAll:
         ):
             results = await _populate_all("/fake/root")
 
-        assert results["dependencies"] == {"status": "dispatched", "task_id": "dependencies-task-id", "countdown": 0}
-        assert results["duplicates"] == {"status": "dispatched", "task_id": "duplicates-task-id", "countdown": 100}
-        assert results["anti_pattern"] == {"status": "dispatched", "task_id": "anti_pattern-task-id", "countdown": 200}
+        assert [results[n]["countdown"] for n in ("dependencies", "duplicates", "anti_pattern")] == [0, 100, 200]
+        assert all(r["status"] == "dispatched" for r in results.values())
+        for name, task, _args, _prefix in modules:
+            assert task.apply_async.call_args.kwargs["task_id"] == results[name]["task_id"]
+
+    @pytest.mark.asyncio
+    async def test_many_sources_still_dispatch_inside_the_window(self):
+        modules = [self._make_mock_module(f"m{i}", None) for i in range(500)]
+        with patch("tasks.analytics_cache_population._build_modules", return_value=modules):
+            results = await _populate_all("/fake/root")
+
+        assert max(r["countdown"] for r in results.values()) < _WINDOW_SECONDS
 
     @pytest.mark.asyncio
     async def test_one_module_failure_does_not_abort_others(self):
@@ -145,7 +154,7 @@ class TestPopulateAll:
         assert "broker unavailable" in results["dependencies"]["error"]
         # The second module still dispatched despite the first one failing.
         assert results["duplicates"]["status"] == "dispatched"
-        assert results["duplicates"]["task_id"] == "ok-task-id"
+        assert results["duplicates"]["task_id"] == ok_task.apply_async.call_args.kwargs["task_id"]
 
     @pytest.mark.asyncio
     async def test_all_six_real_modules_dispatch(self):
@@ -164,7 +173,7 @@ class TestPopulateAll:
             for i, mock_task in enumerate([dep, dup, imp, bug, sec, anti]):
                 mock_task.apply_async.return_value = MagicMock(id=f"id-{i}")
 
-            results = await _populate_all("/fake/root")
+            results = await _populate_all("/fake/root", ("s1",))
 
         assert len(results) == 6
         assert all(r["status"] == "dispatched" for r in results.values())

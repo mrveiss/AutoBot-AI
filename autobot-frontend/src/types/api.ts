@@ -7,6 +7,8 @@ export interface ApiResponse<T = unknown> {
   message?: string;
   error?: string;
   status?: string;
+  /** The HTTP status of a failed response; absent when the request got no response (network error, timeout). */
+  httpStatus?: number;
 }
 
 // Chat API Types
@@ -38,6 +40,7 @@ export type ChatMessageDisplayType =
   | 'response'
   | 'message'
   | 'command_approval_request'
+  | 'human_question'
   | 'overseer_plan'
   | 'overseer_step'
   | 'terminal_output'

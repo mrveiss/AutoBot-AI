@@ -11,12 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.ext.compiler import compiles
 
+from tests.helpers._sqlite_test_engine import real_savepoint_session_factory
 from user_management.models import AuditLog, Role, User
-from user_management.models.base import Base
 from user_management.models.person_link import PersonLink
 from user_management.services import person_link_service as service
 
@@ -26,26 +23,23 @@ _ADMIN_ROLE_ID = uuid.UUID(
 )  # has hex letters: an all-digit id is stored as a number by SQLite
 
 
-@compiles(JSONB, "sqlite")
-def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
-    return "JSON"
+@pytest.fixture(autouse=True)
+def _no_copy_sync_listeners():
+    """Startup also installs the SLM copy sync's global commit listener, which would then push in the
+    background after every later test's commit; these tests are about the link only."""
+    with patch("user_management.services.person_copy_sync.start_person_copy_sync"):
+        yield
 
 
 @pytest_asyncio.fixture
 async def session():
     """A real session on an in-memory database, so the checks run as the queries they are."""
-    engine = create_async_engine("sqlite+aiosqlite://")  # canonical: ignore py-adhoc-db-engine (test-local, in-memory)
-    async with engine.begin() as conn:
-        tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
-        await conn.run_sync(Base.metadata.create_all, tables=tables)
-    try:
-        sessions = async_sessionmaker(bind=engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+    tables = [User.__table__, Role.__table__, AuditLog.__table__, PersonLink.__table__]
+    async for sessions in real_savepoint_session_factory(tables):
         async with sessions() as db:
             db.add(Role(id=_ADMIN_ROLE_ID, name="admin", is_system=True))  # the system role seed.py finds by name
             await db.flush()
             yield db
-    finally:
-        await engine.dispose()
 
 
 async def _count(session, model) -> int:

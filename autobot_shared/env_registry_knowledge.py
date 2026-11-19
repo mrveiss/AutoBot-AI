@@ -546,44 +546,54 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_KB_GRAPH_SECTION_SAMPLE_LIMIT",
+        name="AUTOBOT_KB_WIPE_CHROMA_BATCH",
         type=int,
-        default=25,
-        description="Records sampled per knowledge-graph section; the response reports total vs returned.",
+        default=500,
+        description=(
+            "Vector ids deleted per call while an approved knowledge wipe empties a knowledge "
+            "collection (services/kb_wipe_chroma.py, #21048)."
+        ),
         component="knowledge",
-        range=(1, 500),
+        range=(1, 10000),
     )
 )
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_KB_GRAPH_PREVIEW_CHARS",
+        name="AUTOBOT_KB_WIPE_SCAN_BATCH",
         type=int,
-        default=160,
-        description="Characters of a bucket record shown as its knowledge-graph node name.",
+        default=500,
+        description=(
+            "Keys scanned and unlinked per call while an approved knowledge wipe removes knowledge "
+            "key prefixes (services/kb_wipe_redis.py, #21048)."
+        ),
         component="knowledge",
-        range=(20, 1000),
+        range=(1, 10000),
     )
 )
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_KB_GRAPH_MAX_OFFSET",
-        type=int,
-        default=100000,
-        description="Upper bound of the knowledge-graph offset parameter (facts and bucket records to skip).",
+        name="AUTOBOT_DOC_INDEX_PROGRESS_INTERVAL_S",
+        type=float,
+        default=30.0,
+        description="Seconds between batch progress lines while the doc indexer embeds chunks (#20886).",
         component="knowledge",
-        range=(0, 10000000),
+        range=(1.0, 3600.0),
     )
 )
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_KB_GRAPH_SCAN_LIMIT",
+        name="AUTOBOT_CODE_INDEX_MAX_CALL_SITES_PER_EDGE",
         type=int,
-        default=5000,
-        description="Records scanned per fact listing or bucket collection to count and page what the caller may see.",
+        default=50,
+        description=(
+            "Most call-site lines one code-graph call edge records. Calls past the cap are counted in the "
+            "edge's dropped_call_sites rather than lost silently; raising it stores more lines per edge "
+            "in the vector store's metadata (services/knowledge/code_call_sites.py)."
+        ),
         component="knowledge",
-        range=(100, 100000),
+        range=(1, 10000),
     )
 )

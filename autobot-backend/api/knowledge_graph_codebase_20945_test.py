@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The graph's codebase section: AutoBot's own code first, reusing the analytics services (#20945)."""
+"""The graph's codebase section: newest-synced code first, reusing the analytics services (#20945)."""
 
 import pytest
 from fastapi import HTTPException
@@ -17,12 +17,12 @@ from knowledge.root_read import AdminReadLedger
 
 
 def _viewer(admin: bool = True) -> Viewer:
-    return Viewer("u1", None, (), False, AdminReadLedger() if admin else False)
+    return Viewer("u1", None, (), AdminReadLedger() if admin else False)
 
 
 LEDGER = AdminReadLedger()
-AUTOBOT = CodeSource(id="src-autobot", name="AutoBot", status=SourceStatus.READY, last_synced="2026-11-07T10:00:00")
-OTHER = CodeSource(id="src-other", name="Other", status=SourceStatus.READY, last_synced="2026-11-07T12:00:00")
+AUTOBOT = CodeSource(id="src-autobot", name="AutoBot", status=SourceStatus.READY, last_synced="2026-11-07T12:00:00")
+OTHER = CodeSource(id="src-other", name="Other", status=SourceStatus.READY, last_synced="2026-11-07T10:00:00")
 SYNCING = CodeSource(id="src-syncing", name="Syncing", status=SourceStatus.SYNCING)
 CALL_GRAPH = {
     "summary": {
@@ -52,9 +52,6 @@ def analytics(monkeypatch):
     """Stand in for the registry and the two analytics caches; the section must only read them."""
     seen = {"call_graph_roots": [], "deps": []}
 
-    async def default_id():
-        return AUTOBOT.id  # the most recently INDEXED, not the most recently listed
-
     async def listing(owner):
         return [OTHER, SYNCING, AUTOBOT]
 
@@ -72,7 +69,6 @@ def analytics(monkeypatch):
         return DEPS
 
     for name, fn in (
-        ("get_default_source_id", default_id),
         ("list_sources", listing),
         ("resolve_scan_root", root),
         ("_get_cached_call_graph", cached_graph),
@@ -83,14 +79,22 @@ def analytics(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_autobot_code_is_first_and_unindexed_sources_are_left_out(analytics):
+async def test_newest_synced_code_is_first_and_unindexed_sources_are_left_out(analytics):
     nodes, edges = [{"id": "fact:1", "type": "fact"}], []
     report = await cb.codebase_section_for_graph(nodes, edges, {"id": "u1"}, _viewer())
     assert [n["id"] for n in nodes[:4]] == ["section:codebase", "codebase:src-autobot", "codebase:src-other", "fact:1"]
-    assert nodes[1]["metadata"]["is_autobot"] is True and nodes[2]["metadata"]["is_autobot"] is False
     assert [e["to"] for e in edges] == ["codebase:src-autobot", "codebase:src-other"]
     assert report == [
-        {"key": "codebase", "label": "Codebases", "total": 2, "returned": 2, "limited": False, "truncated": False}
+        {
+            "key": "codebase",
+            "label": "Codebases",
+            "total": 2,
+            "returned": 2,
+            "limited": False,
+            "truncated": False,
+            "budget_exhausted": False,
+            "failed": False,
+        }
     ]
 
 
@@ -131,7 +135,7 @@ async def test_an_unreadable_registry_omits_the_section(monkeypatch, analytics):
     async def down():
         raise cb.RegistryUnavailable("down")
 
-    monkeypatch.setattr(cb, "get_default_source_id", down)
+    monkeypatch.setattr(cb, "list_sources", lambda owner: down())
     nodes: list = []
     assert await cb.codebase_section_for_graph(nodes, [], None, _viewer()) == []
 

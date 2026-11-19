@@ -75,6 +75,7 @@ from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
 from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.enrollment_skip import EnrollmentSkip
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -101,6 +102,7 @@ from models.schemas import (
 from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
+from services.collection_errors import mark_stage_failed, operational_failure_reason
 from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
@@ -116,6 +118,7 @@ from services.drift_checker import (
 )
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
+from services.node_events import get_slm_self_node, split_enrollment_failed
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
 from services.single_flight_cache import SingleFlightCache
@@ -4369,6 +4372,7 @@ class UpdateAllJob(BaseModel):
     completed_fleet_nodes: int = 0
     failed_fleet_nodes: int = 0
     skipped_fleet_nodes: int = 0  # non-operational nodes skipped (#11511)
+    enrollment_skipped_nodes: List[EnrollmentSkip] = []  # never completed enrollment (#21036)
     created_at: str = ""
     completed_at: Optional[str] = None
     failure_reason: Optional[str] = None
@@ -4516,6 +4520,8 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     plan_version_is_supported,
     restart_cut_the_wait,
     restored_stage,
+    resume_ref,
+    resumed_scope,
 )
 from api._resume_wait import resolve_completion_time, wait_for_detached_self_update  # noqa: E402
 
@@ -4891,12 +4897,7 @@ def _fail_fleet_stage(
     reason: str,
 ) -> None:
     """Mark *stage* and its job failed with one reason string (any update-all stage)."""
-    stage.status = _StageStatus.FAILED
-    stage.message = reason[:300]
-    stage.completed_at = utc_timestamp()
-    job.status = "failed"
-    job.failure_reason = reason[:300]
-    job.completed_at = utc_timestamp()
+    mark_stage_failed(job, stage, reason, _StageStatus.FAILED, utc_timestamp())
 
 
 _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending", "enrolling", "decommissioned"})
@@ -4905,10 +4906,9 @@ _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending"
 def _is_node_operational(node: Node) -> bool:
     """Return True only when a node is in a state where a deploy is safe (#11511).
 
-    Nodes that are degraded, have never sent a heartbeat, or whose status is
-    anything other than online/maintenance are not targeted — attempting an
-    Ansible deploy against them will always fail and should not affect the
-    overall job result.
+    Deploy-safety, not enrollment (see status_enums.NOT_FULLY_ENROLLED_STATUSES): nodes that are
+    degraded, never heartbeated or not online/maintenance are not targeted; an Ansible deploy
+    against them always fails and should not affect the overall job result.
     """
     if node.last_heartbeat is None:
         return False
@@ -5130,10 +5130,6 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
     currency count — it does not cause a double-update.
     """
     try:
-        slm_own_ip = urlparse(settings.external_url).hostname or ""
-        seen_ids: set = set()
-        outdated_node_ids: List[str] = []
-
         async with db_service_ref.session() as db:
             # B: use version comparison — reliable immediately after stages 1-2
             nodes_result = await db.execute(
@@ -5142,28 +5138,26 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
                 .order_by(Node.hostname)
             )
             version_outdated = nodes_result.scalars().all()
-
-            for n in version_outdated:
-                seen_ids.add(n.node_id)
-                outdated_node_ids.append(n.node_id)
+            outdated_node_ids = [n.node_id for n in version_outdated]
+            seen_ids = set(outdated_node_ids)
 
             # A: self-node inclusion — ensure the co-located SLM host is counted
             # even when heartbeat hasn't yet updated its code_status to OUTDATED.
-            if slm_own_ip:
-                slm_result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
-                slm_node = slm_result.scalar_one_or_none()
-                if slm_node and slm_node.node_id not in seen_ids:
-                    # Self-node is not captured by version comparison (e.g. no
-                    # code_version recorded yet); include it so the pipeline
-                    # does not report "everything current" prematurely.
-                    logger.info(
-                        "update-all: self-node %s not in version-outdated list "
-                        "(code_version=%s vs remote=%s) — adding explicitly (#9996-A)",
-                        slm_node.node_id,
-                        _short_sha(slm_node.code_version),
-                        _short_sha(remote_commit),
-                    )
-                    outdated_node_ids.append(slm_node.node_id)
+            slm_node = await get_slm_self_node(db, settings.external_url)
+            if slm_node and slm_node.node_id not in seen_ids:
+                # Not captured by version comparison (e.g. no code_version yet); include it so the
+                # pipeline does not report "everything current" prematurely.
+                logger.info(
+                    "update-all: self-node %s not outdated (code_version=%s, remote=%s), adding (#9996-A)",
+                    slm_node.node_id,
+                    _short_sha(slm_node.code_version),
+                    _short_sha(remote_commit),
+                )
+                outdated_node_ids.append(slm_node.node_id)
+
+            outdated_node_ids, job.enrollment_skipped_nodes = await split_enrollment_failed(
+                db, outdated_node_ids, {slm_node.node_id} if slm_node else set()
+            )
 
         stage_fleet = _get_stage(job, "fleet_nodes")
         stage_fleet.sha = _short_sha(remote_commit)
@@ -5174,8 +5168,8 @@ async def _collect_outdated_node_ids(job: UpdateAllJob, remote_commit: str, db_s
             f"Collected {len(outdated_node_ids)} outdated fleet node(s)",
         )
         return outdated_node_ids
-    except Exception as exc:
-        logger.warning("update-all: could not collect outdated nodes: %s", exc)
+    except Exception as exc:  # operational_failure_reason decides: it re-raises a programming error (#21334)
+        _fail_fleet_stage(job, _get_stage(job, "fleet_nodes"), operational_failure_reason("outdated nodes", exc))
         return []
 
 
@@ -5394,6 +5388,8 @@ async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> No
 
     outdated_node_ids = await _collect_outdated_node_ids(job, remote_commit, db_service_ref)
     _mark_progress(job)
+    if job.status == "failed":  # #21334: could not determine, not "nothing outdated"
+        return
 
     slm_fired = await _run_slm_stage(job, remote_commit, outdated_node_ids, db_service_ref)
     _mark_progress(job)
@@ -5475,7 +5471,7 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     if deployed_commit == target_commit:
         return True
     err_msg = (
-        f"SLM deployed commit {_short_sha(deployed_commit)} " f"!= target {_short_sha(target_commit)} — stage 3 failed"
+        f"SLM deployed commit {_short_sha(deployed_commit)} != target {_short_sha(target_commit)} — stage 3 failed"
     )
     logger.error("update-all resume: %s", err_msg)
     stage_slm = _get_stage(job, "slm_self_update")
@@ -5489,17 +5485,14 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     return False
 
 
-async def _execute_resume(
-    job: UpdateAllJob,
-    target_commit: Optional[str],
-    remaining: List[str],
-) -> None:
+async def _execute_resume(job: UpdateAllJob, target_commit: Optional[str], remaining: List[str], plan: dict) -> None:
     """C2-c: Inner resume execution — always clears plan on any exception.
 
-    C1: verifies deployed commit; C2-c: try/except wraps everything.
-    """
+    C1: verifies deployed commit. #20214: a rollback's ref is read once from the plan; one without a valid ref
+    fails the job here rather than deploying main."""
     global _resume_task
     try:
+        deploy_ref = resume_ref(plan)
         if not await wait_for_detached_self_update(
             job, _mark_progress, _SELF_UPDATE_WATCH_TIMEOUT_SECONDS, _SELF_UPDATE_WATCH_POLL_SECONDS
         ):
@@ -5523,7 +5516,8 @@ async def _execute_resume(
             await _clear_resume_plan()
             return
 
-        await _run_fleet_stage(job, remaining)
+        with resumed_scope(deploy_ref):
+            await _run_fleet_stage(job, remaining)
     except Exception as exc:
         logger.error("update-all resume: unhandled error: %s", exc, exc_info=True)
         job.status = "failed"
@@ -5582,7 +5576,7 @@ async def resume_update_all_orchestration() -> None:
         ],
     )
     _set_update_all_job(job)
-    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining))
+    _resume_task = asyncio.create_task(_execute_resume(job, target_commit, remaining, plan))
 
 
 async def _check_persisted_plan_exists() -> bool:
@@ -5636,8 +5630,8 @@ def _retire_stale_job(existing: UpdateAllJob) -> None:
     existing.completed_at = utc_timestamp()
 
 
-async def _start_update_all_locked() -> UpdateAllJob:
-    """Decide, retire, and start — serialised by `_update_all_start_lock`."""
+async def _start_update_all_locked(orchestrate=None) -> UpdateAllJob:
+    """Decide, retire, and start (serialised by the start lock); `orchestrate` replaces the forward run (#20214)."""
     global _update_all_task
 
     existing = _get_update_all_job()
@@ -5691,7 +5685,7 @@ async def _start_update_all_locked() -> UpdateAllJob:
     async def _run() -> None:
         global _update_all_task
         try:
-            await _run_update_all_orchestration(job, _db_svc)
+            await (orchestrate or _run_update_all_orchestration)(job, _db_svc)
         except Exception as exc:
             logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
             job.status = "failed"

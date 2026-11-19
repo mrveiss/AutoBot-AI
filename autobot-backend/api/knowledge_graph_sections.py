@@ -18,7 +18,20 @@ logger = get_logger(__name__)
 
 def facts_section(page: FactsPage, offset: int) -> Dict[str, Any]:
     """The facts section: the VISIBLE total vs this page (never a count of facts the caller cannot read)."""
-    return section_report("facts", "Knowledge base facts", page.total, len(page.facts), offset, page.truncated)
+    report = section_report(
+        "facts",
+        "Knowledge base facts",
+        page.total,
+        len(page.facts),
+        offset,
+        page.truncated,
+        budget_exhausted=page.budget_exhausted,
+        failed=page.failed,
+    )
+    if page.by_cursor:  # no visible total in a cursor read: more remains exactly while a cursor is returned
+        report["limited"] = page.cursor is not None or page.budget_exhausted
+    report["cursor"] = page.cursor
+    return report
 
 
 async def bucket_sections_for_graph(
@@ -36,11 +49,11 @@ async def bucket_sections_for_graph(
     try:
         viewer = viewer_for(current_user, ledger)
         built = await build_bucket_sections(
-            client, viewer, getattr(kb, "ownership_manager", None), limit=body.max_facts, offset=body.offset
+            client, viewer, getattr(kb, "ownership_manager", None), limit=body.max_facts, offset=body.offset, kb=kb
         )
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)
-        return []
+        return [section_report("buckets", "Knowledge buckets", None, 0, failed=True)]  # not "no buckets"
     if built["unmapped"]:
         logger.warning("Knowledge collections missing from the graph registry: %s", built["unmapped"])
     nodes.extend(built["nodes"])
@@ -57,7 +70,7 @@ async def graph_sections(
     page: FactsPage,
     current_user: Any,
 ) -> List[Dict[str, Any]]:
-    """The codebase section first (AutoBot's own code), then facts, then one per bucket: visible total vs this page."""
+    """The codebase section first (the indexed codebases), then facts, then one per bucket: visible total vs this page."""
     codebases: List[Dict[str, Any]] = []
     if body.include_buckets and body.offset == 0 and not body.category_filter:
         codebases = await codebase_section_for_graph(nodes, edges, current_user, viewer_for(current_user, ledger))

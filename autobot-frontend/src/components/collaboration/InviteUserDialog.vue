@@ -8,7 +8,7 @@
  *
  * Modal dialog for inviting users to collaborate on a session.
  * Supports role selection and email-based invitations.
- * Fetches real users from the /user-management/users API endpoint.
+ * Fetches real users from the /user-management/users/search API endpoint.
  */
 
 import { ref, computed, onMounted, toRef, watch } from 'vue'
