@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, Request, status
 
 from auth_middleware import check_admin_permission
-from autobot_shared.frontend_served_by import try_frontend_url
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.principal import resolve_principal_id
 from autobot_shared.ssot_config import config
 from llm_shared.provider_auth import org_vault_subject, user_vault_subject

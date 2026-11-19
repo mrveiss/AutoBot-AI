@@ -36,8 +36,8 @@ from user_management.services import TenantContext
 from ..deps import require_board_role
 from ..models.enums import LLCRunStatus, MembershipRole
 from ..models.heartbeat_run import LLCHeartbeatRun
+from ..scheduler.dispatch_gate import BUDGET_EXHAUSTED, dispatch_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
-from ..services.budget import BudgetService
 from ..services.membership_service import MembershipService
 from ..services.replay_service import ReplayLogNotFoundError, RunReplayService
 
@@ -47,7 +47,6 @@ _ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
 
 _get_membership = lazy_singleton(MembershipService)
 _get_replay_svc = lazy_singleton(RunReplayService)
-_get_budget_svc = lazy_singleton(BudgetService)
 
 
 # ---------------------------------------------------------------------------
@@ -103,28 +102,13 @@ async def _validate_agent_tenant(
     return dict(row)
 
 
-def _validate_agent_status(agent_cfg: Dict[str, Any]) -> None:
-    """Reject replay when the agent is inactive or terminated (H2c)."""
-    status = str(agent_cfg.get("status") or "")
-    if status in ("inactive", "terminated"):
+async def _validate_dispatchable(session: AsyncSession, agent_cfg: Dict[str, Any], company_id: Any) -> None:
+    """Reject replay when the dispatch gate refuses the agent (H2c, H2d, #19240)."""
+    reason = await dispatch_block_reason(session, agent_cfg["agent_id"], company_id, agent_cfg.get("status"))
+    if reason is not None:
         raise HTTPException(
-            status_code=409,
-            detail=f"Cannot replay: agent status is '{status}'",
-        )
-
-
-async def _validate_budget(session: AsyncSession, agent_id: str, company_id: str) -> None:
-    """Reject replay when the agent is over its budget limit (H2d).
-
-    Scoped by company: the caller has already been shown to own this agent, and
-    the slug alone does not identify a budget row (#15812).
-    """
-    svc = _get_budget_svc()
-    _remaining, is_over, _alert = await svc.check_budget(session, agent_id, company_id)
-    if is_over:
-        raise HTTPException(
-            status_code=402,
-            detail="Cannot replay: agent has exceeded its budget limit",
+            status_code=402 if reason == BUDGET_EXHAUSTED else 409,
+            detail=f"Cannot replay: {reason}",
         )
 
 
@@ -197,15 +181,12 @@ async def trigger_replay(
         raise HTTPException(status_code=422, detail="Invalid run_id UUID format")
 
     # M3: ALL validations happen BEFORE creating the run row.
-    # H2a + H2c: tenant scope + status gate.
+    # H2a: tenant scope. H2c + H2d: status, pause flags and budget.
     agent_cfg = await _validate_agent_tenant(session, agent_id, ctx.org_id)
-    _validate_agent_status(agent_cfg)
+    await _validate_dispatchable(session, agent_cfg, ctx.org_id)
 
     # H3a: refuse while a RUNNING/QUEUED run exists.
     await _validate_no_active_run(session, agent_id)
-
-    # H2d: budget gate.
-    await _validate_budget(session, agent_id, str(ctx.org_id))
 
     # Load the replay log (validates company scope + existence).
     svc = _get_replay_svc()

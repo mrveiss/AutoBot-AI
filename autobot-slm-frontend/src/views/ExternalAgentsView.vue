@@ -12,7 +12,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { useExternalAgents } from '@/composables/useExternalAgents'
 import type { ExternalAgent, ExternalAgentCreate, ExternalAgentUpdate } from '@/types/slm'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { BaseModal } from '@autobot/ui'
 
 const registry = useExternalAgents()
@@ -441,7 +441,7 @@ onMounted(() => {
             <div>
               <div class="text-xs text-gray-500 mb-0.5">{{ $t('externalAgentsView.cardFetched') }}</div>
               <div class="text-gray-200">
-                {{ formatDateTime(detailAgent.card_fetched_at ?? null) }}
+                {{ formatFleetDateTime(detailAgent.card_fetched_at ?? null) }}
               </div>
             </div>
             <div>

@@ -18,6 +18,8 @@ import uuid
 
 from sqlalchemy import select
 
+from autobot_shared.auth.permissions import Role as PlatformRole
+from autobot_shared.auth.permissions import role_value
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.grant_scope import encode_grant, grants_in_scope
 from autobot_shared.user_management.login_eligibility import login_refusal
@@ -30,6 +32,15 @@ from autobot_shared.user_management.user_service_base import UserServiceBase
 
 class UserAccessMixin(UserServiceBase):
     """Authentication and role assignment."""
+
+    @staticmethod
+    def account_role(user: UserCore) -> str:
+        """The role login issues for *user*: ``admin`` for a platform admin, else ``user``.
+
+        The one derivation: ``api/auth.py`` builds the token's role with it, and a
+        workflow step re-derives the role an account holds when it runs (#19807).
+        """
+        return role_value(PlatformRole.ADMIN) if user.is_platform_admin else role_value(PlatformRole.USER)
 
     # -------------------------------------------------------------------------
     # Authentication

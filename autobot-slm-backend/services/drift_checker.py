@@ -267,7 +267,6 @@ _EXPECTED_DRIFT_PREFIXES: tuple[str, ...] = ("autobot_shared/",)
 _DEPLOY_ONLY_ENTRIES: dict[str, frozenset[str]] = {
     "autobot-backend": frozenset({"config/npu_workers.yaml", "autobot_shared"}),
     "autobot-slm-backend": frozenset({"autobot_shared"}),
-    "autobot-slm-frontend": deploy_artifacts.SLM_FRONTEND_RELEASE_EXCLUDES,  # #16717
 }
 
 # Individual files inside an otherwise-1:1 component tree that are deployed as a
@@ -344,7 +343,8 @@ def deploy_only_entries(component: str) -> frozenset[str]:
     the component tree), while the walk must still compare it — see
     ``_rendered_file_drift``.
     """
-    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | frozenset(_RENDERED_FILES.get(component, {}))
+    generated = deploy_artifacts.host_generated_paths(component)  # #19443
+    return _DEPLOY_ONLY_ENTRIES.get(component, frozenset()) | generated | frozenset(_RENDERED_FILES.get(component, {}))
 
 
 def _is_expected_drift(
@@ -378,12 +378,11 @@ def _is_expected_drift(
         return True
     if component is None:
         return False
-    # _DEPLOY_ONLY_ENTRIES, not deploy_only_entries(): the latter also carries
-    # the rendered artifacts, which rsync must not delete but the walk MUST
-    # still compare (#13851).
+    # _DEPLOY_ONLY_ENTRIES, not deploy_only_entries(): the latter carries rendered
+    # artifacts the walk MUST still compare (#13851).
     if rel_path in _DEPLOY_ONLY_ENTRIES.get(component, frozenset()):
         return True
-    if deploy_artifacts.is_release_artifact(component, rel_path.split("/", 1)[0]):  # #16717
+    if deploy_artifacts.is_host_generated(component, rel_path):  # #16717, #19443
         return True
     if owned is None:
         raise ValueError("owned_subtrees must be supplied when component is given (#13851)")

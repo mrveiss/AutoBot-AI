@@ -16,8 +16,9 @@ from typing import Any, Dict, List
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
-from constants.api_constants import PATH_OLLAMA_GENERATE
+from chat_history.rolling_summary import prompt_summary
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
 from middleware.base import HookContext
@@ -524,7 +525,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
+        return _normalize_outbound_url(ollama_generate_url(_ssot_config.ollama_url))
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -535,10 +536,7 @@ class LLMHandlerMixin:
         try:
             endpoint = provide_config_manager().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
-                # Ensure /api/generate path is included
-                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(endpoint)
+                return _normalize_outbound_url(ollama_generate_url(endpoint))
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
@@ -554,9 +552,7 @@ class LLMHandlerMixin:
         try:
             base_url = provide_config_manager().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith(PATH_OLLAMA_GENERATE):
-                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(base_url)
+                return _normalize_outbound_url(ollama_generate_url(base_url))
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
@@ -662,29 +658,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             "that printed output is what you receive back — tool-call plumbing is handled for you.\n"
         )
 
-    def _build_conversation_context(self, session: WorkflowSession) -> str:
-        """Build conversation context from recent history.
+    def _build_conversation_context(self, session: WorkflowSession, rolling_summary: str = "") -> str:
+        """Rolling summary of older turns (#20852) + the recent turns verbatim."""
+        from chat_history.rolling_summary import render_context
 
-        Issue #715: Now handles incomplete entries (empty assistant response)
-        that are registered before LLM call to fix race conditions.
-        """
-        if not session.conversation_history:
-            return ""
-
-        # Filter out incomplete entries (where assistant response is empty placeholder)
-        # These are messages currently being processed
-        complete_messages = [
-            msg
-            for msg in session.conversation_history
-            if msg.get("assistant")  # Only include if assistant response exists
-        ]
-
-        if not complete_messages:
-            return ""
-
-        context_parts = ["\n**Recent Context:**\n"]
-        context_parts.extend(f"User: {msg['user']}\nYou: {msg['assistant']}\n\n" for msg in complete_messages[-2:])
-        return "".join(context_parts)
+        return render_context(session.conversation_history, rolling_summary)
 
     async def _retrieve_knowledge_context(self, message: str, session: WorkflowSession) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
@@ -698,7 +676,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 query=message,
                 conversation_history=session.conversation_history or [],
                 top_k=5,
-                score_threshold=0.3,  # Issue #1526: lowered from 0.7
                 principal=session.kb_principal(),  # #16664: retrieve as the turn's user
             )
             if knowledge_context:
@@ -854,9 +831,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
-                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
-            ollama_endpoint = slm_base
+            ollama_endpoint = ollama_generate_url(slm_base)
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
 
@@ -888,7 +863,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
             system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
-        conversation_context = self._build_conversation_context(session)
+        conversation_context = self._build_conversation_context(session, await prompt_summary(session))
 
         # Knowledge retrieval for RAG
         # Issue MVA-1992: Skip RAG when lightweight_mode=True
@@ -991,7 +966,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         http_client = get_http_client()
         response_data = await http_client.post_json(
-            f"{ollama_endpoint}/api/generate",
+            ollama_generate_url(ollama_endpoint),
             json_data={
                 "model": selected_model,
                 "prompt": interpretation_prompt,
@@ -1034,7 +1009,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         full_response = ""
         try:
             async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
+                ollama_generate_url(ollama_endpoint),
                 json={
                     "model": selected_model,
                     "prompt": interpretation_prompt,
@@ -1188,7 +1163,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str) -> None:
+    async def _persist_to_conversation_history(self, session_id: str, interpretation: str, model: str = "") -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1198,6 +1173,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         Args:
             session_id: Chat session ID
             interpretation: Interpretation text to persist
+            model: The model that produced it; the rolling-summary refresh folds with it (#20852)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1222,6 +1198,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 session=session,
                 message=last_user_message,
                 llm_response=interpretation,
+                model=model or None,
             )
             logger.info(
                 f"✅ [interpret_terminal_command] Persisted user message + "
@@ -1289,7 +1266,8 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                 return interpretation
 
             await self._save_to_chat_history(session_id, interpretation)
-            await self._persist_to_conversation_history(session_id, interpretation)
+            model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
+            await self._persist_to_conversation_history(session_id, interpretation, model)
 
             return interpretation
 

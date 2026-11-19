@@ -65,15 +65,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
-   "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "file": ".github/filters/backend-python-paths.yml"
   },
-  "header_sha256": "6b14b130-240ae654-3579fc89-8b24097f-83d5a130-a63919da-2fa62ef4-9719e66c",
   "job_level_extras": [],
   "on": {
    "pull_request": {
@@ -90,15 +89,6 @@
      ".github/workflows/ai-security-review.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "review": [
-    "needs.changes.outputs.reviewable == 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "review": "c4da5772-74ac3142-f2f51e84-da110e40-11b691c5-426b56ce-9bbba9c8-4742495c"
   },
   "outputs": [
    "reviewable"
@@ -174,15 +164,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
-   "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "file": ".github/filters/backend-python-paths.yml"
   },
-  "header_sha256": "a87bc1db-91fe7005-6f25388c-4a9b806f-e9f98d50-8fbac86c-4e4f5d3f-28af4f51",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -210,25 +199,12 @@
      ".github/filters/backend-python-paths.yml",
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "api-wiring": [
-    "${{ (github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}",
-    "changes"
-   ],
-   "api-wiring-skip": [
-    "github.event_name != 'merge_group' && needs.changes.outputs.wiring != 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "api-wiring": "14fe6a45-acdf5fae-d3c272dd-97c22d20-96224875-38e2376e-bd6c1af5-3089fb3a",
-   "api-wiring-skip": "cac0dd1c-62ba26a3-33f2182d-4533ec0b-bfb0c475-6a353ba2-436156ae-0a9bb6f7"
   },
   "outputs": [
    "wiring"
@@ -304,33 +280,22 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
-   "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "file": ".github/filters/backend-python-paths.yml"
   },
-  "header_sha256": "6629c9ed-7906202f-b2e85727-a7f74b8c-5d24a02b-5111c92a-a8a034fa-c2491067",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "startup-import-smoke": [
-    "needs.changes.outputs.backend != 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "startup-import-smoke": "4558146d-032aa2db-5397a099-b4650f72-25889bb5-5511bf37-5c4732c1-18b4cb6e"
   },
   "outputs": [
    "backend"
@@ -385,18 +350,15 @@
      ".github/workflows/code-quality-required-context.yml"
     ]
    },
-   "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
+   "file": ".github/filters/code-quality-paths.yml"
   },
-  "header_sha256": "5038f297-5490d82c-e53d78c7-b13d9f9a-44d5ece5-70782fbe-346d8ec4-5f6496fd",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -408,8 +370,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "**/*.py",
@@ -444,15 +405,6 @@
      ".github/workflows/code-quality-required-context.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "code-quality": [
-    "${{ (github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "code-quality": "5e896dba-2adbd3c9-e09ab9ae-8d851a42-afe587a4-c4c048ab-7b67a84c-31619405"
   },
   "outputs": [
    "backend"
@@ -507,28 +459,16 @@
      ".github/workflows/code-quality-required-context.yml"
     ]
    },
-   "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
+   "file": ".github/filters/code-quality-paths.yml"
   },
-  "header_sha256": "cad81a4c-5ce99eec-c4f17ee4-2194a963-a7672eb9-d6251c56-2b4a1602-c65966fd",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "code-quality": [
-    "needs.changes.outputs.backend != 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "code-quality": "d9d54ec6-fd90941e-d248db4c-f372be55-22a6acda-d15aa483-62237553-aa94ce66"
   },
   "outputs": [
    "backend"
@@ -581,10 +521,8 @@
      ".github/filters/docker-paths.yml"
     ]
    },
-   "file": ".github/filters/docker-paths.yml",
-   "sha256": "70254e15-7e9d902c-06dd61e9-f0758247-95a13af1-7f733230-5664132a-00f63686"
+   "file": ".github/filters/docker-paths.yml"
   },
-  "header_sha256": "8bf50320-7c1bfc3c-81cb2dc6-99a159b7-656a444d-96d99d49-f9ebd199-42112117",
   "job_level_extras": [],
   "on": {
    "pull_request": {
@@ -592,15 +530,6 @@
      "main"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "smoke-test": [
-    "always() && (\n  needs.changes.result != 'success'\n  || needs.changes.outputs.docker != 'true'\n)",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "smoke-test": "3487fedd-b1af5244-679bfb7f-6420ba41-5b4deb6a-d4d8918b-a3f59fd4-b61eca57"
   },
   "outputs": [
    "docker"
@@ -653,10 +582,8 @@
      ".github/filters/docker-paths.yml"
     ]
    },
-   "file": ".github/filters/docker-paths.yml",
-   "sha256": "70254e15-7e9d902c-06dd61e9-f0758247-95a13af1-7f733230-5664132a-00f63686"
+   "file": ".github/filters/docker-paths.yml"
   },
-  "header_sha256": "6ca40dcb-18d57aa0-b2bd4fad-4869d200-9d76fe01-11e9a0b3-ff76469b-689545cf",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -681,15 +608,6 @@
      "cron": "0 10 * * 0"
     }
    ]
-  },
-  "other_jobs_if_needs": {
-   "smoke-test": [
-    "always() && (\n  github.event_name != 'pull_request'\n  || needs.changes.result != 'success'\n  || needs.changes.outputs.docker == 'true'\n)",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "smoke-test": "f983f49e-10792959-6eb87d0d-29204df4-58066675-d84b67ff-ff219375-42bde2fb"
   },
   "outputs": [
    "docker"
@@ -722,28 +640,16 @@
      "autobot-plugins/terminal/**"
     ]
    },
-   "file": ".github/filters/frontend-paths.yml",
-   "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
+   "file": ".github/filters/frontend-paths.yml"
   },
-  "header_sha256": "541b38f2-f2fbe2fa-75830233-a5f53ce5-4ea84e36-b605b44b-1833b9c6-9903a3bf",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "unit-tests-skip": [
-    "needs.changes.outputs.frontend != 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "unit-tests-skip": "b8a02c68-416cfda9-83f2bd56-0506ad5d-b3034695-4b4c8440-1f8785e0-3a37f720"
   },
   "outputs": [
    "frontend"
@@ -776,18 +682,15 @@
      "autobot-plugins/terminal/**"
     ]
    },
-   "file": ".github/filters/frontend-paths.yml",
-   "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
+   "file": ".github/filters/frontend-paths.yml"
   },
-  "header_sha256": "38c89395-38a9547d-1016b6dc-5518a276-bf77d868-3500af7f-e2c5ead9-fbc5269f",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -799,8 +702,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-frontend/**",
@@ -813,38 +715,6 @@
      "autobot-plugins/terminal/**"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "build-test": [
-    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
-    [
-     "changes",
-     "unit-tests"
-    ]
-   ],
-   "security-scan": [
-    "needs.changes.outputs.frontend == 'true'",
-    "changes"
-   ],
-   "test-summary": [
-    "always() && needs.changes.outputs.frontend == 'true'",
-    [
-     "changes",
-     "unit-tests",
-     "security-scan",
-     "build-test"
-    ]
-   ],
-   "unit-tests": [
-    "github.event_name == 'merge_group' || needs.changes.outputs.frontend == 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "build-test": "3fd7f4c0-63a0a145-c290bd2a-75ab472b-ef4f429a-e73fd899-852ae7aa-2916e273",
-   "security-scan": "5c95d26a-60d1831b-44e429b6-e40209b6-cba46566-f482ec3f-cd5b247b-92ccf9a4",
-   "test-summary": "21a0a14e-3456bf36-0f235718-4be0366f-847644c5-f152cd13-cade046a-6f015388",
-   "unit-tests": "489cce94-94409927-bbe4d011-63b3d406-08a14e32-90d346f2-1767ca4a-71cb4306"
   },
   "outputs": [
    "frontend"
@@ -880,7 +750,6 @@
     ]
    }
   },
-  "header_sha256": "eb71a914-35916764-1b61fada-bf95924a-1f89ee1d-602904c3-73d257e3-5adabdb9",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -920,23 +789,6 @@
     }
    ],
    "workflow_dispatch": null
-  },
-  "other_jobs_if_needs": {
-   "migration-matrix": [
-    "always()",
-    [
-     "changes",
-     "migration-tests"
-    ]
-   ],
-   "migration-tests": [
-    "needs.changes.outputs.migrations != 'false' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "migration-matrix": "56f77551-31073ea2-fcbedcc1-084d04d6-dd858fed-912ec86e-7b364952-d0a5fac8",
-   "migration-tests": "e8afa7e8-d3449785-d179ae56-32d553e1-afd5337b-f18ceb42-f225b4f8-bbdf11fe"
   },
   "outputs": [
    "migrations"
@@ -979,14 +831,12 @@
     ]
    }
   },
-  "header_sha256": "80c9bfc3-dd167824-d5ab8edb-0ba1fc01-d92710af-59506277-7e4fef21-01f9ced8",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      ".mcp/**",
@@ -1005,8 +855,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      ".mcp/**",
@@ -1016,15 +865,6 @@
      ".github/workflows/npm-package-tests.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "npm-package-tests": [
-    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "npm-package-tests": "e96786b0-da71aaa7-117700cc-7059b687-61fee02e-4b4fc1e5-4e6a4917-671af6e2"
   },
   "outputs": [
    "browser_worker",
@@ -1126,22 +966,11 @@
      ".github/workflows/docs-liquid-tags.yml"
     ]
    },
-   "file": ".github/filters/python-paths.yml",
-   "sha256": "377f8f96-7b0cd8d6-c340e4c7-7ad2875e-9fd9dee9-d3f2344b-bace14b9-955377f3"
+   "file": ".github/filters/python-paths.yml"
   },
-  "header_sha256": "8b42d970-d0f9a9b7-9319ae9c-3558382f-2a638cb2-1c44f9d3-d3c8cb5f-b52fd591",
   "job_level_extras": [],
   "on": {
    "pull_request": null
-  },
-  "other_jobs_if_needs": {
-   "python-suite": [
-    "needs.changes.outputs.python != 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "python-suite": "b5c13534-d0eed61a-185fa376-9728a1d4-f4112946-291f81ad-57add81d-c2f7c00b"
   },
   "outputs": [
    "python"
@@ -1218,15 +1047,14 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
-   "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "file": ".github/filters/backend-python-paths.yml"
   },
-  "header_sha256": "62af6fd6-ff964832-90073392-d155fad1-5de04098-2868d1c0-089e9559-d8aeb82d",
   "job_level_extras": [],
   "on": {
    "pull_request": {
@@ -1257,7 +1085,6 @@
    "push": {
     "branches": [
      "release",
-     "dev",
      "main"
     ]
    },
@@ -1266,41 +1093,6 @@
      "cron": "0 2 * * *"
     }
    ]
-  },
-  "other_jobs_if_needs": {
-   "compliance-check": [
-    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
-    null
-   ],
-   "dependency-security": [
-    "github.event_name == 'schedule' || needs.changes.outputs.deps == 'true'",
-    "changes"
-   ],
-   "secret-detection": [
-    null,
-    null
-   ],
-   "security-summary": [
-    "always()",
-    [
-     "changes",
-     "dependency-security",
-     "static-analysis",
-     "secret-detection",
-     "compliance-check"
-    ]
-   ],
-   "static-analysis": [
-    "github.event_name == 'schedule' || needs.changes.outputs.python == 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "compliance-check": "123899e0-fd587e01-b14084dd-0e8759c8-fe7288b4-9ffd527b-46a3f255-e6168d12",
-   "dependency-security": "df69eea4-4640e723-3d0139e1-7cf03735-35c2af86-2d36366e-098371e6-9fa5cff5",
-   "secret-detection": "1a70dd4d-b07dda90-8885db96-e999d7fa-2ebac94b-4549aee2-a00815ba-ad431d1d",
-   "security-summary": "d7ada57f-e7d14e7d-4559749f-a7e4e3e6-44b5e914-96e7e4aa-fb0a26fc-7de2aaa9",
-   "static-analysis": "f27cd020-be74dfdc-a50d1946-f1e0d1c6-bdef6255-f121145c-5dcbd146-02398fee"
   },
   "outputs": [
    "deps",
@@ -1332,14 +1124,12 @@
     ]
    }
   },
-  "header_sha256": "aaeae90a-afa13fa3-29caabce-631c4931-8b92bda4-c92aab84-c828fb1a-fc8c3419",
   "job_level_extras": [],
   "on": {
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-slm-frontend/**",
@@ -1358,8 +1148,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-slm-frontend/**",
@@ -1369,15 +1158,6 @@
      "scripts/lift_locale_translations.py"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "slm-frontend-check": [
-    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "slm-frontend-check": "017c4df6-eeb9f2f2-17216e9a-43452fd4-3e97780a-a9684fc5-11d0a208-d866a017"
   },
   "outputs": [
    "slm_frontend"
@@ -1453,23 +1233,21 @@
      ],
      "autobot-frontend/src/**",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "scripts/api_wiring_baseline.txt",
      "requirements*.txt",
      ".github/workflows/api-wiring.yml"
     ]
    },
-   "file": ".github/filters/backend-python-paths.yml",
-   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+   "file": ".github/filters/backend-python-paths.yml"
   },
-  "header_sha256": "f512d3b6-efd5481d-818ab8cb-3d9f85f4-0925f555-180926e3-c80918c7-df36334f",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
    "pull_request": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "types": [
      "opened",
@@ -1481,8 +1259,7 @@
    "push": {
     "branches": [
      "release",
-     "main",
-     "develop"
+     "main"
     ],
     "paths": [
      "autobot-backend/**/*.py",
@@ -1495,15 +1272,6 @@
      ".github/workflows/backend-required-context.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "startup-import-smoke": [
-    "github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "startup-import-smoke": "b1550ecd-ccc9f6d1-59aa4ec6-dce655c6-3b72d773-bf9486ae-f9d11127-537289f9"
   },
   "outputs": [
    "backend"
@@ -1533,6 +1301,7 @@
      "autobot-slm-frontend/package.json",
      "autobot-slm-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ],
@@ -1540,15 +1309,17 @@
      "autobot-backend/**/*.py",
      "autobot_shared/**/*.py",
      "autobot-frontend/src/types/generated/api.ts",
+     "autobot-frontend/src/types/_generated/**",
+     "autobot-infrastructure/shared/scripts/gen_frontend_types.py",
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "**/requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
    }
   },
-  "header_sha256": "c5361763-f8918f58-e12fab4e-e027fd31-a331618f-51df485a-cec7412b-33052e58",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -1573,35 +1344,16 @@
      "autobot-backend/**/*.py",
      "autobot_shared/**/*.py",
      "autobot-frontend/src/types/generated/api.ts",
+     "autobot-frontend/src/types/_generated/**",
+     "autobot-infrastructure/shared/scripts/gen_frontend_types.py",
      "autobot-frontend/package.json",
      "autobot-frontend/package-lock.json",
      "scripts/audit_api_wiring.py",
+     "scripts/audit_api_wiring_args.py",
      "requirements*.txt",
      ".github/workflows/verify-generated-types.yml"
     ]
    }
-  },
-  "other_jobs_if_needs": {
-   "verify-generated-types": [
-    "always()",
-    [
-     "changes",
-     "verify-types-run"
-    ]
-   ],
-   "verify-generated-types-slm": [
-    "needs.changes.outputs.slm_types != 'false'",
-    "changes"
-   ],
-   "verify-types-run": [
-    "needs.changes.outputs.types != 'false'",
-    "changes"
-   ]
-  },
-  "other_jobs_sha256": {
-   "verify-generated-types": "ac5fd1e1-db2bb897-b430800b-b03f9cde-756191ff-03934548-f24c4381-545d5899",
-   "verify-generated-types-slm": "f3f06b05-0766b2cf-e03d2bbd-fbdf74bf-a06bc200-e5b2a52a-20417764-02a47e1a",
-   "verify-types-run": "127a1b00-23b174e6-b9cdd29f-64823518-2a3905ff-38277b36-f8c64489-2db14894"
   },
   "outputs": [
    "slm_types",

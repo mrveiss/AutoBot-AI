@@ -21,13 +21,12 @@ from constants.threshold_constants import (
     BatchConfig,
     LLMDefaults,
     RetryConfig,
-    TimingConstants,
 )
 from events.types import create_plan_event
+from planner.plan_storage import PLAN_TTL_SECONDS, plan_key, require_scoped
 from planner.types import ExecutionPlan, PlanStatus, PlanStep, PlanStepStatus
 
 logger = get_logger(__name__)
-
 
 # =============================================================================
 # Configuration
@@ -42,7 +41,8 @@ class PlannerConfig:
     """
 
     max_steps_per_plan: int = 20  # Plan-specific, no constant needed
-    plan_ttl_seconds: int = TimingConstants.HOURLY_INTERVAL * 24  # 86400 = 24 hours
+    plan_ttl_seconds: int = PLAN_TTL_SECONDS
+    key_scope: str = ""  # session id for chat plans (see plan_storage); required: LLMPlannerModule rejects empty
     llm_temperature: float = LLMDefaults.DEFAULT_TEMPERATURE - 0.4  # 0.3 for planning precision
     enable_parallel_steps: bool = True
     max_parallel_steps: int = BatchConfig.SMALL_BATCH // 2  # 5 parallel steps
@@ -177,7 +177,7 @@ Output ONLY valid JSON in this format:
         self.llm = llm_client
         self.event_stream = event_stream
         self.redis = redis_client
-        self.config = config or PlannerConfig()
+        self.config = require_scoped(config or PlannerConfig())
         self._plans: dict[str, ExecutionPlan] = {}
 
     def _format_context_for_prompt(self, context: dict) -> str:
@@ -211,7 +211,7 @@ Output ONLY valid JSON in this format:
         step_id_map: dict[int, str] = {}  # step_number -> step_id
 
         # Create steps with proper IDs
-        for step_data in plan_data.get("steps", []):
+        for step_data in plan_data.get("steps", [])[: self.config.max_steps_per_plan]:
             step = PlanStep(
                 step_number=step_data.get("step_number", len(plan.steps) + 1),
                 description=step_data.get("description", ""),
@@ -222,7 +222,7 @@ Output ONLY valid JSON in this format:
             plan.steps.append(step)
 
         # Resolve dependencies from step numbers to step IDs
-        for step_data in plan_data.get("steps", []):
+        for step_data in plan_data.get("steps", [])[: self.config.max_steps_per_plan]:
             step_num = step_data.get("step_number", 0)
             step = plan.get_step_by_number(step_num)
             if step:
@@ -314,13 +314,13 @@ Output ONLY valid JSON in this format:
             elif hasattr(self.llm, "complete"):
                 response = await self.llm.complete(prompt)
             else:
-                response = self._generate_fallback_plan(task_description)
+                return {**self._parse_plan_response(self._generate_fallback_plan(task_description)), "fallback": True}
 
             return self._parse_plan_response(response)
 
         except Exception as e:
             logger.warning("LLM plan generation failed: %s, using fallback", e)
-            return self._generate_simple_plan(task_description)
+            return {**self._generate_simple_plan(task_description), "fallback": True}
 
     async def create_plan(
         self,
@@ -353,9 +353,9 @@ Output ONLY valid JSON in this format:
         self._populate_plan_steps(plan, plan_data)
 
         plan.status = PlanStatus.READY
+        plan.metadata["fallback"] = bool(plan_data.get("fallback"))
         plan.update_metrics()
 
-        # Store plan
         await self._store_plan(plan)
 
         # Publish PLAN event (Issue #620: uses helper)
@@ -673,7 +673,7 @@ Output ONLY valid JSON in this format:
         # Try Redis if available
         if self.redis:
             try:
-                key = f"autobot:plans:{plan_id}"
+                key = plan_key(self.config.key_scope, plan_id)
                 data = await self.redis.get(key)
                 if data:
                     if isinstance(data, bytes):
@@ -697,7 +697,7 @@ Output ONLY valid JSON in this format:
 
         if self.redis:
             try:
-                key = f"autobot:plans:{plan.plan_id}"
+                key = plan_key(self.config.key_scope, plan.plan_id)
                 await self.redis.set(
                     key,
                     plan.to_json(),

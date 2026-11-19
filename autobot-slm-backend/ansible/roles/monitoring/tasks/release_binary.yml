@@ -28,6 +28,7 @@
   changed_when: false
   failed_when: false
   when: _release_binary_stat.stat.exists
+  check_mode: false
 
 # Upstream prints "<name>, version X.Y.Z (branch: ...)" -- older builds to stderr,
 # so both streams are read; the trailing space keeps 2.48.0 from matching 2.48.01.

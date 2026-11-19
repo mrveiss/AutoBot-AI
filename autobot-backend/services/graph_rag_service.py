@@ -62,6 +62,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from knowledge.search_components.graph_blend import blend_graph_score
 from knowledge.search_components.reranking import provenance_adjustment, ranking_score
 from knowledge.search_filters import KbPrincipal
+from knowledge.stale_filter import fresh_graph_items
 from services.graph_rag_metrics import GraphRAGMetrics
 from services.graph_rag_path import GraphPathMixin
 from services.rag_config import get_rag_config
@@ -329,9 +330,8 @@ class GraphRAGService(GraphPathMixin):
             max_depth: Maximum traversal depth for scoring.
 
         Returns:
-            List of RankedResult objects from expanded entities.
-
-        Issue #620.
+            RankedResult objects for the expanded entities whose entity and relation are still valid
+            (Issue #620; the KAG staleness rule, ``knowledge.stale_filter.fresh_graph_items``, #19280).
         """
         expanded_results = []
 
@@ -342,7 +342,7 @@ class GraphRAGService(GraphPathMixin):
 
             logger.debug("Found %s related entities for '%s'", len(related), entity_name)
 
-            for item in related:
+            for item in fresh_graph_items(related):
                 result = self._create_search_result_from_entity(
                     item["entity"],
                     item["relation"],

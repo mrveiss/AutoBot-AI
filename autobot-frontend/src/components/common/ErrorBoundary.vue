@@ -54,6 +54,7 @@
 import { ref, computed, onErrorCaptured, inject, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
 import { BaseButton } from '@autobot/ui'
 
 const { t } = useI18n()
@@ -105,7 +106,7 @@ const userFriendlyMessage = computed(() => {
   if (error.message?.includes('ChunkLoadError')) {
     return t('common.errorBoundary.chunkLoadError')
   }
-  if (error.message?.includes('ResizeObserver loop limit exceeded')) {
+  if (isBenignBrowserNotice(error)) {
     return t('common.errorBoundary.resizeError')
   }
 

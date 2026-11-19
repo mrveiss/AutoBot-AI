@@ -21,6 +21,7 @@ from pathlib import Path
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOTS = ("autobot-slm-backend",)
@@ -64,7 +65,7 @@ REACH = declare(
 def enum_members(source: str) -> dict[str, set[str]]:
     """``{enum: {member names}}`` for the node enums defined in *source*."""
     found: dict[str, set[str]] = {}
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         if isinstance(node, ast.ClassDef) and node.name in _ENUMS:
             found[node.name] = {
                 t.id for b in node.body if isinstance(b, ast.Assign) for t in b.targets if isinstance(t, ast.Name)

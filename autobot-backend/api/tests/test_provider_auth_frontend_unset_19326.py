@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""An unset AUTOBOT_FRONTEND_SERVED_BY leaves no origin to compare: redirects are refused, not guessed (#19326)."""
+"""Redirects compare against the served origin; an unknown AUTOBOT_FRONTEND_SERVED_BY refuses them (#19326)."""
 
 import pytest
 from fastapi import HTTPException
@@ -23,8 +23,14 @@ def _cfg(monkeypatch: pytest.MonkeyPatch, served_by: str | None) -> AutoBotConfi
     return AutoBotConfig(_env_file=None)
 
 
-def test_unset_refuses_every_redirect_with_503(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_unset_profile_on_a_production_host_accepts_the_served_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTOBOT_ENVIRONMENT", "production")
     monkeypatch.setattr(scope, "config", _cfg(monkeypatch, None))
+    scope.validate_redirect_uri(f"https://ui.example.test{_CALLBACK}")
+
+
+def test_an_unknown_profile_refuses_every_redirect_with_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scope, "config", _cfg(monkeypatch, "apache"))
     with pytest.raises(HTTPException) as err:
         scope.validate_redirect_uri(f"https://ui.example.test:443{_CALLBACK}")
     assert err.value.status_code == 503

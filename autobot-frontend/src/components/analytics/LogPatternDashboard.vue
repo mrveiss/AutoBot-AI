@@ -228,15 +228,13 @@ import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLogPatternData } from '@/composables/analytics/useLogPatternData'
 import type { LogPattern, LogTrend, MiningResult, RealtimeData } from '@/composables/analytics/useLogPatternData'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
-
-const logger = createLogger('LogPatternDashboard')
 
 const { fetchMiningResult, fetchRealtimeData: _fetchRealtimeData } = useLogPatternData()
 
@@ -298,16 +296,7 @@ const truncate = (text: string, length: number): string => {
   return text.substring(0, length) + '...'
 }
 
-const formatTimestamp = (timestamp: string): string => {
-  if (!timestamp) return 'N/A'
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch (error) {
-    logger.warn('Failed to parse timestamp:', error)
-    return timestamp
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'N/A' })
 
 const formatAnomalyType = (type: string): string => {
   const key = `analytics.logPatterns.anomalyTypes.${type}`

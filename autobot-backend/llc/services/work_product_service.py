@@ -75,11 +75,15 @@ class WorkProductService(LLCServiceBase):
 
         Falls back to an empty list if ChromaDB is unavailable.
         """
-        collection_name = f"project:{project_id}"
-        try:
-            from utils.async_chromadb_client import get_async_chromadb_client
+        # Deferred: importing the llc.kb package from llc.services at module load
+        # would cycle through llc.kb.context_builder -> llc.services.
+        from ..kb.collections import kb_chroma_client, project_collection
 
-            client = await get_async_chromadb_client()
+        collection_name = project_collection(project_id)
+        try:
+            # #19519: the client the collection is created through; the raw
+            # client's lookup of a ``:`` name is rejected by ChromaDB.
+            client = await kb_chroma_client()
             try:
                 collection = await client.get_collection(collection_name)
             except Exception:

@@ -74,7 +74,7 @@
                 <option v-for="a in people.agents.value" :key="a.id" :value="`agent:${a.id}`">{{ a.name }}</option>
               </optgroup>
             </select>
-            <button class="assignee-cancel" @click="showAssign = false">{{ $t('common.cancel') }}</button>
+            <span v-if="people.loadFailed.value" class="save-error" role="alert" data-testid="assignee-people-failed">{{ $t('nav.llcPeopleLoadFailed') }}</span><button class="assignee-cancel" @click="showAssign = false">{{ $t('common.cancel') }}</button>
           </div>
         </div>
         <div class="meta-field">
@@ -159,7 +159,7 @@
           <div class="comments-list">
             <div v-for="c in comments" :key="c.id" class="comment-item">
               <div class="comment-author">
-                <span class="author-avatar">{{ initials(commentAuthor(c)) }}</span>
+                <BaseAvatar :name="commentAuthor(c)" size="sm" variant="primary" decorative />
                 <div class="author-meta">
                   <span class="author-name">{{ commentAuthor(c) }}</span>
                   <span class="comment-time">{{ formatTime(c.created_at ?? '') }}</span>
@@ -168,9 +168,13 @@
               </div>
               <div class="comment-body" v-html="renderMarkdown(c.body)" />
             </div>
-            <div v-if="comments.length === 0 && !isLoadingComments" class="meta-empty">
+            <div v-if="comments.length === 0 && !loading.comments && !failed.comments" class="meta-empty">
               {{ $t('llc.workItem.noComments') }}
             </div>
+            <div v-if="failed.comments" class="save-error" role="alert">{{ $t('llc.workItem.errors.commentsFailed') }}</div>
+            <button v-if="hasMoreComments" class="btn-primary" :disabled="loading.comments" @click="fetchComments(true)">
+              {{ $t('llc.workItem.loadMoreComments') }}
+            </button>
           </div>
           <div class="comment-input-row">
             <textarea
@@ -196,9 +200,10 @@
               </div>
               <a v-if="a.url" :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
             </div>
-            <div v-if="artifacts.length === 0 && !isLoadingArtifacts" class="meta-empty">
+            <div v-if="artifacts.length === 0 && !loading.artifacts && !failed.artifacts" class="meta-empty">
               {{ $t('llc.workItem.noArtifacts') }}
             </div>
+            <div v-if="failed.artifacts" class="save-error" role="alert">{{ $t('llc.workItem.errors.artifactsFailed') }}</div>
           </div>
         </template>
 
@@ -210,17 +215,19 @@
               <span class="activity-actor">{{ evt.actor_name }}</span>
               <span class="activity-text">{{ evt.description }}</span>
             </div>
-            <div v-if="activity.length === 0 && !isLoadingActivity" class="meta-empty">
+            <div v-if="activity.length === 0 && !loading.activity && !failed.activity" class="meta-empty">
               {{ $t('llc.workItem.noActivity') }}
             </div>
+            <div v-if="failed.activity" class="save-error" role="alert">{{ $t('llc.workItem.errors.activityFailed') }}</div>
           </div>
         </template>
 
         <!-- Handoff Brief tab -->
         <template v-if="activeTab === 'handoff'">
           <div v-if="handoffBrief" class="handoff-brief" v-html="renderMarkdown(handoffBrief)" />
-          <div v-else-if="!isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.noHandoffBrief') }}</div>
-          <div v-if="isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.loadingBrief') }}</div>
+          <div v-else-if="!loading.handoff && !failed.handoff" class="meta-empty">{{ $t('llc.workItem.noHandoffBrief') }}</div>
+          <div v-if="loading.handoff" class="meta-empty">{{ $t('llc.workItem.loadingBrief') }}</div>
+          <div v-if="failed.handoff" class="save-error" role="alert">{{ $t('llc.workItem.errors.handoffFailed') }}</div>
         </template>
       </div>
     </div>
@@ -231,7 +238,6 @@
     :work-item-id="props.item.id"
     :company-id="props.companyId"
     :direction="handoffDirection"
-    :agent-assignee-id="localItem.assignee_agent_id"
     @close="handoffDirection = null"
     @done="onHandoffDone"
   />
@@ -239,24 +245,24 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { BaseDrawer } from '@autobot/ui'
+import { BaseAvatar, BaseDrawer } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import HandoffModal from '@/components/llc/HandoffModal.vue'
+import { useWorkItemPanels } from '@/composables/llc/useWorkItemPanels'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
 
-// Comments return with their read route (#18750): only POST .../comments is served, no GET.
-const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
-import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
-import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
+import { commentAuthor } from './workItemDetailTypes'
+import type { Comment, GoalAncestor } from './workItemDetailTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   item: WorkItem
@@ -274,7 +280,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
+])
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -289,18 +295,14 @@ const origDesc = ref('')
 // #12348: message shown when an optimistic edit could not be persisted.
 const saveError = ref<string | null>(null)
 
-const comments = ref<Comment[]>([])
-const artifacts = ref<Artifact[]>([])
-const activity = ref<ActivityEvent[]>([])
+const {
+  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed, addPostedComment,
+  fetchComments, fetchArtifacts, fetchActivity, fetchHandoffBrief,
+} = useWorkItemPanels(api, () => props.item.id)
 const goalAncestry = ref<GoalAncestor[]>([])
-const handoffBrief = ref<string | null>(null)
 const newComment = ref('')
 const isPosting = ref(false)
 const isActioning = ref(false)
-const isLoadingComments = ref(false)
-const isLoadingArtifacts = ref(false)
-const isLoadingActivity = ref(false)
-const isLoadingHandoff = ref(false)
 
 // #10531 handoff dialog + #10532 assignee picker.
 const handoffDirection = ref<'to_agent' | 'to_human' | null>(null)
@@ -350,13 +352,7 @@ const availableActions = computed(() => {
   return [...transitions, ...extras]
 })
 
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = createDateFormatter({ intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
 function renderMarkdown(text: string) {
   return text
@@ -472,66 +468,17 @@ function onHandoffDone() {
 async function postComment() {
   if (!newComment.value.trim()) return
   isPosting.value = true
+  const postedTo = props.item.id
   try {
-    const comment = await api.post<Comment>(`/api/llc/work-items/${props.item.id}/comments`, {
-      body: newComment.value,
+    const comment = await api.post<Comment>(`/api/llc/work-items/${postedTo}/comments`, {
+      company_id: props.companyId, body: newComment.value,
     })
-    comments.value.push(comment)
+    addPostedComment(postedTo, comment)
     newComment.value = ''
   } catch (err) {
     logger.error('Post comment failed', err)
   } finally {
     isPosting.value = false
-  }
-}
-
-async function fetchComments() {
-  isLoadingComments.value = true
-  try {
-    const result = await api.get<{ comments: Comment[] }>(`/api/llc/work-items/${props.item.id}/comments`)
-    comments.value = result.comments ?? []
-  } catch (err) {
-    logger.error('Failed to load comments', err)
-  } finally {
-    isLoadingComments.value = false
-  }
-}
-
-async function fetchArtifacts() {
-  isLoadingArtifacts.value = true
-  try {
-    // GH#9851: the backend calls these work "products" and returns {products:[...]}.
-    const result = await api.get<{ products: RawWorkProduct[] }>(`/api/llc/work-items/${props.item.id}/products`)
-    artifacts.value = (result.products ?? []).map(toArtifact)
-  } catch (err) {
-    logger.error('Failed to load artifacts', err)
-  } finally {
-    isLoadingArtifacts.value = false
-  }
-}
-
-async function fetchActivity() {
-  isLoadingActivity.value = true
-  try {
-    // GH#9851: /activity returns an ActivityLogResponse ({items:[...]}).
-    const result = await api.get<{ items: RawActivityEntry[] }>(`/api/llc/work-items/${props.item.id}/activity`)
-    activity.value = (result.items ?? []).map(toActivityEvent)
-  } catch (err) {
-    logger.error('Failed to load activity', err)
-  } finally {
-    isLoadingActivity.value = false
-  }
-}
-
-async function fetchHandoffBrief() {
-  isLoadingHandoff.value = true
-  try {
-    const result = await api.get<{ brief: string }>(`/api/llc/work-items/${props.item.id}/handoff-brief`)
-    handoffBrief.value = result.brief ?? null
-  } catch {
-    handoffBrief.value = null
-  } finally {
-    isLoadingHandoff.value = false
   }
 }
 
@@ -592,7 +539,7 @@ onMounted(() => {
   padding: 0.5rem 1.25rem;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-default);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -608,7 +555,7 @@ onMounted(() => {
 
 .item-title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   cursor: text;
   line-height: 1.4;
@@ -616,7 +563,7 @@ onMounted(() => {
 
 .title-input {
   width: 100%;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   border: 1px solid var(--color-primary);
   border-radius: 0.25rem;
@@ -661,7 +608,7 @@ onMounted(() => {
 }
 
 .assignee-edit {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -681,7 +628,7 @@ onMounted(() => {
 }
 
 .assignee-cancel {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -735,7 +682,7 @@ onMounted(() => {
 
 .action-done, .action-ready {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -786,7 +733,7 @@ onMounted(() => {
 }
 
 .section-label {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -794,7 +741,7 @@ onMounted(() => {
 }
 
 .description-text {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
   cursor: text;
   min-height: 2rem;
@@ -807,7 +754,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 
@@ -821,7 +768,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -849,19 +796,6 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-.author-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 600;
-  flex-shrink: 0;
-}
 
 .author-meta {
   display: flex;
@@ -888,7 +822,7 @@ onMounted(() => {
 }
 
 .comment-body {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
   margin-left: 2.25rem;
 }
@@ -909,7 +843,7 @@ onMounted(() => {
   border-radius: 0.375rem;
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: none;
 }
 
@@ -931,7 +865,7 @@ onMounted(() => {
 }
 
 .artifact-type-icon {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .artifact-info {
@@ -942,7 +876,7 @@ onMounted(() => {
 }
 
 .artifact-name {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -985,17 +919,17 @@ onMounted(() => {
 }
 
 .handoff-brief {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .btn-primary {
   padding: 0.5rem 1rem;
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   flex-shrink: 0;

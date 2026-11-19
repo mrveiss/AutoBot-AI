@@ -70,7 +70,9 @@
   command: redis-cli --version
   register: redis_cli_version_output
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Display redis-cli version
   debug:
     msg: "redis-cli installed: {{ redis_cli_version_output.stdout }}"
+  when: not ansible_check_mode

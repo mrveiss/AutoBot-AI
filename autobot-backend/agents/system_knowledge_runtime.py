@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Copies of the system-knowledge templates in the editable runtime directory (#18556).
 
-``data/system_knowledge`` is documented as the operator-editable copy, so the import must never
+The runtime dir (``system_knowledge_dirs().runtime``) is the operator-editable copy, so the import must never
 replace an operator's edit. A manifest beside the copies records the hash of what the import last
 wrote; a runtime file is overwritten only while it still hashes to that record.
 """

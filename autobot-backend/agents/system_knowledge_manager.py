@@ -82,11 +82,6 @@ class SystemKnowledgeManager(DefaultKnowledgeMixin):
 
         logger.info("System knowledge initialization completed")
 
-    async def _is_system_knowledge_imported(self) -> bool:
-        """Check if system knowledge has been imported"""
-        marker_file = self.runtime_knowledge_dir / ".imported"
-        return await asyncio.to_thread(marker_file.exists)
-
     async def _check_system_knowledge_changes(self) -> tuple[bool, List[str]]:
         """Check if system knowledge files have changed since last import"""
         try:
@@ -211,20 +206,6 @@ class SystemKnowledgeManager(DefaultKnowledgeMixin):
 
         except Exception as e:
             logger.warning("Failed to update system knowledge cache: %s", e)
-
-    async def _mark_system_knowledge_imported(self):
-        """Mark system knowledge as imported (legacy method)"""
-        marker_file = self.runtime_knowledge_dir / ".imported"
-        try:
-            async with aiofiles.open(marker_file, "w", encoding="utf-8") as f:
-                await f.write(
-                    json.dumps(
-                        {"imported_at": datetime.now(tz=timezone.utc).isoformat(), "version": "1.0.0"},
-                        indent=2,
-                    )
-                )
-        except OSError as e:
-            logger.error("Failed to mark system knowledge as imported: %s", e)
 
     async def _backup_current_knowledge(self):
         """Backup current system knowledge"""

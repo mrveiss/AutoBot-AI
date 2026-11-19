@@ -35,6 +35,8 @@ from api.user_management.dependencies import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from llc.services.agent_hire_service import HireApprovalRequiredError
+from services.agent_activity_feed import get_agent_feeds, with_feed
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
 from user_management.services import TenantContext
@@ -83,12 +85,8 @@ def _fallback_agents_from_registry() -> List[Dict[str, Any]]:
                     "name": profile.agent_id.replace("_", " ").title(),
                     "type": _ORCH_TYPE_MAP.get(profile.agent_type, "worker"),
                     "status": profile.availability_status,
-                    "currentTask": None,
-                    "tasksCompleted": 0,
-                    "uptime": 0,
-                    "successRate": int(profile.success_rate * 100),
-                    "recentTasks": [],
-                    "activityTimeline": [],
+                    # #17514: the registry counts no tasks, so its success_rate is a starting
+                    # default until tasks run; activity fields are not reported (None).
                 }
             )
         return agents
@@ -151,7 +149,9 @@ async def get_agents_status(
         # The in-memory registry holds platform agents only (no company), which every
         # signed-in caller may see (#19246), so this fallback needs no tenant filter.
         logger.debug("PG unavailable — returning in-memory agents for /agents/status (#10511)")
-        agents = _fallback_agents_from_registry()
+        fallback = _fallback_agents_from_registry()
+        feeds = await get_agent_feeds([a["id"] for a in fallback])  # #21270: same feed as the PG path
+        agents = [with_feed(a, feeds[a["id"]]) for a in fallback]
 
     items = [AgentStatusItem(**a) for a in agents]
     return AgentStatusListResponse(agents=items, total=len(items))
@@ -340,6 +340,9 @@ async def upsert_agent_org(
             title=body.title,
             capabilities=body.capabilities,
         )
+    except HireApprovalRequiredError as exc:
+        # Updating an existing node's reporting line stays allowed; only a new node is a hire (#8214).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

@@ -55,7 +55,9 @@
       register: agent_status
       changed_when: false
       failed_when: agent_status.rc != 0
+      when: not ansible_check_mode
 
     - name: Display agent status
       debug:
         msg: "SLM Agent on {{ inventory_hostname }} ({{ slm_node_id }}): {{ agent_status.stdout }}"
+      when: not ansible_check_mode

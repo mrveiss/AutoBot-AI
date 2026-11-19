@@ -46,7 +46,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const config = {
     backend: { host: env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_BACKEND_PORT || '8001' },
-    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '3000' },
+    // #19324: 9001, pinned to PORT_DEFAULTS.browser in src/config/ssot-config.ts by
+    // repo_tests/browser_port_single_home_19324_test.py. That module runs getConfig()
+    // at import (import.meta.env), which vite's own config cannot evaluate.
+    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '9001' },
     vnc: { host: env.VITE_DESKTOP_VNC_HOST || env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_DESKTOP_VNC_PORT || '6080' },
     protocol: env.VITE_HTTP_PROTOCOL || 'http'
   }
@@ -70,7 +73,10 @@ export default defineConfig(({ mode }) => {
       // Required for file: workspace packages — see #8482 / MVA-893.
       preserveSymlinks: true,
       // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
-      dedupe: autobotUiResolve().dedupe,
+      // #18550: also pin the xterm packages `@autobot/terminal` imports to this app's
+      // copy -- the plugin directory has no node_modules, so when its in-tree source
+      // is loaded by real path (a worktree test) they would not resolve at all.
+      dedupe: [...autobotUiResolve().dedupe, '@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
       alias: [
         ...autobotUiResolve().alias,
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
@@ -90,7 +96,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api/terminal/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/api/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
-        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, timeout: 300000 },
+        '/api': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, changeOrigin: true, secure: false, ws: true, timeout: 300000 },
         '/ws': { target: `${config.protocol}://${config.backend.host}:${config.backend.port}`, ws: true, changeOrigin: true, timeout: 300000 }
       }
     },

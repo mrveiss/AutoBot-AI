@@ -13,6 +13,32 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 N_TO_Z: dict[str, tuple[str, str, str]] = {
+    "no_partial_key_mask_18221.sources": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under three of the source trees (#18221); no tracked count moves with that "
+        "subset, because the test share and the other trees grow at their own rate.",
+    ),
+    "node-major-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow, Ansible and install-script files (yml/yaml/sh/j2), against all tracked files there; drifts.",
+    ),
+    "severity-order-copies": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under the backends, shared and pipeline-scripts, against all tracked .py; test share drifts.",
+    ),
+    "search-mode-copies": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test backend modules, against all tracked .py under autobot-backend; the test-file share drifts.",
+    ),
+    "redaction-placeholder-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under both backends and autobot_shared, against all tracked .py; the test share drifts.",
+    ),
     "shadowed-literal-routes": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -30,7 +56,17 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "parse-cache-direct-parse-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Guard modules under repo_tests are a subset of tracked .py; the guard share of the tree drifts.",
+    ),
     "one-internal-api-key-reader-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
+    "single-constant-time-compare": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
@@ -64,6 +100,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
+    ),
+    "one-system-knowledge-template-tree": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Template-schema YAML is a subset of all tracked YAML (whole repo); unrelated YAML drifts (#19310).",
     ),
     "one-static-data-copy-scan": (
         ABSOLUTE,
@@ -110,6 +151,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
+    ),
+    "torch-pair-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow, docker, infrastructure, Ansible and script files, against all tracked files there; drifts.",
     ),
     "tool-effect-table-scan": (
         ABSOLUTE,
@@ -187,6 +233,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     "response-model-secret-scan": (ABSOLUTE, "SUBSET_DRIFTS", "Backend Python modules, against all tracked Python."),
     "router-auth-coverage": (ABSOLUTE, "NOT_PATHS", "Routers registered in `core_routers.py`, not files."),
     "slm-frontend-components": (ABSOLUTE, "SUBSET_DRIFTS", "One frontend's components, against all tracked `.vue`."),
+    "slm-node-id-one-home-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked files outside docs and tests, a subset of the tree; docs and tests grow at their own rate.",
+    ),
     "severity-enum-fork-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -223,6 +274,12 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked frontend source.",
     ),
+    "v-html-sanitiser-sinks": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both frontends' and the kit's non-test `.vue`/`.ts`, against all tracked frontend source; "
+        "the test-file share drifts.",
+    ),
     "vnc-password-not-in-frontend-source": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -235,6 +292,12 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     ),
     "workflow-job-parse-sweep": (ABSOLUTE, "NOT_PATHS", "Parsed workflow jobs, not files."),
     "workflow-rc-capture": (ABSOLUTE, "NOT_PATHS", "`run:` blocks under an errexit shell, not files."),
+    "workflow-visible-name-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow files are a subset of tracked YAML; compose, ansible and filter files grow at "
+        "their own rate, so a share of all YAML would sink with nothing wrong.",
+    ),
     "user-mode-default-carriers-18729": (
         ABSOLUTE,
         "FIXED_INVENTORY",
@@ -255,5 +318,36 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Tracked Python, YAML and Jinja files, a subset of the tree; the other extensions grow at their own rate.",
+    ),
+    "service-port-homes-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python and nine text extensions under seven roots, plus .env.example, a subset of tracked "
+        "files; the test "
+        "share and the other extensions grow at their own rate.",
+    ),
+    "ssot-rehardcode-scan-19730": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under the backends and shared, a subset of tracked Python; the test share and "
+        "the other trees grow at their own rate, so a share of all Python would sink with nothing wrong.",
+    ),
+    "user-mode-values-sweep-19437": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Docs and deployment files by extension, minus the history trees; the code share of the tree grows "
+        "at its own rate, so a share of all tracked files would sink with nothing wrong.",
+    ),
+    "browser-service-routes-scan-19490": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
+        "own rate, so a share of all Python would sink with nothing wrong.",
+    ),
+    "one-after-commit-queue-21107": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .py under the backend and shared roots, against all tracked .py there; the test-file share "
+        "drifts on its own.",
     ),
 }

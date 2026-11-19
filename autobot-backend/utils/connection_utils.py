@@ -15,6 +15,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url, ollama_tags_url
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
@@ -24,8 +25,7 @@ from autobot_shared.ssot_config import get_ollama_url
 # autobot_shared/ssot_config.py, attribute-access only). The `.get()`/
 # `.get_nested()` lookups below require `config_manager`. Using `config` here
 # previously raised AttributeError (#12069, same root cause as #11971).
-from config import config_manager as global_config_manager
-from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
+from config import config_manager
 from constants.model_constants import ModelConstants
 from type_defs.common import Metadata
 
@@ -66,7 +66,7 @@ class ConnectionTester:
             ollama_status = "disconnected"
             try:
                 ollama_endpoint = get_ollama_url()
-                ollama_check_url = f"{ollama_endpoint}/api/tags"
+                ollama_check_url = ollama_tags_url(ollama_endpoint)
                 timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.health_check)
                 # Issue #12979: shared pool instead of a per-probe session.
                 # suppress_error_log because this probe already swallows failure
@@ -136,7 +136,7 @@ class ConnectionTester:
         """Get Ollama config from new structure (Issue #336 - extracted helper)."""
         endpoint = None
         model = None
-        llm_config = global_config_manager.get("backend", {}).get("llm", {})
+        llm_config = config_manager.get("backend", {}).get("llm", {})
         is_local_ollama = (
             llm_config.get("provider_type") == "local" and llm_config.get("local", {}).get("provider") == "ollama"
         )
@@ -151,18 +151,18 @@ class ConnectionTester:
     def _get_ollama_config_fallback(endpoint: str, model: str) -> tuple:
         """Get Ollama config from legacy/env (Issue #336 - extracted helper)."""
         if not endpoint:
-            endpoint = global_config_manager.get_nested(
+            endpoint = config_manager.get_nested(
                 "backend.ollama_endpoint",
-                f"{get_ollama_url()}/api/generate",
+                ollama_generate_url(get_ollama_url()),
             )
         if not model:
-            model = global_config_manager.get_nested(
+            model = config_manager.get_nested(
                 "backend.ollama_model",
                 _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
             )
         # Final fallbacks
         if not endpoint:
-            endpoint = f"{get_ollama_url()}/api/generate"
+            endpoint = ollama_generate_url(get_ollama_url())
         if not model:
             model = _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL
         return endpoint, model
@@ -180,7 +180,7 @@ class ConnectionTester:
         # so this keeps the explicit response block instead of post_json().
         async with get_http_client().tracked_request(
             "POST",
-            endpoint,
+            ollama_generate_url(endpoint),
             json=test_payload,
             timeout=gen_timeout,
         ) as resp:
@@ -217,7 +217,7 @@ class ConnectionTester:
             endpoint, model = ConnectionTester._get_ollama_config_from_new_structure()
             endpoint, model = ConnectionTester._get_ollama_config_fallback(endpoint, model)
 
-            check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
+            check_url = ollama_tags_url(endpoint)
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
             # Issue #12979: shared pool. The reachability probe releases its
@@ -252,7 +252,7 @@ class ConnectionTester:
             Tuple of (redis_host, redis_port, error_response or None)
         """
         # Check task_transport config (backwards compatibility)
-        task_transport_config = global_config_manager.get("task_transport", {})
+        task_transport_config = config_manager.get("task_transport", {})
 
         if task_transport_config.get("type") == "redis":
             redis_config = task_transport_config.get("redis", {})
@@ -261,7 +261,7 @@ class ConnectionTester:
             return host, port, None
 
         # Check memory.redis config (current structure)
-        memory_config = global_config_manager.get("memory", {})
+        memory_config = config_manager.get("memory", {})
         redis_config = memory_config.get("redis", {})
 
         if not redis_config.get("enabled", False):
@@ -326,7 +326,7 @@ class ConnectionTester:
     async def _check_ollama_embedding(provider_config: dict, current_model: str, provider: str) -> Metadata:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
         ollama_host = provider_config.get("host", get_ollama_url())
-        tags_url = f"{ollama_host}/api/tags"
+        tags_url = ollama_tags_url(ollama_host)
         timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.connect)
 
         # Issue #12979: shared pool; status is inspected, so the response block stays.
@@ -354,7 +354,7 @@ class ConnectionTester:
         """Get current embedding model status"""
         try:
             # Get embedding configuration from unified config
-            llm_config = global_config_manager.get_llm_config()
+            llm_config = config_manager.get_llm_config()
             embedding_config = llm_config.get("unified", {}).get("embedding", {})
 
             if not embedding_config:
@@ -462,7 +462,7 @@ class ModelManager:
             models.extend(ollama_models)
 
             # Add configured models from config
-            llm_config = global_config_manager.get("llm_config", {})
+            llm_config = config_manager.get("llm_config", {})
             ollama_config_models = llm_config.get("ollama", {}).get("models", {})
             for key, model_name in ollama_config_models.items():
                 if not any(m["name"] == model_name for m in models):
@@ -509,9 +509,9 @@ class ModelManager:
     async def _get_ollama_models() -> list:
         """Get models from Ollama service"""
         try:
-            ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
+            ollama_config = config_manager.get_nested("llm_config.ollama", {})
             ollama_host = ollama_config.get("host", get_ollama_url())
-            ollama_url = f"{ollama_host}/api/tags"
+            ollama_url = ollama_tags_url(ollama_host)
 
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
             # Issue #12979: shared pool. suppress_error_log because this path

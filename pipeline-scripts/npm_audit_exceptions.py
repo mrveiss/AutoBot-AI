@@ -19,7 +19,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-SEVERITY_ORDER = ("critical", "high", "moderate", "low", "info")
+#: npm's own advisory vocabulary (``moderate``), not ``Severity`` -- named for its domain (#19336).
+NPM_ADVISORY_ORDER = ("critical", "high", "moderate", "low", "info")
 FAILING_SEVERITIES = ("critical", "high")
 
 _GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")
@@ -51,12 +52,14 @@ class AdvisoryException:
 #:
 #: The expiry is enforced by THIS GATE and not by the test suite, deliberately: a test
 #: failing on a date would block every Python PR, where the gate blocks only the PRs that
-#: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
-#: reminder to look again before 2026-11-14.
+#: trigger the frontend suite. So the suite stays date-independent, and the expiry of any
+#: recorded entry is the reminder to look again.
 #:
-#: The table is EMPTY by design when nothing is currently unfixable. GHSA-vfj7-8cjw-p6xm
-#: (braces, owner decision 2026-10-03, #13400) was retired once upstream stopped reporting
-#: it (2026-10-23): the stale-record check above is what demanded its removal.
+#: The table is EMPTY whenever nothing is currently unfixable, and holds one entry per advisory
+#: that is. GHSA-vfj7-8cjw-p6xm (braces, owner decision 2026-10-03, #13400) was retired once
+#: upstream stopped reporting it (2026-10-23): the stale-record check above is what demanded its
+#: removal. GHSA-fc5q-39xc-vjpf (picomatch, owner decision 2026-11-17, #21736) was retired the
+#: same way: it was withdrawn upstream on 2026-11-18 and the stale-record check demanded its removal.
 ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {}
 
 

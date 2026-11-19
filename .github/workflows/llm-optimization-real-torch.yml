@@ -70,6 +70,8 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
+      - "constraints/shared.txt"  # #21471: CI-plane versions live here
       - ".github/workflows/llm-optimization-real-torch.yml"
   pull_request:
     # ready_for_review is REQUIRED: the job is gated on draft == false, and
@@ -134,6 +136,8 @@ on:
       - "autobot_shared/stream_logging.py"
       - "autobot_shared/token_count.py"
       - "autobot_shared/url_safety.py"
+      - "requirements-ci/monitoring.txt"
+      - "constraints/shared.txt"  # #21471: CI-plane versions live here
       - ".github/workflows/llm-optimization-real-torch.yml"
 
 # Least privilege (#15331). Runs tests only; no token writes.
@@ -146,7 +150,18 @@ concurrency:
 
 jobs:
   real-torch:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -160,9 +175,9 @@ jobs:
           python-version-file: '.python-version'
       - name: Install CPU torch at the repo's declared pin
         run: |
-          # One version, declared once: autobot-backend/requirements.txt.
-          pin="$(grep -m1 -E '^torch==[0-9][^ #]*' autobot-backend/requirements.txt | sed -E 's/^(torch==[^ #]+).*/\1/')"
-          test -n "$pin" || { echo "no torch== pin in autobot-backend/requirements.txt"; exit 1; }
+          # One version, declared once: constraints/shared.txt (#19330).
+          pin="$(grep -m1 -E '^torch==[0-9][^ #]*' constraints/shared.txt | sed -E 's/^(torch==[^ #]+).*/\1/')"
+          test -n "$pin" || { echo "no torch== pin in constraints/shared.txt"; exit 1; }
           python -m pip install --upgrade pip
           python -m pip install "$pin" --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
           python -c "import torch; print('torch', torch.__version__)"
@@ -171,6 +186,8 @@ jobs:
           python -m pip install --prefer-binary
           -r requirements-ci/framework.txt
           -r requirements-ci/utilities.txt
+          -r requirements-ci/networking.txt
+          -r requirements-ci/monitoring.txt
           -r requirements-ci-test.txt
       - name: Run the real-torch optimization tests
         run: >

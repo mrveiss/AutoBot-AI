@@ -6,7 +6,6 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router/index'
 import { createLogger } from '@/utils/debugUtils'
-import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 const logger = createLogger('main');
 
@@ -88,25 +87,7 @@ registerDirectives(app)
 // Register plugin UI components from the plugin mount registry (#6972 / #7793)
 mountAllPlugins(app)
 
-// Global error handler for uncaught errors
-app.config.errorHandler = (err, _instance, info) => {
-  logger.error('Vue Error Handler:', { error: err, info })
-
-  // Check if this is a chunk loading error
-  const error = err as Error
-  if (isChunkLoadError(error)) {
-    logger.warn('Chunk loading error detected, initiating cache clear...')
-
-    // Import and use cache management
-    import('./utils/cacheManagement').then(({ handleChunkLoadingError }) => {
-      handleChunkLoadingError(error, _instance?.$?.type?.name || 'Unknown')
-    }).catch(cacheError => {
-      logger.error('Failed to handle chunk error:', cacheError)
-      // Fallback to hard reload
-      window.location.reload()
-    })
-  }
-}
+// Vue errors: the single app.config.errorHandler lives in plugins/errorHandler.ts (#19458)
 
 // Global warning handler
 app.config.warnHandler = (msg, _instance, trace) => {

@@ -82,12 +82,13 @@ from services.code_status import get_latest_code_version as _get_latest_code_ver
 from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
-from services.node_events import create_node_event
+from services.node_events import create_node_event, enrollment_details
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
+_SSH_TEST_TIMEOUT_S = 15.0  # one value for the SSH test wait and its message (#18056)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 
@@ -173,7 +174,7 @@ async def _handle_enrollment_failed(db: AsyncSession, node_id: str, message: str
         NodeEventType.DEPLOYMENT_FAILED,
         EventSeverity.ERROR,
         f"Enrollment failed for node {node_id}: {message}",
-        error_details,
+        enrollment_details(error_details),
     )
     await db.commit()
 
@@ -224,7 +225,7 @@ async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
         NodeEventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Enrollment completed for node {node_id}",
-        completion_details,
+        enrollment_details(completion_details),
     )
     await db.commit()
 
@@ -395,7 +396,7 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
     if status_filter:
         query = query.where(Node.status == status_filter)
 
-    query = query.order_by(Node.hostname)
+    query = query.order_by(Node.hostname, Node.node_id)
 
     # Count the filtered set (the previous `query.whereclause or True`
     # always collapsed to True, silently dropping the filter -> wrong
@@ -2272,7 +2273,6 @@ async def test_connection(
     remote_cmd = "uname -a && cat /etc/os-release 2>/dev/null | " "head -5 || echo 'OS info unavailable'"
 
     try:
-        # Build SSH command based on auth method
         if request.auth_method == "password" and request.password:
             if not shutil.which("sshpass"):
                 return ConnectionTestResponse(
@@ -2289,7 +2289,7 @@ async def test_connection(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=_SSH_TEST_TIMEOUT_S)
         latency_ms = (time.time() - start_time) * 1000
 
         if process.returncode == 0:
@@ -2300,7 +2300,7 @@ async def test_connection(
         return ConnectionTestResponse(
             success=False,
             message="Connection timed out",
-            error="SSH connection timed out after 15 seconds",
+            error=f"SSH connection timed out after {_SSH_TEST_TIMEOUT_S:.0f} seconds",
         )
     except FileNotFoundError as e:
         return _handle_file_not_found_error(e)
@@ -2750,7 +2750,7 @@ class NodeExecRequest(BaseModel):
     """Request body for executing a command on a node."""
 
     command: str
-    timeout: int = 30
+    timeout: float = config.timeout.subprocess  # #19730: fractional budgets kept
 
 
 class NodeExecResponse(BaseModel):

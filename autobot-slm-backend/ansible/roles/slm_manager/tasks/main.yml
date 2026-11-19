@@ -182,6 +182,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       # Re-includes come first -- rsync applies the first matching rule, and
       # `.env.example` is tracked source that the `.env.*` family below would
       # otherwise swallow (#14231).
@@ -250,6 +251,12 @@
   register: slm_requirements_stat
   tags: ['slm', 'backend']
 
+- name: "SLM | Resolve the floor interpreter (.python-version, #20932)"
+  ansible.builtin.include_role:
+    name: python_interpreter
+    tasks_from: resolve
+  tags: ['always']
+
 - name: "SLM | Check venv Python version matches target"
   ansible.builtin.shell:
     cmd: >-
@@ -262,14 +269,15 @@
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
+  check_mode: false
 
-- name: "SLM | Remove stale venv if not Python 3.14"
+- name: "SLM | Remove stale venv if not the floor Python"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.14'
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != python_interpreter_version
   tags: ['slm', 'backend']
 
 # #7052: also detect partially-corrupted venv (correct python version but
@@ -283,7 +291,7 @@
   when:
     - slm_requirements_stat.stat.exists
     - _venv_py_version.rc == 0
-    - _venv_py_version.stdout == '3.14'
+    - _venv_py_version.stdout == python_interpreter_version
   tags: ['slm', 'backend']
 
 - name: "SLM | Remove broken venv when health check failed (#7052)"
@@ -295,9 +303,9 @@
     - (_slm_venv_health.rc | default(0)) != 0
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python 3.14 virtual environment"
+- name: "SLM | Create floor-Python virtual environment"
   ansible.builtin.command:
-    cmd: python3.14 -m venv {{ slm_backend_dir }}/venv
+    cmd: "{{ python_interpreter_binary }} -m venv {{ slm_backend_dir }}/venv"
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
@@ -314,9 +322,10 @@
 # Issue #937: Sync and install autobot_shared before requirements (prometheus metrics)
 - name: "SLM | Sync autobot_shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot_shared/"
+    src: "{{ role_path }}/../../../../autobot_shared/"
     dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
@@ -399,13 +408,13 @@
 
 # #16641: without this, pip falls back to shelling out to the standalone
 # `virtualenv` executable, absent from these hosts -- matches the
-# interpreter the earlier `python3.14 -m venv {{ slm_backend_dir }}/venv`
+# interpreter the earlier `python_interpreter_binary -m venv {{ slm_backend_dir }}/venv`
 # task in this file already targets.
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"
     virtualenv: "{{ slm_backend_dir }}/venv"
-    virtualenv_command: "python3.14 -m venv"
+    virtualenv_command: "{{ python_interpreter_binary }} -m venv"
     state: present
   become_user: "{{ slm_user }}"
   environment:
@@ -421,6 +430,21 @@
   ansible.builtin.stat:
     path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
   register: slm_secrets_stat
+  tags: ['slm', 'secrets']
+
+# #16299: a password given to a fresh install must not be guessable. Generated ones pass by length.
+# Only with no secrets file yet: a live install's password is its owner's to change.
+- name: "SLM | Refuse a guessable admin password on a fresh install"
+  ansible.builtin.command:
+    cmd: "python3 {{ role_path }}/../../../../autobot_shared/security/password_weakness.py"
+    stdin: "{{ slm_admin_password }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  no_log: true
+  when:
+    - not slm_secrets_stat.stat.exists
+    - slm_admin_password | default('') | length > 0
   tags: ['slm', 'secrets']
 
 - name: "SLM | Generate security secrets"
@@ -471,6 +495,13 @@
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
          else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #19864: chat-history and device-token encryption, on for new installs only. No back-fill
+    # below: losing this key makes everything written after it unreadable, so an existing
+    # install opts in rather than having an update switch it on (owner decision).
+    autobot_encryption_key: >-
+      {{ autobot_encryption_key
+         if (autobot_encryption_key | default('') | trim | length > 0)
+         else lookup('pipe', 'openssl rand -hex 32') }}
     # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
     # was the guessable literal "change-me-in-production", shipped unchanged on every
     # deployment that never overrode it. Generated here, once, the same way
@@ -515,6 +546,7 @@
     owner: "{{ slm_user }}"
     group: "{{ slm_group }}"
     mode: "0600"
+  diff: false  # the file carries secrets (#20941)
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -847,6 +879,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -876,6 +909,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -1158,6 +1192,7 @@
   changed_when: false
   failed_when: false
   tags: ['slm', 'service']
+  check_mode: false
 
 - name: "SLM | Collect startup logs when service is not starting (#7920)"
   ansible.builtin.shell:

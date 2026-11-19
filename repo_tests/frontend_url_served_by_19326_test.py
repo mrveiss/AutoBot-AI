@@ -15,7 +15,7 @@ that cannot (shell, Ansible, j2, ``.env``) is held equal to its home here, which
    ``floor`` sites, so a reworded file cannot pass by matching nothing.
 2. ``FORBIDDEN``: ``AUTOBOT_FRONTEND_PORT`` / ``frontend_port`` assigned 80 or 443 -- the served ports
    under the dev port's name -- anywhere in production sources.
-3. ``frontend_url`` resolves for vite, nginx with TLS, nginx with HTTP, and raises for unset or invalid.
+3. ``frontend_url`` resolves for vite, nginx with TLS, nginx with HTTP, derives unset from the environment, and raises for invalid.
 """
 
 from __future__ import annotations
@@ -28,7 +28,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from autobot_shared.frontend_served_by import SERVED_BY_VALUES, FrontendServedByError, try_frontend_url
+from autobot_shared.deployment_profile import FRONTEND_SERVED_BY_VALUES, FrontendServedByError, try_frontend_url
+from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.ssot_config import AutoBotConfig, PortConfig
 from autobot_shared.ssot_tls import TLSConfig
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
@@ -68,7 +69,13 @@ PINNED: tuple[Pin, ...] = (
     Pin("dev", f"{_ANSIBLE}/deploy-hybrid.sh", r"^AUTOBOT_FRONTEND_PORT=(\d+)$", 1),
     Pin("http", ".env.example", r"^AUTOBOT_FRONTEND_HTTP_PORT=(\d+)$", 1),
     Pin("http", _SHELL_SSOT, r"AUTOBOT_FRONTEND_HTTP_PORT:=(\d+)", 1),
-    Pin("http", f"{_ANSIBLE}/deploy-native.sh", r"^AUTOBOT_FRONTEND_HTTP_PORT=(\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/backend/defaults/main.yml", r"^frontend_http_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/frontend/defaults/main.yml", r"^nginx_http_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/frontend/vars/main.yml", r"^nginx_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/setup-user-frontend.yml", r"^    nginx_http_port: (\d+)$", 1),
+    Pin("tls", f"{_ANSIBLE}/roles/frontend/vars/main.yml", r"^nginx_ssl_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/inventory/production.yml", r"^\s+nginx_port: (\d+)$", 1),
+    Pin("tls", f"{_ANSIBLE}/inventory/production.yml", r"^\s+nginx_ssl_port: (\d+)$", 1),
     Pin("tls", _SHELL_SSOT, r"AUTOBOT_FRONTEND_TLS_PORT:=(\d+)", 1),
     Pin("tls", f"{_ANSIBLE}/fix-slm-env-ports.yml", r'^    frontend_tls_port: "(\d+)"$', 1),
     Pin("tls", f"{_ANSIBLE}/setup-user-frontend.yml", r"^    frontend_tls_port: (\d+)$", 1),
@@ -87,7 +94,6 @@ PINNED: tuple[Pin, ...] = (
     ),
     Pin("nginx", f"{_ANSIBLE}/roles/backend/templates/backend.env.j2", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", ".env.example", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
-    Pin("vite", ".env.base", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", f"{_ANSIBLE}/deploy-hybrid.sh", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", "conftest.py", r'setdefault\("AUTOBOT_FRONTEND_SERVED_BY", "(\w+)"\)', 1),
     Pin("tls_env", _ORCH, r'"frontend": ServiceDefinition\((?:.*\n)*?\s+default_port_env="(\w+)"', 1),
@@ -105,6 +111,7 @@ PAIRED: tuple[tuple[str, str], ...] = (
 FORBIDDEN: tuple[re.Pattern[str], ...] = (
     re.compile(r"AUTOBOT_FRONTEND_PORT(?:=|:=|:-|[\"']?\s*[:=]\s*[\"']?)(80|443)\b"),
     re.compile(r"^\s*[\"']?frontend_port[\"']?\s*[:=]\s*[\"']?(80|443)\b", re.MULTILINE),
+    re.compile(r"VITE_FRONTEND_PORT(?:=|:=|:-)(?:80\b|443\b|\{\{ *frontend_tls_port)"),
 )
 #: file -> how many sites of a FORBIDDEN shape stay; shrink-only (empty: none remain).
 KNOWN: dict[str, int] = {}
@@ -130,10 +137,9 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "frontend-url-served-by-scan",
     discover=_scanned_files,
-    floor=4217,  # mid-window: 4267 files measured at authoring, less half of growth
     growth=100,
     what="production sources and env profiles",
-    roots=_SCAN_ROOTS,
+    roots=(*_SCAN_ROOTS, ".env"),
 )
 
 
@@ -209,6 +215,8 @@ def test_a_drifted_pin_is_caught() -> None:
         "AUTOBOT_FRONTEND_PORT=443",
         "${AUTOBOT_FRONTEND_PORT:-443}",
         "frontend_port: 443\n",
+        "VITE_FRONTEND_PORT=443\n",
+        "VITE_FRONTEND_PORT={{ frontend_tls_port }}\n",
         '"frontend_port": 80',
         'AUTOBOT_FRONTEND_PORT: "443"',
     ],
@@ -222,6 +230,8 @@ def test_a_served_port_under_the_dev_ports_name_is_caught(text: str) -> None:
     [
         "AUTOBOT_FRONTEND_PORT=5173\n",
         "AUTOBOT_FRONTEND_PORT=15173",
+        "VITE_FRONTEND_PORT=5173\n",
+        "VITE_FRONTEND_SERVED_PORT={{ frontend_tls_port }}\n",
         "AUTOBOT_FRONTEND_PORT=8443",
         "frontend_tls_port: 443\n",
         "AUTOBOT_FRONTEND_TLS_PORT=443",
@@ -233,6 +243,8 @@ def test_the_dev_port_and_the_served_ports_under_their_own_names_pass(text: str)
 
 
 _ENV = (
+    "AUTOBOT_ENVIRONMENT",
+    "AUTOBOT_ENV",
     "AUTOBOT_FRONTEND_HOST",
     "AUTOBOT_FRONTEND_PORT",
     "AUTOBOT_FRONTEND_HTTP_PORT",
@@ -278,9 +290,24 @@ def test_frontend_url_follows_the_served_by_profile(monkeypatch: pytest.MonkeyPa
     assert _config(monkeypatch, **env).frontend_url == url
 
 
-def test_an_unset_served_by_raises_rather_than_picking_a_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(FrontendServedByError, match="unset"):
-        _config(monkeypatch).frontend_url  # noqa: B018 -- the property is the call under test
+@pytest.mark.parametrize(
+    ("environment", "url"),
+    [
+        ("development", "http://ui.example.test:5173"),
+        ("test", "http://ui.example.test:5173"),
+        ("production", "http://ui.example.test:80"),
+        ("staging", "http://ui.example.test:80"),
+    ],
+)
+def test_an_unset_served_by_follows_the_environment(
+    monkeypatch: pytest.MonkeyPatch, environment: str, url: str
+) -> None:
+    assert _config(monkeypatch, AUTOBOT_ENVIRONMENT=environment).frontend_url == url
+
+
+def test_an_explicit_served_by_overrides_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _config(monkeypatch, AUTOBOT_ENVIRONMENT="production", AUTOBOT_FRONTEND_SERVED_BY="vite")
+    assert cfg.frontend_url == "http://ui.example.test:5173"
 
 
 @pytest.mark.parametrize("value", ["apache", "vite,nginx", "5173", "true"])
@@ -290,27 +317,62 @@ def test_an_unknown_served_by_raises_rather_than_picking_a_port(monkeypatch: pyt
 
 
 def test_an_empty_served_by_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(FrontendServedByError, match="unset"):
-        _config(monkeypatch, AUTOBOT_FRONTEND_SERVED_BY="  ").frontend_url  # noqa: B018
+    cfg = _config(monkeypatch, AUTOBOT_ENVIRONMENT="production", AUTOBOT_FRONTEND_SERVED_BY="  ")
+    assert cfg.frontend_url == "http://ui.example.test:80"
 
 
 def test_the_valid_values_are_the_two_the_profile_documents() -> None:
-    assert SERVED_BY_VALUES == ("vite", "nginx")
+    assert FRONTEND_SERVED_BY_VALUES == ("vite", "nginx")
 
 
-def test_try_frontend_url_leaves_the_frontend_out_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert try_frontend_url(_config(monkeypatch)) is None
+def test_try_frontend_url_leaves_the_frontend_out_when_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert try_frontend_url(_config(monkeypatch, AUTOBOT_FRONTEND_SERVED_BY="apache")) is None
     assert try_frontend_url(_config(monkeypatch, AUTOBOT_FRONTEND_SERVED_BY="vite")) == "http://ui.example.test:5173"
 
 
 def test_get_service_url_does_not_evaluate_the_frontend_for_other_services(monkeypatch: pytest.MonkeyPatch) -> None:
-    cfg = _config(monkeypatch)
-    assert (
-        cfg.get_service_url(
-            "backend",
-        )
-        is not None
-        and cfg.get_service_url("nope") is None
-    )
+    cfg = _config(monkeypatch, AUTOBOT_FRONTEND_SERVED_BY="apache")
+    assert cfg.get_service_url("backend") is not None and cfg.get_service_url("nope") is None
     with pytest.raises(FrontendServedByError):
         cfg.get_service_url("frontend")
+
+
+_ANSIBLE_NAME = re.compile(
+    r"^\s*(frontend_tls_port|frontend_http_port|nginx_http_port|nginx_port|nginx_ssl_port): \"?(\d+)", re.M
+)
+
+
+def test_every_ansible_statement_of_a_served_port_is_pinned() -> None:
+    """#20058: a new literal under a served-port name fails here, so PINNED cannot fall behind the tree."""
+    pinned = {pin.rel for pin in PINNED}
+    paths = [p for p in (_ROOT / _ANSIBLE).rglob("*") if p.suffix in (".yml", ".yaml", ".j2") and p.is_file()]
+    assert len(paths) >= 100, f"the sweep read {len(paths)} Ansible files -- a clean result would be blind"
+    stated = {
+        p.relative_to(_ROOT).as_posix() for p in paths if _ANSIBLE_NAME.search(_read(p.relative_to(_ROOT).as_posix()))
+    }
+    assert len(stated) >= 5, f"found {len(stated)} files -- the pattern stopped matching?"
+    assert stated - pinned == set()
+
+
+@pytest.mark.parametrize(
+    ("env", "vm", "local"),
+    [
+        ({"AUTOBOT_FRONTEND_SERVED_BY": "vite"}, "http://ui.example.test:5173", "http://localhost:5173"),
+        (
+            {"AUTOBOT_FRONTEND_SERVED_BY": "nginx", "AUTOBOT_FRONTEND_TLS_ENABLED": "true"},
+            "https://ui.example.test:443",
+            "https://localhost:443",
+        ),
+        (
+            {"AUTOBOT_FRONTEND_SERVED_BY": "nginx", "AUTOBOT_FRONTEND_TLS_ENABLED": "false"},
+            "http://ui.example.test:80",
+            "http://localhost:80",
+        ),
+    ],
+)
+def test_service_urls_follow_the_served_model(monkeypatch: pytest.MonkeyPatch, env: dict, vm: str, local: str) -> None:
+    """#20058: ``ServiceURLs`` reads the same model as ``config.frontend_url``, not the dev port."""
+    cfg = _config(monkeypatch, **env)
+    monkeypatch.setattr("autobot_shared.ssot_config.config", cfg)
+    assert ServiceURLs.FRONTEND_VM == vm == cfg.frontend_url
+    assert ServiceURLs.FRONTEND_LOCAL == local

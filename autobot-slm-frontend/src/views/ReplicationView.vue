@@ -13,13 +13,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
-import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, createLogger } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('ReplicationView')
+const { t } = useI18n()
 const api = useSlmApi()
 const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
@@ -127,7 +128,7 @@ async function handleCreateReplication(): Promise<void> {
 }
 
 async function handlePromote(replicationId: string): Promise<void> {
-  if (!confirm('Are you sure you want to promote this replica to primary? This will make the target node a standalone master.')) {
+  if (!confirm(t('replicationView.areYouSureYouWantToPromote'))) {
     return
   }
 
@@ -141,7 +142,7 @@ async function handlePromote(replicationId: string): Promise<void> {
 }
 
 async function handleStop(replicationId: string): Promise<void> {
-  if (!confirm('Are you sure you want to stop this replication? The replica will remain connected but replication link will be marked as stopped.')) {
+  if (!confirm(t('replicationView.areYouSureYouWantToStop'))) {
     return
   }
 
@@ -205,11 +206,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDateTime(isoString: string | null): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
-}
-
 function formatLag(lagBytes: number): string {
   if (lagBytes === 0) return '0 B (in sync)'
   if (lagBytes < 1024) return `${lagBytes} B`
@@ -258,14 +254,12 @@ function getNodeHostname(nodeId: string): string {
     </div>
 
     <!-- Warning if less than 2 Redis nodes -->
-    <div v-if="redisNodes.length < 2" class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <p class="text-sm text-yellow-700">{{ $t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length }) }}</p>
-      </div>
-    </div>
+    <BaseAlert
+      v-if="redisNodes.length < 2"
+      variant="warning"
+      class="mb-6"
+      :message="$t('replicationView.atLeast2NodesWithThe', { count: redisNodes.length })"
+    />
 
     <!-- Summary Stats -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
@@ -392,7 +386,7 @@ function getNodeHostname(nodeId: string): string {
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(replication.started_at) }}
+                {{ formatFleetDateTime(replication.started_at, '-') }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex items-center justify-end gap-2">
@@ -527,12 +521,10 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Info Box -->
-        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <p class="text-sm text-blue-700">
-            {{ $t('replicationView.thisWillConfigureThe') }}
-            <code class="bg-blue-100 px-1 rounded-sm">REPLICAOF</code> {{ $t('replicationView.commandViaAnsibleThe') }}
-          </p>
-        </div>
+        <BaseAlert variant="info" size="compact">
+          {{ $t('replicationView.thisWillConfigureThe') }}
+          <code>REPLICAOF</code> {{ $t('replicationView.commandViaAnsibleThe') }}
+        </BaseAlert>
       </div>
       <template #actions>
         <button
@@ -662,15 +654,15 @@ function getNodeHostname(nodeId: string): string {
       <div class="grid grid-cols-2 gap-4 mb-6">
         <div>
           <p class="text-sm text-gray-500">{{ $t('replicationView.created') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.created_at) }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.created_at, '-') }}</p>
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('replicationView.started') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.started_at) }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.started_at, '-') }}</p>
         </div>
         <div v-if="selectedReplication.completed_at">
           <p class="text-sm text-gray-500">{{ $t('replicationView.completed') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.completed_at) }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedReplication.completed_at, '-') }}</p>
         </div>
       </div>
 

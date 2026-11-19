@@ -199,7 +199,7 @@ function onClear() {
 
 .mode-button.rag-button.active {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .mode-description {
@@ -232,11 +232,12 @@ function onClear() {
 .search-button {
   @apply px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2;
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
 }
 
 .search-button:hover:not(:disabled) {
-  filter: brightness(1.1);
+  /* keep the fill so --text-on-primary contrast holds on every accent */
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--text-on-primary) 35%, transparent);
 }
 
 /* Filters disclosure */

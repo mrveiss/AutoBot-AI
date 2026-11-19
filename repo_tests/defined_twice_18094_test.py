@@ -34,6 +34,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared import fleet_constants
+from tools.lint import _parse_cache as parse_cache
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
 
 from tools.lint import _env_fork_scan as scan_mod  # isort: skip
@@ -50,12 +51,6 @@ _ANSIBLE = "autobot-slm-backend/ansible"
 #: Counted per occurrence, so a NEW literal in a listed file fails, and shrink-only: a file stating fewer
 #: than its count fails as stale until the count is lowered (or the entry deleted at zero).
 KNOWN_INSTALL_ROOT_LITERALS: dict[str, tuple[int, str]] = {
-    "autobot-slm-backend/services/code_distributor.py": (1, "#15708 (SLM_REPO_PATH, two modules disagree)"),
-    "autobot-slm-backend/services/git_tracker.py": (1, "#15708 (SLM_REPO_PATH, two modules disagree)"),
-    "autobot_shared/redis_management/types.py": (
-        1,
-        "owned by #19232 (rewrites this YAML resolver; one file, one PR)",
-    ),
     "autobot-backend/security/enterprise/compliance_manager.py": (
         1,
         "historical: the literal junk-directory NAME the unexpanded #13658 placeholder created, matched "
@@ -110,7 +105,6 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "defined-twice-18094-scan",
     discover=_scanned_files,
-    floor=3558,  # mid-window; the arithmetic is in the commit message, which cannot drift from the tree
     growth=150,
     what="production python files swept for a second definition of a #18094 value",
     roots=scan_mod.SCAN_ROOTS,
@@ -128,7 +122,7 @@ def _band_name(node: ast.AST) -> str | None:
 def similarity_restatements(rel: str, source: str) -> list[str]:
     """A band assigned outside its home (at any depth), or paired with a literal fallback."""
     out: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         targets = node.targets if isinstance(node, ast.Assign) else []
         targets = [node.target] if isinstance(node, (ast.AnnAssign, ast.AugAssign)) else targets
         for name in filter(None, map(_band_name, targets)):
@@ -164,7 +158,7 @@ def install_root_literals(rel: str, source: str) -> list[str]:
     """Every non-docstring string constant outside ``fleet_constants`` that states the install root."""
     if rel == _FLEET_HOME:
         return []
-    tree, root = ast.parse(source), fleet_constants.FLEET_INSTALL_ROOT
+    tree, root = parse_cache.parse(source), fleet_constants.FLEET_INSTALL_ROOT
     prose = _docstrings(tree)
     return [
         f"{rel}:{node.lineno}: the install root as a literal -- import FLEET_INSTALL_ROOT from {_FLEET_HOME}"
@@ -175,7 +169,7 @@ def install_root_literals(rel: str, source: str) -> list[str]:
 
 def string_constants(source: str) -> int:
     """How many string constants a file holds: the reach of the install-root check over it."""
-    return sum(isinstance(n, ast.Constant) and isinstance(n.value, str) for n in ast.walk(ast.parse(source)))
+    return sum(isinstance(n, ast.Constant) and isinstance(n.value, str) for n in ast.walk(parse_cache.parse(source)))
 
 
 def settings_heartbeat_literals(rel: str, source: str) -> list[str]:
@@ -184,7 +178,7 @@ def settings_heartbeat_literals(rel: str, source: str) -> list[str]:
         return []
     return [
         f"{rel}:{node.lineno}: heartbeat_interval restated -- use DEFAULT_HEARTBEAT_INTERVAL from {_FLEET_HOME}"
-        for node in ast.walk(ast.parse(source))
+        for node in ast.walk(parse_cache.parse(source))
         if isinstance(node, ast.AnnAssign)
         and isinstance(node.target, ast.Name)
         and node.target.id == "heartbeat_interval"
@@ -218,7 +212,7 @@ def stale_baseline_entries(sources: dict[str, str]) -> list[str]:
 
 def _copy_line(source: str, name: str) -> int | None:
     """Line of the module-level ``name = <the install root>`` a standalone copy declares, else None."""
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == [name]:
             if isinstance(node.value, ast.Constant) and node.value.value == fleet_constants.FLEET_INSTALL_ROOT:
                 return node.lineno
@@ -270,6 +264,8 @@ def test_the_ansible_copies_agree_with_fleet_constants() -> None:
     assert base_dir == fleet_constants.FLEET_INSTALL_ROOT
     assert fleet_constants.FLEET_AGENT_DIR == fleet_constants.FLEET_INSTALL_ROOT + agent_suffix
     assert agent["slm_heartbeat_interval"] == fleet_constants.DEFAULT_HEARTBEAT_INTERVAL
+    code_source = _yaml("roles/autobot_shared/defaults/main.yml")["code_source_dir"]
+    assert code_source.replace("{{ autobot.base_dir }}", base_dir) == fleet_constants.FLEET_CODE_SOURCE_DIR  # #15708
 
 
 # --- contrast: each shape #18094 found must be flagged -------------------------------------------
@@ -324,7 +320,7 @@ def test_a_shared_settings_heartbeat_is_allowed() -> None:
 
 
 def test_a_new_literal_in_a_baselined_file_is_flagged_and_a_removed_one_is_stale() -> None:
-    rel = "autobot-slm-backend/services/git_tracker.py"
+    rel = "autobot-backend/security/enterprise/compliance_manager.py"  # any file still on the baseline at a count of 1
     one = 'REPO = "/opt/autobot"\n'
 
     def stale(source: str) -> list[str]:

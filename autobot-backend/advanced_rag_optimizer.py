@@ -30,21 +30,29 @@ from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.query_term_replace import replace_whole_word
 from knowledge.search_components.bm25 import BM25Scorer
 from knowledge.search_components.reranking import (
     RerankWeights,
-    _shared_rerank_weights,
     apply_mmr_reorder_by_content,
     fetch_staleness_scores,
     final_rerank_score,
     ranking_score,
     set_reranking_active,
+    shared_rerank_weights,
 )
 from knowledge.search_filters import SYSTEM_SCOPE, KbPrincipal
 from rag_optimizer_context import OptimizedContextMixin
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
+
+# Query expansion (#21525): query type -> keyword -> synonyms; whole words, any case.
+_EXPANSION_SYNONYMS: Dict[str, Dict[str, Tuple[str, ...]]] = {
+    "technical": {"install": ("setup", "deploy"), "configure": ("setup", "config")},
+    "troubleshooting": {"error": ("issue", "problem")},
+}
+MAX_EXPANDED_QUERIES = 5  # the original plus up to four variants
 
 # MAP-Elites minimum category coverage required to activate grid-based selection.
 # Issue #10600: moved below imports to clear pre-existing E402 lint.
@@ -149,7 +157,7 @@ class AdvancedRAGOptimizer(OptimizedContextMixin):
         """
         self.kb = None
         self.semantic_chunker = None
-        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else _shared_rerank_weights()
+        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else shared_rerank_weights()
         # Issue #10600: config-gated retrieval-quality knobs (defaults = no-op).
         self._bm25_hybrid_enabled: bool = (
             model_config.RAG_BM25_HYBRID_ENABLED if bm25_hybrid_enabled is None else bm25_hybrid_enabled
@@ -363,32 +371,20 @@ class AdvancedRAGOptimizer(OptimizedContextMixin):
         return context
 
     def _expand_query(self, query: str, query_type: str) -> List[str]:
-        """Generate expanded queries for improved recall."""
+        """Generate expanded queries for improved recall (#21525: whole-word, any case)."""
         expanded = [query]  # Always include original
 
-        # Add synonyms and related terms based on query type
-        if query_type == "technical":
-            # Add common technical synonyms
-            if "install" in query.lower():
-                expanded.append(query.replace("install", "setup"))
-                expanded.append(query.replace("install", "deploy"))
-            if "configure" in query.lower():
-                expanded.append(query.replace("configure", "setup"))
-                expanded.append(query.replace("configure", "config"))
+        for keyword, synonyms in _EXPANSION_SYNONYMS.get(query_type, {}).items():
+            expanded.extend(replace_whole_word(query, keyword, syn) for syn in synonyms)
 
-        elif query_type == "troubleshooting":
-            # Add problem-solving variations
-            if "error" in query.lower():
-                expanded.append(query.replace("error", "issue"))
-                expanded.append(query.replace("error", "problem"))
+        if query_type == "troubleshooting":
             expanded.append(f"how to fix {query}")
             expanded.append(f"troubleshoot {query}")
 
-        # Add general variations
-        expanded.append(f"autobot {query}")  # Context-specific
+        expanded.append(f"autobot {query}")  # Context-specific general variation
 
-        # Remove duplicates and limit
-        unique_expanded = list(dict.fromkeys(expanded))[:5]
+        # Remove duplicates (a keyword-less query's rewrites equal the original) and limit
+        unique_expanded = list(dict.fromkeys(expanded))[:MAX_EXPANDED_QUERIES]
 
         logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded

@@ -204,6 +204,13 @@ class SessionHandlerMixin:
 
         return removed_count
 
+    async def remove_session(self, session_id: str) -> bool:
+        """Drop one session from memory (a caller that created it for a single throwaway turn); False if absent.
+
+        A single ``dict.pop`` is atomic on the event loop, so it needs no lock.
+        """
+        return self.sessions.pop(session_id, None) is not None
+
     async def get_active_sessions_count(self) -> int:
         """Get count of active sessions."""
         async with self._lock:

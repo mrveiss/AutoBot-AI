@@ -18,6 +18,7 @@ from typing import List
 from advanced_rag_optimizer import RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from knowledge.acl_epoch import read_acl_epoch
+from knowledge.retrieval_invalidation import invalidation_pending
 from knowledge.search_filters import SYSTEM_SCOPE, KbPrincipal, filter_for_principal, require_kb_principal
 
 logger = get_llm_logger("rag_visibility")
@@ -40,15 +41,20 @@ def scope_key(principal: KbPrincipal, epoch: str) -> str:
     if principal is SYSTEM_SCOPE:
         return f"system|{epoch}"
     raw = f"{principal.user_id}|{principal.company_id or ''}|{','.join(sorted(principal.group_ids))}|{epoch}"
+    if principal.is_superadmin:  # a root read never shares a partition with a scoped one (#19860)
+        raw += "|root"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
 async def cache_scope(principal: KbPrincipal) -> str | None:
-    """The cache scope key for *principal*, or ``None`` when the epoch cannot be read.
+    """The cache scope key for *principal*, or ``None`` when the epoch cannot be trusted.
 
     ``None`` means every cache tier is skipped for this search -- read and write alike -- since an
-    entry cannot be shown to predate a revocation.
+    entry cannot be shown to predate a revocation: the epoch is unreadable, or a KB write's epoch
+    bump failed in this process and has not yet succeeded (#20958).
     """
+    if await invalidation_pending():
+        return None
     epoch = await read_acl_epoch()
     if epoch is None:
         return None

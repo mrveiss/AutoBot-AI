@@ -90,14 +90,14 @@ All classes are now in the redis_management/ package. This module provides
 backward compatibility by re-exporting all classes.
 """
 
-import logging
-
 # Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Dict
 
 import redis
 import redis.asyncio as async_redis
+
+from autobot_shared.logging_manager import get_logger
 
 # redis_management now lives in autobot_shared (Issue #2313).
 from autobot_shared.redis_management.config import (
@@ -111,7 +111,7 @@ from autobot_shared.redis_management.statistics import ConnectionMetrics, Manage
 from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState, RedisDatabase
 from autobot_shared.redis_require import require_redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Re-export for backward compatibility
 __all__ = [

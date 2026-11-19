@@ -295,6 +295,19 @@ In single-user mode:
 | `AUTOBOT_SINGLE_USER_MODE` | Enable single-user mode | `true` |
 | `AUTOBOT_AUDIT_LOG_FILE` | Audit log file path | `data/audit.log` |
 
+### Configured user credentials (`allowed_users`)
+
+Each `security_config.allowed_users` entry is a mapping with a bcrypt `password_hash` (#21088).
+`AuthenticationMiddleware.authenticate_user` and `SecurityLayer.authenticate_user` both verify
+through `autobot_shared.auth.configured_users.verify_configured_user`, which uses
+`jwt_core.hash_password` / `verify_password`. An entry without a hash (for example a plain
+value) is rejected: the username is logged as an error and that user cannot authenticate.
+Stored values are never rewritten, and an unknown user still costs one verification.
+
+To produce a hash for an entry, run
+`python autobot-infrastructure/shared/scripts/utilities/generate-password-hashes.py <username>`
+(several names may be given; with none, the SSOT admin account name is used; the password is prompted, not echoed) and paste the printed `password_hash` into that user's entry.
+
 ### Config File (`config/config.yaml`)
 
 ```yaml

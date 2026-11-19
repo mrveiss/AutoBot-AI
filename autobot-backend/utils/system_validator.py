@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 import aiohttp
 import psutil
 
-from autobot_shared.frontend_served_by import try_frontend_url
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -91,7 +91,7 @@ class SystemValidator:
 
         self.base_urls = {  # service endpoints
             "backend": ssot_config.backend_url,
-            "frontend": try_frontend_url(ssot_config),  # None while AUTOBOT_FRONTEND_SERVED_BY is unset (#19326)
+            "frontend": try_frontend_url(ssot_config),  # None while AUTOBOT_FRONTEND_SERVED_BY is unknown (#19326)
             "ollama": ssot_config.ollama_url,
             "redis": None,  # Special handling for Redis
         }

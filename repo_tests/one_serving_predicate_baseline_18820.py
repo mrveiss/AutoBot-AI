@@ -65,7 +65,7 @@ ALLOWLIST: dict[str, str] = {
     "autobot-backend/knowledge/adapters/okf_adapter.py::_build_frontmatter::verification_status::READ": _TRUST,
     "autobot-backend/knowledge/facts.py::_fact_is_protected::verification_status::READ": _TRUST,
     "autobot-backend/llc/api/companies.py::_compose_human_nodes::is_active::READ": _ACCOUNT,
-    "autobot-backend/llc/api/companies.py::list_members::is_active::READ": _ACCOUNT,
+    "autobot-backend/llc/services/member_standing.py::member_people::is_active::READ": _ACCOUNT,
     "autobot-backend/llm_shared/run_credential_loader.py::load_user_provider_credentials::is_active::READ": _CREDENTIAL,
     "autobot-backend/models/atomic_fact.py::AtomicFact.__repr__::is_active::READ": _ATOMIC,
     "autobot-backend/models/atomic_fact.py::AtomicFact.__str__::is_active::READ": _ATOMIC,

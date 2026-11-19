@@ -14,8 +14,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
+from api.source_scope import require_source_id
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import collect_python_files
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, collect_python_files, discover_files
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -87,22 +88,6 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Default exclusions
-    DEFAULT_EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-        }
-    )
-
     def _init_feature_flags(
         self,
         enable_clone_detection: bool,
@@ -120,7 +105,7 @@ class CodePatternAnalyzer:
         self.enable_complexity_analysis = enable_complexity_analysis
         self.enable_embedding_storage = enable_embedding_storage
         self.similarity_threshold = similarity_threshold
-        self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDE_DIRS
+        self.exclude_dirs = exclude_dirs or ANALYSIS_EXCLUDE_DIRS
 
     def _init_sub_analyzers(self, cc_threshold: int, mi_threshold: float) -> None:
         """Initialize sub-analyzer instances based on feature flags. Issue #620."""
@@ -177,9 +162,7 @@ class CodePatternAnalyzer:
             exclude_dirs,
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
-        # Issue #12384: scope tag for chroma metadata written by this instance.
-        self.source_id = source_id
-        self._source_tag = source_id or "default"
+        self.source_id = self._source_tag = None if source_id is None else require_source_id(source_id, "analysis")
         # Issue #12407: single reused EmbeddingCache instance (mirrors
         # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
         # calls to ``_generate_embedding`` actually benefit from the cache
@@ -541,10 +524,7 @@ class CodePatternAnalyzer:
         line_count = 0
         dir_path = Path(directory)
 
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-
+        for py_file in discover_files(dir_path, ("*.py",), self.exclude_dirs):
             try:
                 with open(py_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
@@ -953,7 +933,7 @@ class CodePatternAnalyzer:
         Args:
             report: Report with patterns to store
         """
-        if not self.enable_embedding_storage:
+        if not (self.enable_embedding_storage and self.source_id):  # #20513: no source, no partition to write
             return
 
         try:

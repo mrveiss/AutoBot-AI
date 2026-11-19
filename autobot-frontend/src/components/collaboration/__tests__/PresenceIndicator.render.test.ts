@@ -40,15 +40,23 @@ function mountWith(others: UserPresence[], expanded = false) {
 }
 
 const collaboratorTitles = (w: ReturnType<typeof mount>) =>
-  w.findAll('[title^="collaboration.presence.collaboratorTooltip"]').map((el) => el.attributes('title'))
+  w.findAll('[title^="collaboration.presenceIndicator.collaboratorTooltip"]').map((el) => el.attributes('title'))
 
 describe('PresenceIndicator renders who is present (#16754)', () => {
   it('one other participant: their avatar, initials and status tooltip', () => {
     const wrapper = mountWith([person('u1', 'ada_lovelace')])
     const titles = collaboratorTitles(wrapper)
     expect(titles).toHaveLength(1)
-    expect(titles[0]).toContain('"name":"ada_lovelace"')
+    expect(titles[0]).toContain('"username":"ada_lovelace"')
     expect(wrapper.text()).toContain('AL')
+  })
+
+  it('compact entries are named for assistive technology, not only by title (#14780)', () => {
+    const wrapper = mountWith([person('u1', 'ada_lovelace')])
+    const labels = wrapper.findAll('[role="img"][aria-label]').map((el) => el.attributes('aria-label'))
+    expect(labels).toHaveLength(2)
+    expect(labels[0]).toContain('presenceIndicator.youStatus{"status":"online"}')
+    expect(labels[1]).toContain('"username":"ada_lovelace","status":"online"')
   })
 
   it('several participants: three stacked avatars and a +N overflow', () => {

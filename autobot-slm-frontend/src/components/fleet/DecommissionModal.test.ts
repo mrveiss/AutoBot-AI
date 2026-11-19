@@ -40,8 +40,8 @@ async function startDecommission() {
   await vi.waitFor(() => expect(decommissionPreflight).toHaveBeenCalled())
   await flushPromises()
   await wrapper.find('#confirm-node-id').setValue(node.node_id)
-  await vi.waitFor(() => expect(wrapper.find('button.btn-error').attributes('disabled')).toBeUndefined())
-  await wrapper.find('button.btn-error').trigger('click')
+  await vi.waitFor(() => expect(wrapper.find('button.aui-btn--error').attributes('disabled')).toBeUndefined())
+  await wrapper.find('button.aui-btn--error').trigger('click')
   await vi.waitFor(() => expect(decommissionNode).toHaveBeenCalled())
   await flushPromises()
   return { wrapper, finish: (r: { success: boolean; output: string }) => finish(r) }

@@ -58,7 +58,8 @@ const INTENTIONALLY_HIDDEN: Record<string, string> = {
   '/agents/heartbeat': 'Reached as a tab inside /agents shell (#6634); standalone URL kept for bookmarks',
   '/plugins': 'lives in the SLM console nav (#18240); no user-app nav entry, route kept for deep links',
   '/admin/users': 'Admin-only — surfaced via separate admin entrypoint',
-  '/slm/tools/novnc': "Accessed via Chat tab's noVNC sub-tab (#6414/#6415); standalone URL kept for bookmarks",
+  // /slm/tools/novnc is a redirect to the SLM console since #20605 (pinned in router/__tests__/slmRedirects.test.ts),
+  // so it is no longer a route this allowlist covers.
 }
 
 /** True if route is hidden from nav by an explicit meta flag. */
@@ -208,16 +209,21 @@ describe('header icon cluster (#18240)', () => {
     }
   })
 
-  it('Secrets and Platform admin are advanced; Preferences is not', () => {
+  it('Secrets and Platform admin are advanced; Approvals and Preferences are not', () => {
     const adv = Object.fromEntries(navIconItems.map((i) => [i.labelKey, !!i.adv]))
-    expect(adv).toEqual({ 'nav.secrets': true, 'nav.preferences': false, 'nav.platformAdmin': true })
+    expect(adv).toEqual({
+      'nav.approvals.aria': false,
+      'nav.secrets': true,
+      'nav.preferences': false,
+      'nav.platformAdmin': true,
+    })
   })
 
-  it('Platform admin is external and gated on service management, with no router target', () => {
+  it('Platform admin is external and for admins only, with no router target', () => {
     const admin = navIconItems.find((i) => i.labelKey === 'nav.platformAdmin')!
     expect(admin.to).toBeUndefined()
     expect(typeof admin.href).toBe('function')
-    expect(admin.requires).toBe('serviceManagement')
+    expect(admin.requires).toBe('admin')
   })
 
   it('Plugins is in no user-app registry (it lives in the SLM console nav)', () => {
@@ -236,10 +242,23 @@ describe('header icon cluster (#18240)', () => {
 })
 
 describe('adminMenuItems coverage (#16933)', () => {
-  /** Top-level routes under /admin/ that carry hideInNav: true. */
+  /**
+   * /admin/* routes that carry hideInNav: true, with their full path. The
+   * pre-existing ones are children of the /admin parent (#19833), so the parent's
+   * children are flattened to `/admin/<child>`; routes still top-level count too.
+   */
   function hiddenAdminRoutes(): RouteRecordRaw[] {
-    return topLevelRoutes().filter(
-      (r) => typeof r.path === 'string' && r.path.startsWith('/admin/') && isHiddenByMeta(r),
+    const flat = routes.flatMap((r) =>
+      r.path === '/admin' && r.children
+        ? r.children.map((c) => ({ ...c, path: `/admin/${c.path}` }) as RouteRecordRaw)
+        : [r],
+    )
+    return flat.filter(
+      (r) =>
+        !isRedirectOrCatchAll(r) &&
+        typeof r.path === 'string' &&
+        r.path.startsWith('/admin/') &&
+        isHiddenByMeta(r),
     )
   }
 
