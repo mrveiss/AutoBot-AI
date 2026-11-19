@@ -65,10 +65,14 @@ def parse_tool_args(raw: str) -> dict:
     """Parse tool call args: JSON, then literals, then apostrophe-tolerant dicts. (#4483, #21843)
 
     ``ast.literal_eval`` only accepts Python literal structures, so it is safe.
-    Raises ``json.JSONDecodeError`` when nothing parses.
+    Raises ``json.JSONDecodeError`` when nothing parses to a dict (a non-object JSON value is a failure).
     """
     try:
-        return json.loads(raw, strict=False)  # strict=False: raw newlines/tabs inside strings
+        parsed = json.loads(raw, strict=False)  # strict=False: raw newlines/tabs inside strings
+        if isinstance(parsed, dict):
+            return parsed
+        # `null`, `[]`, `"x"` are valid JSON but not arguments: a caller would call `.get` on them (#21843)
+        first_error = json.JSONDecodeError("tool args must be a JSON object", raw[:_PARSE_ERROR_SNIPPET_CHARS], 0)
     except json.JSONDecodeError as err:
         first_error = err
     except RecursionError:  # a deeply nested blob is unparseable, not a crash

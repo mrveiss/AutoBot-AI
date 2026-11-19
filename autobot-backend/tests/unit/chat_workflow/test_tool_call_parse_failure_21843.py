@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from chat_workflow.tool_call_args import (
     _split_quoted_entries,
     clean_reply_text,
@@ -105,3 +109,12 @@ def test_an_unclosed_fragment_beside_a_valid_call_is_removed_and_the_call_kept()
 def test_a_tag_quoted_inside_a_complete_calls_params_is_not_an_unmatched_opening():
     call = """<TOOL_CALL name="execute_command" params='{"command": "echo <tool_call x>"}'>say hi</TOOL_CALL>"""
     assert tool_call_parse_error(call) is None
+
+
+@pytest.mark.parametrize("raw", ["null", "[]", '"text"', "42", "true"])
+def test_valid_json_that_is_not_an_object_is_a_parse_failure(raw):
+    with pytest.raises(json.JSONDecodeError):
+        parse_tool_args(raw)
+    call = f"""<TOOL_CALL name="browser_evaluate" params='{raw}'>x</TOOL_CALL>"""
+    assert "tool args must be a JSON object" in tool_call_parse_error(call)
+    assert parse_tool_args("{}") == {}
