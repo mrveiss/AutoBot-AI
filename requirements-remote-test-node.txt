@@ -9,6 +9,7 @@ jinja2
 fastapi
 starlette
 sqlalchemy
+greenlet  # SQLAlchemy async engine dependency (#17432)
 httpx
 requests
 structlog
