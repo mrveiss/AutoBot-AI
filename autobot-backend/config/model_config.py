@@ -12,6 +12,7 @@ from typing import Any, Dict, Tuple
 
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config
+from services.config_write_lock import locked_config_write
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class ModelConfigMixin:
         logger.warning("UNIFIED CONFIG: No model configured, using fallback: %s", fallback_model)
         return fallback_model
 
+    @locked_config_write
     def update_llm_model(self, model_name: str) -> None:
         """Update the selected LLM model in config.yaml (GUI integration)"""
         logger.info("UNIFIED CONFIG: Updating selected model to '%s'", model_name)
