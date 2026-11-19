@@ -193,9 +193,9 @@ class EventHistory:
         """Count a user's events of *action* inside the last *window_minutes* (#18844)."""
         cutoff_time = now_utc() - timedelta(minutes=window_minutes)
         count = 0
-        for event in reversed(self.events):
+        for event in self.events:  # analysis order is not timestamp order: an expired row ends nothing
             if parse_utc_iso(event.get("timestamp", utc_timestamp())) < cutoff_time:
-                break
+                continue
             count += event.get("user_id") == user_id and event.get("action") == action
         return count
 

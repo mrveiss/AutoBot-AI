@@ -102,3 +102,18 @@ def test_the_history_counts_only_this_users_agent_actions_in_the_window() -> Non
         {"timestamp": now, "user_id": "alice", "action": "api_request"},
     ]
     assert EventHistory(events=deque(rows)).count_recent_actions("alice", "agent_action", 1) == 3
+
+
+def test_an_expired_row_analysed_late_does_not_end_the_count() -> None:
+    from collections import deque
+    from datetime import timedelta
+
+    from autobot_shared.time_utils import now_utc, utc_timestamp
+    from security.enterprise.threat_detection.models import EventHistory
+
+    old = (now_utc() - timedelta(minutes=30)).isoformat()
+    now = utc_timestamp()
+    rows = [{"timestamp": now, "user_id": "alice", "action": "agent_action"}] * 2
+    rows += [{"timestamp": old, "user_id": "alice", "action": "agent_action"}]  # analysed after the in-window rows
+    rows += [{"timestamp": now, "user_id": "alice", "action": "agent_action"}]
+    assert EventHistory(events=deque(rows)).count_recent_actions("alice", "agent_action", 1) == 3
