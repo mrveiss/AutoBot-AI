@@ -2008,7 +2008,6 @@
         "currentlySharedWith": "Currently shared with",
         "updateAccess": "Update Access"
       },
-      "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "deleteTitle": "Delete",
       "indexingRunning": "Indexing running",
       "removeFromQueue": "Remove from queue",
@@ -3332,6 +3331,7 @@
       "deleteTitle": "Deletion proposed",
       "deleteProposed": "Deletion proposed for approval. Nothing is deleted until an administrator approves it in the Approvals inbox.",
       "deleteNotProposed": "No deletion was proposed and nothing was deleted. Deleting needs an administrator's approval.",
+      "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "verified": "Verified",
       "pendingReview": "Pending review",
       "unverified": "Unverified",
