@@ -40,6 +40,11 @@ UNTRIAGED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking",
         "autobot-slm-frontend",
         "libs/autobot-sdk-ts",
+        # #18890: 5 moderate, all dev-only via @vue/test-utils -> js-beautify
+        # (editorconfig, glob, minimatch): GHSA-g3hv-75wg-m249 (minimatch),
+        # GHSA-3g3m-2fjr-6pw4 (glob). No reachable fix: @vue/test-utils 2.6.0
+        # (latest) still resolves them; npm's only offered "fix" is a downgrade.
+        "libs/autobot-ui",
     }
 )
 
