@@ -1311,7 +1311,7 @@ class EnvironmentAnalyzer:
     ) -> list[HardcodedValue]:
         """Use LLM to filter false positives. Issue #633."""
 
-        ollama_host = config.ollama_host
+        ollama_host = config.vm.ollama
         ollama_port = config.port.ollama
         ollama_url = ollama_generate_url(f"http://{ollama_host}:{ollama_port}")
 
