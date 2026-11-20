@@ -15,6 +15,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 #: The reply when no usable final answer was produced (also the fallback of ``force_final_answer``, #19715).
 NO_ANSWER_FALLBACK = "I ran out of steps before finishing and could not write a final answer. Please try again."
 
@@ -24,11 +28,32 @@ def wants_another_pass(latest: Dict[str, Any], reflection_count: int, max_reflec
     return latest.get("verdict") == "REFINE" and reflection_count < max_reflections
 
 
+def count_turn_not_evaluated(result: Any) -> bool:
+    """Count a turn whose reply the evaluator still could not judge (#21845); True when counted.
+
+    A metrics fault never breaks the turn.
+    """
+    if not getattr(result, "evaluator_failed", False):
+        return False
+    try:
+        from autobot_shared.monitoring.metrics.quality_gates import quality_gate_metrics
+
+        quality_gate_metrics().record_turn_not_evaluated("evaluator_failed")
+        return True
+    except Exception as exc:  # noqa: BLE001 - observability must not break the turn
+        logger.warning("not-evaluated turn not counted (%s: %r)", type(exc).__name__, exc)
+        return False
+
+
 async def evaluate_with_one_retry(evaluator: Any, **kwargs: Any) -> Any:
-    """``evaluator.evaluate(**kwargs)``, asked once more when it could not give a reading."""
+    """``evaluator.evaluate(**kwargs)``, asked once more when it could not give a reading.
+
+    A turn still unjudged after the retry is counted in metrics (``autobot_turn_not_evaluated_total``, #21845).
+    """
     result = await evaluator.evaluate(**kwargs)
     if getattr(result, "evaluator_failed", False):
         result = await evaluator.evaluate(**kwargs)
+    count_turn_not_evaluated(result)
     return result
 
 

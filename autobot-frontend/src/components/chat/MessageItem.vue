@@ -9,8 +9,8 @@
         <div class="message-info">
           <span class="sender-name">
             {{ senderName }}
-            <span v-if="message.sender === 'assistant' && message.metadata?.model" class="model-name">
-              ({{ message.metadata.model }})
+            <span v-if="message.sender === 'assistant' && shownModel(message.metadata)" class="model-name">
+              ({{ shownModel(message.metadata) }})
             </span>
           </span>
           <span class="message-time">{{ formatTime(message.timestamp) }}</span>
@@ -98,9 +98,9 @@
       <!-- Message Metadata -->
       <div v-if="showMetadata" class="message-metadata">
         <div class="metadata-items">
-          <span v-if="message.metadata?.model" class="metadata-item">
+          <span v-if="shownModel(message.metadata)" class="metadata-item">
             <Icon name="robot" />
-            {{ message.metadata.model }}
+            {{ shownModel(message.metadata) }}
           </span>
           <span v-if="message.metadata?.tokens" class="metadata-item">
             <Icon name="dollar-sign" />
@@ -193,6 +193,7 @@ import { useRouter } from 'vue-router'
 import type { ChatMessage } from '@/stores/useChatStore'
 import type { Citation } from '@/types/api'
 import { formatTime } from '@/utils/formatHelpers'
+import { shownModel } from '@/utils/internalMessage'
 
 const { t } = useI18n()
 import MessageStatus from '@/components/ui/MessageStatus.vue'

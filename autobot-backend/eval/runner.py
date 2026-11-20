@@ -126,9 +126,8 @@ class TrajectoryReplayer:
 
         # The evaluator distinguishes "scored badly" from "could not score" via
         # INDETERMINATE, and until now this dropped that and kept only the
-        # number. A failed evaluation scores 0.0 (no reading, #21845), which against
-        # a 0.9 baseline is arithmetically a regression — so an evaluator outage
-        # would be reported as quality drift (#16157).
+        # number. A failed evaluation has no score (None, #21845); a number there would be, against
+        # a 0.9 baseline, arithmetically a regression — an evaluator outage reported as quality drift (#16157).
         indeterminate = reflection.verdict == ReflectionVerdict.INDETERMINATE
         if indeterminate and not detail:
             detail = "evaluator returned no verdict; quality score not measured"
@@ -259,12 +258,12 @@ class TrajectoryReplayer:
         for golden in goldens:
             outcome = await self._replay_bounded(golden, candidate)
             logger.info(
-                "replayed %s [%s] verdict=%s baseline=%.2f candidate=%.2f",
+                "replayed %s [%s] verdict=%s baseline=%.2f candidate=%s",
                 outcome.trajectory_id,
                 outcome.task_class,
                 outcome.classify(),
                 outcome.baseline_score,
-                outcome.candidate_score,
+                "n/a" if outcome.candidate_score is None else f"{outcome.candidate_score:.2f}",
             )
             outcomes.append(outcome)
         return RegressionReport(outcomes=outcomes)

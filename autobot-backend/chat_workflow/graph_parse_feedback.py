@@ -4,23 +4,19 @@
 # Author: mrveiss
 """Parse-failure feedback for the chat graph itself (#21843).
 
-A reply whose TOOL_CALL did not parse ran nothing. The graph tells the model so and asks again, bounded, whether or
-not RLM reflection is on. When the budget is spent the user gets ``NO_ANSWER_FALLBACK``, never the markup and never an
-empty reply. Intermediate replies are stored cleaned, so raw markup is never persisted; the failure stays recorded
-as a ``tool_call_parse`` step in ``execution_history``.
+A reply whose TOOL_CALL did not parse ran nothing. The graph tells the model so and asks again, bounded by
+``limits.INVALID_CALL_LIMIT``, whether or not RLM reflection is on. When the budget is spent the user gets
+``NO_ANSWER_FALLBACK``, never the markup and never an empty reply. Intermediate replies are stored cleaned, so
+raw markup is never persisted; the failure stays recorded as a ``tool_call_parse`` step in ``execution_history``.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
-from autobot_shared.env_utils import env_int
 from chat_workflow import limits
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step
-
-#: Times one turn re-asks the model after an unparsed TOOL_CALL (#21843); the turn is also capped by the step budget.
-PARSE_RETRY_BUDGET: int = env_int("AUTOBOT_CHAT_PARSE_RETRY_BUDGET", default=2)
 
 #: ``ChatState`` keys this module owns; reset at the start of a turn.
 INITIAL_PARSE_STATE: Dict[str, Any] = {"parse_retries": 0, "parse_retry_pending": False}
@@ -51,7 +47,7 @@ def apply_parse_feedback(state: Dict[str, Any], update: Dict[str, Any], stream_c
     if step is None:
         return {**update, "parse_retry_pending": False}
     retries = state.get("parse_retries", 0)
-    if retries >= PARSE_RETRY_BUDGET or iteration >= limits.MAX_CONTINUATION_ITERATIONS:
+    if retries >= limits.INVALID_CALL_LIMIT or iteration >= limits.MAX_CONTINUATION_ITERATIONS:
         return _fallback(state, update, stream_cb)
     responses = [*update["all_llm_responses"][:-1], clean_reply_text(update["llm_response"])]
     history = [*(update.get("execution_history") or state.get("execution_history") or []), step]
