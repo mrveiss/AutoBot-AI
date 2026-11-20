@@ -17,6 +17,12 @@ NC='\033[0m' # No Color
 # Script directory (project root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# shellcheck source=scripts/lib/browser_worker_files.sh
+source "$REPO_ROOT/scripts/lib/browser_worker_files.sh" || {
+    echo "FATAL: $REPO_ROOT/scripts/lib/browser_worker_files.sh could not be sourced (#21852)" >&2
+    exit 1
+}
 
 # Default options
 REPAIR_MODE=false
@@ -339,16 +345,13 @@ check_permissions() {
 check_critical_files() {
     log_info "Checking critical files..."
 
-    # Check playwright-server.js
-    if [ ! -f "playwright-server.js" ]; then
-        if [ -f "autobot-browser-worker/playwright-server.js" ]; then
-            log_warning "playwright-server.js missing from root (exists in autobot-browser-worker/)"
-            ISSUES_FOUND["playwright_server_missing"]=true
-        else
-            log_error "playwright-server.js not found anywhere"
-            ISSUES_FOUND["playwright_server_not_found"]=true
-        fi
-    fi
+    # Every file of the browser worker the manifest ships (#21852); the compose files mount them in place
+    local worker_files f
+    worker_files="$(browser_worker_files "$REPO_ROOT")" || exit 1
+    while IFS= read -r f; do
+        [ -f "$REPO_ROOT/autobot-browser-worker/$f" ] \
+            || { log_warning "autobot-browser-worker/$f is missing"; ISSUES_FOUND["playwright_server_missing"]=true; }
+    done <<< "$worker_files"
 
     # Check config files
     if [ ! -f "config/config.yaml" ] && [ -f "config/config.yaml.template" ]; then
@@ -427,8 +430,12 @@ run_repairs() {
     if [ "${HEALTH_STATUS[autobot-playwright]}" != "healthy" ]; then
         # Special handling for Playwright
         if [ "${ISSUES_FOUND[playwright_server_missing]}" = true ]; then
-            log_info "Copying playwright-server.js to root..."
-            cp autobot-browser-worker/playwright-server.js autobot-browser-worker/session-store.js autobot-browser-worker/element-index.js autobot-browser-worker/search-snippet.js ./
+            log_info "Restoring the missing browser worker files from git..."
+            local worker_files f
+            worker_files="$(browser_worker_files "$REPO_ROOT")" || exit 1
+            while IFS= read -r f; do
+                [ -f "$REPO_ROOT/autobot-browser-worker/$f" ] || git -C "$REPO_ROOT" checkout -- "autobot-browser-worker/$f"
+            done <<< "$worker_files"
         fi
         repair_container "autobot-playwright" "playwright-service" "docker-compose.playwright.yml"
     fi
