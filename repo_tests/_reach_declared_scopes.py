@@ -302,7 +302,6 @@ DECLARED_SCOPES = {
         "autobot-backend/chat_workflow/manager.py",
         "autobot-backend/modern_ai_integration.py",
     ),
-    "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "redis-direct-constructor-scan": (
         "autobot-backend",
         "autobot-slm-backend",
