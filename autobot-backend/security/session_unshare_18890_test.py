@@ -139,7 +139,7 @@ async def test_share_never_expires(env):
 
 
 @pytest.mark.asyncio
-async def test_redis_miss_is_rebuilt_from_the_table(env):
+async def test_access_is_decided_from_the_table_after_redis_is_cleared(env):
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
     redis.sets.clear()

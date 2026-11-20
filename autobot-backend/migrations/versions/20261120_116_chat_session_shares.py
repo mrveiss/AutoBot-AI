@@ -5,7 +5,8 @@
 """Create chat_session_shares, the durable participant set of a shared chat (#18890).
 
 Shares lived only in a Redis set with a 30-day TTL, so a participant lost access silently. This table is
-the system of record; the Redis sets are projections rebuilt from it.
+the only store; the legacy Redis keys ``session:shared_with:*`` and ``user:shared_sessions:*`` are
+adoption input only.
 
 Also creates chat_session_share_adoption, the durable one-shot record that the Redis adoption finished, so a
 lost Redis marker plus restored legacy keys can never re-insert a share that was unshared afterwards.
