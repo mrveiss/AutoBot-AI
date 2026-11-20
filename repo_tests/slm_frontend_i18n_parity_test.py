@@ -188,6 +188,33 @@ def test_every_locale_has_exactly_english_keys(locale: str) -> None:
     )
 
 
+#: Keys that sit as English in a non-English locale on purpose (#21796): English is the only required language (owner,
+#: 2026-10-18), and `fallbackLocale: 'en'` renders the same words for a missing key, so a copy is not a regression.
+#: What a locale must still do is keep the placeholders the English message interpolates; a copy that dropped one
+#: would render a blank where the count goes. `orchestrationView.serviceCount` is the plural pair (`a | b`).
+_ENGLISH_ACCEPTED = ("orchestrationView.serviceCount",)
+_PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def _placeholders(message: object) -> set[str]:
+    return set(_PLACEHOLDER.findall(message)) if isinstance(message, str) else set()
+
+
+@pytest.mark.parametrize("locale", [loc for loc in _EXPECTED_LOCALES if loc != "en"])
+def test_an_accepted_english_fallback_keeps_the_placeholders_of_its_source(locale: str) -> None:
+    english = _flatten(json.loads((repo_root() / _LOCALES / "en.json").read_text(encoding="utf-8")))
+    theirs = _flatten(json.loads((repo_root() / _LOCALES / f"{locale}.json").read_text(encoding="utf-8")))
+    for key in _ENGLISH_ACCEPTED:
+        assert _placeholders(english[key]), f"{key} no longer interpolates in en.json: drop it from the list"
+        assert _placeholders(theirs[key]) == _placeholders(english[key]), (locale, key, theirs[key])
+
+
+def test_the_placeholder_reader_sees_a_count_and_nothing_in_prose() -> None:
+    assert _placeholders("{count} service | {count} services") == {"count"}
+    assert _placeholders("No placeholders here") == set()
+    assert _placeholders(["not a string"]) == set()
+
+
 @pytest.mark.parametrize("locale", _EXPECTED_LOCALES)
 def test_every_locale_declares_its_direction(locale: str) -> None:
     """`getLocaleDir` reads `_meta.dir`; a missing one silently renders LTR."""

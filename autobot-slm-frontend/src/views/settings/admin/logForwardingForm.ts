@@ -78,6 +78,11 @@ export function buildUpdateBody(form: LogForwardingForm): LogForwardingDestinati
   return body
 }
 
+/**
+ * Destination kinds and their labels. Every label is a product or protocol name that reads the same in every
+ * locale (a proper noun), so it is not an i18n key; the hardcoded-literal ratchet does not read this module either
+ * (it scans `.vue` files and `utils/format*.ts`), and `logForwardingForm.destinationTypes.test.ts` pins the set (#21796).
+ */
 export const destinationTypes = [
   { value: 'syslog', label: 'Syslog' },
   { value: 'webhook', label: 'Webhook' },
