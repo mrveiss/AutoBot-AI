@@ -17,6 +17,7 @@ from typing import AsyncGenerator
 
 import aiohttp
 
+from autobot_shared.chat_model_context import num_ctx_for_model
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_chat_url
@@ -117,7 +118,7 @@ class OllamaRequestExecutor:
                 "top_k": self.settings.top_k,
                 "top_p": self.settings.top_p,
                 "repeat_penalty": self.settings.repeat_penalty,
-                "num_ctx": request.metadata.get("num_ctx", self.settings.num_ctx),
+                "num_ctx": request.metadata.get("num_ctx") or num_ctx_for_model(model, self.settings.num_ctx),
             },
         }
         if tools_will_be_sent:

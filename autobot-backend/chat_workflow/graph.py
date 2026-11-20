@@ -57,6 +57,7 @@ from chat_workflow.reflection_gate import (
     wants_another_pass,
 )
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
+from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
     _LOOP_ABORT_THRESHOLD,
     FINAL_ANSWER_INSTRUCTION,
@@ -1033,11 +1034,7 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
 
     session_id = state.get("session_id", "")
     wf_messages = [
-        WorkflowMessage(
-            type=m.get("type", "response"),
-            content=m.get("content", ""),
-            metadata=m.get("metadata", {}),
-        )
+        workflow_message_from_state(m)
         for m in state.get("workflow_messages", [])
         if m.get("content")  # skip empty stream-control markers
     ]
@@ -1089,16 +1086,7 @@ def _build_workflow_messages_from_state(state: ChatState) -> List[Any]:
 
     Extracted from ``persist_conversation`` (#13303 review).
     """
-    from async_chat_workflow import WorkflowMessage
-
-    return [
-        WorkflowMessage(
-            type=msg_dict.get("type", "response"),
-            content=msg_dict.get("content", ""),
-            metadata=msg_dict.get("metadata", {}),
-        )
-        for msg_dict in state.get("workflow_messages", [])
-    ]
+    return [workflow_message_from_state(msg_dict) for msg_dict in state.get("workflow_messages", [])]
 
 
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:

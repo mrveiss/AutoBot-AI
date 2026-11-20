@@ -26,6 +26,8 @@ import unicodedata
 from typing import Any, Dict, Iterable, List
 
 from autobot_shared.text_tokens import word_token_list
+from chat_workflow.thought_markers import split_reasoning_blocks
+from chat_workflow.tool_call_args import clean_reply_text
 
 UNKNOWN_MODEL = "unknown"
 RESPOND_TOOL_TYPE = "respond_tool"
@@ -94,3 +96,23 @@ def stamp_model(entry: Dict[str, Any], model: Any) -> None:
         return
     if not isinstance(metadata.get("model"), str) or not metadata["model"].strip():
         entry["metadata"] = {**metadata, "model": model_or_unknown(model)}
+
+
+def reasoning_entries(
+    chat_mgr: Any, text: str, iteration: int, model: Any, created_at: float | None
+) -> tuple[List[Dict[str, Any]], str]:
+    """(an entry per thought/planning block of the prose, typed as it is live; the answer text) (#21904)."""
+    blocks, answer = split_reasoning_blocks(clean_reply_text(text or ""))
+    entries = [
+        chat_mgr._build_message_dict(
+            "assistant",
+            body,
+            kind,
+            {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model)},
+            None,
+            sources=[],
+            created_at=created_at,
+        )
+        for kind, body in blocks
+    ]
+    return entries, answer

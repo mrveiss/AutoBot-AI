@@ -28,7 +28,13 @@ from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
-from chat_workflow.reply_persistence import is_redundant_prose, later_respond_entries, model_or_unknown, stamp_model
+from chat_workflow.reply_persistence import (
+    is_redundant_prose,
+    later_respond_entries,
+    model_or_unknown,
+    reasoning_entries,
+    stamp_model,
+)
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
@@ -3052,15 +3058,17 @@ before summarizing.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
         model = streamed_prose_model(iter_messages) or selected_model  # #21881: this iteration's own model
 
+        streamed = streamed_prose_identity(iter_messages)  # #21846; the time is when the prose was said (#21904)
+        reasoning, answer_text = reasoning_entries(chat_mgr, response_text, iteration, model, streamed[1])  # #21904
         final_entry = self._build_final_response_entry(
             chat_mgr,
-            response_text,
+            answer_text,
             batch + tool_entries + later_respond_entries(workflow_messages, iteration),
             iteration=iteration,
-            streamed=streamed_prose_identity(iter_messages),  # #21846
+            streamed=streamed,
             model=model,
         )
-        entries = [final_entry] if final_entry else []
+        entries = reasoning + ([final_entry] if final_entry else [])
         entries.extend(tool_entries)
         for entry in tool_entries:
             stamp_model(entry, model)
