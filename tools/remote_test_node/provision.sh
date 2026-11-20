@@ -71,13 +71,13 @@ pkg_available() {
 
 install_base_tools() {
   local need=() tool
-  for tool in flock setsid git; do command -v "$tool" >/dev/null 2>&1 || need+=("$tool"); done
+  for tool in flock setsid git ps; do command -v "$tool" >/dev/null 2>&1 || need+=("$tool"); done
   [ "${#need[@]}" -eq 0 ] && return 0
   info "installing base tools for: ${need[*]}"
   require_pkg_manager
   case "$PKG_MGR" in
-    apt) sudo -n apt-get update -qq; pkg_install util-linux git ;;
-    dnf) pkg_install util-linux git ;;
+    apt) sudo -n apt-get update -qq; pkg_install util-linux git procps ;;
+    dnf) pkg_install util-linux git procps-ng ;;
   esac
 }
 
@@ -152,7 +152,7 @@ install_requirements() {
 # The last word: everything a run needs, checked, so "provisioned" is a claim with evidence.
 verify_node() {
   local tool floor="$1"
-  for tool in flock setsid git timeout; do command -v "$tool" >/dev/null 2>&1 || die "verify: $tool is missing"; done
+  for tool in flock setsid git timeout ps; do command -v "$tool" >/dev/null 2>&1 || die "verify: $tool is missing"; done
   check_floor_or_die "$base/venv/bin/python" "$floor"
   "$base/venv/bin/python" -c 'import pytest, xdist' || die "verify: pytest / xdist are not importable in the venv"
   git --git-dir="$base/mirror.git" rev-parse --verify -q refs/heads/main >/dev/null || die "verify: the mirror has no main"

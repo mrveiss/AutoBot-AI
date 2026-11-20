@@ -75,7 +75,10 @@ take_slot() {
 
 session_lost() {
   # The SSH session is the job's parent; once it vanishes the job is reparented and nobody wants its result.
-  [ "$(ps -o ppid= -p $$ | tr -d ' ')" != "$parent" ]
+  # An empty answer (no ps on the node) means the parent is unknown, which is not a lost session.
+  local now
+  now=$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')
+  [ -n "$now" ] && [ "$now" != "$parent" ]
 }
 
 wait_child() {
