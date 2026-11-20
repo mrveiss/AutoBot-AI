@@ -82,6 +82,22 @@ def test_a_queued_push_prints_while_it_waits_and_names_the_holder(tmp_path: Path
     assert "pre-push" in (tmp_path / "slot-1").read_text(encoding="utf-8")
 
 
+def test_a_wall_clock_step_back_never_reports_a_negative_wait(tmp_path: Path) -> None:
+    """#21905: bash SECONDS follows the wall clock; a step back made the hook log "waited -1s"."""
+    (tmp_path / "slot-1").write_text("4242 pre-push issue-9-x\n", encoding="utf-8")
+    held = os.open(tmp_path / "slot-1", os.O_WRONLY)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    env = {**_env(tmp_path), "AUTOBOT_MACHINE_SLOT_REPORT": "0"}
+    # Every log line rewinds SECONDS by 10: the clock stepping back while the push is queued.
+    script = f'log() {{ echo "$*"; SECONDS=$((SECONDS - 10)); }}; warn() {{ echo "$*"; }}\n{hook_functions()}\nmachine_slot_wait; echo GOT\n'
+    waiter = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, text=True)
+    time.sleep(1.0)
+    os.close(held)
+    out, _ = waiter.communicate(timeout=30)
+    assert "waited" in out and "GOT" in out
+    assert not re.search(r"(waited|queued) -\d", out), out
+
+
 def test_the_hook_and_python_build_the_same_default_path(tmp_path: Path) -> None:
     env = {k: v for k, v in os.environ.items() if k not in _ENV_DROP + ("AUTOBOT_MACHINE_SLOT_DIR",)}
     env.update(XDG_RUNTIME_DIR=str(tmp_path), PATH=os.environ["PATH"])
