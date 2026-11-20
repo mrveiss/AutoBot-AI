@@ -31,9 +31,11 @@ module enforces, is the *enabler*: a hand-rolled comment skip (a call testing
 a string against a comment marker). A guard that never strips at all, and so
 is satisfied by its own comment, is invisible here --
 `test_a_plain_substring_search_is_the_recorded_blind_spot` pins that limit so
-it is read, not implied. A prefix tuple is resolved when it is a module-level
-`NAME = (...)` constant; one built in a function, imported or concatenated is
-not followed (an AST rule cannot evaluate it), and is a second recorded limit.
+it is read, not implied. A prefix is resolved when it is a literal, a
+module-level `NAME = ...` or annotated `NAME: T = ...` constant (string or
+tuple/list/set), optionally starred or wrapped in `tuple(...)`; one built in a
+function, imported or concatenated is not followed (an AST rule cannot
+evaluate it), and is a second recorded limit.
 """
 
 from __future__ import annotations
@@ -129,13 +131,28 @@ def _asserted_ids(tree: ast.AST) -> set[int]:
     return asserted
 
 
-def _module_tuples(tree: ast.AST) -> dict[str, ast.Tuple]:
-    """Module-level `NAME = (<tuple>)` constants, so `startswith(NAME)` can be resolved."""
-    found: dict[str, ast.Tuple] = {}
+def _module_constants(tree: ast.AST) -> dict[str, ast.expr]:
+    """Module-level `NAME = <literal>` / `NAME: T = <literal>` constants (string, tuple, list, set)."""
+    found: dict[str, ast.expr] = {}
     for node in getattr(tree, "body", []):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Tuple):
-            found.update({t.id: node.value for t in node.targets if isinstance(t, ast.Name)})
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if isinstance(value, (ast.Constant, ast.Tuple, ast.List, ast.Set)):
+            found.update({t.id: value for t in targets if isinstance(t, ast.Name)})
     return found
+
+
+def _resolve_prefixes(arg: ast.expr, consts: dict[str, ast.expr]) -> ast.expr:
+    """Unwrap `*P` and `tuple(P)`, then follow a module constant name to its literal."""
+    if isinstance(arg, ast.Starred):
+        arg = arg.value
+    if isinstance(arg, ast.Call) and isinstance(arg.func, ast.Name) and arg.func.id == "tuple" and len(arg.args) == 1:
+        arg = arg.args[0]
+    return consts.get(arg.id, arg) if isinstance(arg, ast.Name) else arg
 
 
 def _scopes(tree: ast.AST) -> list[ast.AST]:
@@ -153,18 +170,20 @@ def _scope_nodes(scope: ast.AST):
             stack.extend(ast.iter_child_nodes(node))
 
 
-def _is_marker_check(node: ast.AST, tuples: dict[str, ast.Tuple], path_vars: set[str]) -> bool:
+def _is_marker_check(
+    node: ast.AST, consts: dict[str, ast.expr], path_vars: set[str], content_vars: set[str] = frozenset()
+) -> bool:
     """True if `node` is a `.startswith(...)` call testing against a comment marker."""
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return False
     if node.func.attr != "startswith":
         return False
     for arg in node.args:
-        if isinstance(arg, ast.Constant) and arg.value in _MARKERS:
+        resolved = _resolve_prefixes(arg, consts)
+        if isinstance(resolved, ast.Constant) and resolved.value in _MARKERS:
             return True
-        resolved = tuples.get(arg.id) if isinstance(arg, ast.Name) else arg
-        if isinstance(resolved, ast.Tuple) and _tuple_has_marker(resolved):
-            if not _is_url_or_path(node.func.value, path_vars):
+        if isinstance(resolved, (ast.Tuple, ast.List, ast.Set)) and _tuple_has_marker(resolved):
+            if not _is_url_or_path(node.func.value, path_vars, content_vars):
                 return True
     return False
 
@@ -177,10 +196,13 @@ def _strips_comments_by_hand(tree: ast.AST) -> bool:
     comment naming the idiom -- as this module's own do -- cannot satisfy it.
     """
     asserted = _asserted_ids(tree)
-    tuples = _module_tuples(tree)
+    consts = _module_constants(tree)
     for scope in _scopes(tree):
-        path_vars = _path_valued_names(scope)
-        if any(id(n) not in asserted and _is_marker_check(n, tuples, path_vars) for n in _scope_nodes(scope)):
+        good, bad, content_vars = _bindings(scope)
+        path_vars = good - bad
+        if any(
+            id(n) not in asserted and _is_marker_check(n, consts, path_vars, content_vars) for n in _scope_nodes(scope)
+        ):
             return True
     return False
 
@@ -199,6 +221,8 @@ _CONTENT_METHODS = frozenset(
 #: Constructors and attributes whose result is a URL or a path.
 _URL_PATH_CALLS = frozenset({"Path", "PurePath", "PurePosixPath", "PureWindowsPath", "urlparse", "urlsplit"})
 _URL_PATH_ATTRS = frozenset({"path", "url"})
+#: Attributes that hold CONTENT (`resp.text`, `node.body`): a path-named root beneath one is not the value.
+_CONTENT_ATTRS = frozenset({"text", "content", "body"})
 
 
 def _name_is_url_or_path(name: str) -> bool:
@@ -208,13 +232,19 @@ def _name_is_url_or_path(name: str) -> bool:
     return bool(tokens & _URL_PATH_HINTS) and not tokens & _CONTENT_TOKENS
 
 
-def _is_path_valued(value: ast.AST, path_vars: frozenset[str] | set[str] = frozenset()) -> bool:
+def _name_is_path(name: str, path_vars: set[str], content_vars: set[str]) -> bool:
+    """A name proven path-valued here, or path-named and not bound to content in this scope."""
+    return name in path_vars or (name not in content_vars and _name_is_url_or_path(name))
+
+
+def _is_path_valued(value: ast.AST, path_vars: set[str] = frozenset(), content_vars: set[str] = frozenset()) -> bool:
     """True if the expression's own ROOT value is a URL or path, not something derived from content.
 
     Peels the chain from the outside in. Reaching a `Path(...)`/`urlparse(...)` call, a
     `.path`/`.url` attribute or a path-named/path-valued name proves it; passing through a content
     method (`read_text`, `splitlines`, `strip`...) first means the receiver is content.
-    `Path(p).as_posix()` is not a content method, so it stays a path.
+    `Path(p).as_posix()` is not a content method, so it stays a path. A name bound in this
+    function to provable content (`path = p.read_text()`) is content whatever it is called.
     """
     node = value
     while True:
@@ -227,24 +257,50 @@ def _is_path_valued(value: ast.AST, path_vars: frozenset[str] | set[str] = froze
                 return False
             node = fn.value
         elif isinstance(node, ast.Attribute):
+            if node.attr in _CONTENT_ATTRS:
+                return False
             if node.attr in _URL_PATH_ATTRS or _name_is_url_or_path(node.attr):
                 return True
             node = node.value
         elif isinstance(node, ast.Subscript):
             node = node.value
         else:
-            return isinstance(node, ast.Name) and (node.id in path_vars or _name_is_url_or_path(node.id))
+            return isinstance(node, ast.Name) and _name_is_path(node.id, path_vars, content_vars)
 
 
-def _path_valued_names(scope: ast.AST) -> set[str]:
-    """Names in ONE function scope whose every binding is a provable URL or path value.
+def _param_names(scope: ast.AST) -> set[str]:
+    """Parameters of a function scope (and everything nested), or of the lambdas in a module scope."""
+    roots = [scope] if _is_function(scope) else [n for n in _scope_nodes(scope) if isinstance(n, ast.Lambda)]
+    return {a.arg for root in roots for a in ast.walk(root) if isinstance(a, ast.arg)}
+
+
+def _is_content_valued(value: ast.AST) -> bool:
+    """True if the expression provably passed through a content method or `.text`-style attribute."""
+    node = value
+    while isinstance(node, (ast.Call, ast.Attribute, ast.Subscript)):
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Attribute):
+                return False
+            if node.func.attr in _CONTENT_METHODS:
+                return True
+            node = node.func.value
+        elif isinstance(node, ast.Attribute) and node.attr in _CONTENT_ATTRS:
+            return True
+        else:
+            node = node.value
+    return False
+
+
+def _bindings(scope: ast.AST) -> tuple[set[str], set[str], set[str]]:
+    """(provably path-valued, unproven, bound-to-content) names bound in ONE scope.
 
     A name that is also a for-target, part of a tuple unpacking, a walrus, an augmented
-    assignment, a `with`/comprehension target or a parameter has a binding that is not proven, so
-    it is not path-valued.
+    assignment, a `with`/comprehension target or a parameter (lambda parameters included, at
+    module scope too) has a binding that is not proven, so it is not path-valued.
     """
     good: set[str] = set()
-    bad: set[str] = {a.arg for a in ast.walk(scope) if isinstance(a, ast.arg)} if _is_function(scope) else set()
+    content: set[str] = set()
+    bad: set[str] = _param_names(scope)
     simple: set[int] = set()
     for node in _scope_nodes(scope):
         targets = (
@@ -255,24 +311,26 @@ def _path_valued_names(scope: ast.AST) -> set[str]:
             if isinstance(t, ast.Name) and value is not None:
                 simple.add(id(t))
                 (good if _is_path_valued(value) else bad).add(t.id)
+                if _is_content_valued(value):
+                    content.add(t.id)
     bad.update(
         n.id
         for n in _scope_nodes(scope)
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store) and id(n) not in simple
     )
-    return good - bad
+    return good, bad, content
 
 
 def _is_function(scope: ast.AST) -> bool:
     return isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef))
 
 
-def _is_url_or_path(receiver: ast.AST, path_vars: set[str]) -> bool:
+def _is_url_or_path(receiver: ast.AST, path_vars: set[str], content_vars: set[str] = frozenset()) -> bool:
     """True if the startswith receiver's own root value is provably a URL or path."""
-    return _is_path_valued(receiver, path_vars)
+    return _is_path_valued(receiver, path_vars, content_vars)
 
 
-def _tuple_has_marker(arg: ast.Tuple) -> bool:
+def _tuple_has_marker(arg: ast.Tuple | ast.List | ast.Set) -> bool:
     """A tuple of prefixes that includes a comment marker (`#`, `//`, `/*`...).
 
     The default is unsafe-to-ignore: sibling prefixes such as `http` or `/api` do not exempt
@@ -414,6 +472,31 @@ def test_the_pending_list_only_shrinks() -> None:
             "a module tuple constant on a url receiver",
             'PREFIXES = ("#", "//")\nif url.startswith(PREFIXES):\n    pass\n',
             False,
+        ),
+        ("a module string constant", 'COMMENT = "#"\nif line.startswith(COMMENT):\n    pass\n', True),
+        ("an annotated module string constant", 'C: str = "//"\nif line.startswith(C):\n    pass\n', True),
+        (
+            "an annotated module tuple constant",
+            'P: tuple[str, ...] = ("#",)\nif line.startswith(P):\n    pass\n',
+            True,
+        ),
+        ("a starred module tuple", 'P = ("#", "//")\nif line.startswith(*P):\n    pass\n', True),
+        ("a tuple() wrapped list", 'if line.startswith(tuple(["#", "//"])):\n    pass\n', True),
+        ("a string constant on a url receiver", 'C = "//"\nif url.startswith((C, "x")):\n    pass\n', False),
+        ("an annotated tuple on a url receiver", 'P: tuple = ("#",)\nif url.startswith(P):\n    pass\n', False),
+        (
+            "a path-named name bound to file content",
+            'path = p.read_text()\nif path.startswith(("#", "//")):\n    pass\n',
+            True,
+        ),
+        ("a path-named parameter stays a path", 'def f(path):\n    return path.startswith(("#", "//"))\n', False),
+        ("a path under a .text attribute", 'if self.path.text.startswith(("#", "//")):\n    pass\n', True),
+        ("a path under a .content attribute", 'if self.path.content.startswith(("#",)):\n    pass\n', True),
+        ("a path under a .body attribute", 'if self.path.body.startswith(("#",)):\n    pass\n', True),
+        (
+            "a lambda parameter shadowing a path-valued name",
+            'q = req.path\nf = lambda q: q.startswith(("//", "#"))\n',
+            True,
         ),
         ("startswith on something else", 'if name.startswith("test_"):\n    pass\n', False),
         ("a comment naming the idiom", '# we used to call line.startswith("#") here\nx = 1\n', False),
