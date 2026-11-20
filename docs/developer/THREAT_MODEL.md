@@ -35,7 +35,7 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:46) the one owner stamper · `validate_session_ownership` (:735) the one read-side gate · `validate_ownership` (:580).
+— `build_owner_metadata` (:46) the one owner stamper · `validate_session_ownership` (:732) the one read-side gate · `validate_ownership` (:580).
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**

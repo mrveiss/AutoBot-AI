@@ -692,25 +692,22 @@ class SessionOwnershipValidator:
         return removed
 
     async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:
-        """Check if a session is shared with a user; a Redis miss is rebuilt from the table (#689, #18890)."""
+        """Is the session shared with the user? Decided from the table; Redis is never consulted (#18890).
+
+        Legacy Redis-only shares are adopted first, so they still grant access. Fails closed.
+        """
         try:
-            shared_key = self._get_shared_session_key(session_id)
-            if await self.redis.sismember(shared_key, user_id):
-                return True
-            if await self.redis.exists(shared_key):
-                return False
-            return user_id in await session_shares.rebuild_session_projection(self.redis, session_id)
+            await session_shares.ensure_adopted(self.redis)
+            return await session_shares.durable_is_participant(session_id, user_id)
         except Exception as e:
             logger.error("Failed to check shared status: %s", e)
             return False
 
     async def get_shared_sessions(self, user_id: str) -> list[str]:
-        """Get all sessions shared with a user; a Redis miss is rebuilt from the table (#689, #18890)."""
+        """Every session shared with a user, from the table after adopting legacy shares (#689, #18890)."""
         try:
-            sessions = await self.redis.smembers(self._get_user_shared_sessions_key(user_id))
-            if not sessions:
-                return await session_shares.rebuild_user_projection(self.redis, user_id)
-            return [s.decode() if isinstance(s, bytes) else s for s in sessions]
+            await session_shares.ensure_adopted(self.redis)
+            return await session_shares.durable_sessions_for(user_id)
         except Exception as e:
             logger.error("Failed to get shared sessions: %s", e)
             return []

@@ -494,3 +494,40 @@ async def test_audit_records_the_uuid_and_client_ip_with_the_username_in_metadat
     assert kwargs["user_id"] == "u-uuid-1"
     assert kwargs["ip_address"] == "203.0.113.7"
     assert kwargs["metadata"]["username"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_a_user_in_redis_but_absent_from_the_table_is_denied(env):
+    """Race (share landing after an unshare) and a failed Redis drop both leave exactly this state."""
+    validator, redis, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+    await session_shares.durable_remove(SESSION_ID, "bob")  # the row is gone; the projection is not
+    assert await redis.sismember("session:shared_with:" + SESSION_ID, "bob")
+
+    assert not await validator.is_shared_with_user(SESSION_ID, "bob")
+    assert SESSION_ID not in await validator.get_shared_sessions("bob")
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_redis_only_share_grants_access_before_adoption_has_run(env):
+    validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"legacy"}
+    redis.sets["user:shared_sessions:legacy"] = {SESSION_ID}
+
+    assert await validator.is_shared_with_user(SESSION_ID, "legacy")
+    assert await validator.get_shared_sessions("legacy") == [SESSION_ID]
+
+
+@pytest.mark.asyncio
+async def test_an_unshare_whose_redis_drop_fails_still_revokes_access(env, monkeypatch):
+    validator, redis, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+
+    async def boom(*_a):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(session_shares, "drop_projection", boom)
+    assert await validator.unshare_session(SESSION_ID, "bob", ACTOR) is True
+
+    assert await redis.sismember("session:shared_with:" + SESSION_ID, "bob")  # stale entry, grants nothing
+    assert not await validator.is_shared_with_user(SESSION_ID, "bob")

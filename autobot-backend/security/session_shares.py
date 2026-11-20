@@ -109,6 +109,15 @@ async def durable_participants(session_id: str) -> list[str]:
         return list(rows.scalars().all())
 
 
+async def durable_is_participant(session_id: str, user_id: str) -> bool:
+    """Primary-key lookup in the system of record: the ONLY source of an access decision."""
+    async with _factory()() as db:
+        row = await db.execute(
+            select(SessionShare.user_id).where(SessionShare.session_id == session_id, SessionShare.user_id == user_id)
+        )
+        return row.first() is not None
+
+
 async def durable_sessions_for(user_id: str) -> list[str]:
     """Every chat shared with *user_id*, from the system of record."""
     async with _factory()() as db:
@@ -176,12 +185,15 @@ async def remove_share(redis, session_id: str, user_id: str) -> bool:
 
     If the table write raises, nothing changed anywhere and the caller is told the share was NOT removed;
     clearing Redis first would let the next read-miss rebuild restore the participant from the surviving row.
-    Once the row is gone no rebuild can restore the participant, and a rebuild that was already in flight
-    reconciles itself against the table (the re-read at the end of ``rebuild_*_projection``).
+    Access is decided from the table (``durable_is_participant``), never from the Redis sets, so a projection
+    entry that outlives the row (a failed drop, a share racing this unshare) grants nothing.
     """
     await ensure_adopted(redis)
     removed = await durable_remove(session_id, user_id)
-    await drop_projection(redis, session_id, user_id)
+    try:
+        await drop_projection(redis, session_id, user_id)
+    except Exception as e:  # access is already revoked: reads are decided from the table, not from Redis
+        logger.warning("Unshare left a stale share projection entry (reconciled on the next share/unshare): %s", type(e).__name__)
     return removed
 
 
