@@ -317,7 +317,7 @@ async def _audit_cancelled(approval: "Approval", record: dict, self_approval: bo
     snapshot = {**record, "redis": [dict(s) for s in record["redis"]], "chroma": [dict(s) for s in record["chroma"]]}
     note = "cancelled, in progress: the worker was told to stop and may still finish the batch in flight"
     details = _outcome_details(approval, self_approval, snapshot, error=type(exc).__name__, phase="failure", note=note)
-    await audit_failure(lambda result, d: _audit(approval, result, d), approval, details, "knowledge wipe")
+    await audit_failure(lambda result, d: _audit(approval, result, d), approval, details, "knowledge wipe", logger)
 
 
 def _summary(record: dict) -> str:
@@ -346,6 +346,7 @@ async def execute_kb_wipe_action(approval: "Approval", session: "AsyncSession") 
         delete=lambda: _wipe(approval, scope, self_approval, record),
         failure=failed,
         completion=lambda _: _outcome_details(approval, self_approval, record),
+        log=logger,
     )
     body = _summary(record) + (" (self-approved by the only admin)." if self_approval else ".")
     session.add(ApprovalComment(approval_id=approval.id, author="system", author_type="system", body=body))

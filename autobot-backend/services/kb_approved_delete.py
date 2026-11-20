@@ -50,14 +50,16 @@ def require_approved(approval: "Approval", action: str, what: str) -> None:
 async def pending_approval(
     session: "AsyncSession", action: str, same_scope: Callable[[dict], bool] | None = None
 ) -> "Approval | None":
-    """The pending proposal of *action* (row-locked), the first one *same_scope* accepts when it is given."""
+    """The pending proposal of *action* (row-locked); with *same_scope*, the first one it accepts."""
     query = (
         select(Approval)
         .where(Approval.status == ApprovalStatus.PENDING.value, Approval.context["action"].astext == action)
         .with_for_update()
     )
-    pending = (await session.execute(query)).scalars().all()
-    return next((a for a in pending if same_scope is None or same_scope(a.context or {})), None)
+    scalars = (await session.execute(query)).scalars()
+    if same_scope is None:
+        return scalars.first()
+    return next((a for a in scalars.all() if same_scope(a.context or {})), None)
 
 
 async def write_audit(
@@ -78,15 +80,21 @@ async def write_audit(
     )
 
 
-async def audit_failure(audit: Audit, approval: "Approval", details: dict, label: str) -> None:
-    """Record the failed outcome. Never raises, so the delete's own error stays the one that propagates."""
+async def audit_failure(audit: Audit, approval: "Approval", details: dict, label: str, log: Any = logger) -> None:
+    """Record the failed outcome. Never raises, so the delete's own error stays the one that propagates.
+
+    A lost entry (not written, or raising) is logged ONCE on *log* (the action's own logger) at ERROR, naming the
+    approval id and the reason as a type only, never the audit error's message; a raising audit adds its traceback.
+    """
+    outcome, raised = "returned False", False
     try:
         if await audit("failed", details):
             return
-    except Exception:  # noqa: BLE001 -- logged below with its traceback; it must not replace the original error
-        logger.error("%s: the failure audit for approval %s raised", label, approval.id, exc_info=True)
-        return
-    logger.error("%s: the failure audit entry for approval %s was not written", label, approval.id)
+    except Exception as audit_exc:  # noqa: BLE001 -- logged below; it must not replace the original error
+        outcome, raised = type(audit_exc).__name__, True
+    log.error(
+        "%s: the failure audit entry for approval %s was not written (%s)", label, approval.id, outcome, exc_info=raised
+    )
 
 
 async def refuse_more_than_approved(
@@ -118,6 +126,7 @@ async def run_audited_delete(
     delete: Callable[[], Awaitable[Any]],
     failure: Callable[[BaseException], dict],
     completion: Callable[[Any], dict],
+    log: Any = logger,
 ) -> Any:
     """Intent entry, then the delete, then the outcome entry; returns what *delete* returned."""
     if not await audit("attempted", {**intent, "phase": "intent"}):
@@ -125,7 +134,7 @@ async def run_audited_delete(
     try:
         done = await delete()
     except Exception as exc:
-        await audit_failure(audit, approval, {**failure(exc), "phase": "failure"}, what)
+        await audit_failure(audit, approval, {**failure(exc), "phase": "failure"}, what, log)
         raise
     if not await audit("success", {**completion(done), "phase": "completion"}):
         raise RuntimeError(f"{what} for approval {approval.id} ran but its audit record could not be written")

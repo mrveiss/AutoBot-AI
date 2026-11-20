@@ -200,6 +200,7 @@ async def _refuse_then_delete(approval: "Approval", self_approval: bool, keys: l
         delete=lambda: _delete_all(keys, deleted),
         failure=lambda exc: {"deleted": deleted[0], "error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
+        log=logger,
     )
 
 

@@ -292,6 +292,7 @@ async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession
         delete=lambda: _run_delete(op, kb, selector, _approved_scope(approval)),
         failure=lambda exc: {"error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
+        log=logger,
     )
     suffix = " (self-approved by the only admin)." if self_approval else "."
     body = f"Ran {op.operation}: {deleted} facts deleted{suffix}"
