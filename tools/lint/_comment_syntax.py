@@ -293,11 +293,16 @@ def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     return _BlockScan(text, line_comments).run()
 
 
-#: The markup of a `.vue` component: the root ``<template>`` element (its body is the one group), or an HTML comment
-#: that opens at a line start -- the licence header above the template. Both open and close at a line start, as an
-#: SFC's root blocks do (a slot's ``<template #x>`` is indented). Everything else is script, style or a bare snippet.
+#: The top level of a `.vue` component, read left to right so that what sits inside a block is never taken for a block
+#: of its own. A root ``<script>``/``<style>`` element is consumed whole (``code``): a ``<template>`` or ``<!--`` at a
+#: line start inside a template literal in script is script text. Markup is the root ``<template>`` body (``one``
+#: when it closes on its opening line, else ``body`` up to a line-start ``</template>``, as a slot's indented
+#: ``<template #x>`` does not close it) or an HTML comment opened at a line start, the licence header above it.
 _SFC_MARKUP = re.compile(
-    r"^<template(?=[\s>/])[^>]*>(.*?)^</template\s*>|^<!--.*?-->", re.DOTALL | re.IGNORECASE | re.MULTILINE
+    r"(?P<code>^<(?P<tag>script|style)(?=[\s>/])[^>]*>.*?</(?P=tag)\s*>)"
+    r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$|(?P<body>.*?)^</template\s*>)"
+    r"|(?P<comment>^<!--.*?-->)",
+    re.DOTALL | re.IGNORECASE | re.MULTILINE,
 )
 
 
@@ -311,7 +316,12 @@ class _FileScan(NamedTuple):
 
 def _markup_spans(text: str) -> list[tuple[int, int]]:
     """The ``(start, end)`` of each markup span of a `.vue` text (see ``_SFC_MARKUP``): a template's body, a comment."""
-    return [(m.start(1), m.end(1)) if m.group(1) is not None else m.span() for m in _SFC_MARKUP.finditer(text)]
+    spans = []
+    for found in _SFC_MARKUP.finditer(text):
+        group = next((g for g in ("one", "body", "comment") if found.group(g) is not None), None)
+        if group:  # a script or style block is code: no span
+            spans.append(found.span(group))
+    return spans
 
 
 def _scan_regions(text: str) -> _FileScan:

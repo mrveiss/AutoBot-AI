@@ -372,6 +372,22 @@ def test_a_block_comment_header_above_a_vue_component_is_still_stripped() -> Non
     assert "gone_header" not in text and "<p>kept</p>" in text, text
 
 
+def test_a_compact_one_line_root_template_is_markup_too() -> None:
+    """`<template>...</template>` on one line has a `/api/errors/*` in it: no block comment, the rest stays (#21571)."""
+    source = "<template><p>Backed by /api/errors/*</p></template>\n<script>\nconst a = 1 // gone\n</script>\n"
+    text = code_text(source, name="x.vue", strip_trailing=True)
+    assert "/api/errors/*" in text and "const a = 1" in text and "gone" not in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
+def test_template_tags_inside_a_script_literal_are_script_text() -> None:
+    """A line-start `<template>` in a backtick literal in script is not the root template (#21571)."""
+    source = "<script>\nconst html = `\n<template>\n<p>x</p>\n</template>\n` /* gone */\n</script>\n"
+    text = code_text(source, name="x.vue")
+    assert "gone" not in text and "<p>x</p>" in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
 def test_html_comments_in_a_vue_template_are_left_for_the_explicit_stripper() -> None:
     """The recorded choice (#21571): `code_lines` keeps `<!-- -->`; `strip_html_comments` is the call that removes it."""
     source = "<template>\n<!-- kept_note -->\n<p>x</p>\n</template>\n"

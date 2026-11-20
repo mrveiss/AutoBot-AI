@@ -79,14 +79,16 @@ export function buildUpdateBody(form: LogForwardingForm): LogForwardingDestinati
 }
 
 /**
- * Destination kinds and their labels. Every label is a product or protocol name that reads the same in every
- * locale (a proper noun), so it is not an i18n key; the hardcoded-literal ratchet does not read this module either
- * (it scans `.vue` files and `utils/format*.ts`), and `logForwardingForm.destinationTypes.test.ts` pins the set (#21796).
+ * Destination kinds. A product or protocol name (Syslog, Webhook, Elasticsearch, Loki, Seq) reads the same in every
+ * locale, so it is a literal `label`; "File" is a plain word, so it carries an i18n `labelKey` instead (#21796). The
+ * hardcoded-literal ratchet does not read this module (it scans `.vue` files and `utils/format*.ts`);
+ * `logForwardingForm.destinationTypes.test.ts` pins both halves. `codeSyncView.file` is the existing English
+ * "File" key; a key of its own waits on the open PR that holds every SLM locale file.
  */
-export const destinationTypes = [
+export const destinationTypes: Array<{ value: string; label?: string; labelKey?: string }> = [
   { value: 'syslog', label: 'Syslog' },
   { value: 'webhook', label: 'Webhook' },
-  { value: 'file', label: 'File' },
+  { value: 'file', labelKey: 'codeSyncView.file' },
   { value: 'elasticsearch', label: 'Elasticsearch' },
   { value: 'loki', label: 'Loki' },
   { value: 'seq', label: 'Seq' },
