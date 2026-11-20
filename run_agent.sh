@@ -216,10 +216,14 @@ if [ ! -f "$PROJECT_ROOT/playwright-server.js" ]; then
     if [ -f "$PROJECT_ROOT/autobot-browser-worker/playwright-server.js" ]; then
         echo "📋 Copying playwright-server.js from autobot-browser-worker..."
         # shellcheck source=scripts/lib/browser_worker_files.sh
-        source "$PROJECT_ROOT/scripts/lib/browser_worker_files.sh"
-        for f in $(browser_worker_files "$PROJECT_ROOT"); do
+        source "$PROJECT_ROOT/scripts/lib/browser_worker_files.sh" || {
+            echo "FATAL: $PROJECT_ROOT/scripts/lib/browser_worker_files.sh could not be sourced" >&2
+            exit 1
+        }
+        BROWSER_WORKER_FILES="$(browser_worker_files "$PROJECT_ROOT")" || exit 1
+        while IFS= read -r f; do
             cp "$PROJECT_ROOT/autobot-browser-worker/$f" "$PROJECT_ROOT/"
-        done
+        done <<< "$BROWSER_WORKER_FILES"
     else
         echo "❌ playwright-server.js not found. Playwright container cannot start."
         echo "   Please ensure playwright-server.js exists in the project root."

@@ -25,11 +25,14 @@ browser_worker_files() {
         echo "browser_worker_files: $manifest not found" >&2
         return 1
     }
-    files="$(awk '
+    files="$(awk -v q="'" '
         /^deploy:/ { in_deploy = 1; next }
         in_deploy && /^[^ #]/ { in_deploy = 0 }
         in_deploy && /^  files:/ { in_files = 1; next }
-        in_files && /^    - / { sub(/^    - /, ""); sub(/[ \t]*(#.*)?$/, ""); print; next }
+        in_files && /^    - / {
+            sub(/^    - /, ""); sub(/\r$/, ""); sub(/[ \t]+#.*$/, ""); sub(/[ \t]+$/, "")
+            gsub("^[\"" q "]|[\"" q "]$", ""); print; next
+        }
         in_files && /^[ \t]*(#.*)?$/ { next }
         in_files { in_files = 0 }
     ' "$manifest")"

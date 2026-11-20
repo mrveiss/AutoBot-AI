@@ -15,6 +15,10 @@ tool failed there (seen in review of #21749). The list now lives once, in
 * a local ``require('./x')`` in the worker, or a worker module at all, that the manifest does
   not list fails here.
 
+The JS detector sees ``require('./x')`` / ``require("../x")`` only: no ``import``, no template-string
+or computed ``require``, no ``require.resolve``. The shell check wants a real call or assignment of
+``browser_worker_files``, not a mention in a comment.
+
 The guard parses JavaScript and shell with regexes, not Python, so ``_parse_cache`` has nothing
 to memoise here.
 """
@@ -45,6 +49,7 @@ _SHELL = (
     "autobot-infrastructure/shared/scripts/setup/setup_repair.sh",
     "autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh",
 )
+_READS_MANIFEST = re.compile(r"^[^#\n]*(?:\$\(|\b[A-Za-z_]+=\"\$\()\s*browser_worker_files\b", re.MULTILINE)
 _REQUIRE = re.compile(r"""\brequire\(\s*['"](\.{1,2}/[^'"]+)['"]\s*\)""")
 
 
@@ -96,7 +101,7 @@ def _shell_drift(text: str, shipped: list[str]) -> list[str]:
     The entry file's name is allowed (log lines, existence checks); every other shipped module
     named literally is the hand-copied list returning.
     """
-    problems = [] if "browser_worker_files" in text else ["does not read the manifest through browser_worker_files"]
+    problems = [] if _READS_MANIFEST.search(text) else ["does not read the manifest through browser_worker_files"]
     return problems + [f"restates {f}" for f in shipped if f != _ENTRY and f in text]
 
 
@@ -150,7 +155,12 @@ def test_the_compose_detector_finds_a_missing_mount(label, text, expected) -> No
             "for f in playwright-server.js session-store.js; do scp $f; done",
             ["does not read the manifest through browser_worker_files", "restates session-store.js"],
         ),
-        ("the entry named in a message", 'browser_worker_files "$R"; echo playwright-server.js', []),
+        ("the entry named in a message", 'F="$(browser_worker_files "$R")"; echo playwright-server.js', []),
+        (
+            "only a comment mentions the reader",
+            "# use browser_worker_files someday\ncp session-store.js .",
+            ["does not read the manifest through browser_worker_files", "restates session-store.js"],
+        ),
     ],
 )
 def test_the_shell_detector_finds_a_restated_list(label, text, expected) -> None:
@@ -199,6 +209,22 @@ def test_the_shell_reader_returns_exactly_the_manifest_list() -> None:
     root = repo_root()
     out = subprocess.run(["bash", str(root / _HELPER), str(root)], capture_output=True, text=True, check=True)
     assert out.stdout.split() == _manifest_files(_read(_MANIFEST))
+
+
+def test_the_shell_reader_defaults_to_its_own_checkout() -> None:
+    out = subprocess.run(["bash", str(repo_root() / _HELPER)], capture_output=True, text=True, check=True)
+    assert out.stdout.split() == _manifest_files(_read(_MANIFEST))
+
+
+def test_the_shell_reader_strips_quotes_comments_and_carriage_returns(tmp_path) -> None:
+    target = tmp_path / "autobot-infrastructure" / "autobot-browser-worker"
+    target.mkdir(parents=True)
+    body = "deploy:\r\n  files:\r\n    - \"a.js\"  # why\r\n    - 'b.js'\r\n    - c.js\r\nnext: 1\r\n"
+    (target / "manifest.yml").write_bytes(body.encode("utf-8"))
+    out = subprocess.run(
+        ["bash", str(repo_root() / _HELPER), str(tmp_path)], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.split("\n")[:-1] == ["a.js", "b.js", "c.js"]
 
 
 def test_the_shell_reader_refuses_a_manifest_that_lists_nothing(tmp_path) -> None:

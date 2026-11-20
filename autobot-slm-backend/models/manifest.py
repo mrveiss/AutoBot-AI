@@ -76,7 +76,10 @@ class ManifestDeploy(BaseModel):
     )
     files: List[str] = Field(
         default_factory=list,
-        description="Files of `source` that a deploy path copies one by one (#21852); empty ships the whole directory",
+        description=(
+            "Files of `source` that the shell deploy paths copy one by one (#21852); empty ships the whole directory. "
+            "No SLM consumer reads this yet: the SLM and Ansible paths ship the whole `source` directory."
+        ),
     )
 
 

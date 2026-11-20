@@ -103,7 +103,10 @@ run_on_browser_vm "pkill -f playwright-server.js 2>/dev/null || true"
 # One canonical server + every module the manifest ships, from autobot-browser-worker (#18549, #21852)
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # shellcheck source=scripts/lib/browser_worker_files.sh
-source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh"
+source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh" || {
+    echo "FATAL: ${REPO_ROOT}/scripts/lib/browser_worker_files.sh could not be sourced (#21852)" >&2
+    exit 1
+}
 BROWSER_WORKER_FILES="$(browser_worker_files "$REPO_ROOT")" || exit 1
 for f in $BROWSER_WORKER_FILES; do
     scp -i "$SSH_KEY" "${REPO_ROOT}/autobot-browser-worker/${f}" "$BROWSER_USER@$BROWSER_VM_IP:${f}"

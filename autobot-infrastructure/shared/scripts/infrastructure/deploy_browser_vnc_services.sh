@@ -40,7 +40,10 @@ copy_to_browser_vm "$SCRIPT_DIR/browser-playwright.service" "/tmp/browser-playwr
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 BROWSER_WORKER_DIR="${REPO_ROOT}/autobot-browser-worker"
 # shellcheck source=scripts/lib/browser_worker_files.sh
-source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh"
+source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh" || {
+    echo "FATAL: ${REPO_ROOT}/scripts/lib/browser_worker_files.sh could not be sourced (#21852)" >&2
+    exit 1
+}
 BROWSER_WORKER_FILES="$(browser_worker_files "$REPO_ROOT")" || exit 1
 for f in $BROWSER_WORKER_FILES; do
     copy_to_browser_vm "${BROWSER_WORKER_DIR}/${f}" "${f}"
