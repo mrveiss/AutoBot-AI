@@ -19,6 +19,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "NOT_PATHS",
         "Renderings, not paths: one id per (task file, template) pair, a template counted once per renderer.",
     ),
+    "comment-helper-terminates-21571": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The non-test .vue/.ts/.js sources of every frontend (#21571), a subset of tracked files; every new "
+        "component grows it, and the rest of the tree grows at its own rate.",
+    ),
     "defined-twice-18094-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

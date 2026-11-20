@@ -17,7 +17,9 @@ derivation, a line regex over the root ``<template>`` block, not the helper's re
 
 **What it does not claim.** A `.vue` file with no root block is scanned whole, as a snippet; a ``<!-- -->`` comment is
 left in the template text by design (`strip_html_comments` removes it), so a guard that wants it gone asks for that.
-The reach floor guards the enumeration: a moved folder would otherwise read as a clean pass.
+The reach floor guards the enumeration: a moved folder would otherwise read as a clean pass. No ``roots=`` is declared:
+the hand-written scope record (``_reach_declared_scopes``) is held by open PRs, so the guard runs on every push until a
+follow-up adds it there.
 """
 
 from __future__ import annotations
@@ -53,7 +55,6 @@ REACH = declare(
     what="frontend source files read by the shared comment helper",
     floor=1770,
     growth=100,
-    roots=("autobot-frontend/", "autobot-slm-frontend/", "libs/", "autobot-plugins/", "tools/lint/_comment_syntax.py"),
 )
 
 
