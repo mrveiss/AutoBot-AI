@@ -169,6 +169,13 @@ class _BlockScan:
         self.in_block = False
         self.i = 0
 
+    @property
+    def unterminated(self) -> str | None:
+        """What the pass ended inside, ``"block comment"`` or ``"quote"``; ``None`` when it ended in code."""
+        if self.in_block:
+            return "block comment"
+        return "quote" if self.quote is not None else None
+
     def run(self) -> str:
         while self.i < len(self.text):
             if self.in_block:
@@ -203,8 +210,8 @@ class _BlockScan:
             self._emit(self.text[self.i : self.i + 2])
             self.i += 2
             return
-        if char == self.quote:
-            self.quote = None
+        if char == self.quote or (char == "\n" and self.quote != "`"):
+            self.quote = None  # only a template literal runs past a newline; an apostrophe in prose must not (#21571)
         self._emit(char)
         self.i += 1
 
@@ -286,12 +293,78 @@ def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     return _BlockScan(text, line_comments).run()
 
 
+#: The markup of a `.vue` component: the root ``<template>`` element (its body is the one group), or an HTML comment
+#: that opens at a line start -- the licence header above the template. Both open and close at a line start, as an
+#: SFC's root blocks do (a slot's ``<template #x>`` is indented). Everything else is script, style or a bare snippet.
+_SFC_MARKUP = re.compile(
+    r"^<template(?=[\s>/])[^>]*>(.*?)^</template\s*>|^<!--.*?-->", re.DOTALL | re.IGNORECASE | re.MULTILINE
+)
+
+
+class _FileScan(NamedTuple):
+    """One file's pass: its text with block comments blanked, the `//` comment offsets, what it ended inside."""
+
+    text: str
+    cuts: list[int]
+    unterminated: str | None
+
+
+def _markup_spans(text: str) -> list[tuple[int, int]]:
+    """The ``(start, end)`` of each markup span of a `.vue` text (see ``_SFC_MARKUP``): a template's body, a comment."""
+    return [(m.start(1), m.end(1)) if m.group(1) is not None else m.span() for m in _SFC_MARKUP.finditer(text)]
+
+
+def _scan_regions(text: str) -> _FileScan:
+    """A `.vue` component scanned per region (#21571): markup kept as it is, the rest read as code.
+
+    The template, and the HTML comment above it, have no `/* */` and no `//` comments: a path such as
+    ``/api/errors/*`` in their prose opened a block that blanked every line to the next ``*/`` or to the end of the
+    file, and an apostrophe in prose opened a string that kept a later real comment as code. ``<!-- -->`` comments
+    are left in the text on purpose -- ``strip_html_comments`` is the explicit call for a guard that wants them
+    gone, and removing them here would move the count of every guard that reads a commented-out element. The pass
+    does not carry its state across a markup span. A `/** */` header outside both is still read as the comment it is,
+    and text with no markup span (a snippet of script) is scanned whole.
+    """
+    out: list[str] = []
+    cuts: list[int] = []
+    size, last, ended = 0, 0, None
+    for start, end in [*_markup_spans(text), (len(text), len(text))]:
+        scan = _BlockScan(text[last:start], True)
+        piece = scan.run()
+        cuts.extend(size + cut for cut in scan.cuts)
+        out += [piece, text[start:end]]
+        size, last, ended = size + len(piece) + end - start, end, ended or scan.unterminated
+    return _FileScan("".join(out), cuts, ended)
+
+
+def _scan_file(text: str, suffix: str) -> _FileScan | None:
+    """The block-comment pass over *text*; ``None`` for a suffix with no block comments."""
+    if suffix not in _BLOCK_COMMENTS:
+        return None
+    if suffix == ".vue":
+        return _scan_regions(text)
+    scan = _BlockScan(text, True)
+    out = scan.run()
+    return _FileScan(out, scan.cuts, scan.unterminated)
+
+
 def _scan_block_syntax(text: str, suffix: str) -> tuple[str, list[int] | None]:
     """*text* with block comments blanked, and the offsets where `//` comments start; `None` for other syntaxes."""
-    if suffix not in _BLOCK_COMMENTS:
-        return text, None
-    scan = _BlockScan(text, True)
-    return scan.run(), scan.cuts
+    scanned = _scan_file(text, suffix)
+    return (text, None) if scanned is None else (scanned.text, scanned.cuts)
+
+
+def unterminated_construct(source: str | Path, *, name: str | Path | None = None) -> str | None:
+    """What the block-comment pass of *source* ended inside, or ``None`` when it ended in code (#21571).
+
+    ``"block comment"`` or ``"quote"``: the rest of the file was read as that and every guard going through
+    `code_lines` is blind to it. A suffix with no block comments is never unterminated. `code_lines` itself does not
+    raise on this -- about a hundred guards read through it -- so a file that does it is reported here, and
+    ``repo_tests/comment_helper_terminates_21571_test.py`` pins that no tracked source file does.
+    """
+    text, name = _read(source, name)
+    scanned = _scan_file(text, Path(name).suffix if name is not None else "")
+    return None if scanned is None else scanned.unterminated
 
 
 def _cut_comment(raw: str, start: int, cuts: list[int]) -> str:
@@ -402,7 +475,7 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
 #: The one ``<script>`` element pattern, its body in the one group; compile it with ``SCRIPT_ELEMENT_FLAGS``. The
 #: closing tag tolerates whitespace and attributes (``</script >``), as browsers do. ``repo_tests`` builds its SFC
 #: script extractor (``_ui_literal_scan.SCRIPT_BODY``) from it.
-SCRIPT_ELEMENT = r"<script\b[^>]*>(.*?)</script\b[^>]*>"
+SCRIPT_ELEMENT = r"<script(?=[\s>/])[^>]*>(.*?)</script(?=[\s>/])[^>]*>"
 SCRIPT_ELEMENT_FLAGS = re.DOTALL | re.IGNORECASE
 
 #: A ``<script>`` element (group 1, whole) or an HTML comment, whichever starts first. Markup has no line comments, so
