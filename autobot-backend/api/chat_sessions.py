@@ -16,7 +16,6 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-# CRITICAL SECURITY FIX: Import session ownership validation
 from api import chat_session_sharing as _sharing  # #18890, #21898: share routes + the owner-only gate
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
 from api.chat_session_messages import fetch_session_messages
@@ -1180,6 +1179,7 @@ async def delete_session(
     """
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
+    _sharing.require_owner(ownership)  # SECURITY: owner-only for every caller, incl. DELETE /chats/{id} (#21898)
 
     parsed_file_options = _validate_delete_session_params(session_id, file_action, file_options)
 

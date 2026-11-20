@@ -109,3 +109,35 @@ def test_participant_can_still_export(client, reason, monkeypatch):
     client.app.dependency_overrides[dep] = lambda: _ownership(reason)
     response = client.get(f"/api/chat/sessions/{SID}/export")
     assert response.status_code == 200
+
+
+@pytest.fixture
+def chats_client(client):
+    """The alias route DELETE /chats/{id}: its own read-access dependency, then the canonical delete."""
+    import api.chat as chat_api
+    from auth_middleware import get_current_user
+
+    app = FastAPI()
+    app.include_router(chat_api.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: {"username": "bob"}
+    return TestClient(app), chat_api
+
+
+@pytest.mark.parametrize("reason", NON_OWNER_REASONS)
+def test_chats_alias_refuses_non_owner_and_deletes_nothing(chats_client, reason):
+    http, chat_api = chats_client
+    with patch.object(chat_api, "validate_session_ownership", AsyncMock(return_value=_ownership(reason))):
+        response = http.delete(f"/api/chats/{SID}")
+    assert response.status_code == 403
+    assert response.json()["detail"] == REFUSAL
+    chat_sessions.delete_session_or_refer.assert_not_awaited()
+    chat_sessions._perform_all_session_cleanup.assert_not_awaited()
+
+
+@pytest.mark.parametrize("reason", sorted(session_shares.OWNER_REASONS))
+def test_chats_alias_lets_the_owner_delete(chats_client, reason):
+    http, chat_api = chats_client
+    with patch.object(chat_api, "validate_session_ownership", AsyncMock(return_value=_ownership(reason))):
+        response = http.delete(f"/api/chats/{SID}")
+    assert response.status_code == 200, response.text
+    chat_sessions.delete_session_or_refer.assert_awaited_once()
