@@ -248,9 +248,6 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
     planning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_PLANNING_MODEL")
 
-    # Timeout (seconds)
-    timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
-
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
 
@@ -491,7 +488,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "endpoint": self.get_endpoint_for_agent(agent_id),
             "model": self.get_model_for_agent(agent_id),
             "api_key": self._get_api_key_for_provider(provider),
-            "timeout": self.timeout,
+            "timeout": int(config.timeout.llm),  # bound once, in TimeoutConfig (#17419)
         }
 
     def _get_api_key_for_provider(self, provider: str) -> str:
@@ -521,6 +518,11 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    @property
+    def default_model_override(self) -> str:
+        """AUTOBOT_DEFAULT_LLM_MODEL only when set; "" when ``default_model`` is its default (#17419)."""
+        return self.default_model if "default_model" in self.model_fields_set else ""
 
     # Backward compatibility aliases
     def get_provider_for_model(self, model_type: str) -> str:
@@ -1542,7 +1544,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     default_command: str = Field(default="", alias="AUTOBOT_DEFAULT_COMMAND")
     default_continue: str = Field(default="", alias="AUTOBOT_DEFAULT_CONTINUE")
     default_host: str = Field(default="", alias="AUTOBOT_DEFAULT_HOST")
-    default_llm_model: str = Field(default="", alias="AUTOBOT_DEFAULT_LLM_MODEL")
     default_port: str = Field(default="", alias="AUTOBOT_DEFAULT_PORT")
     default_scan_network: str = Field(default="", alias="AUTOBOT_DEFAULT_SCAN_NETWORK")
     default_yes_no: str = Field(default="", alias="AUTOBOT_DEFAULT_YES_NO")
@@ -2069,7 +2070,6 @@ class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
     # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
@@ -2745,8 +2745,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def llm_timeout(self) -> int:
-        """Backward-compat: config.llm_timeout → config.llm.timeout."""
-        return self.llm.timeout
+        """Backward-compat: config.llm_timeout → config.timeout.llm."""
+        return int(self.timeout.llm)
 
     @property
     def llm_temperature(self) -> float:
@@ -2958,7 +2958,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
         "endpoint": endpoint,
         "model": model,
         "api_key": api_key,
-        "timeout": cfg.llm.timeout,
+        "timeout": int(cfg.timeout.llm),
     }
 
 

@@ -4,14 +4,19 @@
 # Author: mrveiss
 """A variable declared in both the env registry and the SSOT models has one default (#17419).
 
+Also: one ``alias="AUTOBOT_*"`` binds one field. A name bound by two fields is set by one
+environment variable yet read through two differently-typed or differently-defaulted attributes.
+
 Compares the planes as loaded, so a value spelled through a constant is compared by what it is.
 ``None`` and ``""`` both mean unset, and ``"8001"`` and ``8001`` differ only in the declared type.
 """
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Iterator
 
+from pydantic import Field
 from pydantic.fields import PydanticUndefined
 from pydantic_settings import BaseSettings
 
@@ -20,6 +25,10 @@ from autobot_shared.env_registry import REGISTRY
 
 #: Names in both planes on main when this guard landed, less a margin for removals.
 MIN_NAMES_COMPARED = 20
+
+
+#: Aliases still bound by two fields (the SSH identity in PathConfig and TLSConfig), shrink-only.
+KNOWN_DOUBLE_BINDINGS = frozenset({"AUTOBOT_SSH_KEY", "AUTOBOT_SSH_USER"})
 
 
 def _normalized(value: Any) -> str:
@@ -64,3 +73,41 @@ def test_a_different_value_is_caught_and_a_different_spelling_is_not() -> None:
     ssot = {"AUTOBOT_A": {"127.0.0.1"}, "AUTOBOT_B": {""}, "AUTOBOT_C": {"8001"}, "AUTOBOT_D": {"x"}}
     registry = {"AUTOBOT_A": "localhost", "AUTOBOT_B": None, "AUTOBOT_C": 8001}
     assert disagreements(registry, ssot) == {"AUTOBOT_A": ("localhost", {"127.0.0.1"})}
+
+
+def _own_aliases(cls: type[BaseSettings]) -> Iterator[str]:
+    """Aliases of the fields *cls* itself declares, so an inherited field is not counted per subclass."""
+    for name in inspect.get_annotations(cls):
+        field = cls.model_fields.get(name)
+        if field is not None and (field.alias or "").startswith("AUTOBOT_"):
+            yield field.alias
+
+
+def double_bindings(classes: Iterator[type[BaseSettings]]) -> set[str]:
+    seen: set[str] = set()
+    twice: set[str] = set()
+    for cls in classes:
+        for alias in _own_aliases(cls):
+            (twice if alias in seen else seen).add(alias)
+    return twice
+
+
+def test_every_alias_binds_one_field() -> None:
+    assert double_bindings(_settings_classes()) - KNOWN_DOUBLE_BINDINGS == set()
+
+
+def test_the_double_binding_exemptions_are_not_stale() -> None:
+    assert KNOWN_DOUBLE_BINDINGS <= double_bindings(_settings_classes())
+
+
+def test_a_second_binding_is_caught_and_an_inherited_field_is_not() -> None:
+    class Base(BaseSettings):
+        shared: int = Field(default=1, alias="AUTOBOT_X_SHARED")
+
+    class Left(Base):
+        own: int = Field(default=1, alias="AUTOBOT_X_OWN")
+
+    class Right(Base):
+        again: float = Field(default=1.0, alias="AUTOBOT_X_OWN")
+
+    assert double_bindings(iter([Base, Left, Right])) == {"AUTOBOT_X_OWN"}
