@@ -115,6 +115,7 @@ def node_ssh_options(cfg: RemoteNodeSettings) -> list[str]:
     if cfg.known_hosts:  # pinned: only the keys in this file are trusted
         argv += ["-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={os.path.expanduser(cfg.known_hosts)}"]
         argv += ["-o", "GlobalKnownHostsFile=/dev/null"]  # no second trust source: that file only
+        argv += ["-F", "/dev/null"]  # and no user ssh config (KnownHostsCommand, VerifyHostKeyDNS, ProxyCommand...)
     else:  # trust on first use: a later change of the node's key is refused
         argv += ["-o", "StrictHostKeyChecking=accept-new"]
     if cfg.key:
@@ -242,32 +243,41 @@ def _origin_url() -> str:
     return _without_credentials(done.stdout.strip())
 
 
+_SCHEME_PREFIX = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+
+
 def _without_credentials(url: str) -> str:
     """The URL the node's mirror follows: no userinfo, no query, no fragment, so it holds and shows no secret.
 
-    Userinfo is removed (not masked) so the URL still fetches, in every form: with a scheme, and schemeless
-    (a colon in the text before the last ``@``, ahead of any ``/``, marks ``name:secret`` userinfo). That includes
+    Userinfo is removed (not masked) so the URL still fetches, in every form. The scheme form is chosen only when
+    the text opens with a valid scheme token and ``://`` (so ``user:tok@host/x?r=http://a`` is schemeless, not
+    read as scheme ``user``). Schemeless, the text before the last ``@`` is userinfo when it holds a colon ahead of
+    any ``/`` (``name:secret``), or when a ``/`` follows the host (``tok@host/x``). That includes
     ``ssh://user@host/x``, which loses its username because the node holds no key, so it could not use it anyway.
     Query and fragment are dropped because a git remote needs neither and ``?token=`` would otherwise travel.
-    The scp form ``git@host:path`` has no secret and passes through unchanged. A URL that cannot be read safely
-    raises ``ValueError`` without the URL in the message.
+    The scp form ``git@host:path`` has no secret and passes through unchanged. Known limit, failing safe: an scp
+    path holding ``@`` after a colon-led host (``host:dir/a@b``) is read as userinfo and mangled to ``b``, because
+    stripping less could leak a secret. A URL that cannot be read safely raises ``ValueError`` without the URL.
     """
-    try:
-        parts = urlsplit(url)
-    except ValueError:
-        raise ValueError("the origin URL cannot be parsed") from None
-    if "://" in url:
-        host = parts.netloc.rsplit("@", 1)[-1]
-        return urlunsplit((parts.scheme, host, parts.path, "", ""))
+    if _SCHEME_PREFIX.match(url):
+        try:
+            parts = urlsplit(url)
+        except ValueError:
+            raise ValueError("the origin URL cannot be parsed") from None
+        return urlunsplit((parts.scheme, parts.netloc.rsplit("@", 1)[-1], parts.path, "", ""))
+    url = re.split(r"[?#]", url, maxsplit=1)[0]
     head, at, tail = url.rpartition("@")
     if not at:
         return url
     colon, slash = head.find(":"), head.find("/")
-    if colon != -1 and (slash == -1 or colon < slash):
-        if not tail:
-            raise ValueError("the origin URL cannot be read safely")
-        return tail
-    return url
+    named_secret = colon != -1 and (slash == -1 or colon < slash)
+    tail_colon, tail_slash = tail.find(":"), tail.find("/")
+    token_user = tail_slash != -1 and (tail_colon == -1 or tail_slash < tail_colon)
+    if not (named_secret or token_user):
+        return url
+    if not tail:
+        raise ValueError("the origin URL cannot be read safely")
+    return tail
 
 
 def _pins() -> list[str]:

@@ -30,6 +30,14 @@ sys.modules.pop("remote_test_node_run_url", None)  # needed only while the datac
         ("tok@host:x", "tok@host:x"),  # scp form: no colon before the @, so no secret  # pragma: allowlist secret
         ("user:tok@host/x.git", "host/x.git"),  # pragma: allowlist secret
         ("user:tok@host:x.git", "host:x.git"),  # pragma: allowlist secret
+        (
+            "user:tok@host/x.git?r=http://a",
+            "host/x.git",
+        ),  # a "://" in the query is not a scheme  # pragma: allowlist secret
+        ("user:tok@host:x?q=ssh://b", "host:x"),  # pragma: allowlist secret
+        ("tok@host/x.git", "host/x.git"),  # bare token as user, a "/" after the host  # pragma: allowlist secret
+        ("git@host:org/a/b.git", "git@host:org/a/b.git"),  # scp path with slashes stays
+        ("host:dir/a@b", "b"),  # known limit, fails safe: an "@" in an scp path reads as userinfo
     ],
 )
 def test_the_origin_url_sent_to_the_node_carries_no_credential(url, expected):

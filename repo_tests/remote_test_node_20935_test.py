@@ -422,6 +422,8 @@ def test_host_key_trust_is_first_use_unless_pinned():
     assert "StrictHostKeyChecking=yes" in pinned and "UserKnownHostsFile=/pins/kh" in pinned
     assert "GlobalKnownHostsFile=/dev/null" in pinned  # the pinned file is the only trust source
     assert "StrictHostKeyChecking=accept-new" not in pinned
+    assert pinned[pinned.index("-F") + 1] == "/dev/null"  # a user ssh config cannot widen trust
+    assert "-F" not in run.ssh_argv(run.load_config(_BASE_ENV)) and "-p" in pinned  # port stays explicit
 
 
 def test_the_stale_sweep_ttl_follows_the_effective_timeout(monkeypatch):
