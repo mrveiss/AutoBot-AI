@@ -61,8 +61,8 @@
             <div class="message-info">
               <span class="sender-name">
                 {{ getSenderName(message.sender) }}
-                <span v-if="message.sender === 'assistant' && message.metadata?.model" class="model-name">
-                  ({{ message.metadata.model }})
+                <span v-if="message.sender === 'assistant' && shownModel(message.metadata)" class="model-name">
+                  ({{ shownModel(message.metadata) }})
                 </span>
               </span>
               <!-- MVA-1993: Lightweight mode cost indicator -->
@@ -203,9 +203,9 @@
               <span v-if="message.sender === 'assistant' && message.metadata.thinking_used" class="metadata-item thinking-used-badge">
                 🧠 {{ $t('chat.messages.thinkingUsed', 'Extended thinking') }}
               </span>
-              <span v-if="message.metadata.model" class="metadata-item">
+              <span v-if="shownModel(message.metadata)" class="metadata-item">
                 <Icon name="robot" />
-                {{ message.metadata.model }}
+                {{ shownModel(message.metadata) }}
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
                 <Icon name="dollar-sign" />
@@ -561,7 +561,7 @@
 
 <script setup lang="ts">
 import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
-import { visibleMessages } from '@/utils/internalMessage'
+import { visibleMessages, shownModel } from '@/utils/internalMessage'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'

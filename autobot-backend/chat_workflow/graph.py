@@ -717,8 +717,8 @@ async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
     history.append(result.to_dict())
 
     logger.info(
-        "RLM reflect: score=%.2f verdict=%s iter=%d/%d",
-        result.quality_score,
+        "RLM reflect: score=%s verdict=%s iter=%d/%d",
+        "none" if result.quality_score is None else f"{result.quality_score:.2f}",
         result.verdict.name,
         reflection_count + 1,
         rlm_cfg.max_reflections,
