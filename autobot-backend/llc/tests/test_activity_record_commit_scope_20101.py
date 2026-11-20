@@ -31,7 +31,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.activity import ActorType
-from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus
+from llc.models.enums import ActivityEventType, AssigneeType, WorkItemStatus, WorkItemType
 from llc.services import activity_log as activity_log_module
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.actor import ActivityRecordError, audit
@@ -297,7 +297,13 @@ def _service_whose_audit_fails() -> HandoffService:
 
 def _a2h_session(agent_id: str) -> AsyncMock:
     item = MagicMock(
-        assignee_agent_id=uuid.UUID(agent_id), project_id=None, title="t", description="d", version=1, identifier="W-1"
+        type=WorkItemType.TASK.value,  # agent_to_human converts it for the reviewer-role check (handoff.py:575)
+        assignee_agent_id=uuid.UUID(agent_id),
+        project_id=None,
+        title="t",
+        description="d",
+        version=1,
+        identifier="W-1",
     )
     session = AsyncMock()
     session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=item)))
