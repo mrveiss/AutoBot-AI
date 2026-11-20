@@ -122,4 +122,16 @@ describe('NPUDetailsPanel node switch', () => {
     expect(wrapper.findAll('input[type="checkbox"]:checked')).toHaveLength(0)
     expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('retry')
   })
+
+  it('shows a per-node error when a load fails, and clears it for the next node (#19068)', async () => {
+    fetchNpuNodeMetrics.mockRejectedValueOnce(new Error('metrics unreachable')).mockResolvedValue(metrics(5))
+    fetchNpuWorkerConfig.mockResolvedValue(config(2))
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('metrics unreachable')
+
+    await wrapper.setProps({ node: nodeB as never })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('metrics unreachable')
+  })
 })

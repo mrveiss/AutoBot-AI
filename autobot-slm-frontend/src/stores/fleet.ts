@@ -39,6 +39,9 @@ import type {
 import { useSlmApi } from '@/composables/useSlmApi'
 import i18n from '@/i18n'
 import { PartialListError } from '@/utils/fetchAllPages'
+
+/** A caught value's message; the original error text, never a hard-coded English fallback. */
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
 import type { NodeListIncomplete } from './fleetHelpers'
 
@@ -211,7 +214,7 @@ export const useFleetStore = defineStore('fleet', () => {
       availableRoles.value = roles
       return roles
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to fetch roles'
+      error.value = errorText(err)
       throw err
     }
   }
@@ -264,7 +267,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
       return node
     } catch (err) {
-      error.value = err instanceof Error ? err.message : `Failed to refresh node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -359,7 +362,7 @@ export const useFleetStore = defineStore('fleet', () => {
       nodes.value.set(node.node_id, node)
       return node
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to register node'
+      error.value = errorText(err)
       throw err
     }
   }
@@ -372,7 +375,7 @@ export const useFleetStore = defineStore('fleet', () => {
       await api.deleteNode(nodeId)
       removeNodeLocal(nodeId)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : `Failed to delete node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -395,7 +398,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
       return updatedNode
     } catch (err) {
-      error.value = err instanceof Error ? err.message : `Failed to update node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -418,7 +421,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
       return updatedNode
     } catch (err) {
-      error.value = err instanceof Error ? err.message : `Failed to update roles for node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -445,7 +448,7 @@ export const useFleetStore = defineStore('fleet', () => {
         // If refresh also fails, set to unhealthy
         updateNodeStatus(nodeId, 'unhealthy')
       })
-      error.value = err instanceof Error ? err.message : `Failed to enroll node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -468,7 +471,7 @@ export const useFleetStore = defineStore('fleet', () => {
       })
       return result
     } catch (err) {
-      error.value = err instanceof Error ? err.message : `Failed to test connection to node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -486,9 +489,7 @@ export const useFleetStore = defineStore('fleet', () => {
       certificateStatus.value.set(nodeId, certInfo)
       return certInfo
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to get certificate status for node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -502,9 +503,7 @@ export const useFleetStore = defineStore('fleet', () => {
       // Refresh certificate status after renewal
       await checkNodeCertificate(nodeId)
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to renew certificate for node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -518,9 +517,7 @@ export const useFleetStore = defineStore('fleet', () => {
       // Refresh certificate status after deployment
       await checkNodeCertificate(nodeId)
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to deploy certificate to node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -541,9 +538,7 @@ export const useFleetStore = defineStore('fleet', () => {
       nodeEvents.value.set(nodeId, events)
       return events
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to get events for node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -567,9 +562,7 @@ export const useFleetStore = defineStore('fleet', () => {
       reconcileNodeUpdateSummary(nodeId, result.total, result.code_update_available, result.code_status)
       return result
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to check updates for node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -595,9 +588,7 @@ export const useFleetStore = defineStore('fleet', () => {
         failed: result.failed_updates,
       }
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to apply updates to node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -620,9 +611,7 @@ export const useFleetStore = defineStore('fleet', () => {
       }
       return npuStatuses
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : 'Failed to fetch NPU nodes'
+      error.value = errorText(err)
       return []
     }
   }
@@ -630,16 +619,14 @@ export const useFleetStore = defineStore('fleet', () => {
   /**
    * Fetch NPU status for a specific node
    */
-  async function fetchNpuStatus(nodeId: string): Promise<NPUNodeStatus | null> {
+  async function fetchNpuStatus(nodeId: string): Promise<NPUNodeStatus> {
     try {
       const status = await api.getNpuStatus(nodeId)
       npuCapabilities.value.set(nodeId, status)
       return status
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to fetch NPU status for node ${nodeId}`
-      return null
+      error.value = errorText(err)
+      throw err
     }
   }
 
@@ -672,9 +659,7 @@ export const useFleetStore = defineStore('fleet', () => {
       }
       return result.success
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to trigger NPU detection for node ${nodeId}`
+      error.value = errorText(err)
       return false
     }
   }
@@ -717,9 +702,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
       return updatedNode
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to assign NPU role to node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -753,9 +736,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
       return updatedNode
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to remove NPU role from node ${nodeId}`
+      error.value = errorText(err)
       throw err
     }
   }
@@ -770,9 +751,7 @@ export const useFleetStore = defineStore('fleet', () => {
       await api.updateNpuLoadBalancing(config)
       npuLoadBalancingConfig.value = config
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : 'Failed to update NPU load balancing configuration'
+      error.value = errorText(err)
       throw err
     }
   }
@@ -780,16 +759,14 @@ export const useFleetStore = defineStore('fleet', () => {
   /**
    * Fetch current NPU load balancing configuration
    */
-  async function fetchNpuLoadBalancing(): Promise<NPULoadBalancingConfig | null> {
+  async function fetchNpuLoadBalancing(): Promise<NPULoadBalancingConfig> {
     try {
       const config = await api.getNpuLoadBalancing()
       npuLoadBalancingConfig.value = config
       return config
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : 'Failed to fetch NPU load balancing configuration'
-      return null
+      error.value = errorText(err)
+      throw err
     }
   }
 
@@ -800,44 +777,38 @@ export const useFleetStore = defineStore('fleet', () => {
   /** Per-node config cache */
   const npuWorkerConfigs = ref<Map<string, NPUWorkerConfig>>(new Map())
 
-  async function fetchNpuFleetMetrics(): Promise<NPUFleetMetrics | null> {
+  async function fetchNpuFleetMetrics(): Promise<NPUFleetMetrics> {
     try {
       const metrics = await api.getNpuFleetMetrics()
       npuFleetMetrics.value = metrics
       return metrics
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : 'Failed to fetch NPU fleet metrics'
-      return null
+      error.value = errorText(err)
+      throw err
     }
   }
 
   async function fetchNpuNodeMetrics(
     nodeId: string
-  ): Promise<NPUWorkerMetrics | null> {
+  ): Promise<NPUWorkerMetrics> {
     try {
       return await api.getNpuNodeMetrics(nodeId)
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to fetch metrics for node ${nodeId}`
-      return null
+      error.value = errorText(err)
+      throw err
     }
   }
 
   async function fetchNpuWorkerConfig(
     nodeId: string
-  ): Promise<NPUWorkerConfig | null> {
+  ): Promise<NPUWorkerConfig> {
     try {
       const config = await api.getNpuWorkerConfig(nodeId)
       npuWorkerConfigs.value.set(nodeId, config)
       return config
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to fetch config for node ${nodeId}`
-      return null
+      error.value = errorText(err)
+      throw err
     }
   }
 
@@ -852,9 +823,7 @@ export const useFleetStore = defineStore('fleet', () => {
       }
       return result.success
     } catch (err) {
-      error.value = err instanceof Error
-        ? err.message
-        : `Failed to update config for node ${nodeId}`
+      error.value = errorText(err)
       return false
     }
   }
