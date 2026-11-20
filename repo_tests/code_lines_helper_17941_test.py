@@ -325,6 +325,16 @@ def test_a_vue_line_with_a_closing_tag_a_html_comment_and_a_line_comment_is_read
     assert 'href="/x/y">t</a>' in text and "banned_token" not in text and "<!-- n -->" in text
 
 
+@pytest.mark.xfail(strict=True, reason="an apostrophe in .vue template prose desyncs the quote scanner -- see #21571")
+def test_a_vue_apostrophe_in_template_prose_does_not_hide_a_following_line_comment() -> None:
+    """Pins the live defect (#21571): today the `//` line below survives as code.
+
+    Strict, so the fix flips this to XPASS-fail and the marker must then be removed.
+    """
+    text = code_text("<template>\n<p>don't do this</p>\n</template>\n// banned_token\nconst k = 1\n", name="x.vue")
+    assert "banned_token" not in text, text
+
+
 #: Lines where the scanner and the older quote-only trailing strip must cut at the same place.
 _AGREED = [
     ("const a = 1 // c", "const a = 1 "),
@@ -360,3 +370,17 @@ def test_the_trailing_cut_follows_the_scanner_on_lines_the_quote_only_strip_cann
 def test_a_line_that_is_only_a_comment_is_dropped_and_numbering_survives_the_scanner_cut() -> None:
     lines = code_lines("// whole\nconst a = 1 // t\n/* b */ const b = /[//]/ // t\n", name="x.ts", strip_trailing=True)
     assert [(line.lineno, line.text.strip()) for line in lines] == [(2, "const a = 1"), (3, "const b = /[//]/")]
+
+
+def test_a_template_literal_line_starting_with_double_slash_is_code_and_a_real_comment_line_is_not() -> None:
+    """#21883: the whole-line drop follows the scanner, so a line inside a template literal is kept."""
+    source = "const text = `\n// ${api.get<Shape>('/x')}\n`;\n// api.get<Real>('/y')\nconst z = 1;\n"
+    lines = code_lines(source, name="x.ts")
+    assert [line.lineno for line in lines] == [1, 2, 3, 5]
+    assert "api.get<Shape>" in code_text(source, name="x.ts")
+    assert "api.get<Real>" not in code_text(source, name="x.ts")
+
+
+def test_a_string_continuation_line_and_an_indented_comment_follow_the_scanner_too() -> None:
+    source = "const a = `\n    // kept\n`;\n    // dropped\n/* b */ // dropped too\nconst c = 2;\n"
+    assert [line.lineno for line in code_lines(source, name="x.vue")] == [1, 2, 3, 6]
