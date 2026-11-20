@@ -1672,13 +1672,13 @@ async def share_session(
     user_data = ownership.get("user_data", {})
     shared_by = user_data.get("username", "unknown")
 
-    # Share session access
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
     from security.session_ownership import SessionOwnershipValidator
 
     redis = await get_redis_mgr(async_client=True, database="main")
     validator = SessionOwnershipValidator(redis)
-    await validator.share_session(session_id, share_data.share_with, shared_by)
+    if not await validator.share_session(session_id, share_data.share_with, shared_by):
+        raise HTTPException(status_code=500, detail="Session could not be shared")
 
     # Optionally share KB facts
     facts_result = None
@@ -1787,3 +1787,8 @@ async def clear_session_checkpoints(
             message="Failed to clear checkpoints",
             status_code=500,
         )
+
+
+from api.chat_session_unshare import router as _unshare_router  # noqa: E402  (#18890)
+
+router.include_router(_unshare_router)

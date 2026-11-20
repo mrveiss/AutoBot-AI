@@ -29,6 +29,28 @@
 
         <!-- ===== User-share mode ===== -->
         <template v-if="mode === 'users'">
+          <div data-testid="share-participants">
+            <p class="text-sm font-medium text-autobot-text-primary mb-1">{{ $t('chat.share.sharedWithNow') }}</p>
+            <p v-if="participants.length === 0" class="text-xs text-autobot-text-secondary">
+              {{ $t('chat.share.noParticipants') }}
+            </p>
+            <ul v-else class="space-y-1">
+              <li
+                v-for="p in participants"
+                :key="p"
+                class="flex items-center justify-between text-sm text-autobot-text-primary"
+              >
+                <span>{{ p }}</span>
+                <button
+                  class="text-xs text-autobot-error hover:opacity-80"
+                  :disabled="unsharing === p"
+                  @click="unshareParticipant(p)"
+                >
+                  {{ unsharing === p ? $t('chat.share.unsharing') : $t('chat.share.unshare') }}
+                </button>
+              </li>
+            </ul>
+          </div>
           <div>
             <label class="block text-sm font-medium text-autobot-text-primary mb-1">
               {{ $t('chat.share.shareWith') }}
@@ -298,6 +320,8 @@ const facts = ref<ShareFact[]>([])
 const factsLoading = ref(false)
 const factSelection = useBatchSelection<ShareFact, string>(facts, (f) => f.id)
 const sharing = ref(false)
+const participants = ref<string[]>([])
+const unsharing = ref<string | null>(null)
 
 // ---- link share ----
 const linkPassword = ref('')
@@ -341,6 +365,29 @@ const loadFacts = async () => {
     facts.value = []
   } finally {
     factsLoading.value = false
+  }
+}
+
+const loadParticipants = async () => {
+  if (!props.sessionId) return
+  try {
+    const data = await ApiClient.get<{ data?: { participants?: string[] } }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`)
+    participants.value = data?.data?.participants || []
+  } catch (err) {
+    logger.error('Failed to load share participants:', err)
+    participants.value = []
+  }
+}
+
+const unshareParticipant = async (userId: string) => {
+  unsharing.value = userId
+  try {
+    await ApiClient.delete(`${getApiBase()}/chat/sessions/${props.sessionId}/share/${encodeURIComponent(userId)}`)
+    participants.value = participants.value.filter(x => x !== userId)
+  } catch (err) {
+    logger.error('Failed to unshare session:', err)
+  } finally {
+    unsharing.value = null
   }
 }
 
@@ -436,6 +483,8 @@ watch(() => props.visible, (val) => {
   expirySeconds.value = null
   requireLogin.value = false
   copied.value = false
+  participants.value = []
+  loadParticipants()
 })
 
 watch(includeKnowledge, (val) => {
