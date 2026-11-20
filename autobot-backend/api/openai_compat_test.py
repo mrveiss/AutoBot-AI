@@ -5,10 +5,9 @@
 """
 Integration tests for the openai_compat rate-limit wiring (#7271).
 
-Per-IP rate-limit logic itself lives in
-``autobot_shared.rate_limit.IPRateLimiter`` and is comprehensively tested
-in ``autobot_shared/rate_limit_test.py`` (covers Redis path, in-process
-fallback, env-driven limit, etc.).
+Per-IP rate-limit logic itself lives in the canonical
+``autobot_shared.rate_limiter.RateLimiter`` (single-window mode, #18087) and
+is tested in ``autobot_shared/rate_limiter_window_18087_test.py``.
 
 This file pins the openai_compat-specific configuration of that helper:
 the right key prefix, the right env var, and that the helper is the same
@@ -28,7 +27,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import openai_compat
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
 
 # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
@@ -86,21 +85,25 @@ class TestGetUserAsync:
 
 
 class TestOAIRateLimitWiring:
-    """Issue #7271: openai_compat uses the shared IPRateLimiter."""
+    """Issue #7271/#18087: openai_compat uses the canonical window limiter."""
 
     def test_module_exposes_limiter_instance(self):
-        """``_oai_limiter`` must be an IPRateLimiter (not the legacy func)."""
-        assert isinstance(openai_compat._oai_limiter, IPRateLimiter)
+        """``_oai_limiter`` must be a WindowQuota (not the legacy func)."""
+        assert isinstance(openai_compat._oai_limiter, WindowQuota)
 
     def test_limiter_uses_oai_specific_config(self):
         """The instance is configured for the /v1/chat/completions endpoint."""
-        limiter = openai_compat._oai_limiter
-        # #6588 / #7271: prefix shared across uvicorn workers via Redis key.
-        assert limiter._key_prefix == "ratelimit:oai"
+        quota = openai_compat._oai_limiter
+        # #6588 / #7271: scope shared across uvicorn workers via the Redis key.
+        assert quota.limiter._prefix == "oai"
         # AUTOBOT_OAI_RATE_LIMIT env var; default 60/min preserved.
-        assert limiter._limit_env == "AUTOBOT_OAI_RATE_LIMIT"
-        assert limiter._default_limit == 60
-        assert limiter._window_seconds == 60
+        assert quota._limit_env == "AUTOBOT_OAI_RATE_LIMIT"
+        assert quota._default_max == 60
+        assert quota.window_seconds == 60
+
+    def test_public_endpoint_keeps_enforcing_when_redis_is_down(self):
+        """The old per-IP limiter fell back to a per-worker bucket, never open."""
+        assert openai_compat._oai_limiter.limiter._window_policy is WindowFailurePolicy.LOCAL
 
 
 @pytest.fixture
