@@ -35,12 +35,13 @@ def test_build_message_dict_uses_supplied_id_and_time():
         None, "assistant", "x", "response", None, None, message_id="abc", created_at=EARLY
     )
     assert msg["id"] == "abc"
-    assert msg["timestamp"] == time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(EARLY))
+    assert msg["timestamp"] == "2023-11-14T22:13:20+00:00"
 
 
 def test_build_message_dict_defaults_are_unchanged():
     msg = MessagesMixin._build_message_dict(None, "assistant", "x", "response", None, None)
-    assert len(msg["id"]) == 36 and msg["timestamp"][:4] == time.strftime("%Y")
+    assert len(msg["id"]) == 36 and msg["timestamp"][:4] == time.strftime("%Y")  # a UTC instant, with an offset
+    assert msg["timestamp"].endswith("+00:00")
 
 
 def test_marker_only_for_first_streamed_response_chunk():
@@ -59,7 +60,7 @@ def test_final_reply_entry_carries_streamed_identity():
         None, _chat_mgr(), "hello", [], iteration=1, streamed=(streamed_id, streamed_at)
     )
     assert entry["id"] == "seg-9"
-    assert entry["timestamp"] == time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(EARLY))
+    assert entry["timestamp"] == "2023-11-14T22:13:20+00:00"
 
 
 def test_no_marker_falls_back_to_fresh_identity():

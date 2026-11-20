@@ -428,7 +428,7 @@ run_repairs() {
         # Special handling for Playwright
         if [ "${ISSUES_FOUND[playwright_server_missing]}" = true ]; then
             log_info "Copying playwright-server.js to root..."
-            cp autobot-browser-worker/playwright-server.js autobot-browser-worker/session-store.js autobot-browser-worker/element-index.js ./
+            cp autobot-browser-worker/playwright-server.js autobot-browser-worker/session-store.js autobot-browser-worker/element-index.js autobot-browser-worker/search-snippet.js ./
         fi
         repair_container "autobot-playwright" "playwright-service" "docker-compose.playwright.yml"
     fi
