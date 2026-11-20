@@ -18,6 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from repo_tests._machine_slot_hook import fake_load
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import git, isolated_git_env, make_repo
@@ -279,7 +280,15 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, str, str]:
 
 def _push(tmp_path: Path, branch: str, **env: str) -> subprocess.CompletedProcess[str]:
     repo, base, head = _gate_repo(tmp_path)
+    # #21906: the hook queues for a machine-wide slot while the real load average is at or above its ceiling, so
+    # under `-n auto` it waited out the 300 s timeout below. Own slot dir and a fixed load: no host state is read.
+    slots = tmp_path / "slots"
     full_env = {**isolated_git_env(), "PATH": _shim(tmp_path), "AUTOBOT_PREPUSH_CACHE": "0", **env}
+    full_env.pop("AUTOBOT_MACHINE_SLOT_HELD", None)
+    full_env.pop("CI", None)
+    full_env.update(
+        AUTOBOT_MACHINE_SLOT_DIR=str(slots), AUTOBOT_MACHINE_SLOT_LOADAVG=str(fake_load(tmp_path / "loadavg"))
+    )
     return subprocess.run(
         ["bash", str(_HOOK)],
         input=f"refs/heads/{branch} {head} refs/heads/{branch} {base}\n",
