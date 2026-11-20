@@ -11,10 +11,13 @@ Endpoints:
 
 No route removes anything. Each copy is verified (the copy that works wins); the proposal names the survivor
 when exactly one verifies and asks a person to choose otherwise. Nothing runs until an admin approves it in the
-Approvals inbox, and it is never auto-approved. The executor lives in ``services.secret_duplicate_cleanup_action``.
+Approvals inbox, and it is never auto-approved. Each call probes at most
+``AUTOBOT_SECRET_DUPLICATE_MAX_GROUPS_PER_REQUEST`` groups and reports ``remaining``; a group whose proposal was
+rejected stays unproposed until an admin passes ``?re_raise=true``.
+The executor lives in ``services.secret_duplicate_cleanup_action``.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_secret_duplicates import (
@@ -46,18 +49,21 @@ async def secret_duplicates_status(session: AsyncSession = Depends(get_db_sessio
     "/secret-duplicates/requests", response_model=DuplicateRequestResponse, status_code=status.HTTP_201_CREATED
 )
 async def propose_secret_duplicate_resolution(
-    current_user: dict = Depends(get_current_user), session: AsyncSession = Depends(get_db_session)
+    re_raise: bool = Query(False, description="Raise a group again after a rejected or revision-requested proposal"),
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DuplicateRequestResponse:
     """Verify every duplicated group and PROPOSE its resolution -- a request, not an execution."""
     requester = current_user.get("id") or current_user.get("user_id")  # as the approve route reads the decider
     if not requester:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
-    results = await propose_duplicate_resolutions(session, str(requester))
-    if not results:
+    batch = await propose_duplicate_resolutions(session, str(requester), re_raise=re_raise)
+    if not batch.results and not batch.remaining:
         raise HTTPException(status.HTTP_409_CONFLICT, "There are no duplicated secrets")
     return DuplicateRequestResponse(
         proposals=[
             DuplicateProposal(approval_id=r.approval_id, reason=r.reason, copies=r.copies, skipped=r.skipped)
-            for r in results
-        ]
+            for r in batch.results
+        ],
+        remaining=batch.remaining,
     )

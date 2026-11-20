@@ -10,11 +10,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from autobot_shared.secrets_vault import VaultRef
 from models.approval import ApprovalType
 from services import secret_duplicate_cleanup_action as action
 from services import secret_duplicate_proposals as proposals
 from services import secret_duplicates as dup
-from services.envelope_secrets_service import AmbiguousSecretError, EnvelopeSecretsService
+from services.envelope_secrets_service import AmbiguousSecretError, EnvelopeSecretsService, SecretConflictError
+from testkit.fake_async_session import FakeAsyncSession
 
 _V = dup.Verdict
 _VAULT = "system"
@@ -118,7 +120,10 @@ async def test_a_proposal_is_filed_once_per_group(monkeypatch):
 
 
 def _approval(**context):
-    return MagicMock(id=uuid.uuid4(), context={"action": action.ACTION, **context}, decided_by_user="admin")
+    versions = {str(i): 1 for i in (_A, _B, _C)}
+    return MagicMock(
+        id=uuid.uuid4(), context={"action": action.ACTION, "versions": versions, **context}, decided_by_user="admin"
+    )
 
 
 @pytest.mark.asyncio
@@ -133,7 +138,9 @@ async def test_approving_a_human_choice_proposal_removes_nothing(monkeypatch):
 async def test_a_group_that_changed_since_review_removes_nothing(monkeypatch):
     removed = AsyncMock()
     monkeypatch.setattr(action, "_remove_one", removed)
-    monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=[SimpleNamespace(owner_vault="a", name="n")]))
+    monkeypatch.setattr(
+        action, "_group_rows", AsyncMock(return_value=[SimpleNamespace(id=_A, owner_vault="a", name="n", version=1)])
+    )
     with pytest.raises(ValueError):
         await action.execute_secret_duplicate_cleanup(
             _approval(survivor_id=str(_A), removal_ids=[str(_B)]), AsyncMock()
@@ -144,7 +151,10 @@ async def test_a_group_that_changed_since_review_removes_nothing(monkeypatch):
 @pytest.mark.asyncio
 async def test_a_survivor_that_stopped_working_removes_nothing(monkeypatch):
     removed = AsyncMock()
-    rows = [SimpleNamespace(id=_A, owner_vault="v", name="n"), SimpleNamespace(id=_B, owner_vault="v", name="n")]
+    rows = [
+        SimpleNamespace(id=_A, owner_vault="v", name="n", version=1),
+        SimpleNamespace(id=_B, owner_vault="v", name="n", version=1),
+    ]
     monkeypatch.setattr(action, "_remove_one", removed)
     monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=rows))
     monkeypatch.setattr(action, "_survivor_still_works", AsyncMock(return_value=False))
@@ -158,7 +168,7 @@ async def test_a_survivor_that_stopped_working_removes_nothing(monkeypatch):
 @pytest.mark.asyncio
 async def test_only_the_named_removals_are_deleted(monkeypatch):
     removed = AsyncMock(return_value="removed")
-    rows = [SimpleNamespace(id=i, owner_vault="v", name="n") for i in (_A, _B, _C)]
+    rows = [SimpleNamespace(id=i, owner_vault="v", name="n", version=1) for i in (_A, _B, _C)]
     monkeypatch.setattr(action, "_remove_one", removed)
     monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=rows))
     monkeypatch.setattr(action, "_survivor_still_works", AsyncMock(return_value=True))
@@ -203,3 +213,170 @@ def test_an_ambiguous_secret_is_a_fixed_409_never_a_pick():
 
     refusal = error_for(AmbiguousSecretError(_VAULT, [_A, _B]))
     assert refusal.status_code == 409 and str(_A) not in str(refusal.detail)
+
+
+# --- review round: active-only lookup, value-aware create, re-raise, per-call cap -------------------------------
+
+
+def _held(value: bytes, active: bool = True):
+    return SimpleNamespace(id=_A, is_active=active, already_existed=False), AsyncMock(return_value=value)
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_with_the_same_value_returns_the_existing_row_and_says_so():
+    row, read = _held(b"same")
+    service = EnvelopeSecretsService(root_key=bytes(32))
+    service.read = read
+    got = await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"same")
+    assert got is row and row.already_existed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "held, active, reason", [(b"zq-held-9", True, "value_differs"), (b"zq-new-7", False, "inactive")]
+)
+async def test_a_differing_or_deactivated_name_is_refused_never_reused(held, active, reason):
+    row, read = _held(held, active)
+    service = EnvelopeSecretsService(root_key=bytes(32))
+    service.read = read
+    with pytest.raises(SecretConflictError) as raised:
+        await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"zq-new-7")
+    assert raised.value.reason == reason and "zq-" not in str(raised.value)
+    assert not row.already_existed
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_existing_copy_is_not_treated_as_the_same_value():
+    row, read = _held(b"")
+    service = EnvelopeSecretsService(root_key=bytes(32))
+    service.read = AsyncMock(side_effect=ValueError("boom"))
+    with pytest.raises(SecretConflictError):
+        await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"x")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("active, expected", [(True, _A), (False, None)])
+async def test_the_provider_key_lookup_never_returns_a_deactivated_row(monkeypatch, active, expected):
+    from services import provider_key_vault
+
+    row = SimpleNamespace(id=_A, is_active=active)
+    monkeypatch.setattr(EnvelopeSecretsService, "find_by_name", staticmethod(AsyncMock(return_value=row)))
+    assert await provider_key_vault._find_system_secret_id(MagicMock(), _NAME) == expected
+
+
+@pytest.mark.asyncio
+async def test_the_provider_key_lookup_judges_ambiguity_before_activity():
+    """One active + one deactivated copy is still an unresolved group: refuse, never pick the active one."""
+    from services import provider_key_vault
+
+    rows = [SimpleNamespace(id=_A, is_active=True), SimpleNamespace(id=_B, is_active=False)]
+    scalars = MagicMock(__iter__=lambda self: iter(rows))
+    session = MagicMock(execute=AsyncMock(return_value=MagicMock(scalars=lambda: scalars)))
+    with pytest.raises(AmbiguousSecretError):
+        await provider_key_vault._find_system_secret_id(session, _NAME)
+
+
+def _two_groups(monkeypatch, standing):
+    groups = [dup.SecretDuplicateGroup(_VAULT, _NAME, (uuid.UUID(int=n), uuid.UUID(int=n + 10))) for n in (1, 2, 3)]
+    monkeypatch.setattr(proposals, "find_duplicate_groups", AsyncMock(return_value=groups))
+    monkeypatch.setattr(proposals, "_already_proposed", AsyncMock(side_effect=standing))
+    monkeypatch.setattr(
+        proposals,
+        "verify_group",
+        AsyncMock(side_effect=lambda db, g: _result({i: _V.NOT_VERIFIED for i in g.secret_ids})),
+    )
+    gate = MagicMock(create_approval=AsyncMock(return_value=MagicMock(id=uuid.uuid4())))
+    monkeypatch.setattr(proposals, "ApprovalGateService", lambda db: gate)
+    return gate
+
+
+@pytest.mark.asyncio
+async def test_the_request_probes_at_most_the_cap_and_reports_the_rest(monkeypatch):
+    gate = _two_groups(monkeypatch, lambda *a: False)
+    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", limit=2)
+    assert len(batch.results) == 2 and batch.remaining == 1 and gate.create_approval.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_groups_with_a_standing_proposal_do_not_use_the_cap(monkeypatch):
+    gate = _two_groups(monkeypatch, [True, True, False, False])
+    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", limit=1)
+    assert batch.remaining == 0 and [r.skipped for r in batch.results] == [True, True, False]
+    assert gate.create_approval.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_proposal_blocks_until_an_admin_re_raises():
+    db = FakeAsyncSession(default_result=[])
+    await proposals._already_proposed(db, "d")
+    await proposals._already_proposed(db, "d", re_raise=True)
+    seen = [str(q.compile(compile_kwargs={"literal_binds": True})) for q in db.statements]
+    assert "rejected" in seen[0] and "rejected" not in seen[1] and "pending" in seen[1]
+
+
+# --- review round: rotated copies, survivor hold, expired approval ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_copy_rotated_since_it_was_probed_removes_nothing(monkeypatch):
+    removed = AsyncMock()
+    rows = [
+        SimpleNamespace(id=_A, owner_vault="v", name="n", version=1),
+        SimpleNamespace(id=_B, owner_vault="v", name="n", version=2),
+    ]
+    monkeypatch.setattr(action, "_remove_one", removed)
+    monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=rows))
+    monkeypatch.setattr(action, "_survivor_still_works", AsyncMock(return_value=True))
+    with pytest.raises(ValueError, match="changed since"):
+        await action.execute_secret_duplicate_cleanup(
+            _approval(survivor_id=str(_A), removal_ids=[str(_B)]), AsyncMock()
+        )
+    removed.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_proposal_without_recorded_versions_is_refused(monkeypatch):
+    rows = [
+        SimpleNamespace(id=_A, owner_vault="v", name="n", version=1),
+        SimpleNamespace(id=_B, owner_vault="v", name="n", version=1),
+    ]
+    monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=rows))
+    approval = _approval(survivor_id=str(_A), removal_ids=[str(_B)])
+    approval.context["versions"] = {}
+    with pytest.raises(ValueError):
+        await action.execute_secret_duplicate_cleanup(approval, AsyncMock())
+
+
+def _review():
+    return action._Review("ap", "admin", _A, 1, [_B], {str(_A): 1, str(_B): 1})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("found", [None, SimpleNamespace(version=2)])
+async def test_a_removal_is_refused_when_the_survivor_is_gone_or_rotated(found):
+    session = MagicMock(execute=AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: found)))
+    with pytest.raises(ValueError, match="surviving copy"):
+        await action._hold_survivor(session, _review())
+
+
+@pytest.mark.asyncio
+async def test_a_refused_removal_refreshes_the_approval_and_still_audits_from_plain_values(monkeypatch):
+    audits = []
+    monkeypatch.setattr(
+        action, "_audit", AsyncMock(side_effect=lambda review, result, sid, **kw: audits.append(result) or True)
+    )
+    monkeypatch.setattr(action, "_guarded_remove", AsyncMock(side_effect=RuntimeError("409")))
+    session, approval = AsyncMock(), _approval()
+    assert "kept" in await action._remove_one(approval, session, _B, _review())
+    session.refresh.assert_awaited_once_with(approval)
+    assert audits == ["attempted", "failed"]
+
+
+def test_the_proposal_records_each_copys_version():
+    group = dup.SecretDuplicateGroup(_VAULT, _NAME, (_A, _B), (3, 4))
+    context = proposals.proposal_context(dup.GroupVerification(group, {_A: _V.NOT_VERIFIED, _B: _V.VERIFIED}))
+    assert context["versions"] == {str(_A): 3, str(_B): 4}
+
+
+def test_a_canonical_llm_provider_name_is_manual_only():
+    assert not dup.has_verifier("llm:provider:openai:api_key")

@@ -8,10 +8,13 @@ Owner ruling (2026-11-20): duplicate credentials are always resolved by verifica
 wins. Age, id and lookup order never decide. This module only READS and PROBES; it deletes nothing. What to do
 with the result is a proposal a human approves (``services/secret_duplicate_proposals.py``).
 
-Verifier per secret type: an LLM provider key is probed with the provider's own health check
+Verifier per secret type: an LLM provider key named by its env-var label is probed with the provider's own health check
 (``services.provider_health.providers``), which sends one authenticated read through the guarded fetch under the
 egress policy. A name with no verifier is ``NO_VERIFIER`` -- never "verified", never "failed" -- and the group
-goes to a person with no recommendation. Nothing here logs or returns a name or a value: groups are ids.
+goes to a person with no recommendation. That includes the vault's canonical ``llm:provider:<name>:api_key``
+names (the SLM's LLM-provider producer): a provider's target is its own configured endpoint, which a name alone
+does not give, so those groups are MANUAL-ONLY (#17850) -- never guessed against a default endpoint, never ordered
+or aged, never rotated to make a copy verifiable. Nothing here logs or returns a name or a value: groups are ids.
 """
 
 from __future__ import annotations
@@ -46,6 +49,7 @@ class SecretDuplicateGroup:
     owner_vault: str
     name: str
     secret_ids: tuple[uuid.UUID, ...]
+    versions: tuple[int, ...] = ()  # rotation generation of each copy, aligned with ``secret_ids`` (#17850)
 
 
 @dataclass(frozen=True)
@@ -92,14 +96,17 @@ async def find_duplicate_groups(session: AsyncSession) -> list[SecretDuplicateGr
         .subquery()
     )
     rows = await session.execute(
-        select(Secret.owner_vault, Secret.name, Secret.id)
+        select(Secret.owner_vault, Secret.name, Secret.id, Secret.version)
         .join(dupes, (Secret.owner_vault == dupes.c.owner_vault) & (Secret.name == dupes.c.name))
         .order_by(Secret.owner_vault, Secret.name, Secret.id)
     )
-    grouped: dict[tuple[str, str], list[uuid.UUID]] = {}
-    for vault, name, secret_id in rows:
-        grouped.setdefault((vault, name), []).append(secret_id)
-    return [SecretDuplicateGroup(v, n, tuple(ids)) for (v, n), ids in grouped.items()]
+    grouped: dict[tuple[str, str], list[tuple[uuid.UUID, int]]] = {}
+    for vault, name, secret_id, version in rows:
+        grouped.setdefault((vault, name), []).append((secret_id, version))
+    return [
+        SecretDuplicateGroup(v, n, tuple(i for i, _ in found), tuple(ver for _, ver in found))
+        for (v, n), found in grouped.items()
+    ]
 
 
 async def _probe(name: str, value: str) -> Verdict:

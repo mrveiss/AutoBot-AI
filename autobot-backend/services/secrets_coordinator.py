@@ -473,8 +473,7 @@ class SecretsCoordinator:
     ) -> Secret:
         """Create a system-vault secret on behalf of a service identity."""
         self._assert_system_vault(owner_vault)
-        logger.info("service_create system secret", extra={"service_id": service_id, "name": name})
-        return await self._service.create(
+        secret = await self._service.create(
             session,
             owner_vault=owner_vault,
             name=name,
@@ -482,6 +481,8 @@ class SecretsCoordinator:
             plaintext=plaintext,
             created_by=_SERVICE_OWNER_ID,
         )
+        logger.info("service_create system secret", extra={"service_id": service_id, "secret_id": str(secret.id)})
+        return secret
 
     async def service_read(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> bytes:
         """Read a system-vault secret value on behalf of a service identity."""

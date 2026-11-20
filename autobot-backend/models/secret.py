@@ -57,6 +57,9 @@ class Secret(Base):
     # One envelope secret per (owner_vault, name) (#17850). Legacy rows (owner_vault NULL) are exempt: SQL treats
     # NULLs as distinct. The migration refuses while same-name rows exist; duplicates are resolved by
     # verification through the approval queue (services/secret_duplicate_proposals.py), never by picking one.
+    #: Not a column: set on the row ``EnvelopeSecretsService.create`` returns when it already existed (#17850).
+    already_existed = False
+
     __table_args__ = (UniqueConstraint("owner_vault", "name", name=SECRET_OWNER_VAULT_NAME_UNIQUE),)
 
     id: Mapped[uuid.UUID] = mapped_column(

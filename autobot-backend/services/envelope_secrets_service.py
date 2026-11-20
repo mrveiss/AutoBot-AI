@@ -24,6 +24,7 @@ computes those sets from user/agent identity + membership is Task 2.3 / 9.2.
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
@@ -33,7 +34,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_envelope import (
+    DecryptionError,
     SealedSecret,
+    UnsupportedFormatError,
     WrappedDek,
     derive_vault_key,
     load_root_key,
@@ -62,6 +65,18 @@ class AmbiguousSecretError(Exception):
     def __init__(self, owner_vault: str, secret_ids: list[uuid.UUID]) -> None:
         self.secret_ids = sorted(secret_ids, key=str)
         super().__init__(f"{len(self.secret_ids)} secrets share one name in vault {owner_vault}")
+
+
+class SecretConflictError(Exception):
+    """The ``(owner_vault, name)`` is taken by a secret this create may not reuse (#17850).
+
+    ``reason`` is ``inactive`` (a deactivated row still holds the unique slot: reactivate or rotate it) or
+    ``value_differs`` (the name exists with another value: rotate it). Carries the id only -- never a name or value.
+    """
+
+    def __init__(self, reason: str, secret_id: uuid.UUID) -> None:
+        self.reason, self.secret_id = reason, secret_id
+        super().__init__(f"secret {secret_id} already holds this name ({reason})")
 
 
 class SecretAccessError(PermissionError):
@@ -95,13 +110,28 @@ class EnvelopeSecretsService:
     ) -> Secret:
         """Seal *plaintext* for *owner_vault*; persist secret + owner grant. Idempotent per (owner_vault, name).
 
-        An existing secret is returned untouched (value NOT replaced; use :meth:`rotate_value`); a lost create race
-        re-reads the winner; pre-constraint duplicates raise :class:`AmbiguousSecretError`, never a pick.
+        An existing secret holding the SAME value is returned (``already_existed`` set) and nothing is written. One
+        holding a different value, or a deactivated one, raises :class:`SecretConflictError`: a create never
+        replaces a value (use :meth:`rotate_value`). A lost create race re-reads the winner; pre-constraint
+        duplicates raise :class:`AmbiguousSecretError`, never a pick.
         """
         vault = owner_vault.to_str()
         if (existing := await self.find_by_name(session, owner_vault=vault, name=name)) is not None:
-            return existing
-        secret_id = uuid.uuid4()
+            return await self._settle_existing(session, existing, owner_vault, plaintext)
+        secret, grant = self._seal_new(owner_vault, name, secret_type, plaintext, created_by, extra_data, expires_at)
+        try:
+            return await self._insert(session, secret, grant)
+        except IntegrityError:  # lost the race at the unique constraint: the winner's row is the answer
+            winner = await self.find_by_name(session, owner_vault=vault, name=name)
+            if winner is None:
+                raise
+            return await self._settle_existing(session, winner, owner_vault, plaintext)
+
+    def _seal_new(
+        self, owner_vault: VaultRef, name, secret_type, plaintext, created_by, extra_data, expires_at
+    ) -> tuple[Secret, SecretGrant]:
+        """The new ``Secret`` row (value sealed once under a fresh DEK) and its owner grant, not yet persisted."""
+        secret_id, vault = uuid.uuid4(), owner_vault.to_str()
         sealed, dek = seal(plaintext, secret_id=str(secret_id))
         wrapped = wrap_dek(dek, self._kek(vault), vault, secret_id=str(secret_id))
         secret = Secret(
@@ -110,25 +140,39 @@ class EnvelopeSecretsService:
             extra_data=dict(extra_data or {}), expires_at=expires_at
         )  # fmt: skip
         grant = SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
-        return await self._insert_or_reread(session, secret, grant)
+        return secret, grant
 
-    async def _insert_or_reread(self, session: AsyncSession, secret: Secret, grant: SecretGrant) -> Secret:
-        """Insert in a savepoint; a unique-constraint loss returns the winner's row."""
-        try:
-            async with session.begin_nested():
-                session.add(secret)
-                session.add(grant)
-                await session.flush()
-        except IntegrityError:
-            winner = await self.find_by_name(session, owner_vault=secret.owner_vault, name=secret.name)
-            if winner is None:
-                raise
-            return winner
+    @staticmethod
+    async def _insert(session: AsyncSession, secret: Secret, grant: SecretGrant) -> Secret:
+        """Insert in a savepoint, so a constraint loss leaves the caller's transaction usable."""
+        async with session.begin_nested():
+            session.add(secret)
+            session.add(grant)
+            await session.flush()
         return secret
+
+    async def _settle_existing(
+        self, session: AsyncSession, existing: Secret, owner_vault: VaultRef, plaintext: bytes
+    ) -> Secret:
+        """Reuse *existing* only when it is active and already holds *plaintext*; the value is never logged."""
+        if not existing.is_active:
+            raise SecretConflictError("inactive", existing.id)
+        try:
+            held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])
+        except (SecretAccessError, SecretNotFoundError, DecryptionError, UnsupportedFormatError, KeyError, ValueError):
+            raise SecretConflictError("value_differs", existing.id) from None  # unreadable is not "the same"
+        if not hmac.compare_digest(held, plaintext):
+            raise SecretConflictError("value_differs", existing.id)
+        existing.already_existed = True
+        return existing
 
     @staticmethod
     async def find_by_name(session: AsyncSession, *, owner_vault: str, name: str) -> Secret | None:
-        """The one secret named *name* in *owner_vault*, ``None`` if absent; several: :class:`AmbiguousSecretError`."""
+        """The one secret named *name* in *owner_vault*, ``None`` if absent; several: :class:`AmbiguousSecretError`.
+
+        Every row counts, active or not: ambiguity is judged over the whole group, and a deactivated row still
+        holds the unique slot. A reader that must not use a deactivated row checks ``is_active`` on the result.
+        """
         rows = await session.execute(select(Secret).where(Secret.owner_vault == owner_vault, Secret.name == name))
         found = list(rows.scalars())
         if len(found) > 1:

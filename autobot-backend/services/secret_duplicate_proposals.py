@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
@@ -36,13 +37,26 @@ REQUESTED_BY = "secret-duplicate-resolution"
 # Registered at import: the handler must be in place before any approve() can reach a proposal raised here.
 register_secret_duplicate_cleanup_action()
 
-#: Proposal states that keep a group from being proposed again.
+#: Proposal states that keep a group from being proposed again. A denial is a person's decision, so it stands --
+#: until an admin explicitly re-raises the group, which only a still-PENDING proposal then blocks.
 _BLOCKING = (ApprovalStatus.PENDING.value, ApprovalStatus.REJECTED.value, ApprovalStatus.REVISION_REQUESTED.value)
+_BLOCKING_WHEN_RE_RAISED = (ApprovalStatus.PENDING.value,)
+
+#: Most groups one request verifies and proposes (each copy is a network probe); the rest are reported (#17850).
+MAX_GROUPS_PER_REQUEST = env_int_clamped("AUTOBOT_SECRET_DUPLICATE_MAX_GROUPS_PER_REQUEST", 5, 1, 100)
 
 REASON_ONE = "one_verified"
 REASON_NONE = "none_verified"
 REASON_SEVERAL = "several_verified"
 REASON_NO_VERIFIER = "no_verifier"
+
+
+@dataclass(frozen=True)
+class ProposalBatch:
+    """The results of one request and how many duplicated groups it left for another call."""
+
+    results: list["ProposalResult"]
+    remaining: int
 
 
 @dataclass(frozen=True)
@@ -75,18 +89,19 @@ def proposal_context(result: GroupVerification) -> dict:
         "group_digest": group_digest(ids),
         "secret_ids": ids,
         "verified_ids": [str(i) for i in result.verified_ids],
+        "versions": {str(i): v for i, v in zip(result.group.secret_ids, result.group.versions)},
         "survivor_id": str(survivor) if survivor else None,
         "removal_ids": [i for i in ids if survivor and i != str(survivor)],
         "reason": _reason(result),
     }
 
 
-async def _already_proposed(db: AsyncSession, digest: str) -> bool:
+async def _already_proposed(db: AsyncSession, digest: str, re_raise: bool = False) -> bool:
     """Whether this group has a proposal that must not be repeated. Plain columns only, any SQL dialect."""
     query = select(Approval.context).where(
         Approval.approval_type == ApprovalType.DESTRUCTIVE_ACTION.value,
         Approval.requested_by_agent.like(f"{REQUESTED_BY}%"),
-        Approval.status.in_(_BLOCKING),
+        Approval.status.in_(_BLOCKING_WHEN_RE_RAISED if re_raise else _BLOCKING),
     )
     contexts = (await db.execute(query)).scalars().all()
     return any(c and c.get("action") == ACTION and c.get("group_digest") == digest for c in contexts)
@@ -107,11 +122,13 @@ def _text(context: dict) -> tuple[str, str]:
     )
 
 
-async def propose_group(db: AsyncSession, result: GroupVerification, requester: str) -> ProposalResult:
-    """File the proposal for one verified group; skipped when one already stands for it."""
+async def propose_group(
+    db: AsyncSession, result: GroupVerification, requester: str, re_raise: bool = False
+) -> ProposalResult:
+    """File the proposal for one verified group; skipped when one already stands for it (see ``re_raise``)."""
     context = proposal_context(result)
     copies = len(context["secret_ids"])
-    if await _already_proposed(db, context["group_digest"]):
+    if await _already_proposed(db, context["group_digest"], re_raise):
         return ProposalResult(None, context["reason"], copies, skipped=True)
     title, description = _text(context)
     approval = await ApprovalGateService(db).create_approval(
@@ -124,12 +141,25 @@ async def propose_group(db: AsyncSession, result: GroupVerification, requester: 
     return ProposalResult(str(approval.id), context["reason"], copies)
 
 
-async def propose_duplicate_resolutions(db: AsyncSession, requester: str) -> list[ProposalResult]:
-    """Detect, verify and propose for every duplicated ``(owner_vault, name)``; returns one result per group."""
-    results = []
+async def propose_duplicate_resolutions(
+    db: AsyncSession, requester: str, *, re_raise: bool = False, limit: int | None = None
+) -> ProposalBatch:
+    """Detect, verify and propose for duplicated ``(owner_vault, name)`` groups, probing at most *limit* per call.
+
+    ``re_raise`` lets an admin raise a group again after a rejected or revision-requested proposal. A group with a
+    standing proposal is skipped before any probe and does not count against the cap; groups past the cap are
+    counted in ``remaining`` for the next call, so repeated calls always make progress.
+    """
+    cap = MAX_GROUPS_PER_REQUEST if limit is None else limit
+    results: list[ProposalResult] = []
+    probed = remaining = 0
     for group in await find_duplicate_groups(db):
-        results.append(await propose_group(db, await verify_group(db, group), requester))
-    logger.info(
-        "Secret duplicate resolution: %d groups, %d proposals", len(results), sum(not r.skipped for r in results)
-    )
-    return results
+        if await _already_proposed(db, group_digest(group.secret_ids), re_raise):
+            results.append(ProposalResult(None, "already_proposed", len(group.secret_ids), skipped=True))
+        elif probed >= cap:
+            remaining += 1
+        else:
+            probed += 1
+            results.append(await propose_group(db, await verify_group(db, group), requester, re_raise))
+    logger.info("Secret duplicate resolution: %d proposed, %d left for another call", probed, remaining)
+    return ProposalBatch(results, remaining)

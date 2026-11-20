@@ -336,15 +336,16 @@ def plugin_credential_resolvers() -> dict[str, Callable[[str], str]]:
 
 
 async def _find_system_secret_id(session: AsyncSession, name: str) -> uuid.UUID | None:
-    """Return the id of the System-vault secret named *name*, if any.
+    """Return the id of the ACTIVE System-vault secret named *name*, if any (a deactivated key is never used).
 
-    ``(owner_vault, name)`` is unique (#17850), so there is one row or none; same-name duplicates that predate the
-    constraint raise ``AmbiguousSecretError`` -- no row is picked by order, a human resolves them first.
+    Ambiguity is judged over ALL rows first: same-name duplicates (active or not) raise ``AmbiguousSecretError`` --
+    no copy is picked by order or by status while a group is unresolved (#17850). A sole deactivated row is then
+    excluded, as the query did before the unique constraint.
     """
     from services.envelope_secrets_service import EnvelopeSecretsService
 
     row = await EnvelopeSecretsService.find_by_name(session, owner_vault=_SYSTEM_VAULT.to_str(), name=name)
-    return row.id if row is not None else None
+    return row.id if row is not None and row.is_active else None
 
 
 async def capture_provider_key(

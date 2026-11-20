@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.envelope_secrets_service import AmbiguousSecretError, EnvelopeSecretsService
+from services.envelope_secrets_service import AmbiguousSecretError, EnvelopeSecretsService, SecretConflictError
+from services.provider_key_vault import _find_system_secret_id
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
@@ -53,16 +54,38 @@ async def _count(session, name="SOME_KEY") -> int:
     return (await session.execute(select(func.count()).select_from(Secret).where(Secret.name == name))).scalar_one()
 
 
-async def test_two_creates_of_one_name_yield_one_row_and_one_id(maker):
+async def test_two_creates_of_one_name_and_value_yield_one_row_and_one_id(maker):
     async with maker() as s:
         first = await _create(s, value=b"first")
         await s.commit()
-        second = await _create(s, value=b"second")
+        assert first.already_existed is False
+        second = await _create(s, value=b"first")
         await s.commit()
-        assert second.id == first.id
+        assert second.id == first.id and second.already_existed is True
         assert await _count(s) == 1
+
+
+async def test_a_create_with_a_different_value_is_refused_and_the_stored_value_kept(maker):
+    async with maker() as s:
+        first = await _create(s, value=b"first")
+        await s.commit()
+        with pytest.raises(SecretConflictError) as refused:
+            await _create(s, value=b"second")
+        assert refused.value.reason == "value_differs" and refused.value.secret_id == first.id
         value = await EnvelopeSecretsService(root_key=_ROOT).read(s, secret_id=first.id, accessible_vaults={_VAULT})
-        assert value == b"first", "a repeated create must not replace the stored value"
+        assert value == b"first" and await _count(s) == 1
+
+
+async def test_a_deactivated_secret_keeps_its_name_and_is_neither_reused_nor_found_by_the_vault_lookup(maker):
+    async with maker() as s:
+        first = await _create(s)
+        first.is_active = False
+        await s.commit()
+        with pytest.raises(SecretConflictError) as refused:
+            await _create(s)
+        assert refused.value.reason == "inactive"
+        assert await _find_system_secret_id(s, "SOME_KEY") is None
+        assert await _count(s) == 1
 
 
 async def test_concurrent_first_creates_meet_at_the_constraint(maker):

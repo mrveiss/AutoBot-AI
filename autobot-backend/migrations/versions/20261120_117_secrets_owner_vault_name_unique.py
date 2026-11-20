@@ -8,9 +8,11 @@
 insert a second secret for every repeated first-time save, so an installation may hold several rows under one
 ``(owner_vault, name)``. Choosing which one survives is a decision about stored credentials: the migration
 NEVER makes it. If any duplicate exists the migration FAILS, naming each group by vault and secret ids (never
-a name or a value), and changes nothing. The fix is a person's: raise the proposals
-(``POST /api/admin/secret-duplicates/requests``), each copy is verified against its target, a human approves the
-removal of the losing copies in the Approvals inbox, then run the upgrade again.
+a name or a value), and changes nothing. The fix is a person's. Where a type can be verified, raise the proposals
+(``POST /api/admin/secret-duplicates/requests``): each copy is verified against its target and a human approves the
+removal of the losing copies in the Approvals inbox. Where it cannot (a secret type with no verifier, or zero or
+several copies that verify), the proposal is a flag for a person: they keep the copy they choose and delete the
+others with ``DELETE /api/secrets/<id>`` (the guarded delete). Then run the upgrade again.
 
 Legacy rows (``owner_vault IS NULL``) are not constrained: SQL treats NULLs as distinct.
 """
@@ -51,7 +53,9 @@ def upgrade() -> None:
         raise RuntimeError(
             f"cannot create {_CONSTRAINT}: several secrets share one (owner_vault, name) (first 20 groups): "
             f"{listed}. Nothing was changed and no copy was chosen. Verify and resolve them through the "
-            "Approvals inbox (POST /api/admin/secret-duplicates/requests), then run the upgrade again."
+            "Approvals inbox (POST /api/admin/secret-duplicates/requests; add ?re_raise=true after a rejected "
+            "proposal), or keep the copy you choose and delete the others with DELETE /api/secrets/<id>, "
+            "then run the upgrade again."
         )
     op.create_unique_constraint(_CONSTRAINT, _TABLE, ["owner_vault", "name"])
 

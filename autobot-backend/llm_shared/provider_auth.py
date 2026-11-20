@@ -201,7 +201,7 @@ async def _vault_read(
     try:
         return json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        logger.warning("provider_auth vault decode failed for %s: %s", name, exc)
+        logger.warning("provider_auth vault decode failed (%s)", type(exc).__name__)
         return None
 
 

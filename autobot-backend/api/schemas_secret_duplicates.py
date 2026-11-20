@@ -33,3 +33,4 @@ class DuplicateRequestResponse(BaseModel):
     """The proposals one request raised."""
 
     proposals: list[DuplicateProposal]
+    remaining: int = 0  # duplicated groups left for another call (the per-request cap)
