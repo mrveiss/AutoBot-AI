@@ -20,6 +20,7 @@ import type {
 import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/useKnowledgeStore'
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 import { createLogger } from '@/utils/debugUtils'
+import i18n from '@/i18n'
 
 // Create scoped logger for KnowledgeController
 const logger = createLogger('KnowledgeController')
@@ -237,19 +238,16 @@ export class KnowledgeController {
     }
   }
 
+  /** #21383: the backend only proposes the delete for approval, so the list keeps its rows and a notice says so. */
   async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
     try {
-
-      await knowledgeRepository.bulkDeleteDocuments(documentIds)
-      this.knowledgeStore.bulkDeleteDocuments(documentIds)
-
-      await this.refreshStats()
-
+      const reply = await knowledgeRepository.bulkDeleteDocuments(documentIds)
+      const key = reply.approval_id ? 'knowledge.entries.deleteProposed' : 'knowledge.entries.deleteNotProposed'
+      this.appStore.addSystemNotification({ title: i18n.global.t('knowledge.entries.deleteTitle'), message: i18n.global.t(key), severity: 'info' })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.appStore.setGlobalError(`Failed to delete documents: ${errorMessage}`)
+      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.deleteProposeFailed', { message: errorMessage }))
       throw error
-    } finally {
     }
   }
 
