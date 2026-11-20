@@ -67,6 +67,9 @@ _MARKERS: dict[str, tuple[str, ...]] = {
     ".cjs": ("//",),
     ".vue": ("//",),
     ".json5": ("//",),
+    # Markdown has no comment syntax: a leading `#` is a heading, which is
+    # content a reader sees. Chosen by the processor, not defaulted (#17941).
+    ".md": (),
 }
 
 #: Files with no suffix -- git hooks, `install.sh`-style scripts invoked by
@@ -327,7 +330,7 @@ def code_lines(
     suffix = Path(name).suffix if name is not None else ""
     text, cuts = _scan_block_syntax(text, suffix)
     trailing = (cuts, markers, suffix in _BACKSLASH_ESCAPES) if strip_trailing else None
-    kept = _code_lines_of(text, markers, trailing)
+    kept = _code_lines_of(text, markers, trailing, cuts)
     return _join_continuations(kept) if join_continuations else kept
 
 
@@ -338,17 +341,33 @@ def _read(source: str | Path, name: str | Path | None) -> tuple[str, str | Path 
     return source, name
 
 
-def _code_lines_of(text: str, markers: Sequence[str], trailing: tuple | None) -> list[CodeLine]:
-    """The lines of *text* that do not start with a comment marker, each cut at its trailing comment if *trailing*.
+def _starts_comment(raw: str, start: int, markers: Sequence[str], cuts: list[int] | None) -> bool:
+    """Whether the line *raw*, beginning at output offset *start*, is a whole-line comment.
 
-    *trailing* is ``(scanner cuts or None, markers, backslash escapes)``; the scanner's cuts decide where a `//`
-    comment starts on the block-comment suffixes, `strip_trailing_comment` everywhere else.
+    On the block-comment suffixes the scanner's own `//` offsets decide, so a line inside a template literal or
+    string that merely begins with `//` is code; elsewhere the marker prefix does.
+    """
+    indent = len(raw) - len(raw.lstrip())
+    if cuts is not None:
+        index = bisect_left(cuts, start + indent)
+        return index < len(cuts) and cuts[index] == start + indent
+    return any(raw[indent:].startswith(marker) for marker in markers)
+
+
+def _code_lines_of(
+    text: str, markers: Sequence[str], trailing: tuple | None, cuts: list[int] | None = None
+) -> list[CodeLine]:
+    """The lines of *text* that are not whole-line comments, each cut at its trailing comment if *trailing*.
+
+    *cuts* are the scanner's comment offsets on the block-comment suffixes (`None` elsewhere); *trailing* is
+    ``(cuts or None, markers, backslash escapes)``, the scanner's cuts deciding where a `//` comment starts there
+    and `strip_trailing_comment` everywhere else.
     """
     kept: list[CodeLine] = []
     offset = 0
     for lineno, (raw, whole) in enumerate(zip(text.splitlines(), text.splitlines(True)), 1):
         start, offset = offset, offset + len(whole)
-        if any(raw.lstrip().startswith(marker) for marker in markers):
+        if _starts_comment(raw, start, markers, cuts):
             continue
         kept.append(CodeLine(lineno, _cut_trailing(raw, start, trailing) if trailing else raw))
     return kept
