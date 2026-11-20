@@ -139,6 +139,7 @@ _REFUSAL_TEXT = {
     ReviewRefused.NO_REVIEWER: "it has no reviewer and no creator to hand it to",
     ReviewRefused.NOT_A_MEMBER: "its reviewer or creator is not a member of the company",
     ReviewRefused.NOT_THE_HOLDER: "the agent that held it no longer does",
+    ReviewRefused.LACKS_ROLE: "its reviewer does not hold the role its review policy requires",
 }
 
 
