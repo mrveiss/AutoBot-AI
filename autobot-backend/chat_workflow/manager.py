@@ -20,6 +20,7 @@ from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import note_chat_turn_model
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
@@ -29,10 +30,12 @@ from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.reply_persistence import (
+    COMPLETED_KEY,
     is_redundant_prose,
+    iteration_reply_entries,
     later_respond_entries,
     model_or_unknown,
-    reasoning_entries,
+    stable_entry_id,
     stamp_model,
 )
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
@@ -1924,6 +1927,7 @@ before summarizing.
         actually consumes (see _attach_vision_payload) — vision-capable models get it,
         non-vision models keep the existing text-only "prompt" field, unaffected.
         """
+        note_chat_turn_model(selected_model)  # #21878: this model is resident now; side calls match its context
         payload = {
             "model": selected_model,
             "prompt": current_prompt,
@@ -2959,10 +2963,11 @@ before summarizing.
                 "streamed": True,
                 "model": model_or_unknown(model),
                 "iteration": iteration,
+                COMPLETED_KEY: True,  # a whole reply, never merged as a streaming state on load (#21904)
             },
             None,
             sources=[],
-            message_id=streamed[0],
+            message_id=streamed[0] or stable_entry_id(iteration, "response", content),
             created_at=streamed[1],
         )
 
@@ -3059,16 +3064,11 @@ before summarizing.
         model = streamed_prose_model(iter_messages) or selected_model  # #21881: this iteration's own model
 
         streamed = streamed_prose_identity(iter_messages)  # #21846; the time is when the prose was said (#21904)
-        reasoning, answer_text = reasoning_entries(chat_mgr, response_text, iteration, model, streamed[1])  # #21904
-        final_entry = self._build_final_response_entry(
-            chat_mgr,
-            answer_text,
-            batch + tool_entries + later_respond_entries(workflow_messages, iteration),
-            iteration=iteration,
-            streamed=streamed,
-            model=model,
+        judged = batch + tool_entries + later_respond_entries(workflow_messages, iteration)
+        build = functools.partial(self._build_final_response_entry, chat_mgr)
+        entries, final_entry = iteration_reply_entries(
+            chat_mgr, build, response_text, iteration, model, streamed, judged
         )
-        entries = reasoning + ([final_entry] if final_entry else [])
         entries.extend(tool_entries)
         for entry in tool_entries:
             stamp_model(entry, model)

@@ -23,7 +23,8 @@ streamed chunk of its own iteration, else the turn's selected model, else ``unkn
 from __future__ import annotations
 
 import unicodedata
-from typing import Any, Dict, Iterable, List
+import uuid
+from typing import Any, Callable, Dict, Iterable, List
 
 from autobot_shared.text_tokens import word_token_list
 from chat_workflow.thought_markers import split_reasoning_blocks
@@ -31,6 +32,8 @@ from chat_workflow.tool_call_args import clean_reply_text
 
 UNKNOWN_MODEL = "unknown"
 RESPOND_TOOL_TYPE = "respond_tool"
+#: Set on a stored reply that is whole, never an accumulated streaming state; a load must not merge it (#21904).
+COMPLETED_KEY = "completed"
 
 
 def normalize_reply(text: str | None) -> str:
@@ -98,21 +101,41 @@ def stamp_model(entry: Dict[str, Any], model: Any) -> None:
         entry["metadata"] = {**metadata, "model": model_or_unknown(model)}
 
 
-def reasoning_entries(
-    chat_mgr: Any, text: str, iteration: int, model: Any, created_at: float | None
-) -> tuple[List[Dict[str, Any]], str]:
-    """(an entry per thought/planning block of the prose, typed as it is live; the answer text) (#21904)."""
+def stable_entry_id(iteration: int | None, kind: str, text: str) -> str:
+    """The id of a prose entry that was not streamed under one: the same reply persisted twice has the same id (#21904).
+
+    The append merge drops an id that is already stored, so a re-persist (a graph resume) adds nothing twice.
+    """
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"autobot-reply:{iteration}:{kind}:{text}"))
+
+
+def iteration_reply_entries(
+    chat_mgr: Any,
+    build_final: Callable[..., Dict[str, Any] | None],
+    text: str,
+    iteration: int,
+    model: Any,
+    streamed: tuple,
+    judged_against: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], Dict[str, Any] | None]:
+    """(an iteration's thought/planning entries then its answer entry, the answer entry or None) (#21904).
+
+    Each thought/planning block is stored typed as it is live; the answer is *text* without them, built by
+    *build_final* and judged for redundancy against *judged_against*.
+    """
     blocks, answer = split_reasoning_blocks(clean_reply_text(text or ""))
     entries = [
         chat_mgr._build_message_dict(
             "assistant",
             body,
             kind,
-            {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model)},
+            {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model), COMPLETED_KEY: True},
             None,
             sources=[],
-            created_at=created_at,
+            message_id=stable_entry_id(iteration, kind, body),
+            created_at=streamed[1],
         )
         for kind, body in blocks
     ]
-    return entries, answer
+    final = build_final(answer, judged_against, iteration=iteration, streamed=streamed, model=model)
+    return entries + ([final] if final else []), final

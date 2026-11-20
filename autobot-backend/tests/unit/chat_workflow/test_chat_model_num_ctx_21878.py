@@ -12,7 +12,8 @@ import sys
 import httpx
 import pytest
 
-from autobot_shared.chat_model_context import num_ctx_for_model
+from autobot_shared import chat_model_context
+from autobot_shared.chat_model_context import chat_context_options, note_chat_turn_model, num_ctx_for_model
 from autobot_shared.ssot_constants import ModelConfig
 from chat_workflow.llm_handler import LLMHandlerMixin
 
@@ -32,6 +33,7 @@ def llm_shared_real(monkeypatch):
 def chat_model(monkeypatch):
     from autobot_shared.ssot_config import config
 
+    monkeypatch.setattr(chat_model_context, "_last_turn_model", None)
     monkeypatch.setattr(type(config), "default_llm_model", property(lambda _self: CHAT), raising=False)
 
 
@@ -75,14 +77,29 @@ def test_interpretation_asks_the_chat_model_with_the_chat_context():
     assert handler._get_interpretation_llm_options(OTHER)["num_ctx"] == ModelConfig.DEFAULT_NUM_CTX
 
 
-def test_the_ollama_provider_sends_the_chat_context_for_the_chat_model(llm_shared_real):
-    LLMRequest = importlib.import_module("llm_shared.models").LLMRequest
-    LLMSettings = importlib.import_module("llm_shared.models").LLMSettings
-    StreamingManager = importlib.import_module("llm_shared.streaming").StreamingManager
-    OllamaRequestExecutor = importlib.import_module("llm_shared.providers.ollama").OllamaRequestExecutor
-    provider = OllamaRequestExecutor(LLMSettings(), StreamingManager())
-    request = LLMRequest(messages=[{"role": "user", "content": "hi"}], model_name=CHAT)
-    chat = provider.build_request_data(request, CHAT, False)
-    other = provider.build_request_data(request, OTHER, False)
-    assert chat["options"]["num_ctx"] == ModelConfig.CHAT_NUM_CTX
-    assert other["options"]["num_ctx"] == LLMSettings().num_ctx
+def test_the_provider_keeps_the_callers_context_and_only_the_caller_asks_for_the_chats(llm_shared_real):
+    models = importlib.import_module("llm_shared.models")
+    executor = importlib.import_module("llm_shared.providers.ollama").OllamaRequestExecutor
+    streaming = importlib.import_module("llm_shared.streaming").StreamingManager
+    provider = executor(models.LLMSettings(), streaming())
+
+    def sent(**metadata):
+        request = models.LLMRequest(messages=[{"role": "user", "content": "hi"}], model_name=CHAT, metadata=metadata)
+        return provider.build_request_data(request, CHAT, False)["options"]["num_ctx"]
+
+    assert sent() == models.LLMSettings().num_ctx  # no override by model name
+    assert sent(**chat_context_options(CHAT)) == ModelConfig.CHAT_NUM_CTX
+    assert sent(num_ctx=0) == 0  # an explicit value is kept, falsy or not
+
+
+def test_a_user_selected_chat_model_is_recognised_after_a_turn_ran_with_it():
+    selected = "user-picked:14b"
+    assert num_ctx_for_model(selected, 1234) == 1234
+    note_chat_turn_model(selected)
+    assert num_ctx_for_model(selected, 1234) == ModelConfig.CHAT_NUM_CTX
+    assert num_ctx_for_model(OTHER, 1234) == 1234
+
+
+def test_the_verifier_uses_the_same_rule():
+    assert chat_context_options(OTHER, reuses_chat=True) == {"num_ctx": ModelConfig.CHAT_NUM_CTX}
+    assert chat_context_options(OTHER) == {}

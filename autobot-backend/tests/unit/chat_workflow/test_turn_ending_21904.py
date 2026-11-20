@@ -49,6 +49,10 @@ def _through_state(messages):
     return _build_workflow_messages_from_state(state)
 
 
+def _through_state_entries(entries):
+    return _build_workflow_messages_from_state({"workflow_messages": entries})
+
+
 def _at(entry):
     return parse_message_timestamp(entry["timestamp"]).timestamp()
 
@@ -133,3 +137,54 @@ def test_a_marker_quoted_in_code_is_not_a_reasoning_block():
 
     blocks, rest = split_reasoning_blocks("Use `[THOUGHT]` to mark reasoning.")
     assert blocks == [] and rest == "Use `[THOUGHT]` to mark reasoning."
+
+
+def test_an_unclosed_thought_marker_keeps_the_answer_text():
+    from chat_workflow.thought_markers import split_reasoning_blocks
+
+    blocks, rest = split_reasoning_blocks(f"[THOUGHT] still thinking\n{ANSWER}")
+    assert blocks == [] and ANSWER in rest
+    blocks, rest = split_reasoning_blocks(f"[THOUGHT] first [PLANNING] second [/PLANNING]\n{ANSWER}")
+    assert [kind for kind, _ in blocks] == ["thought", "planning"] and rest == ANSWER
+
+
+def test_a_completed_reply_without_an_iteration_is_still_not_merged():
+    entries = [
+        {
+            "id": "a",
+            "sender": "assistant",
+            "text": NARRATION + " and some more words",
+            "messageType": "response",
+            "metadata": {"iteration": None, "completed": True},
+            "timestamp": "2026-11-20T19:00:01+00:00",
+        },
+        {
+            "id": "b",
+            "sender": "assistant",
+            "text": ANSWER,
+            "messageType": "response",
+            "metadata": {"iteration": None, "completed": True},
+            "timestamp": "2026-11-20T19:00:02+00:00",
+        },
+    ]
+    assert [e["id"] for e in DeduplicationMixin()._dedupe_streaming_messages(entries)] == ["a", "b"]
+
+
+def test_persisting_the_same_turn_twice_adds_nothing_the_second_time():
+    from chat_history.session_merge import combine_messages
+
+    messages = _through_state(_tool_steps(1))
+    first = _stored(messages, [NARRATION, ANSWER])
+    again = _stored(_through_state(_tool_steps(1)), [NARRATION, ANSWER])
+    # the tool steps are rebuilt with fresh ids here; the replies must carry the same id both times
+    reply_ids = lambda batch: [e["id"] for e in batch if e["messageType"] == "response"]  # noqa: E731
+    assert reply_ids(first) == reply_ids(again)
+    merged = combine_messages(first, [e for e in first], append=True, replace=False)
+    assert [e["id"] for e in merged] == [e["id"] for e in first]
+
+
+def test_a_state_entry_with_no_created_at_is_stamped_at_persist_time():
+    """Pinned limitation: a checkpoint written before ``created_at`` existed has no creation time to keep."""
+    before = time.time()
+    rebuilt = _through_state_entries([{"type": "tool_execution", "content": "ran", "metadata": {}}])[0]
+    assert before <= rebuilt.timestamp <= time.time()

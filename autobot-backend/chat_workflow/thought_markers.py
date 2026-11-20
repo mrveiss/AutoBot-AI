@@ -182,7 +182,9 @@ def find_new_segment_start(llm_response: str, new_type: str, previous_type: str 
     return llm_response[match.end() :] if match else ""
 
 
-_REASONING_BLOCK_RE = re.compile(r"\[(THOUGHT|PLANNING)\](.*?)(?:\[/\1\]|\Z)", re.IGNORECASE | re.DOTALL)
+_REASONING_BLOCK_RE = re.compile(
+    r"\[(THOUGHT|PLANNING)\](.*?)(?:\[/\1\]|(?=\[(?:THOUGHT|PLANNING)\]))", re.IGNORECASE | re.DOTALL
+)
 
 
 def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
@@ -190,7 +192,8 @@ def split_reasoning_blocks(text: str) -> tuple[list[tuple[str, str]], str]:
 
     The live view types a block as ``thought`` / ``planning`` and badges it; the stored reply kept the markers'
     text inline, and a reload strips only the markers, so the reasoning showed as part of the answer. Markers in
-    code regions are not blocks (#17513). An unclosed block runs to the end, as it does live.
+    code regions are not blocks (#17513). A block ends at its closing marker or at the next opener. An unclosed
+    block with neither stays in the text: live it runs to the end, but storing it that way would swallow the answer.
     """
     masked = mask_code_regions(text)
     blocks: list[tuple[str, str]] = []
