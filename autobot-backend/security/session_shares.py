@@ -19,9 +19,9 @@ from sqlalchemy import delete, exists, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from autobot_shared.coordination.work_claims import ClaimConflictError, work_claim
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.coordination.work_claims import ClaimConflictError, work_claim
 from autobot_shared.store_authority import system_of_record
 from models.session_share import SessionShare, SessionShareAdoption
 

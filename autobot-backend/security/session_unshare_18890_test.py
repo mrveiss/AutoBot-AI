@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from autobot_shared.coordination.work_claims import ClaimConflictError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from autobot_shared.coordination.work_claims import ClaimConflictError
 from models.session_share import SessionShare, SessionShareAdoption
 from security import session_shares
 from security.session_ownership import SessionOwnershipValidator
