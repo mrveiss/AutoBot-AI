@@ -15,6 +15,7 @@ services:
       - ../../../../autobot-browser-worker/playwright-server.js:/app/server.js
       - ../../../../autobot-browser-worker/session-store.js:/app/session-store.js
       - ../../../../autobot-browser-worker/element-index.js:/app/element-index.js
+      - ../../../../autobot-browser-worker/search-snippet.js:/app/search-snippet.js
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:${HOME}/.Xauthority:rw
     # Remove /dev/dri for compatibility

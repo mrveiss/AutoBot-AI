@@ -99,7 +99,7 @@ For searching the web, use the `web_search` tool. This is the simplest way to fi
 ```
 
 **Parameters:**
-- `query` (required): The search query string
+{{ web_search_parameters }}
 
 **When to use web_search:**
 - User asks to search, find, or look up something online

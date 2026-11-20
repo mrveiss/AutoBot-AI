@@ -16,6 +16,7 @@ deploy:
     - playwright-server.js
     - session-store.js
     - element-index.js
+    - search-snippet.js
 
 system_dependencies:
   - nodejs              # major = node_major (= .nvmrc), via NodeSource

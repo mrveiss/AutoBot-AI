@@ -6,8 +6,9 @@
 
 from __future__ import annotations
 
+from chat_workflow import limits
 from chat_workflow.graph import route_after_generation
-from chat_workflow.graph_parse_feedback import PARSE_RETRY_BUDGET, apply_parse_feedback
+from chat_workflow.graph_parse_feedback import apply_parse_feedback
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 
 BROKEN = '<TOOL_CALL name="web_search" params=\'{"query": \'>look it up'
@@ -34,7 +35,7 @@ def test_an_unparsed_call_is_recorded_cleaned_and_sent_back_to_generation():
 
 def test_a_spent_budget_gives_the_readable_fallback_and_no_markup():
     seen: list = []
-    out = apply_parse_feedback({"parse_retries": PARSE_RETRY_BUDGET}, _update(), seen.append)
+    out = apply_parse_feedback({"parse_retries": limits.INVALID_CALL_LIMIT}, _update(), seen.append)
     assert not out["parse_retry_pending"] and out["llm_response"] == ""
     assert out["workflow_messages"][-1]["content"] == NO_ANSWER_FALLBACK and seen == out["workflow_messages"]
     assert out["all_llm_responses"] == ["earlier", ""]
