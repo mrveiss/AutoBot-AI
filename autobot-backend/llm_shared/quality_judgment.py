@@ -68,14 +68,14 @@ def meets_threshold(score: float, threshold: float) -> bool:
 class QualityAssessment:
     """Common view of an LLM quality judgment: score, critique, threshold outcome."""
 
-    score: float
+    score: float | None
     critique: str = ""
     hint: str = ""
     threshold: float | None = None
 
     @property
     def passed(self) -> bool | None:
-        """Threshold outcome, or ``None`` when no threshold applies to this judgment."""
+        """Threshold outcome, ``None`` when no threshold applies, ``False`` when there is no score to meet it."""
         if self.threshold is None:
             return None
-        return meets_threshold(self.score, self.threshold)
+        return self.score is not None and meets_threshold(self.score, self.threshold)

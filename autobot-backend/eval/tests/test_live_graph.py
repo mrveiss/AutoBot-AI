@@ -20,7 +20,7 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 from chat_workflow import graph as graph_module
-from chat_workflow.graph_parse_feedback import PARSE_RETRY_BUDGET
+from chat_workflow import limits
 from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.tool_call_loop import _LOOP_ABORT_THRESHOLD
@@ -199,9 +199,9 @@ async def test_an_unparsed_tool_call_in_the_model_text_is_classified_malformed(t
         yield (broken, False)
 
     record, *_ = await _drive(script, tmp_path)
-    assert len(asked) == PARSE_RETRY_BUDGET + 1  # the first reply plus each bounded re-ask, then it stops
+    assert len(asked) == limits.INVALID_CALL_LIMIT + 1  # the first reply plus each bounded re-ask, then it stops
     parse_steps = [e for e in record.execution_history if e.get("tool") == "tool_call_parse"]
-    assert len(parse_steps) == PARSE_RETRY_BUDGET and all(e["status"] == "error" for e in parse_steps)
+    assert len(parse_steps) == limits.INVALID_CALL_LIMIT and all(e["status"] == "error" for e in parse_steps)
     assert "malformed_tool_call" in classify_failures(record)
     assert record.final_text == NO_ANSWER_FALLBACK and "TOOL_CALL" not in record.final_text
     assert not any("TOOL_CALL" in r for r in record.raw_responses[:-1] if r), "no raw markup is stored"
