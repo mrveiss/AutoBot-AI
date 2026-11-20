@@ -78,7 +78,7 @@ _STATUS_FOR_REASON: dict[str, int] = {
 #: The fixed 409 text per conflict reason (#17850): says what to do, carries no id, name or value.
 _CONFLICT_DETAIL: dict[str, str] = {
     "ambiguous": "Conflict: several secrets share this name; an administrator must resolve the duplicates",
-    "inactive": "Conflict: a deactivated secret holds this name; reactivate or rotate it instead of creating",
+    "inactive": "Conflict: a deactivated secret holds this name; delete it first, then create the secret again",
     "value_differs": "Conflict: a secret with this name already holds a different value; rotate it instead",
 }
 

@@ -26,7 +26,7 @@
       <BaseAlert v-if="card.error" variant="error" :message="card.error" />
       <BaseButton
         size="sm"
-        :disabled="!card.status || card.status.count === 0 || !!card.status.refused || card.busy || card.proposed"
+        :disabled="!card.status || card.status.count === 0 || !!card.status.refused || card.busy || (card.proposed && card.remaining === 0)"
         @click="propose(card)"
       >
         {{ t('admin.cleanup.propose') }}
@@ -58,6 +58,7 @@ interface Card {
   loadFailed: boolean
   busy: boolean
   proposed: boolean
+  remaining: number // duplicated groups the last request left for another call (#17850)
   error: string
 }
 
@@ -69,6 +70,7 @@ const makeCard = (id: string, statusUrl: string, requestUrl: string): Card => ({
   loadFailed: false,
   busy: false,
   proposed: false,
+  remaining: 0,
   error: '',
 })
 
@@ -127,10 +129,16 @@ async function propose(card: Card): Promise<void> {
   card.busy = true
   card.error = ''
   try {
-    // Each route answers with its own response model; the approval id(s) say a proposal now waits for review.
-    const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] | Schemas['DuplicateRequestResponse'] =
-      await apiClient.post(card.requestUrl)
-    card.proposed = 'proposals' in reply ? reply.proposals.some((p) => !!p.approval_id) : !!reply.approval_id
+    // Each route answers with its own response model; an approval id says a proposal now waits for review.
+    if (card.id === 'secretDuplicates') {
+      const dup: Schemas['DuplicateRequestResponse'] = await apiClient.post(card.requestUrl)
+      card.proposed = card.proposed || dup.proposals.some((proposal) => !!proposal.approval_id)
+      card.remaining = dup.remaining
+    } else {
+      const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] =
+        await apiClient.post(card.requestUrl)
+      card.proposed = !!reply.approval_id
+    }
   } catch (err) {
     card.error = t(proposeErrorKey(err))
     logger.error('Could not propose cleanup', card.id, err)

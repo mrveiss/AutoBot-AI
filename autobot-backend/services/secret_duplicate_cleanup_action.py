@@ -124,6 +124,13 @@ async def _hold_survivor(session: "AsyncSession", review: _Review) -> None:
         raise ValueError("the surviving copy is gone or changed; nothing more is removed")
 
 
+async def _hold_removal(session: "AsyncSession", secret_id: uuid.UUID, review: _Review) -> None:
+    """Lock one removal copy and require it unrotated since the approval named it: a rotated copy is kept."""
+    row = (await session.execute(select(Secret).where(Secret.id == secret_id).with_for_update())).scalar_one_or_none()
+    if row is None or row.version != review.versions.get(str(secret_id)):
+        raise ValueError("the copy is gone or was rotated since it was probed; it is kept")
+
+
 async def _guarded_remove(session: "AsyncSession", secret_id: uuid.UUID, review: _Review) -> None:
     """Delete one copy through the ONE guarded delete; a copy with dependents is refused (409), never confirmed."""
     from api.secrets_guarded_delete import guarded_delete
@@ -133,6 +140,7 @@ async def _guarded_remove(session: "AsyncSession", secret_id: uuid.UUID, review:
     service = EnvelopeSecretsService()
 
     async def delete() -> None:
+        await _hold_removal(session, secret_id, review)
         await _hold_survivor(session, review)
         await service.delete(session, secret_id=secret_id)
 

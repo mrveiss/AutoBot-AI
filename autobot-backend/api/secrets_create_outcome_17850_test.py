@@ -39,7 +39,7 @@ def test_each_conflict_is_a_fixed_409_that_names_the_way_out_and_no_id(exc):
     refusal = error_for(exc)
     assert refusal.status_code == 409
     assert str(_A) not in refusal.detail and "N" != refusal.detail
-    assert {"ambiguous": "duplicates", "inactive": "reactivate", "value_differs": "rotate"}[
+    assert {"ambiguous": "duplicates", "inactive": "delete it first", "value_differs": "rotate"}[
         exc_reason(exc)
     ] in refusal.detail
 

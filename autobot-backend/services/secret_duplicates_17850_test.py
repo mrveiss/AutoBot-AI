@@ -380,3 +380,20 @@ def test_the_proposal_records_each_copys_version():
 
 def test_a_canonical_llm_provider_name_is_manual_only():
     assert not dup.has_verifier("llm:provider:openai:api_key")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("found", [None, SimpleNamespace(version=9)])
+async def test_a_removal_copy_rotated_or_gone_before_its_turn_is_kept(found):
+    session = MagicMock(execute=AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: found)))
+    with pytest.raises(ValueError, match="kept"):
+        await action._hold_removal(session, _B, _review())
+
+
+@pytest.mark.asyncio
+async def test_an_unrotated_removal_copy_passes_its_hold():
+    session = MagicMock(
+        execute=AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: SimpleNamespace(version=1)))
+    )
+    await action._hold_removal(session, _B, _review())
+    assert "FOR UPDATE" in str(session.execute.call_args.args[0])

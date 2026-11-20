@@ -89,7 +89,7 @@ def proposal_context(result: GroupVerification) -> dict:
         "group_digest": group_digest(ids),
         "secret_ids": ids,
         "verified_ids": [str(i) for i in result.verified_ids],
-        "versions": {str(i): v for i, v in zip(result.group.secret_ids, result.group.versions)},
+        "versions": {str(i): v for i, v in zip(result.group.secret_ids, result.group.versions, strict=False)},
         "survivor_id": str(survivor) if survivor else None,
         "removal_ids": [i for i in ids if survivor and i != str(survivor)],
         "reason": _reason(result),

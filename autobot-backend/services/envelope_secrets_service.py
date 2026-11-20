@@ -70,7 +70,7 @@ class AmbiguousSecretError(Exception):
 class SecretConflictError(Exception):
     """The ``(owner_vault, name)`` is taken by a secret this create may not reuse (#17850).
 
-    ``reason`` is ``inactive`` (a deactivated row still holds the unique slot: reactivate or rotate it) or
+    ``reason`` is ``inactive`` (a deactivated row still holds the unique slot: delete it, then create again) or
     ``value_differs`` (the name exists with another value: rotate it). Carries the id only -- never a name or value.
     """
 

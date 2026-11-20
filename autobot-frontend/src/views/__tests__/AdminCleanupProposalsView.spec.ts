@@ -122,4 +122,24 @@ describe('AdminCleanupProposalsView.vue', () => {
     expect(mockPost).toHaveBeenCalledWith('/api/admin/secret-duplicates/requests')
     expect(wrapper.text()).toContain('Proposal sent to the review queue')
   })
+
+  it('keeps Propose available while duplicated groups remain after a proposal (#17850)', async () => {
+    mockGet.mockImplementation(async (url: string) =>
+      url.endsWith('secret-duplicates')
+        ? { group_count: 6, copy_count: 12, groups: [] }
+        : url.endsWith('org-tier-column')
+          ? { present: false }
+          : { count: 0, detail: '', refused: null },
+    )
+    mockPost.mockResolvedValue({
+      proposals: [{ approval_id: 'ap-1', reason: 'one_verified', copies: 2, skipped: false }],
+      remaining: 1,
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.findAll('button')[2].trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Proposal sent to the review queue')
+    expect(wrapper.findAll('button')[2].attributes('disabled')).toBeUndefined()
+  })
 })
