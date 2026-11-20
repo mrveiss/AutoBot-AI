@@ -380,6 +380,17 @@ def test_a_compact_one_line_root_template_is_markup_too() -> None:
     assert unterminated_construct(source, name="x.vue") is None
 
 
+def test_a_root_template_with_an_indented_close_and_a_nested_slot_is_one_markup_span() -> None:
+    """The root closes at its LAST `</template>` before the script, indented or not; a slot's close is not it (#21571)."""
+    source = (
+        "<template>\n  <Foo>\n    <template #x>/api/a/*</template>\n  </Foo>\n  <p>/api/b/*</p>\n  </template>\n"
+        "<script>\n/* gone */ const a = 1\n</script>\n"
+    )
+    text = code_text(source, name="x.vue")
+    assert "/api/a/*" in text and "/api/b/*" in text and "const a = 1" in text and "gone" not in text, text
+    assert unterminated_construct(source, name="x.vue") is None
+
+
 def test_template_tags_inside_a_script_literal_are_script_text() -> None:
     """A line-start `<template>` in a backtick literal in script is not the root template (#21571)."""
     source = "<script>\nconst html = `\n<template>\n<p>x</p>\n</template>\n` /* gone */\n</script>\n"

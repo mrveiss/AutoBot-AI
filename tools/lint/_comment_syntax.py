@@ -310,11 +310,13 @@ SCRIPT_OR_STYLE_ELEMENT = (
 #: The top level of a `.vue` component, read left to right so that what sits inside a block is never taken for a block
 #: of its own. A root ``<script>``/``<style>`` element is consumed whole (``code``): a ``<template>`` or ``<!--`` at a
 #: line start inside a template literal in script is script text. Markup is the root ``<template>`` body (``one``
-#: when it closes on its opening line, else ``body`` up to a line-start ``</template>``, as a slot's indented
-#: ``<template #x>`` does not close it) or an HTML comment opened at a line start, the licence header above it.
+#: when it closes on its opening line, else ``body`` up to the LAST ``</template>`` before the next root
+#: ``<script>``/``<style>`` or the end of the file, wherever it is indented, so a slot's ``<template #x>`` never
+#: closes it) or an HTML comment opened at a line start, the licence header above it.
 _SFC_MARKUP = re.compile(
     rf"(?P<code>^{SCRIPT_OR_STYLE_ELEMENT})"
-    r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$|(?P<body>.*?)^</template\s*>)"
+    r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$"
+    r"|(?P<body>(?:(?!^<(?:script|style)(?=[\s>/])).)*)</template\s*>)"
     r"|(?P<comment>^<!--.*?-->)",
     re.DOTALL | re.IGNORECASE | re.MULTILINE,
 )

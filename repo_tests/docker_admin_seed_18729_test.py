@@ -146,6 +146,8 @@ def test_install_md_pulls_the_models_docker_env_names() -> None:
 #: (`AUTOBOT_USER_MODE: single_user`, `- AUTOBOT_USER_MODE: 'single_user'`, a quoted key; #21797).
 _RETIRED_MODE = re.compile(
     r"AUTOBOT_USER_MODE[\"']?\s*(?:=|:-|-|:)\s*[\"']?single_user|USER_MODE[\"']?\s*!?=+\s*[\"']?single_user"
+    # a default taken through another variable: `AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}` (#21797)
+    r"|AUTOBOT_USER_MODE[\"']?\s*[=:]\s*[\"']?\$\{\w+:?-[\"']?single_user"
 )
 
 
@@ -200,8 +202,25 @@ def test_the_retired_mode_check_sees_every_shape() -> None:
         "l": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE:-team}",
         "m": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-single_user}",
         "n": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-team}",
+        "o": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}",
+        "p": "      - AUTOBOT_USER_MODE=${DEPLOYMENT_MODE-'single_user'}",
+        "q": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-team}",
     }
-    assert retired_mode_sites(shapes) == ["a:1", "b:1", "c:1", "e:1", "f:1", "g:1", "h:1", "i:1", "j:1", "k:1", "m:1"]
+    assert retired_mode_sites(shapes) == [
+        "a:1",
+        "b:1",
+        "c:1",
+        "e:1",
+        "f:1",
+        "g:1",
+        "h:1",
+        "i:1",
+        "j:1",
+        "k:1",
+        "m:1",
+        "o:1",
+        "p:1",
+    ]
 
 
 # --- the entrypoint's migration retry is safe only if non-transactional migrations resume ---
