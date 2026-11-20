@@ -36,9 +36,16 @@ echo "[1/5] Copying systemd service files..."
 copy_to_browser_vm "$SCRIPT_DIR/browser-vnc.service" "/tmp/browser-vnc.service"
 copy_to_browser_vm "$SCRIPT_DIR/browser-vnc-websockify.service" "/tmp/browser-vnc-websockify.service"
 copy_to_browser_vm "$SCRIPT_DIR/browser-playwright.service" "/tmp/browser-playwright.service"
-# One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
-BROWSER_WORKER_DIR="${SCRIPT_DIR}/../../../../autobot-browser-worker"
-for f in playwright-server.js session-store.js element-index.js search-snippet.js; do
+# One canonical server + every module the manifest ships, from autobot-browser-worker (#18549, #21852)
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+BROWSER_WORKER_DIR="${REPO_ROOT}/autobot-browser-worker"
+# shellcheck source=scripts/lib/browser_worker_files.sh
+source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh" || {
+    echo "FATAL: ${REPO_ROOT}/scripts/lib/browser_worker_files.sh could not be sourced (#21852)" >&2
+    exit 1
+}
+BROWSER_WORKER_FILES="$(browser_worker_files "$REPO_ROOT")" || exit 1
+for f in $BROWSER_WORKER_FILES; do
     copy_to_browser_vm "${BROWSER_WORKER_DIR}/${f}" "${f}"
 done
 echo "✓ Service files copied"
