@@ -581,6 +581,8 @@
       "unshare": "Remove access",
       "unsharing": "Removing",
       "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
       "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "يتطلب تسجيل الدخول للعرض",

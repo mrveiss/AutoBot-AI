@@ -5,10 +5,12 @@
 """A shared chat can be unshared, a share never lapses, and the participant set is durable (#18890)."""
 
 import json
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from autobot_shared.coordination.work_claims import ClaimConflictError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -25,6 +27,7 @@ class FakeRedis:
 
     def __init__(self):
         self.sets, self.ttls, self.kv = {}, {}, {}
+        self.claim_held = False  # the adoption work claim, as held by some other worker
 
     async def sadd(self, key, *members):
         self.sets.setdefault(key, set()).update(members)
@@ -82,6 +85,18 @@ async def env(monkeypatch):
     )
     monkeypatch.setattr(session_shares, "_factory", lambda: factory)
     redis = FakeRedis()
+
+    @asynccontextmanager
+    async def claim(_scope, **_kw):
+        if redis.claim_held:
+            raise ClaimConflictError(MagicMock())
+        redis.claim_held = True
+        try:
+            yield
+        finally:
+            redis.claim_held = False
+
+    monkeypatch.setattr(session_shares, "work_claim", claim)
     validator = SessionOwnershipValidator.__new__(SessionOwnershipValidator)
     validator.redis = redis
     with patch("services.audit.audit.audit_record") as audit:
@@ -197,7 +212,8 @@ async def test_participant_list_is_owner_only_and_reads_the_table(env):
     redis.sets.clear()
     request = MagicMock()
 
-    listed = await list_session_participants(SESSION_ID, request, {"reason": "owner_match"})
+    with patch("api.chat_session_sharing.get_redis_client", AsyncMock(return_value=redis)):
+        listed = await list_session_participants(SESSION_ID, request, {"reason": "owner_match"})
     assert json.loads(listed.body)["data"]["participants"] == ["bob", "carol"]
 
     with pytest.raises(HTTPException) as refused:
@@ -342,7 +358,7 @@ async def test_unshare_before_adoption_adopts_first_then_removes(env):
 
 
 @pytest.mark.asyncio
-async def test_unshare_fails_closed_when_the_table_write_fails(env, monkeypatch):
+async def test_a_failed_unshare_is_reported_and_changes_nothing(env, monkeypatch):
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
 
@@ -353,24 +369,95 @@ async def test_unshare_fails_closed_when_the_table_write_fails(env, monkeypatch)
     with pytest.raises(ConnectionError):
         await validator.unshare_session(SESSION_ID, "bob", ACTOR)
 
+    # Not revoked, and honestly so: the row and the projection agree, so a rebuild cannot flip the outcome later.
+    assert await _rows() == {"bob": "alice"}
+    redis.sets.clear()
+    assert await validator.is_shared_with_user(SESSION_ID, "bob")
+
+
+@pytest.mark.asyncio
+async def test_participant_list_adopts_legacy_shares_first(env):
+    from api.chat_session_sharing import list_session_participants
+
+    validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"legacy"}
+    with patch("api.chat_session_sharing.get_redis_client", AsyncMock(return_value=redis)):
+        listed = await list_session_participants(SESSION_ID, MagicMock(), {"reason": "owner_match"})
+    assert json.loads(listed.body)["data"]["participants"] == ["legacy"]
+
+
+@pytest.mark.asyncio
+async def test_a_share_into_a_lost_projection_keeps_the_other_participants(env):
+    validator, redis, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+    await validator.share_session("s2" * 16, ["bob"], "alice")
+    redis.sets.clear()  # both projection sets lost
+
+    await validator.share_session(SESSION_ID, ["carol"], "alice")
+
+    assert await validator.is_shared_with_user(SESSION_ID, "bob")
+    assert sorted(await validator.get_shared_sessions("bob")) == sorted([SESSION_ID, "s2" * 16])
+
+
+@pytest.mark.asyncio
+async def test_a_rebuild_overtaken_by_an_unshare_does_not_restore_the_participant(env, monkeypatch):
+    validator, redis, _ = env
+    await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
+    redis.sets.clear()
+    real_project = session_shares.project_share
+
+    async def unshare_mid_rebuild(r, session_id, user_ids):
+        await session_shares.remove_share(r, session_id, "bob")  # lands between the read and the write
+        await real_project(r, session_id, user_ids)
+
+    monkeypatch.setattr(session_shares, "project_share", unshare_mid_rebuild)
+    members = await session_shares.rebuild_session_projection(redis, SESSION_ID)
+
+    assert members == ["carol"]
     assert not await redis.sismember("session:shared_with:" + SESSION_ID, "bob")
+    assert not await redis.sismember("user:shared_sessions:bob", SESSION_ID)
+
+
+@pytest.mark.asyncio
+async def test_a_superseded_adopter_cannot_write_after_completion(env):
+    _, _, _ = env
+    await session_shares.durable_mark_adopted()
+    await session_shares.durable_add_unless_adopted(SESSION_ID, ["bob"])
+    assert await _rows() == {}
+
+
+@pytest.mark.asyncio
+async def test_adoption_rechecks_completion_after_taking_the_lock(env, monkeypatch):
+    _, redis, _ = env
+    answers = iter([False, True])  # incomplete at the first look, complete once this worker holds the lock
+
+    async def is_adopted(_r):
+        return next(answers)
+
+    async def never(_r):
+        raise AssertionError("scanned although adoption had completed")
+
+    monkeypatch.setattr(session_shares, "_is_adopted", is_adopted)
+    monkeypatch.setattr(session_shares, "_adopt_from_session_keys", never)
+    assert await session_shares.adopt_redis_shares(redis) == 0
+    assert not redis.claim_held
 
 
 @pytest.mark.asyncio
 async def test_a_worker_that_loses_the_adoption_lock_waits_then_fails(env, monkeypatch):
     _, redis, _ = env
-    redis.kv[session_shares.ADOPT_LOCK_KEY] = "another-worker"
+    redis.claim_held = True
     monkeypatch.setattr(session_shares, "ADOPT_WAIT_SECONDS", 0)
 
     with pytest.raises(TimeoutError):
         await session_shares.adopt_redis_shares(redis)
-    assert redis.kv[session_shares.ADOPT_LOCK_KEY] == "another-worker"  # not released by the loser
+    assert redis.claim_held  # not released by the loser
 
 
 @pytest.mark.asyncio
 async def test_a_worker_that_loses_the_lock_returns_once_the_marker_appears(env):
     _, redis, _ = env
-    redis.kv[session_shares.ADOPT_LOCK_KEY] = "another-worker"
+    redis.claim_held = True
     redis.kv[session_shares.ADOPTED_KEY] = "1"
 
     assert await session_shares.adopt_redis_shares(redis) == 0

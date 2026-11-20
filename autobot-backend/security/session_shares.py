@@ -12,16 +12,16 @@ Its own module because ``security/session_ownership.py`` is at its recorded size
 """
 
 import asyncio
+import math
 import time
-import uuid
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, exists, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_utils import delete_if_value
+from autobot_shared.coordination.work_claims import ClaimConflictError, work_claim
 from autobot_shared.store_authority import system_of_record
 from models.session_share import SessionShare, SessionShareAdoption
 
@@ -39,10 +39,12 @@ ADOPTED_SHARER = "migrated-from-redis"
 ADOPTION_NAME = "redis_shares"
 #: Redis cache (no TTL) of that durable row; losing it is harmless, the row is what stops a re-adoption.
 ADOPTED_KEY = "session_shares:adopted"
-ADOPT_LOCK_KEY = "session_shares:adopt_lock"
+#: The adoption lease is a work claim (#16653), not a private Redis lock.
+ADOPT_CLAIM_SCOPE = "config:session_shares/adoption"
+ADOPT_CLAIM_AGENT = "session-share-adoption"
 #: How long one worker may hold the adoption lock, and how long another waits for the marker.
-ADOPT_LOCK_TTL_MS = env_int("AUTOBOT_SESSION_SHARE_ADOPT_LOCK_TTL_MS", 60_000)
-ADOPT_WAIT_SECONDS = env_int("AUTOBOT_SESSION_SHARE_ADOPT_WAIT_SECONDS", 30)
+ADOPT_LOCK_TTL_MS = env_int_clamped("AUTOBOT_SESSION_SHARE_ADOPT_LOCK_TTL_MS", 60_000, 1000, 600_000)
+ADOPT_WAIT_SECONDS = env_int_clamped("AUTOBOT_SESSION_SHARE_ADOPT_WAIT_SECONDS", 30, 0, 600)
 _ADOPT_POLL_SECONDS = 0.2
 
 #: ``reason`` values of the ownership result that mean "this caller owns the chat" (or has no ownership to
@@ -71,6 +73,22 @@ async def durable_add(session_id: str, user_ids: list[str], shared_by: str) -> N
         await db.execute(
             insert(SessionShare).values(rows).on_conflict_do_nothing(index_elements=["session_id", "user_id"])
         )
+        await db.commit()
+
+
+async def durable_add_unless_adopted(session_id: str, user_ids: list[str]) -> None:
+    """Adoption's insert: one statement per row that writes only while no completion row exists.
+
+    The check and the insert are a single SQL statement, so a superseded adopter (lease expired, or it read
+    its members before an unshare) cannot re-create a share once adoption has been recorded as complete.
+    """
+    async with _factory()() as db:
+        insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+        done = exists().where(SessionShareAdoption.name == ADOPTION_NAME)
+        for user_id in user_ids:
+            row = select(literal(session_id), literal(user_id), literal(ADOPTED_SHARER)).where(~done)
+            stmt = insert(SessionShare).from_select(["session_id", "user_id", "shared_by"], row)
+            await db.execute(stmt.on_conflict_do_nothing(index_elements=["session_id", "user_id"]))
         await db.commit()
 
 
@@ -133,10 +151,18 @@ async def _project(redis, key: str, members: list[str]) -> None:
 
 
 async def project_share(redis, session_id: str, user_ids: list[str]) -> None:
-    """Write-through of a share into both Redis sets."""
-    await _project(redis, SESSION_KEY % session_id, list(user_ids))
+    """Write-through of a share into both Redis sets, leaving each set complete.
+
+    A set that is absent is created from the table (every participant of the chat, every chat of the user),
+    never from just this write's delta, or the read path would trust a partial set and deny the rest.
+    """
+    key = SESSION_KEY % session_id
+    known = [] if await redis.exists(key) else await durable_participants(session_id)
+    await _project(redis, key, list(user_ids) + known)
     for user_id in user_ids:
-        await _project(redis, USER_KEY % user_id, [session_id])
+        user_key = USER_KEY % user_id
+        owned = [] if await redis.exists(user_key) else await durable_sessions_for(user_id)
+        await _project(redis, user_key, [session_id] + owned)
 
 
 async def drop_projection(redis, session_id: str, user_id: str) -> None:
@@ -146,14 +172,14 @@ async def drop_projection(redis, session_id: str, user_id: str) -> None:
 
 
 async def remove_share(redis, session_id: str, user_id: str) -> bool:
-    """Unshare, failing closed: Redis is cleared BEFORE the table, and again after it.
+    """Unshare: the table (system of record) first, then the projection.
 
-    A failure at any step raises with access already gone from the projection, so a 500 never leaves the
-    participant able to read. The second clear removes what a concurrent read-miss rebuilt from the row
-    that was still there.
+    If the table write raises, nothing changed anywhere and the caller is told the share was NOT removed;
+    clearing Redis first would let the next read-miss rebuild restore the participant from the surviving row.
+    Once the row is gone no rebuild can restore the participant, and a rebuild that was already in flight
+    reconciles itself against the table (the re-read at the end of ``rebuild_*_projection``).
     """
     await ensure_adopted(redis)
-    await drop_projection(redis, session_id, user_id)
     removed = await durable_remove(session_id, user_id)
     await drop_projection(redis, session_id, user_id)
     return removed
@@ -164,8 +190,8 @@ async def _adopt_from_session_keys(redis) -> int:
     async for raw in redis.scan_iter(match=_SESSION_KEY_PATTERN, count=500):
         session_id = _text(raw).split(":", 2)[2]
         members = [_text(m) for m in await redis.smembers(raw)]
-        await durable_add(session_id, members, ADOPTED_SHARER)
-        await _project(redis, _text(raw), members)
+        await durable_add_unless_adopted(session_id, members)
+        await redis.persist(_text(raw))
         copied += len(members)
     return copied
 
@@ -177,9 +203,8 @@ async def _adopt_from_user_keys(redis) -> int:
         user_id = _text(raw).split(":", 2)[2]
         sessions = [_text(m) for m in await redis.smembers(raw)]
         for session_id in sessions:
-            await durable_add(session_id, [user_id], ADOPTED_SHARER)
-            await _project(redis, SESSION_KEY % session_id, [user_id])
-        await _project(redis, _text(raw), sessions)
+            await durable_add_unless_adopted(session_id, [user_id])
+        await redis.persist(_text(raw))
         copied += len(sessions)
     return copied
 
@@ -188,7 +213,7 @@ async def adopt_redis_shares(redis) -> int:
     """Copy pre-#18890 Redis-only shares into the table and drop their TTLs; at most once, across workers.
 
     Inserts only the rows that are missing, so it never rewrites ``shared_by`` or overrides the table. A
-    ``SET NX`` lock (``ADOPT_LOCK_TTL_MS``) keeps one worker at it; completion is the durable
+    work claim (``ADOPT_CLAIM_SCOPE``, lease ``ADOPT_LOCK_TTL_MS``) keeps one worker at it; completion is the durable
     ``chat_session_share_adoption`` row, cached as ``ADOPTED_KEY`` in Redis. Once the row is set nothing is
     adopted again, whatever Redis holds. The legacy keys are NOT deleted afterwards: they share their names
     with the projection keys this module maintains, so the durable row alone marks them as already imported.
@@ -197,17 +222,29 @@ async def adopt_redis_shares(redis) -> int:
     """
     if await _is_adopted(redis):
         return 0
-    token = uuid.uuid4().hex
-    if not await redis.set(ADOPT_LOCK_KEY, token, nx=True, px=ADOPT_LOCK_TTL_MS):
-        return await _await_marker(redis)
     try:
-        copied = await _adopt_from_session_keys(redis) + await _adopt_from_user_keys(redis)
-        await durable_mark_adopted()
-        await redis.set(ADOPTED_KEY, "1")
-    finally:
-        await delete_if_value(redis, ADOPT_LOCK_KEY, token)
+        async with work_claim(
+            ADOPT_CLAIM_SCOPE,
+            agent_id=ADOPT_CLAIM_AGENT,
+            intent="adopt pre-table Redis chat shares",
+            ttl_s=math.ceil(ADOPT_LOCK_TTL_MS / 1000),
+        ):
+            copied = await _adopt_once(redis)
+    except ClaimConflictError:
+        return await _await_marker(redis)
     if copied:
         logger.info("Adopted %d Redis-only chat shares into the durable table (#18890)", copied)
+    return copied
+
+
+async def _adopt_once(redis) -> int:
+    """The body of adoption, under the claim. A holder whose lease lapsed is fenced by the table itself:
+    ``durable_add_unless_adopted`` writes nothing once the completion row exists."""
+    if await _is_adopted(redis):  # another worker finished between the check before the claim and the claim
+        return 0
+    copied = await _adopt_from_session_keys(redis) + await _adopt_from_user_keys(redis)
+    await durable_mark_adopted()
+    await redis.set(ADOPTED_KEY, "1")
     return copied
 
 
@@ -230,7 +267,10 @@ async def rebuild_session_projection(redis, session_id: str) -> list[str]:
     await ensure_adopted(redis)
     members = await durable_participants(session_id)
     await project_share(redis, session_id, members)
-    return members
+    current = await durable_participants(session_id)
+    for user_id in set(members) - set(current):  # unshared while this rebuild was publishing
+        await drop_projection(redis, session_id, user_id)
+    return current
 
 
 async def rebuild_user_projection(redis, user_id: str) -> list[str]:
@@ -238,7 +278,10 @@ async def rebuild_user_projection(redis, user_id: str) -> list[str]:
     await ensure_adopted(redis)
     sessions = await durable_sessions_for(user_id)
     await _project(redis, USER_KEY % user_id, sessions)
-    return sessions
+    current = await durable_sessions_for(user_id)
+    for session_id in set(sessions) - set(current):  # unshared while this rebuild was publishing
+        await drop_projection(redis, session_id, user_id)
+    return current
 
 
 def audit_actor(request, user_data: dict | None) -> dict:

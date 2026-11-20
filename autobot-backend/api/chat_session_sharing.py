@@ -58,6 +58,7 @@ async def list_session_participants(
     request_id = generate_request_id()
     _check_request(request, "list_session_participants", request_id, session_id)
     require_owner(ownership)
+    await session_shares.ensure_adopted(await get_redis_client(async_client=True, database="main"))
     participants = sorted(await session_shares.durable_participants(session_id))
     return create_chat_response(
         data={"session_id": session_id, "participants": participants}, message="OK", request_id=request_id

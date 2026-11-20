@@ -31,7 +31,13 @@
         <template v-if="mode === 'users'">
           <div data-testid="share-participants">
             <p class="text-sm font-medium text-autobot-text-primary mb-1">{{ $t('chat.share.sharedWithNow') }}</p>
-            <p v-if="participants.length === 0" class="text-xs text-autobot-text-secondary">
+            <p v-if="participantsFailed" class="text-xs text-autobot-error" role="alert" data-testid="share-participants-error">
+              {{ $t('chat.share.participantsLoadFailed') }}
+              <button class="underline hover:opacity-80" data-testid="share-participants-retry" @click="loadParticipants">
+                {{ $t('chat.share.retryLoad') }}
+              </button>
+            </p>
+            <p v-else-if="participants.length === 0" class="text-xs text-autobot-text-secondary">
               {{ $t('chat.share.noParticipants') }}
             </p>
             <ul v-else class="space-y-1">
@@ -274,6 +280,7 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
@@ -322,6 +329,8 @@ const factsLoading = ref(false)
 const factSelection = useBatchSelection<ShareFact, string>(facts, (f) => f.id)
 const sharing = ref(false)
 const participants = ref<string[]>([])
+const participantsFailed = ref(false)
+const participantsRequest = useLatestRequest()
 const unsharing = ref<string | null>(null)
 
 // ---- link share ----
@@ -371,14 +380,19 @@ const loadFacts = async () => {
 
 const loadParticipants = async () => {
   if (!props.sessionId) return
+  const token = participantsRequest.begin()
+  participantsFailed.value = false
   try {
     const data = await ApiClient.call('get', '/api/chat/sessions/{session_id}/share', {
       path: { session_id: props.sessionId },
     })
+    if (!participantsRequest.isCurrent(token)) return
     participants.value = data?.data?.participants || []
   } catch (err) {
+    if (!participantsRequest.isCurrent(token)) return
     logger.error('Failed to load share participants:', err)
     participants.value = []
+    participantsFailed.value = true
   }
 }
 
@@ -388,7 +402,9 @@ const unshareParticipant = async (userId: string) => {
     await ApiClient.call('delete', '/api/chat/sessions/{session_id}/share/{user_id}', {
       path: { session_id: props.sessionId, user_id: userId },
     })
+    participantsRequest.invalidate()
     participants.value = participants.value.filter(x => x !== userId)
+    loadParticipants() // the invalidation above dropped any load still in flight
   } catch (err) {
     logger.error('Failed to unshare session:', err)
     showToast(t('chat.share.unshareFailed'), 'error')
@@ -478,6 +494,7 @@ const formatExpiry = createDateFormatter()
 
 // ---- lifecycle ----
 watch(() => props.visible, (val) => {
+  participantsRequest.invalidate()
   if (!val) return
   recipients.value = []
   recipientInput.value = ''
@@ -491,6 +508,7 @@ watch(() => props.visible, (val) => {
   requireLogin.value = false
   copied.value = false
   participants.value = []
+  participantsFailed.value = false
   loadParticipants()
 })
 

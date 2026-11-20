@@ -28,7 +28,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-from migrations.guards import has_table
+from migrations.guards import has_column, has_table
 
 revision: str = "20261120_116"
 down_revision: Union[str, None] = "20261118_115"
@@ -44,6 +44,7 @@ def upgrade() -> None:
             sa.Column("user_id", sa.String(255), nullable=False),
             sa.Column("shared_by", sa.String(255), nullable=False),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.PrimaryKeyConstraint("session_id", "user_id"),
         )
         op.create_index("ix_chat_session_shares_user_id", "chat_session_shares", ["user_id"])
@@ -52,8 +53,21 @@ def upgrade() -> None:
             "chat_session_share_adoption",
             sa.Column("name", sa.String(64), nullable=False),
             sa.Column("completed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.PrimaryKeyConstraint("name"),
         )
+    # The columns ``Base`` gives every model (``autobot_shared/user_management/models/base.py``), for a table
+    # an earlier run of this revision created without them.
+    for table, column in (
+        ("chat_session_shares", "updated_at"),
+        ("chat_session_share_adoption", "created_at"),
+        ("chat_session_share_adoption", "updated_at"),
+    ):
+        if not has_column(table, column):
+            op.add_column(
+                table, sa.Column(column, sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+            )
 
 
 def downgrade() -> None:
