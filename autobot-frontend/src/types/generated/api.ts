@@ -19692,7 +19692,7 @@ export interface paths {
         };
         /**
          * Secret Duplicates Status
-         * @description Read only: vault references and secret ids, never a name or a value.
+         * @description Read only: counts, vault references and approval ids. No secret id, name or value (#17865).
          */
         get: operations["secret_duplicates_status_api_admin_secret_duplicates_get"];
         put?: never;
@@ -75706,13 +75706,18 @@ export interface components {
         };
         /**
          * DuplicateGroupStatus
-         * @description One duplicated ``(owner_vault, name)``: the vault reference and the ids of its copies.
+         * @description One duplicated ``(owner_vault, name)``: the vault, how many copies, and its open proposal if any.
+         *
+         *     No secret id and no name leaves here (#17865): a person acts on a group from its approval, in the Approvals
+         *     inbox, not from this view.
          */
         DuplicateGroupStatus: {
             /** Owner Vault */
             owner_vault: string;
-            /** Secret Ids */
-            secret_ids: string[];
+            /** Copy Count */
+            copy_count: number;
+            /** Approval Id */
+            approval_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -75749,9 +75754,13 @@ export interface components {
         };
         /**
          * DuplicateStatus
-         * @description Every duplicated group. Empty means the unique-constraint migration can apply.
+         * @description Every duplicated group, in counts. ``group_count == 0`` means the unique-constraint migration can apply.
          */
         DuplicateStatus: {
+            /** Group Count */
+            group_count: number;
+            /** Copy Count */
+            copy_count: number;
             /** Groups */
             groups: components["schemas"]["DuplicateGroupStatus"][];
         } & {

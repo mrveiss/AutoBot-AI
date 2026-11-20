@@ -45,7 +45,9 @@ describe('AdminCleanupProposalsView.vue', () => {
     mockGet.mockImplementation(async (url: string) =>
       url.endsWith('org-tier-column')
         ? { present: false }
-        : { count: 2, detail: 'two things', refused: null },
+        : url.endsWith('secret-duplicates')
+          ? { group_count: 0, copy_count: 0, groups: [] }
+          : { count: 2, detail: 'two things', refused: null },
     )
   })
 
@@ -54,7 +56,7 @@ describe('AdminCleanupProposalsView.vue', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Found: 2.')
     const buttons = wrapper.findAll('button')
-    expect(buttons).toHaveLength(2)
+    expect(buttons).toHaveLength(3)
     expect(buttons[1].attributes('disabled')).toBeDefined()
   })
 
@@ -101,5 +103,23 @@ describe('AdminCleanupProposalsView.vue', () => {
     expect(card).toContain(en.admin.cleanup.refused)
     expect(card).not.toContain('Found: 0')
     expect(card).not.toContain('RAW-REFUSAL')
+  })
+
+  it('shows duplicated credentials as counts only and proposes through the review queue (#17850)', async () => {
+    mockGet.mockImplementation(async (url: string) =>
+      url.endsWith('secret-duplicates')
+        ? { group_count: 2, copy_count: 5, groups: [{ owner_vault: 'system', copy_count: 3, approval_id: null }] }
+        : url.endsWith('org-tier-column')
+          ? { present: false }
+          : { count: 0, detail: '', refused: null },
+    )
+    mockPost.mockResolvedValue({ proposals: [{ approval_id: 'ap-1', reason: 'one_verified', copies: 3, skipped: false }], remaining: 0 })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('5 copies in total.')
+    await wrapper.findAll('button')[2].trigger('click')
+    await flushPromises()
+    expect(mockPost).toHaveBeenCalledWith('/api/admin/secret-duplicates/requests')
+    expect(wrapper.text()).toContain('Proposal sent to the review queue')
   })
 })

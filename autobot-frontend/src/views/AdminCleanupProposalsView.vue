@@ -75,6 +75,8 @@ const makeCard = (id: string, statusUrl: string, requestUrl: string): Card => ({
 const cards = reactive<Card[]>([
   makeCard('envCopies', '/api/admin/env-copies-cleanup', '/api/admin/env-copies-cleanup/requests'),
   makeCard('tierColumn', '/api/admin/org-tier-column', '/api/admin/org-tier-column/requests'),
+  // Duplicated stored credentials (#17850): counts only; each copy is verified before a person is asked.
+  makeCard('secretDuplicates', '/api/admin/secret-duplicates', '/api/admin/secret-duplicates/requests'),
 ])
 
 // The approvals inbox is company-scoped: go to the selected company's, else the company picker.
@@ -98,6 +100,12 @@ async function load(card: Card): Promise<void> {
         count: col.present ? 1 : 0,
         detail: t(col.present ? 'admin.cleanup.tierColumn.present' : 'admin.cleanup.tierColumn.absent'),
       }
+    } else if (card.id === 'secretDuplicates') {
+      const dup: Schemas['DuplicateStatus'] = await apiClient.get(card.statusUrl)
+      card.status = {
+        count: dup.group_count,
+        detail: t('admin.cleanup.secretDuplicates.copies', { count: dup.copy_count }),
+      }
     } else {
       const status: Schemas['CleanupStatus'] = await apiClient.get(card.statusUrl)
       card.status = status
@@ -119,10 +127,10 @@ async function propose(card: Card): Promise<void> {
   card.busy = true
   card.error = ''
   try {
-    // The org-tier-column route answers with its own response model; both carry the approval id.
-    const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] =
+    // Each route answers with its own response model; the approval id(s) say a proposal now waits for review.
+    const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] | Schemas['DuplicateRequestResponse'] =
       await apiClient.post(card.requestUrl)
-    card.proposed = !!reply.approval_id
+    card.proposed = 'proposals' in reply ? reply.proposals.some((p) => !!p.approval_id) : !!reply.approval_id
   } catch (err) {
     card.error = t(proposeErrorKey(err))
     logger.error('Could not propose cleanup', card.id, err)

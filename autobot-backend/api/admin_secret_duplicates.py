@@ -5,7 +5,7 @@
 """Admin API: PROPOSE how to resolve duplicated secrets (#17850, #17038).
 
 Endpoints:
-    GET  /api/admin/secret-duplicates            groups of secrets sharing one (owner_vault, name): ids only
+    GET  /api/admin/secret-duplicates            duplicated groups as counts, vaults and approval ids (no secret ids)
     POST /api/admin/secret-duplicates/requests   verify every copy against its target and PROPOSE the
                                                  resolution -- creates PENDING approvals
 
@@ -28,7 +28,7 @@ from api.schemas_secret_duplicates import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
-from services.secret_duplicate_proposals import propose_duplicate_resolutions
+from services.secret_duplicate_proposals import group_digest, pending_proposals, propose_duplicate_resolutions
 from services.secret_duplicates import find_duplicate_groups
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
@@ -36,13 +36,17 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission
 
 @router.get("/secret-duplicates", response_model=DuplicateStatus)
 async def secret_duplicates_status(session: AsyncSession = Depends(get_db_session)) -> DuplicateStatus:
-    """Read only: vault references and secret ids, never a name or a value."""
-    groups = await find_duplicate_groups(session)
-    return DuplicateStatus(
-        groups=[
-            DuplicateGroupStatus(owner_vault=g.owner_vault, secret_ids=[str(i) for i in g.secret_ids]) for g in groups
-        ]
-    )
+    """Read only: counts, vault references and approval ids. No secret id, name or value (#17865)."""
+    groups, pending = await find_duplicate_groups(session), await pending_proposals(session)
+    shown = [
+        DuplicateGroupStatus(
+            owner_vault=g.owner_vault,
+            copy_count=len(g.secret_ids),
+            approval_id=pending.get(group_digest(g.secret_ids)),
+        )
+        for g in groups
+    ]
+    return DuplicateStatus(group_count=len(shown), copy_count=sum(g.copy_count for g in shown), groups=shown)
 
 
 @router.post(

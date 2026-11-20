@@ -107,6 +107,16 @@ async def _already_proposed(db: AsyncSession, digest: str, re_raise: bool = Fals
     return any(c and c.get("action") == ACTION and c.get("group_digest") == digest for c in contexts)
 
 
+async def pending_proposals(db: AsyncSession) -> dict[str, str]:
+    """``group_digest -> approval id`` of every PENDING proposal, so the admin view can link a group to its review."""
+    query = select(Approval.id, Approval.context).where(
+        Approval.approval_type == ApprovalType.DESTRUCTIVE_ACTION.value,
+        Approval.requested_by_agent.like(f"{REQUESTED_BY}%"),
+        Approval.status == ApprovalStatus.PENDING.value,
+    )
+    return {c["group_digest"]: str(i) for i, c in (await db.execute(query)).all() if c and c.get("action") == ACTION}
+
+
 def _text(context: dict) -> tuple[str, str]:
     copies = len(context["secret_ids"])
     if context["survivor_id"]:

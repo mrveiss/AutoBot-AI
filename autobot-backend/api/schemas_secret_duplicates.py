@@ -2,21 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Schemas for the secret-duplicate admin routes (#17850). Ids and counts only -- never a name or a value."""
+"""Schemas for the secret-duplicate admin routes (#17850): counts, vaults, approval ids; no secret id or name."""
 
 from pydantic import BaseModel
 
 
 class DuplicateGroupStatus(BaseModel):
-    """One duplicated ``(owner_vault, name)``: the vault reference and the ids of its copies."""
+    """One duplicated ``(owner_vault, name)``: the vault, how many copies, and its open proposal if any.
+
+    No secret id and no name leaves here (#17865): a person acts on a group from its approval, in the Approvals
+    inbox, not from this view.
+    """
 
     owner_vault: str
-    secret_ids: list[str]
+    copy_count: int
+    approval_id: str | None = None
 
 
 class DuplicateStatus(BaseModel):
-    """Every duplicated group. Empty means the unique-constraint migration can apply."""
+    """Every duplicated group, in counts. ``group_count == 0`` means the unique-constraint migration can apply."""
 
+    group_count: int
+    copy_count: int
     groups: list[DuplicateGroupStatus]
 
 
