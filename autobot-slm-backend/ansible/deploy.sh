@@ -345,7 +345,7 @@ restart_services() {
 rollback_deployment() {
     # #19239: no rollback.yml exists; this stopped every service, then failed, leaving the fleet down.
     # The SLM's rollback runs no playbook yet (#17657). Code Sync deploys only main, so there is no pinned deploy (#20214).
-    error_exit "No rollback playbook exists, and Code Sync deploys only main, so no earlier commit can be deployed yet (#20214, #17657). Fix forward on main."
+    error_exit "deploy.sh cannot roll back. Use the SLM updater instead: Maintenance > Updates > Code Sync, 'Roll back to an earlier version' (gated by SLM_ROLLBACK_ENABLED; see docs/runbooks/CODE_UPDATE.md). Fix forward on main."
 }
 
 # Dependency patching - Issue #682
@@ -473,7 +473,7 @@ OPTIONS:
   --stop              Stop AutoBot services
   --restart           Restart AutoBot services
   --health-check      Validate all services are healthy
-  --rollback          Rollback to previous version
+  --rollback          Refuses; use the SLM updater (Maintenance > Updates > Code Sync)
 
   Security & Authentication (Issue #700):
   --setup-sudo        Configure passwordless sudo for autobot user (one-time setup)
