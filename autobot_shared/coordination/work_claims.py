@@ -364,6 +364,20 @@ def _build(
     )
 
 
+def acquire_eval_args(parsed: Scope, claim: WorkClaim, mode: ClaimMode, ttl: int) -> tuple[str, ...]:
+    """KEYS+ARGV for ``_ACQUIRE_LUA``: shared by the async path here and the sync one in ``work_claims_sync``."""
+    return (
+        _INDEX_KEY.format(kind=parsed.kind),
+        _CLAIM_PREFIX.format(kind=parsed.kind),
+        parsed.path,
+        mode.value,
+        json.dumps(asdict(claim)),
+        str(ttl),
+        claim.agent_id,
+        claim.task_id,
+    )
+
+
 async def _acquire(
     scope: str | Scope,
     *,
@@ -385,18 +399,7 @@ async def _acquire(
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
     claim = _build(parsed, agent_id, task_id, mode, intent, ttl, company_id)
     client = await _redis()
-    outcome = await client.eval(
-        _ACQUIRE_LUA,
-        1,
-        _INDEX_KEY.format(kind=parsed.kind),
-        _CLAIM_PREFIX.format(kind=parsed.kind),
-        parsed.path,
-        mode.value,
-        json.dumps(asdict(claim)),
-        str(ttl),
-        agent_id,
-        task_id,
-    )
+    outcome = await client.eval(_ACQUIRE_LUA, 1, *acquire_eval_args(parsed, claim, mode, ttl))
     verdict = outcome[0].decode() if isinstance(outcome[0], bytes) else outcome[0]
     if len(outcome) > 2 and outcome[2]:  # index members whose TTL ran out unreleased (#18391)
         await record_expired_members(client, parsed.kind, [_text(m) for m in outcome[2]])
