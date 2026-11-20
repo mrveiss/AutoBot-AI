@@ -122,7 +122,11 @@ async def _secret_holds(record: dict[str, Any], fields: tuple[str, ...]) -> str 
         return f"secrets store cannot supply the credential ({type(exc).__name__})"
     unequal = [name for name in fields if not secure_compare(merged.get(name), config.get(name))]
     if unequal:
-        return "secrets store does not hold an equal value for: %s; nothing removed" % ", ".join(unequal)
+        names = ", ".join(unequal)
+        return (
+            f"secrets store does not hold an equal value for: {names} "
+            "(stale copy \u2014 rotate or re-save the connector); nothing removed"
+        )
     return None
 
 

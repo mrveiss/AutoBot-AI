@@ -2,22 +2,48 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""``delete_collection_if_empty`` never deletes vectors written after the empty check (#20992, #17038)."""
+"""``delete_collection_if_empty`` and the per-collection write lease (#20992, #17038).
+
+Real ``EVAL`` via fakeredis[lua], as in ``tests/coordination/test_work_claims.py``: the registry's own Lua
+decides every conflict here, so the lease semantics tested are the production ones.
+"""
+
+import asyncio
+import threading
+import time
 
 import pytest
 
+from autobot_shared.coordination import collection_lease as cl
+from autobot_shared.coordination import work_claims_sync
+from autobot_shared.coordination.work_claims import ClaimUnavailable
 from services import chroma_empty_collections as svc
 from utils.async_chromadb_client import AsyncChromaClient
+from utils.leased_chroma import LeasedChromaClient, delete_if_empty, lease_client
+
+try:
+    import fakeredis
+except ImportError:  # pragma: no cover
+    fakeredis = None
 
 _NAME = "autobot_docs"
+_CLAIM_KEYS = "work_claims:c:kb:*"
+
+
+@pytest.fixture
+def redis(monkeypatch):
+    if fakeredis is None:
+        pytest.skip("fakeredis[lua] not installed")
+    client = fakeredis.FakeRedis(server=fakeredis.FakeServer(), decode_responses=True)
+    monkeypatch.setattr(work_claims_sync, "get_redis_client", lambda **_: client)
+    return client
 
 
 class _Raw:
-    """A sync Chroma collection; ``on_count`` runs between the count and the delete (a concurrent writer)."""
+    """A sync Chroma collection; ``on_count`` runs inside the count (where a concurrent actor would act)."""
 
     def __init__(self, owner, name, vectors=0):
         self.owner, self.name, self.vectors, self.on_count = owner, name, vectors, None
-        self.fail_rename_back = False
 
     def count(self):
         seen = self.vectors
@@ -25,79 +51,173 @@ class _Raw:
             self.on_count()
         return seen
 
-    def modify(self, name=None, metadata=None):
-        if name == _NAME and self.fail_rename_back:
-            raise ValueError("name taken")
-        self.owner.collections[name] = self.owner.collections.pop(self.name)
-        self.name = name
+    def add(self, **kwargs):
+        self.vectors += len(kwargs["ids"])
+
+    upsert = update = add
+
+    def delete(self, **kwargs):
+        self.vectors = 0
 
 
 class _Sync:
-    def __init__(self, raw_vectors=0):
-        self.collections = {_NAME: _Raw(self, _NAME, raw_vectors)}
+    def __init__(self, vectors=0):
+        self.collections = {_NAME: _Raw(self, _NAME, vectors)}
         self.deleted = []
+        self.delete_error = None
 
     def get_collection(self, name, embedding_function=None):
         return self.collections[name]
 
     def delete_collection(self, name):
+        if self.delete_error:
+            raise self.delete_error
         self.deleted.append(name)
         self.collections.pop(name)
 
 
-@pytest.mark.asyncio
-async def test_an_empty_collection_is_deleted_under_its_fenced_name():
+def _held(redis):
+    return redis.keys(_CLAIM_KEYS)
+
+
+def test_an_empty_collection_is_deleted_and_the_lease_released(redis):
     sync = _Sync()
-    client = AsyncChromaClient(sync)
-    assert await client.delete_collection_if_empty(_NAME) == 0
-    assert len(sync.deleted) == 1 and sync.deleted[0].startswith(_NAME + ".deleting-")
-    assert sync.collections == {}
+    assert delete_if_empty(sync, _NAME) == 0
+    assert sync.deleted == [_NAME] and _held(redis) == []
 
 
-@pytest.mark.asyncio
-async def test_a_writer_looking_the_name_up_after_the_check_does_not_reach_the_collection():
+def test_the_count_runs_while_the_delete_holds_the_lease(redis):
+    sync, seen = _Sync(), []
+    sync.collections[_NAME].on_count = lambda: seen.append(len(_held(redis)))
+    delete_if_empty(sync, _NAME)
+    assert seen == [1]
+
+
+def test_a_non_empty_collection_returns_its_count_and_is_kept(redis):
+    sync = _Sync(vectors=4)
+    assert delete_if_empty(sync, _NAME) == 4
+    assert sync.deleted == [] and _NAME in sync.collections and _held(redis) == []
+
+
+def test_a_delete_while_a_write_holds_the_lease_does_not_run(redis):
     sync = _Sync()
-    seen = []
-    sync.collections[_NAME].on_count = lambda: seen.append(_NAME in sync.collections)
-    await AsyncChromaClient(sync).delete_collection_if_empty(_NAME)
-    assert seen == [False]  # the name was already fenced when the count ran
+    with cl.write_lease(_NAME):
+        with pytest.raises(cl.CollectionLeaseUnavailable, match="write is in progress"):
+            delete_if_empty(sync, _NAME)
+    assert sync.deleted == [] and _NAME in sync.collections
 
 
-@pytest.mark.asyncio
-async def test_a_non_empty_collection_is_renamed_back_and_kept():
-    sync = _Sync(raw_vectors=4)
-    assert await AsyncChromaClient(sync).delete_collection_if_empty(_NAME) == 4
-    assert sync.deleted == [] and list(sync.collections) == [_NAME]
-
-
-@pytest.mark.asyncio
-async def test_a_write_landing_between_the_existence_check_and_the_delete_is_kept(monkeypatch):
-    """The old flow counted, then deleted in a separate await; a write in that gap was destroyed."""
+def test_a_write_waits_for_a_running_delete_and_lands_after_it(redis):
     sync = _Sync()
+    leased = lease_client(sync)
+    landed = threading.Event()
+    with cl.delete_lease(_NAME):
+        writer = threading.Thread(
+            target=lambda: (leased.get_collection(name=_NAME).add(ids=["a"]), landed.set()), daemon=True
+        )
+        writer.start()
+        assert not landed.wait(0.4)  # blocked on the lease while the delete holds it
+        assert sync.collections[_NAME].vectors == 0
+    assert landed.wait(5)
+    writer.join(5)
+    assert sync.collections[_NAME].vectors == 1  # the write was held back, not lost
+
+
+def test_a_write_that_outwaits_the_delete_raises_and_writes_nothing(redis, monkeypatch):
+    monkeypatch.setattr(cl, "WRITE_LEASE_WAIT_S", 0.2)
+    sync = _Sync()
+    with cl.delete_lease(_NAME):
+        with pytest.raises(cl.CollectionLeaseUnavailable, match="waited"):
+            lease_client(sync).get_collection(name=_NAME).add(ids=["a"])
+    assert sync.collections[_NAME].vectors == 0
+
+
+def test_writers_share_the_lease(redis):
+    with cl.write_lease(_NAME), cl.write_lease(_NAME):
+        assert len(_held(redis)) == 2
+
+
+def test_a_lease_that_lapsed_after_the_count_means_nothing_is_deleted(redis):
+    sync = _Sync()
+    sync.collections[_NAME].on_count = lambda: redis.delete(*_held(redis))  # the TTL ran out mid-delete
+    with pytest.raises(cl.CollectionLeaseUnavailable, match="lapsed"):
+        delete_if_empty(sync, _NAME)
+    assert sync.deleted == [] and _NAME in sync.collections
+
+
+def test_a_crashed_writer_frees_the_collection_when_its_lease_expires(redis):
+    sync = _Sync()
+    crashed = cl.Lease(_NAME, cl.ClaimMode.SHARED, cl.WRITE_LEASE_TTL_S)
+    assert crashed.try_take() is None  # never released: the holder died
+    with pytest.raises(cl.CollectionLeaseUnavailable):
+        delete_if_empty(sync, _NAME)
+    redis.delete(*_held(redis))  # what the claim's TTL does
+    assert delete_if_empty(sync, _NAME) == 0
+
+
+def test_a_failed_delete_leaves_the_collection_and_releases_the_lease(redis):
+    sync = _Sync()
+    sync.delete_error = OSError("chroma down")
+    with pytest.raises(OSError):
+        delete_if_empty(sync, _NAME)
+    assert _NAME in sync.collections and _held(redis) == []
+
+
+def test_an_unreachable_registry_means_neither_delete_nor_write(monkeypatch):
+    monkeypatch.setattr(work_claims_sync, "get_redis_client", lambda **_: None)
+    sync = _Sync()
+    with pytest.raises(ClaimUnavailable):
+        delete_if_empty(sync, _NAME)
+    with pytest.raises(ClaimUnavailable):
+        lease_client(sync).get_collection(name=_NAME).add(ids=["a"])
+    assert sync.deleted == [] and sync.collections[_NAME].vectors == 0
+
+
+def test_a_write_through_the_client_holds_the_shared_lease_only_for_the_write(redis):
+    sync, during = _Sync(), []
     raw = sync.collections[_NAME]
-
-    async def _get():
-        return AsyncChromaClient(sync)
-
-    async def _exists_then_a_writer_adds(self, name, embedding_function=None):
-        raw.vectors = 1  # the concurrent write, after the service looked and before it deletes
-        return object()
-
-    monkeypatch.setattr(svc, "get_async_chromadb_client", _get)
-    monkeypatch.setattr(AsyncChromaClient, "get_collection_or_none", _exists_then_a_writer_adds)
-    done, reason = await svc.delete_empty_collection(_NAME)
-    assert done is False and "1 vector" in reason
-    assert sync.deleted == [] and list(sync.collections) == [_NAME]
+    raw.upsert = lambda **kw: during.append(len(_held(redis)))
+    client = lease_client(sync)
+    assert isinstance(client, LeasedChromaClient) and lease_client(client) is client
+    client.get_collection(name=_NAME).upsert(ids=["a"])
+    assert during == [1] and _held(redis) == []
+    assert client.get_collection(name=_NAME).count() == 0  # reads pass through, unleased
 
 
 @pytest.mark.asyncio
-async def test_a_failed_delete_restores_the_name_and_reports_did_not_run(monkeypatch):
+async def test_the_async_client_deletes_an_empty_collection(redis):
     sync = _Sync()
+    assert await AsyncChromaClient(sync).delete_collection_if_empty(_NAME) == 0
+    assert sync.deleted == [_NAME] and _held(redis) == []
 
-    def _boom(name):
-        raise OSError("chroma down")
 
-    sync.delete_collection = _boom
+@pytest.mark.asyncio
+async def test_a_cancelled_delete_finishes_or_does_nothing_and_releases_the_lease(redis):
+    sync = _Sync()
+    inside, go = threading.Event(), threading.Event()
+
+    def _slow_count():
+        inside.set()
+        go.wait(5)
+
+    sync.collections[_NAME].on_count = _slow_count
+    task = asyncio.ensure_future(AsyncChromaClient(sync).delete_collection_if_empty(_NAME))
+    await asyncio.get_running_loop().run_in_executor(None, inside.wait, 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert len(_held(redis)) == 1  # the worker still holds the lease: no write can slip in
+    go.set()
+    deadline = time.monotonic() + 5
+    while _held(redis) and time.monotonic() < deadline:
+        await asyncio.sleep(0.02)
+    assert _held(redis) == []
+    assert sync.deleted == [_NAME] or _NAME in sync.collections  # whole delete, or untouched
+
+
+@pytest.mark.asyncio
+async def test_the_service_reports_a_busy_collection_as_did_not_run(redis, monkeypatch):
+    sync = _Sync()
 
     async def _get():
         return AsyncChromaClient(sync)
@@ -107,14 +227,7 @@ async def test_a_failed_delete_restores_the_name_and_reports_did_not_run(monkeyp
 
     monkeypatch.setattr(svc, "get_async_chromadb_client", _get)
     monkeypatch.setattr(AsyncChromaClient, "get_collection_or_none", _exists)
-    done, reason = await svc.delete_empty_collection(_NAME)
-    assert done is False and "did not run" in reason
-    assert list(sync.collections) == [_NAME]
-
-
-@pytest.mark.asyncio
-async def test_a_restore_that_fails_is_named_in_the_error():
-    sync = _Sync(raw_vectors=2)
-    sync.collections[_NAME].fail_rename_back = True
-    with pytest.raises(RuntimeError, match="held as"):
-        await AsyncChromaClient(sync).delete_collection_if_empty(_NAME)
+    with cl.write_lease(_NAME):
+        done, reason = await svc.delete_empty_collection(_NAME)
+    assert done is False and "in progress" in reason and sync.deleted == []
+    assert await svc.delete_empty_collection(_NAME) == (True, None)

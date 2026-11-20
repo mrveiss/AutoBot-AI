@@ -33,13 +33,13 @@ from autobot_shared.logging_manager import get_logger
 from __future__ import annotations
 
 import asyncio
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from utils.chromadb_auth import chroma_client_auth_kwargs
+from utils.leased_chroma import delete_if_empty, lease_client
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -468,35 +468,15 @@ class AsyncChromaClient:
         self._collection_cache.pop(name, None)
 
     async def delete_collection_if_empty(self, name: str) -> int:
-        """Delete *name* only if it holds no vectors at delete time; returns the count seen (0 = deleted).
+        """Delete *name* only if it holds no vectors; returns the count seen (0 = deleted).
 
-        Chroma has no compare-and-delete, so the collection is first renamed away: a writer looking it up by
-        name no longer finds it, which closes the check-to-delete gap for all but a writer already holding an
-        open handle. A non-empty collection is renamed back untouched; any failure restores it first.
+        Runs under the collection's exclusive write lease (``utils.leased_chroma``), so no write can land between
+        the count and the delete. Raises ``CollectionLeaseUnavailable`` when a writer holds it: did not run.
         """
-        raw = await asyncio.to_thread(self._client.get_collection, name=name)
-        fenced = f"{name}.deleting-{uuid.uuid4().hex[:12]}"
-        await asyncio.to_thread(raw.modify, name=fenced)
-        self._collection_cache.pop(name, None)
         try:
-            count = await asyncio.to_thread(raw.count)
-            if count == 0:
-                await asyncio.to_thread(self._client.delete_collection, name=fenced)
-                return 0
-        except BaseException:
-            await self._restore_name(raw, name, fenced)
-            raise
-        await self._restore_name(raw, name, fenced)
-        return count
-
-    @staticmethod
-    async def _restore_name(raw: Any, name: str, fenced: str) -> None:
-        try:
-            await asyncio.shield(asyncio.to_thread(raw.modify, name=name))
-        except Exception as exc:
-            raise RuntimeError(
-                f"collection {name!r} could not be renamed back and is held as {fenced!r}: {exc}"
-            ) from exc
+            return await asyncio.to_thread(delete_if_empty, self._client, name)
+        finally:
+            self._collection_cache.pop(name, None)
 
     async def heartbeat(self) -> int:
         """Check if the client is alive (async)."""
@@ -559,7 +539,7 @@ async def get_async_chromadb_client(
                     **chroma_client_auth_kwargs(),
                 ),
             )
-            async_client = AsyncChromaClient(sync_client)
+            async_client = AsyncChromaClient(lease_client(sync_client))
             _async_client_cache[cache_key] = async_client
             logger.info(
                 "Async ChromaDB HTTP client connected to %s:%s",

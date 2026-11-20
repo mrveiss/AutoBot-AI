@@ -7,9 +7,9 @@
 The knowledge health scan reads Redis facts only, so empty vector collections never showed up as a finding.
 ``scan_empty_collections`` lists them (and the collections it could not read, which are NOT reported as
 empty). ``delete_empty_collection`` is reachable only from the post-approval handler, and re-checks at that
-moment that the collection is still empty, atomically with the delete (a collection filled in between is
-kept). A collection with no vectors cannot change a retrieval result, so no retrieval-cache invalidation is
-needed.
+moment that the collection is still empty, under the collection's exclusive write lease so no write can land
+between the count and the delete (a collection being written to is kept). A collection with no vectors cannot change a retrieval
+result, so no retrieval-cache invalidation is needed.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from autobot_shared.coordination.collection_lease import CollectionLeaseUnavailable
 from autobot_shared.logging_manager import get_logger
 from knowledge.graph_buckets import FACT_VECTOR_COLLECTIONS, section_for
 from services.approval_execution import register_post_approval_action
@@ -81,7 +82,10 @@ async def delete_empty_collection(name: str) -> tuple[bool, str | None]:
         return False, "the collection no longer exists"
     try:
         count = await client.delete_collection_if_empty(name)
-    except Exception as exc:  # a failed fence/count/delete leaves the collection (restored) in place
+    except CollectionLeaseUnavailable as exc:  # a writer holds the collection, or the lease lapsed: did not run
+        logger.warning("Empty-collection delete of %s did not run: %s", name, exc)
+        return False, "a write to the collection is in progress or the delete lease was lost; nothing deleted"
+    except Exception as exc:  # an unreachable lease registry, count or delete failure: nothing was deleted
         logger.warning("Empty-collection delete of %s did not run: %s", name, exc)
         return False, f"the delete did not run ({type(exc).__name__}); nothing deleted"
     if count != 0:
