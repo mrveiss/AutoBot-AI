@@ -16,6 +16,8 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
+# CRITICAL SECURITY FIX: Import session ownership validation
+from api import chat_session_sharing as _sharing  # #18890, #21898: share routes + the owner-only gate
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
 from api.chat_session_messages import fetch_session_messages
 from api.chat_session_team_access import require_team_member
@@ -56,8 +58,6 @@ from chat_workflow.session_handler import _emit_session_create, _emit_session_de
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
-
-# CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
@@ -866,7 +866,7 @@ async def update_session(
     session_id: str,
     session_data: SessionUpdate,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -1169,7 +1169,7 @@ def _build_delete_session_response(
 async def delete_session(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: str | None = None,
 ):
@@ -1354,7 +1354,7 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         # resolves a path parameter. Reset clears another user's conversation,
         # so the caller must own it. Only reachable when an id was supplied; an
         # absent one mints a new session above, which has no owner to check.
-        await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
+        _sharing.require_owner(await validate_session_ownership(session_id, request))  # SECURITY: owner-only (#21898)
 
         if clear_context:
             await _clear_session_messages(chat_history_manager, session_id)
@@ -1709,6 +1709,4 @@ async def clear_session_checkpoints(
         )
 
 
-from api.chat_session_sharing import router as _sharing_router  # noqa: E402  (#18890)
-
-router.include_router(_sharing_router)
+router.include_router(_sharing.router)

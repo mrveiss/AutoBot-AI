@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Share, list and unshare a chat's participants: owner only (#689, #18890).
+"""Share, list and unshare a chat's participants: owner only (#689, #18890); also the owner-only gate for delete,
+rename and reset (``validate_session_owner``, #21898).
 
 Its own router because ``api/chat_sessions.py`` is at its recorded size ceiling; that module includes it, and
 this one reaches back into it lazily (a top-level import would be circular). Every route runs
@@ -41,6 +42,13 @@ def require_owner(ownership: Dict) -> None:
     """Allowlist: anything but an owner-equivalent reason is refused like an outsider, so nothing leaks."""
     if ownership.get("reason") not in session_shares.OWNER_REASONS:
         raise HTTPException(status_code=403, detail=_REFUSAL)
+
+
+async def validate_session_owner(session_id: str, request: Request) -> Dict:
+    """Ownership dependency for destructive routes: ``validate_session_ownership`` then ``require_owner`` (#21898)."""
+    ownership = await validate_session_ownership(session_id, request)
+    require_owner(ownership)
+    return ownership
 
 
 @router.get("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionParticipantsData])
