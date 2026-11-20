@@ -128,3 +128,17 @@ register_env_var(
         range=(5, 5000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHROMA_LEASE_RENEW_RETRY_S",
+        type=int,
+        default=5,
+        description=(
+            "Seconds before a Chroma write lease's renew is retried after the lease registry was unreachable "
+            "(never longer than the normal renew interval)."
+        ),
+        component="knowledge",
+        range=(1, 60),
+    )
+)

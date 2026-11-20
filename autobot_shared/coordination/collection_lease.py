@@ -51,6 +51,8 @@ DELETE_LEASE_TTL_S = env_int_clamped("AUTOBOT_CHROMA_DELETE_LEASE_TTL_S", 60, mi
 #: How long a writer waits for a delete to finish before it raises.
 WRITE_LEASE_WAIT_S = env_int_clamped("AUTOBOT_CHROMA_WRITE_LEASE_WAIT_S", 30, min_v=1, max_v=600)
 LEASE_POLL_MS = env_int_clamped("AUTOBOT_CHROMA_LEASE_POLL_MS", 50, min_v=5, max_v=5000)
+#: Seconds before a renew that found the registry unreachable is tried again (capped at the normal interval).
+LEASE_RENEW_RETRY_S = env_int_clamped("AUTOBOT_CHROMA_LEASE_RENEW_RETRY_S", 5, min_v=1, max_v=60)
 
 _AGENT = "chroma-collection-lease"
 
@@ -88,12 +90,14 @@ class _Renewer:
         self._due: dict[Lease, float] = {}
         self._thread: threading.Thread | None = None
 
-    def add(self, lease: Lease) -> None:
+    def add(self, lease: Lease, delay_s: float | None = None) -> None:
+        """Schedule *lease*'s next renew (default a third of its TTL); restart the thread if it has died."""
+        interval = lease.ttl_s / RENEW_DIVISOR
         with self._cv:
             if lease._stopped:
                 return
-            self._due[lease] = time.monotonic() + lease.ttl_s / RENEW_DIVISOR
-            if self._thread is None:
+            self._due[lease] = time.monotonic() + (interval if delay_s is None else min(delay_s, interval))
+            if self._thread is None or not self._thread.is_alive():
                 self._thread = threading.Thread(target=self._run, name="chroma-lease-renew", daemon=True)
                 self._thread.start()
             self._cv.notify()
@@ -113,12 +117,20 @@ class _Renewer:
                     return ready
                 self._cv.wait(min(self._due.values()) - now if self._due else None)
 
+    def _renew_one(self, lease: Lease) -> None:
+        """Renew one lease; keep it scheduled unless the registry said it lapsed (an outage retries sooner)."""
+        verdict = None
+        try:
+            verdict = lease.renew_due()
+        except Exception:  # noqa: BLE001 -- one bad lease must not end the renewer for every other writer
+            logger.exception("chroma lease %s: scheduled renew raised; retrying", lease.scope)
+        if not lease._lapsed:
+            self.add(lease, None if verdict is not None else LEASE_RENEW_RETRY_S)
+
     def _run(self) -> None:
         while True:
             for lease in self._take_due():
-                lease.renew_due()
-                if not lease._lapsed:
-                    self.add(lease)
+                self._renew_one(lease)
 
 
 _RENEWER = _Renewer()
@@ -174,13 +186,15 @@ class Lease:
         """Register for renewal; nothing renews until the block has outlived a third of the TTL."""
         _RENEWER.add(self)
 
-    def renew_due(self) -> None:
-        """One scheduled renew; the renewer re-registers the lease only while the registry still holds it."""
+    def renew_due(self) -> bool | None:
+        """One scheduled renew; True held, None registry unreachable (retry), False lapsed (dropped for good)."""
         if self._stopped:
-            return
-        if not self.still_held():
+            return True
+        verdict = self.renew()
+        if verdict is False:
             logger.error("chroma lease %s lapsed while its holder was still running", self.scope)
             self._lapsed = True
+        return verdict
 
     def stop(self) -> None:
         self._stopped = True

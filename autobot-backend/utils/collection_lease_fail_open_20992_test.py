@@ -151,3 +151,67 @@ def test_a_sync_wait_on_the_event_loop_raises_instead_of_blocking(redis):
                 lease_client(_Client()).get_collection(name=_NAME).add(ids=["a"])
 
     asyncio.run(go())
+
+
+def _verdicts(monkeypatch, verdicts):
+    """Script Lease.renew with *verdicts* (then True forever); returns the call counter."""
+    calls = []
+
+    def fake(self):
+        calls.append(1)
+        v = verdicts[len(calls) - 1] if len(calls) <= len(verdicts) else True
+        self.lost = self.lost or v is False
+        return v
+
+    monkeypatch.setattr(cl.Lease, "renew", fake)
+    monkeypatch.setattr(cl, "RENEW_DIVISOR", 1200)  # ttl 60s -> due every 0.05s
+    monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.01)
+    return calls
+
+
+def test_a_renew_that_hit_a_redis_blip_is_retried_not_dropped(redis, monkeypatch):
+    calls = _verdicts(monkeypatch, [None])
+    with cl.write_lease(_NAME) as lease:
+        threading.Event().wait(0.4)
+        assert len(calls) >= 3 and not lease.lost and not lease._lapsed
+    assert not lease.lost and not lease._lapsed
+
+
+def test_a_renew_that_found_the_claim_gone_sets_lost_and_drops_the_lease(redis, monkeypatch):
+    calls = _verdicts(monkeypatch, [False])
+    with cl.write_lease(_NAME) as lease:
+        threading.Event().wait(0.3)
+        assert lease.lost and lease._lapsed and lease not in cl._RENEWER._due
+        assert len(calls) == 1
+
+
+def test_add_restarts_a_dead_renewer_thread(redis, monkeypatch):
+    renewer = cl._Renewer()
+    renewer._thread = threading.Thread(target=lambda: None)
+    renewer._thread.start()
+    renewer._thread.join()
+    dead = renewer._thread
+    lease = cl.Lease(_NAME, cl.ClaimMode.SHARED, 60)
+    try:
+        renewer.add(lease)
+        assert renewer._thread is not dead and renewer._thread.is_alive()
+    finally:
+        lease._stopped = True
+        renewer.remove(lease)
+
+
+def test_a_renew_that_raises_does_not_kill_the_renewer(redis, monkeypatch):
+    monkeypatch.setattr(cl, "RENEW_DIVISOR", 1200)
+    monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.01)
+    calls = []
+
+    def boom(self):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ValueError("boom")
+        return True
+
+    monkeypatch.setattr(cl.Lease, "renew_due", boom)
+    with cl.write_lease(_NAME):
+        threading.Event().wait(0.4)
+    assert len(calls) >= 2
