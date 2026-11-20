@@ -100,9 +100,16 @@ echo "  Playwright configured for headed mode on DISPLAY :1"
 # Step 7: Restart Playwright server
 echo "[7/7] Restarting Playwright server..."
 run_on_browser_vm "pkill -f playwright-server.js 2>/dev/null || true"
-# One canonical server (+ the two modules it requires) from autobot-browser-worker (#18549)
-for f in playwright-server.js session-store.js element-index.js search-snippet.js; do
-    scp -i "$SSH_KEY" "${SCRIPT_DIR}/../../../../autobot-browser-worker/${f}" "$BROWSER_USER@$BROWSER_VM_IP:${f}"
+# One canonical server + every module the manifest ships, from autobot-browser-worker (#18549, #21852)
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+# shellcheck source=scripts/lib/browser_worker_files.sh
+source "${REPO_ROOT}/scripts/lib/browser_worker_files.sh" || {
+    echo "FATAL: ${REPO_ROOT}/scripts/lib/browser_worker_files.sh could not be sourced (#21852)" >&2
+    exit 1
+}
+BROWSER_WORKER_FILES="$(browser_worker_files "$REPO_ROOT")" || exit 1
+for f in $BROWSER_WORKER_FILES; do
+    scp -i "$SSH_KEY" "${REPO_ROOT}/autobot-browser-worker/${f}" "$BROWSER_USER@$BROWSER_VM_IP:${f}"
 done
 run_on_browser_vm "cd /home/autobot && mkdir -p logs && \
     nohup node playwright-server.js > logs/playwright.log 2>&1 &"

@@ -10,7 +10,8 @@ services:
       - HEADLESS=${HEADLESS:-false}
       - PLAYWRIGHT_PORT=${AUTOBOT_BROWSER_SERVICE_PORT:-9001}  # the fleet's port.browser (#19418)
     volumes:
-      # One canonical server + its two local modules (#18549)
+      # One canonical server + every module in the worker manifest's deploy.files (#18549, #21852);
+      # repo_tests/browser_worker_one_manifest_21852_test.py fails when this list drifts from it.
       - ../../../../autobot-browser-worker/playwright-server.js:/app/server.js
       - ../../../../autobot-browser-worker/session-store.js:/app/session-store.js
       - ../../../../autobot-browser-worker/element-index.js:/app/element-index.js
