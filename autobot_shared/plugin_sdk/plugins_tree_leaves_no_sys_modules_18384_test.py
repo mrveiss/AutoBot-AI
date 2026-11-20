@@ -19,12 +19,12 @@ from pathlib import Path
 
 import pytest
 
-_spec = importlib.util.spec_from_file_location("plugins_conftest_18384", Path(__file__).with_name("conftest.py"))
+_ROOT = Path(__file__).resolve().parents[2]
+_spec = importlib.util.spec_from_file_location("plugins_conftest_18384", _ROOT / "plugins" / "conftest.py")
 _conftest = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_conftest)
 withdraw_plugins_packages = _conftest.withdraw_plugins_packages
 
-_ROOT = Path(__file__).resolve().parents[1]
 _LOADER = "autobot_shared/plugin_sdk/loader_file_fallback_test.py"
 _TREES = ("plugins/core-plugins/image-generation-plugin", "plugins/core-plugins/video-generation-plugin")
 
@@ -45,6 +45,9 @@ def test_the_loader_tests_pass_after_and_before_the_plugin_trees(trees_first):
 
 
 def test_withdraw_removes_every_plugins_entry_and_nothing_else(monkeypatch):
+    # Entries other tests in this process (the loader's) legitimately left are set aside, then restored.
+    for name in [n for n in sys.modules if n == "plugins" or n.startswith("plugins.")]:
+        monkeypatch.delitem(sys.modules, name)
     monkeypatch.setitem(sys.modules, "plugins", sys)
     monkeypatch.setitem(sys.modules, "plugins.core-plugins", sys)
     monkeypatch.setitem(sys.modules, "pluginsx", sys)
