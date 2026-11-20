@@ -34,8 +34,8 @@ from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import get_session, require_board_role
 
-from ..models.enums import MembershipRole
 from ..scheduler.schedule_entry import schedule_heartbeat
+from ..services.authz import GRANTING_ROLES
 from ..services.company import CompanyNotFoundError
 from ..services.controls_service import (
     AgentNotFoundError,
@@ -52,7 +52,7 @@ router = APIRouter(tags=["llc-controls"])
 _get_controls = lazy_singleton(ControlsService)
 _get_membership = lazy_singleton(MembershipService)
 
-_ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
+_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
 
 
 def _controls_svc() -> ControlsService:
