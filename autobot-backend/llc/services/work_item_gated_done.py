@@ -108,7 +108,7 @@ async def hand_off_for_review(
         return await handoff_svc.agent_to_human(
             session, work_item_id, agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
         )
-    except ReviewerLacksRole as exc:
+    except ReviewerLacksRole as exc:  # must precede HandoffNotAllowed, its base class, or this reason is never reached
         raise ReviewRefused(refusal + str(exc), ReviewRefused.LACKS_ROLE) from exc
     except HandoffNotAllowed as exc:
         raise ReviewRefused(str(exc), ReviewRefused.NOT_THE_HOLDER) from exc

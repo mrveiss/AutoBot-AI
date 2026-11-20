@@ -239,7 +239,13 @@ async def _agent_to_human(redis, item_id: str) -> None:
     service._record_a2h_activity = AsyncMock()
     service._publish_a2h_notification = AsyncMock()
     service._generate_and_update_brief_async = AsyncMock()
-    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with (
+        patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch(
+            "llc.services.handoff.get_review_gate_service",
+            return_value=MagicMock(missing_reviewer_role=AsyncMock(return_value=None)),
+        ),  # the policy's reviewer role has its own tests (#21588)
+    ):
         await service.agent_to_human(session, item_id, _AGENT, str(uuid.uuid4()), str(_ORG))
     await asyncio.gather(*service._background_tasks)
 

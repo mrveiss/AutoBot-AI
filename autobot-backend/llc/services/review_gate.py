@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import WorkItemType
 from ..models.review_gate import LLCReviewGatePolicy
-from .authz import membership_role
+from .authz import GRANTING_ROLES, membership_role
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
@@ -204,13 +204,15 @@ class ReviewGatePolicyService(LLCServiceBase):
 
         Only a policy that requires human review and names a ``reviewer_role`` constrains the reviewer; with no
         role the answer is ``None`` and the handoff is unchanged. The role is a company ``MembershipRole`` value
-        and is matched exactly: holding a higher role does not stand in for it.
+        and is matched exactly, except that an owner or admin (``GRANTING_ROLES``) always qualifies (owner ruling,
+        #21588); no other role outranks another.
         """
         policy = await self.get_policy(session, company_id, item_type)
         if policy is None or not policy.requires_human_review or not policy.reviewer_role:
             return None
         held = await membership_role(session, uuid.UUID(company_id), uuid.UUID(reviewer_user_id), for_update=False)
-        return None if held == policy.reviewer_role else policy.reviewer_role
+        qualifies = held == policy.reviewer_role or held in GRANTING_ROLES
+        return None if qualifies else policy.reviewer_role
 
     async def requires_cross_vendor_review(
         self,

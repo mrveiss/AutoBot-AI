@@ -306,7 +306,13 @@ def _a2h_session(agent_id: str) -> AsyncMock:
 
 async def test_a_failed_audit_leaves_the_key_and_sends_nothing_on_agent_to_human():
     agent, redis, service = str(uuid.uuid4()), _redis(), _service_whose_audit_fails()
-    with patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)):
+    with (
+        patch("llc.services.handoff.get_async_redis_client", AsyncMock(return_value=redis)),
+        patch(
+            "llc.services.handoff.get_review_gate_service",
+            return_value=MagicMock(missing_reviewer_role=AsyncMock(return_value=None)),
+        ),  # the policy's reviewer role has its own tests (#21588)
+    ):
         with pytest.raises(ActivityRecordError):
             await service.agent_to_human(_a2h_session(agent), str(uuid.uuid4()), agent, USER, COMPANY)
     redis.eval.assert_not_called()  # the owner-checked release (delete_if_holder / delete_if_value)

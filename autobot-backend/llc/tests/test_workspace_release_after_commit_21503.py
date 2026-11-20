@@ -99,6 +99,7 @@ async def test_the_approve_path_removes_the_worktree_only_after_commit(commit: b
         patch("services.task_workspace.release_workspace", removed),
         patch("llc.services.handoff.get_work_item_service", return_value=done_path),
         patch.object(WorkItemService, "_trigger_artifact_ingest", new=AsyncMock()),
+        patch.object(HandoffService, "_assert_reviewer_holds_role", new=AsyncMock()),  # no policy query in this script
     ):
         service = HandoffService(activity_log=MagicMock(record=AsyncMock()))
         await service.approve(session, str(item.id), str(reviewer), str(item.company_id))

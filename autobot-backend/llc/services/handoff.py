@@ -248,6 +248,7 @@ class HandoffService(LLCServiceBase):
             raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
         self._assert_in_review(item)
+        await self._assert_reviewer_holds_role(session, item, company_id, reviewer_user_id)  # demoted since the handoff
         # The one done path (#21590): the allowed-transition rule, the completion audit row, the artifact ingest,
         # the fence and the workspace release. A reviewer is a person, so the review gate never holds the finish.
         await get_work_item_service().transition_status(
