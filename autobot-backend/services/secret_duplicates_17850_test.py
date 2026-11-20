@@ -15,13 +15,23 @@ from models.approval import ApprovalType
 from services import secret_duplicate_cleanup_action as action
 from services import secret_duplicate_proposals as proposals
 from services import secret_duplicates as dup
-from services.envelope_secrets_service import AmbiguousSecretError, EnvelopeSecretsService, SecretConflictError
+from services.approval_execution import set_verified_decider
+from services.envelope_secrets_service import (
+    AmbiguousSecretError,
+    EnvelopeSecretsService,
+    SecretAccessError,
+    SecretConflictError,
+)
+from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
 from testkit.fake_async_session import FakeAsyncSession
 
 _V = dup.Verdict
 _VAULT = "system"
 _NAME = "OPENAI_API_KEY"
 _A, _B, _C = (uuid.UUID(int=n) for n in (1, 2, 3))
+
+
+_ACTOR = MaintenanceActor(uuid.UUID(int=99), frozenset({"admin"}), "ref-1")
 
 
 def _result(verdicts: dict, name: str = _NAME) -> dup.GroupVerification:
@@ -61,10 +71,10 @@ def test_only_known_provider_keys_have_a_verifier():
 
 @pytest.mark.asyncio
 async def test_a_type_without_a_verifier_is_never_probed_or_read():
-    service = MagicMock(read=AsyncMock())
+    coordinator = MagicMock(maintenance_read=AsyncMock())
     group = dup.SecretDuplicateGroup(_VAULT, "SLACK_BOT_TOKEN", (_A, _B))
-    assert await dup.verify_copy(MagicMock(), service, group, _A) is _V.NO_VERIFIER
-    service.read.assert_not_called()
+    assert await dup.verify_copy(MagicMock(), coordinator, _ACTOR, group, _A) is _V.NO_VERIFIER
+    coordinator.maintenance_read.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -81,8 +91,9 @@ async def test_a_copy_is_probed_with_its_own_value_and_only_healthy_verifies(mon
 
     monkeypatch.setattr(dup, "_probe_classes", lambda: {_NAME: _Checker})
     values = {_A: b"bad", _B: b"good"}
-    service = MagicMock(read=AsyncMock(side_effect=lambda s, secret_id, accessible_vaults: values[secret_id]))
-    out = await dup.verify_group(MagicMock(), dup.SecretDuplicateGroup(_VAULT, _NAME, (_A, _B)), service)
+    coordinator = MagicMock(maintenance_read=AsyncMock(side_effect=lambda s, actor, secret_id: values[secret_id]))
+    group = dup.SecretDuplicateGroup(_VAULT, _NAME, (_A, _B))
+    out = await dup.verify_group(MagicMock(), group, _ACTOR, coordinator)
     assert out.verdicts == {_A: _V.NOT_VERIFIED, _B: _V.VERIFIED} and out.survivor_id == _B
     assert sorted(seen) == ["bad", "good"]
 
@@ -90,9 +101,10 @@ async def test_a_copy_is_probed_with_its_own_value_and_only_healthy_verifies(mon
 @pytest.mark.asyncio
 async def test_an_unreadable_copy_did_not_verify_and_its_value_is_not_logged(monkeypatch, caplog):
     monkeypatch.setattr(dup, "_probe_classes", lambda: {_NAME: object})
-    service = MagicMock(read=AsyncMock(side_effect=ValueError("sk-secret-value")))
+    coordinator = MagicMock(maintenance_read=AsyncMock(side_effect=ValueError("sk-secret-value")))
     with caplog.at_level("WARNING"):
-        verdict = await dup.verify_copy(MagicMock(), service, dup.SecretDuplicateGroup(_VAULT, _NAME, (_A,)), _A)
+        group = dup.SecretDuplicateGroup(_VAULT, _NAME, (_A,))
+        verdict = await dup.verify_copy(MagicMock(), coordinator, _ACTOR, group, _A)
     assert verdict is _V.NOT_VERIFIED
     assert "sk-secret-value" not in caplog.text and _NAME not in caplog.text
 
@@ -121,9 +133,11 @@ async def test_a_proposal_is_filed_once_per_group(monkeypatch):
 
 def _approval(**context):
     versions = {str(i): 1 for i in (_A, _B, _C)}
-    return MagicMock(
+    approval = MagicMock(
         id=uuid.uuid4(), context={"action": action.ACTION, "versions": versions, **context}, decided_by_user="admin"
     )
+    set_verified_decider(approval, _ACTOR.admin_id)
+    return approval
 
 
 @pytest.mark.asyncio
@@ -283,7 +297,7 @@ def _two_groups(monkeypatch, standing):
     monkeypatch.setattr(
         proposals,
         "verify_group",
-        AsyncMock(side_effect=lambda db, g: _result({i: _V.NOT_VERIFIED for i in g.secret_ids})),
+        AsyncMock(side_effect=lambda db, g, actor: _result({i: _V.NOT_VERIFIED for i in g.secret_ids})),
     )
     gate = MagicMock(create_approval=AsyncMock(return_value=MagicMock(id=uuid.uuid4())))
     monkeypatch.setattr(proposals, "ApprovalGateService", lambda db: gate)
@@ -293,14 +307,14 @@ def _two_groups(monkeypatch, standing):
 @pytest.mark.asyncio
 async def test_the_request_probes_at_most_the_cap_and_reports_the_rest(monkeypatch):
     gate = _two_groups(monkeypatch, lambda *a: False)
-    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", limit=2)
+    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", _ACTOR, limit=2)
     assert len(batch.results) == 2 and batch.remaining == 1 and gate.create_approval.await_count == 2
 
 
 @pytest.mark.asyncio
 async def test_groups_with_a_standing_proposal_do_not_use_the_cap(monkeypatch):
     gate = _two_groups(monkeypatch, [True, True, False, False])
-    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", limit=1)
+    batch = await proposals.propose_duplicate_resolutions(MagicMock(), "admin", _ACTOR, limit=1)
     assert batch.remaining == 0 and [r.skipped for r in batch.results] == [True, True, False]
     assert gate.create_approval.await_count == 1
 
@@ -348,7 +362,7 @@ async def test_a_proposal_without_recorded_versions_is_refused(monkeypatch):
 
 
 def _review():
-    return action._Review("ap", "admin", _A, 1, [_B], {str(_A): 1, str(_B): 1})
+    return action._Review("ap", "admin", _A, 1, [_B], {str(_A): 1, str(_B): 1}, _ACTOR)
 
 
 @pytest.mark.asyncio
@@ -397,3 +411,44 @@ async def test_an_unrotated_removal_copy_passes_its_hold():
     )
     await action._hold_removal(session, _B, _review())
     assert "FOR UPDATE" in str(session.execute.call_args.args[0])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refusal", [SecretAccessError("not an administrator"), MaintenanceAuditError("no audit")])
+async def test_a_refused_maintenance_read_is_raised_never_read_as_a_copy_that_does_not_work(monkeypatch, refusal):
+    monkeypatch.setattr(dup, "_probe_classes", lambda: {_NAME: object})
+    coordinator = MagicMock(maintenance_read=AsyncMock(side_effect=refusal))
+    with pytest.raises(type(refusal)):
+        await dup.verify_copy(MagicMock(), coordinator, _ACTOR, dup.SecretDuplicateGroup(_VAULT, _NAME, (_A,)), _A)
+
+
+@pytest.mark.asyncio
+async def test_an_approval_without_a_verified_administrator_removes_nothing(monkeypatch):
+    removed = AsyncMock()
+    rows = [SimpleNamespace(id=i, owner_vault="v", name="n", version=1) for i in (_A, _B)]
+    monkeypatch.setattr(action, "_remove_one", removed)
+    monkeypatch.setattr(action, "_group_rows", AsyncMock(return_value=rows))
+    approval = _approval(survivor_id=str(_A), removal_ids=[str(_B)])
+    set_verified_decider(approval, None)
+    with pytest.raises(ValueError, match="verified administrator"):
+        await action.execute_secret_duplicate_cleanup(approval, AsyncMock())
+    removed.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_the_removal_goes_through_the_coordinators_maintenance_delete(monkeypatch):
+    calls = []
+
+    class _Coordinator:
+        async def maintenance_delete(self, session, *, actor, secret_id):
+            calls.append((actor, secret_id))
+
+    async def _guarded(session, secret_id, *, dependents, delete, confirmed_digest=None):
+        await delete()
+
+    monkeypatch.setattr(action, "SecretsCoordinator", _Coordinator)
+    monkeypatch.setattr(action, "_hold_removal", AsyncMock())
+    monkeypatch.setattr(action, "_hold_survivor", AsyncMock())
+    monkeypatch.setattr("api.secrets_guarded_delete.guarded_delete", _guarded)
+    await action._guarded_remove(AsyncMock(), _B, _review())
+    assert calls == [(_ACTOR, _B)]

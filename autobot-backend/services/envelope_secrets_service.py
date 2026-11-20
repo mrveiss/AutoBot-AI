@@ -47,6 +47,7 @@ from autobot_shared.secrets_envelope import (
 )
 from autobot_shared.secrets_vault import VaultRef
 from autobot_shared.security.constant_time import secure_compare
+from knowledge.serving import is_servable
 from models.secret import Secret
 from models.secret_grant import SecretGrant
 
@@ -155,7 +156,7 @@ class EnvelopeSecretsService:
         self, session: AsyncSession, existing: Secret, owner_vault: VaultRef, plaintext: bytes
     ) -> Secret:
         """Reuse *existing* only when it is active and already holds *plaintext*; the value is never logged."""
-        if not existing.is_active:
+        if not is_servable(existing):  # the one serving predicate (#18820): a deactivated row is not reused
             raise SecretConflictError("inactive", existing.id)
         try:
             held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])

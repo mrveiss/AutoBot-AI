@@ -20,9 +20,11 @@ At execution the group is checked again from the database -- every named id must
 ``(owner_vault, name)`` with the survivor and carry the rotation ``version`` it was probed at (a copy rotated since
 is refused and needs a new proposal), and the survivor must still verify -- so an approval removes only what a
 person reviewed. Each removal re-locks the survivor in its own transaction and is refused if the survivor is gone.
-Each removal goes through the ONE guarded delete (``api/secrets_guarded_delete``): a copy with dependents is
-refused, kept, and said so. A durable audit entry is written BEFORE each delete, and the
-delete does not run when it cannot be written (#17038 rule 3).
+Reads and deletes go through ``SecretsCoordinator.maintenance_read`` / ``maintenance_delete`` (admin-only, attributed
+to the approving administrator and this approval, audited before they run; #17773). Each removal goes through the
+ONE guarded delete (``api/secrets_guarded_delete``): a copy with dependents is refused, kept,
+and said so. A durable audit entry is written BEFORE each delete, and the delete does not run when it cannot be
+written (#17038 rule 3).
 """
 
 from __future__ import annotations
@@ -36,9 +38,12 @@ from sqlalchemy import select
 from autobot_shared.logging_manager import get_logger
 from models.approval import ApprovalComment
 from models.secret import Secret
-from services.approval_execution import register_post_approval_action
+from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
+from services.secrets_coordinator import SecretsCoordinator
+from services.secrets_maintenance import MaintenanceActor
+from services.secrets_principal_resolver import ADMIN_PERMISSION
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +73,7 @@ class _Review:
     survivor_version: int
     removals: list[uuid.UUID]
     versions: dict[str, int]
+    actor: MaintenanceActor  # the approving administrator and this approval, for the coordinator's audit rows
 
 
 def _ids(context: dict, key: str) -> list[uuid.UUID]:
@@ -91,12 +97,11 @@ def _unchanged_group(rows: list[Secret], review: _Review) -> bool:
     return all(str(r.id) in review.versions and r.version == review.versions[str(r.id)] for r in rows)
 
 
-async def _survivor_still_works(session: "AsyncSession", survivor: Secret) -> bool:
-    from services.envelope_secrets_service import EnvelopeSecretsService
+async def _survivor_still_works(session: "AsyncSession", survivor: Secret, actor: MaintenanceActor) -> bool:
     from services.secret_duplicates import SecretDuplicateGroup, Verdict, verify_copy
 
     group = SecretDuplicateGroup(survivor.owner_vault, survivor.name, (survivor.id,))
-    return await verify_copy(session, EnvelopeSecretsService(), group, survivor.id) is Verdict.VERIFIED
+    return await verify_copy(session, SecretsCoordinator(), actor, group, survivor.id) is Verdict.VERIFIED
 
 
 async def _audit(review: _Review, result: str, secret_id: uuid.UUID, **extra: str) -> bool:
@@ -134,15 +139,14 @@ async def _hold_removal(session: "AsyncSession", secret_id: uuid.UUID, review: _
 async def _guarded_remove(session: "AsyncSession", secret_id: uuid.UUID, review: _Review) -> None:
     """Delete one copy through the ONE guarded delete; a copy with dependents is refused (409), never confirmed."""
     from api.secrets_guarded_delete import guarded_delete
-    from services.envelope_secrets_service import EnvelopeSecretsService
     from services.secret_dependency_service import SecretDependencyService
 
-    service = EnvelopeSecretsService()
+    coordinator = SecretsCoordinator()
 
     async def delete() -> None:
         await _hold_removal(session, secret_id, review)
         await _hold_survivor(session, review)
-        await service.delete(session, secret_id=secret_id)
+        await coordinator.maintenance_delete(session, actor=review.actor, secret_id=secret_id)
 
     deps = lambda: SecretDependencyService().what_depends_on(session, secret_id=secret_id)  # noqa: E731
     await guarded_delete(session, secret_id, dependents=deps, delete=delete)
@@ -163,6 +167,18 @@ async def _remove_one(approval: "Approval", session: "AsyncSession", secret_id: 
     return "removed"
 
 
+def _actor_of(approval: "Approval") -> MaintenanceActor:
+    """The approving administrator, attributed to this approval. Refused when the route supplied no verified user.
+
+    ``admin_only=True`` on the registration means the decision route has already refused a non-administrator decider
+    (#20046); the coordinator checks the account again before it opens or removes anything.
+    """
+    decider = verified_decider(approval)
+    if decider is None:
+        raise ValueError(f"approval {approval.id}: no verified administrator decided it; nothing was removed")
+    return MaintenanceActor(decider, frozenset({ADMIN_PERMISSION}), str(approval.id))
+
+
 async def _review_of(approval: "Approval", session: "AsyncSession") -> _Review:
     """Parse and re-check the approved context against the database; raises (recorded durably) if it cannot stand."""
     context = approval.context or {}
@@ -170,12 +186,18 @@ async def _review_of(approval: "Approval", session: "AsyncSession") -> _Review:
     versions = {str(k): int(v) for k, v in (context.get("versions") or {}).items()}
     rows = await _group_rows(session, [survivor_id, *removals])
     review = _Review(
-        str(approval.id), approval.decided_by_user, survivor_id, versions.get(str(survivor_id), -1), removals, versions
+        str(approval.id),
+        approval.decided_by_user,
+        survivor_id,
+        versions.get(str(survivor_id), -1),
+        removals,
+        versions,
+        _actor_of(approval),
     )
     if not removals or not _unchanged_group(rows, review):
         raise ValueError(f"approval {approval.id}: the named copies changed since they were probed; propose again")
     survivor = next(r for r in rows if r.id == survivor_id)
-    if not await _survivor_still_works(session, survivor):
+    if not await _survivor_still_works(session, survivor, review.actor):
         raise ValueError(f"approval {approval.id}: the surviving copy no longer verifies; nothing was removed")
     return review
 

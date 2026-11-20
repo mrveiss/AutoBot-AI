@@ -8,6 +8,8 @@ Owner ruling (2026-11-20): duplicate credentials are always resolved by verifica
 wins. Age, id and lookup order never decide. This module only READS and PROBES; it deletes nothing. What to do
 with the result is a proposal a human approves (``services/secret_duplicate_proposals.py``).
 
+Reads go through ``SecretsCoordinator.maintenance_read`` (admin-only, attributable, audited first; #17773).
+
 Verifier per secret type: an LLM provider key named by its env-var label is probed with the provider's own health check
 (``services.provider_health.providers``), which sends one authenticated read through the guarded fetch under the
 egress policy. A name with no verifier is ``NO_VERIFIER`` -- never "verified", never "failed" -- and the group
@@ -27,9 +29,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secrets_vault import VaultRef
 from models.secret import Secret
-from services.envelope_secrets_service import EnvelopeSecretsService
+from services.envelope_secrets_service import SecretAccessError
+from services.secrets_coordinator import SecretsCoordinator
+from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
 
 logger = get_logger(__name__)
 
@@ -119,24 +122,50 @@ async def _probe(name: str, value: str) -> Verdict:
     return Verdict.VERIFIED if result.status == ProviderHealthStatus.HEALTHY else Verdict.NOT_VERIFIED
 
 
+async def _open_copy(
+    session: AsyncSession, coordinator: SecretsCoordinator, actor: MaintenanceActor, secret_id: uuid.UUID
+) -> str | None:
+    """The copy's value through the coordinator's maintenance path, or ``None`` when it cannot be read.
+
+    A REFUSAL (not an administrator, or the audit entry could not be written) is raised, never read as "this copy
+    does not work": that would let a missing permission recommend the removal of a working credential.
+    """
+    try:
+        return (await coordinator.maintenance_read(session, actor=actor, secret_id=secret_id)).decode("utf-8").strip()
+    except (SecretAccessError, MaintenanceAuditError):
+        raise
+    except Exception as exc:  # unreadable or undecodable: it did not verify
+        logger.warning("A duplicate secret copy could not be read (%s)", type(exc).__name__)
+        return None
+
+
 async def verify_copy(
-    session: AsyncSession, service: EnvelopeSecretsService, group: SecretDuplicateGroup, secret_id: uuid.UUID
+    session: AsyncSession,
+    coordinator: SecretsCoordinator,
+    actor: MaintenanceActor,
+    group: SecretDuplicateGroup,
+    secret_id: uuid.UUID,
 ) -> Verdict:
-    """Open one copy through its owner vault and probe it. Failures are verdicts; nothing is logged but the id."""
+    """Open one copy and probe it. Failures are verdicts; nothing is logged but the exception class."""
     if not has_verifier(group.name):
         return Verdict.NO_VERIFIER
+    value = await _open_copy(session, coordinator, actor, secret_id)
+    if value is None:
+        return Verdict.NOT_VERIFIED
     try:
-        raw = await service.read(session, secret_id=secret_id, accessible_vaults=[VaultRef.parse(group.owner_vault)])
-        return await _probe(group.name, raw.decode("utf-8").strip())
-    except Exception as exc:  # unreadable, undecodable or the probe itself failed: it did not verify
-        logger.warning("A duplicate secret copy could not be verified (%s)", type(exc).__name__)
+        return await _probe(group.name, value)
+    except Exception as exc:  # the probe itself failed: it did not verify
+        logger.warning("A duplicate secret copy could not be probed (%s)", type(exc).__name__)
         return Verdict.NOT_VERIFIED
 
 
 async def verify_group(
-    session: AsyncSession, group: SecretDuplicateGroup, service: EnvelopeSecretsService | None = None
+    session: AsyncSession,
+    group: SecretDuplicateGroup,
+    actor: MaintenanceActor,
+    coordinator: SecretsCoordinator | None = None,
 ) -> GroupVerification:
     """Verify every copy of *group* independently of order."""
-    service = service or EnvelopeSecretsService()
-    verdicts = {sid: await verify_copy(session, service, group, sid) for sid in group.secret_ids}
+    coordinator = coordinator or SecretsCoordinator()
+    verdicts = {sid: await verify_copy(session, coordinator, actor, group, sid) for sid in group.secret_ids}
     return GroupVerification(group, verdicts)

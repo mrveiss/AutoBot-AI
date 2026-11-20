@@ -72,9 +72,6 @@ _FROZEN_DIRECT_CALLERS = {
     "autobot-backend/services/json_secrets_read.py": "SYSTEM-vault service read; should move to service_read (#17773)",
     "autobot-backend/services/provider_key_vault.py": "SYSTEM-vault service read; should move to service_read (#17773)",
     "autobot-backend/services/github_service_credential.py": "SYSTEM-vault service read; should move to service_read (#17773)",
-    # Duplicate-secret resolution (#17850): a server-only, admin-only maintenance action over EVERY vault.
-    "autobot-backend/services/secret_duplicates.py": "admin maintenance probe over all vaults; the coordinator's service_* paths are system-vault only and its user paths need a principal (#17773, #17850)",
-    "autobot-backend/services/secret_duplicate_cleanup_action.py": "approved, admin-only removal of losing duplicate copies in any vault, through the guarded delete; no principal the coordinator models (#17773, #17850)",
     # Reached by the #17773 sweep but not yet given a per-caller verdict.
     "autobot-backend/services/credential_write.py": "no verdict yet (#17773)",
     "autobot-backend/services/orphan_repair_types.py": "no verdict yet (#17773)",

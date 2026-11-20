@@ -127,30 +127,12 @@ def _walk_scoped(node: ast.AST, scope: tuple[str, ...]):
         yield from _walk_scoped(child, inner)
 
 
-def _imports_secret_model(tree: ast.AST) -> bool:
-    """True when the module imports the credential row (`from models.secret import Secret`), at any depth.
-
-    Such a module's `.is_active` is the stored credential's own flag, not a knowledge fact's: the field name is
-    shared across models and a syntactic detector cannot tell them apart without the model in scope (#17850).
-    Only `is_active` is excused, and only here; `valid_*` / `verification_status` reads stay decisions anywhere.
-    """
-    return any(
-        isinstance(node, ast.ImportFrom)
-        and (node.module or "").split(".")[-2:] == ["models", "secret"]
-        and any(alias.name == "Secret" for alias in node.names)
-        for node in ast.walk(tree)
-    )
-
-
 def serving_decisions(source: str) -> set[tuple[str, str, str]]:
     """`(enclosing_qualname, field, kind)` for every serving-decision shape in `source`."""
-    tree = parse_cache.parse(source)
-    credential_module = _imports_secret_model(tree)
     return {
         (qualname, field, kind)
-        for qualname, node in _walk_scoped(tree, ())
+        for qualname, node in _walk_scoped(parse_cache.parse(source), ())
         for field, kind in _decision_kinds(node)
-        if not (credential_module and field == "is_active" and kind == "READ")
     }
 
 
@@ -390,18 +372,3 @@ def test_the_main_baseline_reader_reads_both_sizes() -> None:
     source = 'ALLOWLIST: dict[str, str] = {\n    "a::b::c::d": "x",\n    "e::f::g::h": "y",\n}\n\nFROZEN_TOTAL = 2\n'
     assert _main_frozen(source) == (2, 2)
     assert _main_frozen(Path(repo_root() / BASELINE_PATH).read_text(encoding="utf-8")) == (len(ALLOWLIST), FROZEN_TOTAL)
-
-
-_CREDENTIAL_ROW = (
-    "from models.secret import Secret\n\n\ndef f(row, fact):\n    return row.is_active and fact.valid_to\n"
-)
-_FACT_ONLY = "def f(fact):\n    return fact.is_active\n"
-
-
-def test_a_module_holding_the_credential_row_does_not_read_a_facts_is_active_but_still_reads_validity() -> None:
-    """#17850: `is_active` on a stored credential is not a serving decision; every other trust field still is."""
-    assert serving_decisions(_CREDENTIAL_ROW) == {("f", "valid_to", "READ")}
-
-
-def test_the_same_is_active_read_without_the_credential_row_in_scope_is_still_a_decision() -> None:
-    assert serving_decisions(_FACT_ONLY) == {("f", "is_active", "READ")}

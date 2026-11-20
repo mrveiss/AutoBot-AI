@@ -57,6 +57,7 @@ from services.secret_dependency_service import SecretDependencyService
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_access_log import record_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
+from services.secrets_maintenance import MaintenanceActor, audit_maintenance, require_maintenance_admin
 from services.secrets_principal_resolver import resolve_principal_facts
 
 logger = logging.getLogger(__name__)
@@ -446,6 +447,25 @@ class SecretsCoordinator:
         owner_vault = await self._owner_vault(session, secret_id)
         if not authorize(facts, "write", owner_vault):
             raise SecretAccessError(f"not authorized to delete secrets in {owner_vault.to_str()}")
+        await self._service.delete(session, secret_id=secret_id)
+
+    # ------------------------------------------------------------------
+    # Admin-maintenance principal (#17850): cross-vault, admin-only, attributable, audited first.
+    # See services/secrets_maintenance.py. Removal still needs its approval (#17038).
+    # ------------------------------------------------------------------
+
+    async def maintenance_read(self, session: AsyncSession, *, actor: MaintenanceActor, secret_id: uuid.UUID) -> bytes:
+        """Decrypt *secret_id* through its own owner vault for an administrator's maintenance action."""
+        await require_maintenance_admin(session, actor)
+        owner_vault = await self._owner_vault(session, secret_id)
+        await audit_maintenance("read", secret_id, actor)
+        return await self._service.read(session, secret_id=secret_id, accessible_vaults=[owner_vault])
+
+    async def maintenance_delete(self, session: AsyncSession, *, actor: MaintenanceActor, secret_id: uuid.UUID) -> None:
+        """Delete *secret_id* for an administrator's approved maintenance action (call inside ``guarded_delete``)."""
+        await require_maintenance_admin(session, actor)
+        await self._owner_vault(session, secret_id)  # absent or legacy row: not found
+        await audit_maintenance("delete", secret_id, actor)
         await self._service.delete(session, secret_id=secret_id)
 
     # ------------------------------------------------------------------

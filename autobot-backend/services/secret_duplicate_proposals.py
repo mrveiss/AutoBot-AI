@@ -30,6 +30,7 @@ from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.secret_duplicate_cleanup_action import ACTION, register_secret_duplicate_cleanup_action
 from services.secret_duplicates import GroupVerification, Verdict, find_duplicate_groups, verify_group
+from services.secrets_maintenance import MaintenanceActor
 
 logger = get_logger(__name__)
 
@@ -153,13 +154,14 @@ async def propose_group(
 
 
 async def propose_duplicate_resolutions(
-    db: AsyncSession, requester: str, *, re_raise: bool = False, limit: int | None = None
+    db: AsyncSession, requester: str, actor: MaintenanceActor, *, re_raise: bool = False, limit: int | None = None
 ) -> ProposalBatch:
     """Detect, verify and propose for duplicated ``(owner_vault, name)`` groups, probing at most *limit* per call.
 
     ``re_raise`` lets an admin raise a group again after a rejected or revision-requested proposal. A group with a
     standing proposal is skipped before any probe and does not count against the cap; groups past the cap are
-    counted in ``remaining`` for the next call, so repeated calls always make progress.
+    counted in ``remaining`` for the next call, so repeated calls always make progress. *actor* is the requesting
+    administrator: every probe read is made as them and audited (``SecretsCoordinator.maintenance_read``).
     """
     cap = MAX_GROUPS_PER_REQUEST if limit is None else limit
     results: list[ProposalResult] = []
@@ -171,6 +173,6 @@ async def propose_duplicate_resolutions(
             remaining += 1
         else:
             probed += 1
-            results.append(await propose_group(db, await verify_group(db, group), requester, re_raise))
+            results.append(await propose_group(db, await verify_group(db, group, actor), requester, re_raise))
     logger.info("Secret duplicate resolution: %d proposed, %d left for another call", probed, remaining)
     return ProposalBatch(results, remaining)
