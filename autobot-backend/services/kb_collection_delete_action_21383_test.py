@@ -18,6 +18,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import knowledge_collections as routes
+from knowledge.collections import _unapproved
 from services import kb_collection_delete_action as action
 from services import kb_collection_delete_request as request
 from services.approval_execution import (
@@ -41,6 +42,10 @@ class FakeKB:
         self.mutations: list = []
         self.events = events
 
+    def _refusal(self, collection_id, approved, found, deletes_facts):
+        """The real knowledge base's own check (``knowledge.collections._unapproved``), not a copy of it."""
+        return _unapproved(approved, {"created_at": self.created[collection_id]}, found, deletes_facts)
+
     async def get_collection(self, collection_id):
         if collection_id not in self.collections:
             return {"success": False, "code": "not_found", "message": f"Collection not found: {collection_id}"}
@@ -62,8 +67,8 @@ class FakeKB:
                 "facts_to_delete": len(ids),
                 "confirm_required": True,
             }
-        if approved and (self.created[collection_id] != approved["created_at"] or len(ids) > approved["facts"]):
-            return {"success": False, "message": "not the approved collection; nothing deleted"}
+        if refused := self._refusal(collection_id, approved, len(ids), True):
+            return refused
         self.mutations.append(("bulk", collection_id))
         self.events.append("delete")
         deleted = len(ids)
@@ -81,9 +86,8 @@ class FakeKB:
                 "success": False,
                 "message": f"Collection not found: {collection_id}",
             }
-        too_many = delete_facts and approved and len(self.collections[collection_id]) > approved["facts"]
-        if approved and (self.created[collection_id] != approved["created_at"] or too_many):
-            return {"success": False, "message": "not the approved collection; nothing deleted"}
+        if refused := self._refusal(collection_id, approved, len(self.collections[collection_id]), delete_facts):
+            return refused
         self.mutations.append(("delete", collection_id, delete_facts))
         self.events.append("delete")
         ids = self.collections.pop(collection_id)
@@ -131,7 +135,14 @@ def _req():
     return types.SimpleNamespace(app=object())
 
 
-def _approval(op, selector, facts, status="approved", created_at="t1"):
+_FAKE_CREATED_AT = {"c1": "t1", "c2": "t2"}  # the identity FakeKB gives each collection
+_FROM_THE_FAKE = object()
+
+
+def _approval(op, selector, facts, status="approved", created_at=_FROM_THE_FAKE):
+    """An approved proposal with the plan shape the real proposer writes: selector, count, identity, display name."""
+    if created_at is _FROM_THE_FAKE:
+        created_at = _FAKE_CREATED_AT.get(selector["collection_id"])
     approval = types.SimpleNamespace(
         id=uuid.uuid4(),
         status=status,
@@ -141,7 +152,7 @@ def _approval(op, selector, facts, status="approved", created_at="t1"):
         context={
             "action": op.action,
             "channel": "api",
-            "plan": {"selector": selector, "facts": facts},
+            "plan": {"selector": selector, "facts": facts, "created_at": created_at, "name": "Name"},
         },
     )
     set_verified_decider(approval, uuid.uuid4())
@@ -184,6 +195,8 @@ async def test_bulk_delete_route_files_a_proposal_and_deletes_nothing(world):
     assert world.created["context"]["plan"] == {
         "selector": action.selector_for(action.BULK_DELETE, "c1"),
         "facts": 3,
+        "created_at": "t1",
+        "name": "Name c1",
     }
 
 
