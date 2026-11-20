@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Durable participant set of a shared chat, with its Redis projection (#18890).
+"""Durable participant set of a shared chat (#18890).
 
-The system of record is the ``chat_session_shares`` table (``models/session_share.py``). The Redis sets
-``session:shared_with:<session>`` and ``user:shared_sessions:<user>`` are projections: they carry NO TTL (a
-share lasts until the owner unshares it) and are rebuilt from the table on a read-miss.
+The ``chat_session_shares`` table (``models/session_share.py``) is the ONLY store of who a chat is shared with,
+and every access decision reads it. The Redis sets ``session:shared_with:<session>`` and
+``user:shared_sessions:<user>`` are the pre-#18890 store: legacy input, copied into the table once by
+``adopt_redis_shares`` and never written or read afterwards (apart from clearing their TTLs).
 
 Its own module because ``security/session_ownership.py`` is at its recorded size ceiling.
 """
@@ -152,49 +153,10 @@ async def _is_adopted(redis) -> bool:
     return True
 
 
-async def _project(redis, key: str, members: list[str]) -> None:
-    """Write a projection set with no TTL; clearing any TTL a pre-#18890 key still carries."""
-    if members:
-        await redis.sadd(key, *members)
-        await redis.persist(key)
-
-
-async def project_share(redis, session_id: str, user_ids: list[str]) -> None:
-    """Write-through of a share into both Redis sets, leaving each set complete.
-
-    A set that is absent is created from the table (every participant of the chat, every chat of the user),
-    never from just this write's delta, or the read path would trust a partial set and deny the rest.
-    """
-    key = SESSION_KEY % session_id
-    known = [] if await redis.exists(key) else await durable_participants(session_id)
-    await _project(redis, key, list(user_ids) + known)
-    for user_id in user_ids:
-        user_key = USER_KEY % user_id
-        owned = [] if await redis.exists(user_key) else await durable_sessions_for(user_id)
-        await _project(redis, user_key, [session_id] + owned)
-
-
-async def drop_projection(redis, session_id: str, user_id: str) -> None:
-    """Remove one participant from both Redis sets."""
-    await redis.srem(SESSION_KEY % session_id, user_id)
-    await redis.srem(USER_KEY % user_id, session_id)
-
-
 async def remove_share(redis, session_id: str, user_id: str) -> bool:
-    """Unshare: the table (system of record) first, then the projection.
-
-    If the table write raises, nothing changed anywhere and the caller is told the share was NOT removed;
-    clearing Redis first would let the next read-miss rebuild restore the participant from the surviving row.
-    Access is decided from the table (``durable_is_participant``), never from the Redis sets, so a projection
-    entry that outlives the row (a failed drop, a share racing this unshare) grants nothing.
-    """
+    """Unshare: delete the row. If that raises, nothing changed and the caller is told it was NOT removed."""
     await ensure_adopted(redis)
-    removed = await durable_remove(session_id, user_id)
-    try:
-        await drop_projection(redis, session_id, user_id)
-    except Exception as e:  # access is already revoked: reads are decided from the table, not from Redis
-        logger.warning("Unshare left a stale share projection entry (reconciled on the next share/unshare): %s", type(e).__name__)
-    return removed
+    return await durable_remove(session_id, user_id)
 
 
 async def _adopt_from_session_keys(redis) -> int:
@@ -228,7 +190,7 @@ async def adopt_redis_shares(redis) -> int:
     work claim (``ADOPT_CLAIM_SCOPE``, lease ``ADOPT_LOCK_TTL_MS``) keeps one worker at it; completion is the durable
     ``chat_session_share_adoption`` row, cached as ``ADOPTED_KEY`` in Redis. Once the row is set nothing is
     adopted again, whatever Redis holds. The legacy keys are NOT deleted afterwards: they share their names
-    with the projection keys this module maintains, so the durable row alone marks them as already imported.
+    with the legacy keys, which are no longer written, so the durable row alone marks them as already imported.
     A worker that loses the lock waits for completion and raises if it never appears, because an unshare must
     not run ahead of adoption.
     """
@@ -272,28 +234,6 @@ async def _await_marker(redis) -> int:
 async def ensure_adopted(redis) -> None:
     """Lazy fallback for the startup adoption: a no-op once the marker is set."""
     await adopt_redis_shares(redis)
-
-
-async def rebuild_session_projection(redis, session_id: str) -> list[str]:
-    """Repopulate a chat's Redis sets from the table (read-miss rebuild)."""
-    await ensure_adopted(redis)
-    members = await durable_participants(session_id)
-    await project_share(redis, session_id, members)
-    current = await durable_participants(session_id)
-    for user_id in set(members) - set(current):  # unshared while this rebuild was publishing
-        await drop_projection(redis, session_id, user_id)
-    return current
-
-
-async def rebuild_user_projection(redis, user_id: str) -> list[str]:
-    """Repopulate a user's shared-sessions set from the table (read-miss rebuild)."""
-    await ensure_adopted(redis)
-    sessions = await durable_sessions_for(user_id)
-    await _project(redis, USER_KEY % user_id, sessions)
-    current = await durable_sessions_for(user_id)
-    for session_id in set(sessions) - set(current):  # unshared while this rebuild was publishing
-        await drop_projection(redis, session_id, user_id)
-    return current
 
 
 def audit_actor(request, user_data: dict | None) -> dict:

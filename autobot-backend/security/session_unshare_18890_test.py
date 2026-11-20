@@ -122,7 +122,7 @@ async def test_unshare_survives_a_redis_flush(env):
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
     await validator.unshare_session(SESSION_ID, "bob", ACTOR)
-    redis.sets.clear()  # the projection is gone; the table is the record
+    redis.sets.clear()  # nothing reads Redis; the table is the record
 
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
     assert await validator.is_shared_with_user(SESSION_ID, "carol")
@@ -131,6 +131,7 @@ async def test_unshare_survives_a_redis_flush(env):
 @pytest.mark.asyncio
 async def test_share_never_expires(env):
     validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob"}
     redis.ttls["session:shared_with:" + SESSION_ID] = 99  # a legacy key still carrying the old 30-day TTL
     await validator.share_session(SESSION_ID, ["bob"], "alice")
 
@@ -369,7 +370,7 @@ async def test_a_failed_unshare_is_reported_and_changes_nothing(env, monkeypatch
     with pytest.raises(ConnectionError):
         await validator.unshare_session(SESSION_ID, "bob", ACTOR)
 
-    # Not revoked, and honestly so: the row and the projection agree, so a rebuild cannot flip the outcome later.
+    # Not revoked, and honestly so: the row is untouched, so nothing can flip the outcome later.
     assert await _rows() == {"bob": "alice"}
     redis.sets.clear()
     assert await validator.is_shared_with_user(SESSION_ID, "bob")
@@ -384,38 +385,6 @@ async def test_participant_list_adopts_legacy_shares_first(env):
     with patch("api.chat_session_sharing.get_redis_client", AsyncMock(return_value=redis)):
         listed = await list_session_participants(SESSION_ID, MagicMock(), {"reason": "owner_match"})
     assert json.loads(listed.body)["data"]["participants"] == ["legacy"]
-
-
-@pytest.mark.asyncio
-async def test_a_share_into_a_lost_projection_keeps_the_other_participants(env):
-    validator, redis, _ = env
-    await validator.share_session(SESSION_ID, ["bob"], "alice")
-    await validator.share_session("s2" * 16, ["bob"], "alice")
-    redis.sets.clear()  # both projection sets lost
-
-    await validator.share_session(SESSION_ID, ["carol"], "alice")
-
-    assert await validator.is_shared_with_user(SESSION_ID, "bob")
-    assert sorted(await validator.get_shared_sessions("bob")) == sorted([SESSION_ID, "s2" * 16])
-
-
-@pytest.mark.asyncio
-async def test_a_rebuild_overtaken_by_an_unshare_does_not_restore_the_participant(env, monkeypatch):
-    validator, redis, _ = env
-    await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
-    redis.sets.clear()
-    real_project = session_shares.project_share
-
-    async def unshare_mid_rebuild(r, session_id, user_ids):
-        await session_shares.remove_share(r, session_id, "bob")  # lands between the read and the write
-        await real_project(r, session_id, user_ids)
-
-    monkeypatch.setattr(session_shares, "project_share", unshare_mid_rebuild)
-    members = await session_shares.rebuild_session_projection(redis, SESSION_ID)
-
-    assert members == ["carol"]
-    assert not await redis.sismember("session:shared_with:" + SESSION_ID, "bob")
-    assert not await redis.sismember("user:shared_sessions:bob", SESSION_ID)
 
 
 @pytest.mark.asyncio
@@ -498,11 +467,12 @@ async def test_audit_records_the_uuid_and_client_ip_with_the_username_in_metadat
 
 @pytest.mark.asyncio
 async def test_a_user_in_redis_but_absent_from_the_table_is_denied(env):
-    """Race (share landing after an unshare) and a failed Redis drop both leave exactly this state."""
+    """A leftover Redis entry (an old write racing an unshare, a stale key) grants nothing once adopted."""
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
-    await session_shares.durable_remove(SESSION_ID, "bob")  # the row is gone; the projection is not
-    assert await redis.sismember("session:shared_with:" + SESSION_ID, "bob")
+    await session_shares.durable_remove(SESSION_ID, "bob")
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob"}  # present in Redis, absent from the table
+    redis.sets["user:shared_sessions:bob"] = {SESSION_ID}
 
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
     assert SESSION_ID not in await validator.get_shared_sessions("bob")
@@ -519,15 +489,10 @@ async def test_a_legacy_redis_only_share_grants_access_before_adoption_has_run(e
 
 
 @pytest.mark.asyncio
-async def test_an_unshare_whose_redis_drop_fails_still_revokes_access(env, monkeypatch):
+async def test_sharing_writes_only_the_table(env):
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
-
-    async def boom(*_a):
-        raise ConnectionError("redis down")
-
-    monkeypatch.setattr(session_shares, "drop_projection", boom)
-    assert await validator.unshare_session(SESSION_ID, "bob", ACTOR) is True
-
-    assert await redis.sismember("session:shared_with:" + SESSION_ID, "bob")  # stale entry, grants nothing
+    assert redis.sets == {}
+    assert await validator.is_shared_with_user(SESSION_ID, "bob")
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")

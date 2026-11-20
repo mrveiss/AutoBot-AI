@@ -4,10 +4,10 @@
 # Author: mrveiss
 """Durable participant set of a shared chat (#18890).
 
-One row per (chat, participant). The Redis sets ``session:shared_with:*`` and
-``user:shared_sessions:*`` are projections of these rows (see
-``security/session_shares.py``). ``user_id`` is the same string the share
-endpoint is given, so no foreign key: a participant may be a username.
+One row per (chat, participant); the only store of who a chat is shared with and the source of every access
+decision (``security/session_shares.py``). The legacy Redis sets ``session:shared_with:*`` and
+``user:shared_sessions:*`` are adoption input only. ``user_id`` is the same string the share endpoint is given,
+so no foreign key: a participant may be a username.
 """
 
 from datetime import datetime

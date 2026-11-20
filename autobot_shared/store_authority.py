@@ -282,12 +282,12 @@ STORE_AUTHORITY: dict[str, Concept] = {
     "session_shares": Concept(
         name="session_shares",
         system_of_record=Store.POSTGRES,
-        projections=(Store.REDIS,),
+        projections=(),
         write_sites=("autobot-backend/security/session_shares.py",),
-        rebuilt_by="security.session_shares.rebuild_session_projection / rebuild_user_projection repopulate "
-        "session:shared_with:* and user:shared_sessions:* from the chat_session_shares rows on a read-miss; "
-        "adopt_redis_shares copies pre-#18890 Redis-only shares into the table once ever, recorded in the "
-        "durable chat_session_share_adoption row (#18890).",
+        rebuilt_by="No projections: access is decided from the chat_session_shares table. The legacy Redis keys "
+        "session:shared_with:* and user:shared_sessions:* are not a projection; adopt_redis_shares copies "
+        "pre-#18890 Redis-only shares into the table once ever, recorded in the durable "
+        "chat_session_share_adoption row (#18890).",
         note="Who a chat is shared with. A share lasts until the owner unshares it; it was a 30-day Redis "
         "set that lapsed silently, so a participant lost access with no owner action and no record.",
     ),

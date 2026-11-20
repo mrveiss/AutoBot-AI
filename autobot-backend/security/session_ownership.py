@@ -652,11 +652,11 @@ class SessionOwnershipValidator:
     # =========================================================================
 
     def _get_shared_session_key(self, session_id: str) -> str:
-        """Redis key for users a session is shared with (#689)."""
+        """Legacy Redis key for users a session is shared with (#689); adoption input only (#18890)."""
         return session_shares.SESSION_KEY % session_id
 
     def _get_user_shared_sessions_key(self, user_id: str) -> str:
-        """Redis key for sessions shared WITH a user (#689)."""
+        """Legacy Redis key for sessions shared WITH a user (#689); adoption input only (#18890)."""
         return session_shares.USER_KEY % user_id
 
     async def share_session(
@@ -668,12 +668,11 @@ class SessionOwnershipValidator:
     ) -> bool:
         """Share a session until the owner unshares it (#689, #18890).
 
-        The table is written first (system of record), then the Redis projection (no TTL). False = not recorded.
+        The table is the only store. False = not recorded.
         """
         try:
             await session_shares.ensure_adopted(self.redis)
             await session_shares.durable_add(session_id, shared_with_ids, shared_by)
-            await session_shares.project_share(self.redis, session_id, shared_with_ids)
             actor = actor or {"user_id": shared_by, "username": shared_by, "ip": "unknown"}
             session_shares.audit("share", actor, session_id, shared_with_ids)
             logger.info("Session %s... shared by %s with %d users", session_id[:8], shared_by, len(shared_with_ids))
