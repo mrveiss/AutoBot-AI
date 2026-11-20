@@ -37,7 +37,10 @@ sys.modules.pop("remote_test_node_run_url", None)  # needed only while the datac
         ("user:tok@host:x?q=ssh://b", "host:x"),  # pragma: allowlist secret
         ("tok@host/x.git", "host/x.git"),  # bare token as user, a "/" after the host  # pragma: allowlist secret
         ("git@host:org/a/b.git", "git@host:org/a/b.git"),  # scp path with slashes stays
-        ("tok@h:o/r.git", "tok@h:o/r.git"),  # known limit: a bare-token scp user looks like git@host  # pragma: allowlist secret
+        (
+            "tok@h:o/r.git",
+            "tok@h:o/r.git",
+        ),  # known limit: a bare-token scp user looks like git@host  # pragma: allowlist secret
         ("tok@h:22/x", "tok@h:22/x"),  # pragma: allowlist secret
         ("tok@h", "tok@h"),  # pragma: allowlist secret
         ("HTTPS://u:p@h/x", "https://h/x"),  # pragma: allowlist secret
