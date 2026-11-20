@@ -28,7 +28,7 @@ from autobot_shared.testfile_names import is_test_filename
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
-from .lifecycle import reload_with_fresh_code, reverse_registrations
+from .lifecycle import initialize_attributed, reload_with_fresh_code, reverse_registrations
 from .registry import get_registry
 
 if TYPE_CHECKING:
@@ -367,7 +367,7 @@ class PluginLoader:
             plugin.credential_resolver = bound_resolver(
                 manifest.name, plugin_dir, self.credential_resolvers, self.trusted_roots
             )
-            await plugin.initialize()
+            await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
             plugin.status = PluginStatus.LOADED
 
             # Register with plugin registry and unified registry

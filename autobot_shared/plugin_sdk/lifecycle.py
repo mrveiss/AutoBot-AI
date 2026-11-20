@@ -4,9 +4,9 @@
 # Author: mrveiss
 """Host-side reversal of what a plugin registered (#19302).
 
-The host removes a plugin's hooks and capability grants itself on unload, so
-cleanup never depends on the plugin's own ``shutdown()``. Tools are not yet
-tracked per plugin; see #19302.
+The host removes a plugin's hooks, tools and capability grants itself on
+unload, so cleanup never depends on the plugin's own ``shutdown()``. Tools are
+attributed to the plugin that registered them by ``registering_for_plugin``.
 """
 
 import importlib
@@ -14,6 +14,8 @@ import logging
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from autobot_shared.tool_sdk.registry import get_tool_registry, registering_for_plugin
 
 from .base import BasePlugin, PluginStatus
 from .capabilities import CapabilityChecker
@@ -26,9 +28,16 @@ logger = logging.getLogger(__name__)
 
 
 def reverse_registrations(plugin_name: str) -> None:
-    """Remove every hook and capability grant recorded against *plugin_name*."""
+    """Remove every hook, tool and capability grant recorded against *plugin_name*."""
     HookRegistry().unregister_plugin(plugin_name)
+    get_tool_registry().unregister_plugin(plugin_name)
     CapabilityChecker().revoke_capabilities(plugin_name)
+
+
+async def initialize_attributed(plugin: BasePlugin) -> None:
+    """Run ``plugin.initialize()`` with its tool registrations attributed to the plugin (#19302)."""
+    with registering_for_plugin(plugin.manifest.name):
+        await plugin.initialize()
 
 
 def _own_modules(entry_point: str) -> list[str]:

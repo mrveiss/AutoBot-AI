@@ -10,7 +10,9 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 """
 
 import logging
-from typing import Dict, List, Type
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Dict, Iterator, List, Type
 
 from autobot_shared.coordination.run_progress import record_progress
 
@@ -24,6 +26,19 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The plugin whose code is registering tools right now; set by the plugin host (#19302).
+_registering_plugin: ContextVar[str | None] = ContextVar("tool_registering_plugin", default=None)
+
+
+@contextmanager
+def registering_for_plugin(plugin_name: str) -> Iterator[None]:
+    """Attribute every tool registered inside the block to *plugin_name* (#19302)."""
+    token = _registering_plugin.set(plugin_name)
+    try:
+        yield
+    finally:
+        _registering_plugin.reset(token)
 
 
 class PermissionDeniedError(Exception):
@@ -60,6 +75,7 @@ class ToolSDKRegistry:
 
     def __init__(self) -> None:
         self._tools: Dict[str, Type[BaseTool]] = {}
+        self._owners: Dict[str, str] = {}  # tool name -> owning plugin (#19302)
 
     # ------------------------------------------------------------------
     # Registration
@@ -86,6 +102,9 @@ class ToolSDKRegistry:
             raise ValueError(f"Tool already registered: '{name}'")
 
         self._tools[name] = tool_class
+        owner = _registering_plugin.get()
+        if owner:
+            self._owners[name] = owner
         logger.info(
             "Registered tool '%s' v%s (permission=%s)",
             name,
@@ -101,7 +120,30 @@ class ToolSDKRegistry:
         """
         if name in self._tools:
             del self._tools[name]
+            self._owners.pop(name, None)
             logger.info("Unregistered tool '%s'", name)
+
+    def unregister_plugin(self, plugin_name: str) -> int:
+        """Remove every tool *plugin_name* registered; return how many (#19302).
+
+        The host calls this on unload so cleanup never depends on the plugin's
+        own ``shutdown()``.
+        """
+        names = [n for n, owner in self._owners.items() if owner == plugin_name]
+        for name in names:
+            self.unregister(name)
+        return len(names)
+
+    def _is_dispatchable(self, name: str) -> bool:
+        """False when the owning plugin is known and disabled, unloaded or errored (#19302)."""
+        owner = self._owners.get(name)
+        if owner is None:
+            return True
+        from autobot_shared.plugin_sdk.hooks import (  # noqa: PLC0415  (plugin_sdk imports this package's peers)
+            HookRegistry,
+        )
+
+        return not HookRegistry._plugin_is_inactive(owner)
 
     # ------------------------------------------------------------------
     # Lookup
@@ -120,7 +162,7 @@ class ToolSDKRegistry:
             ToolNotFoundError: If the name is not registered.
         """
         tool_class = self._tools.get(name)
-        if tool_class is None:
+        if tool_class is None or not self._is_dispatchable(name):
             raise ToolNotFoundError(f"No tool registered with name '{name}'")
         return tool_class()
 
@@ -140,9 +182,11 @@ class ToolSDKRegistry:
             List of ToolMetadata, sorted by tool name.
         """
         results = []
-        for tool_class in self._tools.values():
+        for name, tool_class in self._tools.items():
             meta = tool_class.metadata
             if permission_filter is not None and not permission_filter.allows(meta.permission):
+                continue
+            if not self._is_dispatchable(name):
                 continue
             results.append(meta)
         return sorted(results, key=lambda m: m.name)
@@ -182,7 +226,7 @@ class ToolSDKRegistry:
         """
         # Step 1: look up
         tool_class = self._tools.get(name)
-        if tool_class is None:
+        if tool_class is None or not self._is_dispatchable(name):
             raise ToolNotFoundError(f"No tool registered with name '{name}'")
 
         required = tool_class.metadata.permission
@@ -247,6 +291,8 @@ class ToolSDKRegistry:
         for tool_class in sorted(self._tools.values(), key=lambda c: c.metadata.name):
             meta = tool_class.metadata
             if permission_filter is not None and not permission_filter.allows(meta.permission):
+                continue
+            if not self._is_dispatchable(meta.name):
                 continue
             instance = tool_class()
             tools.append(instance.to_openapi_schema())
