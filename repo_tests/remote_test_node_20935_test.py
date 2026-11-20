@@ -150,8 +150,12 @@ def test_sigterm_mid_run_leaves_no_checkout(node):
 def test_a_lost_ssh_session_removes_the_checkout(node):
     proc = _run(node, "sleep", "60")
     assert _wait_for(lambda: _checked_out(node))
-    pid = subprocess.run(["pgrep", "-f", "fake-ssh"], capture_output=True, text=True).stdout.split()[0]
-    os.kill(int(pid), signal.SIGKILL)
+    # Only this runner's own session: another run's stand-in on the same machine must never be hit.
+    found = subprocess.run(
+        ["pgrep", "-P", str(proc.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
+    ).stdout.split()
+    assert found, "no stand-in ssh session found under the runner"
+    os.kill(int(found[0]), signal.SIGKILL)
     assert _wait_for(lambda: _leftovers(node) == [], 30), "the node must clean up when its session vanishes"
     proc.kill()
     proc.communicate()
@@ -165,6 +169,37 @@ def test_a_stale_dir_from_a_hard_kill_is_swept_at_the_next_start(node):
     proc = _run(node, "true")
     proc.communicate(timeout=60)
     assert not stale.exists()
+
+
+def test_a_live_run_is_not_swept_by_a_run_with_a_shorter_ttl(node):
+    live = _run(node, "sleep", "60", timeout=3600)
+    assert _wait_for(lambda: _checked_out(node))
+    dirs = list((node["base"] / "runs").iterdir())
+    old = time.time() - 5 * 3600
+    for d in dirs:
+        os.utime(d, (old, old))
+    short = _run(node, "true", timeout=60)  # ttl 31 min: the live run's dir is older than that
+    short.communicate(timeout=60)
+    assert all(d.exists() for d in dirs), "a run holding its liveness lock must survive another run's sweep"
+    live.send_signal(signal.SIGTERM)
+    live.communicate(timeout=60)
+    assert _wait_for(lambda: _leftovers(node) == [])
+
+
+def test_a_queued_job_whose_caller_left_never_takes_a_slot(node):
+    holders = [_run(node, "sleep", "60") for _ in range(2)]  # SLOTS=2: both slots busy
+    assert _wait_for(lambda: len(_leftovers(node)) >= 2)
+    queued = _run(node, "true")
+    time.sleep(3)
+    found = subprocess.run(
+        ["pgrep", "-P", str(queued.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
+    ).stdout.split()
+    assert found, "the queued job's stand-in ssh session was not found"
+    os.kill(int(found[0]), signal.SIGKILL)
+    assert _wait_for(lambda: not any((node["base"] / "runs").glob("job.*")) or len(_leftovers(node)) <= 2, 30)
+    for proc in (queued, *holders):
+        proc.kill()
+        proc.communicate()
 
 
 def _provision(tmp_path: Path, body: str) -> subprocess.CompletedProcess:
@@ -285,11 +320,25 @@ def test_a_remote_test_failure_is_a_failure_not_a_fallback(tmp_path):
 _TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh")
 
 
+def _hardcoded_secrets(text: str) -> list[str]:
+    """What must not be written into the tooling: an IPv4 address or a private key block."""
+    found = re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text)
+    return found + (["private key"] if "BEGIN" in text and "PRIVATE KEY" in text else [])
+
+
+@pytest.mark.parametrize("text", ["ssh 10.0.0.5", "-----BEGIN " + "OPENSSH PRIVATE" + " KEY-----"])
+def test_the_detector_trips_on_an_address_and_a_key(text):
+    assert _hardcoded_secrets(text)
+
+
+@pytest.mark.parametrize("text", ["python 3.14.2", "pip==25.3", "BEGIN the run"])
+def test_the_detector_passes_version_strings_and_plain_words(text):
+    assert _hardcoded_secrets(text) == []
+
+
 def test_no_address_or_credential_is_written_into_the_tooling():
     for path in (_TOOL / name for name in _TOOL_FILES):
-        text = path.read_text(encoding="utf-8")
-        assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", text), path.name
-        assert "BEGIN" not in text or "PRIVATE KEY" not in text
+        assert _hardcoded_secrets(path.read_text(encoding="utf-8")) == [], path.name
 
 
 def test_shipping_a_commit_does_not_run_the_repos_own_pre_push_hook(node):
@@ -483,3 +532,60 @@ def test_provision_refuses_before_touching_the_node(tmp_path, monkeypatch, capfd
 def test_a_payload_with_constraints_but_no_requirements_fails(tmp_path):
     done, _reqs, _cons = _split(tmp_path, b"#--constraints--\nfoo==1.0\n")
     assert done.returncode != 0 and b"carries no requirements" in done.stderr
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://user:tok@host/org/repo.git", "https://host/org/repo.git"),  # pragma: allowlist secret
+        ("https://tok@host:8443/org/repo.git", "https://host:8443/org/repo.git"),
+        ("https://host/org/repo.git", "https://host/org/repo.git"),
+        ("git@host:org/repo.git", "git@host:org/repo.git"),
+    ],
+)
+def test_the_origin_url_sent_to_the_node_carries_no_credential(url, expected):
+    assert run._without_credentials(url) == expected
+
+
+def test_provision_without_an_origin_remote_is_refused_not_a_traceback(tmp_path, monkeypatch, capfd):
+    root = _payload_root(tmp_path, "pytest==9.0.0\n")
+    (root / ".python-version").write_text("3.14.2\n", encoding="utf-8")
+    monkeypatch.setattr(run, "_origin_url", lambda: (_ for _ in ()).throw(subprocess.CalledProcessError(2, "git")))
+    monkeypatch.setattr(run.subprocess, "run", _no_ship)
+    assert run.provision(run.load_config(_BASE_ENV), root) == 1
+    assert "provision refused" in capfd.readouterr().err
+
+
+def test_a_session_that_gives_no_result_is_unavailable_not_a_124(monkeypatch):
+    def _hang(_self, timeout):
+        raise subprocess.TimeoutExpired("ssh", timeout)
+
+    monkeypatch.setattr(run, "ship_commit", lambda *_a: None)
+    monkeypatch.setattr(run, "_script_command", lambda *_a: "true")
+    monkeypatch.setattr(run, "remote_cleanup", lambda *_a: None)
+    monkeypatch.setattr(
+        run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": _hang, "poll": lambda s: 0})()
+    )
+    assert run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 30) == run.UNAVAILABLE
+
+
+def test_an_unsupported_distro_stops_a_package_step_instead_of_passing_it(tmp_path):
+    (tmp_path / "os-release").write_text("ID=plan9\n", encoding="utf-8")
+    done = _provision(tmp_path, f'OS_RELEASE_FILE="{tmp_path}/os-release"; pkg_available git; echo reached')
+    assert done.returncode == 1 and "reached" not in done.stdout
+    assert "unsupported distribution 'plan9'" in done.stderr
+
+
+def test_a_venv_without_a_working_pip_is_rebuilt(tmp_path):
+    broken = tmp_path / "base/venv/bin"
+    broken.mkdir(parents=True)
+    (broken / "python").write_text(
+        f'#!/usr/bin/env bash\n[ "$1" = "-m" ] && exit 1\nexec {sys.executable} "$@"\n', encoding="utf-8"
+    )
+    (broken / "python").chmod(0o755)
+    done = _provision(
+        tmp_path,
+        f'base="{tmp_path}/base"; make_venv "{sys.executable}" 3.0; echo "rc=$?"; "$base/venv/bin/python" -m pip --version',
+    )
+    assert "no working pip: rebuilding" in done.stderr and "rc=0" in done.stdout, done.stderr
+    assert "pip " in done.stdout

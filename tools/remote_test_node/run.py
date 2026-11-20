@@ -5,8 +5,9 @@
 The pushed SHA goes over SSH with ``git send-pack`` into a mirror on the node, so only what the branch adds crosses
 the link, the node holds no repository credential and every run starts from a clean checkout. The node's
 address, user and key come from ``AUTOBOT_TEST_NODE_*`` settings and never from the repo.
-Exit status: the command's own, 124 on timeout, 75 when the node is not
-configured, not provisioned or not reachable (the caller falls back to local), 130/143 after SIGINT/SIGTERM.
+Exit status: the command's own, 124 when the command started and hit its limit on the node, 75 when the node is not
+configured, not provisioned, not reachable or gave no result within the limit (the caller falls back to local),
+130/143 after SIGINT/SIGTERM.
 
     run.py --sha SHA [--timeout N] -- CMD...   run CMD on the node against SHA's tree
     run.py --provision                         install what a run needs on the node (idempotent)
@@ -24,16 +25,17 @@ import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent.parent))  # run as a script: the repo root is not on the path
+REPO_ROOT = HERE.parent.parent  # provisioning reads files by repo path, never from the caller's working directory
+sys.path.insert(0, str(REPO_ROOT))  # run as a script: the repo root is not on the path
 
 from autobot_shared.env_registry import REGISTRY  # noqa: E402
 from autobot_shared.env_utils import within_range  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 UNAVAILABLE = 75
-TIMEOUT_RC = 124
 REQUIREMENTS = ("requirements-ci-test.txt", "requirements-remote-test-node.txt")
 CONSTRAINTS = "constraints/shared.txt"
 CONSTRAINTS_MARKER = "#--constraints--"  # provision.sh splits its stdin here
@@ -197,7 +199,9 @@ def run_remote(cfg: RemoteNodeSettings, sha: str, cmd: list[str], timeout: int) 
         ssh = subprocess.Popen(ssh_argv(cfg) + [remote], stdin=subprocess.DEVNULL, start_new_session=True)
         return ssh.wait(timeout=timeout + 120)
     except subprocess.TimeoutExpired:
-        return TIMEOUT_RC
+        # The command runs under the node's own `timeout`, which reports 124 through the session. No answer at all
+        # within the limit means the session hung or the run never started (e.g. waiting for a slot): not a verdict.
+        return report_unavailable("the remote session gave no result within the time limit")
     except _Interrupted as exc:
         return 128 + exc.signum
     finally:
@@ -234,7 +238,23 @@ def _origin_url() -> str:
     done = subprocess.run(
         ["git", "remote", "get-url", "origin"], capture_output=True, text=True, check=True, env=scrubbed_git_env()
     )
-    return done.stdout.strip()
+    return _without_credentials(done.stdout.strip())
+
+
+def _without_credentials(url: str) -> str:
+    """The URL without userinfo: the node's mirror follows a public URL and must hold, and show, no credential.
+
+    The userinfo is removed (not masked) so the URL still fetches. scp-style remotes (``git@host:path``) carry no
+    secret and have no scheme, so they pass through unchanged.
+    """
+    try:
+        parts = urlsplit(url)
+        has_userinfo = "@" in parts.netloc
+    except ValueError:
+        raise ValueError("the origin URL cannot be parsed") from None
+    if not (parts.scheme and has_userinfo):
+        return url
+    return urlunsplit(parts._replace(netloc=parts.netloc.rsplit("@", 1)[1]))
 
 
 def _pins() -> list[str]:
@@ -273,11 +293,12 @@ def provision(cfg: RemoteNodeSettings, root: Path) -> int:
     try:
         reqs = _requirements_payload(root)
         pins = _pins()
-    except ValueError as exc:
+        script = _script_command("provision.sh", cfg.base, _origin_url(), python_floor(root), *pins)
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         print(f"[remote-test-node] provision refused: {exc}", file=sys.stderr)
         return 1
     done = subprocess.run(
-        ssh_argv(cfg) + [_script_command("provision.sh", cfg.base, _origin_url(), python_floor(root), *pins)],
+        ssh_argv(cfg) + [script],
         input=reqs.encode("utf-8"),
         check=False,
         timeout=1800,
@@ -312,7 +333,7 @@ def main(argv: "list[str] | None" = None, env: "dict[str, str] | None" = None) -
 
 def _dispatch(cfg: RemoteNodeSettings, args: argparse.Namespace) -> int:
     if args.provision:
-        return provision(cfg, Path.cwd())
+        return provision(cfg, REPO_ROOT)
     reason = probe(cfg)
     if reason:
         return report_unavailable(reason)

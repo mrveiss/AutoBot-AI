@@ -45,16 +45,25 @@ check_floor_or_die() {
   die "Python $have ($1) is below the repository floor $2 (.python-version)"
 }
 
+# Sets PKG_MGR in the caller's shell. Never call detect_pkg_manager inside $(...) at a use site: its `die`
+# would end only the subshell and the script would carry on with an empty value.
+require_pkg_manager() {
+  [ -n "${PKG_MGR:-}" ] && return 0
+  PKG_MGR=$(detect_pkg_manager) || exit 1
+}
+
 pkg_install() {
   sudo -n true 2>/dev/null || die "installing packages needs passwordless sudo (sudo -n) for the SSH user"
-  case "$(detect_pkg_manager)" in
+  require_pkg_manager
+  case "$PKG_MGR" in
     apt) sudo -n apt-get install -y --no-install-recommends "$@" ;;
     dnf) sudo -n dnf install -y "$@" ;;
   esac
 }
 
 pkg_available() {
-  case "$(detect_pkg_manager)" in
+  require_pkg_manager
+  case "$PKG_MGR" in
     apt) apt-cache show "$1" >/dev/null 2>&1 ;;
     dnf) dnf list --available "$1" >/dev/null 2>&1 ;;
   esac
@@ -65,7 +74,8 @@ install_base_tools() {
   for tool in flock setsid git; do command -v "$tool" >/dev/null 2>&1 || need+=("$tool"); done
   [ "${#need[@]}" -eq 0 ] && return 0
   info "installing base tools for: ${need[*]}"
-  case "$(detect_pkg_manager)" in
+  require_pkg_manager
+  case "$PKG_MGR" in
     apt) sudo -n apt-get update -qq; pkg_install util-linux git ;;
     dnf) pkg_install util-linux git ;;
   esac
@@ -100,8 +110,13 @@ make_venv() {
     info "the venv's Python is below $floor: rebuilding it"
     rm -rf -- "$base/venv"
   fi
-  [ -x "$base/venv/bin/python" ] && return 0
+  if [ -x "$base/venv/bin/python" ]; then
+    "$base/venv/bin/python" -m pip --version >/dev/null 2>&1 && return 0
+    info "the venv has no working pip: rebuilding it"
+    rm -rf -- "$base/venv"
+  fi
   "$py" -m venv "$base/venv" 2>/dev/null && return 0
+  rm -rf -- "$base/venv"  # a failed attempt can leave bin/python without pip
   pkg_install "python$floor-venv" >&2 || pkg_install python3-venv >&2
   "$py" -m venv "$base/venv"
 }
@@ -151,7 +166,8 @@ main() {
   trap 'rm -f -- "$reqs" "$cons"' EXIT
   split_payload
   mkdir -p "$base"; base=$(cd "$base" && pwd)
-  info "distribution package manager: $(detect_pkg_manager)"
+  require_pkg_manager
+  info "distribution package manager: $PKG_MGR"
   install_base_tools
   mkdir -p "$base/runs" "$base/slots"
   py=$(ensure_python "$floor")

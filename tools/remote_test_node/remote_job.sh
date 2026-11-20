@@ -29,8 +29,15 @@ trap cleanup EXIT
 trap 'cleanup; exit 143' INT TERM HUP
 
 sweep_stale() {
-  # A run killed with SIGKILL, or with the node's power, leaves its dir; no live run outlives the ttl.
-  find "$base/runs" -mindepth 1 -maxdepth 1 -type d -mmin "+$ttl" -exec rm -rf -- {} + 2>/dev/null
+  # A run killed with SIGKILL, or with the node's power, leaves its dir. Only a dir that is old by THIS run's ttl
+  # and whose liveness lock nobody holds is abandoned: another run may use a longer timeout (and so a longer ttl)
+  # than this one, and its lock stays held for as long as the run or any process it started is alive.
+  local dir
+  for dir in "$base"/runs/*/; do
+    [ -d "$dir" ] || continue
+    [ -n "$(find "$dir" -maxdepth 0 -mmin "+$ttl" 2>/dev/null)" ] || continue
+    ( flock -n 7 && rm -rf -- "$dir" ) 7>>"${dir}.live" 2>/dev/null
+  done
 }
 
 gc_mirror() {
@@ -48,6 +55,7 @@ take_slot() {
   local i
   mkdir -p "$base/slots"
   while :; do
+    session_lost && { cleanup; exit 129; }  # a queued job whose caller left must not take a slot later
     for ((i = 1; i <= slots; i++)); do
       exec 9>>"$base/slots/slot-$i"
       flock -n 9 && { printf 'slot %s of %s\n' "$i" "$slots" >&2; return 0; }
@@ -57,10 +65,15 @@ take_slot() {
   done
 }
 
+session_lost() {
+  # The SSH session is the job's parent; once it vanishes the job is reparented and nobody wants its result.
+  [ "$(ps -o ppid= -p $$ | tr -d ' ')" != "$parent" ]
+}
+
 wait_child() {
-  # Polls instead of `wait` so a vanished SSH session (parent reparented) ends the run.
+  # Polls instead of `wait` so a vanished SSH session ends the run.
   while kill -0 "$child" 2>/dev/null; do
-    [ "$(ps -o ppid= -p $$ | tr -d ' ')" = "$parent" ] || { cleanup; exit 129; }
+    session_lost && { cleanup; exit 129; }
     sleep 1
   done
   wait "$child"
@@ -72,6 +85,7 @@ sweep_stale
 gc_mirror
 take_slot
 workdir="$base/runs/job.$job"; mkdir -p "$workdir/tree"
+exec 7>>"$workdir/.live"; flock -n 7  # liveness lock: held until this run and what it started are gone (sweep_stale)
 checkout_commit() {
   # A real repository over the mirror's objects (alternates, no copy): the guards read git state, and
   # concurrent jobs share nothing writable. origin/main is the mirror's base branch, as on a developer tree.
