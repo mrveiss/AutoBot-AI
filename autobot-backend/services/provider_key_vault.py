@@ -447,9 +447,7 @@ async def _register_credential_dependency(session: AsyncSession, *, name: str, s
             session, secret_id=secret_id, dependent_kind="service", dependent_id=consumer
         )
     except Exception as exc:  # noqa: BLE001 - metadata only; never blocks hydration
-        logger.warning(
-            "provider-key-vault: dependency registration failed (secret %s): %s", secret_id, type(exc).__name__
-        )
+        logger.warning("provider-key-vault: dependency registration failed: %s", type(exc).__name__)
 
 
 async def _read_one_key(
@@ -461,7 +459,7 @@ async def _read_one_key(
     try:
         value = await service.read(session, secret_id=secret_id, accessible_vaults={_SYSTEM_VAULT})
     except Exception as exc:  # noqa: BLE001 - defensive, one bad row must not break the rest
-        logger.warning("provider-key-vault: hydrate failed (secret %s): %s", secret_id, type(exc).__name__)
+        logger.warning("provider-key-vault: hydrate failed: %s", type(exc).__name__)
         return None
     return value.decode("utf-8")
 

@@ -129,7 +129,7 @@ async def verify_copy(
         raw = await service.read(session, secret_id=secret_id, accessible_vaults=[VaultRef.parse(group.owner_vault)])
         return await _probe(group.name, raw.decode("utf-8").strip())
     except Exception as exc:  # unreadable, undecodable or the probe itself failed: it did not verify
-        logger.warning("Secret copy %s could not be verified (%s)", secret_id, type(exc).__name__)
+        logger.warning("A duplicate secret copy could not be verified (%s)", type(exc).__name__)
         return Verdict.NOT_VERIFIED
 
 

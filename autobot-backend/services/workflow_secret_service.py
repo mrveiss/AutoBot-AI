@@ -240,7 +240,7 @@ class WorkflowSecretService:
             updated_by=owner_id,
         )
         if updated:
-            logger.info("Workflow secret updated: secret=%s owner=%s", existing["id"], owner_id)
+            logger.info("Workflow secret updated: owner=%s", owner_id)
         return updated
 
     def delete_secret(self, name: str, owner_id: str) -> bool:
@@ -268,7 +268,7 @@ class WorkflowSecretService:
             deleted_by=owner_id,
         )
         if deleted:
-            logger.info("Workflow secret deleted: secret=%s owner=%s", existing["id"], owner_id)
+            logger.info("Workflow secret deleted: owner=%s", owner_id)
         return deleted
 
     # ------------------------------------------------------------------

@@ -481,7 +481,7 @@ class SecretsCoordinator:
             plaintext=plaintext,
             created_by=_SERVICE_OWNER_ID,
         )
-        logger.info("service_create system secret", extra={"service_id": service_id, "secret_id": str(secret.id)})
+        logger.info("service_create system secret", extra={"service_id": service_id})
         return secret
 
     async def service_read(self, session: AsyncSession, *, secret_id: uuid.UUID, vault: VaultRef) -> bytes:
