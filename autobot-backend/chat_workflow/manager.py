@@ -28,7 +28,8 @@ from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
-from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity
+from chat_workflow.reply_persistence import is_redundant_prose, later_respond_entries, model_or_unknown, stamp_model
+from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
@@ -1777,7 +1778,7 @@ class ChatWorkflowManager(
         Returns a non-empty string only when the LLM has made 2+ consecutive invalid
         tool calls (Issue #2310), so the reminder is injected into the next prompt.
         """
-        if consecutive_invalid_tool_calls < 2:
+        if consecutive_invalid_tool_calls < limits.INVALID_CALL_LIMIT:  # #21843: the one invalid-call bound
             return ""
         logger.warning(
             "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
@@ -2927,37 +2928,21 @@ before summarizing.
         batch: List[Dict[str, Any]],
         iteration: int | None = None,
         streamed: tuple = (None, None),
+        model: str | None = None,
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for one iteration's completed prose (#13214).
 
-        Streamed chunks carry ``metadata.streaming = True`` (set unconditionally by
-        ``StreamingMessage.to_workflow_message``) and are deliberately excluded from
-        ``workflow_messages`` by both accumulators — see ``graph._run_llm_iteration``
-        and ``_collect_llm_iteration_response``, whose comment states the complete
-        reply "is persisted in _persist_workflow_messages". That was never true:
-        ``llm_response`` arrived here and was dropped, so a conversational streamed
-        reply persisted nothing and ``chat:session:*`` read back user-turns only.
+        Streamed chunks are never persisted (``metadata.streaming``); the completed reply
+        arrives here as *llm_response* and is persisted from the accumulated text (#13214).
+        *iteration* records which continuation pass produced it (#13295). *model* is the
+        model that produced it (#21881): the entry carries it from the start, never ``""``.
 
-        Issue #13295: *iteration* records which continuation pass produced this
-        prose (1-indexed, matching ``all_llm_responses``) so a reload can be
-        cross-referenced against the tool output it was interleaved with.
-        The entry is built WITHOUT ``selected_model``/``rag_citations`` — Issue
-        #13292's model badge/KB sources are attached retroactively by
-        ``_attach_model_and_citations`` to whichever prose entry actually ends
-        up LAST in the persisted batch, since the "final" iteration's own
-        entry can be ``None`` (empty content, or deduped) and #13292 must not
-        regress by leaving no entry carrying them at all (review F5).
-
-        Returns None when there is nothing to add — an empty reply, or an assistant
-        entry in *batch* already carrying byte-identical text. The scan is restricted
-        to assistant entries so that a ``terminal_output`` or other system message
-        echoing the reply cannot suppress the assistant turn.
+        Returns None for an empty reply, or prose that repeats an assistant entry already in
+        *batch* (the rule in ``reply_persistence``, #21880). Only assistant entries count, so
+        a ``terminal_output`` echoing the reply cannot suppress the assistant turn.
         """
         content = clean_reply_text(llm_response or "")
-        if not content:
-            return None
-        assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
-        if any(text == content for text in assistant_texts):
+        if not content or is_redundant_prose(content, batch):
             return None
         return chat_mgr._build_message_dict(
             "assistant",
@@ -2966,7 +2951,7 @@ before summarizing.
             {
                 "message_type": "llm_response",
                 "streamed": True,
-                "model": "",
+                "model": model_or_unknown(model),
                 "iteration": iteration,
             },
             None,
@@ -2991,7 +2976,7 @@ before summarizing.
         or deduped) — no entry would carry them at all. Called once, after
         the whole batch is built, on whichever entry is actually last.
         """
-        entry["metadata"]["model"] = selected_model
+        stamp_model(entry, selected_model)  # #21881: an entry keeps the model that produced it
         kb_sources = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
         # Never blank out sources an entry already carries — the fallback target
         # may be a tool entry that legitimately has its own.
@@ -3046,6 +3031,7 @@ before summarizing.
         response_text: str,
         iteration: int,
         batch: List[Dict[str, Any]],
+        selected_model: str = "",
     ) -> tuple[List[Dict[str, Any]], set, Dict[str, Any] | None]:
         """Build one iteration's prose + tool-message entries, in that order.
 
@@ -3064,16 +3050,20 @@ before summarizing.
         # workflow message carrying byte-identical text — is still caught even
         # though it is placed AFTER the prose entry in the final order.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
+        model = streamed_prose_model(iter_messages) or selected_model  # #21881: this iteration's own model
 
         final_entry = self._build_final_response_entry(
             chat_mgr,
             response_text,
-            batch + tool_entries,
+            batch + tool_entries + later_respond_entries(workflow_messages, iteration),
             iteration=iteration,
             streamed=streamed_prose_identity(iter_messages),  # #21846
+            model=model,
         )
         entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)
+        for entry in tool_entries:
+            stamp_model(entry, model)
         return entries, consumed, final_entry
 
     def _build_persist_batch(
@@ -3128,6 +3118,7 @@ before summarizing.
                 response_text,
                 iteration,
                 batch,
+                selected_model,
             )
             if final_entry is not None:
                 last_prose_entry = final_entry
@@ -3135,7 +3126,10 @@ before summarizing.
             consumed.update(group_consumed)
 
         leftover = [m for m in workflow_messages if id(m) not in consumed]
-        batch.extend(self._build_workflow_message_batch(chat_mgr, leftover))
+        leftover_entries = self._build_workflow_message_batch(chat_mgr, leftover)
+        for entry in leftover_entries:
+            stamp_model(entry, selected_model)
+        batch.extend(leftover_entries)
 
         # Review F5: when every iteration's prose is empty or deduped away — the
         # ``respond``-tool turn — no prose entry exists, and the model badge and

@@ -32,7 +32,13 @@ def stream_identity_marker(chunk: Any, iteration: int, existing: list) -> Workfl
         type=_MARKER_TYPE,
         content="",
         timestamp=chunk.timestamp,
-        metadata={"completed_type": "response", "message_id": message_id, "internal": True, "iteration": iteration},
+        metadata={
+            "completed_type": "response",
+            "message_id": message_id,
+            "internal": True,
+            "iteration": iteration,
+            "model": meta.get("model"),  # #21881: the model that produced this chunk
+        },
     )
 
 
@@ -48,4 +54,14 @@ def streamed_prose_identity(iter_messages: Iterable[WorkflowMessage]) -> tuple[s
         meta = msg.metadata or {}
         if msg.type == _MARKER_TYPE and meta.get("internal") and meta.get("completed_type") == "response":
             found = (meta.get("message_id"), msg.timestamp)
+    return found
+
+
+def streamed_prose_model(iter_messages: Iterable[WorkflowMessage]) -> str | None:
+    """The model the iteration's LAST streamed reply segment came from (#21881), or None when none is recorded."""
+    found: str | None = None
+    for msg in iter_messages:
+        meta = msg.metadata or {}
+        if msg.type == _MARKER_TYPE and meta.get("internal") and meta.get("completed_type") == "response":
+            found = meta.get("model") or found
     return found

@@ -173,7 +173,7 @@ async def handle_browser_tool(
 
         # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
         result_text = str(result)
-        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
+        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {}, success=True)
 
         yield record_browser_success(tool_name, params, result, execution_results)
 

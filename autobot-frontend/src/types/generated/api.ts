@@ -146483,6 +146483,13 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTerminalApproveResponse"];
                 };
             };
+            /** @description The approval was already decided; nothing ran again (#19951) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
