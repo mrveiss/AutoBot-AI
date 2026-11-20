@@ -1,0 +1,63 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""Admin API: PROPOSE how to resolve duplicated secrets (#17850, #17038).
+
+Endpoints:
+    GET  /api/admin/secret-duplicates            groups of secrets sharing one (owner_vault, name): ids only
+    POST /api/admin/secret-duplicates/requests   verify every copy against its target and PROPOSE the
+                                                 resolution -- creates PENDING approvals
+
+No route removes anything. Each copy is verified (the copy that works wins); the proposal names the survivor
+when exactly one verifies and asks a person to choose otherwise. Nothing runs until an admin approves it in the
+Approvals inbox, and it is never auto-approved. The executor lives in ``services.secret_duplicate_cleanup_action``.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.schemas_secret_duplicates import (
+    DuplicateGroupStatus,
+    DuplicateProposal,
+    DuplicateRequestResponse,
+    DuplicateStatus,
+)
+from api.user_management.dependencies import get_db_session
+from auth_middleware import check_admin_permission, get_current_user
+from services.secret_duplicate_proposals import propose_duplicate_resolutions
+from services.secret_duplicates import find_duplicate_groups
+
+router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
+
+
+@router.get("/secret-duplicates", response_model=DuplicateStatus)
+async def secret_duplicates_status(session: AsyncSession = Depends(get_db_session)) -> DuplicateStatus:
+    """Read only: vault references and secret ids, never a name or a value."""
+    groups = await find_duplicate_groups(session)
+    return DuplicateStatus(
+        groups=[
+            DuplicateGroupStatus(owner_vault=g.owner_vault, secret_ids=[str(i) for i in g.secret_ids]) for g in groups
+        ]
+    )
+
+
+@router.post(
+    "/secret-duplicates/requests", response_model=DuplicateRequestResponse, status_code=status.HTTP_201_CREATED
+)
+async def propose_secret_duplicate_resolution(
+    current_user: dict = Depends(get_current_user), session: AsyncSession = Depends(get_db_session)
+) -> DuplicateRequestResponse:
+    """Verify every duplicated group and PROPOSE its resolution -- a request, not an execution."""
+    requester = current_user.get("id") or current_user.get("user_id")  # as the approve route reads the decider
+    if not requester:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The proposal cannot be attributed to a verified user")
+    results = await propose_duplicate_resolutions(session, str(requester))
+    if not results:
+        raise HTTPException(status.HTTP_409_CONFLICT, "There are no duplicated secrets")
+    return DuplicateRequestResponse(
+        proposals=[
+            DuplicateProposal(approval_id=r.approval_id, reason=r.reason, copies=r.copies, skipped=r.skipped)
+            for r in results
+        ]
+    )

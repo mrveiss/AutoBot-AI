@@ -29,6 +29,7 @@ from collections.abc import Iterable
 from datetime import datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_envelope import (
@@ -49,6 +50,18 @@ from models.secret_grant import SecretGrant
 
 class SecretNotFoundError(Exception):
     """The secret does not exist (or is not envelope-backed)."""
+
+
+class AmbiguousSecretError(Exception):
+    """Several rows share one ``(owner_vault, name)``; none is chosen by order (#17850).
+
+    Carries ids only -- never the name or any value. The duplicates are resolved by verification and a
+    human's approval (``services/secret_duplicate_proposals.py``), not by picking one here.
+    """
+
+    def __init__(self, owner_vault: str, secret_ids: list[uuid.UUID]) -> None:
+        self.secret_ids = sorted(secret_ids, key=str)
+        super().__init__(f"{len(self.secret_ids)} secrets share one name in vault {owner_vault}")
 
 
 class SecretAccessError(PermissionError):
@@ -80,22 +93,47 @@ class EnvelopeSecretsService:
         extra_data: dict | None = None,
         expires_at: datetime | None = None,
     ) -> Secret:
-        """Seal *plaintext* for *owner_vault*; persist secret + owner grant (+ non-secret metadata, expiry)."""
+        """Seal *plaintext* for *owner_vault*; persist secret + owner grant. Idempotent per (owner_vault, name).
+
+        An existing secret is returned untouched (value NOT replaced; use :meth:`rotate_value`); a lost create race
+        re-reads the winner; pre-constraint duplicates raise :class:`AmbiguousSecretError`, never a pick.
+        """
+        vault = owner_vault.to_str()
+        if (existing := await self.find_by_name(session, owner_vault=vault, name=name)) is not None:
+            return existing
         secret_id = uuid.uuid4()
         sealed, dek = seal(plaintext, secret_id=str(secret_id))
-        vault = owner_vault.to_str()
         wrapped = wrap_dek(dek, self._kek(vault), vault, secret_id=str(secret_id))
         secret = Secret(
             id=secret_id, owner_id=created_by, name=name, type=secret_type, scope=owner_vault.kind.value,
             owner_vault=vault, sealed_value=sealed.to_dict(), version=1,
             extra_data=dict(extra_data or {}), expires_at=expires_at
         )  # fmt: skip
-        session.add(secret)
-        session.add(
-            SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
-        )
-        await session.flush()
+        grant = SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
+        return await self._insert_or_reread(session, secret, grant)
+
+    async def _insert_or_reread(self, session: AsyncSession, secret: Secret, grant: SecretGrant) -> Secret:
+        """Insert in a savepoint; a unique-constraint loss returns the winner's row."""
+        try:
+            async with session.begin_nested():
+                session.add(secret)
+                session.add(grant)
+                await session.flush()
+        except IntegrityError:
+            winner = await self.find_by_name(session, owner_vault=secret.owner_vault, name=secret.name)
+            if winner is None:
+                raise
+            return winner
         return secret
+
+    @staticmethod
+    async def find_by_name(session: AsyncSession, *, owner_vault: str, name: str) -> Secret | None:
+        """The one secret named *name* in *owner_vault*, ``None`` if absent; several: :class:`AmbiguousSecretError`."""
+        rows = await session.execute(select(Secret).where(Secret.owner_vault == owner_vault, Secret.name == name))
+        found = list(rows.scalars())
+        if len(found) > 1:
+            raise AmbiguousSecretError(owner_vault, [s.id for s in found])
+        return found[0] if found else None
 
     async def _load(self, session: AsyncSession, secret_id: uuid.UUID) -> Secret:
         secret = await session.get(Secret, secret_id)

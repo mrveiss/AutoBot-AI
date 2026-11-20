@@ -66,13 +66,11 @@ import uuid
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Callable, Iterator
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_once import log_once
 from autobot_shared.plugin_sdk.credential_binding import CredentialUnavailableError
 from autobot_shared.secrets_vault import VaultKind, VaultRef
-from models.secret import Secret
 
 if TYPE_CHECKING:  # pragma: no cover -- annotation-only; zero runtime import cost
     from services.envelope_secrets_service import EnvelopeSecretsService
@@ -338,15 +336,15 @@ def plugin_credential_resolvers() -> dict[str, Callable[[str], str]]:
 
 
 async def _find_system_secret_id(session: AsyncSession, name: str) -> uuid.UUID | None:
-    """Return the id of the active System-vault secret named *name*, if any."""
-    result = await session.execute(
-        select(Secret.id).where(
-            Secret.owner_vault == _SYSTEM_VAULT.to_str(),
-            Secret.name == name,
-            Secret.is_active.is_(True),
-        )
-    )
-    return result.scalars().first()
+    """Return the id of the System-vault secret named *name*, if any.
+
+    ``(owner_vault, name)`` is unique (#17850), so there is one row or none; same-name duplicates that predate the
+    constraint raise ``AmbiguousSecretError`` -- no row is picked by order, a human resolves them first.
+    """
+    from services.envelope_secrets_service import EnvelopeSecretsService
+
+    row = await EnvelopeSecretsService.find_by_name(session, owner_vault=_SYSTEM_VAULT.to_str(), name=name)
+    return row.id if row is not None else None
 
 
 async def capture_provider_key(
@@ -519,12 +517,18 @@ async def _staged(stage: str, awaitable):
 async def _hydrate_all(session: AsyncSession, root_key: bytes | None) -> list[str]:
     """List and read every held name into a new cache, then swap it in; any exception = held-state unknown."""
     global _hydrated_keys, _unreadable_keys
+    from services.envelope_secrets_service import AmbiguousSecretError
+
     service = _decrypting_service(root_key)
     keys: dict[str, str] = {}
     unreadable: set[str] = set()
     any_dependency_registered = False
     for name in VAULT_RESOLVED_CREDENTIAL_NAMES:
-        secret_id = await _staged(_STAGE_LIST, _find_system_secret_id(session, name))
+        try:
+            secret_id = await _staged(_STAGE_LIST, _find_system_secret_id(session, name))
+        except AmbiguousSecretError:
+            unreadable.add(name)  # several copies, none chosen by order (#17850): refuse this key only
+            continue
         if secret_id is None:
             continue  # nothing vaulted: resolution falls back to the env var
         await _staged(_STAGE_REGISTER, _register_credential_dependency(session, name=name, secret_id=secret_id))

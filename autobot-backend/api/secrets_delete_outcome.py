@@ -23,7 +23,7 @@ from fastapi import HTTPException, Request, status
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import AuditResult
-from services.envelope_secrets_service import SecretNotFoundError
+from services.envelope_secrets_service import AmbiguousSecretError, SecretNotFoundError
 
 logger = get_logger(__name__)
 
@@ -53,6 +53,8 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
         return "denied", "permission_denied"
     if isinstance(exc, SecretNotFoundError):
         return "failed", "not_found"
+    if isinstance(exc, AmbiguousSecretError):
+        return "denied", "ambiguous"  # #17850: several same-name copies; none is chosen by order
     return "failed", type(exc).__name__
 
 
@@ -61,6 +63,7 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
 _STATUS_FOR_REASON: dict[str, int] = {
     "not_found": status.HTTP_404_NOT_FOUND,
     "permission_denied": status.HTTP_403_FORBIDDEN,
+    "ambiguous": status.HTTP_409_CONFLICT,
 }
 
 

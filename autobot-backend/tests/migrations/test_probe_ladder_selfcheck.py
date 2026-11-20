@@ -188,6 +188,9 @@ def test_observability_coverage():
         # the same category as 20261106_113; upgrade() returns early when the index exists
         "20261118_115",  # approvals pending source-run-record-cleanup partial unique index (#21417): index-only,
         # the same category as 20261107_114; upgrade() returns early when the index exists
+        "20261120_117",  # secrets (owner_vault, name) unique constraint (#17850): constraint-only, the same
+        # structural category as 20261101_108; upgrade() returns early when the constraint exists, and it
+        # REFUSES (changes nothing) while duplicate rows exist, so the adoption re-run is a no-op
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
