@@ -229,6 +229,13 @@ def _label(name: str) -> str:
     return "".join(VAULT_RESOLVED_CREDENTIAL_NAMES & {name}) or "<unregistered name>"
 
 
+def _without_names(text: str) -> str:
+    """*text* with every registered credential name replaced, so a caller's component label never logs one (#17850)."""
+    for registered in sorted(VAULT_RESOLVED_CREDENTIAL_NAMES, key=len, reverse=True):
+        text = text.replace(registered, "<credential>")
+    return text
+
+
 def resolve_provider_key(env_var: str, config_value: str) -> str:
     """The one resolution order for vault-resolved credentials (#18094, owner decision 2026-10-12).
 
@@ -254,10 +261,10 @@ def resolve_provider_key(env_var: str, config_value: str) -> str:
         if vaulted:
             return vaulted
     if _vault_state == VAULT_UNREACHABLE:
-        logger.error("provider-key-vault: %s vault unreachable: refusing the environment fallback", _label(env_var))
+        logger.error("provider-key-vault: vault unreachable: refusing the environment fallback")
         raise VaultKeyUnavailableError(env_var, _UNREACHABLE)
     if env_var in _unreadable_keys:
-        logger.error("provider-key-vault: %s vault unreadable: refusing the environment fallback", _label(env_var))
+        logger.error("provider-key-vault: vault unreadable: refusing the environment fallback")
         raise VaultKeyUnavailableError(env_var)
     if config_value:
         _log_env_fallback(env_var)
@@ -284,7 +291,7 @@ def registration_refusal(component: str) -> Iterator[None]:
     try:
         yield
     except VaultKeyUnavailableError as exc:
-        logger.error("provider-key-vault: %s not registered -- %s", component, exc)
+        logger.error("provider-key-vault: %s not registered (%s)", _without_names(component), type(exc).__name__)
 
 
 def resolve_image_provider_key(name: str) -> str:
@@ -418,14 +425,8 @@ async def mirror_provider_key_best_effort(name: str, value: str, created_by: uui
                 await session.commit()
             return wrote
     except Exception as exc:  # noqa: BLE001 - vault is optional in dev/test; never break the caller
-        # #16444: `name` reached here only by passing the VAULT_RESOLVED_CREDENTIAL_NAMES
-        # guard above, so it is a registry label such as OPENAI_API_KEY and never a
-        # credential. Re-read from the frozenset so that holds by construction rather
-        # than by argument: api/secrets.py unpacks `name` and `value` from one request
-        # model, CodeQL taints every attribute of it alike, and a comment does not
-        # break a taint path (py/clear-text-logging-sensitive-data).
-        known = VAULT_RESOLVED_CREDENTIAL_NAMES & {name}
-        logger.warning("provider-key-vault: mirror failed name=%s: %s", "".join(known), type(exc).__name__)
+        # No credential name or value is logged (#17850): only the failure class.
+        logger.warning("provider-key-vault: mirror failed: %s", type(exc).__name__)
         return False
 
 
@@ -446,7 +447,9 @@ async def _register_credential_dependency(session: AsyncSession, *, name: str, s
             session, secret_id=secret_id, dependent_kind="service", dependent_id=consumer
         )
     except Exception as exc:  # noqa: BLE001 - metadata only; never blocks hydration
-        logger.warning("provider-key-vault: dependency registration failed name=%s: %s", name, type(exc).__name__)
+        logger.warning(
+            "provider-key-vault: dependency registration failed (secret %s): %s", secret_id, type(exc).__name__
+        )
 
 
 async def _read_one_key(
@@ -458,7 +461,7 @@ async def _read_one_key(
     try:
         value = await service.read(session, secret_id=secret_id, accessible_vaults={_SYSTEM_VAULT})
     except Exception as exc:  # noqa: BLE001 - defensive, one bad row must not break the rest
-        logger.warning("provider-key-vault: hydrate failed name=%s: %s", name, type(exc).__name__)
+        logger.warning("provider-key-vault: hydrate failed (secret %s): %s", secret_id, type(exc).__name__)
         return None
     return value.decode("utf-8")
 

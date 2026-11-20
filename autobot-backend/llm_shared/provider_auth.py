@@ -404,7 +404,7 @@ class OAuthAuth(ProviderAuthStrategy):
         except RuntimeError as exc:
             if getattr(exc, "error", "") == "invalid_grant":
                 raise TokenRevokedError(f"OAuth refresh token for {self._provider_name!r} was rejected") from exc
-            raise ProviderAuthError(f"OAuth refresh failed for {self._provider_name!r}: {exc}") from exc
+            raise ProviderAuthError(f"OAuth refresh failed for {self._provider_name!r}: {type(exc).__name__}") from exc
 
         # Finding #3 (#11497): reject a mismatched token_type / issuer / audience
         # before the refreshed pair is persisted.

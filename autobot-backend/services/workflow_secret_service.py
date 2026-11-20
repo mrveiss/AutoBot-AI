@@ -232,7 +232,7 @@ class WorkflowSecretService:
             include_value=False,
         )
         if existing is None:
-            logger.warning("update_secret: secret not found name=%s owner=%s", name, owner_id)
+            logger.warning("update_secret: secret not found owner=%s", owner_id)
             return False
         updated = self._svc.update_secret(
             secret_id=existing["id"],
@@ -240,7 +240,7 @@ class WorkflowSecretService:
             updated_by=owner_id,
         )
         if updated:
-            logger.info("Workflow secret updated: name=%s owner=%s", name, owner_id)
+            logger.info("Workflow secret updated: secret=%s owner=%s", existing["id"], owner_id)
         return updated
 
     def delete_secret(self, name: str, owner_id: str) -> bool:
@@ -268,7 +268,7 @@ class WorkflowSecretService:
             deleted_by=owner_id,
         )
         if deleted:
-            logger.info("Workflow secret deleted: name=%s owner=%s", name, owner_id)
+            logger.info("Workflow secret deleted: secret=%s owner=%s", existing["id"], owner_id)
         return deleted
 
     # ------------------------------------------------------------------
