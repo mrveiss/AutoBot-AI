@@ -1,6 +1,7 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Knowledge-graph bucket-section AUTOBOT_* environment variable registrations (#20945) and the Chroma write-lease ones (#20992).
+"""Knowledge-graph bucket-section AUTOBOT_* environment variable registrations (#20945), plus the Chroma
+write-lease ones (#20992).
 
 Sibling of ``env_registry_knowledge`` (which sits at the 600-line ceiling), imported by
 ``env_registry`` itself like every split module, so registration happens whenever it loads.
