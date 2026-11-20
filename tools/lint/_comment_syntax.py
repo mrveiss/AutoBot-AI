@@ -293,13 +293,27 @@ def strip_block_comments(text: str, *, line_comments: bool = False) -> str:
     return _BlockScan(text, line_comments).run()
 
 
+#: The one ``<script>`` element pattern, its body in the one group; compile it with ``SCRIPT_ELEMENT_FLAGS``. The
+#: closing tag tolerates whitespace and attributes (``</script >``), as browsers do. ``repo_tests`` builds its SFC
+#: script extractor (``_ui_literal_scan.SCRIPT_BODY``) from it.
+SCRIPT_ELEMENT = r"<script(?=[\s>/])[^>]*>(.*?)</script(?=[\s>/])[^>]*>"
+SCRIPT_ELEMENT_FLAGS = re.DOTALL | re.IGNORECASE
+
+#: The one ``<script>`` or ``<style>`` element pattern, same boundary as ``SCRIPT_ELEMENT``: the tag name is anchored
+#: with a lookahead, since ``\b`` also matches ``-`` and ``<script-runner>`` would open a block (#21797). Named groups
+#: (``elem_tag``, ``elem_body``) so it embeds in a larger pattern without renumbering it. ``_SFC_MARKUP`` and
+#: ``repo_tests._ui_literal_scan._SCRIPT_BLOCK`` are both built from it.
+SCRIPT_OR_STYLE_ELEMENT = (
+    r"<(?P<elem_tag>script|style)(?=[\s>/])[^>]*>(?P<elem_body>.*?)</(?P=elem_tag)(?=[\s>/])[^>]*>"
+)
+
 #: The top level of a `.vue` component, read left to right so that what sits inside a block is never taken for a block
 #: of its own. A root ``<script>``/``<style>`` element is consumed whole (``code``): a ``<template>`` or ``<!--`` at a
 #: line start inside a template literal in script is script text. Markup is the root ``<template>`` body (``one``
 #: when it closes on its opening line, else ``body`` up to a line-start ``</template>``, as a slot's indented
 #: ``<template #x>`` does not close it) or an HTML comment opened at a line start, the licence header above it.
 _SFC_MARKUP = re.compile(
-    r"(?P<code>^<(?P<tag>script|style)(?=[\s>/])[^>]*>.*?</(?P=tag)\s*>)"
+    rf"(?P<code>^{SCRIPT_OR_STYLE_ELEMENT})"
     r"|^<template(?=[\s>/])[^>]*>(?:(?P<one>[^\n]*?)</template\s*>[ \t]*$|(?P<body>.*?)^</template\s*>)"
     r"|(?P<comment>^<!--.*?-->)",
     re.DOTALL | re.IGNORECASE | re.MULTILINE,
@@ -481,12 +495,6 @@ def _join_continuations(lines: Iterable[CodeLine]) -> list[CodeLine]:
     # removal has already perforated; map its indices back to the real file.
     return [CodeLine(numbers[i - 1] if 0 < i <= len(numbers) else i, body) for i, body in folded]
 
-
-#: The one ``<script>`` element pattern, its body in the one group; compile it with ``SCRIPT_ELEMENT_FLAGS``. The
-#: closing tag tolerates whitespace and attributes (``</script >``), as browsers do. ``repo_tests`` builds its SFC
-#: script extractor (``_ui_literal_scan.SCRIPT_BODY``) from it.
-SCRIPT_ELEMENT = r"<script(?=[\s>/])[^>]*>(.*?)</script(?=[\s>/])[^>]*>"
-SCRIPT_ELEMENT_FLAGS = re.DOTALL | re.IGNORECASE
 
 #: A ``<script>`` element (group 1, whole) or an HTML comment, whichever starts first. Markup has no line comments, so
 #: the comment is its whole comment syntax; a script element is matched only so its body is kept, since a ``'<!--'``
