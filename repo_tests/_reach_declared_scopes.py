@@ -348,6 +348,7 @@ DECLARED_SCOPES = {
     ),
     "slm-backend-embedded-playbook-scan": ("autobot-slm-backend",),
     "slm-node-enum-members-exist": ("autobot-slm-backend",),
+    "browser-worker-one-manifest-21852": ("autobot-browser-worker",),
     "one-playwright-server-scan": ("autobot-browser-worker", "autobot-infrastructure", "autobot-frontend"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "llm-quality-seam-scan": ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop"),

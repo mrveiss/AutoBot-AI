@@ -23,6 +23,7 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/browser_worker_one_manifest_21852_test.py": ("autobot-browser-worker",),
     "repo_tests/cache_never_in_repo_19553_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/captcha_type_fork_guard_18131_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/chat_history_async_calls_awaited_18316_test.py": ("autobot-backend/api",),

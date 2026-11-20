@@ -120,6 +120,12 @@ MID: dict[str, tuple[str, str, str]] = {
         "Every tracked .py and .md file minus changelogs, archives and the guard itself (#21526); files are "
         "added in every PR, so an exact floor would fail any new file.",
     ),
+    "browser-worker-one-manifest-21852": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .js directly in the browser worker directory (#21852); a new module grows it, and it is a "
+        "small subset of the tracked tree.",
+    ),
     "analytics-callers-scope-to-source-20513": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
