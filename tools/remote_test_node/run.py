@@ -118,6 +118,7 @@ def node_ssh_options(cfg: RemoteNodeSettings) -> list[str]:
         argv += ["-F", "/dev/null"]  # and no user ssh config (KnownHostsCommand, VerifyHostKeyDNS, ProxyCommand...)
     else:  # trust on first use: a later change of the node's key is refused
         argv += ["-o", "StrictHostKeyChecking=accept-new"]
+        argv += ["-F", "/dev/null"]  # same: no user ssh config may change the options above
     if cfg.key:
         argv += ["-i", os.path.expanduser(cfg.key), "-o", "IdentitiesOnly=yes"]
     return argv
@@ -257,8 +258,13 @@ def _without_credentials(url: str) -> str:
     Query and fragment are dropped because a git remote needs neither and ``?token=`` would otherwise travel.
     The scp form ``git@host:path`` has no secret and passes through unchanged. Known limit, failing safe: an scp
     path holding ``@`` after a colon-led host (``host:dir/a@b``) is read as userinfo and mangled to ``b``, because
-    stripping less could leak a secret. A URL that cannot be read safely raises ``ValueError`` without the URL.
+    stripping less could leak a secret. A second known limit: a bare-token user in scp form (``tok@h:o/r.git``,
+    ``tok@h:22/x``, ``tok@h``) passes through unchanged, because it cannot be told apart from ``git@host:path``.
+    A URL holding whitespace or a control character (a newline hides a second URL's userinfo from the parser)
+    raises ``ValueError``; so does one that cannot be read safely. The message never holds the URL.
     """
+    if re.search(r"[\s\x00-\x1f\x7f]", url):
+        raise ValueError("the origin URL holds whitespace or a control character")
     if _SCHEME_PREFIX.match(url):
         try:
             parts = urlsplit(url)

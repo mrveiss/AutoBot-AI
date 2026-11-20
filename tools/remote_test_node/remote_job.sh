@@ -37,7 +37,14 @@ sweep_stale() {
     [ -d "$dir" ] || continue
     [ -n "$(find "$dir" -maxdepth 0 -mmin "+$ttl" 2>/dev/null)" ] || continue
     # the ref goes with the dir: left behind it keeps the run's objects reachable for git gc
-    { ( flock -n 7 && git --git-dir="$mirror" update-ref -d "refs/runs/$(basename "$dir" | sed 's/^job\.//')" && rm -rf -- "$dir" ) 7>>"${dir}.live"; } 2>/dev/null
+    { (
+      flock -n 7 || exit 0
+      if git --git-dir="$mirror" update-ref -d "refs/runs/$(basename "$dir" | sed 's/^job\.//')" 2>/dev/null; then
+        rm -rf -- "$dir"
+      else
+        echo "remote_job: could not delete the ref of stale run $(basename "$dir"); its dir stays" >&9
+      fi
+    ) 7>>"${dir}.live"; } 9>&2 2>/dev/null  # fd 9 keeps the one message visible while the rest stays quiet
   done
 }
 
