@@ -5,7 +5,7 @@
 /** The typed answer survives the card being unmounted by the virtualised list and restored on mount (#21793). */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import { setStallDraft } from '@/composables/chat/useStallDraft'
@@ -43,5 +43,14 @@ describe('StallQuestionCard draft', () => {
     await first.find('input').setValue('answer one')
     const other = mountCard('m2')
     expect((other.find('input').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('clears the draft once the answer was sent', async () => {
+    const card = mountCard('m1')
+    await card.find('input').setValue('use host B')
+    await card.find('form').trigger('submit')
+    await flushPromises()
+    card.unmount()
+    expect((mountCard('m1').find('input').element as HTMLInputElement).value).toBe('')
   })
 })

@@ -32,9 +32,15 @@ describe('factToDocument', () => {
   })
 
   it('reads type and category from the backend like the list rows do (#21796)', () => {
-    const doc = factToDocument('1', { ...base, metadata: { type: 'man_page', category: 'Systems' } })
-    expect(doc.type).toBe('man_page')
+    const doc = factToDocument('1', { ...base, metadata: { type: 'webpage', category: 'Systems' } })
+    expect(doc.type).toBe('webpage')
     expect(doc.category).toBe('Systems')
+    expect(doc.metadata?.factType).toBe('webpage')
+  })
+
+  it('falls back to the default for a fact type that is not a document class', () => {
+    const doc = factToDocument('1', { ...base, metadata: { type: 'man_page' } })
+    expect(doc.type).toBe(DEFAULT_FACT_TYPE)
     expect(doc.metadata?.factType).toBe('man_page')
   })
 

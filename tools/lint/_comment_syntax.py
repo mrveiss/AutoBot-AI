@@ -359,8 +359,8 @@ def unterminated_construct(source: str | Path, *, name: str | Path | None = None
 
     ``"block comment"`` or ``"quote"``: the rest of the file was read as that and every guard going through
     `code_lines` is blind to it. A suffix with no block comments is never unterminated. `code_lines` itself does not
-    raise on this -- about a hundred guards read through it -- so a file that does it is reported here. No tracked
-    source file does today (#21571); the guard that pins it waits on the scope record it must be registered in.
+    raise on this -- about a hundred guards read through it -- so a file that does it is reported here. Nothing calls
+    this yet: the guard that runs it over the tracked tree waits on the scope record it must be registered in (#21571).
     """
     text, name = _read(source, name)
     scanned = _scan_file(text, Path(name).suffix if name is not None else "")

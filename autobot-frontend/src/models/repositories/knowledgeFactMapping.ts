@@ -25,6 +25,12 @@ export function factByKeyUrl(documentId: string): string {
 export const DEFAULT_FACT_CATEGORY = 'General'
 /** The UI document class a list row shows when the backend sent no `type`. */
 export const DEFAULT_FACT_TYPE = 'document'
+const DOCUMENT_TYPES: readonly KnowledgeDocument['type'][] = ['document', 'webpage', 'api', 'upload']
+
+/** The backend `type` when it is a UI document class, else the default (an unknown fact type such as `man_page`). */
+function documentType(factType: string): KnowledgeDocument['type'] {
+  return DOCUMENT_TYPES.find((t) => t === factType) ?? DEFAULT_FACT_TYPE
+}
 
 function metaString(meta: Record<string, unknown>, key: string): string {
   const value = meta[key]
@@ -41,7 +47,7 @@ export function factToDocument(documentId: string, fact: FactByKeyBody): Knowled
     title: metaString(meta, 'title'),
     content: typeof fact.content === 'string' ? fact.content : '',
     source: metaString(meta, 'source'),
-    type: (factType || DEFAULT_FACT_TYPE) as KnowledgeDocument['type'],
+    type: documentType(factType),
     tags: Array.isArray(meta.tags) ? meta.tags.filter((tag): tag is string => typeof tag === 'string') : [],
     category: metaString(meta, 'category') || DEFAULT_FACT_CATEGORY,
     createdAt: created,

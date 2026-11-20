@@ -32,7 +32,7 @@
 import { computed, ref } from 'vue'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { useStallDraft } from '@/composables/chat/useStallDraft'
+import { setStallDraft, useStallDraft } from '@/composables/chat/useStallDraft'
 import { ResumeRejectedError, useStallAnswer } from '@/composables/useGraphApproval'
 import type { ChatMessage } from '@/stores/useChatStore'
 
@@ -62,6 +62,7 @@ async function send(text: string): Promise<void> {
   failure.value = null
   try {
     await answerStallQuestion(props.message, text)
+    setStallDraft(props.message.id, '') // sent: the draft is spent (#21793)
   } catch (error) {
     failure.value = failureKey(error) // not accepted: the form stays so the person can try again
   } finally {
