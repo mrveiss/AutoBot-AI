@@ -45,9 +45,7 @@ describe('AdminCleanupProposalsView.vue', () => {
     mockGet.mockImplementation(async (url: string) =>
       url.endsWith('org-tier-column')
         ? { present: false }
-        : url.endsWith('secret-duplicates')
-          ? { group_count: 0, copy_count: 0, groups: [] }
-          : { count: 2, detail: 'two things', refused: null },
+        : { count: 2, detail: 'two things', refused: null },
     )
   })
 
@@ -56,7 +54,7 @@ describe('AdminCleanupProposalsView.vue', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Found: 2.')
     const buttons = wrapper.findAll('button')
-    expect(buttons).toHaveLength(3)
+    expect(buttons).toHaveLength(2)
     expect(buttons[1].attributes('disabled')).toBeDefined()
   })
 
@@ -105,41 +103,12 @@ describe('AdminCleanupProposalsView.vue', () => {
     expect(card).not.toContain('RAW-REFUSAL')
   })
 
-  it('shows duplicated credentials as counts only and proposes through the review queue (#17850)', async () => {
-    mockGet.mockImplementation(async (url: string) =>
-      url.endsWith('secret-duplicates')
-        ? { group_count: 2, copy_count: 5, groups: [{ owner_vault: 'system', copy_count: 3, approval_id: null }] }
-        : url.endsWith('org-tier-column')
-          ? { present: false }
-          : { count: 0, detail: '', refused: null },
-    )
-    mockPost.mockResolvedValue({ proposals: [{ approval_id: 'ap-1', reason: 'one_verified', copies: 3, skipped: false }], remaining: 0 })
+  it('links the duplicated credentials card to the Secrets page and offers no propose action there (#17850)', async () => {
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('5 copies in total.')
-    await wrapper.findAll('button')[2].trigger('click')
-    await flushPromises()
-    expect(mockPost).toHaveBeenCalledWith('/api/admin/secret-duplicates/requests')
-    expect(wrapper.text()).toContain('Proposal sent to the review queue')
-  })
-
-  it('keeps Propose available while duplicated groups remain after a proposal (#17850)', async () => {
-    mockGet.mockImplementation(async (url: string) =>
-      url.endsWith('secret-duplicates')
-        ? { group_count: 6, copy_count: 12, groups: [] }
-        : url.endsWith('org-tier-column')
-          ? { present: false }
-          : { count: 0, detail: '', refused: null },
-    )
-    mockPost.mockResolvedValue({
-      proposals: [{ approval_id: 'ap-1', reason: 'one_verified', copies: 2, skipped: false }],
-      remaining: 1,
-    })
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.findAll('button')[2].trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).toContain('Proposal sent to the review queue')
-    expect(wrapper.findAll('button')[2].attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('Duplicated stored credentials')
+    expect(wrapper.text()).toContain('Review them on the Secrets page')
+    expect(wrapper.findAll('button')).toHaveLength(2) // only the two decided cleanups propose here
+    expect(mockGet.mock.calls.some(([url]) => String(url).includes('secret-duplicates'))).toBe(false)
   })
 })

@@ -10260,7 +10260,8 @@
       "secretDuplicates": {
         "title": "Duplicated stored credentials",
         "description": "Several stored credentials share one name and vault. Each copy is checked against what it connects to; the proposal asks an administrator to remove the copies that do not work, or to choose when that cannot be told. Names and values are never shown.",
-        "copies": "{count} copies in total."
+        "copies": "{count} copies in total.",
+        "open": "Review them on the Secrets page"
       }
     },
     "conversations": {

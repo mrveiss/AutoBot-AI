@@ -26,11 +26,20 @@
       <BaseAlert v-if="card.error" variant="error" :message="card.error" />
       <BaseButton
         size="sm"
-        :disabled="!card.status || card.status.count === 0 || !!card.status.refused || card.busy || (card.proposed && card.remaining === 0)"
+        :disabled="!card.status || card.status.count === 0 || !!card.status.refused || card.busy || card.proposed"
         @click="propose(card)"
       >
         {{ t('admin.cleanup.propose') }}
       </BaseButton>
+    </BaseCard>
+
+    <!-- #17850: duplicated credentials are managed on the Secrets page; this is an access point to it. -->
+    <BaseCard
+      :title="t('admin.cleanup.secretDuplicates.title')"
+      :subtitle="t('admin.cleanup.secretDuplicates.description')"
+      data-testid="cleanup-secretDuplicates"
+    >
+      <router-link :to="{ name: 'secrets-manager', query: { view: 'duplicates' } }">{{ t('admin.cleanup.secretDuplicates.open') }}</router-link>
     </BaseCard>
   </div>
 </template>
@@ -58,7 +67,6 @@ interface Card {
   loadFailed: boolean
   busy: boolean
   proposed: boolean
-  remaining: number // duplicated groups the last request left for another call (#17850)
   error: string
 }
 
@@ -70,15 +78,12 @@ const makeCard = (id: string, statusUrl: string, requestUrl: string): Card => ({
   loadFailed: false,
   busy: false,
   proposed: false,
-  remaining: 0,
   error: '',
 })
 
 const cards = reactive<Card[]>([
   makeCard('envCopies', '/api/admin/env-copies-cleanup', '/api/admin/env-copies-cleanup/requests'),
   makeCard('tierColumn', '/api/admin/org-tier-column', '/api/admin/org-tier-column/requests'),
-  // Duplicated stored credentials (#17850): counts only; each copy is verified before a person is asked.
-  makeCard('secretDuplicates', '/api/admin/secret-duplicates', '/api/admin/secret-duplicates/requests'),
 ])
 
 // The approvals inbox is company-scoped: go to the selected company's, else the company picker.
@@ -102,12 +107,6 @@ async function load(card: Card): Promise<void> {
         count: col.present ? 1 : 0,
         detail: t(col.present ? 'admin.cleanup.tierColumn.present' : 'admin.cleanup.tierColumn.absent'),
       }
-    } else if (card.id === 'secretDuplicates') {
-      const dup: Schemas['DuplicateStatus'] = await apiClient.get(card.statusUrl)
-      card.status = {
-        count: dup.group_count,
-        detail: t('admin.cleanup.secretDuplicates.copies', { count: dup.copy_count }),
-      }
     } else {
       const status: Schemas['CleanupStatus'] = await apiClient.get(card.statusUrl)
       card.status = status
@@ -129,16 +128,10 @@ async function propose(card: Card): Promise<void> {
   card.busy = true
   card.error = ''
   try {
-    // Each route answers with its own response model; an approval id says a proposal now waits for review.
-    if (card.id === 'secretDuplicates') {
-      const dup: Schemas['DuplicateRequestResponse'] = await apiClient.post(card.requestUrl)
-      card.proposed = card.proposed || dup.proposals.some((proposal) => !!proposal.approval_id)
-      card.remaining = dup.remaining
-    } else {
-      const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] =
-        await apiClient.post(card.requestUrl)
-      card.proposed = !!reply.approval_id
-    }
+    // The org-tier-column route answers with its own response model; both carry the approval id.
+    const reply: Schemas['CleanupRequestResponse'] | Schemas['OrgTierColumnRequestResponse'] =
+      await apiClient.post(card.requestUrl)
+    card.proposed = !!reply.approval_id
   } catch (err) {
     card.error = t(proposeErrorKey(err))
     logger.error('Could not propose cleanup', card.id, err)
