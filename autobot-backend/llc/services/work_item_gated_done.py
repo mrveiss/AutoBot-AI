@@ -33,6 +33,7 @@ class ReviewRefused(InvalidTransition):
     NO_REVIEWER = "no_reviewer"
     NOT_A_MEMBER = "reviewer_not_a_member"
     NOT_THE_HOLDER = "not_the_holder"
+    LACKS_ROLE = "reviewer_lacks_role"  # the policy's reviewer_role is not held by the reviewer (#21588)
 
     def __init__(self, message: str, reason: str) -> None:
         super().__init__(message)
@@ -89,10 +90,10 @@ async def hand_off_for_review(
     """Move the item to review through ``HandoffService.agent_to_human``, naming the arguments it declares.
 
     The gate blocks the agent's done, so the item must go to a current member of the company: with no handoff
-    service, no reviewer, a reviewer who is not a member, or an agent that does not hold the item the transition
-    is refused, never completed past the gate.
+    service, no reviewer, a reviewer who is not a member or lacks the policy's role, or an agent that does not
+    hold the item the transition is refused, never completed past the gate.
     """
-    from .handoff import HandoffNotAllowed  # lazy: the handoff module pulls in llc.kb (#13057)
+    from .handoff import HandoffNotAllowed, ReviewerLacksRole  # lazy: the handoff module pulls in llc.kb (#13057)
 
     work_item_id = str(item.id)
     refusal = f"Work item {work_item_id} requires human review before it can be marked done. "
@@ -107,6 +108,8 @@ async def hand_off_for_review(
         return await handoff_svc.agent_to_human(
             session, work_item_id, agent_id=agent_id, reviewer_user_id=reviewer, company_id=company_id
         )
+    except ReviewerLacksRole as exc:
+        raise ReviewRefused(refusal + str(exc), ReviewRefused.LACKS_ROLE) from exc
     except HandoffNotAllowed as exc:
         raise ReviewRefused(str(exc), ReviewRefused.NOT_THE_HOLDER) from exc
 

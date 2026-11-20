@@ -87,7 +87,10 @@ async def test_the_worktree_stays_when_the_transition_does_not_commit(status) ->
 @pytest.mark.parametrize(("commit", "removals"), [(True, 1), (False, 0)], ids=["commit", "rollback"])
 async def test_the_approve_path_removes_the_worktree_only_after_commit(commit: bool, removals: int) -> None:
     reviewer, item, workspace = uuid.uuid4(), _item(), SimpleNamespace(workspace_dir="/workspaces/task")
-    item.reviewer_user_id = reviewer
+    item.reviewer_user_id, item.status = (
+        reviewer,
+        WorkItemStatus.IN_REVIEW,
+    )  # only an item in review is approved (#21632)
     # the approve's own lock, the done path's lock, then the workspace row the release reads (#21590)
     session = _TxSession(results=[FakeResult([item]), FakeResult([item]), FakeResult([workspace])])
     removed = MagicMock()

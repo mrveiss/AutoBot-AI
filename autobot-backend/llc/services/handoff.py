@@ -21,15 +21,15 @@ from autobot_shared.time_utils import utc_timestamp
 from ..exceptions import PublicMessageMixin
 from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.activity import ActorType
-from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
+from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
-from .accessors import get_work_item_service
+from .accessors import get_review_gate_service, get_work_item_service
 from .actor import audit
 from .base import LLCServiceBase
 from .commit_publish import publish_after_commit, run_after_commit
 from .company_os.errors import CompanyOsNotFound
 from .wake_events import wake_for_item_changes
-from .work_item_own_task import checkout_fence_key, release_agent_fence
+from .work_item_own_task import InvalidTransition, checkout_fence_key, release_agent_fence
 
 try:
     from user_management.database import get_async_session_factory
@@ -51,6 +51,13 @@ class HandoffNotAuthorized(PublicMessageMixin, Exception):
 
 class HandoffNotAllowed(PublicMessageMixin, Exception):
     """Raised when the agent does not hold the checkout lock."""
+
+
+class ReviewerLacksRole(HandoffNotAllowed):
+    """Raised when the reviewer does not hold the ``reviewer_role`` the item type's review-gate policy names (#21588).
+
+    Public: the message names only the role the policy requires and the reviewer the caller supplied.
+    """
 
 
 @dataclass
@@ -159,6 +166,7 @@ class HandoffService(LLCServiceBase):
         agent_notes: Optional[str] = None,
     ) -> LLCWorkItem:
         item = await self._get_agent_held(session, work_item_id, agent_id)
+        await self._assert_reviewer_holds_role(session, item, company_id, reviewer_user_id)
         brief = self._generate_brief(item, agent_notes)
         run_id = self._stamp_in_review(item, reviewer_user_id, brief)
         await session.flush()
@@ -239,14 +247,12 @@ class HandoffService(LLCServiceBase):
         if item is None:
             raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
+        self._assert_in_review(item)
         # The one done path (#21590): the allowed-transition rule, the completion audit row, the artifact ingest,
         # the fence and the workspace release. A reviewer is a person, so the review gate never holds the finish.
         await get_work_item_service().transition_status(
             session, work_item_id, WorkItemStatus.DONE, company_id=company_id, acting_user=uuid.UUID(reviewer_user_id)
         )
-        item.assignee_user_id = None  # an approved item keeps no assignee, as before
-        item.assignee_agent_id = None
-        item.assignee_type = None
         await audit(
             self.activity_log,
             session,
@@ -559,6 +565,25 @@ class HandoffService(LLCServiceBase):
             "generated_at": utc_timestamp(),
             "generator": "stub-phase4",
         }
+
+    async def _assert_reviewer_holds_role(
+        self, session: AsyncSession, item: LLCWorkItem, company_id: str, reviewer_user_id: str
+    ) -> None:
+        """Refuse a reviewer who lacks the role the item type's review-gate policy names (#21588)."""
+        role = await get_review_gate_service().missing_reviewer_role(
+            session, company_id, WorkItemType(item.type), reviewer_user_id
+        )
+        if role is not None:
+            raise ReviewerLacksRole(f"Reviewer {reviewer_user_id} does not hold the {role!r} role this review requires")
+
+    @staticmethod
+    def _assert_in_review(item: LLCWorkItem) -> None:
+        """Only an item waiting on its reviewer can be approved, whoever the reviewer is (#21632)."""
+        if item.status != WorkItemStatus.IN_REVIEW:
+            raise InvalidTransition(
+                f"Work item {item.id} is {WorkItemStatus(item.status).value}, not in_review: "
+                "only an item in review can be approved"
+            )
 
     def _assert_reviewer(self, item: LLCWorkItem, reviewer_user_id: str) -> None:
         if item.reviewer_user_id is None or str(item.reviewer_user_id) != reviewer_user_id:
