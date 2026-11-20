@@ -496,7 +496,7 @@ async def generate_embedding_with_fallback(
 
     # Fallback to Ollama - use SSOT config for defaults
     # config.port.ollama is the canonical path for the port (MVA-1454 / 6c0726ec1).
-    ollama_host = ollama_host or config.ollama_host
+    ollama_host = ollama_host or config.vm.ollama
     ollama_port = ollama_port or config.port.ollama
     ollama_url = ollama_api_url(f"http://{ollama_host}:{ollama_port}", PATH_OLLAMA_EMBEDDINGS)
 
