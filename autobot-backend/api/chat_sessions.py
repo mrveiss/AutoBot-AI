@@ -32,9 +32,7 @@ from api.schemas_chat import (
     SessionCreate,
     SessionCreateData,
     SessionDeleteData,
-    SessionShareData,
     SessionSharePreviewData,
-    SessionShareRequest,
     SessionUpdate,
     SessionUpdateData,
 )
@@ -1625,84 +1623,6 @@ async def get_session_activities(
 # ====================================================================
 
 
-async def _share_session_facts(
-    request: Request,
-    session_id: str,
-    share_with: list[str],
-    shared_by: str,
-    knowledge_facts: list[str] | None,
-) -> Dict:
-    """Share KB facts from a session with other users.
-
-    Helper for share_session (#689).
-    """
-    kb_manager = getattr(request.app.state, "kb_manager", None)
-    if not kb_manager:
-        return {"shared_count": 0, "errors": ["KB manager unavailable"]}
-
-    if knowledge_facts:
-        fact_ids = knowledge_facts
-    else:
-        fact_ids = await kb_manager.get_facts_by_session(session_id)
-
-    if not fact_ids:
-        return {"shared_count": 0, "errors": []}
-
-    return await kb_manager.share_facts(fact_ids, share_with, shared_by)
-
-
-@router.post("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionShareData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_session",
-    error_code_prefix="CHAT_SESSIONS",
-)
-async def share_session(
-    session_id: str,
-    share_data: SessionShareRequest,
-    request: Request,
-    ownership: Dict = Depends(validate_session_ownership),
-):
-    """Share a conversation with other users, optionally including KB facts (#689)."""
-    request_id = generate_request_id()
-    log_request_context(request, "share_session", request_id)
-
-    _validate_session_id_or_raise(session_id)
-
-    user_data = ownership.get("user_data", {})
-    shared_by = user_data.get("username", "unknown")
-
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from security.session_ownership import SessionOwnershipValidator
-
-    redis = await get_redis_mgr(async_client=True, database="main")
-    validator = SessionOwnershipValidator(redis)
-    if not await validator.share_session(session_id, share_data.share_with, shared_by):
-        raise HTTPException(status_code=500, detail="Session could not be shared")
-
-    # Optionally share KB facts
-    facts_result = None
-    if share_data.include_knowledge:
-        facts_result = await _share_session_facts(
-            request,
-            session_id,
-            share_data.share_with,
-            shared_by,
-            share_data.knowledge_facts,
-        )
-
-    return create_chat_response(
-        data={
-            "session_id": session_id,
-            "shared_with": share_data.share_with,
-            "include_knowledge": share_data.include_knowledge,
-            "facts_shared": facts_result,
-        },
-        message="Session shared successfully",
-        request_id=request_id,
-    )
-
-
 @router.get("/chat/sessions/{session_id}/share/preview", response_model=DataResponse[SessionSharePreviewData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1789,6 +1709,6 @@ async def clear_session_checkpoints(
         )
 
 
-from api.chat_session_unshare import router as _unshare_router  # noqa: E402  (#18890)
+from api.chat_session_sharing import router as _sharing_router  # noqa: E402  (#18890)
 
-router.include_router(_unshare_router)
+router.include_router(_sharing_router)

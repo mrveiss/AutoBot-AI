@@ -268,7 +268,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, useToast } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -277,6 +277,7 @@ import { useBatchSelection } from '@/composables/useBatchSelection'
 import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const logger = createLogger('ShareConversationDialog')
 
@@ -371,7 +372,9 @@ const loadFacts = async () => {
 const loadParticipants = async () => {
   if (!props.sessionId) return
   try {
-    const data = await ApiClient.get<{ data?: { participants?: string[] } }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`)
+    const data = await ApiClient.call('get', '/api/chat/sessions/{session_id}/share', {
+      path: { session_id: props.sessionId },
+    })
     participants.value = data?.data?.participants || []
   } catch (err) {
     logger.error('Failed to load share participants:', err)
@@ -382,10 +385,13 @@ const loadParticipants = async () => {
 const unshareParticipant = async (userId: string) => {
   unsharing.value = userId
   try {
-    await ApiClient.delete(`${getApiBase()}/chat/sessions/${props.sessionId}/share/${encodeURIComponent(userId)}`)
+    await ApiClient.call('delete', '/api/chat/sessions/{session_id}/share/{user_id}', {
+      path: { session_id: props.sessionId, user_id: userId },
+    })
     participants.value = participants.value.filter(x => x !== userId)
   } catch (err) {
     logger.error('Failed to unshare session:', err)
+    showToast(t('chat.share.unshareFailed'), 'error')
   } finally {
     unsharing.value = null
   }
@@ -404,6 +410,7 @@ const handleShare = async () => {
     }
     const result = await ApiClient.post<{ data?: Record<string, unknown> }>(`${getApiBase()}/chat/sessions/${props.sessionId}/share`, body)
     emit('shared', result?.data || {})
+    await loadParticipants()
     emit('update:visible', false)
   } catch (err) {
     logger.error('Failed to share session:', err)

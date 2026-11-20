@@ -664,31 +664,31 @@ class SessionOwnershipValidator:
         session_id: str,
         shared_with_ids: list[str],
         shared_by: str,
+        actor: dict | None = None,
     ) -> bool:
         """Share a session until the owner unshares it (#689, #18890).
 
         The table is written first (system of record), then the Redis projection (no TTL). False = not recorded.
         """
         try:
-            await session_shares.adopt_redis_shares(self.redis)
+            await session_shares.ensure_adopted(self.redis)
             await session_shares.durable_add(session_id, shared_with_ids, shared_by)
             await session_shares.project_share(self.redis, session_id, shared_with_ids)
-            session_shares.audit("share", shared_by, session_id, shared_with_ids)
+            actor = actor or {"user_id": shared_by, "username": shared_by, "ip": "unknown"}
+            session_shares.audit("share", actor, session_id, shared_with_ids)
             logger.info("Session %s... shared by %s with %d users", session_id[:8], shared_by, len(shared_with_ids))
             return True
         except Exception as e:
             logger.error("Failed to share session: %s", e)
             return False
 
-    async def unshare_session(self, session_id: str, user_id: str, unshared_by: str) -> bool:
+    async def unshare_session(self, session_id: str, user_id: str, actor: dict) -> bool:
         """Remove one participant; they lose read access at once (#18890).
 
         True when the user was a participant. A failure raises: "could not remove" must not read as removed.
         """
-        await session_shares.adopt_redis_shares(self.redis)
-        removed = await session_shares.durable_remove(session_id, user_id)
-        await session_shares.drop_projection(self.redis, session_id, user_id)
-        session_shares.audit("unshare", unshared_by, session_id, [user_id])
+        removed = await session_shares.remove_share(self.redis, session_id, user_id)
+        session_shares.audit("unshare", actor, session_id, [user_id])
         return removed
 
     async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:

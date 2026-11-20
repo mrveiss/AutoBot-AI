@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from models.session_share import SessionShare
@@ -16,13 +17,14 @@ from security import session_shares
 from security.session_ownership import SessionOwnershipValidator
 
 SESSION_ID = "0123456789abcdef0123456789abcdef"
+ACTOR = {"user_id": "11111111-1111-1111-1111-111111111111", "username": "alice", "ip": "203.0.113.7"}
 
 
 class FakeRedis:
-    """Just the set commands the share code uses; records TTLs so a silent expiry is visible."""
+    """Just the commands the share code uses; records TTLs so a silent expiry is visible."""
 
     def __init__(self):
-        self.sets, self.ttls = {}, {}
+        self.sets, self.ttls, self.kv = {}, {}, {}
 
     async def sadd(self, key, *members):
         self.sets.setdefault(key, set()).update(members)
@@ -40,13 +42,25 @@ class FakeRedis:
         return {m.encode() for m in self.sets.get(key, set())}
 
     async def exists(self, key):
-        return int(key in self.sets)
+        return int(key in self.sets or key in self.kv)
 
     async def expire(self, key, ttl):
         self.ttls[key] = ttl
 
     async def persist(self, key):
         self.ttls.pop(key, None)
+
+    async def set(self, key, value, nx=False, px=None):
+        if nx and key in self.kv:
+            return None
+        self.kv[key] = value
+        return True
+
+    async def eval(self, script, numkeys, key, expected):
+        if self.kv.get(key) == expected:
+            del self.kv[key]
+            return 1
+        return 0
 
     async def scan_iter(self, match, count=0):
         prefix = match.rstrip("*")
@@ -66,7 +80,6 @@ async def env(monkeypatch):
         engine, expire_on_commit=False
     )
     monkeypatch.setattr(session_shares, "_factory", lambda: factory)
-    monkeypatch.setattr(session_shares, "_adopted", False)
     redis = FakeRedis()
     validator = SessionOwnershipValidator.__new__(SessionOwnershipValidator)
     validator.redis = redis
@@ -81,7 +94,7 @@ async def test_removed_user_loses_read_access_immediately(env):
     assert await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
     assert await validator.is_shared_with_user(SESSION_ID, "bob")
 
-    assert await validator.unshare_session(SESSION_ID, "bob", "alice") is True
+    assert await validator.unshare_session(SESSION_ID, "bob", ACTOR) is True
 
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
     assert await validator.is_shared_with_user(SESSION_ID, "carol")
@@ -92,7 +105,7 @@ async def test_removed_user_loses_read_access_immediately(env):
 async def test_unshare_survives_a_redis_flush(env):
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
-    await validator.unshare_session(SESSION_ID, "bob", "alice")
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
     redis.sets.clear()  # the projection is gone; the table is the record
 
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
@@ -135,16 +148,16 @@ async def test_redis_only_shares_on_an_installed_system_are_adopted(env):
 async def test_share_and_unshare_each_write_an_audit_record(env):
     validator, _, audit = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
-    await validator.unshare_session(SESSION_ID, "bob", "alice")
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
 
     actions = [c.kwargs["action"].value for c in audit.call_args_list]
     assert actions == ["session.share", "session.unshare"]
-    assert audit.call_args.kwargs["metadata"] == {"participants": ["bob"]}
+    assert audit.call_args.kwargs["metadata"]["participants"] == ["bob"]
 
 
 @pytest.mark.asyncio
 async def test_a_participant_is_refused_like_an_outsider_and_nothing_changes(env):
-    from api.chat_session_unshare import unshare_session
+    from api.chat_session_sharing import unshare_session
 
     validator, _, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
@@ -161,14 +174,14 @@ async def test_a_participant_is_refused_like_an_outsider_and_nothing_changes(env
 
 @pytest.mark.asyncio
 async def test_owner_unshare_endpoint_removes_the_participant(env):
-    from api.chat_session_unshare import unshare_session
+    from api.chat_session_sharing import unshare_session
 
     validator, _, _ = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
     request = MagicMock()
     request.method, request.url.path = "DELETE", "/x"
 
-    with patch("api.chat_session_unshare.get_redis_client", AsyncMock(return_value=validator.redis)):
+    with patch("api.chat_session_sharing.get_redis_client", AsyncMock(return_value=validator.redis)):
         await unshare_session(SESSION_ID, "bob", request, {"reason": "owner_match", "user_data": {"username": "alice"}})
 
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
@@ -176,7 +189,7 @@ async def test_owner_unshare_endpoint_removes_the_participant(env):
 
 @pytest.mark.asyncio
 async def test_participant_list_is_owner_only_and_reads_the_table(env):
-    from api.chat_session_unshare import list_session_participants
+    from api.chat_session_sharing import list_session_participants
 
     validator, redis, _ = env
     await validator.share_session(SESSION_ID, ["carol", "bob"], "alice")
@@ -189,3 +202,178 @@ async def test_participant_list_is_owner_only_and_reads_the_table(env):
     with pytest.raises(HTTPException) as refused:
         await list_session_participants(SESSION_ID, request, {"reason": "shared_access"})
     assert refused.value.status_code == 403
+
+
+def _request():
+    request = MagicMock()
+    request.method, request.url.path = "POST", "/x"
+    request.client.host = "203.0.113.7"
+    return request
+
+
+async def _rows():
+    async with session_shares._factory()() as db:
+        result = await db.execute(select(SessionShare.user_id, SessionShare.shared_by))
+        return {u: by for u, by in result.all()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["log_only_mode", "org_admin", "shared_access", "something_new", None])
+async def test_only_an_owner_equivalent_reason_manages_shares(env, reason):
+    from api.chat_session_sharing import list_session_participants, share_session, unshare_session
+    from api.schemas_chat import SessionShareRequest
+
+    validator, _, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+    ownership = {"reason": reason, "user_data": {"username": "mallory"}}
+
+    for call in (
+        unshare_session(SESSION_ID, "bob", _request(), ownership),
+        list_session_participants(SESSION_ID, _request(), ownership),
+        share_session(SESSION_ID, SessionShareRequest(share_with=["eve"]), _request(), ownership),
+    ):
+        with pytest.raises(HTTPException) as refused:
+            await call
+        assert refused.value.status_code == 403
+        assert refused.value.detail == "You do not have permission to access this conversation"
+    assert await _rows() == {"bob": "alice"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", sorted(session_shares.OWNER_REASONS))
+async def test_every_owner_equivalent_reason_may_share(env, reason):
+    from api.chat_session_sharing import share_session
+    from api.schemas_chat import SessionShareRequest
+
+    validator, _, _ = env
+    owner = {"reason": reason, "user_data": {"username": "alice", "user_id": "u-1"}}
+    with patch("api.chat_session_sharing.get_redis_client", AsyncMock(return_value=validator.redis)):
+        await share_session(SESSION_ID, SessionShareRequest(share_with=["bob"]), _request(), owner)
+    assert await _rows() == {"bob": "alice"}
+
+
+@pytest.mark.asyncio
+async def test_a_removed_user_cannot_be_re_shared_by_a_participant(env):
+    from api.chat_session_sharing import share_session
+    from api.schemas_chat import SessionShareRequest
+
+    validator, _, _ = env
+    await validator.share_session(SESSION_ID, ["bob", "carol"], "alice")
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+
+    participant = {"reason": "shared_access", "user_data": {"username": "carol"}}
+    with pytest.raises(HTTPException):
+        await share_session(SESSION_ID, SessionShareRequest(share_with=["bob"]), _request(), participant)
+
+    assert not await validator.is_shared_with_user(SESSION_ID, "bob")
+
+
+@pytest.mark.asyncio
+async def test_adoption_inserts_missing_rows_only_and_keeps_shared_by(env):
+    validator, redis, _ = env
+    await session_shares.durable_add(SESSION_ID, ["bob"], "alice")
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "dave"}
+
+    await session_shares.adopt_redis_shares(redis)
+
+    assert await _rows() == {"bob": "alice", "dave": session_shares.ADOPTED_SHARER}
+
+
+@pytest.mark.asyncio
+async def test_a_reshare_does_not_rewrite_shared_by(env):
+    validator, _, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+    await validator.share_session(SESSION_ID, ["bob"], "someone-else")
+
+    assert await _rows() == {"bob": "alice"}
+
+
+@pytest.mark.asyncio
+async def test_adoption_runs_once_and_never_resurrects_a_removed_user(env):
+    validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "carol"}
+    await session_shares.adopt_redis_shares(redis)
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "carol"}  # a stale copy turns up
+
+    assert await session_shares.adopt_redis_shares(redis) == 0  # the durable marker, not a per-process flag
+    assert await _rows() == {"carol": session_shares.ADOPTED_SHARER}
+
+
+@pytest.mark.asyncio
+async def test_unshare_before_adoption_adopts_first_then_removes(env):
+    validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob"}  # legacy, never adopted
+
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    redis.sets.clear()
+
+    assert not await validator.is_shared_with_user(SESSION_ID, "bob")
+
+
+@pytest.mark.asyncio
+async def test_unshare_fails_closed_when_the_table_write_fails(env, monkeypatch):
+    validator, redis, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+
+    async def boom(*_a):
+        raise ConnectionError("postgres down")
+
+    monkeypatch.setattr(session_shares, "durable_remove", boom)
+    with pytest.raises(ConnectionError):
+        await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+
+    assert not await redis.sismember("session:shared_with:" + SESSION_ID, "bob")
+
+
+@pytest.mark.asyncio
+async def test_a_worker_that_loses_the_adoption_lock_waits_then_fails(env, monkeypatch):
+    _, redis, _ = env
+    redis.kv[session_shares.ADOPT_LOCK_KEY] = "another-worker"
+    monkeypatch.setattr(session_shares, "ADOPT_WAIT_SECONDS", 0)
+
+    with pytest.raises(TimeoutError):
+        await session_shares.adopt_redis_shares(redis)
+    assert redis.kv[session_shares.ADOPT_LOCK_KEY] == "another-worker"  # not released by the loser
+
+
+@pytest.mark.asyncio
+async def test_a_worker_that_loses_the_lock_returns_once_the_marker_appears(env):
+    _, redis, _ = env
+    redis.kv[session_shares.ADOPT_LOCK_KEY] = "another-worker"
+    redis.kv[session_shares.ADOPTED_KEY] = "1"
+
+    assert await session_shares.adopt_redis_shares(redis) == 0
+
+
+@pytest.mark.asyncio
+async def test_startup_adoption_copies_shares_and_clears_every_ttl(env):
+    from initialization.background_workers import adopt_chat_shares
+
+    validator, redis, _ = env
+    redis.sets["session:shared_with:s-1"] = {"bob"}
+    redis.sets["user:shared_sessions:bob"] = {"s-1", "s-2"}  # s-2's session-side key already expired
+    for key in ("session:shared_with:s-1", "user:shared_sessions:bob"):
+        redis.ttls[key] = 1000
+
+    with patch("autobot_shared.redis_client.get_redis_client", AsyncMock(return_value=redis)):
+        await adopt_chat_shares()
+
+    assert redis.ttls == {}
+    redis.sets.clear()
+    assert await validator.is_shared_with_user("s-1", "bob")
+    assert await validator.is_shared_with_user("s-2", "bob")
+
+
+@pytest.mark.asyncio
+async def test_audit_records_the_uuid_and_client_ip_with_the_username_in_metadata(env):
+    validator, _, audit = env
+    request = _request()
+    actor = session_shares.audit_actor(request, {"user_id": "u-uuid-1", "username": "alice"})
+
+    await validator.share_session(SESSION_ID, ["bob"], "alice", actor)
+
+    kwargs = audit.call_args.kwargs
+    assert kwargs["user_id"] == "u-uuid-1"
+    assert kwargs["ip_address"] == "203.0.113.7"
+    assert kwargs["metadata"]["username"] == "alice"

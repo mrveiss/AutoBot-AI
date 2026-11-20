@@ -80,6 +80,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_postgres,
     env_registry_rag,
     env_registry_security,
+    env_registry_session_shares,
     env_registry_slm,
     env_registry_slm_health,
     env_registry_slm_rollback,

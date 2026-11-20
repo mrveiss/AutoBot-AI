@@ -672,6 +672,7 @@
       "sharedWithNow": "Currently shared with",
       "unshare": "Remove access",
       "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
       "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Require login to view",
