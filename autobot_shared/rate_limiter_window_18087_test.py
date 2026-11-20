@@ -201,8 +201,34 @@ class TestLocalWindowCounter:
     def test_stale_keys_are_evicted_past_the_cap(self):
         counter = LocalWindowCounter(max_keys=2)
         counter._hits.update({"old1": deque([0.0]), "old2": deque([0.0])})
+        counter._windows.update({"old1": 60.0, "old2": 60.0})
         counter.try_acquire("live", 5, 60)
         assert set(counter._hits) == {"live"}
+
+    def test_a_zero_limit_refuses_with_the_full_window(self):
+        allowed, retry_after = LocalWindowCounter().try_acquire("k", 0, 60)
+        assert allowed is False and retry_after == 60
+
+    def test_live_keys_are_never_evicted_and_the_cap_holds(self):
+        counter = LocalWindowCounter(max_keys=2)
+        assert counter.try_acquire("a", 1, 60)[0] and counter.try_acquire("b", 1, 60)[0]
+        assert counter.try_acquire("c", 1, 60)[0] is False
+        counter.record("d", 60)
+        assert set(counter._hits) == {"a", "b"}
+        assert counter.try_acquire("a", 1, 60)[0] is False  # history preserved
+
+    def test_usage_does_not_create_a_key(self):
+        counter = LocalWindowCounter()
+        assert counter.usage("ghost", 60) == (0, 0.0)
+        assert counter._hits == {}
+
+    def test_a_key_is_evicted_by_its_own_window_not_the_callers(self):
+        counter = LocalWindowCounter(max_keys=2)
+        counter.try_acquire("long", 1, 3600)
+        counter._hits["long"][0] -= 61  # 61s old: expired for a 60s window, live for 3600s
+        counter.try_acquire("short", 1, 60)
+        assert counter.try_acquire("new", 1, 60)[0] is False  # full of live keys; "long" kept
+        assert counter.try_acquire("long", 1, 3600)[0] is False
 
     def test_retry_after_is_time_until_the_oldest_hit_expires(self):
         counter = LocalWindowCounter()

@@ -53,8 +53,8 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-#: Cap on distinct keys the per-process fallback tracks before it evicts keys
-#: whose every hit has aged out of the window.
+#: Cap on distinct keys the per-process fallback tracks; expired keys are evicted
+#: first, and a new key is refused only when every tracked key is still live.
 LOCAL_WINDOW_MAX_KEYS = env_int("AUTOBOT_RATE_LIMIT_LOCAL_MAX_KEYS", 10_000)
 
 
@@ -67,15 +67,30 @@ class WindowFailurePolicy(str, Enum):
 
 
 class LocalWindowCounter:
-    """Per-process sliding window; only admitted hits are recorded."""
+    """Per-process sliding window; only admitted hits are recorded.
+
+    Each key keeps the window it was last used with, so a key admitted under a
+    long window is not evicted by a call that uses a short one. At most
+    ``max_keys`` distinct keys are tracked: once full and nothing has expired, a
+    new key is refused rather than evicting a live quota's history.
+    """
 
     def __init__(self, max_keys: int = LOCAL_WINDOW_MAX_KEYS) -> None:
         self._max_keys = max_keys
         self._hits: dict[str, deque[float]] = {}
+        self._windows: dict[str, float] = {}
         self._lock = threading.Lock()
 
-    def _live(self, key: str, window_seconds: float, now: float) -> deque[float]:
-        hits = self._hits.setdefault(key, deque())
+    def _live(self, key: str, window_seconds: float, now: float) -> deque[float] | None:
+        """Return the key's live hits (trimmed), or ``None`` when the table has no room for it."""
+        hits = self._hits.get(key)
+        if hits is None:
+            if len(self._hits) >= self._max_keys:
+                self._evict_stale(now)
+                if len(self._hits) >= self._max_keys:
+                    return None
+            hits = self._hits[key] = deque()
+        self._windows[key] = max(window_seconds, self._windows.get(key, 0.0))
         while hits and hits[0] <= now - window_seconds:
             hits.popleft()
         return hits
@@ -85,36 +100,40 @@ class LocalWindowCounter:
         now = time.time()
         with self._lock:
             hits = self._live(key, window_seconds, now)
+            if hits is None:
+                return False, float(window_seconds)
             if len(hits) >= max_requests:
-                return False, max(0.0, window_seconds - (now - hits[0]))
+                retry_after = window_seconds - (now - hits[0]) if hits else window_seconds
+                return False, max(0.0, retry_after)
             hits.append(now)
-            if len(self._hits) > self._max_keys:
-                self._evict_stale(window_seconds, now)
             return True, 0.0
 
     def record(self, key: str, window_seconds: float) -> None:
         """Record a hit unconditionally (the caller checked, or owes the count)."""
         now = time.time()
         with self._lock:
-            self._live(key, window_seconds, now).append(now)
-            if len(self._hits) > self._max_keys:
-                self._evict_stale(window_seconds, now)
+            hits = self._live(key, window_seconds, now)
+            if hits is not None:
+                hits.append(now)
 
     def usage(self, key: str, window_seconds: float) -> tuple[int, float]:
-        """Return ``(hits_in_window, seconds_until_the_oldest_hit_expires)``."""
+        """Return ``(hits_in_window, seconds_until_the_oldest_hit_expires)``; never creates a key."""
         now = time.time()
         with self._lock:
-            hits = self._live(key, window_seconds, now)
+            hits = [h for h in self._hits.get(key, ()) if h > now - window_seconds]
             return len(hits), (max(0.0, window_seconds - (now - hits[0])) if hits else 0.0)
 
-    def _evict_stale(self, window_seconds: float, now: float) -> None:
-        for stale in [k for k, h in self._hits.items() if not h or h[-1] <= now - window_seconds]:
+    def _evict_stale(self, now: float) -> None:
+        """Drop keys whose every hit has aged out of that key's own window."""
+        for stale in [k for k, h in self._hits.items() if not h or h[-1] <= now - self._windows[k]]:
             del self._hits[stale]
+            del self._windows[stale]
 
     def reset(self) -> None:
         """Forget every key (tests)."""
         with self._lock:
             self._hits.clear()
+            self._windows.clear()
 
 
 class WindowQuota:

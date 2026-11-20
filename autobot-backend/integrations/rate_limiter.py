@@ -66,8 +66,8 @@ class RateLimitState:
         return max(self.retry_after_until - now, 0.0)
 
     def apply_retry_after(self, retry_after_seconds: float, now: float) -> None:
-        """Set a hard pause based on a Retry-After response header."""
-        self.retry_after_until = now + retry_after_seconds
+        """Set a hard pause based on a Retry-After response header (never shortens a longer one)."""
+        self.retry_after_until = max(self.retry_after_until, now + retry_after_seconds)
         logger.warning("Rate limit enforced: pausing requests for %.1fs", retry_after_seconds)
 
     def apply_github_headers(self, headers: Dict[str, str], now: float, wall_now: float) -> None:

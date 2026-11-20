@@ -184,18 +184,18 @@ class RateLimiter:
         self.fail_open_count: int = 0
 
     def _warn_fail_open(self, reason: str) -> None:
-        """Warn that a request was allowed because Redis is unavailable (#18617).
-
-        Names the limiter scope only, never a key or key-derived value, and is
-        rate-limited per instance to one line per ``FAIL_OPEN_WARN_INTERVAL_SECONDS``.
-        """
+        """Throttled warning (scope only, never a key) that Redis was down and a request was allowed (#18617)."""
         self.fail_open_count += 1
-        mono = time.monotonic()
-        last = self._last_fail_open_warn
-        if last is not None and mono - last < FAIL_OPEN_WARN_INTERVAL_SECONDS:
-            return
-        self._last_fail_open_warn = mono
-        logger.warning("rate_limiter: %s for limiter '%s'; allowing request (fail-open)", reason, self._log_scope)
+        if self._warn_due():
+            logger.warning("rate_limiter: %s for limiter '%s'; allowing request (fail-open)", reason, self._log_scope)
+
+    def _warn_due(self) -> bool:
+        """True at most once per ``FAIL_OPEN_WARN_INTERVAL_SECONDS`` per instance (outage warnings)."""
+        mono, last = time.monotonic(), self._last_fail_open_warn
+        due = last is None or mono - last >= FAIL_OPEN_WARN_INTERVAL_SECONDS
+        if due:
+            self._last_fail_open_warn = mono
+        return due
 
     # ------------------------------------------------------------------
     # Public API
@@ -493,7 +493,8 @@ class RateLimiter:
         if self._window_policy is WindowFailurePolicy.FAIL_OPEN:
             self._warn_fail_open(reason)
             return True, 0.0
-        logger.warning("rate_limiter: %s for '%s'; policy=%s", reason, self._log_scope, self._window_policy.value)
+        if self._warn_due():
+            logger.warning("rate_limiter: %s for '%s'; policy=%s", reason, self._log_scope, self._window_policy.value)
         if self._window_policy is WindowFailurePolicy.FAIL_CLOSED:
             return False, float(window_seconds)
         return self._local_windows.try_acquire(f"{self._prefix}:{key}", max_requests, window_seconds)

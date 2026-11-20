@@ -33,6 +33,14 @@ def test_state_retry_after_blocks():
     assert 28.0 < state.pending_wait(now + 1.0) <= 30.0
 
 
+def test_state_keeps_the_longer_provider_pause():
+    state = RateLimitState()
+    now = time.monotonic()
+    state.apply_retry_after(120.0, now)
+    state.apply_retry_after(60.0, now)
+    assert 118.0 < state.pending_wait(now + 1.0) <= 120.0
+
+
 def test_state_retry_after_expires():
     state = RateLimitState()
     now = time.monotonic()

@@ -154,15 +154,24 @@ def signals(source: str) -> set[str]:
     return found
 
 
-def _tripping_modules(root: Path) -> dict[str, set[str]]:
+def _scan(root: Path, rels: list[str]) -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Return ``(modules with signals, {module: error})`` for every module that could not be parsed."""
     hits: dict[str, set[str]] = {}
-    for rel in REACH.examined(root):
+    failed: dict[str, str] = {}
+    for rel in rels:
         try:
             found = signals((root / rel).read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError, OSError):
+        except (SyntaxError, UnicodeDecodeError, OSError) as exc:
+            failed[rel] = f"{type(exc).__name__}: {exc}"
             continue
         if found:
             hits[rel] = found
+    return hits, failed
+
+
+def _tripping_modules(root: Path) -> dict[str, set[str]]:
+    hits, failed = _scan(root, REACH.examined(root))
+    assert not failed, f"modules the scan could not parse (each counts toward the reach floor): {failed}"
     return hits
 
 
@@ -217,6 +226,15 @@ def test_contrast_a_module_that_only_mentions_rate_limiting_is_not_flagged() -> 
 
 
 # ---------------------------------------------------------------- the tree
+
+
+def test_an_unparseable_module_is_reported_not_skipped(tmp_path: Path) -> None:
+    """Negative control: a broken module must surface as a failure, never silently drop out."""
+    (tmp_path / "broken.py").write_text("def (:\n", encoding="utf-8")
+    (tmp_path / "quiet.py").write_text("x = 1\n", encoding="utf-8")
+    hits, failed = _scan(tmp_path, ["broken.py", "quiet.py"])
+    assert hits == {}
+    assert list(failed) == ["broken.py"]
 
 
 def test_the_sweep_reaches_the_codebase() -> None:
