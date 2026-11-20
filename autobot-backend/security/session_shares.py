@@ -23,7 +23,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.store_authority import system_of_record
-from models.session_share import SessionShare
+from models.session_share import SessionShare, SessionShareAdoption
 
 SYSTEM_OF_RECORD = system_of_record("session_shares")
 
@@ -35,7 +35,9 @@ _SESSION_KEY_PATTERN = SESSION_KEY % "*"
 _USER_KEY_PATTERN = USER_KEY % "*"
 #: ``shared_by`` recorded for a share that predates the table and was copied out of Redis.
 ADOPTED_SHARER = "migrated-from-redis"
-#: Set (no TTL) once every pre-table Redis share is in the table; adoption never runs again after it.
+#: Name of the durable completion row (``chat_session_share_adoption``): the record that adoption finished.
+ADOPTION_NAME = "redis_shares"
+#: Redis cache (no TTL) of that durable row; losing it is harmless, the row is what stops a re-adoption.
 ADOPTED_KEY = "session_shares:adopted"
 ADOPT_LOCK_KEY = "session_shares:adopt_lock"
 #: How long one worker may hold the adoption lock, and how long another waits for the marker.
@@ -94,6 +96,33 @@ async def durable_sessions_for(user_id: str) -> list[str]:
     async with _factory()() as db:
         rows = await db.execute(select(SessionShare.session_id).where(SessionShare.user_id == user_id))
         return list(rows.scalars().all())
+
+
+async def durable_adopted() -> bool:
+    """True once the completion row is in the system of record."""
+    async with _factory()() as db:
+        row = await db.execute(select(SessionShareAdoption.name).where(SessionShareAdoption.name == ADOPTION_NAME))
+        return row.first() is not None
+
+
+async def durable_mark_adopted() -> None:
+    """Record, durably and idempotently, that adoption finished."""
+    async with _factory()() as db:
+        insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+        await db.execute(
+            insert(SessionShareAdoption).values(name=ADOPTION_NAME).on_conflict_do_nothing(index_elements=["name"])
+        )
+        await db.commit()
+
+
+async def _is_adopted(redis) -> bool:
+    """The durable row decides; the Redis marker is only a cache of it, re-written when it was lost."""
+    if await redis.exists(ADOPTED_KEY):
+        return True
+    if not await durable_adopted():
+        return False
+    await redis.set(ADOPTED_KEY, "1")
+    return True
 
 
 async def _project(redis, key: str, members: list[str]) -> None:
@@ -159,17 +188,21 @@ async def adopt_redis_shares(redis) -> int:
     """Copy pre-#18890 Redis-only shares into the table and drop their TTLs; at most once, across workers.
 
     Inserts only the rows that are missing, so it never rewrites ``shared_by`` or overrides the table. A
-    ``SET NX`` lock (``ADOPT_LOCK_TTL_MS``) keeps one worker at it; completion is the ``ADOPTED_KEY`` marker in
-    Redis, which is never expired. A worker that loses the lock waits for the marker and raises if it never
-    appears, because an unshare must not run ahead of adoption.
+    ``SET NX`` lock (``ADOPT_LOCK_TTL_MS``) keeps one worker at it; completion is the durable
+    ``chat_session_share_adoption`` row, cached as ``ADOPTED_KEY`` in Redis. Once the row is set nothing is
+    adopted again, whatever Redis holds. The legacy keys are NOT deleted afterwards: they share their names
+    with the projection keys this module maintains, so the durable row alone marks them as already imported.
+    A worker that loses the lock waits for completion and raises if it never appears, because an unshare must
+    not run ahead of adoption.
     """
-    if await redis.exists(ADOPTED_KEY):
+    if await _is_adopted(redis):
         return 0
     token = uuid.uuid4().hex
     if not await redis.set(ADOPT_LOCK_KEY, token, nx=True, px=ADOPT_LOCK_TTL_MS):
         return await _await_marker(redis)
     try:
         copied = await _adopt_from_session_keys(redis) + await _adopt_from_user_keys(redis)
+        await durable_mark_adopted()
         await redis.set(ADOPTED_KEY, "1")
     finally:
         await delete_if_value(redis, ADOPT_LOCK_KEY, token)
@@ -181,7 +214,7 @@ async def adopt_redis_shares(redis) -> int:
 async def _await_marker(redis) -> int:
     deadline = time.monotonic() + ADOPT_WAIT_SECONDS
     while time.monotonic() < deadline:
-        if await redis.exists(ADOPTED_KEY):
+        if await _is_adopted(redis):
             return 0
         await asyncio.sleep(_ADOPT_POLL_SECONDS)
     raise TimeoutError("chat share adoption by another worker did not finish")

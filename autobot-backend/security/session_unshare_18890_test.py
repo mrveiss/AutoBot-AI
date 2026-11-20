@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from models.session_share import SessionShare
+from models.session_share import SessionShare, SessionShareAdoption
 from security import session_shares
 from security.session_ownership import SessionOwnershipValidator
 
@@ -76,6 +76,7 @@ async def env(monkeypatch):
     )
     async with engine.begin() as conn:
         await conn.run_sync(SessionShare.__table__.create)
+        await conn.run_sync(SessionShareAdoption.__table__.create)
     factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local engine)
         engine, expire_on_commit=False
     )
@@ -297,6 +298,35 @@ async def test_adoption_runs_once_and_never_resurrects_a_removed_user(env):
     redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "carol"}  # a stale copy turns up
 
     assert await session_shares.adopt_redis_shares(redis) == 0  # the durable marker, not a per-process flag
+    assert await _rows() == {"carol": session_shares.ADOPTED_SHARER}
+
+
+@pytest.mark.asyncio
+async def test_adoption_does_not_rerun_when_the_redis_marker_is_lost(env):
+    _, redis, _ = env
+    await session_shares.adopt_redis_shares(redis)
+    assert await session_shares.durable_adopted()
+    redis.kv.clear()  # a restore dropped the Redis marker
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob"}  # a legacy key came back
+
+    assert await session_shares.adopt_redis_shares(redis) == 0
+    assert await _rows() == {}
+    assert redis.kv[session_shares.ADOPTED_KEY] == "1"  # the cache is re-written from the durable row
+
+
+@pytest.mark.asyncio
+async def test_a_share_removed_after_adoption_is_not_resurrected_by_stale_legacy_keys(env):
+    validator, redis, _ = env
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "carol"}
+    await session_shares.adopt_redis_shares(redis)
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    redis.kv.clear()
+    redis.sets.clear()
+    redis.sets["session:shared_with:" + SESSION_ID] = {"bob", "carol"}  # stale legacy keys reappear
+    redis.sets["user:shared_sessions:bob"] = {SESSION_ID}
+
+    await session_shares.adopt_redis_shares(redis)
+
     assert await _rows() == {"carol": session_shares.ADOPTED_SHARER}
 
 

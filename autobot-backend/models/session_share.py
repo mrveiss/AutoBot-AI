@@ -30,3 +30,17 @@ class SessionShare(Base):
     user_id: Mapped[str] = mapped_column(String(255), primary_key=True, index=True)
     shared_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class SessionShareAdoption(Base):
+    """One-shot completion record of the Redis-to-table share adoption (#18890).
+
+    A row means every pre-table Redis share was copied in and adoption never runs again, even if the Redis
+    marker is lost and legacy ``session:shared_with:*`` keys come back. Lives in the system of record next to
+    the shares it guards.
+    """
+
+    __tablename__ = "chat_session_share_adoption"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
