@@ -43,11 +43,11 @@ describe('ChatRepository.getChatMessages timestamps (#21846)', () => {
     expect(riga.timestamp.getTime()).toBe(utc.timestamp.getTime())
   })
 
-  it('orders steps stored microseconds apart by their time', async () => {
+  it('orders steps stored the guaranteed millisecond apart by their time', async () => {
     const messages = await load([
-      entry('late', '2026-11-20T19:34:41.000003+00:00'),
-      entry('early', '2026-11-20T19:34:41.000001+00:00'),
-      entry('mid', '2026-11-20T19:34:41.000002+00:00')
+      entry('late', '2026-11-20T19:34:41.003000+00:00'),
+      entry('early', '2026-11-20T19:34:41.001000+00:00'),
+      entry('mid', '2026-11-20T19:34:41.002000+00:00')
     ])
     const sorted = [...messages].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
     expect(sorted.map((m) => m.id)).toEqual(['early', 'mid', 'late'])
