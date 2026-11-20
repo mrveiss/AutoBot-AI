@@ -114,6 +114,7 @@ def node_ssh_options(cfg: RemoteNodeSettings) -> list[str]:
     ]
     if cfg.known_hosts:  # pinned: only the keys in this file are trusted
         argv += ["-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={os.path.expanduser(cfg.known_hosts)}"]
+        argv += ["-o", "GlobalKnownHostsFile=/dev/null"]  # no second trust source: that file only
     else:  # trust on first use: a later change of the node's key is refused
         argv += ["-o", "StrictHostKeyChecking=accept-new"]
     if cfg.key:

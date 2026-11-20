@@ -141,7 +141,7 @@ split_payload() {
 
 install_requirements() {
   local want have
-  want=$(cat "$reqs" "$cons" | sha256sum | cut -c1-64)
+  want=$({ cat "$reqs" "$cons"; echo "pip==${AUTOBOT_TEST_NODE_PIP_VERSION:?set by run.py --provision}"; } | sha256sum | cut -c1-64)
   have=$(cat "$base/venv/.requirements.sha256" 2>/dev/null || true)
   [ "$want" = "$have" ] && return 0
   "$base/venv/bin/python" -m pip install --quiet "pip==${AUTOBOT_TEST_NODE_PIP_VERSION:?set by run.py --provision}"

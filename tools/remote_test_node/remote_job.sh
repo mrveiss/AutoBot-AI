@@ -36,7 +36,8 @@ sweep_stale() {
   for dir in "$base"/runs/*/; do
     [ -d "$dir" ] || continue
     [ -n "$(find "$dir" -maxdepth 0 -mmin "+$ttl" 2>/dev/null)" ] || continue
-    { ( flock -n 7 && rm -rf -- "$dir" ) 7>>"${dir}.live"; } 2>/dev/null
+    # the ref goes with the dir: left behind it keeps the run's objects reachable for git gc
+    { ( flock -n 7 && rm -rf -- "$dir" && git --git-dir="$mirror" update-ref -d "refs/runs/$(basename "$dir" | sed 's/^job\.//')" ) 7>>"${dir}.live"; } 2>/dev/null
   done
 }
 

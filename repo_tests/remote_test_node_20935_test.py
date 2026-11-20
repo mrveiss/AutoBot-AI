@@ -171,9 +171,10 @@ def test_a_stale_dir_from_a_hard_kill_is_swept_at_the_next_start(node):
     stale.mkdir(parents=True)
     old = time.time() - 3 * 3600
     os.utime(stale, (old, old))
+    _git(node["base"], "--git-dir=mirror.git", "fetch", "-q", str(node["src"]), "HEAD:refs/runs/dead")
     proc = _run(node, "true")
     proc.communicate(timeout=60)
-    assert not stale.exists()
+    assert not stale.exists() and _leftovers(node) == []
 
 
 def test_a_live_run_is_not_swept_by_a_run_with_a_shorter_ttl(node):
@@ -419,6 +420,7 @@ def test_host_key_trust_is_first_use_unless_pinned():
     assert "StrictHostKeyChecking=accept-new" in run.ssh_argv(run.load_config(_BASE_ENV))
     pinned = run.ssh_argv(run.load_config({**_BASE_ENV, "AUTOBOT_TEST_NODE_KNOWN_HOSTS": "/pins/kh"}))
     assert "StrictHostKeyChecking=yes" in pinned and "UserKnownHostsFile=/pins/kh" in pinned
+    assert "GlobalKnownHostsFile=/dev/null" in pinned  # the pinned file is the only trust source
     assert "StrictHostKeyChecking=accept-new" not in pinned
 
 
