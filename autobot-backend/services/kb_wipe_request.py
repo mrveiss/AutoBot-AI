@@ -28,14 +28,14 @@ def _refuse(detail: str) -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, detail)
 
 
-def require_attributed_admin(current_user: dict, what: str = "a knowledge wipe") -> str:
-    """The user id of an admin caller who is a person; 403 otherwise. Shared by every knowledge proposal (#21383).
+def require_human_requester(current_user: dict) -> str:
+    """The user id of a caller who is a person; 403 otherwise. It makes NO admin decision (#21383).
 
     The proposal must name a person, because the approver is checked against that person (four eyes). A service
-    key or a run token is refused before any plan is read or proposal row exists.
+    key or a run token is refused before any plan is read or proposal row exists. The admin decision is the
+    caller's: the route's ``check_admin_permission`` and, where a service function is called directly,
+    ``is_admin_role`` (#16333).
     """
-    if not is_admin_role(current_user.get("role")):
-        raise _refuse(f"Requesting {what} needs the admin role")
     requester = current_user.get("id") or current_user.get("user_id")
     if not requester:
         raise _refuse("The proposal cannot be attributed to a verified user")
@@ -46,7 +46,9 @@ def require_attributed_admin(current_user: dict, what: str = "a knowledge wipe")
 
 async def request_kb_wipe(current_user: dict, session: "AsyncSession") -> dict:
     """Propose (or reuse) the pending wipe approval for an admin user and return its reference. Deletes nothing."""
-    requester = require_attributed_admin(current_user)
+    if not is_admin_role(current_user.get("role")):
+        raise _refuse("Requesting a knowledge wipe needs the admin role")
+    requester = require_human_requester(current_user)
     approval = await propose_kb_wipe(session, requester, await plan_kb_wipe())
     return {"approval_id": str(approval.id), "status": approval.status, "action": ACTION}
 

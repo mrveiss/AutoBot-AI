@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from autobot_shared.auth.permissions import is_admin_role
 from services.kb_collection_delete_action import (
     BULK_DELETE,
     DELETE,
@@ -24,7 +25,7 @@ from services.kb_collection_delete_action import (
     plan_collection_delete,
     propose,
 )
-from services.kb_wipe_request import require_attributed_admin
+from services.kb_wipe_request import require_human_requester
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +52,9 @@ async def _propose(
     cid: str,
     delete_facts: bool,
 ) -> dict:
-    requester = require_attributed_admin(current_user, "a knowledge collection deletion")
+    if not is_admin_role(current_user.get("role")):
+        raise HTTPException(403, "Requesting a knowledge collection deletion needs the admin role")
+    requester = require_human_requester(current_user)
     plan = await plan_collection_delete(op, kb, cid, delete_facts)
     if plan is None:
         raise HTTPException(404, f"Collection not found: {cid}")
