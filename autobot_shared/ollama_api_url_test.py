@@ -17,6 +17,7 @@ from autobot_shared.ollama_urls import (
     ollama_embeddings_url,
     ollama_generate_url,
     ollama_pull_url,
+    ollama_show_url,
     ollama_tags_url,
 )
 from autobot_shared.ssot_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
@@ -96,3 +97,17 @@ def test_host_named_like_an_api_root_is_not_stripped(host):
     assert ollama_generate_url(base) == f"http://{host}/api/generate"
     assert ollama_base_url(base) == base
     assert ollama_generate_url(base + "/api") == f"http://{host}/api/generate"
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "http://ollama.example:11434",
+        _EXPECTED,
+        "http://ollama.example:11434/api/show/",
+        "http://ollama.example:11434/api",
+    ],
+)
+def test_show_url_has_the_path_exactly_once(base):
+    assert ollama_show_url(base) == "http://ollama.example:11434/api/show"
+    assert ollama_generate_url("http://ollama.example:11434/api/show") == _EXPECTED

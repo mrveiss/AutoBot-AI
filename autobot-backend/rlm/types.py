@@ -17,9 +17,15 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Dict
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_constants import AgentThresholds
 from autobot_shared.time_utils import now_utc
+from llm_shared.quality_judgment import QualityAssessment
+
+#: Milliseconds the evaluator LLM call may take (#21845). Env-backed: a bound written as a bare literal cannot be
+#: changed without a deploy, and a slow local model needs more than a fast one.
+RLM_EVAL_TIMEOUT_MS: int = env_int("AUTOBOT_RLM_EVAL_TIMEOUT_MS", default=10000)
 
 
 class ReflectionVerdict(Enum):
@@ -29,9 +35,21 @@ class ReflectionVerdict(Enum):
     REFINE = auto()  # Response needs improvement — recurse
     FAIL = auto()  # Hard failure (unused; retained for backwards-compat).
     # #6697: evaluator infrastructure error (LLM down, parse error, etc.).
-    # Routing treats this like ACCEPT (graph branches only on REFINE), but
-    # callers can distinguish "evaluator broke" from "response was bad."
+    # Callers can distinguish "evaluator broke" from "response was bad"; the graph
+    # does NOT score it -- a result with ``evaluator_failed`` is evaluated once more, then the reply
+    # is kept unverified (#21845, ``chat_workflow/reflection_gate.py``).
     INDETERMINATE = auto()
+
+
+#: The judges' ``recommendation`` string for each reflection verdict (#16133):
+#: one vocabulary, two spellings. ``INDETERMINATE`` has no recommendation --
+#: nothing was judged -- and the judges' error judgment is a REJECT with zero
+#: confidence, which is deliberately not the same thing.
+VERDICT_RECOMMENDATION: Dict[ReflectionVerdict, str] = {
+    ReflectionVerdict.ACCEPT: "APPROVE",
+    ReflectionVerdict.REFINE: "REVISE",
+    ReflectionVerdict.FAIL: "REJECT",
+}
 
 
 @dataclass
@@ -40,22 +58,38 @@ class ReflectionResult:
 
     Attributes:
         verdict: Whether to accept, refine, or fail through.
-        quality_score: 0.0–1.0 estimate of response quality.
+        quality_score: 0.0–1.0 estimate of response quality; ``None`` when the evaluator gave no reading (#21845).
         critique: Free-text explanation of what's lacking.
         refinement_hint: Suggested focus for the next LLM pass.
         iteration: Which reflection pass produced this (1-based).
     """
 
     verdict: ReflectionVerdict
-    quality_score: float
+    quality_score: float | None
     critique: str = ""
     refinement_hint: str = ""
     iteration: int = 1
     timestamp: datetime = field(default_factory=now_utc)
+    #: The evaluator broke (transport, timeout, unreadable reply): there is NO reading of the response (#21845).
+    evaluator_failed: bool = False
+
+    def assessment(self, threshold: float | None = None) -> QualityAssessment:
+        """Project onto the shared quality view (#16133)."""
+        return QualityAssessment(
+            score=self.quality_score,
+            critique=self.critique,
+            hint=self.refinement_hint,
+            threshold=threshold,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize for event stream / logging."""
-        return {
+        """Serialize for event stream / logging.
+
+        ``evaluator_failed`` is emitted only when True, so a scored result keeps the shape pinned in
+        ``llm_shared/quality_judgment_test.py`` (#16133); readers of the history use ``.get``. A result with no
+        reading serializes ``quality_score`` as ``null`` -- the key is always present, never a made-up number (#21845).
+        """
+        data: Dict[str, Any] = {
             "verdict": self.verdict.name,
             "quality_score": self.quality_score,
             "critique": self.critique,
@@ -63,6 +97,9 @@ class ReflectionResult:
             "iteration": self.iteration,
             "timestamp": self.timestamp.isoformat(),
         }
+        if self.evaluator_failed:
+            data["evaluator_failed"] = True
+        return data
 
 
 @dataclass
@@ -78,7 +115,7 @@ class RLMConfig:
         model: Ollama model used for the evaluator LLM call.
         temperature: Sampling temperature for the evaluator.
         max_eval_tokens: Token budget for the evaluator response.
-        timeout_ms: Per-call timeout for the evaluator LLM request.
+        timeout_ms: Per-call timeout for the evaluator LLM request (``AUTOBOT_RLM_EVAL_TIMEOUT_MS``, #21845).
     """
 
     enabled: bool = True
@@ -88,4 +125,4 @@ class RLMConfig:
     model: str = DEFAULT_LLM_MODEL
     temperature: float = 0.2
     max_eval_tokens: int = 512
-    timeout_ms: int = 10000
+    timeout_ms: int = RLM_EVAL_TIMEOUT_MS

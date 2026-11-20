@@ -17,6 +17,7 @@
  */
 
 import { ref } from 'vue'
+import { isAlreadyDecided, NO_PENDING_APPROVAL } from '@/utils/approvalResult'
 import appConfig from '@/config/AppConfig.js'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
@@ -349,6 +350,13 @@ export function useCommandApproval() {
 
       processingApproval.value = false
     } catch (error) {
+      if (isAlreadyDecided(error)) {
+        // #19951: already decided - nothing ran again; this card is stale, not failed.
+        logger.warn('Approval already decided:', terminal_session_id)
+        processingApproval.value = false
+        chatStore.setPendingApproval(false, approvalChatId)
+        return
+      }
       logger.error('Error sending approval:', error)
       notify('Failed to process command approval', 'error')
       processingApproval.value = false
@@ -434,11 +442,15 @@ export function useCommandApproval() {
     terminalSessionId: string,
     approved: boolean
   ): Promise<ApprovalResponse> => {
-    const result = await apiClient.post<ApprovalResponse>(
-      `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
-      { approved }
-    )
-    return result
+    try {
+      return await apiClient.post<ApprovalResponse>(
+        `${getApiBase()}/agent-terminal/sessions/${terminalSessionId}/approve`,
+        { approved }
+      )
+    } catch (err) {
+      if (isAlreadyDecided(err)) return { status: 'error', error: NO_PENDING_APPROVAL } as ApprovalResponse // #19951
+      throw err
+    }
   }
 
   /**

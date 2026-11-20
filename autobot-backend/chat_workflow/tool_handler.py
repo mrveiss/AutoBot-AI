@@ -11,7 +11,6 @@ and approval workflows.
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import html
 import inspect
@@ -58,6 +57,7 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
@@ -79,6 +79,7 @@ from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, disp
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
+from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -218,31 +219,6 @@ _SPILL_MISS_ADVICE: dict[str, str] = {
 _SPILL_MISS_UNKNOWN_ADVICE = (
     "The read did not report why it failed. This may be transient — retrying once is reasonable."
 )
-
-WEB_SEARCH_SCHEMA: dict = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "fetch_full": {
-            "type": "boolean",
-            "description": (
-                "When true, fetches the full markdown of each result page "
-                "in addition to returning search snippets. Default false."
-            ),
-        },
-        "max_pages": {
-            "type": "integer",
-            "description": (
-                "Maximum number of search results to return. Applies to both "
-                "snippet mode (fetch_full=false) and full-fetch mode "
-                "(fetch_full=true). Default 5 (#7479)."
-            ),
-            "minimum": 1,
-            "maximum": 10,
-        },
-    },
-    "required": ["query"],
-}
 
 # Issue #7509: Web research tool schemas — scrape, crawl, map, extract.
 # Agents have admin-grade power: no server-side caps on depth/pages/robots.
@@ -778,25 +754,7 @@ _REPAIRABLE_ERROR_PATTERNS = (
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
 
 
-def _parse_tool_args(raw: str) -> dict:
-    """Parse tool call JSON args with a safe literal-parser fallback. (#4483)
-
-    LLMs occasionally produce near-valid JSON with trailing commas, single
-    quotes, or Python boolean/None literals that json.loads() rejects.
-    ast.literal_eval is safe: it only accepts Python literal structures and
-    raises ValueError/SyntaxError on anything else.
-    """
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        try:
-            result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
-            if isinstance(result, dict):
-                logger.warning("Tool args parsed via ast.literal_eval fallback" " — LLM produced near-valid JSON")
-                return result
-        except (ValueError, SyntaxError):
-            pass
-        raise
+_parse_tool_args = parse_tool_args  # canonical parser lives in tool_call_args.py (#21843)
 
 
 def _detect_and_store_security_output(command: str, output: str, session_id: str) -> None:
@@ -1071,7 +1029,7 @@ async def _try_mcp_dispatch(
         result_text = str(raw_result)
 
         # Issue #4261: Wire AFTER_TOOL_EXECUTE hook to allow result modification
-        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
+        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {}, success=bool(success))
 
         execution_results.append(
             {
@@ -1141,6 +1099,13 @@ async def _fetch_pages_concurrent(entries: list[dict], max_pages: int) -> list[d
     """
     capped = entries[:max_pages]
     return list(await asyncio.gather(*(_fetch_single_page(e) for e in capped)))
+
+
+def _wrap_untrusted_search_text(text: str, query: str) -> str:
+    """*text* sanitised and wrapped as untrusted web content for the model (``scrape_url`` does the same)."""
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return sanitize_and_wrap_web_content(text, query)
 
 
 def _format_full_search_results(query: str, entries: list[dict]) -> str:
@@ -2060,7 +2025,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
             if result.get("status") == "success":
                 stdout = result.get("stdout", "")
-                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
+                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {}, success=True)
 
             # The card binds to the session this execution ran in, not the mapping another request can change.
             terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id, result)
@@ -2472,8 +2437,10 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 # with fetch_full mode).
                 results = await self._execute_web_search(query, max_pages, session_id)
 
+            # Search snippets and fetched pages are untrusted web text: wrapped as data, like scrape_url (#21877)
+            results = _wrap_untrusted_search_text(results, query)
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
-            results = await _emit_after_tool_execute("web_search", results, session_id, {})
+            results = await _emit_after_tool_execute("web_search", results, session_id, {}, success=True)
 
             execution_results.append({"tool": "web_search", "status": "success", "output": results})
             yield WorkflowMessage(

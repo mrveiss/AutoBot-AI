@@ -120,10 +120,14 @@ def _proposal_context(requested_by: str, channel: str, plan: dict) -> dict:
     }
 
 
-def _count_changes(old: object, new: dict) -> dict:
+#: The scope totals a wipe plan reports, and the words the refresh comment uses for them.
+WIPE_COUNT_LABELS = {"total_keys": "keys", "total_vectors": "vectors"}
+
+
+def _count_changes(old: object, new: dict, fields: tuple[str, ...] = tuple(WIPE_COUNT_LABELS)) -> dict:
     """Old and new scope totals, as ``[before, after]`` pairs; no document content."""
     old = old if isinstance(old, dict) else {}
-    return {k: [old.get(k), new.get(k)] for k in ("total_keys", "total_vectors")}
+    return {k: [old.get(k), new.get(k)] for k in fields}
 
 
 def _reviewed_fields(context: dict) -> dict:
@@ -131,32 +135,50 @@ def _reviewed_fields(context: dict) -> dict:
     return {k: v for k, v in context.items() if k not in ("plan", REFRESHED_BY_KEY)}
 
 
-async def _refresh_pending(session: "AsyncSession", pending: "Approval", requested_by: str, plan: dict) -> None:
-    """Re-propose a pending wipe: the plan is replaced, the refresh is recorded durably, the requester stays.
+async def refresh_pending_plan(
+    session: "AsyncSession",
+    pending: "Approval",
+    requested_by: str,
+    plan: dict,
+    *,
+    what: str,
+    audit_action: AuditAction,
+    count_labels: dict[str, str],
+) -> None:
+    """Re-propose a pending knowledge proposal: new plan, durable refresh record, same requester.
 
     The same freeze as a resubmit applies (``context_change_violation``): only ``plan`` and ``refreshed_by`` move.
     The refresher joins ``refreshed_by``, so four eyes treats them as a proposer. The durable audit entry comes
-    first; without it the plan is not changed.
+    first; without it the plan is not changed. Shared by every knowledge proposal (#21383).
     """
     old = pending.context or {}
     new = {**old, "plan": plan, REFRESHED_BY_KEY: [*(old.get(REFRESHED_BY_KEY) or []), requested_by]}
     if (changed := context_change_violation(_reviewed_fields(old), _reviewed_fields(new))) is not None:
-        raise ValueError(f"{_WHAT} proposal: {changed} cannot change on a refresh")
-    counts = _count_changes(old.get("plan"), plan)
+        raise ValueError(f"{what} proposal: {changed} cannot change on a refresh")
+    counts = _count_changes(old.get("plan"), plan, tuple(count_labels))
     details = {"approval_id": str(pending.id), "phase": "plan_refresh", "refreshed_by": requested_by, "counts": counts}
     if not await audit_log(
-        AuditAction.KNOWLEDGE_WIPE_REFRESH.value,
-        user_id=requested_by,
-        resource="knowledge_base",
-        durable=True,
-        details=details,
+        audit_action.value, user_id=requested_by, resource="knowledge_base", durable=True, details=details
     ):
         raise RuntimeError(f"the audit entry for refreshing approval {pending.id} could not be written; plan unchanged")
     pending.context = new
-    keys, vectors = counts["total_keys"], counts["total_vectors"]
-    body = f"Plan refreshed by {requested_by}: keys {keys}, vectors {vectors} (before, after)."
+    shown = ", ".join(f"{label} {counts[field]}" for field, label in count_labels.items())
+    body = f"Plan refreshed by {requested_by}: {shown} (before, after)."
     session.add(ApprovalComment(approval_id=pending.id, author="system", author_type="system", body=body))
     await session.commit()
+
+
+async def _refresh_pending(session: "AsyncSession", pending: "Approval", requested_by: str, plan: dict) -> None:
+    """Re-propose a pending wipe with its new plan."""
+    await refresh_pending_plan(
+        session,
+        pending,
+        requested_by,
+        plan,
+        what=_WHAT,
+        audit_action=AuditAction.KNOWLEDGE_WIPE_REFRESH,
+        count_labels=WIPE_COUNT_LABELS,
+    )
 
 
 async def propose_kb_wipe(
@@ -186,22 +208,27 @@ async def propose_kb_wipe(
     )
 
 
-async def _review_kb_wipe(approval: "Approval", session: "AsyncSession") -> bool:
+async def review_kb_proposal(approval: "Approval", session: "AsyncSession", what: str) -> bool:
     """Four eyes, before the decision commits: True for the only admin approving their own request.
 
     A requester that names no person passes unflagged only on the operator-script channel, which cannot
     authenticate, and only while no admin has refreshed its plan (a refresher is a proposer). On the API channel
-    it fails closed: the decision is refused, never waved through.
+    it fails closed: the decision is refused, never waved through. Shared by every knowledge proposal (#21383).
     """
     if requester_id(approval.requested_by_agent) is None:
         if (approval.context or {}).get("channel") != CHANNEL_OPERATOR:
-            raise ValueError(f"{_WHAT} was proposed by a requester that names no user; it cannot be approved")
+            raise ValueError(f"{what} was proposed by a requester that names no user; it cannot be approved")
         if not proposer_ids(approval):  # nobody refreshed it either: there is no person to compare the decider to
             return False
-    return await is_self_approval(approval, session, what=_WHAT)
+    return await is_self_approval(approval, session, what=what)
 
 
-def _details(approval: "Approval", self_approval: bool, **extra: object) -> dict:
+async def _review_kb_wipe(approval: "Approval", session: "AsyncSession") -> bool:
+    """The wipe's decision review."""
+    return await review_kb_proposal(approval, session, _WHAT)
+
+
+def decision_details(approval: "Approval", self_approval: bool, **extra: object) -> dict:
     """Who proposed, who approved and under which approval id; no document content."""
     return {
         "approval_id": str(approval.id),
@@ -218,7 +245,7 @@ def _outcome_details(
     approval: "Approval", self_approval: bool, record: dict, error: str | None = None, **extra: object
 ) -> dict:
     steps = len(record["redis"]) + len(record["chroma"])
-    return _details(
+    return decision_details(
         approval,
         self_approval,
         step=record["step"],
@@ -265,7 +292,7 @@ async def _frozen_scope(approval: "Approval") -> dict:
 
 async def _record_intent(approval: "Approval", scope: dict, self_approval: bool) -> None:
     """The paper trail comes first: no committed entry means nothing is deleted (#17038)."""
-    details = _details(approval, self_approval, phase="intent", scope=scope)
+    details = decision_details(approval, self_approval, phase="intent", scope=scope)
     if not await _audit(approval, "attempted", details):
         raise RuntimeError(f"the audit entry for approval {approval.id} could not be written; nothing was deleted")
 
@@ -357,8 +384,12 @@ __all__ = [
     "CHANNEL_OPERATOR",
     "KB_WIPE_DATABASES",
     "PROPOSED_BY",
+    "decision_details",
     "execute_kb_wipe_action",
     "plan_kb_wipe",
     "propose_kb_wipe",
     "register_kb_wipe_action",
+    "WIPE_COUNT_LABELS",
+    "refresh_pending_plan",
+    "review_kb_proposal",
 ]

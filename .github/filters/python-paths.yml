@@ -99,6 +99,11 @@ python:
   # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
   - 'autobot-browser-worker/playwright-server.js'
   - 'autobot-browser-worker/session-store.js'
+  # #21852: browser_worker_one_manifest_21852_test.py reads every worker module for its local
+  # `require`s, the shell reader of the manifest's file list, and the root launcher.
+  - 'autobot-browser-worker/**'
+  - 'scripts/lib/browser_worker_files.sh'
+  - 'run_agent.sh'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to the frontend gate's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.

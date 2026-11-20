@@ -192,10 +192,20 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under six roots, tests included; the test-file share drifts.",
     ),
+    "one-rate-limiter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Production Python under three trees, against all tracked Python.",
+    ),
     "fact-read-authorization-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
+    ),
+    "llm-quality-seam-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under three judging packages; the test-file share drifts.",
     ),
     "env-file-family-18555-scan": (
         ABSOLUTE,

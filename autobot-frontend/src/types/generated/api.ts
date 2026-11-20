@@ -96130,8 +96130,7 @@ export interface components {
              * @default false
              */
             requires_human_review: boolean;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /**
              * Requires Cross Vendor Review
              * @default false
@@ -96176,8 +96175,7 @@ export interface components {
         ReviewGatePolicyUpdate: {
             /** Requires Human Review */
             requires_human_review?: boolean | null;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /** Requires Cross Vendor Review */
             requires_cross_vendor_review?: boolean | null;
         } & {
@@ -146482,6 +146480,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentTerminalApproveResponse"];
                 };
+            };
+            /** @description The approval was already decided; nothing ran again (#19951) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
