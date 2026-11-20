@@ -24,7 +24,6 @@ computes those sets from user/agent identity + membership is Task 2.3 / 9.2.
 
 from __future__ import annotations
 
-import hmac
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
@@ -47,6 +46,7 @@ from autobot_shared.secrets_envelope import (
     wrap_dek,
 )
 from autobot_shared.secrets_vault import VaultRef
+from autobot_shared.security.constant_time import secure_compare
 from models.secret import Secret
 from models.secret_grant import SecretGrant
 
@@ -161,7 +161,7 @@ class EnvelopeSecretsService:
             held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])
         except (SecretAccessError, SecretNotFoundError, DecryptionError, UnsupportedFormatError, KeyError, ValueError):
             raise SecretConflictError("value_differs", existing.id) from None  # unreadable is not "the same"
-        if not hmac.compare_digest(held, plaintext):
+        if not secure_compare(held, plaintext):
             raise SecretConflictError("value_differs", existing.id)
         existing.already_existed = True
         return existing

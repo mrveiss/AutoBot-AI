@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.constant_time import secure_compare
 from models.approval import Approval, ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.secret_duplicate_cleanup_action import ACTION, register_secret_duplicate_cleanup_action
@@ -104,7 +105,7 @@ async def _already_proposed(db: AsyncSession, digest: str, re_raise: bool = Fals
         Approval.status.in_(_BLOCKING_WHEN_RE_RAISED if re_raise else _BLOCKING),
     )
     contexts = (await db.execute(query)).scalars().all()
-    return any(c and c.get("action") == ACTION and c.get("group_digest") == digest for c in contexts)
+    return any(c and c.get("action") == ACTION and secure_compare(c.get("group_digest"), digest) for c in contexts)
 
 
 async def pending_proposals(db: AsyncSession) -> dict[str, str]:
