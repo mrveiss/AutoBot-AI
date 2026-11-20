@@ -8349,18 +8349,15 @@ export interface paths {
         post?: never;
         /**
          * Delete Collection
-         * @description Delete a collection.
+         * @description Propose deleting a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collections/Folders for grouping documents.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID to delete
-         *     - delete_facts: If True, also delete all facts in collection
+         *     Files (or reuses) a pending destructive-action approval for every caller, human or agent; the delete runs
+         *     only after a human approves it in the Approvals inbox, with a durable audit entry.
          *
          *     Returns:
-         *     - status: success or error
-         *     - facts_in_collection: Number of facts in collection
-         *     - facts_deleted: Number of facts deleted (if delete_facts=True)
+         *     - status: pending_approval
+         *     - approval_id: the pending approval's reference
+         *     - facts_in_collection: facts in the collection now (what the approver sees)
          */
         delete: operations["delete_collection_api_knowledge_base_collections__collection_id__delete"];
         options?: never;
@@ -8505,17 +8502,10 @@ export interface paths {
         put?: never;
         /**
          * Bulk Delete Collection Facts
-         * @description Delete all facts in a collection.
+         * @description Propose deleting all facts in a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collection-level bulk operations.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID
-         *     - confirm: Must be True to actually delete
-         *
-         *     Returns:
-         *     - status: success or error
-         *     - deleted_count: Number of facts deleted
+         *     Without ``confirm`` it is a read-only preview. With ``confirm`` it files (or reuses) a pending
+         *     destructive-action approval for every caller, human or agent; the delete runs only after a human approves it.
          */
         post: operations["bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post"];
         delete?: never;
@@ -82397,26 +82387,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionBulkDeleteResponse
-         * @description Response for POST /collections/{collection_id}/bulk-delete.
-         */
-        KnowledgeCollectionBulkDeleteResponse: {
-            /** Status */
-            status: string;
-            /** Collection Id */
-            collection_id?: string | null;
-            /** Facts To Delete */
-            facts_to_delete?: number | null;
-            /** Deleted Count */
-            deleted_count: number;
-            /** Confirm Required */
-            confirm_required: boolean;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * KnowledgeCollectionCreateResponse
          * @description Response for POST /collections.
          */
@@ -82433,20 +82403,29 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionDeleteResponse
-         * @description Response for DELETE /collections/{collection_id}.
+         * KnowledgeCollectionDeleteProposal
+         * @description Answer of the two collection delete routes: a proposal (or, without confirm, a read-only preview).
          */
-        KnowledgeCollectionDeleteResponse: {
+        KnowledgeCollectionDeleteProposal: {
             /** Status */
             status: string;
             /** Collection Id */
-            collection_id?: string | null;
+            collection_id: string;
             /** Facts In Collection */
             facts_in_collection: number;
-            /** Facts Deleted */
-            facts_deleted: number;
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action?: string | null;
+            /**
+             * Confirm Required
+             * @default false
+             */
+            confirm_required: boolean;
             /** Message */
-            message?: string | null;
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -120411,7 +120390,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
                 };
             };
             /** @description Validation Error */
@@ -120608,7 +120587,7 @@ export interface operations {
     bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post: {
         parameters: {
             query?: {
-                /** @description Must be True to delete */
+                /** @description Must be True to propose the deletion */
                 confirm?: boolean;
             };
             header?: never;
@@ -120626,7 +120605,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionBulkDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
                 };
             };
             /** @description Validation Error */
