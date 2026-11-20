@@ -34,8 +34,15 @@ def _not_found(collection_id: str) -> Dict[str, Any]:
     return {"success": False, "code": NOT_FOUND, "message": f"Collection not found: {collection_id}"}
 
 
-def _over_approved(found: int, approved: int) -> Dict[str, Any]:
-    return {"success": False, "message": f"{found} facts are in scope but {approved} were approved; nothing deleted"}
+def _unapproved(approved: dict | None, collection: Dict[str, Any], found: int, deletes_facts: bool = True):
+    """The refusal of a delete that is not the approved one (#21383): another collection, or more facts; else None."""
+    if approved is None:
+        return None
+    if collection.get("created_at") != approved.get("created_at"):
+        return {"success": False, "message": "the collection changed since it was approved; nothing deleted"}
+    if deletes_facts and found > (approved.get("facts") or 0):
+        return {"success": False, "message": f"{found} facts exceed the approved count; nothing deleted"}
+    return None
 
 
 class CollectionsMixin:
@@ -272,13 +279,9 @@ class CollectionsMixin:
         await self.redis().srem("collection:all", collection_id)
 
     async def delete_collection(
-        self, collection_id: str, delete_facts: bool = False, max_facts: int | None = None
+        self, collection_id: str, delete_facts: bool = False, approved: dict | None = None
     ) -> Dict[str, Any]:
-        """Delete a collection (Issue #398: refactored).
-
-        ``max_facts`` (#21383): with ``delete_facts``, refuse before deleting anything when the membership read
-        now holds more facts than that, so an approved count is checked against the very set that is deleted.
-        """
+        """Delete a collection (Issue #398); ``approved`` {facts, created_at} (#21383) refuses any other one."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
@@ -289,8 +292,8 @@ class CollectionsMixin:
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
             facts_count = len(fact_ids)
-            if delete_facts and max_facts is not None and facts_count > max_facts:
-                return _over_approved(facts_count, max_facts)
+            if refused := _unapproved(approved, collection, facts_count, delete_facts):
+                return refused
             facts_deleted = await self._remove_facts_from_deleted_collection(collection_id, fact_ids, delete_facts)
             await self._delete_collection_records(collection_id)
 
@@ -647,13 +650,9 @@ class CollectionsMixin:
         await self.redis().delete(f"fact:collections:{fid}")
 
     async def bulk_delete_collection_facts(
-        self, collection_id: str, confirm: bool = False, max_facts: int | None = None
+        self, collection_id: str, confirm: bool = False, approved: dict | None = None
     ) -> Dict[str, Any]:
-        """Delete all facts in a collection (Issue #398: refactored).
-
-        ``max_facts`` (#21383): refuse before deleting anything when the membership read now holds more facts than
-        that, so an approved count is checked against the very set that is deleted.
-        """
+        """Delete all facts in a collection (Issue #398); ``approved`` {facts, created_at} (#21383) refuses others."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
@@ -666,8 +665,8 @@ class CollectionsMixin:
                 return _not_found(collection_id)
 
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
-            if max_facts is not None and len(fact_ids) > max_facts:
-                return _over_approved(len(fact_ids), max_facts)
+            if refused := _unapproved(approved, collection, len(fact_ids)):
+                return refused
             deleted_count = 0
             for fid in fact_ids:
                 await self._delete_fact_completely(fid)

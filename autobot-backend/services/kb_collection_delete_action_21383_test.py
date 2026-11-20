@@ -49,7 +49,7 @@ class FakeKB:
             "collection": {"name": f"Name {collection_id}", "created_at": self.created[collection_id]},
         }
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False, max_facts=None):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None):
         if collection_id not in self.collections:
             return {
                 "success": False,
@@ -62,8 +62,8 @@ class FakeKB:
                 "facts_to_delete": len(ids),
                 "confirm_required": True,
             }
-        if max_facts is not None and len(ids) > max_facts:
-            return {"success": False, "message": "more facts than approved; nothing deleted"}
+        if approved and (self.created[collection_id] != approved["created_at"] or len(ids) > approved["facts"]):
+            return {"success": False, "message": "not the approved collection; nothing deleted"}
         self.mutations.append(("bulk", collection_id))
         self.events.append("delete")
         deleted = len(ids)
@@ -75,14 +75,15 @@ class FakeKB:
             "deleted_count": deleted,
         }
 
-    async def delete_collection(self, collection_id, delete_facts=False, max_facts=None):
+    async def delete_collection(self, collection_id, delete_facts=False, approved=None):
         if collection_id not in self.collections:
             return {
                 "success": False,
                 "message": f"Collection not found: {collection_id}",
             }
-        if delete_facts and max_facts is not None and len(self.collections[collection_id]) > max_facts:
-            return {"success": False, "message": "more facts than approved; nothing deleted"}
+        too_many = delete_facts and approved and len(self.collections[collection_id]) > approved["facts"]
+        if approved and (self.created[collection_id] != approved["created_at"] or too_many):
+            return {"success": False, "message": "not the approved collection; nothing deleted"}
         self.mutations.append(("delete", collection_id, delete_facts))
         self.events.append("delete")
         ids = self.collections.pop(collection_id)
@@ -419,6 +420,23 @@ async def test_a_fact_added_after_the_count_check_is_not_deleted_with_the_approv
         await _run(op, approval)
     assert world.kb.mutations == [] and "f4" in world.kb.collections["c1"]
     assert world.audit.await_args.kwargs["result"] == "failed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("op", action.OPS)
+async def test_a_collection_recreated_during_the_intent_audit_is_not_deleted(world, op):
+    approval = _approval(op, action.selector_for(op, "c1", True), 3)
+    real = world.audit.side_effect
+
+    def recreate_during_the_intent_audit(*args, **kwargs):
+        if kwargs["details"].get("phase") == "intent":
+            world.kb.created["c1"] = "t-later"  # the same id, a new collection, after the identity check
+        return real(*args, **kwargs)
+
+    world.audit.side_effect = recreate_during_the_intent_audit
+    with pytest.raises(RuntimeError, match="refused the deletion"):
+        await _run(op, approval)
+    assert world.kb.mutations == [] and world.kb.collections["c1"] == {"f1", "f2", "f3"}
 
 
 @pytest.mark.asyncio

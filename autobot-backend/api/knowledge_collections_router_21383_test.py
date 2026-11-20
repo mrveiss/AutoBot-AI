@@ -41,12 +41,12 @@ class _KB:
     async def get_collection(self, collection_id):
         return {"success": True, "collection": {"name": "Notes", "created_at": "t1"}}
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False, max_facts=None):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None):
         if confirm:
             self.mutations.append(("bulk", collection_id))
         return {"success": True, "facts_to_delete": 3, "deleted_count": 3 if confirm else 0}
 
-    async def delete_collection(self, collection_id, delete_facts=False, max_facts=None):
+    async def delete_collection(self, collection_id, delete_facts=False, approved=None):
         self.mutations.append(("delete", collection_id))
         return {"success": True}
 

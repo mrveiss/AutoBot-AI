@@ -15,12 +15,16 @@ approved context, refuses a proposal whose selector is not one this module build
 server and refuses a count above the approved one. The knowledge base's own ``delete_collection`` and
 ``bulk_delete_collection_facts`` do the deleting, so the behaviour is theirs and not a second copy.
 
-Identity and staleness. The plan records the collection's ``created_at`` and the executor refuses when it changed, so
-a collection deleted and re-created under the same id after the approval is not deleted. Between the approval and the
-execution there is no other window: the executor runs right after the approval commits, and an approval carries no
-expiry of its own (``expires_at`` is unset on these proposals). The plan also carries the collection ``name`` for the
-approver to read; it is display only, never part of the selector and never used for scope. The "more than approved"
-refusal applies only where facts are deleted (a bulk delete, or a collection delete with ``delete_facts``).
+Identity and staleness. The plan records the collection's ``created_at`` and the executor refuses when it changed,
+so a collection deleted and re-created under the same id after the approval is not deleted. Between the approval and
+the execution there is no other window: the executor runs right after the approval commits, and an approval carries
+no expiry of its own (``expires_at`` is unset on these proposals). The identity and the fact count travel into the
+delete itself (``approved=``): the knowledge base checks them against the collection record and membership it reads
+for that very delete, so a replacement created during the intent audit is refused. A replacement created inside the
+knowledge base's own few awaited steps is not excluded: the store has no transaction across them (the same non-
+atomic window the wipe documents). The plan also carries the collection ``name`` for the approver to read; it is
+display only, never part of the selector and never used for scope. The "more than approved" refusal applies only
+where facts are deleted (a bulk delete, or a collection delete with ``delete_facts``).
 
 The paper trail comes first: a durable "intent" entry is committed before the delete, and no committed entry means
 nothing is deleted; the outcome (completion or failure) is recorded after.
@@ -212,10 +216,10 @@ def _auditor(op: CollectionOp, approval: "Approval", self_approval: bool, select
     return audit
 
 
-def _approved_facts(op: CollectionOp, approval: "Approval", selector: dict) -> int | None:
-    """The count the approver saw, where facts are deleted; ``None`` (no bound) where none are."""
-    approved = ((approval.context or {}).get("plan") or {}).get("facts")
-    return approved if _deletes_facts(op, selector) else None
+def _approved_scope(approval: "Approval") -> dict:
+    """The count and the identity the approver saw; the KB checks them against the very records it deletes."""
+    plan = (approval.context or {}).get("plan") or {}
+    return {"facts": plan.get("facts"), "created_at": plan.get("created_at")}
 
 
 def _deletes_facts(op: CollectionOp, selector: dict) -> bool:
@@ -237,7 +241,7 @@ async def _refuse_recreated(approval: "Approval", audit: Audit, collection: dict
     )
 
 
-async def _run_delete(op: CollectionOp, kb, selector: dict, approved: int | None) -> int:
+async def _run_delete(op: CollectionOp, kb, selector: dict, approved: dict) -> int:
     """Run the knowledge base's own delete; returns the number of facts deleted.
 
     ``approved`` bounds the membership the delete itself reads, so a fact added after the count check cannot be
@@ -245,11 +249,9 @@ async def _run_delete(op: CollectionOp, kb, selector: dict, approved: int | None
     """
     cid = selector["collection_id"]
     if op is DELETE:
-        result = await kb.delete_collection(
-            collection_id=cid, delete_facts=selector["delete_facts"], max_facts=approved
-        )
+        result = await kb.delete_collection(collection_id=cid, delete_facts=selector["delete_facts"], approved=approved)
     else:
-        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True, max_facts=approved)
+        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True, approved=approved)
     if not result.get("success"):
         raise RuntimeError(f"the knowledge base refused the deletion: {result.get('message')}")
     return int(result.get("facts_deleted" if op is DELETE else "deleted_count") or 0)
@@ -287,7 +289,7 @@ async def execute(op: CollectionOp, approval: "Approval", session: "AsyncSession
         audit,
         what="the deletion",
         intent={"facts": facts},
-        delete=lambda: _run_delete(op, kb, selector, _approved_facts(op, approval, selector)),
+        delete=lambda: _run_delete(op, kb, selector, _approved_scope(approval)),
         failure=lambda exc: {"error": type(exc).__name__},
         completion=lambda count: {"deleted": count},
     )
