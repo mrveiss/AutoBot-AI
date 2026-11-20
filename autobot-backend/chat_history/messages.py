@@ -21,6 +21,7 @@ import uuid
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from chat_history.message_times import distinct_ordered_times, message_timestamp
 from chat_history.session_lease import SessionLeaseError
 from chat_history.session_merge import MESSAGE_STAMP_FIELD
 
@@ -104,7 +105,7 @@ class MessagesMixin:
             # truthiness test, because ``0``/``""``/``[]`` are metadata a caller
             # chose to pass and must survive the round-trip.
             "metadata": raw_data if raw_data is not None else {},
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_at)),
+            "timestamp": message_timestamp(created_at),
             "sources": sources if sources is not None else [],
         }
         if tool_markers:
@@ -156,6 +157,7 @@ class MessagesMixin:
         """
         if not messages:
             return True
+        distinct_ordered_times(messages)  # #21846: steps persisted at one instant keep distinct, ordered times
         try:
             await self.save_session(session_id, messages=messages, append=True)
             logger.debug(
@@ -444,7 +446,7 @@ class MessagesMixin:
             tool_marker = {
                 "tool_type": tool_type,
                 "tool_action": tool_action,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": message_timestamp(),
             }
 
             # Add any additional marker data

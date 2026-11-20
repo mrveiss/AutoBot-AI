@@ -84,7 +84,7 @@ For searching the web, use the `web_search` tool. This is the simplest way to fi
 ```
 
 Parameters:
-- `query` (required): The search query string
+{{ web_search_parameters }}
 
 **When to use web_search:**
 - User asks to search, find, or look up something online
@@ -125,14 +125,8 @@ User: "find all Python files in backend"
 <TOOL_CALL name="execute_command" params='{"command":"find backend -name '*.py' -type f","host":"main"}'>Find Python files</TOOL_CALL>
 ```
 
-User: "go to github.com and take a screenshot"
-```
-<TOOL_CALL name="navigate" params='{"url":"https://github.com"}'>Navigate to GitHub</TOOL_CALL>
-```
-After navigation result:
-```
-<TOOL_CALL name="screenshot" params='{}'>Capture page</TOOL_CALL>
-```
+User: "go to example.com and take a screenshot"
+{{ browser_flow_example }}
 
 ## Examples - WRONG Behavior (NEVER DO THIS)
 

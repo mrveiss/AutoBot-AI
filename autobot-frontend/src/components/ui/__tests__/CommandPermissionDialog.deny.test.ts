@@ -79,4 +79,13 @@ describe('CommandPermissionDialog handleDeny (#21174)', () => {
     await clickDeny(wrapper)
     expect(wrapper.emitted('denied')).toHaveLength(1)
   })
+
+  it('closes quietly and does not emit denied when the approval was already decided (#19951)', async () => {
+    approveOrDeny.mockResolvedValue({ status: 'error', error: 'No pending approval' })
+    const wrapper = mountDialog()
+    await clickDeny(wrapper)
+    expect(wrapper.emitted('denied')).toBeUndefined()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(errorApprove.value).toBeNull()
+  })
 })

@@ -17,10 +17,15 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Dict
 
+from autobot_shared.env_utils import env_int
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from autobot_shared.ssot_constants import AgentThresholds
 from autobot_shared.time_utils import now_utc
 from llm_shared.quality_judgment import QualityAssessment
+
+#: Milliseconds the evaluator LLM call may take (#21845). Env-backed: a bound written as a bare literal cannot be
+#: changed without a deploy, and a slow local model needs more than a fast one.
+RLM_EVAL_TIMEOUT_MS: int = env_int("AUTOBOT_RLM_EVAL_TIMEOUT_MS", default=10000)
 
 
 class ReflectionVerdict(Enum):
@@ -53,14 +58,14 @@ class ReflectionResult:
 
     Attributes:
         verdict: Whether to accept, refine, or fail through.
-        quality_score: 0.0–1.0 estimate of response quality.
+        quality_score: 0.0–1.0 estimate of response quality; ``None`` when the evaluator gave no reading (#21845).
         critique: Free-text explanation of what's lacking.
         refinement_hint: Suggested focus for the next LLM pass.
         iteration: Which reflection pass produced this (1-based).
     """
 
     verdict: ReflectionVerdict
-    quality_score: float
+    quality_score: float | None
     critique: str = ""
     refinement_hint: str = ""
     iteration: int = 1
@@ -81,7 +86,8 @@ class ReflectionResult:
         """Serialize for event stream / logging.
 
         ``evaluator_failed`` is emitted only when True, so a scored result keeps the shape pinned in
-        ``llm_shared/quality_judgment_test.py`` (#16133); readers of the history use ``.get``.
+        ``llm_shared/quality_judgment_test.py`` (#16133); readers of the history use ``.get``. A result with no
+        reading serializes ``quality_score`` as ``null`` -- the key is always present, never a made-up number (#21845).
         """
         data: Dict[str, Any] = {
             "verdict": self.verdict.name,
@@ -109,7 +115,7 @@ class RLMConfig:
         model: Ollama model used for the evaluator LLM call.
         temperature: Sampling temperature for the evaluator.
         max_eval_tokens: Token budget for the evaluator response.
-        timeout_ms: Per-call timeout for the evaluator LLM request.
+        timeout_ms: Per-call timeout for the evaluator LLM request (``AUTOBOT_RLM_EVAL_TIMEOUT_MS``, #21845).
     """
 
     enabled: bool = True
@@ -119,4 +125,4 @@ class RLMConfig:
     model: str = DEFAULT_LLM_MODEL
     temperature: float = 0.2
     max_eval_tokens: int = 512
-    timeout_ms: int = 10000
+    timeout_ms: int = RLM_EVAL_TIMEOUT_MS

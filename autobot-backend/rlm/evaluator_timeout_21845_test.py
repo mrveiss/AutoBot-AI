@@ -29,12 +29,13 @@ BAD_CALL = """<TOOL_CALL name="browser_evaluate" params='{'expression': 'a('b')'
         ValueError("unreadable reply"),
     ],
 )
-async def test_any_evaluator_failure_carries_no_passing_score(exc):
+async def test_any_evaluator_failure_carries_no_score_at_all(exc):
     evaluator = ResponseQualityEvaluator(config=RLMConfig())
     with patch.object(evaluator, "_call_llm", new=AsyncMock(side_effect=exc)):
         result = await evaluator.evaluate(query="q", response="some answer", iteration=1)
     assert result.verdict == ReflectionVerdict.INDETERMINATE
-    assert result.quality_score == 0.0 < RLMConfig().quality_threshold
+    assert result.quality_score is None
+    assert result.evaluator_failed and result.verdict != ReflectionVerdict.ACCEPT
 
 
 @pytest.mark.asyncio

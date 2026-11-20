@@ -16,6 +16,7 @@ A catalogue tool without wording is still listed (name only), so adding a tool n
 from markupsafe import Markup
 
 from autobot_shared import tool_catalogue
+from web_search_schema import WEB_SEARCH_SCHEMA
 
 READ_RULE = (
     "To READ information from a page, use `extract_content` (the page you are on) or `scrape_url` "
@@ -57,8 +58,41 @@ def render_tool_name_reminder_lines() -> str:
     )
 
 
+def render_parameter_lines(schema: dict) -> str:
+    """One ``- `name` (required|optional, type): description`` line per property of a tool's JSON *schema* (#21877).
+
+    The chat prompts render the ``web_search`` parameter list from the tool's own schema, so a parameter the
+    handler honours (``fetch_full``) can never be missing from what the model is told.
+    """
+    required = set(schema.get("required", ()))
+    lines = []
+    for name, spec in schema.get("properties", {}).items():
+        kind = "required" if name in required else "optional"
+        description = str(spec.get("description", "")).strip()
+        lines.append(f"- `{name}` ({kind}, {spec.get('type', 'any')})" + (f": {description}" if description else ""))
+    return "\n".join(lines)
+
+
+def render_browser_flow_example() -> str:
+    """The "go to a site and take a screenshot" example for the simple prompt, built from catalogue tools (#21772)."""
+    names = set(tool_catalogue.BROWSER_PROMPT_TOOLS)
+    steps = [
+        (n, p, d)
+        for n, p, d in (
+            ("navigate", '{"url":"https://example.com"}', "Navigate to example.com"),
+            ("screenshot", "{}", "Capture page"),
+        )
+        if n in names
+    ]
+    blocks = [f"```\n<TOOL_CALL name=\"{n}\" params='{p}'>{d}</TOOL_CALL>\n```" for n, p, d in steps]
+    return "\nAfter navigation result:\n".join(blocks)
+
+
 def template_vars() -> "dict[str, str]":
     """Jinja variables every prompt template can use (merged by ``PromptManager.get``)."""
     # Markup: the Jinja env autoescapes plain strings, which would entity-encode the TOOL_CALL examples.
-    section = Markup(render_browser_tools_section())  # nosec B704  # repo-generated text
-    return {"browser_tools_section": section}
+    return {
+        "browser_tools_section": Markup(render_browser_tools_section()),  # nosec B704  # repo-generated text
+        "browser_flow_example": Markup(render_browser_flow_example()),  # nosec B704
+        "web_search_parameters": Markup(render_parameter_lines(WEB_SEARCH_SCHEMA)),  # nosec B704
+    }

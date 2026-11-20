@@ -300,6 +300,7 @@
       "overseerError": "Overseer error: {error}",
       "executionCompleted": "Execution completed",
       "feedbackSent": "Feedback sent",
+      "alreadyDecided": "This command was already decided",
       "feedbackFailed": "Failed to send feedback",
       "toolApprovalTitle": "Agent Tool Approval Required",
       "toolApprovalTool": "Tool",
