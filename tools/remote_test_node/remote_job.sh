@@ -36,7 +36,7 @@ sweep_stale() {
   for dir in "$base"/runs/*/; do
     [ -d "$dir" ] || continue
     [ -n "$(find "$dir" -maxdepth 0 -mmin "+$ttl" 2>/dev/null)" ] || continue
-    ( flock -n 7 && rm -rf -- "$dir" ) 7>>"${dir}.live" 2>/dev/null
+    { ( flock -n 7 && rm -rf -- "$dir" ) 7>>"${dir}.live"; } 2>/dev/null
   done
 }
 

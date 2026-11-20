@@ -242,19 +242,31 @@ def _origin_url() -> str:
 
 
 def _without_credentials(url: str) -> str:
-    """The URL without userinfo: the node's mirror follows a public URL and must hold, and show, no credential.
+    """The URL the node's mirror follows: no userinfo, no query, no fragment, so it holds and shows no secret.
 
-    The userinfo is removed (not masked) so the URL still fetches. scp-style remotes (``git@host:path``) carry no
-    secret and have no scheme, so they pass through unchanged.
+    Userinfo is removed (not masked) so the URL still fetches, in every form: with a scheme, and schemeless
+    (a colon in the text before the last ``@``, ahead of any ``/``, marks ``name:secret`` userinfo). That includes
+    ``ssh://user@host/x``, which loses its username because the node holds no key, so it could not use it anyway.
+    Query and fragment are dropped because a git remote needs neither and ``?token=`` would otherwise travel.
+    The scp form ``git@host:path`` has no secret and passes through unchanged. A URL that cannot be read safely
+    raises ``ValueError`` without the URL in the message.
     """
     try:
         parts = urlsplit(url)
-        has_userinfo = "@" in parts.netloc
     except ValueError:
         raise ValueError("the origin URL cannot be parsed") from None
-    if not (parts.scheme and has_userinfo):
+    if "://" in url:
+        host = parts.netloc.rsplit("@", 1)[-1]
+        return urlunsplit((parts.scheme, host, parts.path, "", ""))
+    head, at, tail = url.rpartition("@")
+    if not at:
         return url
-    return urlunsplit(parts._replace(netloc=parts.netloc.rsplit("@", 1)[1]))
+    colon, slash = head.find(":"), head.find("/")
+    if colon != -1 and (slash == -1 or colon < slash):
+        if not tail:
+            raise ValueError("the origin URL cannot be read safely")
+        return tail
+    return url
 
 
 def _pins() -> list[str]:

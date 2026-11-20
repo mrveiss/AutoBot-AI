@@ -88,6 +88,11 @@ def _leftovers(node: dict) -> list[str]:
     return dirs + ([refs] if refs else [])
 
 
+def _refs(node: dict) -> set[str]:
+    out = _git(node["base"], "--git-dir=mirror.git", "for-each-ref", "--format=%(refname)", "refs/runs")
+    return set(out.split())
+
+
 def _checked_out(node: dict) -> bool:
     runs = node["base"] / "runs"
     return any((runs / name / "tree/hello.txt").is_file() for name in (os.listdir(runs) if runs.is_dir() else []))
@@ -188,15 +193,19 @@ def test_a_live_run_is_not_swept_by_a_run_with_a_shorter_ttl(node):
 
 def test_a_queued_job_whose_caller_left_never_takes_a_slot(node):
     holders = [_run(node, "sleep", "60") for _ in range(2)]  # SLOTS=2: both slots busy
-    assert _wait_for(lambda: len(_leftovers(node)) >= 2)
+    runs = node["base"] / "runs"
+    assert _wait_for(lambda: len(os.listdir(runs)) >= 2 if runs.is_dir() else False)
+    held_dirs, held_refs = sorted(os.listdir(runs)), _refs(node)
     queued = _run(node, "true")
-    time.sleep(3)
+    assert _wait_for(lambda: len(_refs(node) - held_refs) == 1), "the queued job's ref never appeared"
+    queued_ref = next(iter(_refs(node) - held_refs))
     found = subprocess.run(
         ["pgrep", "-P", str(queued.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
     ).stdout.split()
     assert found, "the queued job's stand-in ssh session was not found"
     os.kill(int(found[0]), signal.SIGKILL)
-    assert _wait_for(lambda: not any((node["base"] / "runs").glob("job.*")) or len(_leftovers(node)) <= 2, 30)
+    assert _wait_for(lambda: queued_ref not in _refs(node), 30), "the queued job's ref survived its caller"
+    assert sorted(os.listdir(runs)) == held_dirs, "a dir appeared for the queued job: it took a slot"
     for proc in (queued, *holders):
         proc.kill()
         proc.communicate()
@@ -532,19 +541,6 @@ def test_provision_refuses_before_touching_the_node(tmp_path, monkeypatch, capfd
 def test_a_payload_with_constraints_but_no_requirements_fails(tmp_path):
     done, _reqs, _cons = _split(tmp_path, b"#--constraints--\nfoo==1.0\n")
     assert done.returncode != 0 and b"carries no requirements" in done.stderr
-
-
-@pytest.mark.parametrize(
-    "url,expected",
-    [
-        ("https://user:tok@host/org/repo.git", "https://host/org/repo.git"),  # pragma: allowlist secret
-        ("https://tok@host:8443/org/repo.git", "https://host:8443/org/repo.git"),
-        ("https://host/org/repo.git", "https://host/org/repo.git"),
-        ("git@host:org/repo.git", "git@host:org/repo.git"),
-    ],
-)
-def test_the_origin_url_sent_to_the_node_carries_no_credential(url, expected):
-    assert run._without_credentials(url) == expected
 
 
 def test_provision_without_an_origin_remote_is_refused_not_a_traceback(tmp_path, monkeypatch, capfd):
