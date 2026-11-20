@@ -190,19 +190,20 @@ class BaseProvider(ABC):
     async def _complete_in_slot(self, request: LLMRequest, provider_key: str, entered: float) -> LLMResponse:
         """Wait for the concurrency slot and rate-limit token, then run the call (#21914).
 
-        ``queue_wait_ms`` (semaphore + token acquire) and provider ``latency_ms``
-        are measured separately: the latency clock starts only once both are
-        held, so a long queue never reads as a slow provider. The wait travels
-        on the same observation as ``response.metadata["queue_wait_ms"]``.
+        ``queue_wait_ms`` (attempt entry until slot and token are both held) and
+        provider ``latency_ms`` are measured separately: the latency clock starts
+        only once both are held, so a long queue never reads as a slow provider.
+        The wait travels on the same observation as ``response.metadata["queue_wait_ms"]``.
+
+        #14211: the request-started notify already fired, so every exit -- including
+        a failure or cancellation while still queued -- yields one notify_error.
         """
-        # GH#16527: bound in-flight concurrent requests to this provider
-        # instance before the rate-limit token, so a burst queues here first.
-        async with self._concurrency_semaphore:
-            # Issue #8170: acquire a rate-limit token shared across all uvicorn
-            # workers via Redis.  Falls back to allow-all when Redis unavailable.
-            async with get_llm_rate_limiter().acquire(provider_key):
-                start = time.monotonic()
-                try:
+        try:
+            # GH#16527: bound in-flight requests per provider before the rate-limit token.
+            async with self._concurrency_semaphore:
+                # Issue #8170: cross-worker Redis token; allow-all when Redis is unavailable.
+                async with get_llm_rate_limiter().acquire(provider_key):
+                    start = time.monotonic()
                     response = await self._guarded_completion(request)
                     latency_ms = (time.monotonic() - start) * 1000
                     response.metadata.setdefault("request_type", self._request_type_label(request))
@@ -211,9 +212,9 @@ class BaseProvider(ABC):
                     # GH#8502: raise so the backoff handler can retry.
                     raise_if_rate_limited(response)
                     return response
-                except Exception as exc:
-                    self._notify_error(exc, request)
-                    raise
+        except (Exception, asyncio.CancelledError) as exc:
+            self._notify_error(exc, request)
+            raise
 
     def applied_structured_output_mode(self, request: LLMRequest) -> StructuredOutputMode:
         """Return the structured-output mode this provider applies to *request* (#17305).

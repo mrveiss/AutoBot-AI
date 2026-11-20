@@ -84,6 +84,7 @@ def observed(monkeypatch):
     """Patch every collaborator of chat_completion; return the recorded observations."""
     clock = _FakeClock()
     seen: list = []
+    errors: list = []
 
     @asynccontextmanager
     async def _token(_key):
@@ -95,13 +96,13 @@ def observed(monkeypatch):
     monkeypatch.setattr(base_provider, "get_token_budget_gate", lambda: _OpenGate())
     monkeypatch.setattr(BaseProvider, "_completion_circuit_breaker", lambda self: _PassthroughBreaker())
     monkeypatch.setattr(BaseProvider, "_notify_request_started", staticmethod(lambda r, k: None))
-    monkeypatch.setattr(BaseProvider, "_notify_error", staticmethod(lambda e, r: None))
+    monkeypatch.setattr(BaseProvider, "_notify_error", staticmethod(lambda e, r: errors.append(e)))
     monkeypatch.setattr(BaseProvider, "_notify_response", staticmethod(lambda resp, ms: seen.append((resp, ms))))
-    return clock, seen
+    return clock, seen, errors
 
 
 async def test_latency_excludes_semaphore_wait_and_queue_wait_includes_it(observed):
-    clock, seen = observed
+    clock, seen, _errors = observed
     provider = _TimedProvider(clock)
     request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
 
@@ -121,7 +122,7 @@ async def test_latency_excludes_semaphore_wait_and_queue_wait_includes_it(observ
 
 
 async def test_uncontended_call_records_zero_queue_wait(observed):
-    clock, seen = observed
+    clock, seen, _errors = observed
     provider = _TimedProvider(clock)
     request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
 
@@ -129,3 +130,38 @@ async def test_uncontended_call_records_zero_queue_wait(observed):
 
     assert seen[0][1] == pytest.approx(PROVIDER_S * 1000)
     assert response.metadata["queue_wait_ms"] == 0.0
+
+
+async def test_failure_in_guarded_completion_notifies_error_once(observed, monkeypatch):
+    clock, seen, errors = observed
+    provider = _TimedProvider(clock)
+    boom = RuntimeError("boom")
+
+    async def _raise(_request):
+        raise boom
+
+    monkeypatch.setattr(provider, "_guarded_completion", _raise)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await provider.chat_completion(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert errors == [boom]
+    assert seen == []
+
+
+async def test_cancellation_while_queued_notifies_error_once(observed):
+    clock, seen, errors = observed
+    provider = _TimedProvider(clock)
+
+    await provider._concurrency_semaphore.acquire()  # the only slot is held
+    call = asyncio.create_task(provider.chat_completion(LLMRequest(messages=[{"role": "user", "content": "hi"}])))
+    await asyncio.sleep(0)  # the call is now queued on the semaphore
+    call.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await call
+
+    assert len(errors) == 1
+    assert isinstance(errors[0], asyncio.CancelledError)
+    assert seen == []
+    provider._concurrency_semaphore.release()
