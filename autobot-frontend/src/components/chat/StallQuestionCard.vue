@@ -32,13 +32,14 @@
 import { computed, ref } from 'vue'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
+import { useStallDraft } from '@/composables/chat/useStallDraft'
 import { ResumeRejectedError, useStallAnswer } from '@/composables/useGraphApproval'
 import type { ChatMessage } from '@/stores/useChatStore'
 
 const props = defineProps<{ message: ChatMessage }>()
 
 const answerStallQuestion = useStallAnswer()
-const draft = ref('')
+const draft = useStallDraft(() => props.message.id) // outside the card: scrolling it out of the virtual window unmounts it (#21793)
 const answered = computed(() => props.message.metadata?.answered === true)
 const answerText = computed(() => String(props.message.metadata?.answer_text ?? ''))
 const submitting = ref(false)
