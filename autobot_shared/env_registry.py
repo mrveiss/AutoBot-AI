@@ -58,6 +58,7 @@ def env(name: str, default: Any = None) -> Any:
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_chroma_lease  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401

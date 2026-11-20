@@ -21,9 +21,9 @@ from typing import Any
 from autobot_shared.coordination.claim_company import resolve_company
 from autobot_shared.coordination.ledger_events import cap_text
 from autobot_shared.coordination.work_claims import (
-    CLAIM_TTL_S,
     _CLAIM_PREFIX,
     _INDEX_KEY,
+    CLAIM_TTL_S,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
