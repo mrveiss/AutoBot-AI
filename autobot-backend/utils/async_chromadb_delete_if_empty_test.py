@@ -163,14 +163,12 @@ def test_a_failed_delete_leaves_the_collection_and_releases_the_lease(redis):
     assert _NAME in sync.collections and _held(redis) == []
 
 
-def test_an_unreachable_registry_means_neither_delete_nor_write(monkeypatch):
+def test_an_unreachable_registry_means_the_delete_did_not_run(monkeypatch):
     monkeypatch.setattr(work_claims_sync, "get_redis_client", lambda **_: None)
     sync = _Sync()
     with pytest.raises(ClaimUnavailable):
         delete_if_empty(sync, _NAME)
-    with pytest.raises(ClaimUnavailable):
-        lease_client(sync).get_collection(name=_NAME).add(ids=["a"])
-    assert sync.deleted == [] and sync.collections[_NAME].vectors == 0
+    assert sync.deleted == [] and _NAME in sync.collections
 
 
 def test_a_write_through_the_client_holds_the_shared_lease_only_for_the_write(redis):

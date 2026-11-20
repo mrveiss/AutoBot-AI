@@ -32,7 +32,8 @@ class LeasedChromaCollection:
         setattr(self._raw, attr, value)
 
     def _leased(self, op: str, *args: Any, **kwargs: Any) -> Any:
-        with write_lease(self._raw.name):
+        with write_lease(self._raw.name) as lease:
+            lease.ensure_held()
             return getattr(self._raw, op)(*args, **kwargs)
 
     def add(self, *args: Any, **kwargs: Any) -> Any:

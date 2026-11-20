@@ -21,18 +21,18 @@ from typing import Any
 from autobot_shared.coordination.claim_company import resolve_company
 from autobot_shared.coordination.ledger_events import cap_text
 from autobot_shared.coordination.work_claims import (
-    _CLAIM_PREFIX,
-    _INDEX_KEY,
+    CLAIM_PREFIX,
     CLAIM_TTL_S,
+    INDEX_KEY,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
     Scope,
     WorkClaim,
-    _build,
-    _decode,
-    _require_holder,
     acquire_eval_args,
+    build_claim,
+    decode_claim,
+    require_holder,
 )
 from autobot_shared.coordination.work_claims_lua import _ACQUIRE_LUA, _RELEASE_LUA, _RENEW_LUA
 from autobot_shared.redis_client import get_redis_client
@@ -51,22 +51,22 @@ def try_acquire_sync(
 ) -> WorkClaim | ClaimConflict:
     """Blocking :func:`work_claims.try_acquire`: the claim, or the conflict naming its holder."""
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
-    claim = _build(parsed, agent_id, task_id, mode, cap_text(intent), ttl, resolve_company(None))
+    claim = build_claim(parsed, agent_id, task_id, mode, cap_text(intent), ttl, resolve_company(None))
     outcome = _redis().eval(_ACQUIRE_LUA, 1, *acquire_eval_args(parsed, claim, mode, ttl))
     verdict = outcome[0].decode() if isinstance(outcome[0], bytes) else outcome[0]
     if verdict == "conflict":
-        return ClaimConflict(requested=str(parsed), holder=_decode(outcome[1]))
+        return ClaimConflict(requested=str(parsed), holder=decode_claim(outcome[1]))
     return claim
 
 
 def release_sync(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
     """Blocking :func:`work_claims.release_scope`; True when this holder's claim went."""
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     removed = _redis().eval(
-        _RELEASE_LUA, 1, _INDEX_KEY.format(kind=parsed.kind), _CLAIM_PREFIX.format(kind=parsed.kind), parsed.path,
+        _RELEASE_LUA, 1, INDEX_KEY.format(kind=parsed.kind), CLAIM_PREFIX.format(kind=parsed.kind), parsed.path,
         agent_id, task_id,
     )  # fmt: skip
     return int(removed) == 1
@@ -75,10 +75,10 @@ def release_sync(scope: str | Scope, *, agent_id: str, task_id: str) -> bool:
 def renew_sync(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int | None = None) -> bool:
     """Blocking :func:`work_claims.renew`; False once the claim is gone (expired or released)."""
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
     expires = (now_utc() + timedelta(seconds=ttl)).isoformat()
     result = _redis().eval(
-        _RENEW_LUA, 0, _CLAIM_PREFIX.format(kind=parsed.kind), str(ttl), expires, parsed.path, agent_id, task_id
+        _RENEW_LUA, 0, CLAIM_PREFIX.format(kind=parsed.kind), str(ttl), expires, parsed.path, agent_id, task_id
     )
     return int(result) == 1
