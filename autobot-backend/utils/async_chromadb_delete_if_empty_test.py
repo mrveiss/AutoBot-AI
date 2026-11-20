@@ -10,13 +10,13 @@ decides every conflict here, so the lease semantics tested are the production on
 
 import asyncio
 import threading
-import time
 
 import pytest
 
 from autobot_shared.coordination import collection_lease as cl
 from autobot_shared.coordination import work_claims_sync
 from autobot_shared.coordination.work_claims import ClaimUnavailable
+from autobot_shared.eventually import eventually
 from services import chroma_empty_collections as svc
 from utils.async_chromadb_client import AsyncChromaClient
 from utils.leased_chroma import LeasedChromaClient, delete_if_empty, lease_client
@@ -51,13 +51,13 @@ class _Raw:
             self.on_count()
         return seen
 
-    def add(self, **kwargs):
-        self.vectors += len(kwargs["ids"])
+    def __getattr__(self, op):  # the four write operations, without a hand-written session-shaped method
+        if op not in ("add", "upsert", "update", "delete"):
+            raise AttributeError(op)
+        return lambda **kwargs: self._write(op, kwargs)
 
-    upsert = update = add
-
-    def delete(self, **kwargs):
-        self.vectors = 0
+    def _write(self, op, kwargs):
+        self.vectors = 0 if op == "delete" else self.vectors + len(kwargs["ids"])
 
 
 class _Sync:
@@ -208,9 +208,7 @@ async def test_a_cancelled_delete_finishes_or_does_nothing_and_releases_the_leas
         await task
     assert len(_held(redis)) == 1  # the worker still holds the lease: no write can slip in
     go.set()
-    deadline = time.monotonic() + 5
-    while _held(redis) and time.monotonic() < deadline:
-        await asyncio.sleep(0.02)
+    await eventually(lambda: _held(redis) == [])
     assert _held(redis) == []
     assert sync.deleted == [_NAME] or _NAME in sync.collections  # whole delete, or untouched
 
