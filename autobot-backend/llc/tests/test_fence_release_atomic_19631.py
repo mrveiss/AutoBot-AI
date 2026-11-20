@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from llc.api import work_items as work_items_api
+from llc.models.enums import WorkItemType
 from llc.services import handoff as handoff_module
 from llc.services import work_item_own_task as own_task
 from llc.services import work_item_service as wis
@@ -225,6 +226,7 @@ async def test_a_refused_checkout_keeps_a_fence_a_new_holder_took_while_it_ran(r
 
 async def _agent_to_human(redis, item_id: str) -> None:
     item = MagicMock(
+        type=WorkItemType.TASK.value,  # agent_to_human converts it for the reviewer-role check (handoff.py:575)
         assignee_agent_id=uuid.UUID(_AGENT),
         checkout_run_id="run-1",
         project_id=None,
@@ -239,7 +241,13 @@ async def _agent_to_human(redis, item_id: str) -> None:
     service._record_a2h_activity = AsyncMock()
     service._publish_a2h_notification = AsyncMock()
     service._generate_and_update_brief_async = AsyncMock()
-    with patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+    with (
+        patch.object(own_task, "get_async_redis_client", new=AsyncMock(return_value=redis)),
+        patch(
+            "llc.services.handoff.get_review_gate_service",
+            return_value=MagicMock(missing_reviewer_role=AsyncMock(return_value=None)),
+        ),  # the policy's reviewer role has its own tests (#21588)
+    ):
         await service.agent_to_human(session, item_id, _AGENT, str(uuid.uuid4()), str(_ORG))
     await asyncio.gather(*service._background_tasks)
 
