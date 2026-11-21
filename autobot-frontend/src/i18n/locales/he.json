@@ -5120,16 +5120,6 @@
       "selectUserError": "Please select a user to invite",
       "sendFailed": "Failed to send invitation"
     },
-    "presence": {
-      "participants": "Participants",
-      "you": "You",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "noParticipants": "No participants"
-    },
     "participants": {
       "invite": "Invite",
       "collaborationOffline": "Collaboration offline",

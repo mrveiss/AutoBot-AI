@@ -6854,16 +6854,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "collaboratorTooltip": "Collaborator",
-      "noParticipants": "No participants",
-      "offline": "Offline",
-      "participants": "Participants",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Collaboration",
       "invite": "Invite",
