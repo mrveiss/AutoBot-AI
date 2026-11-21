@@ -134,5 +134,8 @@ async def test_search_engine_leg_never_returns_a_research_quarantined_fact():
 
     with patch("api.knowledge_search.get_vector_search_engine", new=AsyncMock(return_value=engine)):
         results = await _execute_kb_search(kb, "test", 10, "hybrid", "u1", None, [], False)
+        with patch("api.knowledge_search.servable_response", new=lambda response, *a, **k: response):
+            control = await _execute_kb_search(kb, "test", 10, "hybrid", "u1", None, [], False)
 
+    assert RESEARCH in repr(control), "control: without servable_response the quarantined hit survives the leg"
     assert results == [], "a quarantined fact must not leave the engine leg"

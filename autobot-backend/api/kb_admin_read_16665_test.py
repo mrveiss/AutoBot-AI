@@ -143,8 +143,8 @@ def _mcp_reads():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("tool", ["summarize", "vector", "qa", "resource"])
-async def test_every_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
+@pytest.mark.parametrize("tool", ["vector", "resource"])
+async def test_plain_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
     read = _mcp_reads()[tool]
     with (
         patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
@@ -153,3 +153,17 @@ async def test_every_mcp_read_tool_gives_an_admin_another_users_private_fact(too
         as_admin, as_bob = text_of(await read(ADMIN)), text_of(await read(BOB))
 
     assert PRIVATE_A in as_admin and PRIVATE_A not in as_bob
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["summarize", "qa"])
+async def test_prompt_feeding_mcp_tool_gives_an_admin_no_cross_user_fact(tool, audit):
+    """Owner 2026-11-21: summarize and qa feed a prompt, so an admin reads by the normal rules (no bypass)."""
+    read = _mcp_reads()[tool]
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
+        patch.object(knowledge_mcp, "_get_chat_ollama", return_value=None),
+    ):
+        as_admin = text_of(await read(ADMIN))
+
+    assert PRIVATE_A not in as_admin and PRIVATE_B not in as_admin

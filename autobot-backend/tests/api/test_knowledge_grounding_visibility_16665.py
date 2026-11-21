@@ -158,6 +158,15 @@ def test_verify_claim_route_does_not_ground_an_admin_on_another_users_private_fa
     assert "alices" not in response.text and "fact-a" not in response.text
 
 
+def test_verify_claim_route_grounds_an_admin_on_their_own_private_fact():
+    """The no-bypass reader is still the caller's own view: an admin owner is grounded on their own fact."""
+    owner = {"user_id": "alice", "role": "admin"}
+    with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
+        response = _verify_claim_as(owner, _alices_private_kb())
+
+    assert response.status_code == 200 and response.json()["kb_status"] == "in_kb"
+
+
 def test_ground_response_route_does_not_ground_an_admin_on_another_users_private_fact():
     """A grounding pass reads by the caller's normal rules, with no admin bypass (scoped_reader, #16665)."""
     response = _ground_response_as(ADMIN, _alices_private_kb())
