@@ -193,6 +193,14 @@ async def test_redis_down_charges_without_dedupe(factory) -> None:  # noqa: ANN0
 
 
 @pytest.mark.asyncio
+async def test_no_redis_client_warns_and_charges_once(factory, caplog) -> None:  # noqa: ANN001
+    with patch(_STORE, AsyncMock(return_value=None)), caplog.at_level("WARNING"):
+        await _ingest(factory, "agent-a", "run-1")
+    assert "charging without dedupe" in caplog.text
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
 async def test_the_native_adapter_passes_its_run_id_as_the_key() -> None:
     service = MagicMock(ingest_cost_event=AsyncMock())
     session = MagicMock()

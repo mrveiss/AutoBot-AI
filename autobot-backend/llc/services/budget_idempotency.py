@@ -20,6 +20,18 @@ Policies, each decided on purpose:
 * **Any other failure** releases the claim: nothing was committed, and the retry must be able to run.
 * **Commit before record**: the charge is committed before the replay record is written, so a stored
   result never points at a charge a later rollback erased.
+
+The ``Idempotency-Key`` HTTP middleware also sees the header on the ingest route as a fast path (it caches
+only 2xx); this layer is the authority because it also covers the adapter and the scheduler.
+
+Two accepted windows, both closed only by a DB-side unique idempotency row written in the charge's own
+transaction (tracked in #TRACKING_ISSUE):
+
+* (a) A crash, or a failed ``_record``, after ``session.commit()`` leaves the claim held until
+  ``IDEMPOTENCY_CLAIM_TTL_SECONDS``. A retry inside that window gets ``IngestInFlight`` (409); a retry after
+  it charges again.
+* (b) An ambiguous commit (``commit`` raises or is cancelled after the DB committed) releases the claim, so
+  a retry can double-charge.
 """
 
 from __future__ import annotations
@@ -93,6 +105,7 @@ async def charge_once(
     """Run *charge* unless this (agent, key) already ran it; then return the first result."""
     redis = await _redis_or_none()
     if redis is None:
+        logger.warning("idempotency store unavailable: charging without dedupe")
         return await charge()
     key = storage_key(f"{company_id}:{agent_id}", "POST", _SCOPE, idempotency_key)
     outcome = await _claim(redis, key)

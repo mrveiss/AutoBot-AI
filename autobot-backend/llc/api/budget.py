@@ -284,6 +284,7 @@ async def ingest_cost(
     ctx: TenantContext = Depends(get_tenant_context),
     idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> IngestResponse:
+    # Idempotency-Key: service layer is the authority; see budget_idempotency (also the HTTP middleware's role).
     # The row the tenant check already loaded carries the company this slug belongs
     # to; the result was previously discarded. Binding it avoids a second lookup and
     # supplies the company the ingest now requires (#15812).
