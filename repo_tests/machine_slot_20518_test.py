@@ -87,7 +87,12 @@ def test_a_wall_clock_step_back_never_reports_a_negative_wait(tmp_path: Path) ->
     (tmp_path / "slot-1").write_text("4242 pre-push issue-9-x\n", encoding="utf-8")
     held = os.open(tmp_path / "slot-1", os.O_WRONLY)
     fcntl.flock(held, fcntl.LOCK_EX)
-    env = {**_env(tmp_path), "AUTOBOT_MACHINE_SLOT_REPORT": "0"}
+    # An unreadable uptime file forces the SECONDS fallback, the only clock a step back can reach.
+    env = {
+        **_env(tmp_path),
+        "AUTOBOT_MACHINE_SLOT_REPORT": "0",
+        "AUTOBOT_MACHINE_SLOT_UPTIME": str(tmp_path / "no-uptime"),
+    }
     # Every log line rewinds SECONDS by 10: the clock stepping back while the push is queued.
     script = f'log() {{ echo "$*"; SECONDS=$((SECONDS - 10)); }}; warn() {{ echo "$*"; }}\n{hook_functions()}\nmachine_slot_wait; echo GOT\n'
     waiter = subprocess.Popen(["bash", "-c", script], env=env, stdout=subprocess.PIPE, text=True)

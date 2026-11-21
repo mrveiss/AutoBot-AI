@@ -315,10 +315,10 @@ machine_slot_take() {
   return 1
 }
 # #21905: SECONDS follows the wall clock, which can step back (NTP, a VM resuming) and made a wait read "-1s".
-# /proc/uptime is monotonic; the fallback clamps so a duration is never negative.
+# The uptime file is monotonic; the fallback clamps so a duration is never negative. Tests point the file at a fake.
 machine_slot_clock() {
   local up
-  read -r up _ 2>/dev/null < /proc/uptime && [ -n "$up" ] && { echo "${up%.*}"; return; }
+  read -r up _ 2>/dev/null < "${AUTOBOT_MACHINE_SLOT_UPTIME:-/proc/uptime}" && [ -n "$up" ] && { echo "${up%.*}"; return; }
   echo "$SECONDS"
 }
 machine_slot_wait() {
