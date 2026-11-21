@@ -8581,6 +8581,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/facts/delete-selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Selected Facts
+         * @description Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886).
+         */
+        post: operations["delete_selected_facts_api_knowledge_base_facts_delete_selected_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/suggestions/tags": {
         parameters: {
             query?: never;
@@ -83938,6 +83958,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeSelectedFactsDeleteProposal
+         * @description Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886).
+         */
+        KnowledgeSelectedFactsDeleteProposal: {
+            /** Status */
+            status: string;
+            /** Facts Selected */
+            facts_selected: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action: string;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeShareResponse
          * @description Response for POST /knowledge/collaboration/facts/{id}/share.
          */
@@ -121090,6 +121130,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_selected_facts_api_knowledge_base_facts_delete_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionFactsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSelectedFactsDeleteProposal"];
                 };
             };
             /** @description Validation Error */
