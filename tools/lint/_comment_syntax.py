@@ -207,8 +207,9 @@ class _BlockScan:
         """Inside a string literal: keep it, honour a backslash escape, leave at the matching quote."""
         char = self.text[self.i]
         if char == "\\":
-            self._emit(self.text[self.i : self.i + 2])
-            self.i += 2
+            size = 3 if self.text.startswith("\r\n", self.i + 1) else 2  # a CRLF continuation is one escape
+            self._emit(self.text[self.i : self.i + size])
+            self.i += size
             return
         if char == self.quote or (char == "\n" and self.quote != "`"):
             self.quote = None  # only a template literal runs past a newline; an apostrophe in prose must not (#21571)

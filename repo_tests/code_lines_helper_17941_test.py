@@ -430,6 +430,15 @@ def test_the_scan_reports_a_file_that_ends_inside_a_comment_or_a_quote(source, n
     assert unterminated_construct(source, name=name) == ended
 
 
+def test_a_crlf_line_continuation_in_a_quoted_string_is_one_escape() -> None:
+    """`\\` + CRLF continues a single-quoted string; the `\\r` must not eat the escape and let `\\n` end the quote (#21571)."""
+    source = "const a = 'one \\\r\ntwo' /* gone */\r\nconst b = 1\r\n"
+    text = code_text(source, name="x.ts")
+    assert "gone" not in text and "const b = 1" in text, text
+    assert "one" in text and "two'" in text, text
+    assert unterminated_construct(source, name="x.ts") is None
+
+
 def test_an_apostrophe_in_prose_does_not_run_a_string_past_the_line() -> None:
     """A single or double quote ends at a newline; only a template literal spans lines (#21571)."""
     text = code_text("const a = don't\nconst keep = 1\n", name="x.ts")
