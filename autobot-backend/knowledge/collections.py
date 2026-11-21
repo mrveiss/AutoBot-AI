@@ -45,6 +45,17 @@ def _unapproved(approved: dict | None, collection: Dict[str, Any], found: int, d
     return None
 
 
+def _decoded(items) -> list[str]:
+    """Redis set members as str, whether the client returns bytes or str."""
+    return [i.decode("utf-8") if isinstance(i, bytes) else i for i in items]
+
+
+def _scoped(members, only: list[str] | None) -> list[str]:
+    """The fact ids to delete: every member, or only the selected ones among them (#21886)."""
+    ids = _decoded(members)
+    return ids if only is None else sorted(set(ids) & set(only))
+
+
 class CollectionsMixin:
     """
     Collection management mixin for knowledge base (Issue #412).
@@ -162,9 +173,7 @@ class CollectionsMixin:
         """Fetch all collections from Redis (Issue #398: extracted)."""
         collection_ids = await self.redis().smembers("collection:all")
         collections = []
-        for cid in collection_ids:
-            if isinstance(cid, bytes):
-                cid = cid.decode("utf-8")
+        for cid in _decoded(collection_ids):
             data = await self._get_collection_data(cid)
             if data:
                 collections.append(data)
@@ -263,9 +272,7 @@ class CollectionsMixin:
     async def _remove_facts_from_deleted_collection(self, collection_id: str, fact_ids: set, delete_facts: bool) -> int:
         """Remove or delete facts when collection is deleted (Issue #398: extracted)."""
         facts_deleted = 0
-        for fid in fact_ids:
-            if isinstance(fid, bytes):
-                fid = fid.decode("utf-8")
+        for fid in _decoded(fact_ids):
             await self.redis().srem(f"fact:collections:{fid}", collection_id)
             if delete_facts:
                 await self.redis().delete(f"fact:{fid}")
@@ -522,9 +529,7 @@ class CollectionsMixin:
             collection_ids = await self.redis().smembers(f"fact:collections:{fact_id}")
 
             collections = []
-            for cid in collection_ids:
-                if isinstance(cid, bytes):
-                    cid = cid.decode("utf-8")
+            for cid in _decoded(collection_ids):
                 data = await self._get_collection_data(cid)
                 if data:
                     collections.append(data)
@@ -599,9 +604,7 @@ class CollectionsMixin:
             fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
 
             facts = []
-            for fid in fact_ids:
-                if isinstance(fid, bytes):
-                    fid = fid.decode("utf-8")
+            for fid in _decoded(fact_ids):
                 export_fact = await self._export_single_fact(fid, include_content, include_metadata)
                 if export_fact:
                     facts.append(export_fact)
@@ -622,13 +625,13 @@ class CollectionsMixin:
             logger.error("Failed to export collection '%s': %s", collection_id, e)
             return {"success": False, "message": "Collection operation failed"}
 
-    async def _get_bulk_delete_preview(self, collection_id: str) -> Dict[str, Any]:
-        """Get preview of bulk delete operation (Issue #398: extracted)."""
+    async def _get_bulk_delete_preview(self, collection_id: str, only: list[str] | None = None) -> Dict[str, Any]:
+        """Get preview of bulk delete operation (Issue #398: extracted); ``only`` narrows it to those facts."""
         collection = await self._get_collection_data(collection_id)
         if not collection:
             return _not_found(collection_id)
 
-        fact_count = await self.redis().scard(f"collection:facts:{collection_id}")
+        fact_count = len(_scoped(await self.redis().smembers(f"collection:facts:{collection_id}"), only))
         return {
             "success": True,
             "collection_id": collection_id,
@@ -650,34 +653,30 @@ class CollectionsMixin:
         await self.redis().delete(f"fact:collections:{fid}")
 
     async def bulk_delete_collection_facts(
-        self, collection_id: str, confirm: bool = False, approved: dict | None = None
+        self, collection_id: str, confirm: bool = False, approved: dict | None = None, fact_ids: list[str] | None = None
     ) -> Dict[str, Any]:
-        """Delete all facts in a collection (Issue #398); ``approved`` {facts, created_at} (#21383) refuses others."""
+        """Delete all facts in a collection (#398), or only ``fact_ids``; ``approved`` (#21383) refuses others."""
         if not self._aioredis_client:
             return {"success": False, "message": "Redis not available"}
 
         if not confirm:
-            return await self._get_bulk_delete_preview(collection_id)
+            return await self._get_bulk_delete_preview(collection_id, fact_ids)
 
         try:
             collection = await self._get_collection_data(collection_id)
             if not collection:
                 return _not_found(collection_id)
 
-            fact_ids = await self.redis().smembers(f"collection:facts:{collection_id}")
-            if refused := _unapproved(approved, collection, len(fact_ids)):
+            members = await self.redis().smembers(f"collection:facts:{collection_id}")
+            targets = _scoped(members, fact_ids)
+            if refused := _unapproved(approved, collection, len(targets)):
                 return refused
-            deleted_count = 0
-            for fid in fact_ids:
+            for fid in targets:
                 await self._delete_fact_completely(fid)
-                deleted_count += 1
+            deleted_count = len(targets)
 
-            await self.redis().hset(f"collection:{collection_id}", "fact_count", 0)
-            logger.info(
-                "Bulk deleted %d facts from collection '%s'",
-                deleted_count,
-                collection_id,
-            )
+            await self.redis().hset(f"collection:{collection_id}", "fact_count", len(members) - deleted_count)
+            logger.info("Bulk deleted %d facts from collection '%s'", deleted_count, collection_id)
 
             return {
                 "success": True,

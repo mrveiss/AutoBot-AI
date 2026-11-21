@@ -29,7 +29,14 @@ _APPROVAL_ID = uuid.UUID("00000000-0000-4000-8000-000000021383")
 _ROUTES = {
     "delete": ("DELETE", "/api/knowledge_base/collections/c1?delete_facts=true", "kb_collection_delete"),
     "bulk": ("POST", "/api/knowledge_base/collections/c1/bulk-delete?confirm=true", "kb_collection_bulk_delete"),
+    "selected": ("POST", "/api/knowledge_base/collections/c1/delete-selected", "kb_collection_documents_delete"),
 }
+
+
+def _call(client, method: str, path: str, **kwargs):
+    """The request; the selected-facts route (#21886) takes the selection as its body."""
+    body = {"fact_ids": ["f1", "f2"]} if path.endswith("/delete-selected") else None
+    return client.request(method, path, json=body, **kwargs)
 
 
 class _KB:
@@ -41,7 +48,7 @@ class _KB:
     async def get_collection(self, collection_id):
         return {"success": True, "collection": {"name": "Notes", "created_at": "t1"}}
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None, fact_ids=None):
         if confirm:
             self.mutations.append(("bulk", collection_id))
         return {"success": True, "facts_to_delete": 3, "deleted_count": 3 if confirm else 0}
@@ -84,7 +91,7 @@ def client(monkeypatch):
 @pytest.mark.parametrize(("method", "path", "_action"), _ROUTES.values(), ids=list(_ROUTES))
 def test_an_anonymous_caller_is_401_and_nothing_happens(client, method, path, _action) -> None:
     test_client, _, kb, create = client
-    assert test_client.request(method, path).status_code == 401
+    assert _call(test_client, method, path).status_code == 401
     assert kb.mutations == [] and create.await_count == 0
 
 
@@ -92,7 +99,7 @@ def test_an_anonymous_caller_is_401_and_nothing_happens(client, method, path, _a
 def test_a_non_admin_is_403_and_nothing_happens(client, method, path, _action) -> None:
     test_client, identity, kb, create = client
     identity.user = _person("user")
-    assert test_client.request(method, path).status_code == 403
+    assert _call(test_client, method, path).status_code == 403
     assert kb.mutations == [] and create.await_count == 0
 
 
@@ -100,7 +107,7 @@ def test_a_non_admin_is_403_and_nothing_happens(client, method, path, _action) -
 def test_the_internal_key_alone_is_refused(client, method, path, _action) -> None:
     test_client, _, kb, create = client
     # not opted in (service_opt_in) and no human behind it: AUTH_0002, which the error catalogue maps to 401
-    assert test_client.request(method, path, headers=_INTERNAL_KEY).status_code == 401
+    assert _call(test_client, method, path, headers=_INTERNAL_KEY).status_code == 401
     assert kb.mutations == [] and create.await_count == 0
 
 
@@ -108,7 +115,7 @@ def test_the_internal_key_alone_is_refused(client, method, path, _action) -> Non
 def test_an_admin_call_deletes_nothing_and_files_exactly_one_proposal(client, method, path, name) -> None:
     test_client, identity, kb, create = client
     identity.user = _person("admin")
-    reply = test_client.request(method, path)
+    reply = _call(test_client, method, path)
     assert reply.status_code == 200, reply.text
     assert reply.json()["approval_id"] == str(_APPROVAL_ID) and reply.json()["action"] == name
     assert kb.mutations == [] and create.await_count == 1
@@ -122,5 +129,5 @@ def test_an_admin_service_key_user_id_that_is_not_a_user_is_403_and_files_nothin
 ) -> None:
     test_client, identity, kb, create = client
     identity.user = _person("admin", user_id="svc-key")
-    assert test_client.request(method, path).status_code == 403
+    assert _call(test_client, method, path).status_code == 403
     assert kb.mutations == [] and create.await_count == 0

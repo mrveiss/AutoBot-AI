@@ -9,8 +9,11 @@ admin caller, human or agent. They now only *propose* (``approval_type=destructi
 review as ``services.kb_wipe_action`` and ``services.claude_md_reindex_action``); the delete runs when a human
 approves it in the Approvals inbox.
 
-Two actions, one executor body. The proposal names the operation, the collection id and (for a collection delete)
-whether the facts go too, plus a fact count for the approver, and NO id list. The executor takes the scope from the
+Three actions, one executor body. The proposal names the operation, the collection id and (for a collection delete)
+whether the facts go too, plus a fact count for the approver, and NO id list. The third action (#21886) deletes
+exactly the facts a human selected in one collection: its selector carries those sorted fact ids, the only id
+list a proposal holds; the executor deletes only those still members, never more than approved.
+The executor takes the scope from the
 approved context, refuses a proposal whose selector is not one this module builds, recomputes the fact count on the
 server and refuses a count above the approved one. The knowledge base's own ``delete_collection`` and
 ``bulk_delete_collection_facts`` do the deleting, so the behaviour is theirs and not a second copy.
@@ -97,14 +100,28 @@ BULK_DELETE = CollectionOp(
     audit=AuditAction.KNOWLEDGE_COLLECTION_BULK_DELETE,
     refresh_audit=AuditAction.KNOWLEDGE_COLLECTION_BULK_DELETE_REFRESH,
 )
-OPS = (DELETE, BULK_DELETE)
+#: Delete exactly the selected facts of one collection (#21886): the selector carries their sorted ids, the audit
+#: entries are the bulk-delete ones (the selector in their details tells the two apart).
+DOCUMENTS_DELETE = CollectionOp(
+    action="kb_collection_documents_delete",
+    operation="bulk_delete_collection_facts",
+    title="Delete selected facts from a knowledge collection",
+    description="Deletes the selected facts from one knowledge collection. The collection and its other facts stay.",
+    audit=AuditAction.KNOWLEDGE_COLLECTION_BULK_DELETE,
+    refresh_audit=AuditAction.KNOWLEDGE_COLLECTION_BULK_DELETE_REFRESH,
+)
+OPS = (DELETE, BULK_DELETE, DOCUMENTS_DELETE)
 
 
-def selector_for(op: CollectionOp, collection_id: str, delete_facts: bool = False) -> dict:
+def selector_for(
+    op: CollectionOp, collection_id: str, delete_facts: bool = False, fact_ids: list[str] | None = None
+) -> dict:
     """The scope a proposal names: the only shape the executor accepts."""
     selector: dict = {"operation": op.operation, "collection_id": collection_id}
     if op is DELETE:
         selector["delete_facts"] = bool(delete_facts)
+    if op is DOCUMENTS_DELETE:
+        selector["fact_ids"] = sorted(set(fact_ids or ()))
     return selector
 
 
@@ -122,8 +139,8 @@ def _is_missing(result: dict) -> bool:
     return result.get("code") == NOT_FOUND
 
 
-async def collection_state(kb, collection_id: str) -> tuple[dict, int] | None:
-    """The collection record and its fact count now (read only).
+async def collection_state(kb, collection_id: str, fact_ids: list[str] | None = None) -> tuple[dict, int] | None:
+    """The collection record and its fact count now (read only); ``fact_ids`` counts only those facts' members.
 
     ``None`` only when the collection does not exist; any other failure (store unavailable) raises.
     """
@@ -132,7 +149,8 @@ async def collection_state(kb, collection_id: str) -> tuple[dict, int] | None:
         if _is_missing(found):
             return None
         raise RuntimeError(f"the knowledge base could not read the collection: {found.get('message')}")
-    preview = await kb.bulk_delete_collection_facts(collection_id=collection_id, confirm=False)
+    scope = {} if fact_ids is None else {"fact_ids": fact_ids}
+    preview = await kb.bulk_delete_collection_facts(collection_id=collection_id, confirm=False, **scope)
     if not preview.get("success"):
         raise RuntimeError(f"the knowledge base could not count the facts: {preview.get('message')}")
     return (found.get("collection") or {}), int(preview.get("facts_to_delete") or 0)
@@ -144,17 +162,20 @@ async def count_collection_facts(kb, collection_id: str) -> int | None:
     return None if state is None else state[1]
 
 
-async def plan_collection_delete(op: CollectionOp, kb, collection_id: str, delete_facts: bool = False) -> dict | None:
+async def plan_collection_delete(
+    op: CollectionOp, kb, collection_id: str, delete_facts: bool = False, fact_ids: list[str] | None = None
+) -> dict | None:
     """Read only: what the approver sees. ``None`` when the collection is not found.
 
-    ``created_at`` is the identity the executor re-checks; ``name`` is display only.
+    ``created_at`` is the identity the executor re-checks; ``name`` is display only. For a selected-facts delete the
+    selector names the selected ids, and ``facts`` counts those that are members now (the bound the executor holds).
     """
-    state = await collection_state(kb, collection_id)
+    state = await collection_state(kb, collection_id, fact_ids)
     if state is None:
         return None
     collection, facts = state
     return {
-        "selector": selector_for(op, collection_id, delete_facts),
+        "selector": selector_for(op, collection_id, delete_facts, fact_ids),
         "facts": facts,
         "created_at": collection.get("created_at"),
         "name": collection.get("name"),
@@ -197,13 +218,21 @@ async def _review(approval: "Approval", session: "AsyncSession") -> bool:
     return await review_kb_proposal(approval, session, _WHAT)
 
 
+def _valid_fact_ids(op: CollectionOp, selector: dict) -> bool:
+    """A selected-facts delete names a non-empty list of well-formed fact ids; the other operations name none."""
+    ids = selector.get("fact_ids")
+    if op is not DOCUMENTS_DELETE:
+        return ids is None
+    return isinstance(ids, list) and bool(ids) and all(isinstance(i, str) and COLLECTION_ID_RE.match(i) for i in ids)
+
+
 def _check_scope(op: CollectionOp, approval: "Approval") -> dict:
     """The approved selector, refused unless it is exactly one this module builds; the scope is never the client's."""
     plan = (approval.context or {}).get("plan")
     selector = plan.get("selector") if isinstance(plan, dict) else None
     cid = selector.get("collection_id") if isinstance(selector, dict) else None
-    valid = isinstance(cid, str) and COLLECTION_ID_RE.match(cid) is not None
-    if not valid or selector != selector_for(op, cid, (selector or {}).get("delete_facts", False)):
+    valid = isinstance(cid, str) and COLLECTION_ID_RE.match(cid) is not None and _valid_fact_ids(op, selector)
+    if not valid or selector != selector_for(op, cid, selector.get("delete_facts", False), selector.get("fact_ids")):
         raise ValueError(f"approval {approval.id} names a different selector; the deletion is refused")
     return selector
 
@@ -223,8 +252,8 @@ def _approved_scope(approval: "Approval") -> dict:
 
 
 def _deletes_facts(op: CollectionOp, selector: dict) -> bool:
-    """A bulk delete always deletes facts; a collection delete only when asked to."""
-    return op is BULK_DELETE or bool(selector.get("delete_facts"))
+    """A bulk or selected-facts delete always deletes facts; a collection delete only when asked to."""
+    return op is not DELETE or bool(selector.get("delete_facts"))
 
 
 async def _refuse_recreated(approval: "Approval", audit: Audit, collection: dict) -> None:
@@ -251,7 +280,8 @@ async def _run_delete(op: CollectionOp, kb, selector: dict, approved: dict) -> i
     if op is DELETE:
         result = await kb.delete_collection(collection_id=cid, delete_facts=selector["delete_facts"], approved=approved)
     else:
-        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True, approved=approved)
+        scope = {"fact_ids": selector["fact_ids"]} if op is DOCUMENTS_DELETE else {}
+        result = await kb.bulk_delete_collection_facts(collection_id=cid, confirm=True, approved=approved, **scope)
     if not result.get("success"):
         raise RuntimeError(f"the knowledge base refused the deletion: {result.get('message')}")
     return int(result.get("facts_deleted" if op is DELETE else "deleted_count") or 0)
@@ -259,7 +289,7 @@ async def _run_delete(op: CollectionOp, kb, selector: dict, approved: dict) -> i
 
 async def _guarded_state(op: CollectionOp, approval: "Approval", kb, selector: dict, audit: Audit) -> int:
     """The facts in scope now, after the identity and the count checks; refuses (deleting nothing) otherwise."""
-    state = await collection_state(kb, selector["collection_id"])
+    state = await collection_state(kb, selector["collection_id"], selector.get("fact_ids"))
     if state is None:
         raise ValueError(f"approval {approval.id}: collection {selector['collection_id']!r} no longer exists")
     await _refuse_recreated(approval, audit, state[0])
@@ -308,11 +338,16 @@ async def execute_collection_bulk_delete_action(approval: "Approval", session: "
     await execute(BULK_DELETE, approval, session)
 
 
+async def execute_collection_documents_delete_action(approval: "Approval", session: "AsyncSession") -> None:
+    await execute(DOCUMENTS_DELETE, approval, session)
+
+
 def register_collection_delete_actions() -> None:
     """Idempotent: re-registering replaces the same key with an equal handler. Server-only, admin-only."""
     handlers = {
         DELETE: execute_collection_delete_action,
         BULK_DELETE: execute_collection_bulk_delete_action,
+        DOCUMENTS_DELETE: execute_collection_documents_delete_action,
     }
     for op, handler in handlers.items():
         register_post_approval_action(

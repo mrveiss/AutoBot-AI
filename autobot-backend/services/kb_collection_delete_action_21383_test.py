@@ -18,7 +18,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import knowledge_collections as routes
-from knowledge.collections import _unapproved
+from knowledge.collections import _scoped, _unapproved
 from services import kb_collection_delete_action as action
 from services import kb_collection_delete_request as request
 from services.approval_execution import (
@@ -54,13 +54,13 @@ class FakeKB:
             "collection": {"name": f"Name {collection_id}", "created_at": self.created[collection_id]},
         }
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None, fact_ids=None):
         if collection_id not in self.collections:
             return {
                 "success": False,
                 "message": f"Collection not found: {collection_id}",
             }
-        ids = self.collections[collection_id]
+        ids = set(_scoped(self.collections[collection_id], fact_ids))  # the real knowledge base's own scoping
         if not confirm:
             return {
                 "success": True,
@@ -73,7 +73,7 @@ class FakeKB:
         self.events.append("delete")
         deleted = len(ids)
         self.facts -= ids
-        self.collections[collection_id] = set()
+        self.collections[collection_id] -= ids
         return {
             "success": True,
             "collection_id": collection_id,
@@ -261,6 +261,83 @@ async def test_approved_bulk_delete_removes_exactly_the_collections_facts(world)
     )
     assert world.kb.mutations == [("bulk", "c1")] and world.kb.facts == {"g1", "loose"}
     assert world.kb.collections == {"c1": set(), "c2": {"g1"}}
+
+
+# -- the selected-facts delete (#21886) --------------------------------------------------------------------
+
+
+def _selected(ids, facts=None, **approval_kwargs):
+    selector = action.selector_for(action.DOCUMENTS_DELETE, "c1", fact_ids=ids)
+    return _approval(action.DOCUMENTS_DELETE, selector, len(ids) if facts is None else facts, **approval_kwargs)
+
+
+@pytest.mark.asyncio
+async def test_n_selected_facts_produce_a_proposal_scoped_to_those_n_and_delete_nothing(world):
+    reply = await request.request_collection_documents_delete(world.kb, ADMIN, _session(), "c1", ["f2", "f1", "f2"])
+    assert reply["status"] == "pending_approval" and reply["action"] == "kb_collection_documents_delete"
+    assert reply["facts_in_collection"] == 2
+    plan = world.created["context"]["plan"]
+    assert plan["selector"] == action.selector_for(action.DOCUMENTS_DELETE, "c1", fact_ids=["f1", "f2"])
+    assert plan["selector"]["fact_ids"] == ["f1", "f2"] and plan["facts"] == 2 and plan["created_at"] == "t1"
+    assert world.kb.mutations == [] and world.kb.collections["c1"] == {"f1", "f2", "f3"}
+
+
+@pytest.mark.asyncio
+async def test_the_route_proposes_for_the_viewed_collection_only(world):
+    body = routes.CollectionFactsRequest(fact_ids=["f1", "g1"])
+    reply = await routes.delete_selected_collection_facts(body, "c1", _req(), ADMIN, _session())
+    assert reply["facts_in_collection"] == 1  # g1 is in c2, not in the collection being viewed
+    assert world.kb.mutations == [] and world.kb.facts == {"f1", "f2", "f3", "g1", "loose"}
+
+
+@pytest.mark.asyncio
+async def test_a_selection_with_no_member_of_the_collection_proposes_nothing(world):
+    with pytest.raises(HTTPException) as refused:
+        await request.request_collection_documents_delete(world.kb, ADMIN, _session(), "c1", ["g1"])
+    assert refused.value.status_code == 404 and world.created == {}
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_fact_id_is_400_and_a_service_key_is_403(world):
+    with pytest.raises(HTTPException) as bad:
+        await request.request_collection_documents_delete(world.kb, ADMIN, _session(), "c1", ["f1", "../x"])
+    with pytest.raises(HTTPException) as service:
+        await request.request_collection_documents_delete(
+            world.kb, {"id": "svc-key", "role": "admin"}, _session(), "c1", ["f1"]
+        )
+    assert (bad.value.status_code, service.value.status_code) == (400, 403) and world.created == {}
+
+
+@pytest.mark.asyncio
+async def test_an_unapproved_selected_delete_deletes_nothing(world):
+    with pytest.raises(ValueError):
+        await _run(action.DOCUMENTS_DELETE, _selected(["f1", "f2"], status="pending"))
+    assert world.kb.mutations == [] and world.kb.facts == {"f1", "f2", "f3", "g1", "loose"}
+
+
+@pytest.mark.asyncio
+async def test_an_approved_selected_delete_removes_exactly_the_selected_facts(world):
+    await _run(action.DOCUMENTS_DELETE, _selected(["f1", "f2"]))
+    assert world.kb.mutations == [("bulk", "c1")] and world.kb.facts == {"f3", "g1", "loose"}
+    assert world.kb.collections == {"c1": {"f3"}, "c2": {"g1"}}
+
+
+@pytest.mark.asyncio
+async def test_a_selected_delete_refuses_a_recreated_collection_and_a_count_above_the_approved_one(world):
+    with pytest.raises(ValueError, match="changed since it was approved"):
+        await _run(action.DOCUMENTS_DELETE, _selected(["f1", "f2"], created_at="other"))
+    with pytest.raises(ValueError, match="are in scope now"):
+        await _run(action.DOCUMENTS_DELETE, _selected(["f1", "f2"], facts=1))
+    assert world.kb.mutations == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ids", [[], ["f2", "f1"], ["f1", "../x"], "f1"])
+async def test_a_selected_delete_refuses_a_selector_this_module_does_not_build(world, ids):
+    selector = {"operation": "bulk_delete_collection_facts", "collection_id": "c1", "fact_ids": ids}
+    with pytest.raises(ValueError, match="different selector"):
+        await _run(action.DOCUMENTS_DELETE, _approval(action.DOCUMENTS_DELETE, selector, 2))
+    assert world.kb.mutations == []
 
 
 # -- the audit is durable, intent first ----------------------------------------------------------------------

@@ -238,11 +238,11 @@ export class KnowledgeController {
     }
   }
 
-  /** #21383: the backend only proposes the delete for approval, so the list keeps its rows and a notice says so. */
-  async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
+  /** #21886, #21383: propose deleting exactly the selected documents of the viewed collection; the rows stay until a human approves. */
+  async bulkDeleteDocuments(documentIds: string[], collectionId?: string): Promise<void> {
     try {
-      const reply = await knowledgeRepository.bulkDeleteDocuments(documentIds)
-      const key = reply.approval_id ? 'knowledge.entries.deleteProposed' : 'knowledge.entries.deleteNotProposed'
+      const reply = documentIds.length ? await knowledgeRepository.bulkDeleteDocuments(documentIds, collectionId) : null
+      const key = !reply ? 'knowledge.entries.deleteNothingSelected' : reply.approval_id ? 'knowledge.entries.deleteProposed' : 'knowledge.entries.deleteNotProposed'
       this.appStore.addSystemNotification({ title: i18n.global.t('knowledge.entries.deleteTitle'), message: i18n.global.t(key), severity: 'info' })
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'

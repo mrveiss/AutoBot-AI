@@ -3331,6 +3331,7 @@
       "confirmDeleteSelected": "Propose deleting {count} selected entries for approval?",
       "deleteTitle": "Deletion proposed",
       "deleteProposed": "Deletion proposed for approval. Nothing is deleted until an administrator approves it in the Approvals inbox.",
+      "deleteNothingSelected": "Nothing is selected, so no deletion was proposed.",
       "deleteNotProposed": "No deletion was proposed and nothing was deleted. Deleting needs an administrator's approval.",
       "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "verified": "Verified",

@@ -18,6 +18,7 @@ Endpoints:
 - GET /collections/{collection_id}/facts - List facts in collection
 - POST /collections/{collection_id}/export - Export collection
 - POST /collections/{collection_id}/bulk-delete - PROPOSE deleting a collection's facts (#21383)
+- POST /collections/{collection_id}/delete-selected - PROPOSE deleting the selected facts (#21886)
 - GET /facts/{fact_id}/collections - Get collections for a fact
 
 Related Issues: #77 (Organization), #412 (Collections)
@@ -53,6 +54,7 @@ from services.kb_collection_delete_request import (
     preview_collection_bulk_delete,
     request_collection_bulk_delete,
     request_collection_delete,
+    request_collection_documents_delete,
 )
 
 logger = get_logger(__name__)
@@ -126,13 +128,7 @@ async def create_collection(
     - status: success or error
     - collection: Created collection data with ID
     """
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    kb = await _require_kb(req)
 
     logger.info("Creating collection '%s'", request.name)
 
@@ -180,13 +176,7 @@ async def list_collections(
     - collections: List of collections
     - total_count: Total number of collections
     """
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    kb = await _require_kb(req)
 
     result = await kb.list_collections(
         limit=pagination.limit,
@@ -231,21 +221,8 @@ async def get_collection(
     - status: success or error
     - collection: Collection data
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     result = await kb.get_collection(collection_id=collection_id)
 
@@ -286,21 +263,8 @@ async def update_collection(
     - status: success or error
     - collection: Updated collection data
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     logger.info("Updating collection '%s'", collection_id)
 
@@ -382,21 +346,8 @@ async def add_facts_to_collection(
     - already_in_collection: Number already present
     - not_found: List of fact IDs not found
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     logger.info("Adding %d facts to collection '%s'", len(request.fact_ids), collection_id)
 
@@ -444,21 +395,8 @@ async def remove_facts_from_collection(
     - removed_count: Number of facts removed
     - not_in_collection: Number not in collection
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     logger.info("Removing %d facts from collection '%s'", len(request.fact_ids), collection_id)
 
@@ -507,21 +445,8 @@ async def get_facts_in_collection(
     - facts: List of facts
     - total_count: Total facts in collection
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     result = await kb.get_facts_in_collection(
         collection_id=collection_id,
@@ -577,13 +502,7 @@ async def get_fact_collections(
             detail="Invalid fact_id format: only alphanumeric, hyphens, underscores",
         )
 
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    kb = await _require_kb(req)
 
     result = await kb.get_fact_collections(fact_id=fact_id)
 
@@ -629,21 +548,8 @@ async def export_collection(
     - facts: Exported facts
     - total_count: Number of facts
     """
-    # Validate collection_id format
-    collection_id = collection_id.strip()
-    if not _COLLECTION_ID_RE.match(collection_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid collection_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Get knowledge base instance
-    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+    collection_id = _validated_collection_id(collection_id)
+    kb = await _require_kb(req)
 
     logger.info("Exporting collection '%s'", collection_id)
 
@@ -689,3 +595,21 @@ async def bulk_delete_collection_facts(
     if not confirm:
         return await preview_collection_bulk_delete(kb, collection_id)
     return await request_collection_bulk_delete(kb, current_user, session, collection_id)
+
+
+@router.post("/collections/{collection_id}/delete-selected", response_model=KnowledgeCollectionDeleteProposal)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_selected_collection_facts",
+    error_code_prefix="KNOWLEDGE_COLLECTIONS",
+)
+async def delete_selected_collection_facts(
+    body: CollectionFactsRequest,
+    collection_id: str = Path(..., description="Collection UUID"),
+    req: Request = None,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Propose deleting exactly the selected facts of this collection. It deletes nothing (#21886, #17038)."""
+    kb, cid = await _require_kb(req), _validated_collection_id(collection_id)
+    return await request_collection_documents_delete(kb, current_user, session, cid, body.fact_ids)

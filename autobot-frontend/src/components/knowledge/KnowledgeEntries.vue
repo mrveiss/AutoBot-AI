@@ -657,10 +657,10 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
-
+  const ids = [...selection.selected.value]
+  if (ids.length && !(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: ids.length }) }))) return
   try {
-    await controller.bulkDeleteDocuments([...selection.selected.value])
+    await controller.bulkDeleteDocuments(ids, [route.query.collection].flat()[0] ?? undefined) // the collection being viewed (#21886)
     selection.clear()
   } catch (error) {
     logger.error('Failed to delete entries:', error)
