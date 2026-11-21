@@ -105,7 +105,6 @@ export class KnowledgeController {
     accessOptions?: { access_level?: string; visibility?: string }
   ): Promise<string> {
     try {
-
       // Build request with proper typing (Issue #685: hierarchical access)
       const request: AddTextRequest = {
         content,
