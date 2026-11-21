@@ -68,10 +68,13 @@ async def bucket_sections_for_graph(
     try:
         viewer = viewer_for(current_user, ledger)
         built = await _built_buckets(kb, body, viewer)
-        await _fold_codebases(built, body, current_user, viewer)
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)
         return [section_report("buckets", "Knowledge buckets", None, 0, failed=True)]  # not "no buckets"
+    try:
+        await _fold_codebases(built, body, current_user, viewer)
+    except Exception:  # the codebase nodes are extra: their fault must not fail the bucket sections
+        logger.warning("Codebase nodes omitted from the knowledge graph", exc_info=True)
     if built["unmapped"]:
         logger.warning("Knowledge collections missing from the graph registry: %s", built["unmapped"])
     nodes.extend(built["nodes"])

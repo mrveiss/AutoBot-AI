@@ -188,3 +188,17 @@ async def test_codebases_are_on_the_first_page_only_and_recorded_in_the_ledger(a
     assert sorted(ledger.fact_ids) == ["codebase:src-alpha", "codebase:src-beta"]
     _, _, paged, _ = await _graph(kb, offset=50)
     assert paged == []
+
+
+@pytest.mark.asyncio
+async def test_a_codebase_fault_leaves_the_bucket_sections_reporting(analytics, monkeypatch, caplog):
+    async def boom(owner):
+        raise RuntimeError("registry exploded")
+
+    monkeypatch.setattr(cb, "list_sources", boom)
+    kb = ListingKB([], await client_with({"autobot_code": [("r1", {"k": "v"})]}))
+    with caplog.at_level("WARNING"):
+        nodes, _, sections, _ = await _graph(kb)
+    assert not any(s.get("failed") for s in sections), sections
+    assert not [n for n in nodes if n["type"] == "codebase"]
+    assert "Codebase nodes omitted" in caplog.text

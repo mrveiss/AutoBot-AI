@@ -700,6 +700,7 @@ async def get_call_graph(
     if not refresh:
         cached_data = await get_cached_call_graph(str(project_root))
         if cached_data:
+            await store_call_graph_summary(source_id, cached_data)  # #20945: graphs cached before the summary existed
             return JSONResponse({**cached_data, "from_cache": True, "source_id": source_id})
 
     python_files = await _get_python_files(project_root)
