@@ -256,6 +256,28 @@ Index(
 ).ddl_if(dialect="postgresql")
 
 
+#: One PENDING knowledge-base cleanup proposal per target, enforced by the database (#20992): the connector
+#: credential strip (per connector) and the empty-collection delete (per collection). The proposers read for an
+#: open proposal and then create one; only a unique index makes the second concurrent insert fail.
+PENDING_CONNECTOR_CREDENTIAL_INDEX = "uq_approvals_pending_connector_credential_strip"
+PENDING_CONNECTOR_CREDENTIAL_WHERE = "status = 'pending' AND context ->> 'action' = 'connector_credential_strip'"
+Index(
+    PENDING_CONNECTOR_CREDENTIAL_INDEX,
+    Approval.context["connector_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_CONNECTOR_CREDENTIAL_WHERE),
+).ddl_if(dialect="postgresql")
+
+PENDING_EMPTY_COLLECTION_INDEX = "uq_approvals_pending_empty_collection_delete"
+PENDING_EMPTY_COLLECTION_WHERE = "status = 'pending' AND context ->> 'action' = 'chroma_empty_collection_delete'"
+Index(
+    PENDING_EMPTY_COLLECTION_INDEX,
+    Approval.context["collection"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_EMPTY_COLLECTION_WHERE),
+).ddl_if(dialect="postgresql")
+
+
 #: One PENDING owner proposal per chat session, enforced by the database (#20030). Two admins' requests
 #: can both pass the application-level "already pending" read; only a unique index makes the second
 #: insert fail, and the route answers it 409. Partial, so it constrains nothing but pending rows of
