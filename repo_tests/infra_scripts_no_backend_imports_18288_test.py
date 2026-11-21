@@ -35,6 +35,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from repo_tests._hang_guard import run_guarded
 from repo_tests._infra_backend_names import backend_only_names, dir_names, tracked_py
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
@@ -233,15 +234,9 @@ _IMPORT = textwrap.dedent("""
 def _clean_import(path: Path, cwd: Path) -> subprocess.CompletedProcess:
     """Import *path* as a module in an isolated interpreter: no PYTHONPATH, no user site, cwd outside."""
     env = {"PATH": os.environ.get("PATH", ""), "HOME": str(cwd)}
-    return subprocess.run(  # noqa: S603 - fixed argv, our own interpreter
-        [sys.executable, "-I", "-c", _IMPORT, str(path)],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-        env=env,
-        timeout=180,
-        check=False,
-    )
+    # A hang guard on CPU progress, not a wall-clock timeout: the import is CPU-bound, so a loaded
+    # host stretched it past a fixed 180 s budget (#21910).
+    return run_guarded([sys.executable, "-I", "-c", _IMPORT, str(path)], cwd=cwd, env=env)
 
 
 @pytest.mark.parametrize("rel", sorted(BACKEND_TOOLS))
