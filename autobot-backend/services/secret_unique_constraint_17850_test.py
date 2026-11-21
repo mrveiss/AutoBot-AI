@@ -25,11 +25,53 @@ def _approval():
 async def test_the_executor_triggers_the_ensure_after_its_removals(monkeypatch):
     ensure = AsyncMock()
     monkeypatch.setattr(action, "ensure_after_duplicate_removal", ensure)
-    monkeypatch.setattr(action, "_review_of", AsyncMock(return_value=SimpleNamespace(removals=[])))
+    monkeypatch.setattr(action, "_review_of", AsyncMock(return_value=SimpleNamespace(removals=[], survivor_id=_ID)))
     monkeypatch.setattr(action, "_comment", AsyncMock())
     session = AsyncMock()
     await action.execute_secret_duplicate_cleanup(_approval(), session)
     ensure.assert_awaited_once_with(session)
+
+
+class _ExpiringApproval:
+    """Like an ORM row after ``session.rollback()``: its attributes raise until the session refreshes it."""
+
+    def __init__(self):
+        self.expired = False
+        self._id = "ap"
+        self.context = {"survivor_id": _ID, "removal_ids": []}
+
+    @property
+    def id(self):
+        if self.expired:
+            raise RuntimeError("MissingGreenlet: attribute access on an expired instance")
+        return self._id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["InsufficientPrivilege", "OperationalError"])
+async def test_a_failed_ensure_rolls_back_yet_the_summary_comment_is_written(monkeypatch, failure):
+    import services.secret_duplicates as dup
+
+    approval, comments = _ExpiringApproval(), []
+
+    async def rollback():
+        approval.expired = True
+
+    async def refresh(obj):
+        obj.expired = False
+
+    session = MagicMock(
+        connection=AsyncMock(side_effect=type(failure, (Exception,), {})("ddl refused")),
+        rollback=rollback,
+        refresh=refresh,
+        add=comments.append,
+        commit=AsyncMock(),
+    )
+    monkeypatch.setattr(dup, "find_duplicate_groups", AsyncMock(return_value=[]))
+    monkeypatch.setattr(action, "_review_of", AsyncMock(return_value=SimpleNamespace(removals=[], survivor_id=_ID)))
+    await action.execute_secret_duplicate_cleanup(approval, session)
+    assert approval.expired is False and len(comments) == 1
+    assert comments[0].approval_id == "ap" and "Secret duplicate cleanup" in comments[0].body
 
 
 @pytest.mark.asyncio

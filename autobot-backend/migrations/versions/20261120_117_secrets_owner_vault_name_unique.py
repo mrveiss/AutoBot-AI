@@ -24,7 +24,8 @@ from typing import Sequence, Union
 from alembic import op
 
 from migrations.guards import has_table
-from migrations.secret_unique import CONSTRAINT, TABLE, ensure_secret_unique_constraint, has_constraint
+from migrations.secret_unique import TABLE, ensure_secret_unique_constraint, has_constraint
+from models.secret import SECRET_OWNER_VAULT_NAME_UNIQUE
 
 revision: str = "20261120_117"
 down_revision: Union[str, None] = "20261120_116"
@@ -39,4 +40,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql" and has_table(TABLE) and has_constraint(bind):
-        op.drop_constraint(CONSTRAINT, TABLE, type_="unique")
+        op.drop_constraint(SECRET_OWNER_VAULT_NAME_UNIQUE, TABLE, type_="unique")

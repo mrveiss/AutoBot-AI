@@ -16,12 +16,17 @@ Takes a SYNC connection: the migration passes ``op.get_bind()``, the app passes
 import sqlalchemy as sa
 from sqlalchemy.engine import Connection
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from models.secret import SECRET_OWNER_VAULT_NAME_UNIQUE
 
 logger = get_logger(__name__)
 
 TABLE = "secrets"
-CONSTRAINT = "uq_secrets_owner_vault_name"
+
+#: How long the ALTER waits for its ACCESS EXCLUSIVE lock before giving up (the caller logs the timeout by type and
+#: the next startup retries), so a long-running reader never stalls every query on ``secrets`` behind it.
+LOCK_TIMEOUT_MS = env_int_clamped("AUTOBOT_SECRET_UNIQUE_LOCK_TIMEOUT_MS", 5000, 100, 60000)
 
 #: Outcomes of :func:`ensure_secret_unique_constraint`.
 CREATED, EXISTS, PENDING, SKIPPED = "created", "exists", "pending_duplicates", "skipped"
@@ -34,7 +39,7 @@ _DUPLICATE_GROUPS = (
 
 def has_constraint(bind: Connection) -> bool:
     inspector = sa.inspect(bind)
-    return CONSTRAINT in {c["name"] for c in inspector.get_unique_constraints(TABLE)}
+    return SECRET_OWNER_VAULT_NAME_UNIQUE in {c["name"] for c in inspector.get_unique_constraints(TABLE)}
 
 
 def ensure_secret_unique_constraint(bind: Connection) -> str:
@@ -53,10 +58,13 @@ def ensure_secret_unique_constraint(bind: Connection) -> str:
             "constraint %s NOT created: %d duplicated (owner_vault, name) secret group(s) remain; resolve them "
             "through the Approvals inbox (POST /api/admin/secret-duplicates/requests). The app creates the "
             "constraint once none remain",
-            CONSTRAINT,
+            SECRET_OWNER_VAULT_NAME_UNIQUE,
             groups,
         )
         return PENDING
-    bind.execute(sa.text(f"ALTER TABLE {TABLE} ADD CONSTRAINT {CONSTRAINT} UNIQUE (owner_vault, name)"))
-    logger.info("constraint %s created", CONSTRAINT)
+    bind.execute(sa.text(f"SET LOCAL lock_timeout = {int(LOCK_TIMEOUT_MS)}"))
+    bind.execute(
+        sa.text(f"ALTER TABLE {TABLE} ADD CONSTRAINT {SECRET_OWNER_VAULT_NAME_UNIQUE} UNIQUE (owner_vault, name)")
+    )
+    logger.info("constraint %s created", SECRET_OWNER_VAULT_NAME_UNIQUE)
     return CREATED

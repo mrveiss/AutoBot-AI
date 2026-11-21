@@ -385,14 +385,14 @@ async def _init_database() -> None:
     """Helper for initialize_critical_services. Ref: #1088.
 
     Issue #898: Initialize PostgreSQL async engine.
-    Issue #12293: ``init_database()`` now distinguishes a permanent credential misconfiguration (fail fast with a
-    loud CRITICAL diagnosis) from transient DB unavailability (bounded, clearly-logged retry). Both raise a clear
-    ``RuntimeError``; surface it unchanged rather than re-wrapping into a generic "Database initialization failed"
-    that would bury the root cause.
+    Issue #12293: ``init_database()`` now distinguishes a permanent credential
+    misconfiguration (fail fast with a loud CRITICAL diagnosis) from transient
+    DB unavailability (bounded, clearly-logged retry). Both raise a clear
+    ``RuntimeError``; surface it unchanged rather than re-wrapping into a
+    generic "Database initialization failed" that would bury the root cause.
     """
     logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
     try:
-        from services.secret_unique_constraint import ensure_secret_unique_at_startup
         from user_management.config import get_deployment_config
 
         config = get_deployment_config()
@@ -405,11 +405,11 @@ async def _init_database() -> None:
             config.postgres_db,
         )
         await init_database()
-        await ensure_secret_unique_at_startup()  # #17850: applies the constraint migration 117 skipped
         logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
     except Exception as db_error:
-        # init_database() has already logged a CRITICAL fail-fast / bounded-retry diagnosis (#12293). Re-raise its
-        # clear RuntimeError unchanged so the root cause (e.g. stale autobot_app password) is not hidden.
+        # init_database() has already logged a CRITICAL fail-fast / bounded-retry
+        # diagnosis (#12293). Re-raise its clear RuntimeError unchanged so the
+        # root cause (e.g. stale autobot_app password) is not hidden.
         logger.error("❌ CRITICAL: Database initialization aborted: %s", db_error)
         raise
 

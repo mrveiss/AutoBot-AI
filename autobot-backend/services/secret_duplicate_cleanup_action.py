@@ -211,6 +211,7 @@ async def execute_secret_duplicate_cleanup(approval: "Approval", session: "Async
     review = await _review_of(approval, session)
     outcomes = [f"{sid}: {await _remove_one(approval, session, sid, review)}" for sid in review.removals]
     await ensure_after_duplicate_removal(session)  # the last group gone: the app creates the constraint (#17850)
+    await session.refresh(approval)  # a failed ensure rolled back and expired it; the comment reads its id
     await _comment(
         approval, session, f"Secret duplicate cleanup (survivor {review.survivor_id}): " + "; ".join(outcomes)
     )
