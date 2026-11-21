@@ -43,12 +43,10 @@ import {
   type OrphanResource,
   type OrphanStorageCandidate,
   type OrphanStorageListResponse,
-  type UserResponse,
 } from '@/composables/useAutobotApi'
-import { formatFileSize } from '@/utils/formatHelpers'
-import { formatRelativeTime } from '@/utils/dateUtils'
-import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import type { SlmUserResponse } from '@/composables/useSlmUserApi'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
+import { BaseAlert, BaseModal, formatFileSize, createLogger } from '@autobot/ui'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()
@@ -186,7 +184,7 @@ const resourceType = ref<ResourceType>('knowledge_fact')
 const orphans = ref<OrphanResource[]>([])
 const orphansLoading = ref(false)
 const orphansError = ref('')
-const users = ref<UserResponse[]>([])
+const users = ref<SlmUserResponse[]>([])
 const newOwnerByResource = ref<Record<string, string>>({})
 const repairingResource = ref<Record<string, boolean>>({})
 
@@ -293,7 +291,7 @@ const AUDIT_LIMIT_PER_OPERATION = 25
 
 /** `AuditLogEntry.timestamp` is Unix-epoch SECONDS, not an ISO string or ms. */
 function formatAuditTime(ts: number): string {
-  return formatRelativeTime(new Date(ts * 1000).toISOString())
+  return formatCompactRelativeTime(new Date(ts * 1000).toISOString())
 }
 
 const auditEntries = ref<AuditLogEntry[]>([])
@@ -370,15 +368,12 @@ onMounted(() => {
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
 
       <BaseAlert v-if="storageError" variant="error" class="mb-4" :message="storageError" />
-      <div
+      <BaseAlert
         v-for="status in unavailableProviders"
         :key="status.provider"
-        class="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="storage-provider-unavailable"
-      >
-        {{ $t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || 'unknown error' }) }}
-      </div>
+        variant="warning" size="compact" class="mb-2" role="alert" data-testid="storage-provider-unavailable"
+        :message="$t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || $t('dataHygiene.storage.unknownError') })"
+      />
 
       <div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-4 max-w-md">
         <div class="bg-gray-50 rounded-lg p-4">
@@ -433,7 +428,7 @@ onMounted(() => {
               <td class="px-3 py-2 text-gray-900">{{ c.provider }}</td>
               <td class="px-3 py-2 font-mono text-xs text-gray-600">{{ c.location }}</td>
               <td class="px-3 py-2">{{ formatFileSize(c.size_bytes) }}</td>
-              <td class="px-3 py-2 text-gray-500">{{ formatRelativeTime(c.modified_at) }}</td>
+              <td class="px-3 py-2 text-gray-500">{{ formatCompactRelativeTime(c.modified_at) }}</td>
               <td class="px-3 py-2">
                 <span>{{ c.reason }}</span>
                 <span v-if="!c.deletable" class="ml-2 px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
@@ -610,14 +605,11 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.audit.subtitle') }}</p>
 
-      <div
+      <BaseAlert
         v-if="auditPartialError"
-        class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="audit-partial-error"
-      >
-        {{ auditPartialError }}
-      </div>
+        variant="warning" size="compact" class="mb-4" role="alert" data-testid="audit-partial-error"
+        :message="auditPartialError"
+      />
 
       <div class="overflow-x-auto border border-gray-200 rounded-lg">
         <table class="w-full text-sm">

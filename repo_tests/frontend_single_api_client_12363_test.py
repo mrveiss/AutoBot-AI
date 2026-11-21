@@ -6,8 +6,10 @@
 
 **The boundary.** Per app (``autobot-frontend``, ``autobot-slm-frontend``), the count is every
 HTTP transport that is not the app's ``ApiClient.ts``, in a ``.ts``/``.js``/``.vue`` file under
-``src``: a raw ``fetch(`` / ``window.fetch(`` / ``globalThis.fetch(`` call, an ``axios`` import
-or require, and a ``new XMLHttpRequest(``. Tests, specs, stories, ``__tests__/``, ``e2e/`` and
+``src``: a raw ``fetch(`` / ``window.fetch(`` / ``globalThis.fetch(`` call, an ``axios`` value import
+or require (a type-only import creates no transport and is not counted, #19659), and a
+``new XMLHttpRequest(``. A raw ``fetch`` directly under eslint's reasoned
+``no-restricted-syntax`` exemption is exempt; that exemption never covers axios or XHR. Tests, specs, stories, ``__tests__/``, ``e2e/`` and
 the msw mocks under ``src/test/mocks`` mock fetch on purpose and are not read; neither are
 comment lines. ``fetchWithAuth.ts`` IS counted: by its own header it is a bridge for existing
 raw sites, and ``ApiClient.rawRequest()`` is the canonical path for new code.
@@ -29,29 +31,46 @@ import re
 from pathlib import Path
 
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table
+from repo_tests._ratchet_base import base_file_present, base_table, raised_known_entries
 from repo_tests._reach import declare
 
 _THIS = "repo_tests/frontend_single_api_client_12363_test.py"
 _CANONICAL = "src/utils/ApiClient.ts"
 _SUFFIXES = (".ts", ".js", ".vue")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/|/e2e/|/src/test/mocks/)")
-_TRANSPORT = re.compile(
-    r"(?:(?<![\w.])|\b(?:window|globalThis|self)\.)fetch\s*(?:<[^>()]*>\s*)?(?:\?\.)?\("
-    r"|\bfrom\s+['\"]axios['\"]|\bimport\s+['\"]axios['\"]|\bimport\s*\(\s*['\"]axios['\"]"
+_FETCH = re.compile(r"(?:(?<![\w.])|\b(?:window|globalThis|self)\.)fetch\s*(?:<[^>()]*>\s*)?(?:\?\.)?\(")
+_OTHER_TRANSPORT = re.compile(
+    r"\bfrom\s+['\"]axios['\"]|\bimport\s+['\"]axios['\"]|\bimport\s*\(\s*['\"]axios['\"]"
     r"|\brequire\(\s*['\"]axios['\"]"
     r"|\bnew\s+XMLHttpRequest\s*\("
+)
+#: A type-only import or re-export creates no transport (``import type``, ``export type``, or braces
+#: holding only ``type`` specifiers); it may span lines.
+_TYPE_ONLY_AXIOS = re.compile(
+    r"\b(?:import|export)\s+(?:type\s+(?:[\w$]+\s*,?\s*)?(?:\{[^{};]*\}|\*\s+as\s+[\w$]+)?\s*"
+    # Specifiers are comma-SEPARATED, never optionally: an optional separator lets the repetition
+    # re-split ``type a type b ...`` exponentially (CodeQL, #19666 review).
+    r"|\{\s*type\s+[\w$]+(?:\s+as\s+[\w$]+)?(?:\s*,\s*type\s+[\w$]+(?:\s+as\s+[\w$]+)?)*\s*,?\s*\}\s*)"
+    r"from\s+['\"]axios['\"]",  # one statement only: the repo writes no semicolons (#19659 review)
+    re.DOTALL,
 )
 _COMMENT = re.compile(r"^\s*(//|\*|/\*|<!--)")
 #: The existing per-site exemption (eslint's raw-fetch ban): it must follow a comment giving the reason.
 _EXEMPT = re.compile(r"eslint-disable-next-line\s+no-restricted-syntax")
+#: The one-line form (#12363 slice 0): the reason rides on the directive itself, ``-- <at least four words>``.
+_REASONED_EXEMPT = re.compile(r"eslint-disable-next-line\s+no-restricted-syntax\s+--\s+(?:\S+\s+){3,}\S")
 #: A reason is prose: a comment of at least four words that is not itself a lint directive.
 _REASON = re.compile(r"^\s*(?://|\*|/\*)\s*(?!eslint|@ts-|prettier)(?:\S+\s+){3,}\S")
 #: A trailing ``// ...`` or an inline ``/* ... */`` is not code.
 _TRAILING_COMMENT = re.compile(r"/\*.*?\*/|(?<![:'\"\w])//.*$")
 
 # Measured on b07673947b; the SLM's Prometheus/Grafana probes are eslint-exempted with a reason. Lower an app's pin by exactly what a PR removes (#12363 phase 2).
-PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 1}
+# #12363 step 2: the SLM's main-backend calls moved onto SlmApiClient, 1 -> 0.
+# #12363 slice 0: the main app's raw-fetch eslint ban (same selectors as the SLM's) landed, and its 12 legitimate raw
+# fetches (VNC probe, data: URL, connection tester, AppConfig and ServiceDiscovery bootstrap x3, ssot-config bootstrap,
+# widget, RUM x2, thumbnail worker, SLM-origin client) now carry a one-line `eslint-disable-next-line ... -- <reason>` at the call site: 14 -> 2.
+# What remains is `utils/fetchWithAuth.ts` (the bridge slice 3 retires) and `conversationFileUpload.ts`'s XHR.
+PINS = {"autobot-frontend": 2, "autobot-slm-frontend": 0}
 
 
 def _countable(app: Path, path: Path) -> bool:
@@ -70,26 +89,38 @@ def _sources(root: Path) -> list[Path]:
     return found
 
 
-#: 1,088 files measured on b07673947b across both GUIs; repinned by scripts/repin_reach_floors.py.
+#: 1,088 files measured on b07673947b across both GUIs; the floor is computed from the base commit (#19676).
+#: #19532: the unmounted SettingsPanel, CacheService and settings types retired (1,087).
 REACH = declare(
     "frontend-http-transports",
     discover=_sources,
-    floor=1088,
     growth=100,  # ~9%: ordinary GUI growth between repins must not turn an unrelated PR red
     what="non-test GUI source files",
     roots=tuple(f"{app}/src" for app in PINS),
 )
 
 
+def _without_type_only_imports(text: str) -> str:
+    """*text* with each type-only axios import blanked, its newlines kept so line numbers hold."""
+    return _TYPE_ONLY_AXIOS.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
+def _exempted(lines: list[str], i: int) -> bool:
+    """Line *i* sits under a reasoned raw-fetch exemption: a one-line ``-- reason`` directive, or directive under a reason comment."""
+    if i >= 1 and _COMMENT.match(lines[i - 1]) and _REASONED_EXEMPT.search(lines[i - 1]):
+        return True
+    return i >= 2 and bool(_EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]))
+
+
 def _transports(text: str) -> int:
-    """Transports in one file; one directly under a REASONED eslint raw-fetch exemption is exempt."""
-    lines, total = text.splitlines(), 0
+    """Transports in one file; one raw ``fetch`` directly under a REASONED eslint raw-fetch exemption is exempt."""
+    lines, total = _without_type_only_imports(text).splitlines(), 0
     for i, line in enumerate(lines):
         code = "" if _COMMENT.match(line) else _TRAILING_COMMENT.sub("", line)
-        hits = len(_TRANSPORT.findall(code))
-        if hits and i >= 2 and _EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]):
-            hits -= 1  # the exemption covers one call, not the whole line
-        total += hits
+        fetches = len(_FETCH.findall(code))
+        if fetches and _exempted(lines, i):
+            fetches -= 1  # the exemption is eslint's raw-fetch ban: it covers one fetch, never axios or XHR
+        total += fetches + len(_OTHER_TRANSPORT.findall(code))
     return total
 
 
@@ -129,6 +160,21 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "src/B.vue", bare)
         assert count_transports(tmp_path) == 1
 
+    def test_a_one_line_reasoned_directive_is_exempt_and_a_thin_or_trailing_one_is_not(self, tmp_path: Path) -> None:
+        d = "// eslint-disable-next-line no-restricted-syntax"
+        self._w(tmp_path, "src/ok.ts", f"{d} -- probes another origin, not the backend\nawait fetch(a)\n")
+        self._w(tmp_path, "src/thin.ts", f"{d} -- fine\nawait fetch(b)\n")  # one word is not a reason
+        self._w(tmp_path, "src/empty.ts", f"{d} --\nawait fetch(c)\n")
+        self._w(tmp_path, "src/far.ts", f"{d} -- probes another origin, not the backend\nconst x = 1\nawait fetch(d)\n")
+        self._w(
+            tmp_path, "src/xhr.ts", f"{d} -- probes another origin, not the backend\nconst x = new XMLHttpRequest()\n"
+        )
+        self._w(
+            tmp_path, "src/trail.ts", f"const x = 1 {d} -- probes another origin, not the backend\nawait fetch(e)\n"
+        )
+        self._w(tmp_path, "src/same.ts", f"await fetch(f) {d} -- probes another origin, not the backend\n")
+        assert count_transports(tmp_path) == 6  # thin, empty, far (not adjacent), the XHR, and both trailing directives
+
     def test_it_counts_generic_optional_dynamic_and_bare_import_shapes(self, tmp_path: Path) -> None:
         body = (
             "const r = await fetch<Row[]>(u)\nfetch?.(v)\nself.fetch(w)\n"
@@ -152,6 +198,37 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "src/a.ts", body)
         assert count_transports(tmp_path) == 1
 
+    def test_an_exemption_never_hides_axios_or_xhr(self, tmp_path: Path) -> None:
+        reason = "// The probe reaches a separate service on its own origin.\n"
+        directive = "// eslint-disable-next-line no-restricted-syntax\n"
+        self._w(tmp_path, "src/a.ts", f"{reason}{directive}import axios from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", f"{reason}{directive}const x = new XMLHttpRequest()\n")
+        assert count_transports(tmp_path) == 2
+
+    def test_a_type_only_import_is_not_a_transport(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "src/a.ts", "import type { AxiosRequestConfig } from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", "import type {\n  AxiosError,\n  AxiosResponse,\n} from 'axios'\nfetch(u)\n")
+        self._w(tmp_path, "src/c.ts", "import { type AxiosError, type AxiosResponse as R } from 'axios'\n")
+        self._w(tmp_path, "src/d.ts", "export type { AxiosInstance } from 'axios'\n")
+        assert count_transports(tmp_path) == 1  # only b.ts's fetch, still found on its own line
+
+    def test_a_type_import_never_hides_a_later_value_import(self, tmp_path: Path) -> None:
+        bodies = (
+            "import type { A } from 'x'\nimport axios from 'axios'\n",
+            "import type { A } from 'x'\nconst y = 1\nimport axios from 'axios'\n",
+            "import type A from 'x'\nimport { create } from 'axios'\n",
+            "export type Foo = { a: 1 }\nimport axios from 'axios'\n",
+            "<script setup lang=\"ts\">\nimport type { Props } from './p'\nimport axios from 'axios'\n</script>\n",
+        )
+        for i, body in enumerate(bodies):
+            self._w(tmp_path, f"src/m{i}.{'vue' if 'script' in body else 'ts'}", body)
+        assert count_transports(tmp_path) == len(bodies)
+
+    def test_a_value_import_beside_a_type_is_a_transport(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "src/a.ts", "import axios, { type AxiosError } from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", "import { type AxiosError, create } from 'axios'\n")
+        assert count_transports(tmp_path) == 2
+
     def test_a_method_named_fetch_is_not_a_transport(self, tmp_path: Path) -> None:
         self._w(tmp_path, "src/a.ts", "store.fetch(id)\nawait this.fetch()\nprefetch(x)\nrefetch()\n")
         assert count_transports(tmp_path) == 0
@@ -172,11 +249,20 @@ def test_each_gui_has_no_more_transports_than_pinned() -> None:
 
 
 def test_no_pin_was_raised_against_the_base() -> None:
-    base = base_table(repo_root(), (_THIS,), "PINS")
-    if not base:
+    if not base_file_present(repo_root(), (_THIS,)):
         return  # the guard is new at this base (an unreadable base raises BaseUnavailable instead)
+    base = base_table(repo_root(), (_THIS,), "PINS")
     assert set(base) <= set(
         PINS
     ), f"apps dropped from PINS: {sorted(set(base) - set(PINS))}; an app's pin only goes down"
-    raised = {app: (base[app], pin) for app, pin in PINS.items() if app in base and pin > base[app]}
+    raised = raised_known_entries(PINS, base)
     assert not raised, f"pins rose against the base (base, now): {raised}; a pin only goes down (#12363)."
+
+
+def test_the_type_only_pattern_stays_linear_on_a_pathological_input() -> None:
+    """CodeQL flagged exponential backtracking on many ``type $`` repetitions (#19666 review)."""
+    import time
+
+    started = time.perf_counter()
+    _TYPE_ONLY_AXIOS.search("import {" + " type $" * 40 + " from 'nowhere'")
+    assert time.perf_counter() - started < 1.0

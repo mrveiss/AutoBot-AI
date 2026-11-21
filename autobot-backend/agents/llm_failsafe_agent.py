@@ -19,10 +19,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List
 
+from agents.failsafe_models import failsafe_answer, failsafe_primary_model, failsafe_secondary_model
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
-    get_agent_model_explicit,
     get_agent_provider_explicit,
 )
 from llm_shared.types import LLMType
@@ -86,7 +86,7 @@ class LLMFailsafeAgent(StandardizedAgent):
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
-        self.model_name = get_agent_model_explicit(self.AGENT_ID)
+        self.model_name = failsafe_primary_model()
 
         self.logger.info(
             "LLM Failsafe Agent initialized with provider=%s, endpoint=%s, model=%s",
@@ -106,9 +106,8 @@ class LLMFailsafeAgent(StandardizedAgent):
         # Performance tracking
         self.tier_stats = {tier: {"requests": 0, "failures": 0, "avg_time": 0.0} for tier in LLMTier}
 
-        # Configuration - use explicit model from SSOT config
         self.primary_models = [self.model_name]
-        self.secondary_models = [self.model_name]
+        self.secondary_models = [failsafe_secondary_model(self.model_name)]
 
         # Timeout settings (in seconds)
         self.timeouts = {
@@ -496,10 +495,10 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = self._create_structured_messages(prompt, context)
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type=LLMType.TASK),
+                        llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.PRIMARY],
                     )
-                    response = response_data.content
+                    response = failsafe_answer(response_data)
                     if response and response.strip():
                         return self._build_llm_response(response, LLMTier.PRIMARY, model, context, start_time)
                 except asyncio.TimeoutError:
@@ -527,10 +526,10 @@ class LLMFailsafeAgent(StandardizedAgent):
                 try:
                     messages = [{"role": "user", "content": simplified_prompt}]
                     response_data = await asyncio.wait_for(
-                        llm.chat(messages, llm_type=LLMType.TASK),
+                        llm.chat(messages, model_name=model, llm_type=LLMType.TASK),
                         timeout=self.timeouts[LLMTier.SECONDARY],
                     )
-                    response = response_data.content
+                    response = failsafe_answer(response_data)
                     if response and response.strip():
                         return self._build_llm_response(
                             response,

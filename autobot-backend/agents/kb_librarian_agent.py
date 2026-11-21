@@ -118,14 +118,16 @@ class KBLibrarianAgent(StandardizedAgent):
         """Handle search action via StandardizedAgent routing."""
         query = request.payload["query"]
         limit = request.payload.get("limit", 5)
-        results = await self.search_knowledge(query, limit=limit)
+        # The distributed path has no local principal yet (#19810): read as nobody, i.e. deny.
+        results = await self.search_knowledge(query, limit=limit, user_id=None)
         return {"results": results, "count": len(results)}
 
     async def _handle_answer(self, request) -> Dict[str, Any]:
         """Handle answer action via StandardizedAgent routing."""
         question = request.payload["question"]
         context_limit = request.payload.get("context_limit", 3)
-        return await self.answer_question(question, context_limit=context_limit)
+        # No local principal on the distributed path yet (#19810): read as nobody, i.e. deny.
+        return await self.answer_question(question, context_limit=context_limit, user_id=None)
 
     def declared_scopes(self, request) -> List[str]:
         """The knowledge-base entry this run will write, if it writes one (#15950).

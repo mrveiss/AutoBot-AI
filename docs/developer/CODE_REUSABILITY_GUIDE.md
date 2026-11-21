@@ -63,7 +63,8 @@ Comprehensive formatting utilities eliminating 33+ duplicate implementations.
 #### Date & Time Formatting
 
 ```typescript
-import { formatDate, formatTime, formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDate, formatTime, formatDateTime } from '@/utils/formatHelpers'
+import { createRecencyFormatter } from '@autobot/ui'
 
 // Date formatting
 formatDate('2025-10-30T18:05:00Z')  // "10/30/2025"
@@ -76,8 +77,9 @@ formatTime(new Date(), true)          // "14:30" (24-hour)
 // Date and time together
 formatDateTime('2025-10-30T14:30:00Z') // "10/30/2025, 2:30 PM"
 
-// Relative time
-formatTimeAgo(Date.now() - 3600000)   // "1 hour ago"
+// Relative time, in the app's language (#19606)
+const timeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value })
+timeAgo(Date.now() - 3600000)         // "1 hour ago"
 ```
 
 #### File Size Formatting

@@ -381,21 +381,32 @@ class TestBrowserScreenshotSave:
         assert result["mime_type"] == "image/png"
         logger.info(f"✓ Browser saved screenshot: {result['file_id']}")
 
-        # Test file deduplication: Upload same screenshot again (different session)
-        session_id_2 = f"browser_session_{uuid.uuid4()}_duplicate"
-
+        # Same screenshot again in the same session references the stored file
         result_2 = await browser_manager.add_file(
-            session_id=session_id_2,
+            session_id=session_id,
             file_content=fake_screenshot,  # Same content
             original_filename="webpage_screenshot_copy.png",  # Different name
             mime_type="image/png",
             uploaded_by="browser_vm5",
         )
 
-        # Should reference existing file (deduplication)
-        assert result_2["deduplicated"] is True, "Should deduplicate identical files"
+        assert result_2["deduplicated"] is True, "Should deduplicate within a session"
         assert result_2["file_hash"] == result["file_hash"], "Hash should match"
-        logger.info("✓ File deduplication works across uploads")
+
+        # Another session never gets a reference to this session's file (#20133)
+        session_id_2 = f"browser_session_{uuid.uuid4()}_duplicate"
+
+        result_3 = await browser_manager.add_file(
+            session_id=session_id_2,
+            file_content=fake_screenshot,
+            original_filename="webpage_screenshot_copy.png",
+            mime_type="image/png",
+            uploaded_by="browser_vm5",
+        )
+
+        assert result_3["deduplicated"] is False, "Should not deduplicate across sessions"
+        assert result_3["file_id"] != result["file_id"], "Should store a separate file"
+        logger.info("✓ File deduplication stays within the session")
 
         # Verify file can be retrieved from frontend (VM1)
         frontend_manager = ConversationFileManager(

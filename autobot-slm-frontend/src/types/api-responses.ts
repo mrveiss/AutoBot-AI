@@ -315,7 +315,7 @@ export type RecentError = components['schemas']['RecentError']
 export type RecentErrorsResponse = components['schemas']['RecentErrorsResponse']
 
 /** Entry of `CategoriesResponse.categories` (api/errors.py:74). */
-export type CategoryBreakdown = components['schemas']['CategoryBreakdown']
+export type ErrorCategoryShare = components['schemas']['CategoryBreakdown']
 
 /** Response model of GET `/errors/categories` (api/errors.py:82). */
 export type CategoriesResponse = components['schemas']['CategoriesResponse']
@@ -338,10 +338,10 @@ export type ErrorHealthResponse = components['schemas']['ErrorHealthResponse'] &
 }
 
 /** Response model of GET `/errors/metrics/summary` (api/errors.py:116). */
-export type MetricsSummary = components['schemas']['MetricsSummary']
+export type ErrorMetricsSummary = components['schemas']['MetricsSummary']
 
 /** Entry of `TimelineResponse.timeline` (api/errors.py:128). */
-export type TimelinePoint = components['schemas']['TimelinePoint']
+export type ErrorTimelineBucket = components['schemas']['TimelinePoint']
 
 /** Response model of GET `/errors/metrics/timeline` (api/errors.py:137). */
 export type TimelineResponse = components['schemas']['TimelineResponse']

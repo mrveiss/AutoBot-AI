@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field, field_validator
 
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_constants import ProtocolDefaults
 
 
 class UpdatePolicy(str, Enum):
@@ -45,9 +46,9 @@ class ServiceType(str, Enum):
 class ProtocolType(str, Enum):
     """Network protocol for ports."""
 
-    HTTP = "http"
-    HTTPS = "https"
-    TCP = "tcp"
+    HTTP = ProtocolDefaults.HTTP  # #19730
+    HTTPS = ProtocolDefaults.HTTPS
+    TCP = ProtocolDefaults.TCP
     UDP = "udp"
     UNIX = "unix"
 
@@ -72,6 +73,13 @@ class ManifestDeploy(BaseModel):
     extra_sources: List[str] = Field(
         default_factory=list,
         description="Additional source dirs to sync (e.g. autobot-ollama/)",
+    )
+    files: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Files of `source` that the shell deploy paths copy one by one (#21852); empty ships the whole directory. "
+            "No SLM consumer reads this yet: the SLM and Ansible paths ship the whole `source` directory."
+        ),
     )
 
 

@@ -49,6 +49,7 @@ from typing import Dict, List, Tuple
 from repo_tests._paths import repo_root
 
 from autobot_shared.paths import scrubbed_git_env
+from tools.lint import _parse_cache as parse_cache
 
 REPO_ROOT = repo_root()
 
@@ -160,7 +161,7 @@ def discover_pricing_tables() -> Dict[str, Dict[str, Price]]:
     for name in _tracked_python_files():
         path = REPO_ROOT / name
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = parse_cache.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError, OSError):
             continue
         # `ast.walk`, not `tree.body`: a table assigned as a class attribute is

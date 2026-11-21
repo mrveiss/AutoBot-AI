@@ -234,7 +234,7 @@ units are implicit is a baseline that cannot be checked.
 
 ## Worked example — the one that passes
 
-`repo_tests/python_file_size_ratchet_baseline.py`, measured against
+`scripts/python_file_size_known_large.py`, measured against
 `origin/main`:
 
 | | |
@@ -479,9 +479,41 @@ binding, exact `path:qualname`; a module-level binding's qualname is its name), 
 - `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
   leaves the baseline in a removals-only diff.
 
+## Recorded exception: widening the UI-literal matcher to `label:` and `zeroText:` (#19885)
+
+A matcher change that brings existing sites into a shrink-only baseline cannot pass the rule
+"the baseline only shrinks". The owner decided on 2026-11-02 to freeze them **once** as a recorded
+exception, rather than leave the fields unwatched.
+
+- **Matcher:** `_SCRIPT_LITERAL` in `repo_tests/_ui_literal_scan.py` now includes `label:` and
+  `zeroText:` beside `message:` and `title:`, under the same rule (capital then lowercase, at least
+  five characters). Scope: `.vue` under both apps; `.ts` files are not scanned by this guard.
+- **True count:** 120 literals in 24 `.vue` files, all `label:` (0 for `zeroText:`). Main GUI 46 in
+  11 files; SLM console 74 in 13 files. The baseline grew by exactly those 120 digests and lost none.
+- **Against the 187 lines in 32 files a plain regex gave:** that regex reproduces exactly (187 / 32),
+  and it is the same population with the shape rule removed. 120 are detected; 66 are `label:` values
+  under five characters or without a lowercase letter (`Info`, `PDF`, `Chat`, `AWS`), which the shared
+  rule does not match for any key; 1 is a `label: '--'` in a template expression, not script. No hit was
+  lost to the script-block restriction. The "about 24" in the issue was the file count (24 matches).
+- **One-time:** this is a one-time freeze. It is not a precedent for freezing a later widening; the
+  baseline shrinks from 120 as each literal moves to `t('...')`, and a NEW `label:` or `zeroText:`
+  literal fails like any other (controls in `TestLabelAndZeroTextFields`).
+- **Second derivation (rule 3):** the rough regex above, over the same files, compared as sets. The
+  script kind is otherwise not independently re-derivable (no JavaScript parser in this suite).
+
+**Second widening, no freeze (#19885 AC3, 2026-11-03).** The first widening still could not see
+the three sites the issue names: `zeroText: '0B'`, `nullText: '0 B'` in a `.ts` formatter, and
+`label: 'SLOs'`. The matcher now adds the key `nullText:` and two value shapes beside prose: a
+byte size (`0 B`, `1.5 KB`) and an acronym plural (`SLOs`). The scan also reads the formatter
+modules, `src/utils/format*.ts` in both apps, for the script kind. **True count: 0** new sites,
+so the baseline did not change. Second derivation: `git ls-files` plus `grep -P` over 608 files,
+which is a superset scope, since it reads whole files and not just `<script>`. It also found 0,
+and a control string matched. A number with any other unit (`24h`, `3d`) is still not matched:
+`3d` is a view-mode identifier in `KnowledgeGraph.vue`.
+
 ## Down-only tables are compared with the base, not with a hand total (#19283)
 
-A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
+A per-entry table (file-size `KNOWN_LARGE` until #19673, the colour and palette baselines) used to carry a
 hand-summed total or a mirrored copy, so that a raise showed up somewhere. Every PR that lowered
 *any* entry then edited the same total line, and two such PRs always conflicted.
 `repo_tests/_ratchet_base.py` now holds each entry to the same table at the base commit instead:
@@ -498,6 +530,109 @@ an entry above the base, or a key the base lacks, is a raise.
   "nothing rose".
 - **Moving a table:** pass the old path after the new one,
   `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
+
+## Size ratchets are gated against the merge base, not against their own table (#19673)
+
+The three file-size gates (Python, shell, frontend) and the frontend API-contract ratchet used to
+demand that a recorded number equal the file's current length, so every PR that shrank a
+grandfathered file edited a shared sorted table, and PRs shrinking neighbouring entries conflicted.
+
+**Rule:** for each grandfathered file F, `lines(F@HEAD) <= min(KNOWN_LARGE[F], lines(F@base))`
+(`_ratchet_base.growth_over_base`). The recorded ceiling is a down-only upper bound; the base blob
+is the tight gate, so a shrink needs **no** table edit and the lines it cut cannot be spent back.
+The frontend contract ratchet measures its five counts on the head and on the base tree and
+requires `now <= base`; it keeps no recorded number at all.
+
+- **The base** is whatever `_ratchet_base.base_commit` returns, and it measures the PR's own delta
+  in both places:
+  - *Locally:* `git merge-base HEAD origin/main` (override the ref with `AUTOBOT_RATCHET_BASE_REF`).
+    Never the moving `origin/main` tip, so a file the branch did not touch reads equal to its base
+    even after main has moved on.
+  - *In CI* (`GITHUB_ACTIONS=true`): `AUTOBOT_RATCHET_BASE_SHA` when `ci.yml` sets it -- a merge
+    group's `base_sha`, `github.event.before` on a push to main, or on a PR into `release` the merge
+    base with main (#19466) -- else `HEAD^1`. For a pull request that is `HEAD^1` of the PR merge
+    ref (`refs/pull/N/merge`), i.e. the base branch tip; the checkout uses `fetch-depth: 2` so it is
+    readable.
+  - *Why those agree:* the merge ref's tree is the base tip plus the PR's changes. A file the PR
+    did not touch is identical at `HEAD` and at `HEAD^1` (main's newer content is in both), and a
+    file it did touch differs by exactly the PR's edit. Locally `HEAD` is the unmerged branch, so
+    the same file is identical at `HEAD` and at the fork point, and differs by the same edit. Both
+    compare "this PR's edit" with "the file before it".
+- **A file the base did not have is blocked:** a new file never earns an entry (an add still fails
+  `test_no_entry_may_be_added`, a raised ceiling still fails `test_no_ceiling_may_exceed_its_baseline`).
+  The message says `renamed? move its entry in the table` for a `git mv`.
+- **Removed:** the "under its recorded ceiling, lower it" failure in `tools/lint/_file_size_guard.py`.
+- **What the repo enforces about the table:** ceilings are down-only upper bounds; a ceiling above
+  the measured size is harmless (the base gates the file); an entry is deleted when its file reaches
+  600 lines or fewer (the guard fails until it is). Nothing repins the ints automatically and the
+  merge train does not run a repin.
+- **Optional tidy:** `python scripts/check_python_file_size.py --repin-ceilings` (likewise the shell
+  and frontend checkers) rewrites the integers of existing entries downward and deletes entries at
+  or under 600; it reports an entry it cannot rewrite, and keeps line endings. It is a manual
+  convenience, not a step anything depends on.
+- **Fail closed:** an unreadable base raises `BaseUnavailable`; it never reads as "nothing grew".
+
+## Local date and time formatters (#19905)
+
+`repo_tests/frontend_local_date_formatter_ratchet_19905_test.py` pins the local declarations named
+`formatDate`, `formatTime`, `formatDateTime`, `formatTimestamp`, `formatRelativeTime` and
+`formatTimeAgo` under `components/`, `views/` and `composables/` of both frontends. It is modelled
+on the byte/duration ratchet (#19680): one number in `PINS`, held down-only against the base by
+`_ratchet_base.base_table`, and a reach floor from `repo_tests._reach.declare(...)` so a moved
+folder cannot read as a clean 0.
+
+- **Boundary:** a `function` or `const` bound to an arrow/function expression, or an object or
+  class method/property, with one of those names. `const formatTime = createDateFormatter({...})`
+  and `const formatDate = formatDateTime` are bindings of the kit's functions and are not counted.
+- **What the pin holds:** i18n-aware relative-time formatters (the kit's English-only
+  `formatTimeAgo` is gone, #19606; the name stays caught), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
+  open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
+- **Inline and hand-assembled shapes (#19905):** the same guard also pins five shapes a declaration
+  scan cannot see, each as its own `PINS` key over comment-stripped text: `inline_date_locale_calls`
+  (`.toLocaleDateString(` / `.toLocaleTimeString(`), `inline_date_to_locale_string`
+  (`new Date(x).toLocaleString(`), `intl_date_time_format_outside_kit` (`new Intl.DateTimeFormat(`),
+  `hardcoded_locale_formatters` (a locale literal given to `createDateFormatter` /
+  `createRecencyFormatter` or to a `toLocale*String` call; a live `locale: () => ...` is the
+  accepted form) and `hand_assembled_date_fields` (`${d.getMonth()}`-style pieces). All are 0 except
+  `hand_assembled_date_fields`, which is 1: GanttTimelineView's quarter tick ("Q3 2025") has no `Intl`
+  form and is the one named exception. A number's `toLocaleString()` and
+  `Intl.DateTimeFormat().resolvedOptions()` are not date formatting and are not counted. Only the
+  first two keys count towards `scan()`; the rest are compared per key. Controls are in the test file.
+- **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
+  detector's, so its count is as good as the regex. The fixtures in the test file are its positive
+  and negative controls.
+- **A branch doesn't repin (#19673):** the pre-push gate asks only when the branch changed a guard beyond its `floor=` lines. Merge trains still enforce every floor (`AUTOBOT_REACH_AUDIT=1`, train heads only) and repin the rest on their merged tree, so a branch hand-lowering a `floor=` is judged there, not locally.
+- **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
+  past the window.
+- **A floor computed from the base (#19676):** a `declare()` without `floor=` gets
+  `population at the base - skips - growth` (`repo_tests/_reach_base.py`), the bottom of the
+  window a pin had to sit in. The base population is measured by the BASE's own declaration: the
+  guard module as it was at the base commit, imported from a temp worktree of that commit in a
+  separate `python -I` process. So a narrowed `discover` in the PR cannot pull the floor down with
+  it. The base is the one `_ratchet_base.base_commit` resolves. A base that cannot be read or
+  measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
+  `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
+  never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`. That mapping is empty
+  now; existing explicit pins are transitional and are retired in follow-up batches.
+
+## Path-filter entries are declared in place, not in a table (#21205)
+
+`repo_tests/changes_job_equivalence_15360_test.py` used to carry `ALLOWED_ADDITIONS`, a pinned
+count of the migration gate's entries and a SHA-256 of each filter file, so two PRs that each
+widened a filter edited the same lines. The rules in `repo_tests/_filter_entries.py` replace them:
+
+1. Every entry of the pre-#15360 snapshot (`fixtures/pre_15360_changes_jobs.json`, `content` only)
+   is still in head, in order.
+2. Every head entry the snapshot lacks cites `#NNNN` on its own line or in the comment block
+   directly above its run of entries. A blank line ends the run. Write the citation when you add
+   the entry; there is nothing else to edit.
+3. No entry the merge base had is gone (`_ratchet_base.base_text`, fail-closed: `BaseUnavailable`
+   is never a pass). A deliberate removal leaves `# retired #NNNN: '<entry>'` in the head file.
+4. The migration gate's inline `migrations` entries are mirrored in its `on.push.paths`.
+
+The line reader must agree with `yaml.safe_load` (aliases expanded). Controls and the planted
+pair of non-conflicting PRs are in `repo_tests/filter_equivalence_base_21205_test.py`.
 
 ## Checklist for a new ratchet
 

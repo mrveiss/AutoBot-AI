@@ -1,43 +1,59 @@
 <template>
   <div class="code-smells-section analytics-section">
-    <h3>
-      <Icon name="bug" /> {{ $t('analytics.codeSmells.title') }}
-      <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
-        {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
-      </span>
-      <span v-if="smells.length > 0" class="total-count">
-        ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
-      </span>
-      <div v-if="smells.length > 0" class="section-export-buttons">
-        <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
-          <Icon name="file-alt" /> MD
+    <div class="section-header">
+      <h3>
+        <Icon name="bug" /> {{ $t('analytics.codeSmells.title') }}
+        <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
+          {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
+        </span>
+        <span v-if="hasRows" class="total-count">
+          ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
+        </span>
+      </h3>
+      <!-- #21784: the controls sit beside the heading, so they do not join its accessible name. -->
+      <BaseSelectMenu
+        :model-value="category"
+        :options="categoryOptions"
+        :label="$t('analytics.codeSmells.category.label')"
+        size="sm"
+        @update:model-value="(v: string) => emit('update:category', v as SmellCategory)"
+      />
+      <BaseSpinner v-if="loading" size="sm" :label="$t('analytics.codeSmells.loading')" />
+      <div v-if="hasRows" class="section-export-buttons">
+        <button :disabled="loading" @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
+          <Icon name="file-alt" /> {{ $t('analytics.codeSmells.exportMd') }}
         </button>
-        <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
-          <Icon name="file-code" /> JSON
+        <button :disabled="loading" @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
+          <Icon name="file-code" /> {{ $t('analytics.codeSmells.exportJson') }}
         </button>
       </div>
-    </h3>
-    <div v-if="smells.length > 0" class="section-content">
+    </div>
+    <EmptyState
+      v-if="error"
+      icon="exclamation-triangle"
+      :message="$t('analytics.codebase.sectionLoadFailed', { error })"
+    />
+    <div v-else-if="hasRows" class="section-content">
       <!-- Summary Cards by Severity -->
       <div class="summary-cards">
         <div class="summary-card total">
-          <div class="summary-value">{{ smells.length.toLocaleString() }}</div>
+          <div class="summary-value">{{ summary.total.toLocaleString() }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.total') }}</div>
         </div>
         <div class="summary-card critical">
-          <div class="summary-value">{{ severitySummary.critical }}</div>
+          <div class="summary-value">{{ summary.bySeverity.critical }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.critical') }}</div>
         </div>
         <div class="summary-card high">
-          <div class="summary-value">{{ severitySummary.high }}</div>
+          <div class="summary-value">{{ summary.bySeverity.high }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.high') }}</div>
         </div>
         <div class="summary-card medium">
-          <div class="summary-value">{{ severitySummary.medium }}</div>
+          <div class="summary-value">{{ summary.bySeverity.medium }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.medium') }}</div>
         </div>
         <div class="summary-card low">
-          <div class="summary-value">{{ severitySummary.low }}</div>
+          <div class="summary-value">{{ summary.bySeverity.low }}</div>
           <div class="summary-label">{{ $t('analytics.codeSmells.low') }}</div>
         </div>
       </div>
@@ -101,7 +117,7 @@
       </div>
     </div>
     <EmptyState
-      v-else
+      v-else-if="!loading"
       icon="sparkles"
       :message="$t('analytics.codeSmells.emptyMessage')"
       variant="info"
@@ -123,9 +139,12 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { useShowMore } from '@autobot/ui'
+import { BaseSelectMenu, BaseSpinner, useShowMore } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import TruncationNotice from './TruncationNotice.vue'
 import { computed } from 'vue'
+import { summarizeSmells } from '@/composables/analytics/codeSmellSummary'
+import { SMELL_CATEGORIES, type SmellCategory } from '@/composables/analytics/useCodeSmellProblems'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -147,30 +166,36 @@ interface CodeHealthScore {
 interface Props {
   smells: CodeSmell[]
   codeHealthScore: CodeHealthScore | null
+  /** The smells are derived from the problems load; its failure is not "no smells". */
+  error?: string
+  /** Which file category the list holds: production code, test files, or all. */
+  category?: SmellCategory
+  loading?: boolean
+  /** The rows on hand are another category's (a load for the selected one is in flight): show none (#21784). */
+  stale?: boolean
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
+/** Rows of the selected category only: a previous category's rows are not shown, nor exported, while the next loads. */
+const hasRows = computed(() => props.smells.length > 0 && !props.stale)
+const categoryOptions = computed(() =>
+  SMELL_CATEGORIES.map((c) => ({ value: c, label: t(`analytics.codeSmells.category.${c}`) })),
+)
 
 // #12741: a capped list is expandable; the notice below it is the control.
 const PAGE_SIZE = 20
 const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.smells)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
+  'update:category': [category: SmellCategory]
 }>()
 
 const smellTypeExpansion = useExpansion<string>()
 const isSmellTypeExpanded = smellTypeExpansion.isExpanded
 
-const severitySummary = computed(() => {
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 }
-  props.smells.forEach(s => {
-    const sev = (s.severity || 'low').toLowerCase()
-    if (counts[sev as keyof typeof counts] !== undefined) {
-      counts[sev as keyof typeof counts]++
-    }
-  })
-  return counts
-})
+// #20493: the cards and the export count with this one function.
+const summary = computed(() => summarizeSmells(props.smells))
 
 // Issue #4036: Memoized type grouping with severity counts
 const smellsByType = useGroupingMemo(
@@ -178,14 +203,8 @@ const smellsByType = useGroupingMemo(
     const groups: Record<string, { smells: CodeSmell[], severityCounts: Record<string, number> }> = {}
     props.smells.forEach(s => {
       const type = s.smell_type || 'unknown'
-      if (!groups[type]) {
-        groups[type] = { smells: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
-      }
+      groups[type] ??= { smells: [], severityCounts: summary.value.byType[type] }
       groups[type].smells.push(s)
-      const sev = (s.severity || 'low').toLowerCase()
-      if (groups[type].severityCounts[sev] !== undefined) {
-        groups[type].severityCounts[sev]++
-      }
     })
     return groups
   },
@@ -225,7 +244,7 @@ const getItemSeverityClass = (severity: string): string => {
 
 .code-smells-section h3 {
   color: var(--color-info);
-  margin-bottom: var(--spacing-4);
+  margin: 0 auto 0 0; /* the controls beside the heading sit at the far end of the shared .section-header row */
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
@@ -430,7 +449,12 @@ const getItemSeverityClass = (severity: string): string => {
   transition: all var(--duration-150) var(--ease-out);
 }
 
-.export-btn:hover {
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-btn:hover:not(:disabled) {
   background: var(--bg-card);
   border-color: var(--color-info-dark);
   color: var(--text-primary);

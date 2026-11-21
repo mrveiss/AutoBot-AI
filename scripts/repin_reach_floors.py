@@ -21,15 +21,19 @@ kept, except a ``# mid-window: ...`` comment, which is refreshed with the new me
 Usage:
     python scripts/repin_reach_floors.py           # re-pin every stale floor
     python scripts/repin_reach_floors.py --check   # report only
+    python scripts/repin_reach_floors.py --check --changed-since origin/main
+        # a stale floor in a guard this branch did not touch reads BASE-STALE and does not fail (#20050)
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import configparser
 import dataclasses
 import inspect
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,12 +41,23 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 
 
+def import_roots() -> list[str]:
+    """The ``pythonpath`` of pytest.ini, the one list of where the guards' modules live."""
+    ini = configparser.ConfigParser(interpolation=None)
+    ini.read(_ROOT / "pytest.ini", encoding="utf-8")
+    return ini["pytest"]["pythonpath"].split()
+
+
 def _declarations() -> tuple[list, dict[str, str]]:
     """(floor-based declarations, {module: import error}) after importing every guard."""
+    # The paths pytest gives these modules: without them 14 could not import, so every local check
+    # exited 2 and the pre-push gate could never record a pass (#20518).
+    sys.path[1:1] = [str(_ROOT / root) for root in import_roots()]
     from repo_tests import reach_declarations_test as meta  # noqa: PLC0415 - imports every guard
 
     failures = dict(getattr(meta, "IMPORT_FAILURES", {}))
-    return [r for r in meta._declarations() if r.min_fraction is None], failures
+    # A computed floor (no ``floor=``, #19676) has no constant to re-pin.
+    return [r for r in meta._declarations() if r.min_fraction is None and not r.computed], failures
 
 
 def _floor_node(source: str, name: str) -> ast.AST | None | bool:
@@ -101,27 +116,109 @@ def _repin(reach) -> str:
     new, status = repin_source(path.read_text(encoding="utf-8"), reach.name, mid, count, low, high)
     if status != "re-pinned":
         return f"SKIP  {reach.name}: {status} ({path.relative_to(_ROOT)})"
-    if dataclasses.replace(reach, floor=mid).staleness(_ROOT) is not None:
+    if dataclasses.replace(reach, pinned_floor=mid).staleness(_ROOT) is not None:
         return f"SKIP  {reach.name}: the mid-window value {mid} is still stale -- check skips=/growth="
     path.write_text(new, encoding="utf-8")
     return f"PIN   {reach.name}: floor -> {mid} (population {count}) in {path.relative_to(_ROOT)}"
 
 
+_FLOOR_LINE = re.compile(r"^\s*floor=\d+,?\s*(#.*)?$")
+
+
+def only_floor_lines(diff: str) -> bool:
+    """True when a unified diff changes nothing but ``floor=`` lines (#19673)."""
+    changed = [line[1:] for line in diff.splitlines() if line[:1] in "+-" and line[:3] not in ("+++", "---")]
+    return bool(changed) and all(_FLOOR_LINE.match(line) for line in changed)
+
+
+def _changed_files(ref: str) -> set[str] | None:
+    """Paths this branch changed since it left *ref*, not counting a change only to floor pins.
+
+    None if git could not say. A repin alone doesn't make a guard the branch's (#19673): counted, one
+    repin put the file in the diff, the next growth on the base read as this branch's, and the gate
+    demanded another repin. Each of those edits one line every other PR edits too.
+    """
+    from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415 - _ROOT is on the path only from here
+
+    done = subprocess.run(
+        ["git", "diff", "--name-only", f"{ref}...HEAD"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=scrubbed_git_env(),
+    )
+    if done.returncode != 0:
+        return None
+    changed = set(done.stdout.split())
+    for path in sorted(p for p in changed if p.startswith("repo_tests/")):
+        one = subprocess.run(
+            ["git", "diff", "-U0", f"{ref}...HEAD", "--", path],
+            cwd=_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=scrubbed_git_env(),
+        )
+        if one.returncode == 0 and only_floor_lines(one.stdout):
+            changed.discard(path)
+    return changed
+
+
+def _not_this_branch(reach, changed: set[str] | None) -> bool:
+    """True when the branch left this guard alone, so tree growth on the base made it stale (#20050).
+
+    Merge trains still enforce it (``AUTOBOT_REACH_AUDIT``) and repin it. When that cannot be shown,
+    the floor counts as this branch's: an unknown never lets a stale floor through.
+    """
+    if changed is None:
+        return False
+    path = _source_file(reach)
+    return path is not None and path.relative_to(_ROOT).as_posix() not in changed
+
+
+def _import_reason(error: object) -> str:
+    lines = str(error).strip().splitlines()
+    return lines[-1] if lines else "unknown"
+
+
+def _report_import_failures(failures: dict[str, str]) -> None:
+    print(
+        f"ERROR: {len(failures)} guard module(s) failed to import, so their floors were NOT "
+        f"measured: {', '.join(sorted(failures))}",
+        file=sys.stderr,
+    )
+    for module, error in sorted(failures.items()):
+        print(f"  {module}: {_import_reason(error)}", file=sys.stderr)
+    print(
+        "  A package CI puts on its path or installs is missing here. Those floors are measured in CI's "
+        "train audit; nothing to do locally unless you changed one of those guards.",
+        file=sys.stderr,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="report stale floors; change nothing")
+    parser.add_argument("--changed-since", metavar="REF", help="with --check: judge only guards changed since REF")
     args = parser.parse_args(argv)
+    from repo_tests.machine_slot import acquire  # noqa: PLC0415 - _ROOT is on the path only from here
+
+    acquire()
     declarations, failures = _declarations()
     if failures:
-        print(
-            f"ERROR: {len(failures)} guard module(s) failed to import, so their floors were NOT "
-            f"measured: {', '.join(sorted(failures))}",
-            file=sys.stderr,
-        )
+        _report_import_failures(failures)
     stale = [(r, why) for r in declarations if (why := r.staleness(_ROOT))]
     if args.check:
+        changed = _changed_files(args.changed_since) if args.changed_since else None
+        mine = []
         for reach, why in stale:
-            print(f"STALE {reach.name}: {why.splitlines()[0]}")
+            if _not_this_branch(reach, changed):
+                print(f"BASE-STALE {reach.name}: {why.splitlines()[0]}")
+            else:
+                print(f"STALE {reach.name}: {why.splitlines()[0]}")
+                mine.append((reach, why))
+        stale = mine
     else:
         results = [_repin(r) for r, _ in stale]
         print("\n".join(results))

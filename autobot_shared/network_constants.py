@@ -16,8 +16,8 @@ MIGRATION (Issue #763):
 Usage:
     from constants.network_constants import NetworkConstants, ServiceURLs
 
-    # Use VM IP addresses
-    redis_url = f"redis://{NetworkConstants.REDIS_VM_IP}:6379"
+    # A Redis URL comes from the one endpoint resolver (#19232), never from these constants:
+    #   autobot_shared.redis_management.endpoint.resolve_redis_endpoint().url(db)
 
     # Use service URLs
     backend_url = ServiceURLs.BACKEND_API
@@ -34,7 +34,7 @@ from functools import cached_property
 from autobot_shared import deployment_profile as _profile
 
 
-def _get_config_value(key: str, default: str) -> str:
+def _get_config_value(key: str, default: str | None) -> str:
     """Get configuration value with lazy ConfigRegistry import.
 
     ConfigRegistry lives in autobot-backend. This function imports it only
@@ -42,7 +42,12 @@ def _get_config_value(key: str, default: str) -> str:
     independently (e.g., in autobot-slm-backend or CI tooling).
 
     Issue #7526: Explicit import from autobot_shared pattern, not bare 'config'.
+    A ``None`` default is the SSOT value at *key* itself, never a restated literal (#19325).
     """
+    if default is None:
+        from autobot_shared.ssot_value import ssot_value
+
+        default = ssot_value(key)
     try:
         from config.registry import ConfigRegistry
 
@@ -81,7 +86,7 @@ def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
 #
 # Resolving on access costs one lookup per use, and ConfigRegistry has its own
 # cache and TTL — which is where that caching belongs.
-# name -> (config key, default, type)
+# name -> (config key, default, type); a port's default is None -- its SSOT value (#19325)
 _LAZY_CONFIG_VALUES: dict = {
     "MAIN_MACHINE_IP": ("vm.main", "", str),
     "FRONTEND_VM_IP": ("vm.frontend", "", str),
@@ -91,21 +96,21 @@ _LAZY_CONFIG_VALUES: dict = {
     "BROWSER_VM_IP": ("vm.browser", "", str),
     "SLM_VM_IP": ("vm.slm", "", str),
     "AI_STACK_HOST": ("vm.aistack", "", str),
-    "BACKEND_PORT": ("port.backend", "8001", int),
-    "FRONTEND_PORT": ("port.frontend", "5173", int),
-    "REDIS_PORT": ("port.redis", "6379", int),
-    "OLLAMA_PORT": ("port.ollama", "11434", int),
-    "VNC_PORT": ("port.vnc", "6080", int),
-    "BROWSER_SERVICE_PORT": ("port.browser", "9001", int),
-    "AI_STACK_PORT": ("port.aistack", "8080", int),
-    "NPU_WORKER_PORT": ("port.npu", "8081", int),
-    "SLM_PORT": ("port.slm", "8000", int),
-    "NPU_WORKER_WINDOWS_PORT": ("port.npu_windows", "8081", int),
+    "BACKEND_PORT": ("port.backend", None, int),
+    "FRONTEND_PORT": ("port.frontend", None, int),
+    "REDIS_PORT": ("port.redis", None, int),
+    "OLLAMA_PORT": ("port.ollama", None, int),
+    "VNC_PORT": ("port.vnc", None, int),
+    "BROWSER_SERVICE_PORT": ("port.browser", None, int),
+    "AI_STACK_PORT": ("port.aistack", None, int),
+    "NPU_WORKER_PORT": ("port.npu", None, int),
+    "SLM_PORT": ("port.slm", None, int),
+    "NPU_WORKER_WINDOWS_PORT": ("port.npu_windows", None, int),
     "DESKTOP_DISPLAY": ("desktop.display", ":1", str),
-    "PROMETHEUS_PORT": ("port.prometheus", "9090", int),
-    "GRAFANA_PORT": ("port.grafana", "3000", int),
-    "DEV_FRONTEND_PORT": ("port.frontend", "5173", int),
-    "DEV_BACKEND_PORT": ("port.backend", "8001", int),
+    "PROMETHEUS_PORT": ("port.prometheus", None, int),
+    "GRAFANA_PORT": ("port.grafana", None, int),
+    "DEV_FRONTEND_PORT": ("port.frontend", None, int),
+    "DEV_BACKEND_PORT": ("port.backend", None, int),
 }
 
 
@@ -312,10 +317,8 @@ class NetworkConstants(metaclass=_LazyConfigMeta):
 _LAZY_SERVICE_URLS: dict = {
     "BACKEND_API": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}",
     "BACKEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}",
-    "FRONTEND_VM": lambda: f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}",
-    "FRONTEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
-    "REDIS_VM": lambda: f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}",
-    "REDIS_LOCAL": lambda: f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}",
+    "FRONTEND_VM": _profile.served_frontend_url,
+    "FRONTEND_LOCAL": lambda: _profile.served_frontend_url(NetworkConstants.LOCALHOST_NAME),
     "OLLAMA_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
     "VNC_DESKTOP": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html",
     "CHROME_DEBUGGER_LOCAL": lambda: (
@@ -368,33 +371,21 @@ class ServiceURLs(metaclass=_LazyURLMeta):
 
     FRONTEND_LOCAL: str
 
-    # Redis URLs (computed from ConfigRegistry)
-    REDIS_VM: str
-
-    REDIS_LOCAL: str
+    # No Redis URLs here: endpoint.resolve_redis_endpoint is the one builder (#19232).
 
     # Ollama LLM URLs (computed from ConfigRegistry)
     # Ollama runs on the local host (.20); OLLAMA_MAIN pointed to .24 (wrong).
     OLLAMA_LOCAL: str
 
     # VNC Desktop URLs (computed from ConfigRegistry)
-    # fmt: off
     VNC_DESKTOP: str
 
-    # fmt: on
-
     # Chrome DevTools Protocol URLs (static)
-    # fmt: off
     CHROME_DEBUGGER_LOCAL: str
-
-    # fmt: on
     VNC_LOCAL: str
 
     # Browser automation service (computed from ConfigRegistry)
-    # fmt: off
     BROWSER_SERVICE: str
-
-    # fmt: on
 
     # AI Stack service (computed from ConfigRegistry)
     AI_STACK_SERVICE: str
@@ -402,10 +393,7 @@ class ServiceURLs(metaclass=_LazyURLMeta):
     # NPU Worker services (computed from ConfigRegistry)
     NPU_WORKER_SERVICE: str
 
-    # fmt: off
     NPU_WORKER_WINDOWS_SERVICE: str
-
-    # fmt: on
 
     # Issue #474: Monitoring stack services (hosted on Redis VM)
     PROMETHEUS_API: str
@@ -449,10 +437,10 @@ class NetworkConfig:
 
     @property
     def redis_url(self) -> str:
-        """Get Redis URL based on deployment context"""
-        if self._deployment_mode == "local":
-            return ServiceURLs.REDIS_LOCAL
-        return ServiceURLs.REDIS_VM
+        """The Redis URL without credentials, from the one endpoint resolver (#19232)."""
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint().url(with_auth=False)
 
     @property
     def ollama_url(self) -> str:
@@ -534,32 +522,31 @@ def get_network_config() -> NetworkConfig:
     return _network_config
 
 
-class DatabaseConstants:
-    """Redis database assignments aligned with redis-databases.yaml (#2670).
+#: ``DatabaseConstants`` attribute -> the database it names. Names only (#19232): the
+#: numbers come from the one table, read on access because importing it here would cycle.
+_DB_TARGETS: tuple[str, ...] = ("main", "knowledge", "prompts", "agents", "metrics", "cache", "sessions", "logs")
+_DB_TARGETS += ("temp", "audit", "analytics", "testing", "celery_broker", "celery_results")
+_DATABASE_CONSTANT_NAMES = {f"{n.upper()}_DB": n for n in _DB_TARGETS} | {"TASKS_DB": "workflows", "BACKUP_DB": "audit"}
 
-    redis-databases.yaml is the single source of truth for DB allocation.
-    This class mirrors it for callers that import from network_constants.
-    Validated by tests/test_redis_db_ssot.py.
+
+class _DatabaseConstantsMeta(type):
+    """Resolves ``DatabaseConstants.MAIN_DB`` etc. through ``database_number`` on access."""
+
+    def __getattr__(cls, name: str) -> int:
+        target = _DATABASE_CONSTANT_NAMES.get(name)
+        if target is None:
+            raise AttributeError(name)
+        from autobot_shared.redis_management.database_names import database_number
+
+        return database_number(target)
+
+
+class DatabaseConstants(metaclass=_DatabaseConstantsMeta):
+    """Redis database numbers by constant name, read from the one table (#2670, #19232).
+
+    Formerly a literal mirror of redis-databases.yaml that ``AUTOBOT_REDIS_DB_*``
+    overrides could not move.
     """
-
-    # Core databases — aligned with redis-databases.yaml (#2670)
-    MAIN_DB = 0
-    KNOWLEDGE_DB = 1
-    PROMPTS_DB = 2
-    AGENTS_DB = 3
-    METRICS_DB = 4
-    CACHE_DB = 5
-    SESSIONS_DB = 6
-    TASKS_DB = 7  # workflows in redis-databases.yaml
-    LOGS_DB = 8
-    TEMP_DB = 9
-    AUDIT_DB = 10
-    ANALYTICS_DB = 11
-    CELERY_BROKER_DB = 14
-    CELERY_RESULTS_DB = 15
-    TESTING_DB = 13
-    # Legacy alias
-    BACKUP_DB = 10  # Alias for AUDIT_DB
 
     @classmethod
     def get_db_description(cls, db_number: int) -> str:

@@ -31,6 +31,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
+import { mount } from '@vue/test-utils'
+import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
 import { useFleetMetrics } from './useFleetMetrics'
 import { useAuthStore } from '@/stores/auth'
 
@@ -252,5 +255,67 @@ describe('useFleetMetrics GPU state and recommendations (#15226)', () => {
 
     expect(metrics.recommendations.value).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('useFleetMetrics shared dashboard poller (#19482)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  const OK = { fleet_metrics: {}, health_summary: {} }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sessionStorage.clear()
+    localStorage.clear()
+    setActivePinia(createPinia())
+    fetchMock = vi.fn(async () => jsonResponse(OK))
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads on start() without waiting a full interval', async () => {
+    const { poller } = useFleetMetrics({ autoFetch: false, pollInterval: 1000 })
+
+    poller.start('')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(poller.isPolling.value).toBe(true)
+    poller.stop()
+  })
+
+  it('pauses after the consecutive error limit and Retry restarts it', async () => {
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'down' }, 500))
+    const { poller } = useFleetMetrics({ autoFetch: false, pollInterval: 1000 })
+
+    poller.start('')
+    await vi.advanceTimersByTimeAsync(1000 * POLL_CONSECUTIVE_ERROR_LIMIT)
+    expect(poller.pausedOnErrors.value).toBe(true)
+    expect(poller.isPolling.value).toBe(false)
+
+    fetchMock.mockImplementation(async () => jsonResponse(OK))
+    poller.start('')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(poller.pausedOnErrors.value).toBe(false)
+    expect(poller.isPolling.value).toBe(true)
+    poller.stop()
+  })
+
+  it('does not poll behind the back of a caller that set autoFetch off', async () => {
+    const Off = defineComponent({
+      setup() {
+        useFleetMetrics({ autoFetch: false, pollInterval: 1000 })
+        return () => null
+      },
+    })
+    const wrapper = mount(Off)
+
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 })

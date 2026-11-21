@@ -70,8 +70,12 @@ const PEOPLE = [
 
 const PROCESSES = [{ role_id: 'r1', role_name: 'Head of Sales', workflow_id: 'wf-quarterly' }]
 
-function respond(processes: unknown = PROCESSES): void {
+// #21242: the company's workflows, which tell "none attached" from "nothing attachable".
+const WORKFLOWS = [{ workflow_id: 'wf-quarterly', name: 'Quarterly', kind: 'workflow' }]
+
+function respond(processes: unknown = PROCESSES, workflows: unknown = WORKFLOWS): void {
   get.mockImplementation((url: string) => {
+    if (url.startsWith('/api/llc/workflows/')) return Promise.resolve(workflows)
     if (url.includes('/process-nodes')) return Promise.resolve({ nodes: processes })
     if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
     return Promise.resolve({ nodes: [] })
@@ -208,6 +212,7 @@ describe('OrgChart process nodes (#13963)', () => {
     // `peopleUnavailable` precedent. An absent source rendering as "no org
     // chart" is the failure this guards.
     get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/process-nodes')) return Promise.reject(new Error('HTTP 500: boom'))
       if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
       return Promise.resolve({ nodes: [] })
@@ -218,6 +223,8 @@ describe('OrgChart process nodes (#13963)', () => {
     const nodes = wrapper.findComponent(WorkflowCanvas).props('nodes') as { type: string }[]
     expect(nodes.some((n) => n.type === 'org-person')).toBe(true)
     expect(nodes.filter((n) => n.type === 'org-process')).toHaveLength(0)
+    // #21242: and it says the processes are unavailable, rather than drawing an empty chart.
+    expect(wrapper.find('[data-testid="canvas-processes-unavailable"]').exists()).toBe(true)
   })
 
   it('retries the fetch on a later canvas visit after a failure', async () => {
@@ -225,6 +232,7 @@ describe('OrgChart process nodes (#13963)', () => {
     // failure must not permanently hide this company's processes.
     let attempt = 0
     get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve([])
       if (url.includes('/process-nodes')) {
         attempt += 1
         return attempt === 1
@@ -243,5 +251,57 @@ describe('OrgChart process nodes (#13963)', () => {
 
     const nodes = wrapper.findComponent(WorkflowCanvas).props('nodes') as { type: string }[]
     expect(nodes.filter((n) => n.type === 'org-process')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="canvas-processes-unavailable"]').exists()).toBe(false)
+  })
+})
+
+// #21242: an empty process canvas is one of three different things.
+describe('OrgChart process banners (#21242)', () => {
+  const BANNERS = ['unavailable', 'noneAttached', 'nothingAttachable']
+  const shown = (wrapper: Awaited<ReturnType<typeof mountChart>>) =>
+    BANNERS.filter((b) => wrapper.find(`[data-testid="canvas-processes-${b}"]`).exists())
+
+  beforeEach(() => {
+    get.mockReset()
+    post.mockReset()
+    push.mockReset()
+  })
+
+  it('says none are attached when workflows exist but no role runs one', async () => {
+    respond([], WORKFLOWS)
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(shown(wrapper)).toEqual(['noneAttached'])
+  })
+
+  it('says there is nothing to attach when the company has no workflows', async () => {
+    respond([], [])
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(shown(wrapper)).toEqual(['nothingAttachable'])
+  })
+
+  it('says the processes are unavailable when the fetch failed, not that none are attached', async () => {
+    get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/llc/workflows/')) return Promise.resolve(WORKFLOWS)
+      if (url.includes('/process-nodes')) return Promise.reject(new Error('HTTP 500: boom'))
+      if (url.includes('/org-chart')) return Promise.resolve({ nodes: PEOPLE })
+      return Promise.resolve({ nodes: [] })
+    })
+    const wrapper = await mountChart()
+    await openCanvas(wrapper)
+
+    expect(shown(wrapper)).toEqual(['unavailable'])
+  })
+
+  it('says nothing while there are process nodes, and nothing before the canvas is opened', async () => {
+    respond()
+    const wrapper = await mountChart()
+    expect(shown(wrapper)).toEqual([])
+
+    await openCanvas(wrapper)
+    expect(shown(wrapper)).toEqual([])
   })
 })

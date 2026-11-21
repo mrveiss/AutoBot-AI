@@ -25,7 +25,7 @@ from api.voice_bundle_user import (
     router,
 )
 from auth_middleware import get_current_user
-from testkit.canonical_gate import canonical_resolver
+from testkit.canonical_gate import real_admin_gate
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
@@ -39,16 +39,14 @@ _CURRENT: dict = {"user": None}
 
 @pytest.fixture(autouse=True)
 def _patch_auth_middleware():
-    """Make the canonical require_role() gate see the injected test user.
-
-    Admin-gated routes use ``require_role("admin", "superadmin")`` (#12704),
-    which reads the user via ``auth_rbac.resolve_human_user``.
-    """
+    """Make the one admin gate, ``check_admin_permission`` (#16333), run for real and see the injected user."""
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with canonical_resolver("auth_rbac.resolve_human_user", mw):
+    with real_admin_gate(mw) as wire:
+        _CURRENT["wire"] = wire
         yield
     _CURRENT["user"] = None
+    _CURRENT.pop("wire", None)
 
 
 def _make_client(user: dict) -> TestClient:
@@ -66,7 +64,7 @@ def _make_client(user: dict) -> TestClient:
         return user
 
     app.dependency_overrides[get_current_user] = _override
-    return TestClient(app)
+    return _CURRENT["wire"](TestClient(app))
 
 
 # ---------------------------------------------------------------------------
@@ -428,8 +426,8 @@ class TestSetUserBundle:
 class TestSuperadminIsNotLockedOut:
     """#12717: superadmin must count as admin on the READ paths too.
 
-    The write path (PUT /voice/users/{id}/bundle) has always been guarded by
-    require_role("admin", "superadmin"), so a superadmin could ASSIGN a bundle
+    The write path (PUT /voice/users/{id}/bundle) has always been admin-gated
+    (now the one admin gate, #16333), so a superadmin could ASSIGN a bundle
     but then got 403 reading it back — the read path went through _is_admin,
     which only accepted "admin". Same class as #12704.
     """
@@ -448,7 +446,7 @@ class TestSuperadminIsNotLockedOut:
         assert _is_admin({}) is False
         assert _is_admin({"role": None}) is False
 
-    def test_is_admin_is_case_insensitive_like_require_role(self):
+    def test_is_admin_is_case_insensitive_like_the_admin_gate(self):
         """auth_rbac.require_role lowercases both sides; this must match, or a
         'SuperAdmin' token would pass the write guard and fail the read."""
         from api.voice_bundle_user import _is_admin

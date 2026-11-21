@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_once import log_once
 from autobot_shared.service_discovery import SERVICE_DISCOVERY_TTL_S
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from config import settings
@@ -61,9 +62,11 @@ from services.service_remediation_tracker import (
     clear_service_remediation,
     log_restart_result,
     read_service_remediation,
+    settle_remediation,
+    tracker_after_restart,
     write_service_remediation,
 )
-from services.service_upsert import upsert_service
+from services.service_upsert import load_node_services, remove_stale_services, upsert_service
 from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
@@ -230,11 +233,8 @@ MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S = env_int_clamped(
     "AUTOBOT_MAX_ATTEMPTS_REFUSAL_BROADCAST_INTERVAL_S", 3600, min_v=1
 )
 
-# #14465 review, round 7: one-shot latches for _effective_tracker_expiry_s's
-# "log once, not every call" warnings -- that function runs on every
-# _forgive_if_expired, up to once per reconcile pass per degraded node.
-_expiry_floor_override_logged = False
-_reconcile_interval_type_warning_logged = False
+# #14465 review, round 7: _effective_tracker_expiry_s's warnings are "log once, not every call" (log_once)
+# -- that function runs on every _forgive_if_expired, up to once per reconcile pass per degraded node.
 
 
 def _effective_tracker_expiry_s() -> int:
@@ -324,25 +324,27 @@ def _effective_tracker_expiry_s() -> int:
     today but would otherwise silently collapse a legitimately large
     configured interval down to the 60s fallback with no warning).
     """
-    global _expiry_floor_override_logged, _reconcile_interval_type_warning_logged
-
     reconcile_interval = getattr(settings, "reconcile_interval", 60)
     if not isinstance(reconcile_interval, int):
-        if not _reconcile_interval_type_warning_logged:
-            logger.warning(
-                "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
-                "remediation-tracker expiry floor margin",
-                reconcile_interval,
-            )
-            _reconcile_interval_type_warning_logged = True
+        log_once(
+            logger,
+            logging.WARNING,
+            "reconcile_interval_type",
+            "settings.reconcile_interval is %r, not an int -- falling back to 60s for the "
+            "remediation-tracker expiry floor margin",
+            reconcile_interval,
+        )
         reconcile_interval = 60
 
     single_node_attempt_ceiling_s = REMEDIATION_HEARTBEAT_WAIT_S + REMEDIATION_PLAYBOOK_TIMEOUT_S
     floor = max(REMEDIATION_COOLDOWN, single_node_attempt_ceiling_s) + reconcile_interval + 1
     effective = max(REMEDIATION_TRACKER_EXPIRY_S, floor)
 
-    if effective != REMEDIATION_TRACKER_EXPIRY_S and not _expiry_floor_override_logged:
-        logger.warning(
+    if effective != REMEDIATION_TRACKER_EXPIRY_S:
+        log_once(
+            logger,
+            logging.WARNING,
+            "expiry_floor_override",
             "AUTOBOT_REMEDIATION_TRACKER_EXPIRY_S=%ds is below the enforced floor -- using %ds instead "
             "(max(REMEDIATION_COOLDOWN=%ds, ceiling=%ds) + reconcile_interval=%ds + 1)",
             REMEDIATION_TRACKER_EXPIRY_S,
@@ -351,7 +353,6 @@ def _effective_tracker_expiry_s() -> int:
             single_node_attempt_ceiling_s,
             reconcile_interval,
         )
-        _expiry_floor_override_logged = True
 
     return effective
 
@@ -1430,15 +1431,8 @@ class ReconcilerService:
         # undo it. Captured by _handle_service_restart_result's own commit().
         await db.refresh(service)
         fresh_tracker = read_service_remediation(service)
-        write_service_remediation(
-            service,
-            {
-                "count": fresh_tracker["count"] + 1 if not success else 0,
-                "last_attempt": now,
-                "exhausted": False,
-                "last_cause": cause,  # #16712 AC: exhaustion must name the cause
-            },
-        )
+        # #20796: a start counts until it settles; #16712 AC: exhaustion names the cause.
+        write_service_remediation(service, tracker_after_restart(fresh_tracker, success, cause))
 
         await self._handle_service_restart_result(db, node, service, success, fresh_tracker)
         return True
@@ -1897,8 +1891,7 @@ class ReconcilerService:
         if "n_restarts" in svc_data:
             existing_extra["n_restarts"] = svc_data["n_restarts"]
         existing_extra["n_restarts_increased_at"] = last_increase_iso
-        if status != SystemdState.FAILED.value:
-            existing_extra.pop("remediation", None)  # #16712: recovery resets it
+        settle_remediation(existing_extra, status, now)  # #16712, #20796: continuous uptime resets it
         service.extra_data = existing_extra
         return is_churning
 
@@ -1956,60 +1949,57 @@ class ReconcilerService:
         see `_restart_churn_active` (#14465). DB work runs in its own
         SAVEPOINT (#17070) so a row-level failure can't poison the session.
         """
+        if not svc_data.get("name"):
+            return False
+
+        try:
+            async with db.begin_nested():
+                return await self._apply_service(db, node_id, svc_data, now)
+        except Exception as exc:
+            if is_connection_level_db_error(exc):
+                raise
+            logger.warning("service sync failed node=%s service=%s error=%s", node_id, svc_data["name"], exc)
+            return False
+
+    async def _apply_service(self, db, node_id, svc_data, now, known=None) -> bool:
+        """The upsert itself; the caller owns the savepoint. Returns whether it is churning."""
         service_name = svc_data.get("name")
         if not service_name:
             return False
+        status = svc_data.get("status", "unknown")
+        if status not in [s.value for s in SystemdState]:
+            status = SystemdState.UNKNOWN.value
+        error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
+        svc_extra = {"error_message": error_msg} if error_msg else {}
+        svc_extra.update(engine_degraded_fields(svc_data))
+        outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core
+            db,
+            node_id,
+            service_name,
+            update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
+            create=lambda category: self._create_new_service(
+                node_id, service_name, svc_data, status, svc_extra, now, category=category
+            ),
+            known=known,
+        )
+        return bool(outcome and outcome.update_result)
 
+    async def _upsert_services(self, db, node_id, services: list, now) -> bool:
+        """All of a node's services in one lookup and one savepoint; row by row only if that fails (#20250).
+
+        A savepoint and a lookup per service took a heartbeat past the agent's 10 s limit. The row-by-row
+        retry keeps #17070: one bad row costs that row, not the whole batch.
+        """
         try:
             async with db.begin_nested():
-                status = svc_data.get("status", "unknown")
-                if status not in [s.value for s in SystemdState]:
-                    status = SystemdState.UNKNOWN.value
-                error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
-                svc_extra = {"error_message": error_msg} if error_msg else {}
-                svc_extra.update(engine_degraded_fields(svc_data))
-                outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core (#19021)
-                    db,
-                    node_id,
-                    service_name,
-                    update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
-                    create=lambda category: self._create_new_service(
-                        node_id, service_name, svc_data, status, svc_extra, now, category=category
-                    ),
-                )
-                return bool(outcome and outcome.update_result)
+                known = await load_node_services(db, node_id)
+                churning = [await self._apply_service(db, node_id, s, now, known) for s in services]
+            return any(churning)
         except Exception as exc:
             if is_connection_level_db_error(exc):
                 raise
-            logger.warning("service sync failed node=%s service=%s error=%s", node_id, service_name, exc)
-            return False
-
-    async def _remove_stale_services(
-        self,
-        db: AsyncSession,
-        node_id: str,
-        discovered_services: list,
-    ) -> None:
-        """Delete stale services. Helper for _sync_discovered_services (#1088).
-        Same savepoint protection as `_upsert_service` (#17070)."""
-        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
-        if not discovered_names:
-            return
-
-        try:
-            async with db.begin_nested():
-                stale_result = await db.execute(
-                    select(Service).where(
-                        Service.node_id == node_id,
-                        Service.service_name.notin_(discovered_names),
-                    )
-                )
-                for stale_svc in stale_result.scalars().all():
-                    await db.delete(stale_svc)
-        except Exception as exc:
-            if is_connection_level_db_error(exc):
-                raise
-            logger.warning("stale service removal failed node=%s error=%s", node_id, exc)
+            logger.warning("service batch failed node=%s, retrying row by row: %s", node_id, type(exc).__name__)
+        return any([await self._upsert_service(db, node_id, s, now) for s in services])
 
     async def _sync_discovered_services(
         self,
@@ -2031,13 +2021,11 @@ class ReconcilerService:
         any_churning = False
         stage = "service sync"
         try:
-            for svc_data in discovered_services:
-                if await self._upsert_service(db, node_id, svc_data, now):
-                    any_churning = True
+            any_churning = await self._upsert_services(db, node_id, discovered_services, now)
 
             # Remove stale services no longer reported by the agent (#1018)
             stage = "stale service removal"
-            await self._remove_stale_services(db, node_id, discovered_services)
+            await remove_stale_services(db, node_id, discovered_services)
         except Exception as exc:
             if not is_connection_level_db_error(exc):
                 raise

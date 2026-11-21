@@ -46,6 +46,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 
@@ -1080,8 +1081,7 @@ async def get_vulnerabilities(request: DFAAnalyzeRequest, admin_check: bool = De
                     }
                 )
 
-        # Sort by severity
-        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        severity_order = {s.value: i for i, s in enumerate(reversed(Severity.finding_ladder()))}
         all_vulns.sort(key=lambda v: severity_order.get(v["severity"], 5))
 
         return {

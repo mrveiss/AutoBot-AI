@@ -116,6 +116,12 @@ class LLCAgentStatus(str, Enum):
     TERMINATED = "terminated"
 
 
+#: An agent in one of these never starts a run; ``scheduler/dispatch_gate.py`` is the gate (#19240).
+UNDISPATCHABLE_AGENT_STATUSES = frozenset(
+    {LLCAgentStatus.PAUSED.value, LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value}
+)
+
+
 class SprintStatus(str, Enum):
     """Status of a sprint (GH#8219)."""
 
@@ -186,12 +192,20 @@ _NONTERMINAL_RUN_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING
 
 
 class HeartbeatInvocationSource(str, Enum):
-    """How a heartbeat run was triggered (GH#8225, GH#9624)."""
+    """How a heartbeat run was triggered (GH#8225, GH#9624, #19582).
+
+    The four ``WORK_ITEM_*`` / ``AGENT_MENTIONED`` / ``APPROVAL_DECIDED`` members are
+    the event wakes: they start a run through ``llc.scheduler.event_wake.wake_agent``
+    whether or not the agent's periodic heartbeat is on.
+    """
 
     SCHEDULER = "scheduler"
     MANUAL = "manual"
     CALLBACK = "callback"
     WORK_ITEM_COMMENTED = "work_item_commented"
+    WORK_ITEM_ASSIGNED = "work_item_assigned"
+    AGENT_MENTIONED = "agent_mentioned"
+    APPROVAL_DECIDED = "approval_decided"
 
 
 class ContextMode(str, Enum):
@@ -444,6 +458,8 @@ class ActivityEventType(str, Enum):
 
     # Board instant controls (GH#8256 — FR-GOV-05)
     CONTROL_AGENT_PAUSED = "control.agent_paused"
+    # #21056: a pause request for an agent that is already paused; changes no state, so it is not a second "paused".
+    CONTROL_AGENT_PAUSE_REPEATED = "control.agent_pause_repeated"
     CONTROL_AGENT_RESUMED = "control.agent_resumed"
     CONTROL_AGENT_TERMINATED = "control.agent_terminated"
     # #15907: the periodic heartbeat switched on or off for one agent.
@@ -463,8 +479,15 @@ class ActivityEventType(str, Enum):
     ADAPTER_RUN_COMPLETED = "adapter_run.completed"
     ADAPTER_RUN_FAILED = "adapter_run.failed"
 
+    # Budget (#21212): a dispatch the gate refused because the agent's budget is exhausted.
+    BUDGET_DISPATCH_REFUSED = "budget.dispatch_refused"
+
     # Notification
     NOTIFICATION_SENT = "notification.sent"
+
+    # Template library (#20101: services/template.py named these before they existed)
+    TEMPLATE_PUBLISHED = "template.published"
+    TEMPLATE_IMPORTED = "template.imported"
 
 
 class WorkflowStatus(str, Enum):

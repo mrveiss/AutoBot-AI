@@ -51,6 +51,10 @@ repos:
     rev: 26.3.1
     hooks:
       - id: black
+        # The hook runs on the changed files repo-wide (excluding autobot-infrastructure/); the gate
+        # checks autobot-backend/ autobot-slm-backend/ autobot_shared/ only, the code CI owns. The
+        # arguments match (--line-length=120), so a file in both sets is formatted the same way by
+        # either. A file outside the three package dirs is formatted by the hook alone (#21839).
         args: [--line-length=120]
         language_version: python3.14
         exclude: ^autobot-infrastructure/
@@ -60,7 +64,12 @@ repos:
     rev: 8.0.1
     hooks:
       - id: isort
-        args: [--profile=black, --line-length=120]
+        # The hook runs on the changed files repo-wide (excluding autobot-infrastructure/); the gate
+        # checks autobot-backend/ autobot-slm-backend/ autobot_shared/ only, the code CI owns. The
+        # arguments match, so a file in both sets is sorted the same way by either.
+        # Same invocation as _gate-code-quality.yml: read pyproject.toml (profile, src_paths,
+        # known_first_party) so a single changed file classifies imports as the gate does (#16796).
+        args: [--settings-path=., --line-length=120]
         exclude: ^autobot-infrastructure/
 
   # Python linting with flake8
@@ -1081,8 +1090,11 @@ repos:
         description: "Runs at the commit-msg stage against the real message file. At pre-commit time COMMIT_EDITMSG still holds the PREVIOUS subject, and in a linked worktree .git is a file so the path does not resolve at all (#13876)"
 
 # Configuration for specific file types
+# Every `language: python` hook imports autobot_shared, which refuses an
+# interpreter below the .python-version floor (#20903); bare python3 is
+# whatever the machine ships (3.10 on Ubuntu 22.04).
 default_language_version:
-  python: python3
+  python: python3.14
 
 exclude: |
   (?x)^(

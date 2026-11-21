@@ -21,20 +21,22 @@ import {
   sendLedgerAsk,
   type LedgerAskOutcome,
   type LedgerSection,
+  type ActivityRow,
+  type ClaimRow,
+  type ConflictRow,
+  type IdleSubscriberRow,
+  type PeerMessageRow,
+  type PresenceRow,
 } from '@autobot/ui'
 import { slmApiClient } from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 type Schemas = components['schemas']
-export type ClaimRow = Schemas['ClaimRow']
+/** The ledger row shapes are the kit's, one declaration for both consoles (#19910). */
+export type { ActivityRow, ClaimRow, ConflictRow, IdleSubscriberRow, PeerMessageRow, PresenceRow }
 export type ContentionRow = Schemas['ContentionRow']
-export type ConflictRow = Schemas['ConflictRow']
-export type ActivityRow = Schemas['ActivityRow']
 export type DevLoopActionRow = Schemas['DevLoopActionRow']
 export type LedgerSourceStatus = Schemas['LedgerSourceStatus']
-export type PresenceRow = Schemas['PresenceRow']
-export type PeerMessageRow = Schemas['PeerMessageRow']
-export type IdleSubscriberRow = Schemas['IdleSubscriberRow']
 
 const LEDGER = '/monitoring/agent-ledger'
 

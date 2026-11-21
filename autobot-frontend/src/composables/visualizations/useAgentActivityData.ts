@@ -29,23 +29,25 @@ const logger = createLogger('useAgentActivityData')
 type AgentStatusListResponse = components['schemas']['AgentStatusListResponse']
 type AgentStatusItem = components['schemas']['AgentStatusItem']
 
-/** The schema types `type`/`status` and the task lists loosely; Agent narrows them to what the widget renders. */
-function toAgent(item: AgentStatusItem): Agent {
+/** The schema types `type`/`status` and the task lists loosely; ActivityAgent narrows them to what the widget renders. */
+function toAgent(item: AgentStatusItem): ActivityAgent {
   return {
     ...item,
-    type: item.type as Agent['type'],
-    status: (item.status ?? null) as Agent['status'],
+    type: item.type as ActivityAgent['type'],
+    status: (item.status ?? null) as ActivityAgent['status'],
     tasksCompleted: item.tasksCompleted ?? null,
     uptime: item.uptime ?? null,
     successRate: item.successRate ?? null,
-    recentTasks: (item.recentTasks ?? []) as Agent['recentTasks'],
-    activityTimeline: (item.activityTimeline ?? []) as Agent['activityTimeline'],
+    // #21270: null = the history was not readable; [] = measured, nothing happened.
+    recentTasks: (item.recentTasks ?? null) as ActivityAgent['recentTasks'],
+    activityTimeline: (item.activityTimeline ?? null) as ActivityAgent['activityTimeline'],
+    activityWindowStart: item.activityWindowStart ?? null,
   }
 }
 
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
-export interface Agent {
+export interface ActivityAgent {
   id: string
   name: string
   type: 'orchestrator' | 'worker' | 'monitor' | 'analyzer' | 'executor'
@@ -59,19 +61,22 @@ export interface Agent {
   tasksCompleted: number | null
   uptime: number | null
   successRate: number | null
+  // #21270: null = not reported (feed unreadable); [] = measured, none.
   recentTasks: Array<{
     id: string
     name: string
     status: 'completed' | 'failed' | 'cancelled'
     completedAt: number
-  }>
+  }> | null
   activityTimeline: Array<{
     task: string
     type: 'working' | 'idle' | 'error'
     startPercent: number
     widthPercent: number
     duration: number
-  }>
+  }> | null
+  // #21270: UTC ms the timeline axis starts at; the widget labels its columns from it.
+  activityWindowStart?: number | null
 }
 
 export interface ActivityEvent {
@@ -89,7 +94,7 @@ export interface ActivityEvent {
 // surfaces an error state so the UI shows an empty/error message instead of
 // presenting fabricated data as if it were real.
 
-export function getSampleAgents(): Agent[] {
+export function getSampleAgents(): ActivityAgent[] {
   const now = Date.now()
   return [
     {
@@ -194,7 +199,7 @@ export function getSampleEvents(): ActivityEvent[] {
 // ── Composable ────────────────────────────────────────────────────────────────
 
 export function useAgentActivityData() {
-  const agents = ref<Agent[]>([])
+  const agents = ref<ActivityAgent[]>([])
   const recentEvents = ref<ActivityEvent[]>([])
   // BUG1: surface load failures to the UI instead of silently showing samples.
   const error = ref<string | null>(null)

@@ -17,6 +17,7 @@ from knowledge.read_path_fakes_16665 import FakeKB
 DOC_A, DOC_S = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
 ORPHAN = "33333333-3333-4333-8333-333333333333"
 ALICE, BOB = {"user_id": "alice", "role": "user"}, {"user_id": "bob", "role": "user"}
+ADMIN = {"user_id": "root", "role": "admin"}
 
 
 def _summary(doc, text):
@@ -61,6 +62,7 @@ def _call(user, method, path):
         patch("knowledge.summary_search.SummarySearchService", _Service),
         patch("knowledge.backends.get_async_default_client", AsyncMock(return_value=object())),
         patch("knowledge.get_knowledge_base", AsyncMock(return_value=_SummaryKB())),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
     ):
         return getattr(TestClient(app), method)(path)
 
@@ -98,3 +100,23 @@ def test_drill_down_is_withheld_for_a_summary_the_caller_may_not_read():
 )
 def test_an_unresolvable_caller_is_denied(path):
     assert _call({"role": "user"}, "get", path).status_code == 401
+
+
+READS = [
+    ("/summaries/search?query=q", "alice summary"),
+    (f"/documents/{DOC_A}/overview", "overview text"),
+    (f"/summaries/{DOC_A}/drill-down", "drill text"),
+]
+
+
+@pytest.mark.parametrize("path,private_text", READS)
+def test_user_a_reads_their_private_summary_and_user_b_never_does(path, private_text):
+    assert private_text in _call(ALICE, "get", path).text
+    assert private_text not in _call(BOB, "get", path).text
+
+
+@pytest.mark.parametrize("path,private_text", READS)
+def test_an_admin_reads_a_summary_of_another_users_private_fact(path, private_text):
+    response = _call(ADMIN, "get", path)
+
+    assert response.status_code == 200 and private_text in response.text

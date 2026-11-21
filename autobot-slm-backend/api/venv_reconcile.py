@@ -522,7 +522,7 @@ async def _run_pip_install(component: str, req_path: str, pip_bin: str, steps: L
         return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: pip install timed out for %s", component)
-        steps.append("pip: install timed out after 300s")
+        steps.append(f"pip: install timed out after {_PIP_INSTALL_TIMEOUT:g}s")
         return False
     except Exception as exc:
         logger.error("drift resolve: pip install error for %s: %s", component, exc)

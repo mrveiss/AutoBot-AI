@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
@@ -24,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Node, Replication, ReplicationStatus
-from services.ansible_utils import ansible_run_failure
+from services.ansible_utils import run_single_host_playbook
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.ssh_utils import ssh_destination_args, ssh_options
 
@@ -515,37 +514,20 @@ class ReplicationService:
         redis_password: "{auth}"
 """
 
-        # Write temporary playbook (contains no secrets)
         playbook_path = self.ansible_dir / "temp_replication.yml"
         await asyncio.to_thread(playbook_path.write_text, playbook_content, encoding="utf-8")
 
         try:
-            cmd = [
-                "ansible-playbook",
-                str(playbook_path),
-                "-i",
-                f"{target_ip},",
-                "-e",
-                f"ansible_user={ssh_user}",
-                "-e",
-                f"ansible_port={ssh_port}",
-                "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
-            ]
-
             # Pass the credential via the environment (never persisted to disk).
-            playbook_env = {**os.environ, "AUTOBOT_REDIS_REPL_AUTH": redis_password}
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.ansible_dir),
-                env=playbook_env,
+            failure = await run_single_host_playbook(
+                self.ansible_dir,
+                playbook_path,
+                target_ip,
+                ssh_user,
+                ssh_port,
+                timeout=300,
+                AUTOBOT_REDIS_REPL_AUTH=redis_password,
             )
-
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300)
-
-            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), target_ip, process.returncode)
             if failure:
                 logger.error("Ansible replication failed: %s", failure)
                 return False
@@ -579,29 +561,9 @@ class ReplicationService:
         await asyncio.to_thread(playbook_path.write_text, playbook_content, encoding="utf-8")
 
         try:
-            cmd = [
-                "ansible-playbook",
-                str(playbook_path),
-                "-i",
-                f"{target_ip},",
-                "-e",
-                f"ansible_user={ssh_user}",
-                "-e",
-                f"ansible_port={ssh_port}",
-                "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
-            ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.ansible_dir),
+            failure = await run_single_host_playbook(
+                self.ansible_dir, playbook_path, target_ip, ssh_user, ssh_port, timeout=120
             )
-
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=120)
-
-            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), target_ip, process.returncode)
             if failure:
                 logger.error("Ansible promotion failed: %s", failure)
                 return False

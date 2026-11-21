@@ -48,23 +48,26 @@ async def test_playwright_service():
         print("\n2. Testing Web Scraping via Playwright")  # noqa: print
         print("-" * 40)  # noqa: print
 
-        scrape_request = {
-            "url": "https://www.google.com/search?q=network+scanning+tools",
-            "waitFor": "body",
-            "screenshot": False,
-        }
+        # The worker has no /scrape; /automation navigates and reads the page (#19490).
+        automation_url = f"http://localhost:{config.port.browser}/automation"  # canonical: ignore py-hardcoded-url
+        session_id = "playwright-integration-e2e"
+        search_url = "https://www.google.com/search?q=network+scanning+tools"
 
         try:
-            async with session.post(
-                f"http://localhost:{config.port.browser}/scrape", json=scrape_request
-            ) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
-                if response.status == 200:
-                    result = await response.json()
-                    print("✅ Web scraping successful")  # noqa: print
-                    content_preview = result.get("content", "")[:200]
-                    print(f"   Content preview: {content_preview}...")  # noqa: print
-                else:
-                    print(f"❌ Scraping failed: {response.status}")  # noqa: print
+            steps = (
+                {"action": "navigate", "params": {"url": search_url}, "session_id": session_id},
+                {"action": "get_text", "params": {"selector": "body"}, "session_id": session_id},
+            )
+            for step in steps:
+                async with session.post(automation_url, json=step) as response:
+                    payload = await response.json()
+                    if response.status != 200 or not payload.get("success"):
+                        print(f"❌ {step['action']} failed: {response.status}")  # noqa: print
+                        break
+            else:
+                print("✅ Web scraping successful")  # noqa: print
+                content_preview = (payload.get("result", {}).get("text") or "")[:200]
+                print(f"   Content preview: {content_preview}...")  # noqa: print
         except Exception as e:
             print(f"❌ Scraping error: {e}")  # noqa: print
 

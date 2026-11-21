@@ -7,10 +7,10 @@
         <p class="dashboard-subtitle">{{ t('security.threatDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshStatus" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="refreshStatus" :disabled="loading">
           <span class="icon">↻</span>
           {{ loading ? t('security.threatDashboard.loading') : t('security.threatDashboard.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -109,15 +109,14 @@
           class="url-input"
           @keyup.enter="checkUrl"
         />
-        <button
-          class="btn-check"
+        <BaseButton variant="info"
           @click="checkUrl"
           :disabled="checkLoading || !urlToCheck || !status.any_service_configured"
         >
           <span v-if="checkLoading" class="spinner"></span>
           <span v-else>🔍</span>
           {{ checkLoading ? t('security.threatDashboard.checking') : t('security.threatDashboard.checkUrl') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Check Result -->
@@ -197,7 +196,7 @@
     <div v-if="checkHistory.length > 0" class="history-section">
       <div class="section-header">
         <h3>{{ t('security.threatDashboard.recentChecks') }}</h3>
-        <button class="btn-clear" @click="clearHistory">{{ t('security.threatDashboard.clearHistory') }}</button>
+        <BaseButton variant="outline" size="xs" @click="clearHistory">{{ t('security.threatDashboard.clearHistory') }}</BaseButton>
       </div>
       <div class="history-list">
         <div
@@ -218,6 +217,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -424,7 +424,7 @@ onMounted(() => {
 .setup-guide-btn {
   display: inline-block;
   padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   text-decoration: none;
   border-radius: var(--radius-md);
@@ -446,29 +446,6 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: var(--spacing-2);
-}
-
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  transition: var(--transition-all);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Status Cards */
@@ -586,29 +563,6 @@ onMounted(() => {
 .url-input:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.btn-check {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-info);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: var(--font-medium);
-  transition: var(--transition-all);
-}
-
-.btn-check:hover:not(:disabled) {
-  background: var(--color-info-hover);
-}
-
-.btn-check:disabled {
-  background: var(--text-muted);
-  cursor: not-allowed;
 }
 
 .spinner {
@@ -764,22 +718,6 @@ onMounted(() => {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   margin-top: var(--spacing-1);
-}
-
-/* History Section */
-.btn-clear {
-  padding: var(--spacing-1-5) var(--spacing-3);
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: var(--transition-all);
-}
-
-.btn-clear:hover {
-  background: var(--bg-hover);
 }
 
 .history-list {

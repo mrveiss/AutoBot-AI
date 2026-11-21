@@ -23,8 +23,12 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
+from knowledge.backup_audit import audit_backup_action, resolve_backup_name, run_audited
+from knowledge.backup_embeddings import fetch_backup_embeddings, restore_backup_embedding
+from knowledge.backup_stream import write_backup
 from knowledge.export_fields import filter_fact_fields
 from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, QuarantineAuditFailed, read_every_fact
+from services.audit.taxonomy import AuditAction
 
 if TYPE_CHECKING:
     import aioredis
@@ -321,12 +325,9 @@ class BulkOperationsMixin:
                 logger.warning("Failed to get fact %s: %s", fact_id, e)
         return facts
 
-    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, List[float]]:
-        """Fetch embeddings from vector store (Issue #398: extracted)."""
-        result = await asyncio.to_thread(self.vector_store.get, ids=fact_ids, include=["embeddings"])
-        if result and result.get("ids") and result.get("embeddings"):
-            return dict(zip(result["ids"], result["embeddings"]))
-        return {}
+    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Issue #398, #19647."""
+        return await fetch_backup_embeddings(self, fact_ids)
 
     async def _add_embeddings_to_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add vector embeddings to facts from ChromaDB (Issue #398: refactored)."""
@@ -343,7 +344,7 @@ class BulkOperationsMixin:
                 for fact in facts:
                     fact_id = fact.get("fact_id")
                     if fact_id and fact_id in embeddings_map:
-                        fact["embedding"] = embeddings_map[fact_id]
+                        fact.update(embeddings_map[fact_id])
             except Exception as e:
                 logger.warning("Could not retrieve embeddings: %s", e)
         except Exception as e:
@@ -1419,11 +1420,8 @@ class BulkOperationsMixin:
             logger.info("Creating backup: %s", backup_file)
 
             facts = await read_every_fact(self, audit_actor)
-            if include_embeddings:
-                facts = await self._add_embeddings_to_facts(facts)
-
             backup_data = await self._build_backup_data(facts, description, include_embeddings, include_metadata)
-            await self._write_backup_file(backup_file, backup_data, compression)
+            await write_backup(self, backup_file, backup_data, compression)
 
             file_size = os.path.getsize(backup_file)
             logger.info(
@@ -1465,28 +1463,7 @@ class BulkOperationsMixin:
         return str(project_root / "backups" / "knowledge")
 
     def _resolve_backup_path(self, backup_file: str) -> str | None:
-        """Resolve and contain *backup_file* to the default backup directory.
-
-        Uses ``os.path.realpath`` to expand symlinks before comparing, so a
-        symlink inside the backup dir that points outside is correctly rejected.
-
-        Issue #9670: containment check — dotdot-stripping alone is insufficient
-        because the API accepts full filesystem paths; without this check any
-        readable path can be supplied.
-
-        Args:
-            backup_file: Raw path supplied by the API caller.
-
-        Returns:
-            The realpath-resolved path string when it is inside (or equal to)
-            the default backup directory; ``None`` otherwise.
-        """
-        allowed_root = os.path.realpath(self._get_backup_dir(None))
-        resolved = os.path.realpath(backup_file)
-        # Accept the root itself or any path strictly under it.
-        if resolved == allowed_root or resolved.startswith(allowed_root + os.sep):
-            return resolved
-        return None
+        return resolve_backup_name(self._get_backup_dir(None), backup_file)
 
     def _generate_backup_path(self, backup_dir: str, compression: bool) -> tuple:
         """
@@ -1544,26 +1521,6 @@ class BulkOperationsMixin:
             logger.warning("Could not include metadata: %s", e)
             return {}
 
-    async def _write_backup_file(self, backup_file: str, backup_data: Dict[str, Any], compression: bool) -> None:
-        """
-        Write backup data to file.
-
-        Issue #398: Extracted from create_backup.
-        """
-        json_data = json.dumps(backup_data, ensure_ascii=False, indent=2)
-
-        if compression:
-            await asyncio.to_thread(self._write_gzip_file, backup_file, json_data)
-        else:
-            await asyncio.to_thread(_write_file_sync, backup_file, json_data)
-
-    def _write_gzip_file(self, filepath: str, content: str) -> None:
-        """Write content to gzip-compressed file (Issue #419)."""
-        import gzip
-
-        with gzip.open(filepath, "wt", encoding="utf-8") as f:
-            f.write(content)
-
     def _read_gzip_file(self, filepath: str) -> str:
         """Read content from gzip-compressed file (Issue #419)."""
         import gzip
@@ -1578,6 +1535,7 @@ class BulkOperationsMixin:
         skip_duplicates: bool = True,
         restore_embeddings: bool = True,
         dry_run: bool = True,
+        audit_actor: str = BACKUP_AUDIT_ACTOR,
     ) -> Dict[str, Any]:
         """
         Restore knowledge base from a backup file.
@@ -1590,20 +1548,13 @@ class BulkOperationsMixin:
         try:
             resolved = self._resolve_backup_path(backup_file)
             if resolved is None:
-                return {
-                    "status": "error",
-                    "message": "backup_file must be inside the knowledge backups directory",
-                }
-
-            backup_file = resolved
-
+                return {"status": "error", "message": "backup_file must be a backup's filename"}
+            backup_file, filename = resolved, os.path.basename(resolved)
             if not os.path.exists(backup_file):
-                return {
-                    "status": "error",
-                    "message": f"Backup file not found: {backup_file}",
-                }
-
-            logger.info("Restoring from backup: %s (dry_run=%s)", backup_file, dry_run)
+                return {"status": "error", "message": f"Backup file not found: {filename}"}
+            if not self._is_valid_backup_file(filename):
+                return {"status": "error", "message": "Not a valid backup file"}
+            logger.info("Restoring from backup: %s (dry_run=%s)", filename, dry_run)
 
             backup_data = await self._read_backup_file(backup_file)
             validation = self._validate_backup_data(backup_data)
@@ -1613,11 +1564,19 @@ class BulkOperationsMixin:
             if dry_run:
                 return self._build_dry_run_response(backup_data)
 
-            results = await self._restore_facts_from_backup(
-                backup_data.get("facts", []),
-                overwrite_existing,
-                skip_duplicates,
-                restore_embeddings and backup_data.get("include_embeddings", False),
+            if not await audit_backup_action(AuditAction.KNOWLEDGE_BACKUP_RESTORE, audit_actor, filename):
+                return {"status": "error", "message": "The restore could not be audited, so it did not run"}
+
+            results = await run_audited(
+                AuditAction.KNOWLEDGE_BACKUP_RESTORE,
+                audit_actor,
+                filename,
+                self._restore_facts_from_backup(
+                    backup_data.get("facts", []),
+                    overwrite_existing,
+                    skip_duplicates,
+                    restore_embeddings and backup_data.get("include_embeddings", False),
+                ),
             )
 
             return self._build_restore_response(backup_data, results)
@@ -1816,32 +1775,14 @@ class BulkOperationsMixin:
         if result.get("status") != "success":
             return {"action": "error", "reason": "store_failed"}
 
-        embedding = fact_data.get("embedding")
-        if restore_embeddings and embedding and self.vector_store:
-            # #13708: use what store_fact persisted -- an unredacted backup can carry a raw credential.
-            stored_content = result.get("content", content)
-            return await self._restore_fact_embedding(result.get("fact_id", fact_id), stored_content, embedding)
+        if restore_embeddings and fact_data.get("embedding") and self.vector_store:
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), fact_data)
 
         return {"action": "restored", "embedding": False}
 
-    async def _restore_fact_embedding(self, fact_id: str, content: str, embedding: List[float]) -> Dict[str, Any]:
-        """
-        Restore embedding for a fact.
-
-        Issue #398: Extracted from _store_restored_fact.
-        """
-        try:
-            await asyncio.to_thread(
-                self.vector_store.upsert,
-                ids=[fact_id],
-                embeddings=[embedding],
-                metadatas=[{"content": content[:1000]}],
-                documents=[content[:1000]],
-            )
-            return {"action": "restored", "embedding": True}
-        except Exception as e:
-            logger.warning("Embedding restore failed: %s", e)
-            return {"action": "restored", "embedding": False}
+    async def _restore_fact_embedding(self, fact_id: str, fact_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Issue #398, #19647."""
+        return await restore_backup_embedding(self, fact_id, fact_data)
 
     def _count_restore_results(self, restore_results: List[Any]) -> Dict[str, Any]:
         """
@@ -1926,54 +1867,23 @@ class BulkOperationsMixin:
             logger.error("Failed to list backups: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
 
-    async def delete_backup(
-        self,
-        backup_file: str,
-    ) -> Dict[str, Any]:
-        """
-        Delete a backup file.
-
-        Issue #419: Backup and restore functionality.
-        Issue #9670: Directory containment — path is resolved to the default
-            backup directory; any path outside is rejected before os.remove.
-
-        Args:
-            backup_file: Path to backup file to delete
-
-        Returns:
-            Dict with deletion status
-        """
+    async def delete_backup(self, backup_file: str, audit_actor: str = BACKUP_AUDIT_ACTOR) -> Dict[str, Any]:
+        """Delete one backup, named by its filename (#419, #9670); a committed audit entry comes first (#19721)."""
         try:
             resolved = self._resolve_backup_path(backup_file)
             if resolved is None:
-                return {
-                    "status": "error",
-                    "message": "backup_file must be inside the knowledge backups directory",
-                }
-
-            backup_file = resolved
-
-            if not os.path.exists(backup_file):
-                return {
-                    "status": "error",
-                    "message": f"Backup file not found: {backup_file}",
-                }
-
-            # Validate it's a backup file (basename check retained alongside containment)
-            filename = os.path.basename(backup_file)
-            if not filename.startswith("kb_backup_"):
+                return {"status": "error", "message": "backup_file must be a backup's filename"}
+            filename = os.path.basename(resolved)
+            if not os.path.exists(resolved):
+                return {"status": "error", "message": f"Backup file not found: {filename}"}
+            if not self._is_valid_backup_file(filename):
                 return {"status": "error", "message": "Not a valid backup file"}
-
-            # Delete the file
-            await asyncio.to_thread(os.remove, backup_file)
-
-            logger.info("Backup deleted: %s", backup_file)
-
-            return {
-                "status": "success",
-                "deleted_file": backup_file,
-            }
-
+            if not await audit_backup_action(AuditAction.KNOWLEDGE_BACKUP_DELETE, audit_actor, filename):
+                return {"status": "error", "message": "The deletion could not be audited, so it did not run"}
+            removal = asyncio.to_thread(os.remove, resolved)
+            await run_audited(AuditAction.KNOWLEDGE_BACKUP_DELETE, audit_actor, filename, removal)
+            logger.info("Backup deleted: %s", filename)
+            return {"status": "success", "deleted_file": filename}
         except Exception as e:
             logger.error("Failed to delete backup: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}

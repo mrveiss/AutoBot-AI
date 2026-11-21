@@ -241,7 +241,7 @@ cssclasses:
 |----------|-------------|
 | [Frontend Index](frontend/_index.md) | All frontend documentation |
 | [Design System](frontend/DESIGN_SYSTEM_COMPLETE.md) | Design system |
-| [Settings Panel Guide](frontend/settings-panel-guide.md) | Settings panel guide |
+| [Settings Panel Guide](frontend/settings-panel-guide.md) | Retired panel, kept as a record (#19532); settings live in the SLM admin views |
 
 ---
 

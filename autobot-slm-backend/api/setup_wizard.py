@@ -30,6 +30,7 @@ from config import settings
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
+from services.llm_placement import llm_infra_vars
 from services.playbook_executor import get_playbook_executor
 from services.provision_progress import (
     PROVISION_STALE_SECONDS,
@@ -246,11 +247,8 @@ def _build_inventory_children(
     return children, ansible_groups
 
 
-# Role name -> (variable_name, port) for infrastructure service discovery.
-# Maps active roles to the Ansible vars that templates expect (#1431).
-# Ports are INTERNAL service ports (uvicorn/service listen ports), not the
-# external nginx TLS port (8443).  Co-located nodes use 127.0.0.1 so uvicorn
-# binds to loopback; nginx already holds 8443 on the same host (#3426).
+# Role name -> (variable_name, port) for service discovery (#1431). Ports are INTERNAL listen ports, not nginx's
+# 8443. Co-located nodes use 127.0.0.1 so uvicorn binds to loopback; nginx already holds 8443 there (#3426).
 _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "backend": ("backend_host", 8001),  # uvicorn internal port (#3426: was 8443)
     "redis": ("redis_host", 6379),
@@ -261,11 +259,10 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "tts-worker": ("tts_host", 8083),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
-# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
-# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
-# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
-# ansible/roles/backend/defaults/main.yml (#3526).
-_CHROMADB_PORT = 8100
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it has no
+# _ROLE_INFRA_VARS entry (#3526). Its port is the SSOT's (#19321); the ansible
+# chromadb_port / backend_chromadb_port defaults are pinned to it by a repo test.
+_CHROMADB_PORT = config.port.chromadb
 
 
 def _build_infra_vars(
@@ -293,6 +290,7 @@ def _build_infra_vars(
             resolved = "127.0.0.1" if (local_ips and ip in local_ips) else ip
             infra_vars[host_var] = resolved
             infra_vars[host_var.replace("_host", "_port")] = port
+    infra_vars.update(llm_infra_vars(node_roles, node_id_to_ip))
     return infra_vars
 
 

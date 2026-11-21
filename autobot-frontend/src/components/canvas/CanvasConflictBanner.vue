@@ -13,7 +13,7 @@
     </span>
     <button
       aria-label="Resume agent writing in a new cell"
-      class="px-3 py-1 rounded bg-autobot-primary text-white text-xs hover:opacity-90"
+      class="px-3 py-1 rounded bg-autobot-primary text-autobot-text-on-primary text-xs hover:opacity-90"
       @click="$emit('resume')"
     >
       Resume

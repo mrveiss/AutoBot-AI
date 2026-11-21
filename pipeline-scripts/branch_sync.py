@@ -2,23 +2,28 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Merge main into every open same-repo PR branch and every PR-less branch (#19548).
+"""Merge main into each open same-repo PR branch that carries ``land-next``; every other branch is left alone.
 
-Run by ``.github/workflows/sync-branches-with-main.yml`` from a full clone, with
-``GITHUB_TOKEN`` and nothing else. A ``GITHUB_TOKEN`` push starts no workflow run,
-so a sync costs zero CI; the price is that GitHub refuses one whose commits change
-``.github/workflows/*``, which is detected before pushing and labelled instead.
+Run by ``.github/workflows/sync-branches-with-main.yml`` from a full clone of main.
+``git push`` authenticates with ``AUTOBOT_PUSH_TOKEN`` and nothing else, as a
+``-c http...extraheader`` on the push argv only: ``main`` takes the token out of
+``os.environ`` before the first git call, so no other git command, and no file in
+``.git/``, ever holds it. The REST calls use ``GITHUB_TOKEN``. Every merge is
+``--no-ff`` and its commit ends with `` [skip ci]``, so a sync costs zero CI. A merge that changes
+``.github/workflows/*`` is pushed like any other; only a push GitHub refuses for
+lack of the ``workflow`` scope is labelled.
 
 Merge only, never rebase, never force: a plain ``git push`` that fails because the
 branch moved is skipped and retried on the next run. A conflict is aborted and
-labelled, never resolved. The decisions live in ``branch_sync_core``; this module
+labelled, never resolved. ``--start-ci-for-pr N`` instead pushes one empty commit (no skip marker) onto PR N's
+synced head so its suite runs (#21577). The decisions live in ``branch_sync_core``; this module
 is the git and REST plumbing around them.
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import base64
 import os
 import subprocess  # nosec B404  # TimeoutExpired only; git runs through git_probe
 import sys
@@ -32,28 +37,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
 import branch_sync_core as core  # noqa: E402
 from github_api import GitHubApi, WatchdogError, build_api  # noqa: E402
+from issue_api import load_upsert  # noqa: E402  # the ONE by-path loader for the comment upsert (#12984, #19522)
 
 from autobot_shared.git_probe import run_git  # noqa: E402  # scrubbed-env git (#15783)
 
 WORK_BRANCH = "__sync_work"
+PUSH_TOKEN_ENV = "AUTOBOT_PUSH_TOKEN"
+PUSH_HEADER_KEY = "http.https://github.com/.extraheader"
 DEFAULT_RETRY_AFTER_SECONDS = 60
 MAX_RATE_LIMIT_RETRIES = 3
 PAGE_SIZE = 100
 LABEL_COLOURS = {core.LABEL_CONFLICT: "d93f0b", core.LABEL_WORKFLOW: "fbca04"}
 
 Runner = Callable[[Sequence[str]], Tuple[int, str]]
-
-#: The ONE marker-comment upsert (#12984): reads every page, matches a Bot author plus the marker.
-UPSERT_SCRIPT = Path(__file__).resolve().parent.parent / ".github/actions/upsert-pr-comment/upsert_pr_comment.py"
-
-
-def load_upsert() -> Callable[..., Tuple[str, int]]:
-    """``upsert_pr_comment.upsert``, loaded by path: a second copy here is what #12984 removed."""
-    spec = importlib.util.spec_from_file_location("upsert_pr_comment", UPSERT_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("upsert_pr_comment", module)
-    spec.loader.exec_module(module)
-    return module.upsert
 
 
 class SyncApiError(WatchdogError):
@@ -69,15 +65,39 @@ def git_output(args: Sequence[str]) -> Tuple[int, str]:
     try:
         proc = run_git(list(args), strict=False, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
-        return 124, f"git {' '.join(args[:2])} timed out after {exc.timeout}s"
+        return 124, f"git {_verb(args)} timed out after {exc.timeout}s"
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-class Git:
-    """The git commands the sync runs. ``run`` is injected so tests record the argv."""
+def _verb(args: Sequence[str]) -> str:
+    """The subcommand words of *args*, past any ``-c key=value`` pair: never a header."""
+    start = 0
+    while start < len(args) and args[start] == "-c":
+        start += 2
+    return " ".join(args[start : start + 2])
 
-    def __init__(self, run: Runner = git_output) -> None:
-        self._run = run
+
+def push_auth(token: str) -> Tuple[str, ...]:
+    """The ``-c`` pair that authenticates ONE ``git push`` with *token*; empty without one."""
+    if not token:
+        return ()
+    basic = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("ascii")
+    return ("-c", f"{PUSH_HEADER_KEY}=AUTHORIZATION: basic {basic}")
+
+
+def take_push_token(environ: Dict[str, str]) -> str:
+    """Remove the PAT from *environ*, so no git subprocess inherits it, and return it."""
+    return environ.pop(PUSH_TOKEN_ENV, "").strip()
+
+
+class Git:
+    """The git commands the sync runs. ``run`` is injected so tests record the argv.
+
+    ``auth`` is the ``push_auth`` pair; it is prepended to the push argv and nothing else.
+    """
+
+    def __init__(self, run: Runner = git_output, auth: Sequence[str] = ()) -> None:
+        self._run, self._auth = run, tuple(auth)
 
     def out(self, *args: str) -> Optional[str]:
         returncode, output = self._run(args)
@@ -87,6 +107,11 @@ class Git:
         listed = self.out("for-each-ref", "--format=%(refname:lstrip=3)", "refs/remotes/origin")
         return [line for line in (listed or "").splitlines() if line]
 
+    def being_pushed(self) -> set:
+        """Branches a pre-push hook is gating right now; asked just before each merge (#20260)."""
+        listed = self.out("ls-remote", "origin", f"{core.PUSH_MARKER_PREFIX}*")
+        return core.branches_being_pushed(listed or "", time.time())
+
     def behind(self, branch: str, base: str) -> Optional[int]:
         count = self.out("rev-list", "--count", f"origin/{branch}..origin/{base}")
         return int(count) if count and count.isdigit() else None
@@ -95,7 +120,9 @@ class Git:
         return self._run(["checkout", "--quiet", "-B", WORK_BRANCH, f"origin/{branch}"])[0] == 0
 
     def merge(self, branch: str, base: str) -> Tuple[int, str]:
-        return self._run(["merge", "--no-edit", "-m", core.merge_message(branch, base), f"origin/{base}"])
+        # --no-ff: a branch with no commits of its own would otherwise fast-forward to
+        # main's head, make no merge commit, carry no [skip ci], and start full CI.
+        return self._run(["merge", "--no-ff", "--no-edit", "-m", core.merge_message(branch, base), f"origin/{base}"])
 
     def unmerged(self) -> List[str]:
         return (self.out("diff", "--name-only", "--diff-filter=U") or "").splitlines()
@@ -109,7 +136,11 @@ class Git:
 
     def push(self, branch: str) -> Tuple[int, str]:
         # Plain push: rejected, never overwritten, if the branch moved since the fetch.
-        return self._run(["push", "origin", f"HEAD:refs/heads/{branch}"])
+        return self._run([*self._auth, "push", "origin", f"HEAD:refs/heads/{branch}"])
+
+    def commit_empty(self, subject: str) -> Tuple[int, str]:
+        """One empty commit on the checked-out work branch, subject only: no body, no trailer."""
+        return self._run(["commit", "--allow-empty", "--quiet", "-m", subject])
 
     def touching(self, since: str, ref: str, path: str) -> List[Tuple[str, str]]:
         listed = self.out("log", "--format=%h%x1f%s", f"{since}..{ref}", "--", path) or ""
@@ -134,7 +165,7 @@ class SyncApi:
     ) -> None:
         self.api, self._sleep, self._labels_ready = api, sleep, set()
         self.repo = api.repository
-        self._upsert = upsert or load_upsert()
+        self._upsert = upsert or load_upsert().upsert
 
     def call(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         for _ in range(MAX_RATE_LIMIT_RETRIES):
@@ -158,8 +189,23 @@ class SyncApi:
                 return items
         raise SyncApiError(f"{path}: more than 1000 pages")
 
+    def pull(self, number: int) -> Dict[str, Any]:
+        return self._expect((200,), "GET", f"/repos/{self.repo}/pulls/{number}")
+
+    def suite_runs(self, sha: str) -> List[Dict[str, Any]]:
+        """The pull_request workflow runs for exactly ``sha`` (needs ``actions: read``)."""
+        query = f"head_sha={sha}&event=pull_request&per_page={PAGE_SIZE}"
+        body = self._expect((200,), "GET", f"/repos/{self.repo}/actions/runs?{query}")
+        if not isinstance(body, dict):
+            raise SyncApiError(f"the runs list for {sha[:10]} is not an object; refusing to guess it is empty")
+        runs = list(body.get("workflow_runs") or [])
+        total = body.get("total_count")
+        if not isinstance(total, int) or total > len(runs):
+            raise SyncApiError(f"cannot tell whether {sha[:10]} has a suite: {total!r} runs reported, {len(runs)} read")
+        return runs
+
     def open_pulls(self) -> List[Dict[str, Any]]:
-        return self.paginate(f"/repos/{self.repo}/pulls?state=open")
+        return self.paginate(f"/repos/{self.repo}/pulls?state=open&sort=created&direction=asc")
 
     def _expect(self, ok: Sequence[int], method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
         status, body = self.call(method, path, payload)
@@ -234,7 +280,7 @@ class Syncer:
 
     def on_workflow(self, target: core.SyncTarget, paths: Sequence[str]) -> Tuple[str, str]:
         self.flag(target, core.WORKFLOW, core.workflow_comment(target.branch, self.base, paths))
-        return core.WORKFLOW, ", ".join(paths) or "push refused"
+        return core.WORKFLOW, "push refused" + (": " + ", ".join(paths) if paths else "")
 
     def precheck(self, target: core.SyncTarget) -> Tuple[Optional[str], str, str]:
         local = self.git.out("rev-parse", "--verify", "--quiet", f"origin/{target.branch}") or ""
@@ -247,7 +293,7 @@ class Syncer:
             return core.UNREACHABLE, "behind-count failed", local
         if behind == 0:
             self.clear(target)
-            return core.CURRENT, "", local
+            return core.CURRENT, "already up to date", local
         return None, f"{behind} behind", local
 
     def merge(self, target: core.SyncTarget, local: str) -> Tuple[str, str]:
@@ -263,19 +309,21 @@ class Syncer:
         changed = self.git.changed(local, "HEAD")
         if changed is None:
             return core.ERROR, "cannot diff the merge result"
-        paths = core.workflow_changes(changed)
-        return self.on_workflow(target, paths) if paths else self.push(target)
+        return self.push(target, core.workflow_changes(changed))
 
-    def push(self, target: core.SyncTarget) -> Tuple[str, str]:
+    def push(self, target: core.SyncTarget, workflows: Sequence[str] = ()) -> Tuple[str, str]:
+        """Push the merge; a workflow-file delta is named, and labelled only if GitHub refuses it."""
+        note = f"workflow files: {', '.join(workflows)}" if workflows else ""
         if self.dry_run:
-            return core.SYNCED, "dry run: not pushed"
+            return core.SYNCED, "; ".join(filter(None, ("dry run: not pushed", note)))
         returncode, output = self.git.push(target.branch)
         kind = core.classify_push(returncode, output)
         if kind == core.WORKFLOW:
-            return self.on_workflow(target, [])
+            return self.on_workflow(target, workflows)
         if kind == core.SYNCED:
             self.clear(target)
-        return kind, "" if kind == core.SYNCED else (output.strip().splitlines() or ["no output"])[-1]
+            return kind, note
+        return kind, (output.strip().splitlines() or ["no output"])[-1]
 
     def sync(self, target: core.SyncTarget) -> Tuple[str, str]:
         try:
@@ -292,7 +340,7 @@ def _emit(text: str) -> None:
 
 def render_summary(results: Dict[str, List[str]], dry_run: bool) -> str:
     order = (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK)
-    order += (core.OTHER_BASE, core.POLICY, core.UNREACHABLE, core.ERROR)
+    order += (core.OTHER_BASE, core.NO_SLOT, core.NO_OPEN_PR, core.POLICY, core.UNREACHABLE, core.ERROR)
     lines = ["## Branch sync with main (#19548)", ""]
     if dry_run:
         lines += ["**Dry run: nothing was pushed, labelled or commented.**", ""]
@@ -308,11 +356,43 @@ def run(git: Git, gh: SyncApi, base: str, dry_run: bool) -> Dict[str, List[str]]
     results: Dict[str, List[str]] = {key: list(items) for key, items in plan.skipped.items()}
     syncer = Syncer(git, gh, base, dry_run)
     for target in plan.targets:
+        if target.branch in git.being_pushed():
+            _emit(f"{core.PUSH_IN_PROGRESS:>18}  {target.name}  next run syncs it")
+            results.setdefault(core.PUSH_IN_PROGRESS, []).append(target.name)
+            continue
         outcome, detail = syncer.sync(target)
         _emit(f"{outcome:>18}  {target.name}  {detail}")
         results.setdefault(outcome, []).append(f"{target.name}{' — ' + detail if detail else ''}")
     git.out("checkout", "--quiet", "--detach")
     return results
+
+
+def start_suite(git: Git, gh: SyncApi, number: int, base: str, dry_run: bool) -> Tuple[int, str]:
+    """Push ONE empty commit, without the skip marker, onto PR ``number``'s synced head (#21577).
+
+    The ordinary ``pull_request`` pipeline then runs on it. Refused (non-zero) unless ``core.refuse_start_ci``
+    allows it; a no-op (0) when the head already has a suite. The commit's parent is the head this run fetched
+    and checked against the API; the push is plain, so a branch that moved since is rejected, never overwritten.
+    """
+    pull = gh.pull(number)
+    head = pull.get("head") or {}
+    branch, sha = head.get("ref", ""), head.get("sha", "")
+    local = git.out("rev-parse", "--verify", "--quiet", f"origin/{branch}") if core.is_safe_ref(branch) else None
+    reason = core.refuse_start_ci(pull, gh.repo, base, git.behind(branch, base) if local else None, local or "")
+    if reason:
+        return 1, f"::error::not starting the suite: {reason}"
+    if core.suite_already_started(gh.suite_runs(sha), sha):
+        return 0, f"::notice::#{number} already has a suite on {sha[:10]}; nothing to start"
+    if dry_run:
+        return 0, f"dry run: would push one empty commit onto {core.code(branch)}"
+    if not git.checkout(branch) or git.commit_empty(core.start_ci_message(number))[0] != 0:
+        return 1, "::error::cannot create the empty commit"
+    if git.out("rev-parse", "HEAD^") != sha:
+        return 1, "::error::the empty commit's parent is not the verified head; not pushing"
+    kind = core.classify_push(*git.push(branch))
+    if kind != core.SYNCED:
+        return 1, f"::error::the push ended as {kind} (a moved branch is rejected, never overwritten)"
+    return 0, f"started: pushed one empty commit onto {core.code(branch)} (parent {sha[:10]})"
 
 
 def exit_code(results: Dict[str, List[str]]) -> int:
@@ -326,14 +406,35 @@ def exit_code(results: Dict[str, List[str]]) -> int:
     return 0
 
 
+def start_requested(gh: SyncApi, token: str, args: argparse.Namespace) -> int:
+    """The ``--start-ci-for-pr`` request: validate the untrusted number, then start the suite or refuse."""
+    number = core.parse_pr_number(args.start_ci_for_pr.strip())
+    if number is None:
+        _emit("::error::start_ci_for_pr must be a pull request number (digits only).")
+        return 1
+    try:
+        status, message = start_suite(Git(auth=push_auth(token)), gh, number, args.base, args.dry_run)
+    except SyncApiError as exc:
+        status, message = 1, f"::error::cannot start the suite: {exc}"
+    _emit(message)
+    return status
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", default="main")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--start-ci-for-pr", default="", help="start the suite for this PR's head; no other sync")
     args = parser.parse_args(argv)
+    token = take_push_token(os.environ)
+    if not token and not args.dry_run:
+        _emit(f"::error::{PUSH_TOKEN_ENV} is empty; the sync pushes with it and nothing else (#19548).")
+        return 1
     gh = SyncApi(build_api())
+    if args.start_ci_for_pr:
+        return start_requested(gh, token, args)
     try:
-        results = run(Git(), gh, args.base, args.dry_run)
+        results = run(Git(auth=push_auth(token)), gh, args.base, args.dry_run)
     except SyncApiError as exc:
         # Fail closed: an empty PR list would make every PR branch look parked.
         _emit(f"::error::cannot list open pull requests; refusing to run: {exc}")

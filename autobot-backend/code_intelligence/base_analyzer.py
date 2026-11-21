@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity as IssueSeverity  # noqa: F401  # #6689 consolidation
+from code_intelligence.python_files import discover_files, matches_exclusion
 
 logger = get_logger(__name__)
 
@@ -433,29 +434,19 @@ class MultiLanguageAnalyzer:
     ) -> List[Path]:
         """Collect files to analyze after applying exclusion patterns (Issue #665: extracted helper)."""
         # Default exclusions
-        default_excludes = [
-            "**/node_modules/**",
-            "**/__pycache__/**",
-            "**/.venv/**",
-            "**/venv/**",
-            "**/.git/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/*.min.js",
-            "**/*.min.css",
-        ]
+        default_excludes = ["**/*.min.js", "**/*.min.css"]
         all_excludes = set((exclude_patterns or []) + default_excludes)
 
-        pattern = "**/*" if recursive else "*"
+        # Directory exclusion is the shared root-relative rule (#21004).
+        candidates = discover_files(directory, ("*",)) if recursive else sorted(directory.glob("*"))
         files_to_analyze = []
 
-        for file_path in directory.glob(pattern):
+        for file_path in candidates:
             if not file_path.is_file():
                 continue
 
             # Check exclusions
-            excluded = any(file_path.match(exclude) for exclude in all_excludes)
-            if excluded:
+            if matches_exclusion(file_path, all_excludes, directory):
                 continue
 
             # Check if we have an analyzer for this file

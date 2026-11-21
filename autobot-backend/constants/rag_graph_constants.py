@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Graph-blended retrieval defaults, declared once (#18141); the weight is env-backed.
+"""Graph-blended retrieval defaults, declared once (#18141); the weight and score threshold are env-backed.
 
 Read through ``RAGConfig`` (``graph_weight``, ``graph_traversal_depth``) by graph-RAG, the
 Neural Mesh retriever and the API request schemas; ``RAG_PPR_MAX_HOPS`` is PPR's own default.
@@ -15,9 +15,26 @@ The library already imports backend modules (``knowledge.serving``), so this sta
 """
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+
+def env_unit_interval(name: str, default: float) -> float:
+    """A 0-1 weight or score from *name*; NaN or a value outside 0-1 falls back to *default*.
+
+    Clamping is wrong here (#19354 review): NaN clamps to 0.0 and admits every result, and a typo
+    such as ``30`` clamps to 1.0 and rejects every result. ``not 0 <= v <= 1`` is also True for NaN.
+    """
+    value = env_float(name, default)
+    if not 0.0 <= value <= 1.0:
+        logger.warning("Invalid %s=%r (must be 0-1); using %s", name, value, default)
+        return default
+    return value
+
 
 # Weight of the graph signal in the pre-rerank blend (0.0 = vector score only).
-RAG_GRAPH_WEIGHT: float = env_float("AUTOBOT_RAG_GRAPH_WEIGHT", 0.3)
+RAG_GRAPH_WEIGHT: float = env_unit_interval("AUTOBOT_RAG_GRAPH_WEIGHT", 0.3)
 # Default neighbourhood depth, in hops, for graph expansion requests.
 RAG_GRAPH_TRAVERSAL_DEPTH: int = 2
 # Deadline for a graph-RAG search when the caller sets none (the pre-#18141 private budget).
@@ -28,3 +45,6 @@ RAG_PPR_MAX_HOPS: int = 3
 RAG_GRAPH_PATH_DEPTH: int = 6
 # Fact-relation hops a KB hybrid search expands its vector matches by.
 RAG_RELATION_DEPTH: int = 1
+# Minimum relevance score a knowledge-retrieval result needs to be kept (#1532 aligned it, #1526 lowered
+# it from 0.7; #19354 gave it this one home). Every retrieval signature and caller reads it.
+RAG_SCORE_THRESHOLD: float = env_unit_interval("AUTOBOT_RAG_SCORE_THRESHOLD", 0.3)

@@ -22,7 +22,6 @@ Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 import asyncio
 import functools
 import logging
-import os
 import socket
 import time
 import weakref
@@ -36,7 +35,7 @@ import redis.asyncio as async_redis
 from redis.connection import ConnectionPool
 from redis.exceptions import ConnectionError, ResponseError
 
-from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.redis_management import endpoint as _endpoint
 from autobot_shared.redis_management.config import (
     PoolConfig,
     RedisConfigLoader,
@@ -58,35 +57,16 @@ from autobot_shared.retry_mechanism import RetryStrategy as _RetryStrategy
 
 # Lazy imports for backend-specific modules (#2313): optional — present under
 # autobot-backend, absent in other contexts (SLM backend, standalone scripts).
-_config_manager = None
+# The config manager lives with the one endpoint resolver (``endpoint``, #19232).
 _metrics_manager_getter = None
 
 # Locks for thread-safe lazy initialization of module-level globals (#2854).
-_config_manager_lock = Lock()
 _metrics_manager_lock = Lock()
 
 # Retry/timing defaults (previously from constants.threshold_constants)
 _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _STANDARD_DELAY = 1.0
-
-
-def _get_config_manager():
-    """Lazy-load the backend config manager.
-
-    Thread-safe: uses _config_manager_lock to prevent double-initialization (#2854).
-    """
-    global _config_manager
-    if _config_manager is None:
-        with _config_manager_lock:
-            if _config_manager is None:
-                try:
-                    from config import config as cm
-
-                    _config_manager = cm
-                except ImportError:
-                    pass
-    return _config_manager
 
 
 def _get_metrics_manager():
@@ -171,14 +151,12 @@ class RedisConnectionManager(PoolParamsMixin):
 
         #11830: also drops the lazily-cached backend config manager — a
         singleton constructed under test-stubbed config caches the stub in
-        ``_config_manager``, so the next construction must re-resolve config
-        instead of reusing the poisoned import.
+        ``endpoint._config_manager``, so the next construction must re-resolve
+        config instead of reusing the poisoned import.
         """
-        global _config_manager
         with cls._lock:
             cls._instance = None
-        with _config_manager_lock:
-            _config_manager = None
+        _endpoint.reset_config_manager()
 
     def __init__(self) -> None:
         """
@@ -306,7 +284,7 @@ class RedisConnectionManager(PoolParamsMixin):
         ``_load_configurations`` builds the "main" database's default, so
         "main" uses the same resolution chain (config-manager -> env ->
         NetworkConstants -> ssot_config -> loopback, see
-        ``_load_redis_config``/``_ssot_redis_host``) as every other
+        ``endpoint.resolve_redis_endpoint``) as every other
         not-yet-configured database — instead of ``RedisDbConfig.host``'s
         dataclass field default, which is a *class-body* expression evaluated
         once at whichever process happens to import
@@ -352,97 +330,27 @@ class RedisConnectionManager(PoolParamsMixin):
         self._health_check_tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_task: asyncio.Task | None = None
 
-    @staticmethod
-    def _redis_host_from_env() -> str | None:
-        """Return REDIS_HOST / AUTOBOT_REDIS_HOST if either is set (#12778).
-
-        Processes that cannot import the backend config layer — slm-agent runs
-        under the SYSTEM interpreter with only its own PYTHONPATH — get an empty
-        dict from the config manager and then fall back to
-        NetworkConstants.REDIS_VM_IP, which resolves to the EMPTY STRING in that
-        context. _validate_config_host (#11449) then correctly refuses to dial a
-        blank host, so the agent silently dropped every event it collected —
-        including the backend crash-loop transition that is the one signal that
-        would surface a crashing service in the GUI.
-
-        The slm-agent unit already sets both variables, and the resulting error
-        even tells the operator to "set REDIS_HOST" — advice that was
-        unactionable because nothing ever read it. Consulting them here makes
-        that instruction true.
-        """
-        for var in ("REDIS_HOST", "AUTOBOT_REDIS_HOST"):
-            value = (os.getenv(var) or "").strip()
-            if value:
-                return value
-        return None
-
-    @staticmethod
-    def _ssot_redis_host() -> str:
-        """Resolve the Redis host via the canonical SSOT config (#14299).
-
-        ``NetworkConstants.REDIS_VM_IP`` depends on ``config.registry.ConfigRegistry``,
-        which lives only in autobot-backend (see ``network_constants._get_config_value``'s
-        own docstring: "avoiding dependency issues when autobot_shared is used
-        independently"). Importing it from any other process — autobot-slm-backend,
-        whose own ``config.py`` is a single file, not a package, so
-        ``config.registry`` cannot resolve at all — is silently caught and falls
-        back to the caller-supplied default, which for REDIS_VM_IP is the empty
-        string. That is why a deployed SLM backend resolved the 'main' database's
-        host to nothing, continuously (#14299): every other tier already came up
-        empty (no config-manager module there either — see ``_get_config_manager``
-        — and neither REDIS_HOST nor AUTOBOT_REDIS_HOST was set on that process).
-
-        ``autobot_shared.ssot_config`` has no such dependency (pydantic-settings
-        reading an env var / project-root ``.env``) and defaults to '127.0.0.1' —
-        the same co-located default every other Ansible-templated component
-        already falls back to (``roles/*/defaults/main.yml``:
-        ``"{{ redis_host | default('127.0.0.1') }}"``), so this brings the SLM
-        backend's own resolution in line with its siblings instead of the empty
-        string NetworkConstants defaults to outside autobot-backend.
-        """
-        try:
-            from autobot_shared.ssot_config import get_config
-
-            return (get_config().vm.redis or "").strip()
-        except Exception:
-            return ""
-
     def _load_redis_config(self) -> Dict[str, Any]:
-        """Load Redis configuration from unified config (#2477)."""
-        try:
-            cm = _get_config_manager()
-            redis_config: Dict[str, Any] = cm.get_redis_config() if cm is not None else {}
-        except AttributeError:
-            # ssot_config._ConfigProxy does not expose get_redis_config(); fall back to NetworkConstants
-            redis_config = {}
-        # #12778: env beats the NetworkConstants fallback, but NOT an explicit
-        # config-manager value — a deployment that configures Redis centrally
-        # must still win over a stray env var.
-        # #14299: NetworkConstants.REDIS_VM_IP silently resolves to "" outside
-        # autobot-backend (see _ssot_redis_host's docstring) — ssot_config and
-        # finally a literal loopback keep this from ever landing on empty.
-        host = (
-            redis_config.get("host")
-            or self._redis_host_from_env()
-            or NetworkConstants.REDIS_VM_IP
-            or self._ssot_redis_host()
-            or "127.0.0.1"
-        )
+        """Host, port and credentials from the ONE endpoint resolver (#19232).
+
+        The tier order (config-manager -> env -> NetworkConstants -> SSOT ->
+        loopback, #12778/#14299) lives in ``endpoint.resolve_redis_endpoint``,
+        which ``ssot_config.redis_url_with_auth`` reads too, so a URL and a
+        client can no longer name two different servers.
+        """
+        resolved = _endpoint.resolve_redis_endpoint()
+        enabled = _endpoint.config_manager_redis().get("enabled", True)
         return {
-            "host": host,
-            "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
-            "password": redis_config.get("password"),
-            "username": redis_config.get("username"),
-            "enabled": redis_config.get("enabled", True),
+            "host": resolved.host,
+            "port": resolved.port,
+            "password": resolved.password,
+            "username": resolved.username,
+            "enabled": enabled,
         }
 
     def _load_pool_config(self) -> PoolConfig:
         """Load pool configuration from unified config (#2477)."""
-        try:
-            cm = _get_config_manager()
-            redis_config: Dict[str, Any] = cm.get_redis_config() if cm is not None else {}
-        except AttributeError:
-            redis_config = {}
+        redis_config: Dict[str, Any] = _endpoint.config_manager_redis()
         return PoolConfig(
             max_connections=redis_config.get("max_connections", 100),
             socket_timeout=redis_config.get("socket_timeout", 5.0),
@@ -456,32 +364,27 @@ class RedisConnectionManager(PoolParamsMixin):
 
     def _load_configurations(self) -> None:
         """
-        Load configurations from multiple sources with priority.
+        Load per-database configurations.
 
-        Priority order:
-        1. YAML file configuration
-        2. Service registry configuration
-        3. Default configuration with timeout config
+        1. YAML file entries (pool/timeout tuning; number and endpoint from the
+           single sources, #19232)
+        2. A default "main" with the centralized timeout config
+
+        The service registry was a third source of the "main" host and
+        password. It is retired: ``self._config`` is the one endpoint (#19232).
         """
-        # Priority 1: YAML file
-        yaml_configs = RedisConfigLoader.load_from_yaml()
-        self._configs.update(yaml_configs)
+        self._configs.update(RedisConfigLoader.load_from_yaml(endpoint=self._config))
 
-        # Priority 2: Service registry (if not in YAML)
-        registry_configs = RedisConfigLoader.load_from_service_registry()
-        for name, config in registry_configs.items():
-            if name not in self._configs:
-                self._configs[name] = config
-
-        # Priority 3: Default configuration with timeout config
         timeout_config = RedisConfigLoader.load_timeout_config()
         # #14299: host/port come from self._config, not RedisDbConfig's dataclass
         # defaults (untrustworthy outside autobot-backend; see _init_configurations).
         default_config = RedisDbConfig(
             name="main",
-            db=0,
+            db=database_number("main"),
             host=self._config["host"],
             port=self._config["port"],
+            password=self._config.get("password"),
+            username=self._config.get("username"),
             socket_timeout=timeout_config.get("socket_timeout", 5.0),
             socket_connect_timeout=timeout_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=timeout_config.get("retry_on_timeout", True),

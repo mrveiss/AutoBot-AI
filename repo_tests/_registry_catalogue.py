@@ -31,6 +31,9 @@ import ast
 from functools import lru_cache
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
+
 
 def _declares_router_config(source: str) -> bool:
     """True when *source* CALLS ``RouterConfig(...)``.
@@ -40,7 +43,7 @@ def _declares_router_config(source: str) -> bool:
     finding the old file and reporting zero entries from it.
     """
     try:
-        tree = ast.parse(source)
+        tree = parse_cache.parse(source)
     except SyntaxError:
         return False
     return any(
@@ -55,7 +58,8 @@ def catalogue_files(backend_dir: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for path in sorted(api_dir.rglob("*.py"))
-        if not path.name.endswith("_test.py") and _declares_router_config(path.read_text(encoding="utf-8"))
+        if not is_test_filename(path.name, include_js=False, include_conftest=False)
+        and _declares_router_config(path.read_text(encoding="utf-8"))
     )
 
 
@@ -85,7 +89,7 @@ def entries_in_source(source: str, *, origin: str = "<source>") -> tuple[tuple[t
     """
     found: list[tuple[str, str]] = []
     problems: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RouterConfig"):
             continue
         kwargs = {kw.arg: kw.value for kw in node.keywords}
