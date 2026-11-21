@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from llc.deps import assert_company_access
 from llc.models.template import (
     LLCTemplateSearchResponse,
@@ -39,6 +40,7 @@ from llc.models.template import (
     TemplateRead,
     TemplateSearchResult,
 )
+from llc.services.portability import TemplateImportError
 from llc.services.template import (
     BuiltInTemplateNotFoundError,
     TemplateAccessError,
@@ -212,6 +214,8 @@ async def import_template(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"message": "Unresolved secret placeholders", "unresolved": exc.unresolved},
         )
+    except TemplateImportError as exc:
+        raise http_refusal(status.HTTP_422_UNPROCESSABLE_ENTITY, exc, scope="templates.import_template") from None
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

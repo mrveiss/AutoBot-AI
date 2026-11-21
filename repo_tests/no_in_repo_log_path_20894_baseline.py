@@ -9,7 +9,8 @@ left side names PROJECT_ROOT, project_root, base_dir, __file__ or a `.parent`.
 
 Frozen at the #20894 PR: 11 sites in 10 files (derived by the detector itself, then listed). The
 logging manager and the backend API are at 0 -- the one resolver is autobot_shared/log_dir.py. What
-is left is standalone tooling and the audit-log default, tracked in the follow-up issue. Each entry only goes DOWN.
+is left is standalone tooling and the audit-log default, tracked in #20894 (this baseline is its ratchet).
+Each entry only goes DOWN.
 """
 
 BASELINE: dict[str, int] = {

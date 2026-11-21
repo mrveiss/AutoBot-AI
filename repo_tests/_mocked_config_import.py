@@ -33,9 +33,10 @@ except BaseException as exc:
     sys.stdout.write(json.dumps({"autobot_shared": f"{type(exc).__name__}: {exc}"}) + "\\n")
     raise SystemExit(0)
 
+from autobot_shared.testfile_names import is_test_filename
+
 def _is_test(name):
-    leaf = name.rsplit(".", 1)[-1]
-    return leaf.endswith("_test") or leaf.startswith("test_") or leaf == "conftest" or ".tests" in name
+    return is_test_filename(name.rsplit(".", 1)[-1] + ".py", include_js=False) or ".tests" in name
 
 if spec["modules"]:
     targets = spec["modules"]

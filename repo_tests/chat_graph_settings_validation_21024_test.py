@@ -5,6 +5,7 @@
 import pytest
 from pydantic import ValidationError
 
+from autobot_shared.logging_once import reset_log_once
 from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
 
 
@@ -53,7 +54,7 @@ def test_unset_provider_keeps_ollama_and_logs_no_warning(monkeypatch):
     handler = _Collect(level=logging.WARNING)
     mod.logger.addHandler(handler)
     monkeypatch.delenv("AUTOBOT_LLM_PROVIDER", raising=False)
-    monkeypatch.setattr(mod, "_PROVIDER_WARNED", False)
+    reset_log_once()
     try:
         assert LLMConfig().provider == "ollama"
     finally:

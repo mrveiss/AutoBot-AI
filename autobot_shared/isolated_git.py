@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -97,19 +98,46 @@ def isolated_git_env(
     return env
 
 
+#: Longest slice of each git stream kept in a :class:`GitError` message.
+GIT_ERROR_STREAM_LIMIT = 2000
+
+
+def _clip(text: str) -> str:
+    text = text.strip()
+    if len(text) <= GIT_ERROR_STREAM_LIMIT:
+        return text
+    return text[:GIT_ERROR_STREAM_LIMIT] + "... [truncated]"
+
+
+class GitError(subprocess.CalledProcessError):
+    """A failed ``git()`` call whose message carries git's own stderr (and stdout) (#21598).
+
+    Still a :class:`subprocess.CalledProcessError`, so ``except`` and ``pytest.raises`` sites match.
+    """
+
+    def __str__(self) -> str:
+        # ``git commit`` reports "nothing to commit" on stdout, so the explanation is kept from both streams.
+        said = " ".join(_clip(part) for part in (self.stderr, self.stdout) if part and part.strip())
+        return f"{super().__str__()} git said: {said}" if said else super().__str__()
+
+
 def git(repo: str | os.PathLike[str], *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """Run ``git -C <repo> <args>`` under :func:`isolated_git_env`; text output captured.
 
+    With ``check=True`` a failure raises :class:`GitError`, whose ``str()`` includes git's stderr (and stdout).
     There is no ``env`` parameter on purpose: a caller needing extra variables builds
     ``{**isolated_git_env(), ...}`` and calls ``subprocess.run`` itself.
     """
-    return subprocess.run(  # nosec B603 B607  # fixed argv, no shell
+    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "-C", os.fspath(repo), *args],
         capture_output=True,
         text=True,
-        check=check,
+        check=False,
         env=isolated_git_env(),
     )
+    if check and result.returncode:
+        raise GitError(result.returncode, result.args, output=result.stdout, stderr=result.stderr)
+    return result
 
 
 def make_repo(path: Path, *, default_branch: str = DEFAULT_BRANCH) -> Path:
@@ -123,3 +151,15 @@ def make_repo(path: Path, *, default_branch: str = DEFAULT_BRANCH) -> Path:
     git(path, "config", "user.name", IDENTITY_NAME)
     git(path, "config", "user.email", IDENTITY_EMAIL)
     return path
+
+
+def sandbox_path(system: str = "/usr/bin:/bin") -> str:
+    """A minimal ``PATH`` for running a git hook or hook wrapper in a sandbox (#21163).
+
+    Every git hook resolves its Python through ``scripts/lib/hook-python.sh``, which refuses an
+    interpreter below the ``.python-version`` floor, and a system ``python3`` on the minimal path
+    is often older. The interpreter running the suite meets the floor by construction, so its
+    directory leads; the system directories stay for the tools the hooks shell out to. A sandbox
+    that wants to prove the no-interpreter failure builds its own path instead.
+    """
+    return f"{Path(sys.executable).parent}:{system}"

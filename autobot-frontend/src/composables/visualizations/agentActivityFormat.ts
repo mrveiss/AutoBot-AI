@@ -47,9 +47,16 @@ export function agentActivityFormat(t: Translate, locale?: () => string) {
     intl: { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
   })
 
+  // #21270: six one-hour columns from the server's axis start (UTC ms); the current hours when absent.
+  function timelineLabels(startMs?: number | null): string[] {
+    const hourMs = 60 * 60 * 1000
+    const first = startMs ?? new Date().setMinutes(0, 0, 0) - 5 * hourMs
+    return Array.from({ length: 6 }, (_, i) => formatHourLabel(new Date(first + i * hourMs)))
+  }
+
   function truncate(text: string, maxLength: number): string {
     return text.length <= maxLength ? text : text.slice(0, maxLength - 1) + '…'
   }
 
-  return { successText, getAgentIcon, formatAgentType, formatUptime: uptimeText, formatTimeAgo, formatHourLabel, truncate }
+  return { successText, getAgentIcon, formatAgentType, formatUptime: uptimeText, formatTimeAgo, formatHourLabel, timelineLabels, truncate }
 }

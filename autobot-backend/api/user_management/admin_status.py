@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.schemas_admin_status import AdminStatusRequest, AdminStatusResponse
 from api.user_management.dependencies import get_user_service, require_platform_admin, user_management_route_marker
+from autobot_shared.user_management.last_platform_admin import LastPlatformAdminError, refuse_last_platform_admin
 from autobot_shared.user_management.password_epoch import RevocationCheckUnavailable
 from autobot_shared.user_management.revocation_outcome import REVOCATION_INCOMPLETE_MESSAGE, commit_or_503
 from autobot_shared.user_management.user_service_errors import UserNotFoundError
@@ -50,6 +51,8 @@ async def set_admin_status(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=REVOCATION_INCOMPLETE_MESSAGE) from exc
     except UserNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User {user_id} not found")
+    except LastPlatformAdminError as exc:  # #21018: the only active admin cannot be demoted, themself included
+        raise await refuse_last_platform_admin(user_service.session, exc)
     await commit_or_503(user_service.session)  # a failed revocation is answered, not only logged (#20443)
     return AdminStatusResponse(
         user_id=user_id,

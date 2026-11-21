@@ -12,6 +12,7 @@ import os
 from typing import Any, Dict
 from urllib.parse import urlparse
 
+from autobot_shared.ollama_urls import ollama_base_url
 from autobot_shared.ssot_config import config as ssot_config
 from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants
@@ -206,8 +207,7 @@ class ServiceConfigMixin:
         """Get Redis configuration from SSOT config (single source of truth).
 
         Issue #12748: CANONICAL core Redis connection config. Reached via
-        ConfigManager (unified_config_manager / global_config_manager /
-        config_manager) and config.get_redis_config() (config/__init__.py,
+        ConfigManager (config_manager) and config.get_redis_config() (config/__init__.py,
         pure delegate). config.__init__._ConfigStub.get_redis_config() mirrors
         this shape for the circular-import re-entry path only.
 
@@ -238,7 +238,7 @@ class ServiceConfigMixin:
         # Then check configuration
         endpoint = self.get_nested("backend.llm.local.providers.ollama.endpoint")
         if endpoint:
-            return endpoint.replace("/api/generate", "")  # Get base URL
+            return ollama_base_url(endpoint)
 
         host = self.get_nested("backend.llm.local.providers.ollama.host")
         if host:

@@ -16,6 +16,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.no_in_repo_log_path_20894_baseline import BASELINE
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -25,13 +26,7 @@ _TEST_PARTS = ("/tests/", "repo_tests/")
 
 
 def _is_test(path: str) -> bool:
-    name = path.rsplit("/", 1)[-1]
-    return (
-        name.endswith("_test.py")
-        or name.startswith("test_")
-        or name == "conftest.py"
-        or any(part in f"/{path}" for part in _TEST_PARTS)
-    )
+    return is_test_filename(path) or any(part in f"/{path}" for part in _TEST_PARTS)
 
 
 def _python_files(root: Path) -> list[str]:
@@ -75,12 +70,15 @@ def _is_in_tree_join(node: ast.AST) -> bool:
 
 
 def _is_logs_default(node: ast.AST) -> bool:
-    """`getenv(NAME, "logs")` / `environ.get(NAME, "logs")`."""
+    """`getenv(NAME, "logs")` / `environ.get(NAME, "logs")`, the default positional or as `default=`."""
     if not (
         isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ("getenv", "get")
     ):
         return False
-    return len(node.args) >= 2 and _is_logs(node.args[1]) and _env_like(node.func)
+    default = (
+        node.args[1] if len(node.args) >= 2 else next((k.value for k in node.keywords if k.arg == "default"), None)
+    )
+    return default is not None and _is_logs(default) and _env_like(node.func)
 
 
 def _env_like(func: ast.Attribute) -> bool:
@@ -136,3 +134,66 @@ def test_the_guard_fails_on_a_planted_violation(tmp_path: Path) -> None:
     scratch.write_text('import os\nLOGS = os.getenv("AUTOBOT_LOGS_DIR", "logs")\n', encoding="utf-8")
     n = count_violations(scratch.read_text(encoding="utf-8"))
     assert n > BASELINE.get("scratch_writer.py", 0)
+
+
+_EAGER_HANDLERS = ("FileHandler", "RotatingFileHandler", "TimedRotatingFileHandler", "WatchedFileHandler")
+_RESOLVED_DIR_NAMES = {"logs_path", "logs_dir", "resolve_logs_dir"}
+
+
+def eager_handlers_on_resolved_dir(text: str) -> int:
+    """Stdlib file handlers built on the resolved log dir: they open the file at construction, so the directory
+    must already exist -- a fresh install has none. `FirstWriteFileHandler` creates it at the first record."""
+    count = 0
+    for node in ast.walk(parse_cache.parse(text)):
+        if not isinstance(node, ast.Call):
+            continue
+        name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+        path_args = [*node.args, *(kw.value for kw in node.keywords if kw.arg == "filename")]
+        if name in _EAGER_HANDLERS and any(_names(arg) & _RESOLVED_DIR_NAMES for arg in path_args):
+            count += 1
+    return count
+
+
+def test_no_eager_file_handler_on_the_resolved_log_dir() -> None:
+    offenders = {}
+    for rel in REACH.examined(_ROOT):
+        try:
+            n = eager_handlers_on_resolved_dir((_ROOT / rel).read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, SyntaxError):
+            continue  # not parseable Python: nothing to count
+        if n:
+            offenders[rel] = n
+    assert not offenders, f"use autobot_shared.log_dir.FirstWriteFileHandler (creates the directory): {offenders}"
+
+
+def test_the_eager_handler_detector_finds_each_spelling_and_ignores_the_safe_one() -> None:
+    """Control: eager handlers on a resolved dir are counted; FirstWriteFileHandler and other paths are not."""
+    planted = {
+        'logging.FileHandler(str(ssot_config.path.logs_path / "a.log"))': 1,
+        'logging.handlers.RotatingFileHandler(resolve_logs_dir() / "a.log")': 1,
+        'FileHandler(str(logs_dir / "a.log"))': 1,
+        'FirstWriteFileHandler(str(ssot_config.path.logs_path / "a.log"))': 0,
+        'logging.FileHandler("/var/log/x.log")': 0,
+        "logging.StreamHandler(logs_dir)": 0,
+        'logging.FileHandler(filename=str(ssot_config.path.logs_path / "a.log"))': 1,
+        'RotatingFileHandler(filename=resolve_logs_dir() / "a.log", maxBytes=1)': 1,
+        'logging.FileHandler(filename="/var/log/x.log")': 0,
+        'FirstWriteFileHandler(filename=str(logs_dir / "a.log"))': 0,
+        'logging.FileHandler("/var/log/x.log", mode=str(logs_dir))': 0,
+    }
+    for source, expected in planted.items():
+        assert eager_handlers_on_resolved_dir(source) == expected, source
+
+
+def test_control_a_keyword_default_is_counted_and_a_safe_default_is_not() -> None:
+    """Control: `getenv(NAME, default="logs")` selects the in-tree fallback like the positional spelling."""
+    planted = {
+        'os.getenv("AUTOBOT_LOGS_DIR", default="logs")': 1,
+        'os.getenv("AUTOBOT_LOGS_DIR", "logs")': 1,
+        'os.getenv("AUTOBOT_LOGS_DIR", default="/var/log/autobot")': 0,
+        'os.getenv("AUTOBOT_LOGS_DIR", default=None)': 0,
+        'os.getenv("AUTOBOT_LOGS_DIR")': 0,
+        'cfg.get("AUTOBOT_LOGS_DIR", default="logs")': 0,  # not an environment read
+    }
+    for source, expected in planted.items():
+        assert count_violations(source) == expected, source

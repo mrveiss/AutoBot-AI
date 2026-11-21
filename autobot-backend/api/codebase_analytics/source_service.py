@@ -64,7 +64,16 @@ async def delete_source_and_cleanup(source_id: str, source: CodeSource | None = 
     await _purge_source_index(source_id)
     ok = await delete_source(source_id)
     logger.info("Deleted code source %s (clone+index+record)", source_id)
+    if ok:
+        await _propose_run_record_removal(source_id, source.name)
     return ok
+
+
+async def _propose_run_record_removal(source_id: str, source_name: str) -> None:
+    """Ask a human to approve removing the deleted source's run record (#21417, #17038); never removes it."""
+    from services.source_run_record_cleanup_proposals import propose_run_record_removal_logged  # noqa: PLC0415
+
+    await propose_run_record_removal_logged(source_id, source_name)
 
 
 async def _purge_source_index(source_id: str) -> None:
