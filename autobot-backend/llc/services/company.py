@@ -353,9 +353,10 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
                 "re-parent or delete children before deleting the parent"
             )
         org.soft_delete()
+        await CompanyCEOService().stop_company_heartbeats(self.session, company_id)
         await self.session.execute(sa_delete(LLCContact).where(LLCContact.company_id == company_id))
         await self.session.flush()
-        logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged", org.name, org.id)
+        logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged, heartbeats off", org.name, org.id)
 
     # ------------------------------------------------------------------
     # Status transitions

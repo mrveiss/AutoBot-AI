@@ -205,6 +205,22 @@ class CompanyCEOService(LLCServiceBase):
             return
         await self._retire(session, company_id)
 
+    async def stop_company_heartbeats(self, session: AsyncSession, company_id: uuid.UUID) -> None:
+        """Switch off every heartbeat of a company that is being soft-deleted (#15907).
+
+        The scheduler and the dispatch gate never read ``organizations.deleted_at``,
+        so a deleted company's agents would keep running. The CEO goes through the one
+        retire path; every other agent of the company keeps its row and status and only
+        loses its periodic schedule. Nothing is deleted, and the setting stays switchable.
+        """
+        await self._retire(session, company_id)
+        await session.execute(
+            sa.update(AgentOrgNode)
+            .where(AgentOrgNode.company_id == company_id, AgentOrgNode.heartbeat_enabled.is_(True))
+            .values(heartbeat_enabled=False)
+        )
+        await session.flush()
+
     async def _retire(self, session: AsyncSession, company_id: uuid.UUID) -> None:
         """Drop a sub-organization's CEO designation and make its default CEO node dormant.
 

@@ -335,3 +335,40 @@ async def test_the_route_refuses_a_non_board_member(session_factory, client):  #
 
     assert resp.status_code == 403
     assert slug not in await _scheduler_enabled_slugs(session_factory)
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete
+# ---------------------------------------------------------------------------
+
+
+async def _hire_with_heartbeat(session_factory, company_id: uuid.UUID, slug: str) -> None:  # noqa: ANN001
+    """A non-CEO agent of the company whose heartbeat the owner switched on."""
+    async with session_factory() as session:
+        session.add(
+            AgentOrgNode(agent_id=slug, name=slug, company_id=company_id, heartbeat_enabled=True, heartbeat_cron=_CRON)
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_factory):  # noqa: ANN001
+    """The scheduler never reads ``deleted_at``; the delete itself must switch the schedules off."""
+    company_id = await _create(session_factory, "Acme")
+    other_id = await _create(session_factory, "Other")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    await _toggle(session_factory, company_id, ceo.agent_id, True)
+    await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
+    await _hire_with_heartbeat(session_factory, other_id, "worker-other")
+    assert {ceo.agent_id, "worker-acme"} <= await _scheduler_enabled_slugs(session_factory)
+
+    async with session_factory() as session:
+        await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    enabled = await _scheduler_enabled_slugs(session_factory)
+    assert ceo.agent_id not in enabled
+    assert "worker-acme" not in enabled
+    assert "worker-other" in enabled  # a different company is untouched
+    [node] = await _ceo_nodes(session_factory, company_id)  # retired, never deleted
+    assert node.status == DORMANT_CEO_STATUS
