@@ -22,7 +22,7 @@ vi.mock('@autobot/ui', () => ({
     props: ['disabled'],
     template: '<button :disabled="disabled"><slot /></button>',
   },
-  BaseCard: { template: '<section><slot /></section>' },
+  BaseCard: { props: ['title', 'subtitle'], template: '<section><h2>{{ title }}</h2><p>{{ subtitle }}</p><slot /></section>' },
   BaseAlert: { props: ['message'], template: '<p>{{ message }}</p>' },
   PageHeader: { template: '<header />' },
   isHttpError: (e: unknown) => !!(e as { isHttpError?: boolean })?.isHttpError,
@@ -101,5 +101,14 @@ describe('AdminCleanupProposalsView.vue', () => {
     expect(card).toContain(en.admin.cleanup.refused)
     expect(card).not.toContain('Found: 0')
     expect(card).not.toContain('RAW-REFUSAL')
+  })
+
+  it('links the duplicated credentials card to the Secrets page and offers no propose action there (#17850)', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Duplicated stored credentials')
+    expect(wrapper.text()).toContain('Review them on the Secrets page')
+    expect(wrapper.findAll('button')).toHaveLength(2) // only the two decided cleanups propose here
+    expect(mockGet.mock.calls.some(([url]) => String(url).includes('secret-duplicates'))).toBe(false)
   })
 })

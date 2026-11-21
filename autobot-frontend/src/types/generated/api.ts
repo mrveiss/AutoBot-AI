@@ -19697,6 +19697,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/secret-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secret Duplicates Status
+         * @description Read only: counts, vault references and approval ids. No secret id, name or value (#17865).
+         */
+        get: operations["secret_duplicates_status_api_admin_secret_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/secret-duplicates/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Secret Duplicate Resolution
+         * @description Verify every duplicated group and PROPOSE its resolution -- a request, not an execution.
+         */
+        post: operations["propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/ownerless-chat-sessions": {
         parameters: {
             query?: never;
@@ -75705,6 +75745,68 @@ export interface components {
             stats: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateGroupStatus
+         * @description One duplicated ``(owner_vault, name)``: the vault, how many copies, and its open proposal if any.
+         *
+         *     No secret id and no name leaves here (#17865): a person acts on a group from its approval, in the Approvals
+         *     inbox, not from this view.
+         */
+        DuplicateGroupStatus: {
+            /** Owner Vault */
+            owner_vault: string;
+            /** Copy Count */
+            copy_count: number;
+            /** Approval Id */
+            approval_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateProposal
+         * @description What one group produced: the approval raised, or why none was (a proposal already stands).
+         */
+        DuplicateProposal: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Reason */
+            reason: string;
+            /** Copies */
+            copies: number;
+            /** Skipped */
+            skipped: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateRequestResponse
+         * @description The proposals one request raised.
+         */
+        DuplicateRequestResponse: {
+            /** Proposals */
+            proposals: components["schemas"]["DuplicateProposal"][];
+            /**
+             * Remaining
+             * @default 0
+             */
+            remaining: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateStatus
+         * @description Every duplicated group, in counts. ``group_count == 0`` means the unique-constraint migration can apply.
+         */
+        DuplicateStatus: {
+            /** Group Count */
+            group_count: number;
+            /** Copy Count */
+            copy_count: number;
+            /** Groups */
+            groups: components["schemas"]["DuplicateGroupStatus"][];
         } & {
             [key: string]: unknown;
         };
@@ -135416,6 +135518,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CleanupRequestResponse"];
+                };
+            };
+        };
+    };
+    secret_duplicates_status_api_admin_secret_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateStatus"];
+                };
+            };
+        };
+    };
+    propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post: {
+        parameters: {
+            query?: {
+                /** @description Raise a group again after a rejected or revision-requested proposal */
+                re_raise?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

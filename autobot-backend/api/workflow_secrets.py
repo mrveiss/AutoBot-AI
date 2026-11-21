@@ -189,7 +189,7 @@ async def update_workflow_secret(
     if not updated:
         raise HTTPException(status_code=404, detail=f"Secret '{name}' not found")
 
-    logger.info("Workflow secret updated via API: name=%s owner=%s", name, owner_id)
+    logger.info("Workflow secret updated via API: owner=%s", owner_id)
     return WorkflowSecretMetadata(
         id="",
         name=name,
@@ -233,4 +233,4 @@ async def delete_workflow_secret(
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Secret '{name}' not found")
 
-    logger.info("Workflow secret deleted via API: name=%s owner=%s", name, owner_id)
+    logger.info("Workflow secret deleted via API: owner=%s", owner_id)
