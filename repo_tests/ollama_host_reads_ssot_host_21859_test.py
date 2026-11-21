@@ -137,6 +137,15 @@ def test_the_detector_sees_a_read_of_the_ssot_field(source):
     assert ollama_host_reads(parse_cache.parse(source))
 
 
+def test_the_detector_still_sees_an_unshadowed_read_beside_a_shadowing_function():
+    source = (
+        "from autobot_shared.ssot_config import config\n"
+        "def shadowed(config):\n    return config.ollama_host\n"
+        "def real():\n    return config.ollama_host\n"
+    )
+    assert ollama_host_reads(parse_cache.parse(source)) == [5]
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -155,15 +164,6 @@ def test_the_detector_sees_a_read_of_the_ssot_field(source):
         "    config = await _load(db)\n    return config.ollama_host",
     ],
 )
-def test_the_detector_still_sees_an_unshadowed_read_beside_a_shadowing_function():
-    source = (
-        "from autobot_shared.ssot_config import config\n"
-        "def shadowed(config):\n    return config.ollama_host\n"
-        "def real():\n    return config.ollama_host\n"
-    )
-    assert ollama_host_reads(parse_cache.parse(source)) == [5]
-
-
 def test_the_detector_ignores_the_ssot_host_and_a_foreign_config_object(source):
     assert not ollama_host_reads(parse_cache.parse(source))
 
