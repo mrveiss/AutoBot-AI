@@ -565,8 +565,7 @@ async def mcp_summarize_knowledge_topic(
         # Search for relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         results = await kb.search(query=topic, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
-        # prompt-feeding: no admin bypass (owner 2026-11-21)
-        results = await filter_for_user_id(results, kb, scoped_reader(current_user))  # #16665
+        results = await filter_for_user_id(results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not results:
             return {
@@ -681,8 +680,7 @@ async def mcp_langchain_qa_chain(
         # First get relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         search_results = await kb.search(question, context_size, filters=RESEARCH_QUARANTINE_FILTER)
-        # prompt-feeding: no admin bypass (owner 2026-11-21)
-        search_results = await filter_for_user_id(search_results, kb, scoped_reader(current_user))  # #16665
+        search_results = await filter_for_user_id(search_results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not search_results:
             return {
