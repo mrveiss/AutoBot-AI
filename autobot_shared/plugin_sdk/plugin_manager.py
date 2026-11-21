@@ -16,7 +16,8 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from .base import PluginRegistry, PluginStatus
+from .base import PluginManifest, PluginRegistry, PluginStatus
+from .enable_gate import EnableGate
 from .hooks import HookRegistry
 from .loader import PluginLoader
 
@@ -36,6 +37,7 @@ class PluginManager:
         plugin_dirs: List[Path] | None = None,
         credential_resolvers: Dict[str, Callable[[str], str]] | None = None,
         trusted_roots: List[Path] | None = None,
+        enable_gate: EnableGate | None = None,
     ) -> None:
         """
         Initialize plugin manager.
@@ -47,7 +49,11 @@ class PluginManager:
             credential_resolvers: plugin name -> scoped resolver (#18094).
             trusted_roots: built-in plugin roots; a resolver is injected only
                            into a plugin whose real path lies under one.
+            enable_gate: when given, only the plugins it admits are imported at
+                         startup (#17421); the rest are discovered but never loaded.
         """
+        self._enable_gate = enable_gate
+        self._gated: List[str] = []
         self._loader = PluginLoader(plugin_dirs or [], credential_resolvers, trusted_roots)
         self._registry = PluginRegistry()
         self._hook_registry = HookRegistry()
@@ -105,8 +111,9 @@ class PluginManager:
         # The LOADER dedupes now, because it also owns `_manifest_dirs` — the map
         # that decides which code runs. Deduping in two places with opposite
         # precedence is what let one plugin's code run under another's manifest.
-        manifests = self._loader.discover_plugins()
-        logger.info("PluginManager: discovered %d plugin(s)", len(manifests))
+        discovered = self._loader.discover_plugins()
+        logger.info("PluginManager: discovered %d plugin(s)", len(discovered))
+        manifests = await self._admit(discovered)
 
         loaded: List[str] = []
         failed: List[str] = []
@@ -155,13 +162,28 @@ class PluginManager:
                     exc_info=True,
                 )
 
-        self._record_load_report(manifests, loaded, failed)
+        self._record_load_report(discovered, loaded, failed)
 
         await self._hook_registry.call_hook("on_startup")
         logger.info(
             "PluginManager: startup complete — %d plugin(s) active",
             len(self._registry.get_enabled_plugins()),
         )
+
+    async def _admit(self, discovered: List[PluginManifest]) -> List[PluginManifest]:
+        """The discovered plugins an operator has enabled; the rest are never imported (#17421)."""
+        if self._enable_gate is None:
+            return discovered
+        admitted = await self._enable_gate.admit(discovered)
+        kept = {m.name for m in admitted}
+        self._gated = sorted(m.name for m in discovered if m.name not in kept)
+        if self._gated:
+            logger.info("PluginManager: %d plugin(s) not enabled, not imported: %s", len(self._gated), self._gated)
+        return admitted
+
+    def get_gated_plugins(self) -> List[str]:
+        """Discovered plugins held back because no operator has enabled them (#17421)."""
+        return list(self._gated)
 
     async def shutdown(self) -> None:
         """

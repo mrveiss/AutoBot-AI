@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The host removes and gates a plugin's tools on disable and unload (#19302)."""
+"""The host removes and gates a plugin's tools: only ENABLED plugins expose them (#19302)."""
 
 import sys
 import textwrap
@@ -66,7 +66,9 @@ def _listed(tool: str) -> bool:
 @pytest.mark.asyncio
 async def test_unload_removes_tool_despite_empty_shutdown(loaded):
     loader, manifest, tool = loaded
-    await loader.load_plugin(manifest)
+    plugin = await loader.load_plugin(manifest)
+    assert not _listed(tool), "a loaded plugin that is not enabled must not expose its tool"
+    await plugin.enable()
     assert _listed(tool)
     assert await loader.unload_plugin(manifest.name)
     assert not _listed(tool)

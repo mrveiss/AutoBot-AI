@@ -135,7 +135,7 @@ class ToolSDKRegistry:
         return len(names)
 
     def _is_dispatchable(self, name: str) -> bool:
-        """False when the owning plugin is known and disabled, unloaded or errored (#19302)."""
+        """False when the owning plugin is known and not ENABLED (#19302)."""
         owner = self._owners.get(name)
         if owner is None:
             return True

@@ -178,9 +178,6 @@ def validate_hook_names(hook_names: List[str], plugin_name: str = "unknown") -> 
             )
 
 
-_INACTIVE_STATUSES = frozenset({PluginStatus.DISABLED, PluginStatus.UNLOADED, PluginStatus.ERROR})
-
-
 class HookRegistry:
     """
     Singleton registry for managing hooks and callbacks.
@@ -274,13 +271,13 @@ class HookRegistry:
 
     @staticmethod
     def _plugin_is_inactive(plugin_name: str | None) -> bool:
-        """True when the owning plugin is known and disabled, unloaded or errored (#19302).
+        """True when the owning plugin is known and not ENABLED (#19302).
 
-        LOADED plugins still fire: the backend load route never calls ``enable()``.
-        Strict "only ENABLED" gating (#19302 AC1) awaits an owner decision.
+        Only an enabled plugin's callbacks and tools run. A name the registry does
+        not know (a host callback, or a plugin still initialising) is not gated.
         """
         plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
-        return plugin is not None and plugin.status in _INACTIVE_STATUSES
+        return plugin is not None and plugin.status != PluginStatus.ENABLED
 
     async def call_hook(
         self,

@@ -1,0 +1,196 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""A plugin's code runs only after an operator enabled it, and upgrades keep what ran (#17421, #19302).
+
+Real loader, real ``PluginManager``, real ``plugin_enable_state`` table (SQLite). The only fake is the
+audit sink, which models the contract of ``audit_log``: awaited, returns whether the row was committed.
+"""
+
+import json
+import sys
+import textwrap
+
+import pytest
+import pytest_asyncio
+from fastapi import HTTPException
+from fastapi.routing import APIRoute
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
+
+import plugin_enable_state as pes
+import plugin_manager as plugin_routes
+from auth_middleware import check_admin_permission
+from autobot_shared.plugin_sdk import PluginLoader, PluginManager
+from autobot_shared.plugin_sdk.base import PluginRegistry
+from autobot_shared.plugin_sdk.hooks import HookRegistry
+from services.audit.taxonomy import AuditAction
+from user_management.models.base import Base
+from user_management.models.plugin_enable_state import PluginEnableState
+
+_MODULE = """
+    from autobot_shared.plugin_sdk import BasePlugin
+    from autobot_shared.plugin_sdk.hooks import HookRegistry
+
+    class P(BasePlugin):
+        async def initialize(self):
+            HookRegistry().register_hook("gate_hook", lambda: self.manifest.name, self.manifest.name)
+
+        async def shutdown(self):
+            pass
+"""
+
+
+class RecordingAudit:
+    """Same contract as ``audit_log``: awaited, True when the entry was committed."""
+
+    def __init__(self) -> None:
+        self.entries: list[dict] = []
+        self.committed = True
+
+    async def __call__(self, operation, result="success", **kwargs) -> bool:
+        if self.committed:
+            self.entries.append({"operation": operation, **kwargs})
+        return self.committed
+
+
+@pytest_asyncio.fixture
+async def store():
+    engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)  # canonical: ignore py-adhoc-db-engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[PluginEnableState.__table__])
+    factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+    yield pes.PluginEnableStore(factory)
+    await engine.dispose()
+
+
+@pytest.fixture
+def audit(monkeypatch):
+    sink = RecordingAudit()
+    monkeypatch.setattr(pes, "audit_log", sink)
+    return sink
+
+
+@pytest.fixture
+def plugin_root(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(tmp_path))
+    before = set(sys.modules)
+    names: list[str] = []
+    yield tmp_path, names
+    for name in names:
+        PluginRegistry().unregister(name)
+        HookRegistry().unregister_plugin(name)
+    for key in set(sys.modules) - before:
+        del sys.modules[key]
+
+
+def _add_plugin(root, names, name):
+    (root / name).mkdir()
+    (root / name / "plugin.json").write_text(
+        json.dumps(
+            dict(name=name, version="1.0.0", display_name=name, description=name, author="mrveiss", entry_point=name)
+        ),
+        encoding="utf-8",
+    )
+    (root / f"{name}.py").write_text(textwrap.dedent(_MODULE), encoding="utf-8")
+    names.append(name)
+
+
+def _manager(root, store):
+    return PluginManager([root], enable_gate=pes.DatabaseEnableGate(store))
+
+
+@pytest.mark.asyncio
+async def test_upgrade_grandfathers_what_was_running_and_audits_each(store, audit, plugin_root):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    _add_plugin(root, names, "gate_old_b")
+    manager = _manager(root, store)
+    await manager.startup()
+    assert {"gate_old_a", "gate_old_b"} <= set(PluginRegistry().get_all_plugins())
+    assert await store.enabled_names() == {"gate_old_a", "gate_old_b"}
+    grandfathered = [e for e in audit.entries if e["operation"] == AuditAction.PLUGIN_GRANDFATHER]
+    assert sorted(e["resource"] for e in grandfathered) == ["plugin:gate_old_a", "plugin:gate_old_b"]
+    assert all(e["durable"] for e in grandfathered)
+    await manager.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_new_plugin_is_not_imported_until_an_admin_enables_it(store, audit, plugin_root):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    first = _manager(root, store)
+    await first.startup()
+    await first.shutdown()
+    audit.entries.clear()
+
+    _add_plugin(root, names, "gate_new_c")
+    second = _manager(root, store)
+    await second.startup()
+    assert "gate_old_a" in PluginRegistry().get_all_plugins()
+    assert "gate_new_c" not in sys.modules, "discovery must not import the module"
+    assert second.get_gated_plugins() == ["gate_new_c"]
+    assert audit.entries == [], "grandfathering runs once"
+
+    admin = {"username": "root"}
+    await pes.apply_decision("gate_new_c", True, admin, second._loader, store)
+    await pes.require_enabled("gate_new_c", store)
+    assert await second._loader.load_plugin(_manifest(second, "gate_new_c"))
+    assert "gate_new_c" in sys.modules
+    await second.shutdown()
+
+
+def _manifest(manager, name):
+    return next(m for m in manager._loader.discover_plugins() if m.name == name)
+
+
+@pytest.mark.asyncio
+async def test_load_route_refuses_a_plugin_nobody_enabled(store):
+    with pytest.raises(HTTPException) as refused:
+        await pes.require_enabled("gate_never_enabled", store)
+    assert refused.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_disable_is_audited_persisted_and_silences_hooks(store, audit, plugin_root):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    manager = _manager(root, store)
+    await manager.startup()
+    assert await HookRegistry().call_hook("gate_hook") == ["gate_old_a"]
+
+    await pes.apply_decision("gate_old_a", False, {"username": "root"}, manager._loader, store)
+    entry = audit.entries[-1]
+    assert (entry["operation"], entry["user_id"], entry["durable"]) == (AuditAction.PLUGIN_DISABLE, "root", True)
+    assert await HookRegistry().call_hook("gate_hook") == []
+    assert await store.enabled_names() == set(), "a disable survives a restart"
+    await manager.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_no_decision_without_an_audit_entry(store, audit, plugin_root):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    manager = _manager(root, store)
+    await manager.startup()
+    audit.committed = False
+    with pytest.raises(HTTPException) as unavailable:
+        await pes.apply_decision("gate_old_a", False, {"username": "root"}, manager._loader, store)
+    assert unavailable.value.status_code == 503
+    assert await store.enabled_names() == {"gate_old_a"}
+    await manager.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_unknown_plugin_cannot_be_enabled(store, audit):
+    with pytest.raises(HTTPException) as missing:
+        await pes.apply_decision("gate_ghost", True, {"username": "root"}, PluginLoader([]), store)
+    assert missing.value.status_code == 404
+    assert audit.entries == []
+
+
+@pytest.mark.parametrize("suffix", ["enable", "disable", "load"])
+def test_routes_are_admin_gated(suffix):
+    route = next(r for r in plugin_routes.router.routes if isinstance(r, APIRoute) and r.path.endswith(f"/{suffix}"))
+    assert check_admin_permission in {d.call for d in route.dependant.dependencies}

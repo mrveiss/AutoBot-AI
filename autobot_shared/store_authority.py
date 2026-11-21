@@ -468,6 +468,18 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "Redis cause a total auth outage. Every state change is logged, because an "
         "unlogged fallback becomes permanent.",
     ),
+    "plugin_enable_state": Concept(
+        name="plugin_enable_state",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=("autobot-backend/plugin_enable_state.py",),
+        rebuilt_by="Nothing rebuilds it and no copy is kept: the in-memory BasePlugin.status is set from "
+        "the row at startup and by the admin enable/disable routes, never read back as a decision.",
+        note="Whether an operator has enabled a plugin to run in the backend process (#17421). A plugin is "
+        "imported only when its row says enabled, so the decision must survive a restart. Plugins "
+        "running before the gate existed are grandfathered as enabled on the first start, each with a "
+        "durable audit entry.",
+    ),
 }
 
 

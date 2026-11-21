@@ -17,7 +17,7 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk import (
@@ -31,6 +31,7 @@ from autobot_shared.plugin_sdk.base import PluginLoadError
 from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
+from plugin_enable_state import apply_decision, require_enabled
 from plugin_install import install_from_git, install_from_zip
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
 from services.provider_key_vault import plugin_credential_resolvers
@@ -256,6 +257,8 @@ async def load_plugin(
             detail=f"Plugin not found: {plugin_name}",
         )
 
+    await require_enabled(plugin_name)  # #17421: never import a plugin no admin has enabled
+
     # Issue #9049: auto-grant capabilities for official plugins only.
     plugin_config = config.config if config else {}
     plugin = await loader.load_plugin(manifest, plugin_config)
@@ -266,6 +269,7 @@ async def load_plugin(
             detail=f"Failed to load plugin: {plugin_name}",
         )
 
+    await plugin.enable()  # only an ENABLED plugin's hooks and tools run (#19302)
     if manifest.trust_tier == TrustTier.OFFICIAL:
         CapabilityChecker().grant_capabilities(manifest.name, manifest.capabilities)
 
@@ -346,9 +350,10 @@ async def reload_plugin(
 async def enable_plugin(
     plugin_name: str,
     admin_check: bool = Depends(check_admin_permission),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, str]:
     """
-    Enable a plugin.
+    Enable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
 
     Args:
         plugin_name: Plugin name
@@ -356,17 +361,7 @@ async def enable_plugin(
     Returns:
         Success message
     """
-    registry = PluginRegistry()
-    plugin = registry.get_plugin(plugin_name)
-
-    if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin not found: {plugin_name}",
-        )
-
-    await plugin.enable()
-
+    await apply_decision(plugin_name, True, user, get_plugin_loader())
     return {
         "status": "success",
         "message": f"Plugin {plugin_name} enabled successfully",
@@ -378,9 +373,10 @@ async def enable_plugin(
 async def disable_plugin(
     plugin_name: str,
     admin_check: bool = Depends(check_admin_permission),
+    user: dict = Depends(get_current_user),
 ) -> Dict[str, str]:
     """
-    Disable a plugin.
+    Disable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
 
     Args:
         plugin_name: Plugin name
@@ -388,17 +384,7 @@ async def disable_plugin(
     Returns:
         Success message
     """
-    registry = PluginRegistry()
-    plugin = registry.get_plugin(plugin_name)
-
-    if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Plugin not found: {plugin_name}",
-        )
-
-    await plugin.disable()
-
+    await apply_decision(plugin_name, False, user, get_plugin_loader())
     return {
         "status": "success",
         "message": f"Plugin {plugin_name} disabled successfully",
