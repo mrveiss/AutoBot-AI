@@ -8,6 +8,7 @@
  *
  * @author mrveiss
  */
+import type { CollectionDeleteProposal } from './collectionDeleteProposal'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -192,6 +193,27 @@ export interface BackendSearchResult {
   node_id: string
 }
 
+/** A backend search hit as a SearchResult; `metadata.factType` keeps the fact's raw type (#21037). */
+function toSearchResult(result: BackendSearchResult, score: number): SearchResult {
+  const meta = result.metadata
+  return {
+    document: {
+      id: meta?.fact_id || result.node_id,
+      title: meta?.title || 'Untitled',
+      content: result.content,
+      type: meta?.type || 'document',
+      category: meta?.category || 'General',
+      source: meta?.source || 'Unknown',
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: meta?.stored_at ? new Date(meta.stored_at) : new Date(),
+      metadata: { factType: meta?.type },
+    } as KnowledgeDocument,
+    score,
+    highlights: [result.content?.substring(0, 200) + '...' || ''],
+  }
+}
+
 /**
  * KnowledgeRepository - Consolidated Knowledge Base API Repository
  *
@@ -219,21 +241,7 @@ export class KnowledgeRepository extends ApiRepository {
     // Backend returns { results: [...], total_results: N, ... }
     // Transform results to match expected SearchResult format
     const results = response.data.results || []
-    return results.map((result: BackendSearchResult) => ({
-      document: {
-        id: result.metadata?.fact_id || result.node_id,
-        title: result.metadata?.title || 'Untitled',
-        content: result.content,
-        type: result.metadata?.type || 'document',
-        category: result.metadata?.category || 'General',
-        source: result.metadata?.source || 'Unknown',
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: result.metadata?.stored_at ? new Date(result.metadata.stored_at) : new Date()
-      } as KnowledgeDocument,
-      score: result.score,
-      highlights: [result.content?.substring(0, 200) + '...' || '']
-    }))
+    return results.map(result => toSearchResult(result, result.score))
   }
 
   // RAG-enhanced search — migrated from /rag_search to /search (#10666)
@@ -491,16 +499,14 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Bulk delete multiple documents
-   * Issue #552: Note - Backend uses collection-based bulk delete at
-   * POST /api/knowledge_base/collections/{collection_id}/bulk-delete
-   * This endpoint may need adjustment based on collection context
+   * Ask for a bulk delete (#21383): the backend only files a proposal for approval, it deletes nothing.
+   * Issue #552: collection-based, POST /api/knowledge_base/collections/{collection_id}/bulk-delete
    */
-  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<{ success: boolean; deleted_count: number }> {
+  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<CollectionDeleteProposal> {
     const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
       fact_ids: documentIds
     })
-    return response.data
+    return response.data as unknown as CollectionDeleteProposal // the route answers a proposal now (#21383); this URL line is ratcheted as-is
   }
 
   /**
@@ -511,21 +517,7 @@ export class KnowledgeRepository extends ApiRepository {
 
     // Transform results to match SearchResult format
     const results = ((response.data as { results?: BackendSearchResult[] }).results || response.data || []) as BackendSearchResult[]
-    return results.map((result: BackendSearchResult) => ({
-      document: {
-        id: result.metadata?.fact_id || result.node_id,
-        title: result.metadata?.title || 'Untitled',
-        content: result.content,
-        type: result.metadata?.type || 'document',
-        category: result.metadata?.category || 'General',
-        source: result.metadata?.source || 'Unknown',
-        tags: [],
-        createdAt: new Date(),
-        updatedAt: result.metadata?.stored_at ? new Date(result.metadata.stored_at) : new Date()
-      } as KnowledgeDocument,
-      score: result.score || 0,
-      highlights: [result.content?.substring(0, 200) + '...' || '']
-    }))
+    return results.map(result => toSearchResult(result, result.score || 0))
   }
 
   /**

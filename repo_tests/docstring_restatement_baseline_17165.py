@@ -78,7 +78,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/api/sequential_thinking_mcp.py": frozenset({"clear_thinking_session"}),
     "autobot-backend/api/terminal_tools.py": frozenset({"check_tool_installed"}),
     "autobot-backend/api/user_management/organizations.py": frozenset(
-        {"deactivate_organization", "delete_organization", "get_organization_by_slug"}
+        {"deactivate_organization", "delete_organization"}
     ),
     "autobot-backend/api/user_management/teams.py": frozenset(
         {"delete_team", "list_team_members", "update_member_role"}

@@ -7,7 +7,7 @@
 adapter_config schema::
 
     {
-        "model": "claude-sonnet-4-6",
+        "model": "sonnet",   # a tier alias or a pinned ID (autobot_shared.ssot_claude_models)
         "max_turns": 10,
         "allowed_tools": ["Bash", "Read"],
         "output_dir": "/tmp",
@@ -147,6 +147,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
     _state_path = staticmethod(_state_path)
     _output_path = staticmethod(_output_path)
     _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
+    injects_role_credentials = True  # role credentials may enter the child env (#20533)
 
     def _configured_cli_path(self) -> Optional[str]:
         """AUTOBOT_CLAUDE_CLI_PATH override, if set (GH#12478)."""

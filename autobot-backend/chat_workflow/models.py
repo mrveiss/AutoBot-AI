@@ -15,7 +15,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
@@ -386,6 +386,7 @@ class LLMIterationContext:
     message: str | None = None
     agent_context: AgentContext | None = None  # Issue #657: Agent hierarchy
     consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
+    parse_failures: int = 0  # #21843: unparsed-TOOL_CALL re-asks this turn, bounded by limits.INVALID_CALL_LIMIT
     context: Dict[str, Any] = field(default_factory=dict)  # Issue #4264: Request-level context for hooks
     # GH#11160: work item this run executes + its declared approval-gated action
     # categories, resolved upstream (where a DB session exists) so the tool seam
@@ -403,6 +404,12 @@ class LLMIterationContext:
     # field, not a `context` key, for the reason auth_role is: `context` is copied from the request.
     # A call whose fingerprint is absent is still held; nothing in here ever lifts line 3.
     approved_fingerprints: frozenset = frozenset()
+    # #19957: the categories this run declared, taken before an approved dispatch clears them from `context`, so a
+    # delegate spawned in that dispatch inherits them (None: not captured; read `context` instead).
+    declared_snapshot: Optional[tuple] = None
+    # #19957: the gates this run enforced when its approved dispatch began, before `requires_approval_before` was
+    # cleared for that dispatch. The authority a delegate inherits (both engines) is built from this, not the clear.
+    approval_gates_snapshot: Optional[frozenset] = None
     # #16950: authority inherited from the principals this run acts for -- a delegating
     # parent's gates, boundary and grants. Met with the run's own at every seam that
     # enforces one, so no hop can widen it. None: nothing inherited.

@@ -25,7 +25,7 @@ export type ClassPair = { readonly name: string; readonly cls: string }
 
 /** Brand + status semantic colors backed by CSS variables in @theme. */
 export const SEMANTIC_COLORS: readonly ClassPair[] = [
-  { name: 'autobot-primary', cls: 'bg-autobot-primary text-white' },
+  { name: 'autobot-primary', cls: 'bg-autobot-primary text-autobot-text-on-primary' },
   { name: 'autobot-secondary', cls: 'bg-autobot-secondary text-white' },
   { name: 'autobot-success', cls: 'bg-autobot-success text-black' },
   { name: 'autobot-warning', cls: 'bg-autobot-warning text-black' },

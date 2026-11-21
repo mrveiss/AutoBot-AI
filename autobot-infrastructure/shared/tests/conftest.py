@@ -42,8 +42,8 @@ if _backend_path not in sys.path:
     sys.path.append(_backend_path)
 
 # Canonical config manager: autobot-backend/config/__init__.py resolves the
-# `unified_config_manager` attribute lazily onto config.manager.ConfigManager.
-from config import unified_config_manager
+# `config_manager` attribute lazily onto config.manager.ConfigManager.
+from config import config_manager
 
 
 @pytest.fixture(scope="session")
@@ -61,13 +61,13 @@ def config() -> Dict[str, Any]:
     No hardcoded values - everything from config.
     """
     return {
-        "backend": unified_config_manager.get_backend_config(),
-        "redis": unified_config_manager.get_redis_config(),
-        "services": unified_config_manager.get_distributed_services_config(),
+        "backend": config_manager.get_backend_config(),
+        "redis": config_manager.get_redis_config(),
+        "services": config_manager.get_distributed_services_config(),
         # ConfigManager exposes no get_chroma_config(); the chroma settings are
         # a config section like `system` below.
-        "chroma": unified_config_manager.get_config_section("chroma") or {},
-        "system": unified_config_manager.get_config_section("system") or {},
+        "chroma": config_manager.get_config_section("chroma") or {},
+        "system": config_manager.get_config_section("system") or {},
     }
 
 

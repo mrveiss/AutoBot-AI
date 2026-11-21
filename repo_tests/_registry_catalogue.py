@@ -31,6 +31,7 @@ import ast
 from functools import lru_cache
 from pathlib import Path
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 
@@ -57,7 +58,8 @@ def catalogue_files(backend_dir: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for path in sorted(api_dir.rglob("*.py"))
-        if not path.name.endswith("_test.py") and _declares_router_config(path.read_text(encoding="utf-8"))
+        if not is_test_filename(path.name, include_js=False, include_conftest=False)
+        and _declares_router_config(path.read_text(encoding="utf-8"))
     )
 
 

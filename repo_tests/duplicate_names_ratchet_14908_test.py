@@ -46,17 +46,11 @@ _SKIPPED_DIRS = {"node_modules", "dist"}
 # concept, #14908 moved the ApiClient options type into the kit (13 left), and #19910 then moved the
 # agent-ledger rows and the permission rule into the kit (one declaration, both apps import it) and
 # renamed the different-concept names (Agent, CacheStats, WebResearchSettings, the plugin audit row,
-# the TLS upload body). 2 left, each stated in TYPE_EXCEPTIONS with its reason.
-PINS = {"type_names_in_both_apps": 1, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+# the TLS upload body). #20173 then moved AuditQueryResponse into the kit: 0 left.
+PINS = {"type_names_in_both_apps": 0, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
 
-# Stated exceptions: a type name declared in both apps until the audit-entry shape is fixed once.
-TYPE_EXCEPTIONS = {
-    "AuditQueryResponse": (
-        "one backend envelope (`AuditQueryResponse`, entries are untyped dicts so no generated row type exists); the "
-        "main copy (types/audit.ts) is typed on the main `AuditEntry` (timestamp string, error_message, user_agent), "
-        "which the audit dashboard components read; it moves with AuditLogEntry once that row has one shape"
-    ),
-}
+# Stated exceptions: a type name declared in both apps. None left (#20173 moved AuditQueryResponse to the kit).
+TYPE_EXCEPTIONS: dict[str, str] = {}
 
 # Stated exceptions: a util filename implemented in both apps until its own PR lands.
 UTIL_EXCEPTIONS = {

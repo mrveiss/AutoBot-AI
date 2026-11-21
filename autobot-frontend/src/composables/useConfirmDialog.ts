@@ -16,6 +16,10 @@ const dialogOptions = ref<ConfirmOptions | null>(null)
 const resolveRef = ref<((v: boolean) => void) | null>(null)
 
 function confirm(options: ConfirmOptions): Promise<boolean> {
+  // One dialog, one resolver: a pending confirmation the new one replaces is dismissed (false),
+  // so its caller's promise settles instead of hanging forever.
+  resolveRef.value?.(false)
+  resolveRef.value = null
   dialogOptions.value = options
   dialogVisible.value = true
   return new Promise<boolean>((resolve) => {

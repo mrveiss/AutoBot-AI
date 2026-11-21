@@ -31,7 +31,10 @@
 # password while the server stays nopass. Adopted only when no password is set,
 # and always with the username -- a password alone is refused by nopass.
 - name: "AI Stack | Read the SLM-generated Redis credential (#16627)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_redis_password.yml
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_redis_password.yml
+    apply:
+      tags: ['ai', 'config']
   tags: ['ai', 'config']
 
 - name: "AI Stack | Adopt the SLM-generated Redis credential when none is set (#16627)"
@@ -42,6 +45,90 @@
     - (_redis_password_read | default('') | trim) | length > 0
     - (ai_redis_password | default('') | trim) | length == 0
   no_log: true
+  tags: ['ai', 'config']
+
+# #20941: the envelope store opens only with the SLM's secrets root key, the same key
+# the backend renders. Without it every System-vault read in this process is refused.
+# `apply` carries the tags into the shared reader's tasks: tags on an include gate the
+# include only, so `--tags config` would otherwise render the env without the key.
+- name: "AI Stack | Read the SLM's secrets root key (#20941)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_slm_secrets_root_key.yml
+    apply:
+      tags: ['ai', 'config']
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Check whether the env files already carry a secrets root key (#20941)"
+  # Same fail-closed probe as the Redis one below: absent file 1, match 0, unreadable 2.
+  ansible.builtin.command:
+    argv: [sh, -c, '[ -e "$1" ] || exit 1; grep -q "^AUTOBOT_SECRETS_ROOT_KEY=." "$1"', sh, "{{ item }}"]
+  loop:
+    - /etc/autobot/autobot-ai-stack.env
+    - "{{ ai_install_dir }}/.env"
+  register: _ai_env_root_key_present
+  changed_when: false
+  failed_when: false
+  become: true
+  when: (autobot_secrets_root_key | default('') | trim) | length == 0
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Stop before dropping the secrets root key an env file has (#20941)"
+  ansible.builtin.fail:
+    msg: >-
+      An AI Stack env file on this node has a secrets root key, or could not be read to
+      tell, but this run has none to render: the SLM's slm-secrets.env yielded none and no
+      key is set. Rendering now would remove the key and disable the System vault in the
+      AI Stack. Nothing was changed. Restore the SLM's secrets file, then run the update again.
+  when:
+    - (autobot_secrets_root_key | default('') | trim) | length == 0
+    - _ai_env_root_key_present.results | default([]) | selectattr('rc', 'defined')
+      | rejectattr('rc', 'equalto', 1) | list | length > 0
+  tags: ['ai', 'config']
+
+# #21089: the process opens the user database too (the System vault, provider keys), so it
+# needs the same AUTOBOT_POSTGRES_* the backend renders. The password is read by the one
+# reader the backend uses, never copied; `apply` carries the tags into it.
+- name: "AI Stack | Read the role-managed Postgres app password (#21089)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/read_postgres_app_credentials.yml
+    apply:
+      tags: ['ai', 'config']
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Adopt the role-managed Postgres app password when none is set (#21089)"
+  ansible.builtin.set_fact:
+    backend_postgres_password: "{{ _postgres_app_password_read }}"
+  when:
+    - (_postgres_app_password_read | default('') | trim) | length > 0
+    - (backend_postgres_password | default('') | trim) | length == 0
+  no_log: true
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Check whether the env files already carry a Postgres password (#21089)"
+  # Same fail-closed probe as the root-key one: absent file 1, match 0, unreadable 2.
+  ansible.builtin.command:
+    argv: [sh, -c, '[ -e "$1" ] || exit 1; grep -q "^AUTOBOT_POSTGRES_PASSWORD=." "$1"', sh, "{{ item }}"]
+  loop:
+    - /etc/autobot/autobot-ai-stack.env
+    - "{{ ai_install_dir }}/.env"
+  register: _ai_env_postgres_password_present
+  changed_when: false
+  failed_when: false
+  become: true
+  when: (backend_postgres_password | default('') | trim) | length == 0
+  tags: ['ai', 'config']
+
+- name: "AI Stack | Stop before dropping the Postgres password an env file has (#21089)"
+  ansible.builtin.fail:
+    msg: >-
+      An AI Stack env file on this node has a Postgres password, or could not be read to
+      tell, but this run has none to render: the role-managed credentials file yielded none
+      and no password is set. Rendering now would remove it and the AI Stack could no longer
+      open the user database. Nothing was changed. Restore the credentials file, then run the update again.
+  when:
+    - (backend_postgres_password | default('') | trim) | length == 0
+    - _ai_env_postgres_password_present.results | default([]) | selectattr('rc', 'defined')
+      | rejectattr('rc', 'equalto', 1) | list | length > 0
   tags: ['ai', 'config']
 
 # #20724: the updater renders these files on every update now, not only at install.
@@ -79,6 +166,17 @@
       | rejectattr('rc', 'equalto', 1) | list | length > 0
   tags: ['ai', 'config']
 
+- name: "Ensure the application log directory exists (#20894)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/ensure_app_log_dir.yml
+    apply:
+      tags: ['ai', 'config']
+  vars:
+    app_log_dir: "{{ ai_app_log_dir }}"
+    app_log_dir_owner: "{{ ai_user }}"
+    app_log_dir_group: "{{ ai_group }}"
+  tags: ['ai', 'config']
+
 - name: "AI Stack | Deploy /etc/autobot/autobot-ai-stack.env"
   ansible.builtin.template:
     src: ai-stack.env.j2
@@ -87,6 +185,7 @@
     owner: root
     group: "{{ ai_group }}"
   become: true
+  diff: false  # the env carries secrets (#20941)
   notify: restart ai-stack
   tags: ['ai', 'config']
 
@@ -98,5 +197,6 @@
     owner: "{{ ai_user }}"
     group: "{{ ai_group }}"
   become: true
+  diff: false  # the env carries secrets (#20941)
   notify: restart ai-stack
   tags: ['ai', 'config']

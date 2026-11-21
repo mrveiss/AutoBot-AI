@@ -79,24 +79,31 @@ class ConversationHandlerMixin:
 
         return await load_turn_pairs(session_id)
 
-    async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
-        """LLM context: the Redis cache, else projected from chat_sessions, else nothing (#18293)."""
+    async def _cache_is_stale(self, session_id: str, history: List[Dict[str, str]]) -> bool:
+        """True when the cached copy differs from *history*; an unreadable cache is not a reason to drop *history*."""
         try:
-            redis_history = await self._try_redis_history(session_id)
-            if redis_history is not None:
-                return redis_history
+            return await self._try_redis_history(session_id) != history
+        except Exception as e:  # noqa: BLE001 - Redis down / invalid cached JSON: the durable projection still serves
+            logger.warning("Conversation history cache comparison failed for session %s: %r", session_id, e)
+            return False
 
+    async def _load_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
+        """LLM context: projected from chat_sessions (the system of record), else the cache, else nothing (#18293).
+
+        #21847: the durable projection is authoritative. The Redis copy is only a projection of it, so a
+        short or stale cache must never win over chat_sessions; it is served only when chat_sessions
+        cannot be read, and is refreshed from the projection whenever that is read.
+        """
+        try:
             history = await self._project_from_chat_sessions(session_id)
-            if not history:
-                return []  # unreadable, or no completed turns: never a legacy transcript
-
-            if self.redis_client is not None:
-                fire_and_forget(
+            if history is None:  # unreadable: a cached projection is better than none, never a legacy transcript
+                return await self._try_redis_history(session_id) or []
+            if history and self.redis_client is not None and await self._cache_is_stale(session_id, history):
+                fire_and_forget(  # #21847: no Redis write per turn when the cache already equals the projection
                     self._save_conversation_history(session_id, history),
                     name="conversation-history-cache-refill",
                 )
             return history
-
         except Exception as e:
             logger.error("Failed to load conversation history: %s", e)
             return []

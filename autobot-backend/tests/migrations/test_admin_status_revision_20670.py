@@ -19,8 +19,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.base_service import TenantContext
 from tests.migrations.conftest import create_all_schema, requires_postgres
@@ -35,6 +36,7 @@ START = 1_900_000_000
 async def engine(fresh_db_url):
     await create_all_schema(fresh_db_url)
     engine = create_async_engine(fresh_db_url, connect_args=NOT_UTC)
+    await _create_user(engine, "root", True)  # another active admin: the last one cannot be demoted (#21018)
     yield engine
     await engine.dispose()
 
@@ -87,15 +89,18 @@ async def _create_user(engine, name: str, is_admin: bool) -> uuid.UUID:
     async with AsyncSession(engine) as session:
         user = User(email=f"{name}@example.test", username=name, is_platform_admin=is_admin)
         session.add(user)
+        await session.flush()  # assigns the id; after commit() the row is expired and reading it would lazy-load
+        user_id = user.id
         await session.commit()
-        return user.id
+        return user_id
 
 
 async def _request(engine, user_id: uuid.UUID, is_admin: bool):
     """One PUT /admin: a fresh session, the change, the commit. A downed store answers 503."""
     from autobot_shared.user_management.revocation_outcome import commit_or_503
 
-    async with AsyncSession(engine) as session:
+    # async_session_scope seeds the post-commit callback list the revocation marker is queued on (#15068).
+    async with async_session_scope(async_sessionmaker(engine)) as session:
         service = _service_class()(session, TenantContext())
         outcome = await service.set_platform_admin(user_id, is_admin)
         await commit_or_503(session)
