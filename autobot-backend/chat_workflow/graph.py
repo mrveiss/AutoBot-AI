@@ -56,6 +56,7 @@ from chat_workflow.reflection_gate import (
     reflection_update,
     wants_another_pass,
 )
+from chat_workflow.session_init_guard import missing_turn_state
 from chat_workflow.stall_escalation import add_stall_nodes, stall_mode
 from chat_workflow.state_messages import workflow_message_from_state
 from chat_workflow.tool_call_loop import (
@@ -177,6 +178,8 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
     """Initialize chat session, load history, detect exit intent."""
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
+    if (incomplete := missing_turn_state(state, stream_cb)) is not None:  # #21939
+        return incomplete
 
     try:
         (
@@ -224,10 +227,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
-        error_msg = {
-            "type": "error",
-            "content": "Session initialization failed",
-        }
+        error_msg = {"type": "error", "content": "Session initialization failed"}
         if stream_cb:
             stream_cb(error_msg)
         return {"error": "Session initialization failed", "workflow_messages": [error_msg]}
