@@ -77,16 +77,25 @@ async def resolve_command_line(
 
 
 async def decide_command(
-    approval_handler: ApprovalHandler, session: AgentTerminalSession, command: str, risk, *, force_approval: bool
+    approval_handler: ApprovalHandler,
+    session: AgentTerminalSession,
+    command: str,
+    risk,
+    *,
+    force_approval: bool,
+    person_approved: bool = False,
 ) -> tuple[bool, str | None]:
     """``(runs without a person, refusal)``: line 3 refuses, line 1 runs, line 2 asks the user's rules.
 
     ``force_approval`` sends the command to a person whatever line 1 or a learned rule would say.
-    Nothing lifts line 3.
+    Nothing lifts line 3. ``person_approved``: a person said yes to exactly this command in the chat
+    graph's approval interrupt (#21959), so line 2 is satisfied and the command is not held a second time.
     """
     verdict = await resolve_command_line(approval_handler, session, command, risk)
     if verdict.outcome is Outcome.REFUSE:
         return False, verdict.message
+    if person_approved and not force_approval:
+        return True, None
     if verdict.outcome is Outcome.RUN and not force_approval:
         return True, None
     if session.has_pending_approval():  # queueing would replace it, so a yes to its card would run this one

@@ -311,6 +311,21 @@ def _call_params(tool_call: dict[str, Any]) -> dict[str, Any]:
 
 #: Set on a held ``execute_command`` call: the terminal queues it whatever its own rules say (#19951).
 COMMAND_FORCE_APPROVAL_KEY = "force_approval"
+#: Set on an ``execute_command`` call a person already said yes to in the graph's interrupt (#21959): the
+#: terminal's own hold must not ask again. Only the dispatch seam sets it; a model-supplied value is dropped.
+COMMAND_APPROVED_KEY = "person_approved"
+
+
+def _carry_person_approval(tool_call: dict[str, Any], ctx: "LLMIterationContext | None") -> None:
+    """Mark an ``execute_command`` call whose exact shown fingerprint the person approved (#21959).
+
+    The fingerprint binds the yes to the call's tool and raw params, so it never covers a different command.
+    """
+    from services.ai_line_enforcement import shown_call_fingerprint
+
+    shown = shown_call_fingerprint(tool_call.get("name", ""), _call_params(tool_call))
+    if shown in getattr(ctx, "approved_fingerprints", frozenset()):
+        tool_call[COMMAND_APPROVED_KEY] = True
 
 
 def is_held_message(message: Any) -> bool:
@@ -335,6 +350,7 @@ async def enforce_ai_line(
 
     tool_name = tool_call.get("name", "")
     is_command = tool_name == TERMINAL_TOOL
+    tool_call.pop(COMMAND_APPROVED_KEY, None)  # a person's yes sets it below; the model's call never does
     context = getattr(ctx, "context", None) or {}
     verdict = await enforce_line(
         tool_name=tool_name,
@@ -350,6 +366,8 @@ async def enforce_ai_line(
         floor_waived=bool(getattr(ctx, "attachment_floor_waived", False)),  # #20195: the trail names the setting
     )
     if verdict.outcome is Outcome.RUN:
+        if is_command:
+            _carry_person_approval(tool_call, ctx)
         return None
     if is_command and verdict.outcome is Outcome.HOLD:
         # #19951: the terminal's queue is the hold that can run the command: its approval card, its
