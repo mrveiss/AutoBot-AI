@@ -68,6 +68,7 @@ REACH = declare(
     discover=_source_population,
     reference=_all_python,
     min_fraction=MIN_FRACTION,
+    roots=ROOTS,
     what="production python",
 )
 
