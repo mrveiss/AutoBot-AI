@@ -13,6 +13,8 @@ Both are real attacker techniques (PATH-shadowing of standard binaries,
 linker hijack of any dynamic symbol) and must classify as FORBIDDEN.
 """
 
+import re
+
 import pytest
 
 from autobot_shared.status_enums import CommandRisk
@@ -97,3 +99,47 @@ def test_export_assignment_not_treated_as_prefix(executor: SecureCommandExecutor
     from secure_command_executor import _check_dangerous_env_var_prefix
 
     assert _check_dangerous_env_var_prefix("export PATH=/x; ls") is None
+
+
+# #21987: py/redos + py/polynomial-redos — the prefix regex is linear and matches exactly as before.
+_OLD_ENV_VAR_PREFIX_RE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S*)\s+)+")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "LD_PRELOAD=/x.so ls",
+        "PATH=/x:$PATH ls",
+        "  A=1 B=2 ls",
+        "PROMPT_COMMAND='rm -rf /' bash",
+        'X="a b" LD_PRELOAD=/x ls',
+        "A='x y'z LD_PRELOAD=/x ls",
+        "A='x' ls",
+        "A='x ls",
+        "A=1",
+        "A=\xa01 ls",
+        "LD_PRELOAD=x\xa0ls",
+        "ls A=1 ",
+        "export PATH=/x; ls",
+        "",
+    ],
+)
+def test_env_var_prefix_regex_matches_exactly_as_before(command: str) -> None:
+    from secure_command_executor import _ENV_VAR_PREFIX_RE
+
+    old, new = _OLD_ENV_VAR_PREFIX_RE.match(command), _ENV_VAR_PREFIX_RE.match(command)
+    assert (old and old.group(0)) == (new and new.group(0))
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["A=" + "\x7fA=" * 50_000, "A=" + "x" * 50_000, "A=" + " " * 50_000, "A='" + " " * 50_000, "A=1 " * 50_000 + "'"],
+)
+def test_env_var_prefix_regex_is_linear(command: str) -> None:
+    import time
+
+    from secure_command_executor import _check_dangerous_env_var_prefix
+
+    start = time.perf_counter()
+    _check_dangerous_env_var_prefix(command)
+    assert time.perf_counter() - start < 2.0
