@@ -46,6 +46,7 @@ import repo_tests.egress_default_guard_17576_test as _egress_default_guard  # no
 import repo_tests.embedding_model_preserved_15502_test as _embedding_render_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_file_family_18555_test as _env_family_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_fork_guard_18094_test as _env_fork_guard  # noqa: F401 -- registers its scope
+import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
 import repo_tests.github_api_single_module_15411_test as _github_api_guard  # noqa: F401 -- registers its scope
 import repo_tests.infra_scripts_no_backend_imports_18288_test as _infra_backend_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
@@ -76,7 +77,6 @@ import repo_tests.one_rate_limiter_18087_test as _rate_limiter_guard  # noqa: F4
 import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_serving_predicate_18820_test as _serving_predicate_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
-import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_ssh_restart_executor_18186_test as _ssh_restart_guard
 import repo_tests.one_static_data_copy_18556_test as _static_data_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_sync_command_runner_18180_test as _sync_runner_guard  # noqa: F401 -- registers its scope
