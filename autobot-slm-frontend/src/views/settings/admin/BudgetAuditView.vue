@@ -60,12 +60,12 @@ function actionLabel(action: string): string {
 
 function actionClass(action: string): string {
   if (action === 'pause') {
-    return 'bg-red-100 text-red-700'
+    return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
   }
   if (action === 'alert_then_pause') {
-    return 'bg-amber-100 text-amber-700'
+    return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
   }
-  return 'bg-blue-100 text-blue-700'
+  return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
 }
 
 function isPausing(policy: BudgetPolicy): boolean {
@@ -89,10 +89,10 @@ onMounted(() => {
   <div class="p-6 max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">
+        <h1 class="text-2xl font-bold text-autobot-text-primary">
           {{ $t('budgetAudit.title') }}
         </h1>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('budgetAudit.subtitle') }}
         </p>
       </div>
@@ -129,19 +129,19 @@ onMounted(() => {
     <!-- Summary -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
       <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-xs uppercase text-gray-500">{{ $t('budgetAudit.totalPolicies') }}</p>
-        <p class="text-2xl font-bold text-gray-900">{{ policies.length }}</p>
+        <p class="text-xs uppercase text-autobot-text-tertiary">{{ $t('budgetAudit.totalPolicies') }}</p>
+        <p class="text-2xl font-bold text-autobot-text-primary">{{ policies.length }}</p>
       </div>
       <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-xs uppercase text-gray-500">{{ $t('budgetAudit.autoPausePolicies') }}</p>
-        <p class="text-2xl font-bold text-gray-900">{{ pausingCount }}</p>
+        <p class="text-xs uppercase text-autobot-text-tertiary">{{ $t('budgetAudit.autoPausePolicies') }}</p>
+        <p class="text-2xl font-bold text-autobot-text-primary">{{ pausingCount }}</p>
       </div>
     </div>
 
     <!-- Policies table -->
     <div class="bg-white rounded-lg shadow overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+        <thead class="bg-autobot-bg-secondary text-autobot-text-tertiary uppercase text-xs">
           <tr>
             <th class="px-4 py-3 text-left">{{ $t('budgetAudit.name') }}</th>
             <th class="px-4 py-3 text-left">{{ $t('budgetAudit.scope') }}</th>
@@ -153,34 +153,34 @@ onMounted(() => {
             <th class="px-4 py-3 text-left">{{ $t('budgetAudit.status') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-autobot-border-subtle">
           <tr v-if="loading && policies.length === 0">
-            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+            <td colspan="8" class="px-4 py-8 text-center text-autobot-text-tertiary">
               {{ $t('budgetAudit.loading') }}
             </td>
           </tr>
           <tr v-else-if="policies.length === 0">
-            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+            <td colspan="8" class="px-4 py-8 text-center text-autobot-text-tertiary">
               {{ $t('budgetAudit.noPolicies') }}
             </td>
           </tr>
-          <tr v-for="policy in policies" :key="policy.id" class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-gray-900">
+          <tr v-for="policy in policies" :key="policy.id" class="hover:bg-autobot-bg-hover">
+            <td class="px-4 py-3 text-autobot-text-primary">
               {{ policy.name || $t('budgetAudit.unnamed') }}
             </td>
             <td class="px-4 py-3">
               <span
-                class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
+                class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-secondary"
               >
                 {{ policy.scope }}
               </span>
             </td>
-            <td class="px-4 py-3 font-mono text-xs text-gray-600">{{ policy.scope_id }}</td>
-            <td class="px-4 py-3 text-gray-600">{{ policy.period }}</td>
-            <td class="px-4 py-3 font-mono text-xs text-gray-900">
+            <td class="px-4 py-3 font-mono text-xs text-autobot-text-secondary">{{ policy.scope_id }}</td>
+            <td class="px-4 py-3 text-autobot-text-secondary">{{ policy.period }}</td>
+            <td class="px-4 py-3 font-mono text-xs text-autobot-text-primary">
               {{ formatThreshold(policy.threshold_usd) }}
             </td>
-            <td class="px-4 py-3 text-gray-600">{{ formatWarning(policy.warning_pct) }}</td>
+            <td class="px-4 py-3 text-autobot-text-secondary">{{ formatWarning(policy.warning_pct) }}</td>
             <td class="px-4 py-3">
               <span
                 class="px-2 py-0.5 rounded-full text-xs font-medium"
@@ -192,19 +192,19 @@ onMounted(() => {
             <td class="px-4 py-3">
               <span
                 v-if="!policy.enabled"
-                class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500"
+                class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-bg-tertiary text-autobot-text-tertiary"
               >
                 {{ $t('budgetAudit.disabled') }}
               </span>
               <span
                 v-else-if="isPausing(policy)"
-                class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"
+                class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-warn-bg text-autobot-pill-warn-fg"
               >
                 {{ $t('budgetAudit.canPause') }}
               </span>
               <span
                 v-else
-                class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700"
+                class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-ok-bg text-autobot-pill-ok-fg"
               >
                 {{ $t('budgetAudit.active') }}
               </span>

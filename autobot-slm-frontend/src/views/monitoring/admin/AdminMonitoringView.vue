@@ -70,28 +70,28 @@ const healthStatus = computed(() => {
 // The backend's probe vocabulary (#6909): ok / degraded / down
 const healthStatusClass = computed(() => {
   switch (healthStatus.value) {
-    case 'ok': return 'bg-green-100 border-green-500'
-    case 'degraded': return 'bg-yellow-100 border-yellow-500'
-    case 'down': return 'bg-red-100 border-red-500'
-    default: return 'bg-gray-100 border-gray-500'
+    case 'ok': return 'bg-autobot-pill-ok-bg border-autobot-success'
+    case 'degraded': return 'bg-autobot-pill-warn-bg border-autobot-warning'
+    case 'down': return 'bg-autobot-pill-bad-bg border-autobot-error'
+    default: return 'bg-autobot-bg-tertiary border-autobot-border-strong'
   }
 })
 
 const healthIcon = computed(() => {
   switch (healthStatus.value) {
-    case 'ok': return 'text-green-600'
-    case 'degraded': return 'text-yellow-600'
-    case 'down': return 'text-red-600'
-    default: return 'text-gray-600'
+    case 'ok': return 'text-autobot-success'
+    case 'degraded': return 'text-autobot-warning'
+    case 'down': return 'text-autobot-error'
+    default: return 'text-autobot-text-secondary'
   }
 })
 
 // /system/health/detailed lists each service as healthy or unhealthy
 function serviceBadgeClass(status: string): string {
   switch (status) {
-    case 'healthy': return 'bg-green-100 text-green-800'
-    case 'unhealthy': return 'bg-red-100 text-red-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'healthy': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'unhealthy': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -99,10 +99,10 @@ function serviceBadgeClass(status: string): string {
 
 function getErrorLevelClass(level: string): string {
   switch (level.toLowerCase()) {
-    case 'error': return 'bg-red-100 text-red-800'
-    case 'warning': return 'bg-yellow-100 text-yellow-800'
-    case 'info': return 'bg-blue-100 text-blue-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'warning': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'info': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
@@ -201,14 +201,14 @@ onMounted(() => restartRefresh())
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
-        <div class="p-2 bg-amber-100 rounded-lg">
-          <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="p-2 bg-autobot-pill-warn-bg rounded-lg">
+          <svg class="w-6 h-6 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.adminMonitoring') }}</h1>
-          <p class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.autoBotSystemHealthAnd') }}</p>
+          <h1 class="text-2xl font-bold text-autobot-text-primary">{{ $t('monitoring.admin.adminMonitoringView.adminMonitoring') }}</h1>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.admin.adminMonitoringView.autoBotSystemHealthAnd') }}</p>
         </div>
       </div>
 
@@ -216,7 +216,7 @@ onMounted(() => restartRefresh())
         <!-- Auto-refresh toggle -->
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh" class="rounded-sm" />
-          <span class="text-gray-600">{{ $t('monitoring.admin.adminMonitoringView.autoRefreshValue0S', { value0: refreshInterval }) }}</span>
+          <span class="text-autobot-text-secondary">{{ $t('monitoring.admin.adminMonitoringView.autoRefreshValue0S', { value0: refreshInterval }) }}</span>
         </label>
 
         <!-- Refresh button -->
@@ -247,7 +247,7 @@ onMounted(() => restartRefresh())
           </svg>
           <span class="font-medium capitalize">{{ $t('monitoring.admin.adminMonitoringView.systemStatusValue0', { value0: healthStatus }) }}</span>
         </div>
-        <div class="text-sm text-gray-600">{{ $t('monitoring.admin.adminMonitoringView.uptimeValue0', { value0: formatUptime(systemHealth.uptime_seconds ?? 0) }) }}</div>
+        <div class="text-sm text-autobot-text-secondary">{{ $t('monitoring.admin.adminMonitoringView.uptimeValue0', { value0: formatUptime(systemHealth.uptime_seconds ?? 0) }) }}</div>
       </div>
     </div>
 
@@ -257,83 +257,83 @@ onMounted(() => restartRefresh())
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <!-- System Resources -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.cPUUsage') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.admin.adminMonitoringView.cPUUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
-            (systemHealth?.cpu_percent ?? 0) > 80 ? 'text-red-600' :
-            (systemHealth?.cpu_percent ?? 0) > 60 ? 'text-yellow-600' : 'text-green-600'
+            (systemHealth?.cpu_percent ?? 0) > 80 ? 'text-autobot-error' :
+            (systemHealth?.cpu_percent ?? 0) > 60 ? 'text-autobot-warning' : 'text-autobot-success'
           ]">
             {{ systemHealth?.cpu_percent?.toFixed(1) ?? '0' }}%
           </span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
+        <div class="w-full bg-autobot-bg-active rounded-full h-2">
           <div
             class="h-2 rounded-full transition-all"
             :class="[
-              (systemHealth?.cpu_percent ?? 0) > 80 ? 'bg-red-500' :
-              (systemHealth?.cpu_percent ?? 0) > 60 ? 'bg-yellow-500' : 'bg-green-500'
+              (systemHealth?.cpu_percent ?? 0) > 80 ? 'bg-autobot-dot-bad' :
+              (systemHealth?.cpu_percent ?? 0) > 60 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok'
             ]"
             :style="{ width: `${systemHealth?.cpu_percent ?? 0}%` }"
           ></div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.memoryUsage') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.admin.adminMonitoringView.memoryUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
-            (systemHealth?.memory_percent ?? 0) > 80 ? 'text-red-600' :
-            (systemHealth?.memory_percent ?? 0) > 60 ? 'text-yellow-600' : 'text-green-600'
+            (systemHealth?.memory_percent ?? 0) > 80 ? 'text-autobot-error' :
+            (systemHealth?.memory_percent ?? 0) > 60 ? 'text-autobot-warning' : 'text-autobot-success'
           ]">
             {{ systemHealth?.memory_percent?.toFixed(1) ?? '0' }}%
           </span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
+        <div class="w-full bg-autobot-bg-active rounded-full h-2">
           <div
             class="h-2 rounded-full transition-all"
             :class="[
-              (systemHealth?.memory_percent ?? 0) > 80 ? 'bg-red-500' :
-              (systemHealth?.memory_percent ?? 0) > 60 ? 'bg-yellow-500' : 'bg-green-500'
+              (systemHealth?.memory_percent ?? 0) > 80 ? 'bg-autobot-dot-bad' :
+              (systemHealth?.memory_percent ?? 0) > 60 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok'
             ]"
             :style="{ width: `${systemHealth?.memory_percent ?? 0}%` }"
           ></div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.diskUsage') }}</span>
+          <span class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.admin.adminMonitoringView.diskUsage') }}</span>
           <span :class="[
             'text-lg font-bold',
-            (systemHealth?.disk_percent ?? 0) > 90 ? 'text-red-600' :
-            (systemHealth?.disk_percent ?? 0) > 70 ? 'text-yellow-600' : 'text-green-600'
+            (systemHealth?.disk_percent ?? 0) > 90 ? 'text-autobot-error' :
+            (systemHealth?.disk_percent ?? 0) > 70 ? 'text-autobot-warning' : 'text-autobot-success'
           ]">
             {{ systemHealth?.disk_percent?.toFixed(1) ?? '0' }}%
           </span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
+        <div class="w-full bg-autobot-bg-active rounded-full h-2">
           <div
             class="h-2 rounded-full transition-all"
             :class="[
-              (systemHealth?.disk_percent ?? 0) > 90 ? 'bg-red-500' :
-              (systemHealth?.disk_percent ?? 0) > 70 ? 'bg-yellow-500' : 'bg-green-500'
+              (systemHealth?.disk_percent ?? 0) > 90 ? 'bg-autobot-dot-bad' :
+              (systemHealth?.disk_percent ?? 0) > 70 ? 'bg-autobot-dot-warn' : 'bg-autobot-dot-ok'
             ]"
             :style="{ width: `${systemHealth?.disk_percent ?? 0}%` }"
           ></div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('monitoring.admin.adminMonitoringView.totalErrors24h') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ errorStats?.last_24h || 0 }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.admin.adminMonitoringView.totalErrors24h') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ errorStats?.last_24h || 0 }}</p>
           </div>
-          <div class="p-3 bg-red-100 rounded-lg">
-            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-bad-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
@@ -344,18 +344,18 @@ onMounted(() => restartRefresh())
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Recent Errors -->
-      <div class="lg:col-span-2 bg-white rounded-lg shadow-xs border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="lg:col-span-2 bg-white rounded-lg shadow-xs border border-autobot-border">
+        <div class="px-6 py-4 border-b border-autobot-border">
+          <h2 class="text-lg font-semibold text-autobot-text-primary flex items-center gap-2">
+            <svg class="w-5 h-5 text-autobot-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             {{ $t('monitoring.admin.adminMonitoringView.recentErrors') }}
           </h2>
         </div>
         <div class="p-6">
-          <div v-if="recentErrors.length === 0" class="text-center py-8 text-gray-500">
-            <svg class="w-12 h-12 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div v-if="recentErrors.length === 0" class="text-center py-8 text-autobot-text-tertiary">
+            <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             {{ $t('monitoring.admin.adminMonitoringView.noRecentErrors') }}
@@ -364,7 +364,7 @@ onMounted(() => restartRefresh())
             <div
               v-for="err in recentErrors"
               :key="err.id"
-              class="p-4 bg-gray-50 rounded-lg border border-gray-200"
+              class="p-4 bg-autobot-bg-secondary rounded-lg border border-autobot-border"
             >
               <div class="flex items-start justify-between">
                 <div class="flex-1">
@@ -373,8 +373,8 @@ onMounted(() => restartRefresh())
                       {{ err.level }}
                     </span>
                   </div>
-                  <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
-                  <p class="text-xs text-gray-500 mt-1">{{ formatFleetDateTime(err.timestamp) }}</p>
+                  <p class="text-sm text-autobot-text-primary font-medium">{{ err.message }}</p>
+                  <p class="text-xs text-autobot-text-tertiary mt-1">{{ formatFleetDateTime(err.timestamp) }}</p>
                 </div>
               </div>
             </div>
@@ -385,9 +385,9 @@ onMounted(() => restartRefresh())
       <!-- Error Stats & Services -->
       <div class="space-y-6">
         <!-- Error Breakdown -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.errorBreakdown') }}</h2>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+          <div class="px-6 py-4 border-b border-autobot-border">
+            <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('monitoring.admin.adminMonitoringView.errorBreakdown') }}</h2>
           </div>
           <div class="p-6">
             <div v-if="errorStats?.by_level?.length" class="space-y-3">
@@ -399,19 +399,19 @@ onMounted(() => restartRefresh())
                 <span :class="['px-2 py-1 text-xs font-medium rounded-sm', getErrorLevelClass(stat.level)]">
                   {{ stat.level }}
                 </span>
-                <span class="font-bold text-gray-900">{{ stat.count }}</span>
+                <span class="font-bold text-autobot-text-primary">{{ stat.count }}</span>
               </div>
             </div>
-            <div v-else class="text-center py-4 text-gray-500 text-sm">
+            <div v-else class="text-center py-4 text-autobot-text-tertiary text-sm">
               {{ $t('monitoring.admin.adminMonitoringView.noErrorDataAvailable') }}
             </div>
           </div>
         </div>
 
         <!-- Services Status -->
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200">
-          <div class="px-6 py-4 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">{{ $t('monitoring.admin.adminMonitoringView.services') }}</h2>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border">
+          <div class="px-6 py-4 border-b border-autobot-border">
+            <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('monitoring.admin.adminMonitoringView.services') }}</h2>
           </div>
           <div class="p-6">
             <div v-if="systemHealth?.services?.length" class="space-y-2">
@@ -420,13 +420,13 @@ onMounted(() => restartRefresh())
                 :key="service.name"
                 class="flex items-center justify-between py-2"
               >
-                <span class="text-sm text-gray-700">{{ service.name }}</span>
+                <span class="text-sm text-autobot-text-secondary">{{ service.name }}</span>
                 <span :class="['px-2 py-0.5 text-xs font-medium rounded-full', serviceBadgeClass(service.status)]">
                   {{ service.status }}
                 </span>
               </div>
             </div>
-            <div v-else class="text-center py-4 text-gray-500 text-sm">
+            <div v-else class="text-center py-4 text-autobot-text-tertiary text-sm">
               {{ $t('monitoring.admin.adminMonitoringView.noServiceDataAvailable') }}
             </div>
           </div>

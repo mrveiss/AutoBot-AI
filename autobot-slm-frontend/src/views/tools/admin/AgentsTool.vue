@@ -74,21 +74,21 @@ const filteredAgents = computed(() => {
 // Methods
 function getStatusClass(status: string): string {
   switch (status) {
-    case 'active': return 'bg-green-100 text-green-800'
-    case 'idle': return 'bg-blue-100 text-blue-800'
-    case 'error': return 'bg-red-100 text-red-800'
-    case 'stopped': return 'bg-gray-100 text-gray-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'active': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    case 'idle': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg'
+    case 'error': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'stopped': return 'bg-autobot-bg-tertiary text-autobot-text-primary'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary'
   }
 }
 
 function getStatusDot(status: string): string {
   switch (status) {
-    case 'active': return 'bg-green-500'
-    case 'idle': return 'bg-blue-500'
-    case 'error': return 'bg-red-500'
-    case 'stopped': return 'bg-gray-500'
-    default: return 'bg-gray-500'
+    case 'active': return 'bg-autobot-dot-ok'
+    case 'idle': return 'bg-autobot-primary'
+    case 'error': return 'bg-autobot-dot-bad'
+    case 'stopped': return 'bg-autobot-text-tertiary'
+    default: return 'bg-autobot-text-tertiary'
   }
 }
 
@@ -168,56 +168,56 @@ onMounted(() => refreshPoller.start(''))
   <div class="p-6">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.totalAgents') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ stats.total_agents }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.totalAgents') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ stats.total_agents }}</p>
           </div>
-          <div class="p-3 bg-blue-100 rounded-lg">
-            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-info-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.activeAgents') }}</p>
-            <p class="text-2xl font-bold text-green-600">{{ stats.active_agents }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.activeAgents') }}</p>
+            <p class="text-2xl font-bold text-autobot-success">{{ stats.active_agents }}</p>
           </div>
-          <div class="p-3 bg-green-100 rounded-lg">
-            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-ok-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ stats.total_tasks }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ stats.total_tasks }}</p>
           </div>
-          <div class="p-3 bg-purple-100 rounded-lg">
-            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-illus-2-tint rounded-lg">
+            <svg class="w-6 h-6 text-autobot-illus-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-sm text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-2xl font-bold text-gray-900">{{ (stats.avg_success_rate * 100).toFixed(1) }}%</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-2xl font-bold text-autobot-text-primary">{{ (stats.avg_success_rate * 100).toFixed(1) }}%</p>
           </div>
-          <div class="p-3 bg-amber-100 rounded-lg">
-            <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-3 bg-autobot-pill-warn-bg rounded-lg">
+            <svg class="w-6 h-6 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
           </div>
@@ -226,19 +226,19 @@ onMounted(() => refreshPoller.start(''))
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4 mb-6">
       <div class="flex items-center gap-4">
         <div class="flex-1">
           <input
             v-model="searchQuery"
             type="text"
             :placeholder="$t('tools.admin.agentsTool.searchAgents')"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
         <select
           v-model="filterStatus"
-          class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="all">{{ $t('tools.admin.agentsTool.allStatus') }}</option>
           <option value="active">{{ $t('tools.admin.agentsTool.active') }}</option>
@@ -270,14 +270,14 @@ onMounted(() => refreshPoller.start(''))
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
-      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.loadingAgents') }}</p>
+      <p class="mt-4 text-autobot-text-secondary">{{ $t('tools.admin.agentsTool.loadingAgents') }}</p>
     </div>
 
     <div v-else-if="filteredAgents.length === 0" class="text-center py-12">
-      <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-12 h-12 mx-auto text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
-      <p class="mt-4 text-gray-600">{{ $t('tools.admin.agentsTool.noAgentsFound') }}</p>
+      <p class="mt-4 text-autobot-text-secondary">{{ $t('tools.admin.agentsTool.noAgentsFound') }}</p>
     </div>
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -286,7 +286,7 @@ onMounted(() => refreshPoller.start(''))
         :key="agent.id"
         @click="selectAgent(agent)"
         :class="[
-          'bg-white rounded-lg shadow-xs border border-gray-200 p-6 cursor-pointer transition-all',
+          'bg-white rounded-lg shadow-xs border border-autobot-border p-6 cursor-pointer transition-all',
           selectedAgent?.id === agent.id ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
         ]"
       >
@@ -302,8 +302,8 @@ onMounted(() => refreshPoller.start(''))
               <div :class="['absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white', getStatusDot(agent.status)]"></div>
             </div>
             <div>
-              <h3 class="font-semibold text-gray-900">{{ agent.name }}</h3>
-              <p class="text-sm text-gray-500">{{ agent.type }}</p>
+              <h3 class="font-semibold text-autobot-text-primary">{{ agent.name }}</h3>
+              <p class="text-sm text-autobot-text-tertiary">{{ agent.type }}</p>
             </div>
           </div>
           <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(agent.status)]">
@@ -312,28 +312,28 @@ onMounted(() => refreshPoller.start(''))
         </div>
 
         <!-- Description -->
-        <p class="text-sm text-gray-600 mb-4">{{ agent.description }}</p>
+        <p class="text-sm text-autobot-text-secondary mb-4">{{ agent.description }}</p>
 
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
-            <p class="text-lg font-bold text-gray-900">{{ agent.tasks_completed }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.tasksCompleted') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ agent.tasks_completed }}</p>
           </div>
           <div>
-            <p class="text-xs text-gray-500">{{ $t('tools.admin.agentsTool.successRate') }}</p>
-            <p class="text-lg font-bold text-gray-900">{{ (agent.success_rate * 100).toFixed(0) }}%</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ $t('tools.admin.agentsTool.successRate') }}</p>
+            <p class="text-lg font-bold text-autobot-text-primary">{{ (agent.success_rate * 100).toFixed(0) }}%</p>
           </div>
         </div>
 
         <!-- Capabilities -->
         <div class="mb-4">
-          <p class="text-xs text-gray-500 mb-2">{{ $t('tools.admin.agentsTool.capabilities') }}</p>
+          <p class="text-xs text-autobot-text-tertiary mb-2">{{ $t('tools.admin.agentsTool.capabilities') }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="cap in agent.capabilities"
               :key="cap"
-              class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm"
+              class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm"
             >
               {{ cap }}
             </span>
@@ -341,29 +341,29 @@ onMounted(() => refreshPoller.start(''))
         </div>
 
         <!-- Last Activity -->
-        <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
+        <div class="flex items-center justify-between text-xs text-autobot-text-tertiary pt-4 border-t border-autobot-border">
           <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatFleetDateTime(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->
-        <div v-if="selectedAgent?.id === agent.id" class="flex gap-2 mt-4 pt-4 border-t border-gray-200">
+        <div v-if="selectedAgent?.id === agent.id" class="flex gap-2 mt-4 pt-4 border-t border-autobot-border">
           <button
             v-if="agent.status === 'stopped'"
             @click.stop="startAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
+            class="px-3 py-1.5 text-xs bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover"
           >
             {{ $t('tools.admin.agentsTool.start') }}
           </button>
           <button
             v-if="agent.status === 'active' || agent.status === 'idle'"
             @click.stop="stopAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
+            class="px-3 py-1.5 text-xs bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover)"
           >
             {{ $t('tools.admin.agentsTool.stop') }}
           </button>
           <button
             @click.stop="restartAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+            class="px-3 py-1.5 text-xs bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover"
           >
             {{ $t('tools.admin.agentsTool.restart') }}
           </button>

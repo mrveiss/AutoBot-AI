@@ -126,58 +126,58 @@ watch(() => fleetStore.nodeList, () => {
   <div>
     <!-- Summary Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 rounded-lg">
-            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-2 bg-autobot-pill-info-bg rounded-lg">
+            <svg class="w-5 h-5 text-autobot-text-link" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkersTab.nPUNodes') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ npuNodes.length }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUWorkersTab.nPUNodes') }}</p>
+            <p class="text-2xl font-semibold text-autobot-text-primary">{{ npuNodes.length }}</p>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-green-100 rounded-lg">
-            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-2 bg-autobot-pill-ok-bg rounded-lg">
+            <svg class="w-5 h-5 text-autobot-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkersTab.healthy') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ healthyNpuNodes }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUWorkersTab.healthy') }}</p>
+            <p class="text-2xl font-semibold text-autobot-text-primary">{{ healthyNpuNodes }}</p>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-purple-100 rounded-lg">
-            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-2 bg-autobot-illus-2-tint rounded-lg">
+            <svg class="w-5 h-5 text-autobot-illus-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkersTab.totalModels') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ totalModels }}</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUWorkersTab.totalModels') }}</p>
+            <p class="text-2xl font-semibold text-autobot-text-primary">{{ totalModels }}</p>
           </div>
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-orange-100 rounded-lg">
-            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="p-2 bg-autobot-pill-warn-bg rounded-lg">
+            <svg class="w-5 h-5 text-autobot-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-500">{{ $t('fleet.nPUWorkersTab.avgUtilization') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ avgUtilization }}%</p>
+            <p class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUWorkersTab.avgUtilization') }}</p>
+            <p class="text-2xl font-semibold text-autobot-text-primary">{{ avgUtilization }}%</p>
           </div>
         </div>
       </div>
@@ -185,7 +185,7 @@ watch(() => fleetStore.nodeList, () => {
 
     <!-- Sub-Tab Navigation (Issue #590) -->
     <div class="flex items-center justify-between mb-6">
-      <div class="flex border-b border-gray-200">
+      <div class="flex border-b border-autobot-border">
         <button
           v-for="tab in tabs"
           :key="tab.key"
@@ -194,7 +194,7 @@ watch(() => fleetStore.nodeList, () => {
             'px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
             activeTab === tab.key
               ? 'border-primary-600 text-primary-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+              : 'border-transparent text-autobot-text-tertiary hover:text-autobot-text-secondary hover:border-autobot-border-strong',
           ]"
         >
           {{ tab.label }}
@@ -217,7 +217,7 @@ watch(() => fleetStore.nodeList, () => {
         <button
           @click="refreshAll"
           :disabled="loading"
-          class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+          class="px-4 py-2 bg-white border border-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover transition-colors flex items-center gap-2 text-sm"
         >
           <svg
             :class="['w-4 h-4', loading ? 'animate-spin' : '']"
@@ -238,14 +238,14 @@ watch(() => fleetStore.nodeList, () => {
     <!-- Overview Tab (original content) -->
     <template v-if="activeTab === 'overview'">
       <!-- Empty State -->
-      <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-gray-200 p-12 text-center">
-        <div class="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-autobot-border p-12 text-center">
+        <div class="mx-auto w-16 h-16 bg-autobot-bg-tertiary rounded-full flex items-center justify-center mb-4">
+          <svg class="w-8 h-8 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
           </svg>
         </div>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ $t('fleet.nPUWorkersTab.noNPUWorkers') }}</h3>
-        <p class="text-gray-500 mb-4">
+        <h3 class="text-lg font-medium text-autobot-text-primary mb-2">{{ $t('fleet.nPUWorkersTab.noNPUWorkers') }}</h3>
+        <p class="text-autobot-text-tertiary mb-4">
           {{ $t('fleet.nPUWorkersTab.assignTheNPUWorker') }}
         </p>
         <button

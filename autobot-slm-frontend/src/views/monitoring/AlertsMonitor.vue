@@ -70,11 +70,11 @@ const sortedRecommendations = computed(() => {
 
 function getSeverityClass(severity: string): string {
   switch (severity) {
-    case 'critical': return 'bg-red-100 text-red-800 border-red-200'
-    case 'high': return 'bg-orange-100 text-orange-800 border-orange-200'
-    case 'warning': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    case 'info': return 'bg-blue-100 text-blue-800 border-blue-200'
-    default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    case 'critical': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg border-autobot-error-light'
+    case 'high': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg border-autobot-warning-light'
+    case 'warning': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg border-autobot-warning-light'
+    case 'info': return 'bg-autobot-pill-info-bg text-autobot-pill-info-fg border-autobot-primary-light'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-primary border-autobot-border'
   }
 }
 
@@ -93,19 +93,19 @@ function getSeverityIcon(severity: string): string {
 
 function getPriorityClass(priority: string): string {
   switch (priority) {
-    case 'high': return 'bg-red-50 border-red-200'
-    case 'medium': return 'bg-yellow-50 border-yellow-200'
-    case 'low': return 'bg-green-50 border-green-200'
-    default: return 'bg-gray-50 border-gray-200'
+    case 'high': return 'bg-autobot-error-bg border-autobot-error-light'
+    case 'medium': return 'bg-autobot-warning-bg border-autobot-warning-light'
+    case 'low': return 'bg-autobot-success-bg border-autobot-success-light'
+    default: return 'bg-autobot-bg-secondary border-autobot-border'
   }
 }
 
 function getPriorityBadgeClass(priority: string): string {
   switch (priority) {
-    case 'high': return 'bg-red-100 text-red-700'
-    case 'medium': return 'bg-yellow-100 text-yellow-700'
-    case 'low': return 'bg-green-100 text-green-700'
-    default: return 'bg-gray-100 text-gray-700'
+    case 'high': return 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'
+    case 'medium': return 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg'
+    case 'low': return 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg'
+    default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
   }
 }
 
@@ -170,13 +170,13 @@ onMounted(() => refreshPoller.start(''))
     <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.alertsMonitor.alertsRecommendations') }}</h2>
+      <h2 class="text-xl font-bold text-autobot-text-primary">{{ $t('monitoring.alertsMonitor.alertsRecommendations') }}</h2>
       <div class="flex gap-2">
         <button
           v-if="alertCounts.total > 0"
           @click="clearAlerts"
           :disabled="isClearing"
-          class="px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-pill-bad-fg bg-white border border-autobot-error-light rounded-lg hover:bg-autobot-error-bg disabled:opacity-50 flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -184,7 +184,7 @@ onMounted(() => refreshPoller.start(''))
         <button
           @click="refreshPoller.start('')"
           :disabled="isLoading"
-          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-white border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover disabled:opacity-50 flex items-center gap-2"
         >
           <svg
             class="w-4 h-4"
@@ -205,32 +205,32 @@ onMounted(() => refreshPoller.start(''))
       v-if="clearError"
       role="alert"
       data-testid="clear-alerts-error"
-      class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"
+      class="mb-6 rounded-lg border border-autobot-error-light bg-autobot-error-bg px-4 py-3 text-sm text-autobot-pill-bad-fg"
     >
       {{ $t('monitoring.alertsMonitor.clearFailed', { message: clearError }) }}
     </div>
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-        <p class="text-sm text-gray-500">{{ $t('monitoring.alertsMonitor.totalAlerts') }}</p>
-        <p class="text-2xl font-bold text-gray-900">{{ alertCounts.total }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.alertsMonitor.totalAlerts') }}</p>
+        <p class="text-2xl font-bold text-autobot-text-primary">{{ alertCounts.total }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
-        <p class="text-sm text-red-600">{{ $t('monitoring.alertsMonitor.critical') }}</p>
-        <p class="text-2xl font-bold text-red-700">{{ alertCounts.critical }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-error-light p-4">
+        <p class="text-sm text-autobot-error">{{ $t('monitoring.alertsMonitor.critical') }}</p>
+        <p class="text-2xl font-bold text-autobot-pill-bad-fg">{{ alertCounts.critical }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-orange-200 p-4">
-        <p class="text-sm text-orange-600">{{ $t('monitoring.alertsMonitor.high') }}</p>
-        <p class="text-2xl font-bold text-orange-700">{{ alertCounts.high }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
+        <p class="text-sm text-autobot-warning">{{ $t('monitoring.alertsMonitor.high') }}</p>
+        <p class="text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.high }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-yellow-200 p-4">
-        <p class="text-sm text-yellow-600">{{ $t('monitoring.alertsMonitor.warning') }}</p>
-        <p class="text-2xl font-bold text-yellow-700">{{ alertCounts.warning }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
+        <p class="text-sm text-autobot-warning">{{ $t('monitoring.alertsMonitor.warning') }}</p>
+        <p class="text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.warning }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-xs border border-blue-200 p-4">
-        <p class="text-sm text-blue-600">{{ $t('monitoring.alertsMonitor.info') }}</p>
-        <p class="text-2xl font-bold text-blue-700">{{ alertCounts.info }}</p>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-primary-light p-4">
+        <p class="text-sm text-autobot-text-link">{{ $t('monitoring.alertsMonitor.info') }}</p>
+        <p class="text-2xl font-bold text-autobot-pill-info-fg">{{ alertCounts.info }}</p>
       </div>
     </div>
 
@@ -241,8 +241,8 @@ onMounted(() => refreshPoller.start(''))
         :class="[
           'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
           activeTab === 'alerts'
-            ? 'bg-gray-900 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? 'bg-autobot-ink text-autobot-on-ink'
+            : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
         ]"
       >{{ $t('monitoring.alertsMonitor.activeAlertsValue0', { value0: alertCounts.total }) }}</button>
       <button
@@ -250,8 +250,8 @@ onMounted(() => refreshPoller.start(''))
         :class="[
           'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
           activeTab === 'recommendations'
-            ? 'bg-gray-900 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? 'bg-autobot-ink text-autobot-on-ink'
+            : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
         ]"
       >{{ $t('monitoring.alertsMonitor.recommendationsValue0', { value0: recommendations?.length ?? 0 }) }}</button>
     </div>
@@ -260,10 +260,10 @@ onMounted(() => refreshPoller.start(''))
     <div v-if="activeTab === 'alerts'" class="space-y-4">
       <!-- Severity Filter -->
       <div class="flex items-center gap-2">
-        <label class="text-sm text-gray-600">{{ $t('monitoring.alertsMonitor.filterBySeverity') }}</label>
+        <label class="text-sm text-autobot-text-secondary">{{ $t('monitoring.alertsMonitor.filterBySeverity') }}</label>
         <select
           v-model="severityFilter"
-          class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          class="px-3 py-2 text-sm border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option v-for="level in severityLevels" :key="level" :value="level">
             {{ level === 'all' ? $t('monitoring.alertsMonitor.allSeverities') : level.charAt(0).toUpperCase() + level.slice(1) }}
@@ -309,8 +309,8 @@ onMounted(() => refreshPoller.start(''))
           </div>
         </div>
 
-        <div v-if="filteredAlerts.length === 0" class="text-center py-8 text-gray-500">
-          <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div v-if="filteredAlerts.length === 0" class="text-center py-8 text-autobot-text-tertiary">
+          <svg class="w-12 h-12 mx-auto mb-3 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p>{{ $t('monitoring.alertsMonitor.noActiveAlerts') }}</p>
@@ -331,22 +331,22 @@ onMounted(() => refreshPoller.start(''))
               <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getPriorityBadgeClass(rec.priority)]">
                 {{ rec.priority.toUpperCase() }}
               </span>
-              <span class="text-xs text-gray-500">{{ rec.category }}</span>
+              <span class="text-xs text-autobot-text-tertiary">{{ rec.category }}</span>
             </div>
-            <p class="font-medium text-gray-900">{{ rec.recommendation }}</p>
-            <p class="text-sm text-gray-600 mt-1">{{ rec.action }}</p>
-            <p class="text-sm text-green-600 mt-2">
+            <p class="font-medium text-autobot-text-primary">{{ rec.recommendation }}</p>
+            <p class="text-sm text-autobot-text-secondary mt-1">{{ rec.action }}</p>
+            <p class="text-sm text-autobot-success mt-2">
               <span class="font-medium">{{ $t('monitoring.alertsMonitor.expectedImprovement') }}</span> {{ rec.expected_improvement }}
             </p>
           </div>
         </div>
       </div>
 
-      <div v-if="recommendations === null" class="text-center py-8 text-gray-500">
+      <div v-if="recommendations === null" class="text-center py-8 text-autobot-text-tertiary">
         <p>{{ $t('monitoring.alertsMonitor.recommendationsUnavailable') }}</p>
       </div>
-      <div v-else-if="sortedRecommendations.length === 0" class="text-center py-8 text-gray-500">
-        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div v-else-if="sortedRecommendations.length === 0" class="text-center py-8 text-autobot-text-tertiary">
+        <svg class="w-12 h-12 mx-auto mb-3 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
         <p>{{ $t('monitoring.alertsMonitor.noRecommendationsAtThis') }}</p>
