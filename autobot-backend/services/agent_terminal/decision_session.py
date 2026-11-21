@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 
+from fastapi import HTTPException
+
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 from type_defs.common import Metadata
@@ -32,7 +34,22 @@ logger = get_logger(__name__)
 #: Waits between attempts to give a failed run's claim back, after Redis refused the first.
 _RELEASE_RETRY_DELAYS_SECONDS = (1, 5, 30, 120)
 
-__all__ = ["claim_for_decision", "mark_queued_approved", "release_with_retry", "session_for_decision"]
+#: The refusal of a decision on an approval that is not pending: already decided by someone, or never raised.
+NO_PENDING_APPROVAL = "No pending approval"
+
+#: OpenAPI ``responses`` entry for a decision route: the approval was already decided and nothing ran again.
+ALREADY_DECIDED = {409: {"description": "The approval was already decided; nothing ran again (#19951)"}}
+
+__all__ = [
+    "ALREADY_DECIDED",
+    "NO_PENDING_APPROVAL",
+    "already_decided",
+    "claim_for_decision",
+    "decision_response",
+    "mark_queued_approved",
+    "release_with_retry",
+    "session_for_decision",
+]
 
 
 async def session_for_decision(manager, session_id: str) -> AgentTerminalSession | None:
@@ -60,6 +77,22 @@ async def _rebuilt_for_decision(manager, session_id: str, cached) -> AgentTermin
     return await manager._rebuild_session_from_pending_approval(session_id)  # records it before returning it
 
 
+def already_decided(result: Metadata) -> bool:
+    """True when *result* is the refusal of a decision on an approval that is not pending (#19951)."""
+    return result.get("status") == "error" and result.get("error") == NO_PENDING_APPROVAL
+
+
+def decision_response(result: Metadata) -> Metadata:
+    """*result* for the approve route, or HTTP 409 when the approval was already decided (#19951).
+
+    A second approve (or deny) of a decided approval is refused and nothing runs again: the decision claim
+    (``claim_for_decision``) is taken once. The client is told with a conflict status, not a 200 that reads as success.
+    """
+    if already_decided(result):
+        raise HTTPException(status_code=409, detail=NO_PENDING_APPROVAL)
+    return result
+
+
 async def claim_for_decision(manager, session_id: str) -> tuple[AgentTerminalSession | None, Metadata | None]:
     """The session and the one decision claim on its pending approval, or the refusal to return (#20674).
 
@@ -71,7 +104,7 @@ async def claim_for_decision(manager, session_id: str) -> tuple[AgentTerminalSes
         if not session:
             return None, {"status": "error", "error": "Session not found"}
         if not session.has_pending_approval() or not await manager.claim_decision(session):
-            return None, {"status": "error", "error": "No pending approval"}
+            return None, {"status": "error", "error": NO_PENDING_APPROVAL}
     except ApprovalStateUnavailableError as exc:
         logger.error("Approval on session %s refused, its state is unconfirmed: %s", session_id, exc)
         return None, {"status": "error", "error": APPROVAL_STATE_UNAVAILABLE}

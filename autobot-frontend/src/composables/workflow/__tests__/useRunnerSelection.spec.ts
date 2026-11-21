@@ -95,6 +95,15 @@ describe('handleStartWorkflow', () => {
     expect(showToast.mock.calls).toEqual([['workflow.builder.startUnconfirmed', 'warning']])
   })
 
+  it('does not start while the company context disagrees (#21520)', async () => {
+    const sel = useRunnerSelection({
+      t: (k) => k, showToast, navigateToRunner: vi.fn(), activeWorkflows, currentWorkflow, executingWorkflow,
+      startWorkflow, getWorkflowStatus, companyAgrees: () => false,
+    })
+    await sel.handleStartWorkflow('a')
+    expect(startWorkflow).not.toHaveBeenCalled()
+  })
+
   it('ignores a second start while one is in flight', async () => {
     executingWorkflow.value = true
     await setup().handleStartWorkflow('a')

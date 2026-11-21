@@ -38,23 +38,20 @@ def register_env_var(spec: EnvVarSpec) -> None:
 
 
 def env(name: str, default: Any = None) -> Any:
-    """Type-safe env var accessor that enforces registry membership.
-
-    Raises KeyError if *name* is not in REGISTRY — this is intentional:
-    unregistered vars are not allowed in production code.
-    """
+    """Type-safe env var accessor; KeyError if *name* is unregistered (intentional); enforces ``range``."""
     spec = REGISTRY.get(name)
     if spec is None:
         raise KeyError(f"Unregistered env var: {name}. " f"Add it to autobot_shared/env_registry.py before use.")
-    raw = os.getenv(name)
+    raw, fallback = os.getenv(name), spec.default if default is None else default
     if raw is None:
-        return spec.default if default is None else default
+        return fallback
     try:
-        if spec.type is bool:
-            return raw.lower() in ("1", "true", "yes", "on")
-        return spec.type(raw)
+        value = raw.lower() in ("1", "true", "yes", "on") if spec.type is bool else spec.type(raw)
     except (ValueError, TypeError):
-        return spec.default if default is None else default
+        return fallback
+    from autobot_shared.env_utils import within_range  # lazy: import block untouched (#20722)
+
+    return value if within_range(name, value, spec.range) else fallback
 
 
 # Per-component siblings split at the size ceiling (#14236, #18391); imported after REGISTRY exists, before any read.
@@ -62,7 +59,10 @@ from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
 from autobot_shared import env_registry_knowledge  # noqa: E402,F401
+from autobot_shared import env_registry_llc  # noqa: E402,F401
+from autobot_shared import env_registry_logging  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_admin_files,
     env_registry_agent_tools,
     env_registry_ai,
     env_registry_analytics,
@@ -74,13 +74,12 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_gateway,
     env_registry_kb_graph,
     env_registry_ledger,
-    env_registry_llc,
-    env_registry_logging,
     env_registry_memory,
     env_registry_mesh_reembed,
     env_registry_npu,
     env_registry_postgres,
     env_registry_rag,
+    env_registry_rate_limit,
     env_registry_security,
     env_registry_slm,
     env_registry_slm_health,
@@ -93,7 +92,6 @@ from autobot_shared import (  # noqa: E402,F401
 )
 
 # --- events (#14817, #14818) -------------------------------------------------
-
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_CHANNEL_SEQ_KEY_PREFIX",
@@ -439,7 +437,6 @@ register_env_var(
 )
 
 # --- tls, network: env_registry_tls.py (#18765; one line to make room for the mesh sibling import) ---
-
 # --- voice / speech-to-text -------------------------------------------------
 
 register_env_var(

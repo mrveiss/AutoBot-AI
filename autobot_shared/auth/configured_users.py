@@ -14,10 +14,12 @@ Operators produce a hash for an entry with
 """
 
 import functools
+import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.auth.jwt_core import hash_password, verify_password
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 
 logger = get_logger(__name__)
 
@@ -33,15 +35,12 @@ def _stored_hash(entry: Any) -> Optional[str]:
     return None
 
 
-# Log-once per process and user; #21071 tracks the shared helper this should move to.
-_reported: set = set()
-
-
 def _report_rejected(username: Any) -> None:
-    if username in _reported:
-        return
-    _reported.add(username)
-    logger.error(
+    """Log once per process and user that *username*'s entry is rejected."""
+    log_once(
+        logger,
+        logging.ERROR,
+        repr(username),
         "allowed_users entry for %r has no password hash and is rejected; "
         "generate one with generate-password-hashes.py",
         username,

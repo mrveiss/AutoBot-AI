@@ -20,6 +20,7 @@ import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
+import i18n from '@/i18n'
 
 const logger = createLogger('useKnowledgeGraphEntities')
 
@@ -86,6 +87,8 @@ export interface UseKnowledgeGraphEntitiesReturn {
   relations: Readonly<Ref<GraphRelation[]>>
   /** True while a load or create operation is in-flight. */
   isLoading: Readonly<Ref<boolean>>
+  /** True while the next facts page is loading; the drawn graph stays mounted (unlike `isLoading`). */
+  isLoadingMore: Readonly<Ref<boolean>>
   /** Last error message, or empty string. */
   errorMessage: Ref<string>
   /**
@@ -112,9 +115,27 @@ export interface UseKnowledgeGraphEntitiesReturn {
   hasMoreFacts: Readonly<Ref<boolean>>
   /**
    * Read the next page of facts from the server's scan cursor and merge it into
-   * `entities`/`relations`. Does not reject; a failure is reported in `errorMessage`.
+   * `entities`/`relations`. Does not reject; a failure is reported in `errorMessage`. Calls are
+   * serialised: one made while another is in flight joins it instead of re-reading the same cursor.
    */
   loadMoreFacts: () => Promise<void>
+}
+
+/** The relations with repeats of one `(from, to, type)` edge dropped, first occurrence kept (#20945). */
+function _dedupeRelations(all: GraphRelation[]): GraphRelation[] {
+  const seen = new Set<string>()
+  return all.filter((r) => {
+    const key = JSON.stringify([r.from, r.to, r.type]) // `-`-joined ids collide: a-b|c vs a|b-c
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** Whether the facts section of a response reports its source as unreadable (the server's `failed` flag). */
+function _factsFailedOf(payload: unknown): boolean {
+  const stats = (payload as { stats?: { sections?: Array<{ key: string; failed?: boolean }> } } | undefined)?.stats
+  return stats?.sections?.find((section) => section.key === 'facts')?.failed === true
 }
 
 export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
@@ -125,6 +146,11 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   /** The facts section's `cursor` of the last response (#20945); null once the listing is exhausted. */
   const factsCursor = ref<string | null>(null)
   const { isLoading, wrap } = useLoadingState()
+  // A separate flag: `isLoading` swaps the drawn graph for a spinner, which a next page must not do (#20945).
+  const isLoadingMore = ref(false)
+  // The shared next-page read belongs to the epoch it started in: a refresh bumps `loadEpoch`, which orphans it.
+  let moreInFlight: { epoch: number; promise: Promise<void> } | null = null
+  let loadEpoch = 0 // a refresh bumps it, so a next page read for the old cursor is dropped
 
   // --------------------------------------------------------------------------
   // Internal helpers
@@ -170,14 +196,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
       }
     }
 
-    // Deduplicate relations using a Set for O(1) lookups
-    const seen = new Set<string>()
-    relations.value = allRelations.filter((r) => {
-      const key = `${r.from}-${r.to}-${r.type}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+    relations.value = _dedupeRelations(allRelations)
   }
 
   // --------------------------------------------------------------------------
@@ -219,29 +238,62 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     return stats?.sections?.find((section) => section.key === 'facts')?.cursor ?? null
   }
 
-  async function loadMoreFacts(): Promise<void> {
-    if (!factsCursor.value) return
-    await wrap(async () => {
-      try {
-        const page: Record<string, unknown> = await apiClient.get(
-          `${getApiBase()}/knowledge_base/multi-source/graph?max_facts=100&include_buckets=false`
-          + `&cursor=${encodeURIComponent(factsCursor.value as string)}`,
-        )
-        const known = new Set(entities.value.map((entity) => entity.id))
-        entities.value = [...entities.value, ..._entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))]
-        const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
-        const added = (body?.relations as GraphRelation[] | undefined) ?? []
-        relations.value = [...relations.value, ...added]
-        factsCursor.value = _factsCursorOf(page)
-      } catch (error) {
-        errorMessage.value = _reason(error)
-        logger.error('Loading more facts failed:', errorMessage.value)
-      }
+  /** The reason a failure carried, or the translated fallback when it carried none (never an empty banner). */
+  function _reasonOrFallback(error: unknown, key = 'knowledge.graph.loadFailedNoReason'): string {
+    return _reason(error) || (i18n.global.t(key) as string)
+  }
+
+  /** Merge a next page into the shown graph; the category tree each response repeats is deduplicated (#20945). */
+  function _mergePage(page: unknown, fresh: GraphEntity[]): void {
+    entities.value = [...entities.value, ...fresh]
+    const body = (page as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+    const added = (body?.relations as GraphRelation[] | undefined) ?? []
+    relations.value = _dedupeRelations([...relations.value, ...added])
+    factsCursor.value = _factsCursorOf(page)
+  }
+
+  async function _readNextFacts(epoch: number): Promise<void> {
+    try {
+      const requested = factsCursor.value
+      const page: unknown = await apiClient.call('get', '/api/knowledge_base/multi-source/graph', {
+        query: { max_facts: 100, include_buckets: false, cursor: requested },
+      })
+      if (epoch !== loadEpoch) return
+      const known = new Set(entities.value.map((entity) => entity.id))
+      const fresh = _entitiesOf(page).filter((entity) => entity.id && !known.has(entity.id))
+      // The server marks a read it could not make as failed; an unmoved cursor with nothing new is the same
+      // failure unmarked. Either way keep the graph and the cursor, so a retry reads the same page again.
+      const stuck = _factsCursorOf(page) === requested && fresh.length === 0
+      if (_factsFailedOf(page) || stuck) throw new Error('')
+      _mergePage(page, fresh)
+    } catch (error) {
+      if (epoch !== loadEpoch) return // a refresh replaced the cursor this read used: its failure is not news
+      errorMessage.value = _reasonOrFallback(error, 'knowledge.graph.loadMoreFailedNoReason') // the graph stays shown
+      logger.error('Loading more facts failed:', errorMessage.value)
+    }
+  }
+
+  function loadMoreFacts(): Promise<void> {
+    if (moreInFlight?.epoch === loadEpoch) return moreInFlight.promise
+    if (!factsCursor.value) return Promise.resolve()
+    errorMessage.value = ''
+    isLoadingMore.value = true
+    const epoch = loadEpoch
+    const promise = _readNextFacts(epoch).finally(() => {
+      if (epoch !== loadEpoch) return // orphaned by a refresh, which already reset the shared state
+      isLoadingMore.value = false
+      moreInFlight = null
     })
+    moreInFlight = { epoch, promise }
+    return promise
   }
 
   async function fetchGraphData(): Promise<void> {
     errorMessage.value = ''
+    loadEpoch += 1
+    moreInFlight = null // a next page read of the old epoch is orphaned; its state is not carried over
+    isLoadingMore.value = false
+    factsCursor.value = null // the old cursor belongs to the graph being replaced: no continuation until the refresh lands
     await wrap(async () => {
       // allSettled, not all: the graph is assembled from two independent
       // stores, and `Promise.all` threw away a healthy store's entities
@@ -300,7 +352,9 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
         // Still reported, so the transient banner keeps firing; the durable
         // statement is `sources`, because this message is cleared after five
         // seconds and the screen underneath has to stay true after that.
-        errorMessage.value = failed.map((source) => `${source.key}: ${source.error}`).join('; ')
+        errorMessage.value = failed
+          .map((source) => `${source.key}: ${source.error || _reasonOrFallback(null)}`)
+          .join('; ')
         logger.error('Graph sources failed:', errorMessage.value)
       }
 
@@ -356,6 +410,7 @@ export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
     entities: readonly(entities) as Readonly<Ref<GraphEntity[]>>,
     relations: readonly(relations) as Readonly<Ref<GraphRelation[]>>,
     isLoading: readonly(isLoading),
+    isLoadingMore: readonly(isLoadingMore),
     errorMessage,
     sources: readonly(sources) as Readonly<Ref<GraphSourceOutcome[]>>,
     fetchGraphData,

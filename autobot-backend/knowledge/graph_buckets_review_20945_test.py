@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Review findings of the knowledge-graph buckets: tenant, quarantine, stored names, sources, scan edges (#20945)."""
+"""Review findings of the knowledge-graph buckets: admin facts, quarantine, stored names, sources, scan edges (#20945)."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -10,11 +10,19 @@ import pytest
 from fastapi import HTTPException
 
 from api.knowledge_graph_facts import visible_facts_page
-from knowledge.graph_bucket_visibility import collection_in_scope
 from knowledge.graph_buckets import build_bucket_sections, section_for
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, TENANT_B, ListingKB, client_with, fact, manager, viewer
 from knowledge.graph_limits import SCAN_BATCH
 from knowledge.root_read import AdminReadLedger
+from tests.fixtures.graph_buckets_fakes_20945 import (
+    ALICE,
+    TENANT_A,
+    TENANT_B,
+    ListingKB,
+    client_with,
+    fact,
+    manager,
+    viewer,
+)
 
 
 def _tenant_fact(fact_id, owner, tenant):
@@ -24,12 +32,15 @@ def _tenant_fact(fact_id, owner, tenant):
 
 
 @pytest.mark.asyncio
-async def test_a_tenant_admin_does_not_read_another_tenants_facts_but_a_superadmin_does():
-    kb = ListingKB([_tenant_fact("mine", "bob", TENANT_A), _tenant_fact("theirs", "bob", TENANT_B)])
-    admin = await visible_facts_page(kb, None, 10, 0, "adm", TENANT_A, [], AdminReadLedger())
-    root = await visible_facts_page(kb, None, 10, 0, "root", TENANT_A, [], AdminReadLedger(), True)
-    assert [f["fact_id"] for f in admin.facts] == ["mine"] and admin.total == 1
-    assert root.total == 2
+async def test_an_admin_reads_facts_of_every_unit_and_unit_less_ones_and_a_non_admin_none_of_another_owners():
+    unit_less = fact("none", "bob")
+    kb = ListingKB([_tenant_fact("mine", "bob", TENANT_A), _tenant_fact("theirs", "bob", TENANT_B), unit_less])
+    ledger = AdminReadLedger()
+    admin = await visible_facts_page(kb, None, 10, 0, "adm", TENANT_A, [], ledger)
+    plain = await visible_facts_page(kb, None, 10, 0, "alice", TENANT_A, [], False)
+    assert [f["fact_id"] for f in admin.facts] == ["mine", "theirs", "none"] and admin.total == 3
+    assert ledger.fact_ids == ["mine", "theirs", "none"], "every fact the admin was shown is in the admin-read ledger"
+    assert plain.facts == [] and plain.total == 0, "another owner's private facts stay hidden from a non-admin"
 
 
 @pytest.mark.asyncio
@@ -84,13 +95,6 @@ def test_the_stored_chromadb_names_match_their_sections():
     assert section_for("companyx") is None
 
 
-def test_a_stored_company_collection_of_another_tenant_is_out_of_scope():
-    admin = viewer(admin=True)
-    assert collection_in_scope("tenant_admin", f"company_{TENANT_A}", admin)
-    assert not collection_in_scope("tenant_admin", f"company_{TENANT_B}", admin)
-    assert not collection_in_scope("tenant_admin", f"company_{TENANT_B}_agents", admin)
-
-
 @pytest.mark.asyncio
 async def test_a_summary_follows_its_source_fact():
     kb = ListingKB([fact("src-mine", ALICE), fact("src-bob", "bob")])
@@ -143,16 +147,16 @@ async def test_an_unavailable_source_registry_makes_the_collection_unreadable_no
     client = await client_with({"code_patterns": [("x", {"source_id": "some-repo"})]})
     with patch("api.codebase_analytics.endpoints.shared.authorize_source_access", new=AsyncMock(side_effect=down)):
         built = await build_bucket_sections(client, viewer(), manager())
-    assert built["sections"] == []
+    (section,) = built["sections"]
+    assert (section["failed"], section["total"], section["returned"]) == (True, None, 0), "unreadable is not empty"
 
 
 @pytest.mark.asyncio
-async def test_a_truncated_scan_with_no_readable_row_is_still_reported(monkeypatch):
+async def test_a_collection_with_no_readable_row_and_no_more_data_has_no_section(monkeypatch):
     monkeypatch.setattr("knowledge.graph_buckets.GRAPH_SCAN_LIMIT", 3)
     client = await client_with({"trajectories": [(f"t{i}", {"user_id": "bob"}) for i in range(5)]})
     built = await build_bucket_sections(client, viewer(), manager())
-    (section,) = built["sections"]
-    assert (section["total"], section["truncated"], section["limited"]) == (0, True, True)
+    assert built["sections"] == [], "the whole collection was read and holds nothing alice may see"
 
 
 @pytest.mark.asyncio
@@ -193,7 +197,7 @@ async def test_a_cursor_resumes_past_the_scan_cap_where_offset_alone_cannot(monk
     control = await visible_facts_page(kb, None, 50, SCAN_BATCH + 20, ALICE, None, [], False)
     assert control.facts == [] and control.truncated, "offset alone never reaches a fact beyond the scan cap"
     first = await visible_facts_page(kb, None, 50, 0, ALICE, None, [], False)
-    assert first.cursor == f"{SCAN_BATCH}:0", "the capped scan hands back where to resume"
+    assert first.cursor == "0:50", "the cursor points at the first readable fact the page did not return"
     for category in (None, "cat"):
         seen = await _walk_by_cursor(kb, 50, category)
         assert seen == [f"f{i:05d}" for i in range(count)], "every readable fact once, in order, past the cap"
@@ -226,3 +230,23 @@ def test_a_malformed_cursor_is_refused():
         GraphRequest(cursor="-1:0")
     with pytest.raises(ValidationError):
         GraphRequest(cursor="abc")
+
+
+def _own_then_foreign(own, foreign):
+    return ListingKB(
+        [fact(f"mine{i}", ALICE) for i in range(own)] + [fact(f"theirs{i}", "bob") for i in range(foreign)]
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_next_page_is_promised_for_facts_only_another_owner_holds(monkeypatch):
+    """The continuation probe reads through the permission filter, so it neither leaks nor promises a hidden page."""
+    monkeypatch.setattr("api.knowledge_graph_facts.GRAPH_SCAN_LIMIT", SCAN_BATCH)
+    kb = _own_then_foreign(3, SCAN_BATCH + 10)  # the cap ends inside another owner's facts, which go on past it
+    first = await visible_facts_page(kb, None, 5, 0, ALICE, None, [], False)
+    assert [f["fact_id"] for f in first.facts] == ["mine0", "mine1", "mine2"]
+    assert first.truncated is False and first.cursor is None, "nothing readable is left past the cap"
+    exact = await visible_facts_page(kb, None, 3, 0, ALICE, None, [], False, cursor="0:0")
+    assert len(exact.facts) == 3 and exact.cursor is None, "a page filled by the last readable fact ends the listing"
+    seen = await _walk_by_cursor(kb, 2)
+    assert seen == ["mine0", "mine1", "mine2"], "no item of another owner on any page"

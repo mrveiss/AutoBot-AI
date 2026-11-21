@@ -9,10 +9,11 @@
 <template>
   <div class="error-notification" role="status">
     <span>{{ $t('knowledge.graph.moreFactsAvailable') }}</span>
-    <button class="btn-link" @click="emit('more')">{{ $t('knowledge.graph.loadMoreFacts') }}</button>
+    <button class="btn-link" :disabled="loading" @click="emit('more')">{{ $t('knowledge.graph.loadMoreFacts') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
+defineProps<{ loading?: boolean }>()
 const emit = defineEmits<{ (e: 'more'): void }>()
 </script>

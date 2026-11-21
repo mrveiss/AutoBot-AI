@@ -20,6 +20,7 @@
         <BaseButton
           variant="error"
           v-if="analyzing || scanRunnerRunning"
+          :disabled="stopDisabled"
           @click="emit('stop')"
         >
           <Icon name="stop-circle" />
@@ -85,6 +86,8 @@ import type { CodeSource } from '@/types/analytics'
 
 defineProps<{
   analyzing: boolean
+  /** Nothing cancellable yet: this source is only queued, and cancel would stop another source's job (#20513). */
+  stopDisabled?: boolean
   rootPath: string
   selectedSource: CodeSource | null
   scanRunnerRunning: boolean

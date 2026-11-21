@@ -26,7 +26,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.pinned_model_registry import ModelIntegrityError, load_verified
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
-from config import cfg
+from config import config_manager as cfg
 
 # Import centralized components
 from constants.model_constants import model_config

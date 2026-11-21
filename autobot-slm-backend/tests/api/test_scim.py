@@ -105,7 +105,11 @@ def _load_scim_module():
         # Shared modules first imported under the stubs hold the stubbed ``fastapi`` (a mock HTTPException):
         # left cached, a later real user of them (the last-platform-admin guard, #21018) raises a mock.
         for key in [k for k in sys.modules if k not in before and k.startswith("autobot_shared.")]:
-            del sys.modules[key]
+            mod = sys.modules.pop(key)
+            parent_name, _, attr = key.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None and getattr(parent, "__dict__", {}).get(attr) is mod:
+                delattr(parent, attr)
         for key, mod in prev.items():
             if mod is None:
                 sys.modules.pop(key, None)

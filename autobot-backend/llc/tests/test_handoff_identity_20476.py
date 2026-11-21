@@ -39,9 +39,9 @@ async def test_an_agent_credential_is_refused_on_the_route() -> None:
 
 @pytest.mark.asyncio
 async def test_a_named_reviewer_must_be_a_member() -> None:
-    with patch.object(identity, "membership_role", AsyncMock(return_value="member")):
+    with patch("llc.services.authz.membership_role", AsyncMock(return_value="member")):
         assert await identity.member_reviewer(AsyncMock(), _ORG, _REVIEWER) == _REVIEWER
-    with patch.object(identity, "membership_role", AsyncMock(return_value=None)), pytest.raises(HTTPException) as no:
+    with patch("llc.services.authz.membership_role", AsyncMock(return_value=None)), pytest.raises(HTTPException) as no:
         await identity.member_reviewer(AsyncMock(), _ORG, _REVIEWER)
     assert no.value.status_code == 422
 

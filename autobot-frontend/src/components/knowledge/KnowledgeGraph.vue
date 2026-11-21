@@ -140,7 +140,7 @@
       <button @click="refreshGraph" class="btn-link">{{ $t('knowledge.graph.retry') }}</button>
     </div>
 
-    <KnowledgeGraphMoreFacts v-if="hasMoreFacts && entities.length > 0" @more="loadMoreFacts().then(updateCytoscapeElements)" />
+    <KnowledgeGraphMoreFacts v-if="hasMoreFacts" :loading="isLoadingMore" @more="loadMoreFacts().then(updateCytoscapeElements)" />
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner">
@@ -299,7 +299,7 @@
             <ul class="relations-list">
               <li
                 v-for="relation in getEntityRelations(selectedEntity.id)"
-                :key="`${relation.from}-${relation.to}`"
+                :key="JSON.stringify([relation.from, relation.to, relation.type])"
                 @click="navigateToEntity(relation)"
               >
                 <span class="relation-type">{{ relation.type }}</span>
@@ -498,7 +498,7 @@ const { t, locale } = useI18n()
 const {
   entities,
   relations,
-  isLoading,
+  isLoading, isLoadingMore,
   errorMessage: graphError,
   sources: graphSources,
   fetchGraphData,
@@ -881,7 +881,7 @@ function updateCytoscapeElements(): void {
   for (const edge of graphEdges.value) {
     elements.push({
       data: {
-        id: `${edge.from}-${edge.to}`,
+        id: JSON.stringify([edge.from, edge.to, edge.type]), // unambiguous: `-`-joined ids collide, and two types of one pair are two edges
         source: edge.from,
         target: edge.to,
         label: edge.type
@@ -1737,7 +1737,7 @@ watch(layoutMode, () => {
 }
 
 .panel-header .close-btn {
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .panel-content {

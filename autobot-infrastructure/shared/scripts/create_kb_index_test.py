@@ -3,8 +3,8 @@
 """Tests for create_kb_index — the KB index build (#12840).
 
 These drive the real code path with a fake Redis client rather than a live one:
-``create_index_with_correct_dimensions`` DROPs the index before recreating it,
-so running it against a real instance would discard the indexed vectors.
+``create_index_with_correct_dimensions`` builds the index; it never drops one (#21383), so a stale index
+is rebuilt only through the approved wipe proposal (``--request-wipe``).
 """
 
 import importlib.util
@@ -77,7 +77,7 @@ def test_module_imports_without_redisvl():
 def test_create_runs_end_to_end(redis):
     """The whole function completes — this used to raise NameError mid-way."""
     assert kb_index.create_index_with_correct_dimensions() is True
-    assert redis.command_names() == ["FT.DROPINDEX", "FT.DROPINDEX", "FT.CREATE", "FT.INFO"]
+    assert redis.command_names() == ["FT.CREATE", "FT.INFO"]
 
 
 def test_create_command_declares_the_expected_index(redis):
@@ -100,21 +100,46 @@ def test_dimension_is_declared_as_a_string(redis):
     assert isinstance(create[create.index("DIM") + 1], str)
 
 
-def test_legacy_index_is_dropped_too(redis):
-    """Both the current and the pre-rename index are cleared before rebuild."""
+def test_no_command_ever_drops_an_index(redis):
+    """#21383: the build never issues a drop; the wipe is a human-approved proposal."""
     kb_index.create_index_with_correct_dimensions()
-    dropped = [c[1] for c in redis.commands if c[0] == "FT.DROPINDEX"]
 
-    assert dropped == [kb_index.INDEX_NAME, kb_index.LEGACY_INDEX_NAME]
+    assert "FT.DROPINDEX" not in redis.command_names()
+    assert not hasattr(kb_index, "_drop_existing_indexes")
 
 
-def test_missing_index_on_drop_is_not_fatal(monkeypatch):
-    """A first-ever run has nothing to drop; that must not abort the build."""
-    client = FakeRedis(drop_error=RuntimeError("Unknown index name"))
+def test_an_existing_index_fails_the_build_without_a_drop(monkeypatch):
+    """A stale index answers FT.CREATE with an error; the build reports failure and still drops nothing."""
+
+    class Existing(FakeRedis):
+        def execute_command(self, *args):
+            super().execute_command(*args)
+            if args[0] == "FT.CREATE":
+                raise RuntimeError("Index already exists")
+            return "OK"
+
+    client = Existing()
     monkeypatch.setattr(kb_index, "get_redis_client", lambda **_: client)
 
-    assert kb_index.create_index_with_correct_dimensions() is True
-    assert "FT.CREATE" in client.command_names()
+    assert kb_index.create_index_with_correct_dimensions() is False
+    assert "FT.DROPINDEX" not in client.command_names()
+
+
+def test_request_wipe_flag_proposes_and_creates_nothing(redis, monkeypatch):
+    """``--request-wipe`` / ``--dry-run`` go to the shared proposal entry and issue no Redis command."""
+    import kb_wipe_cli
+
+    asked = []
+
+    async def fake_request(dry_run):
+        asked.append(dry_run)
+        return True
+
+    monkeypatch.setattr(kb_wipe_cli, "request_wipe", fake_request)
+    assert kb_index.main(["--request-wipe"]) == 0
+    assert kb_index.main(["--dry-run"]) == 0
+    assert asked == [False, True]
+    assert redis.commands == []
 
 
 def test_unreachable_redis_reports_failure(monkeypatch):

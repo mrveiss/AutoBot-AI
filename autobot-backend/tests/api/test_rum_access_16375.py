@@ -25,7 +25,8 @@ from fastapi.testclient import TestClient
 
 import api.rum as rum_api
 import api.rum_ingest_bounds as bounds
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared import rate_limiter as rl_mod
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
 _PREFIX = "/api/rum"
 _ADMIN, _USER, _OPEN = "admin", "user", "open"
@@ -64,9 +65,16 @@ def rum_state(monkeypatch):
     monkeypatch.setattr(rum_api, "rum_sessions", {})
     monkeypatch.setitem(rum_api.rum_config, "enabled", True)
     monkeypatch.setattr(rum_api, "rum_logger", MagicMock())
-    limiter = IPRateLimiter(key_prefix="ratelimit:rum_test", limit_env=bounds._RATE_ENV, default_limit=120)
+    limiter = WindowQuota.for_scope(
+        "rum_test",
+        policy=WindowFailurePolicy.LOCAL,
+        log_rejections=False,
+        max_requests=120,
+        window_seconds=60,
+        limit_env=bounds._RATE_ENV,
+    )
     monkeypatch.setattr(bounds, "_ingest_limiter", limiter)
-    monkeypatch.setattr("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=None))
+    monkeypatch.setattr(rl_mod, "get_async_redis_client", AsyncMock(return_value=None))
     return rum_api
 
 
@@ -169,6 +177,19 @@ def test_a_flood_is_refused_after_the_limit(client, rum_state, monkeypatch) -> N
     codes = [test_client.post("/api/rum/event", json=_event()).status_code for _ in range(5)]
     assert codes == [200, 200, 200, 429, 429]
     assert len(rum_state.rum_events) == 3
+
+
+def test_a_refused_flood_request_logs_no_warning(client, monkeypatch, caplog) -> None:
+    monkeypatch.setenv("AUTOBOT_RUM_INGEST_RATE_LIMIT", "1")
+    test_client, _ = client
+    with caplog.at_level("WARNING"):
+        codes = [test_client.post("/api/rum/event", json=_event()).status_code for _ in range(3)]
+    assert codes == [200, 429, 429]
+    assert [r for r in caplog.records if "Rate limit exceeded" in r.getMessage()] == []
+
+
+def test_the_production_rum_limiter_is_silent_on_refusal() -> None:
+    assert bounds._ingest_limiter.limiter._log_label is None
 
 
 def test_the_event_buffer_and_session_table_are_capped(client, rum_state, monkeypatch) -> None:

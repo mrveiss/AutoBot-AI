@@ -119,9 +119,9 @@ _KNOWN_TENANT_KEYS_ON_GLOBAL = frozenset(
         "worker_node.py:397",
         "worker_node.py:413",
         "services/autoresearch/auto_research_agent.py:1096",
-        "agent_loop/loop.py:369",
-        "agent_loop/loop.py:654",
-        "agent_loop/loop.py:1787",
+        "agent_loop/loop.py:370",
+        "agent_loop/loop.py:655",
+        "agent_loop/loop.py:1783",
     }
 )
 

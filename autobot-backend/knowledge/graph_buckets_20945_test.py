@@ -18,9 +18,9 @@ from knowledge.graph_buckets import (
     is_accounted_for,
     section_for,
 )
-from knowledge.graph_buckets_fakes_20945 import client_with, manager, viewer
-from knowledge.graph_collection_source import backend_collection_names, names_in_source
 from knowledge.index_embedding_space import ACCELERATOR_COLLECTIONS, CODE_INDEX, PATTERN_INDEXES
+from tests.fixtures.graph_buckets_fakes_20945 import client_with, manager, viewer
+from tests.fixtures.graph_collection_source import backend_collection_names, names_in_source
 
 BACKEND = Path(__file__).resolve().parent.parent
 # What the backend source names today (derived, never hand-kept): the guard fails on any new collection.
@@ -101,7 +101,7 @@ async def test_caches_and_empty_collections_make_no_section():
 async def test_per_entity_buckets_are_admin_only():
     client = await _client_with({"company:c1": 2, "project:p1": 1, "work_item:w1": 1, "autobot_docs": 1})
     non_admin = {s["key"] for s in (await build_bucket_sections(client, viewer(), manager()))["sections"]}
-    admin = {s["key"] for s in (await build_bucket_sections(client, viewer(superadmin=True), manager()))["sections"]}
+    admin = {s["key"] for s in (await build_bucket_sections(client, viewer(admin=True), manager()))["sections"]}
     assert non_admin == {"docs"}
     assert admin == {"docs", "company", "project", "work_item"}
 

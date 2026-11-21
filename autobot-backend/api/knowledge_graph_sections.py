@@ -17,9 +17,18 @@ logger = get_logger(__name__)
 
 def facts_section(page: FactsPage, offset: int) -> Dict[str, Any]:
     """The facts section: the VISIBLE total vs this page (never a count of facts the caller cannot read)."""
-    report = section_report("facts", "Knowledge base facts", page.total, len(page.facts), offset, page.truncated)
+    report = section_report(
+        "facts",
+        "Knowledge base facts",
+        page.total,
+        len(page.facts),
+        offset,
+        page.truncated,
+        budget_exhausted=page.budget_exhausted,
+        failed=page.failed,
+    )
     if page.by_cursor:  # no visible total in a cursor read: more remains exactly while a cursor is returned
-        report["limited"] = page.cursor is not None
+        report["limited"] = page.cursor is not None or page.budget_exhausted
     report["cursor"] = page.cursor
     return report
 
@@ -43,7 +52,7 @@ async def bucket_sections_for_graph(
         )
     except Exception as e:
         logger.warning("Failed to build bucket sections: %s", e)
-        return []
+        return [section_report("buckets", "Knowledge buckets", None, 0, failed=True)]  # not "no buckets"
     if built["unmapped"]:
         logger.warning("Knowledge collections missing from the graph registry: %s", built["unmapped"])
     nodes.extend(built["nodes"])

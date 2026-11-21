@@ -11,7 +11,7 @@ import pytest
 from api.knowledge_search_aggregator import get_multi_source_graph, get_multi_source_graph_simple
 from api.schemas_knowledge import KnowledgeMultiSourceGraphResponse
 from api.schemas_knowledge_graph import GraphRequest
-from knowledge.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
+from tests.fixtures.graph_buckets_fakes_20945 import ALICE, TENANT_A, ListingKB, client_with, fact
 
 _RECORDS = {
     "trajectories": [
@@ -56,11 +56,11 @@ async def test_a_user_gets_their_own_records_and_visible_totals_only():
 
 
 @pytest.mark.asyncio
-async def test_an_admin_read_of_facts_and_buckets_is_audited_and_bound_to_their_tenant():
+async def test_an_admin_read_of_facts_and_buckets_is_audited_and_not_narrowed_to_their_unit():
     result, audit = await _call(_user("adm", role="admin"), _body())
     ids = audit.await_args.kwargs["details"]["fact_ids"]
     assert "bucket:trajectories:t-bob" in ids and "bucket:company:tenant-a:ca" in ids and "f-bob" in ids
-    assert not any("tenant-b" in i for i in ids) and "tenant-b" not in repr(result)
+    assert "bucket:company:tenant-b:cb" in ids and "tenant-b" in repr(result), "no graph-only unit rule (check_access)"
     assert audit.await_args.kwargs["durable"] is True
 
 
