@@ -55,6 +55,7 @@ imports these functions rather than restating the rule.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import logging
 import os
 import pathlib
@@ -80,7 +81,15 @@ from _scan_helpers import configure_logging  # noqa: E402
 from _scan_helpers import project_root as repo_root  # noqa: E402
 from _scan_helpers import report_audit, scrubbed_git_env, tracked_paths  # noqa: E402
 
-from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+# The ONE test-file-name predicate, loaded from its file: importing the
+# `autobot_shared` package would run its __init__ (and non-stdlib imports),
+# and this checker runs before any dependency is installed. The module itself
+# is stdlib-only (#21078).
+_TESTFILE_NAMES_PATH = pathlib.Path(__file__).resolve().parents[2] / "autobot_shared" / "testfile_names.py"
+_testfile_names_spec = importlib.util.spec_from_file_location("_testfile_names", _TESTFILE_NAMES_PATH)
+_testfile_names = importlib.util.module_from_spec(_testfile_names_spec)
+_testfile_names_spec.loader.exec_module(_testfile_names)
+is_test_filename = _testfile_names.is_test_filename
 
 # Plain stdlib logging (matching check_flake8_exclude_anchoring.py and
 # check_requirements_ci_drift.py): this runs inside `code-quality`, which

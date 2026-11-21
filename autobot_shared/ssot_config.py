@@ -52,6 +52,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
 from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.log_dir import LOGS_DIR_DEFAULT, resolve_logs_dir
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
@@ -81,7 +82,7 @@ def default_audit_log_file() -> str:
     """The ONE definition of the audit-log default (#14070): was ALSO spelled out
     as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
     test -- agreement today, not derivation. A function, so it stays lazy."""
-    return str(project_root() / "logs" / "audit.log")
+    return str(resolve_logs_dir() / "audit.log")  # #20894
 
 
 # Default model constants - single source of truth for fallback values (#2553)
@@ -239,7 +240,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
     instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
-
+    verifier_model: str = Field(default="", alias="AUTOBOT_VERIFIER_MODEL")  # #21844 empty: light-processing model
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
@@ -1240,11 +1241,10 @@ class PathConfig(RedactedSettings):
     # resolve into the checkout rather than into the live install.
     base_dir: str = Field(default_factory=lambda: str(install_base_dir()), alias="AUTOBOT_BASE_DIR")
 
-    # Well-known sub-directories (all relative to base_dir unless absolute).
-    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    # Well-known sub-directories (relative to base_dir unless absolute); override via AUTOBOT_PLUGINS_DIR etc.
     plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
     data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
-    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    logs_dir: str = Field(default=LOGS_DIR_DEFAULT, alias="AUTOBOT_LOGS_DIR")  # #20894: unset -> resolver
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
     upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
@@ -1314,14 +1314,13 @@ class PathConfig(RedactedSettings):
     # autobot_ssh_key_path's owning account).
     ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
-    # Explicit override for the `claude` CLI binary used by the LLC claude_code
-    # adapter (GH#12478). Empty string means "not configured" — the adapter falls
-    # back to shutil.which("claude") then common per-user install locations before
-    # raising a clear error. Set this when the service account's PATH does not
-    # include the directory the Claude Code CLI was installed into (e.g. a
-    # per-user npm/curl install landed in ~/.local/bin, which systemd services
-    # typically don't inherit).
+    # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
+    # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
     claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
+    # Claude Code user-level config dir (agents/, skills/); empty = ~/.claude of the backend account.
+    claude_config_dir: str = Field(
+        default="", validation_alias=AliasChoices("AUTOBOT_CLAUDE_CONFIG_DIR", "CLAUDE_CONFIG_DIR")
+    )
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1342,8 +1341,8 @@ class PathConfig(RedactedSettings):
 
     @property
     def logs_path(self) -> Path:
-        """Absolute path to the logs directory."""
-        return self.resolve(self.logs_dir)
+        """Absolute path to the logs directory: the one resolver, never the source tree (#20894)."""
+        return resolve_logs_dir(self.logs_dir or None)
 
     @property
     def models_path(self) -> Path:

@@ -432,7 +432,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         """
         await self._save_command_to_chat(session.conversation_id, command, result, command_type="approved")
 
-        await self._interpret_approved_command(session, command, result)
+        self._interpret_in_background(session, command, result)  # #19951: the approve request does not wait on the LLM
 
         session.add_approved_to_history(
             command=command,

@@ -268,17 +268,12 @@ class WhatsAppIntegration(BaseIntegration):
         from whatever the approver touched (#14539).
         """
         masked_to = _mask_phone(to)
-        verdict = await egress_governor.evaluate(
-            platform="whatsapp",
-            channel_id=masked_to,
-            message_id="",
+        verdict = await egress_governor.gate(
+            platform="whatsapp", channel_id=masked_to, subject=f"WhatsApp send to {masked_to}"
         )
         if verdict.allowed:
             return None
-        logger.warning(
-            "WhatsApp send to %s blocked by egress governance (%s): %s", masked_to, verdict.rule, verdict.reason
-        )
-        return {"ok": False, "error": "egress_denied", "reason": verdict.safe_reason}
+        return egress_governor.denial_payload(verdict)
 
     async def send_text_message(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send text message to WhatsApp number.

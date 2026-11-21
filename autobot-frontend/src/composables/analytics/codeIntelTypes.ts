@@ -385,5 +385,9 @@ export interface CodeHealthScoreData {
   grade: string
   health_score: number
   breakdown?: Record<string, unknown>
+  /** Fields GET /api/code-intelligence/health-score returns (code_intelligence.py). */
+  total_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
   [key: string]: unknown
 }

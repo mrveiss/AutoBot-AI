@@ -244,6 +244,18 @@ Index(
 ).ddl_if(dialect="postgresql")
 
 
+#: One PENDING run-record cleanup proposal per deleted code source, enforced by the database (#21417).
+#: Two deletes can both pass the "already proposed" read. PostgreSQL only, like the file-cleanup index above.
+PENDING_SOURCE_RUN_RECORD_INDEX = "uq_approvals_pending_source_run_record_cleanup"
+PENDING_SOURCE_RUN_RECORD_WHERE = "status = 'pending' AND context ->> 'action' = 'source_run_record_cleanup'"
+Index(
+    PENDING_SOURCE_RUN_RECORD_INDEX,
+    Approval.context["source_id"].astext,
+    unique=True,
+    postgresql_where=text(PENDING_SOURCE_RUN_RECORD_WHERE),
+).ddl_if(dialect="postgresql")
+
+
 #: One PENDING owner proposal per chat session, enforced by the database (#20030). Two admins' requests
 #: can both pass the application-level "already pending" read; only a unique index makes the second
 #: insert fail, and the route answers it 409. Partial, so it constrains nothing but pending rows of

@@ -111,7 +111,10 @@ async def test_failed_audit_on_transition_to_done_runs_no_external_side_effect()
     with patch("services.task_workspace.release_for_task", new=release):
         with pytest.raises(ActivityRecordError):
             await svc.transition_to_done(
-                _session(_item(status=can_finish.value)), str(uuid.uuid4()), str(_ORG), actor_user_id=str(_USER)
+                _session(_item(status=can_finish.value, company_id=_ORG)),
+                str(uuid.uuid4()),
+                str(_ORG),
+                actor_user_id=str(_USER),
             )
     svc._trigger_artifact_ingest.assert_not_called()
     release.assert_not_called()
@@ -154,7 +157,7 @@ async def test_failed_audit_on_transition_to_done_fails_the_transition():
     can_finish = next(st for st, to in wis._ALLOWED_TRANSITIONS.items() if WorkItemStatus.DONE in to)
     svc = wis.WorkItemService(activity_log=_failing_log())
     svc._trigger_artifact_ingest = AsyncMock()
-    session = _session(_item(status=can_finish.value))
+    session = _session(_item(status=can_finish.value, company_id=_ORG))
     with pytest.raises(ActivityRecordError):
         await svc.transition_to_done(session, str(uuid.uuid4()), str(_ORG), actor_user_id=str(_USER))
     session.commit.assert_not_called()

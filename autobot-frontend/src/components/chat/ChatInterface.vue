@@ -404,7 +404,7 @@ const contextWindowProps = computed(() => ({
   usagePercent: _ctxWindow.usagePercent.value,
   isWarning: _ctxWindow.isWarning.value,
   isCritical: _ctxWindow.isCritical.value,
-  hasData: _ctxWindow.hasData.value,
+  hasData: _ctxWindow.hasData.value, loadError: _ctxWindow.loadError.value,
   isSummarizing: isSummarizing.value, // GH#9043: show summarization progress
 }))
 
@@ -968,6 +968,7 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
         })
       })
 
+      if (response.status === 409) { notify(t('chat.interface.alreadyDecided'), 'info'); showCommandDialog.value = false; return } // #19951
       if (!response.ok) throw new Error(`Server returned ${response.status}`)
       const refusal = approvalErrorMessage(await response.json(), t)
       if (refusal) { notify(refusal, 'error'); return } // 200 can carry a refusal: still pending (#21174)
@@ -975,7 +976,6 @@ const onCommandCommented = async (commentData: { command: string; comment: strin
       notify(t('chat.interface.feedbackSent'), 'success')
     }
 
-    // Close the dialog
     showCommandDialog.value = false
 
     // The comment was already sent to chat via CommandPermissionDialog

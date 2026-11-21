@@ -30,7 +30,7 @@
           <template v-if="config.status === 'paused'">
             <div class="config-row">
               <span class="label">Paused By</span>
-              <span class="value mono">{{ config.paused_by || '—' }}</span>
+              <span class="value mono">{{ actorLabel(config.paused_by, config.paused_by_name, $t('agent.systemActor')) }}</span>
             </div>
             <div class="config-row">
               <span class="label">Paused At</span>
@@ -195,10 +195,9 @@ import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
 import { createDateFormatter } from '@/utils/formatHelpers'
-
+import { actorLabel } from '@/utils/displayName'
 const logger = createLogger('HeartbeatPanel')
 const { subscribe, unsubscribe } = useEventBus()
-
 interface HeartbeatConfig {
   agent_id: string
   heartbeat_enabled: boolean
@@ -206,6 +205,7 @@ interface HeartbeatConfig {
   paused_reason: string | null
   paused_at: string | null
   paused_by: string | null
+  paused_by_name?: string | null
   heartbeat_interval_seconds: number
   max_run_duration_seconds: number
   current_task_id: string | null
@@ -415,7 +415,7 @@ async function pauseAgent(): Promise<void> {
   try {
     const updated = await apiFetch(`/${agentId.value}/pause`, {
       method: 'POST',
-      body: { reason: 'Manual pause from UI', paused_by: 'user' },
+      body: { reason: 'Manual pause from UI' },
     })
     config.value = updated as HeartbeatConfig
   } catch (err) {

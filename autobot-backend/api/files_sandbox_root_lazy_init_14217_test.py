@@ -14,10 +14,10 @@ is now an explicit, lazy, idempotent FastAPI router dependency
 
 ``utils.paths_manager`` is a process-wide singleton module: whatever ran
 first in the pytest session already bound its top-level
-``unified_config_manager`` name, so stubbing the ``config`` module per test
+``config_manager`` name, so stubbing the ``config`` module per test
 (as files_root_path_test.py's loader does) would only ever affect the
 *first* load. Each test here instead monkeypatches
-``utils.paths_manager.unified_config_manager`` directly — that reassigns
+``utils.paths_manager.config_manager`` directly — that reassigns
 the already-imported module's attribute regardless of import order — and
 clears its cache, so SANDBOXED_ROOT deterministically resolves under this
 test's own tmp_path.
@@ -46,7 +46,7 @@ def _point_paths_manager_at(monkeypatch, data_dir: Path) -> None:
     running within the same cache window.
     """
     fake_manager = MagicMock(**{"get.return_value": {"data": {"directory": str(data_dir)}}})
-    monkeypatch.setattr(paths_manager_module, "unified_config_manager", fake_manager)
+    monkeypatch.setattr(paths_manager_module, "config_manager", fake_manager)
     monkeypatch.setattr(paths_manager_module.PathsManager, "_paths_cache", None)
     monkeypatch.setattr(paths_manager_module.PathsManager, "_cache_timestamp", None)
 

@@ -239,8 +239,12 @@ class ActiveWorkflow:
 
         A decision for any other step, or for a step that is not in WAITING_APPROVAL (already
         executing, completed or skipped), is a failure, not a silent no-op: the control route
-        maps StepNotAwaitingApproval to 409 rather than reporting success.
+        maps StepNotAwaitingApproval to 409 rather than reporting success. Once cancellation has
+        started (#21194) no step can be decided: approve and skip are both refused here, the one
+        place every route (UI, API, agent, MCP) judges it.
         """
+        if self.is_cancelled:
+            raise StepNotAwaitingApproval(f"Step {step_id} is not waiting for a decision: the workflow is cancelled")
         if self.current_step_index >= len(self.steps):
             raise StepNotAwaitingApproval(f"Step {step_id} is not waiting for a decision: no step is pending")
         current = self.steps[self.current_step_index]
