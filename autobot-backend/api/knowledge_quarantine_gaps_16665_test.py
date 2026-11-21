@@ -16,11 +16,10 @@ import pytest
 from api.knowledge_graph_facts import visible_facts_page
 from api.schemas_knowledge import SearchRequest
 from autobot_shared.ssot_config import config
-from knowledge.categories import CategoriesMixin
 from knowledge.ownership import KnowledgeOwnership
+from knowledge.read_path_fakes_16665 import OPEN_META, CategoryKB
 
 QUARANTINE = config.research_quarantine_collection
-OPEN_META = {"owner_id": "admin", "visibility": "system"}
 
 
 def _hash(fact_id: str, **meta) -> dict:
@@ -29,50 +28,23 @@ def _hash(fact_id: str, **meta) -> dict:
     return {k.encode(): v.encode() for k, v in row.items()}
 
 
-class _Redis:
-    def __init__(self, hashes: dict):
-        self.hashes = hashes
-
-    async def smembers(self, key):
-        # A leaf category: child-category sets are empty, or the descendant walk recurses on fact ids.
-        if key.startswith("category:children:"):
-            return set()
-        return {fid.encode() for fid in self.hashes}
-
-    async def hgetall(self, key):
-        return self.hashes.get(key.split(":")[-1], {})
-
-
-class _CategoryKB(CategoriesMixin):
-    """The real ``CategoriesMixin.get_facts_in_category`` over an in-memory Redis."""
-
-    def __init__(self, hashes: dict):
-        self._aioredis_client = True
-        self._redis = _Redis(hashes)
-        self.ownership_manager = KnowledgeOwnership(None)
-
-    def redis(self):
-        return self._redis
-
-    async def _get_category_data(self, category_id):
-        return {"path": "research"}
-
-
-def _category_kb(quarantined: bool = True) -> _CategoryKB:
-    held = {"collection": QUARANTINE} if quarantined else {}
-    return _CategoryKB({"f-open": _hash("f-open"), "f-research": _hash("f-research", **held)})
+async def _category_kb(quarantined: bool = True) -> CategoryKB:
+    kb = CategoryKB()
+    await kb.add_fact("f-open")
+    await kb.add_fact("f-research", **({"collection": QUARANTINE} if quarantined else {}))
+    return kb
 
 
 @pytest.mark.asyncio
 async def test_a_category_listing_never_returns_a_quarantined_fact():
-    result = await _category_kb().get_facts_in_category("cat1")
+    result = await (await _category_kb()).get_facts_in_category("cat1")
 
     assert [f["id"] for f in result["facts"]] == ["f-open"]
 
 
 @pytest.mark.asyncio
 async def test_the_graph_category_path_never_returns_a_quarantined_fact():
-    page = await visible_facts_page(_category_kb(), "cat1", 10, 0, "u1", None, [], False)
+    page = await visible_facts_page(await _category_kb(), "cat1", 10, 0, "u1", None, [], False)
 
     assert [f["id"] for f in page.facts] == ["f-open"]
 
@@ -80,7 +52,7 @@ async def test_the_graph_category_path_never_returns_a_quarantined_fact():
 @pytest.mark.asyncio
 async def test_the_category_quarantine_test_is_sensitive_to_a_leak():
     """With no quarantined marker the fact is listed, so the absence above is the filter's doing."""
-    result = await _category_kb(quarantined=False).get_facts_in_category("cat1")
+    result = await (await _category_kb(quarantined=False)).get_facts_in_category("cat1")
 
     assert sorted(f["id"] for f in result["facts"]) == ["f-open", "f-research"]
 

@@ -187,6 +187,7 @@ async def test_the_backfill_runs_after_legacy_adoption():
 
     order = []
     kb = MagicMock()
+    kb.redis.return_value = AsyncMock()  # #21957: the quarantine-index rebuild reads its marker first
     kb.adopt_legacy_facts = AsyncMock(side_effect=lambda: order.append("adopt"))
     kb.backfill_document_visibility = AsyncMock(side_effect=lambda: order.append("backfill"))
     await _adopt_then_backfill(kb)

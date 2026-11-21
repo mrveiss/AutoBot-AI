@@ -66,6 +66,7 @@ KB_KEY_PREFIXES: tuple[str, ...] = (
     "kb:",
     "tag:",
     "category:facts:",
+    "category:quarantined:",  # #21957: derived from category:facts: x fact metadata
     "collection:facts:",
     "connector:*:ts:",
     "connector:*:checkpoint",

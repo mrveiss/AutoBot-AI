@@ -8,7 +8,10 @@ The ownership manager is the real :class:`KnowledgeOwnership`, so a test exercis
 canonical visibility decision rather than a stand-in for it.
 """
 
+import json
+
 from autobot_shared.ssot_config import config
+from knowledge.categories import CategoriesMixin
 from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import apply_quarantine, gate_response
 
@@ -93,3 +96,73 @@ class QuarantineGatedKB(FakeKB):
 
     async def get_all_facts(self, limit=None, offset=0, include_quarantined=False, audit_actor=None):
         return await apply_quarantine(self._held(), include_quarantined, audit_actor)
+
+
+OPEN_META = {"owner_id": "admin", "visibility": "system"}
+
+
+class SetRedis:
+    """An in-memory Redis with the hash and set commands the category code uses (#16665, #21957).
+
+    Hashes hold bytes keys and values, as ``hgetall`` returns them; sets hold the strings written.
+    """
+
+    def __init__(self):
+        self.hashes: dict = {}
+        self.sets: dict = {}
+        self.reads: list = []  # every hash read, so a test can show a count made none
+
+    @staticmethod
+    def _b(value) -> bytes:
+        return value if isinstance(value, bytes) else str(value).encode("utf-8")
+
+    async def sadd(self, key, *values):
+        self.sets.setdefault(key, set()).update(values)
+
+    async def srem(self, key, *values):
+        self.sets.get(key, set()).difference_update(values)
+
+    async def smembers(self, key):
+        return {m.encode("utf-8") for m in self.sets.get(key, set())}
+
+    async def sdiff(self, first, *others):
+        gone = set().union(*(self.sets.get(k, set()) for k in others))
+        return {m.encode("utf-8") for m in self.sets.get(first, set()) - gone}
+
+    async def hset(self, key, field=None, value=None, mapping=None):
+        row = self.hashes.setdefault(key, {})
+        for name, val in {**({field: value} if field else {}), **(mapping or {})}.items():
+            row[self._b(name)] = self._b(val)
+
+    async def hget(self, key, field):
+        self.reads.append(key)
+        return self.hashes.get(key, {}).get(self._b(field))
+
+    async def hgetall(self, key):
+        self.reads.append(key)
+        return dict(self.hashes.get(key, {}))
+
+    async def hincrby(self, key, field, amount):
+        return amount
+
+
+class CategoryKB(CategoriesMixin):
+    """The real ``CategoriesMixin`` over :class:`SetRedis`; facts enter through the real assign path."""
+
+    def __init__(self):
+        self._aioredis_client = True
+        self._redis = SetRedis()
+        self.ownership_manager = KnowledgeOwnership(None)
+
+    def redis(self):
+        return self._redis
+
+    async def _get_category_data(self, category_id):
+        return {"path": "research"}
+
+    async def add_fact(self, fact_id: str, category_id: str | None = "cat1", **meta) -> None:
+        """Store a fact hash and, unless *category_id* is None, categorise it by the production code."""
+        metadata = json.dumps({**OPEN_META, **meta})
+        await self._redis.hset(f"fact:{fact_id}", mapping={"content": f"fact {fact_id}", "metadata": metadata})
+        if category_id:
+            await self._assign_fact_to_category(fact_id, category_id)
