@@ -64,7 +64,7 @@ describe('CitationsDisplay with tool steps (#21976)', () => {
   })
 
   it('lists unproven values under their own label, and nothing when there are none', () => {
-    expect(mountList([command], ['5.18.33.2']).get('.citation-unproven').text()).toContain('5.18.33.2')
-    expect(mountList([command]).find('.citation-unproven').exists()).toBe(false)
+    expect(mountList([command], ['5.18.33.2']).get('[role="note"]').text()).toContain('5.18.33.2')
+    expect(mountList([command]).find('[role="note"]').exists()).toBe(false)
   })
 })

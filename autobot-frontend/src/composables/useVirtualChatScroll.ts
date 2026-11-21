@@ -109,7 +109,7 @@ export function useVirtualChatScroll(opts: UseVirtualChatScrollOptions) {
   const scrollToStep = (stepId: string): boolean => {
     const index = filteredMessages.value.findIndex((m) => m.metadata?.step_id === stepId)
     if (index < 0) return false
-    virtualizer.value.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+    virtualizer.value.scrollToIndex(index, { align: 'center' })
     return true
   }
 

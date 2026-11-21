@@ -4,10 +4,10 @@
 # Author: mrveiss
 """The proof record of one tool step: what ran, with which arguments, where its result came from (#21976).
 
-``begin_step`` is called before a tool call is dispatched; ``Step.tag`` stamps its id on each message the call
-yields, and ``Step.finish`` stamps the call's execution results with one ``step`` record (id, tool, redacted
-arguments, start and end time, origin, and the literals the output contains). ``answer_sources`` turns the records
-of a turn into the answer's sources. The record rides on the execution result, so it follows the result into the
+``begin_step`` is called before a tool call is dispatched; ``DispatchedStep.tag`` stamps its id on each message the
+call yields, and ``DispatchedStep.finish`` stamps the call's execution results with one ``step`` record (id, tool,
+redacted arguments, start and end time, origin, and the literals the output contains). ``answer_sources`` turns the
+records of a turn into the answer's sources. The record rides on the execution result, so it follows the result into the
 turn's execution history on both the legacy and the graph path.
 """
 
@@ -93,7 +93,7 @@ def step_origin(tool: str, params: Dict[str, Any], results: List[Dict[str, Any]]
 
 
 @dataclass
-class Step:
+class DispatchedStep:
     """One dispatched tool call: its id and when it started."""
 
     step_id: str = field(default_factory=lambda: str(uuid.uuid4()))
@@ -123,6 +123,6 @@ class Step:
             result[STEP_KEY] = record
 
 
-def begin_step() -> Step:
+def begin_step() -> DispatchedStep:
     """A new step, started now."""
-    return Step()
+    return DispatchedStep()

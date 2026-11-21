@@ -55,7 +55,7 @@
             >
               {{ $t('chat.citations.model') }} {{ citation.model }}
             </div>
-            <div v-if="stepDetails(citation).length" class="citation-excerpt citation-step">
+            <div v-if="stepDetails(citation).length" class="citation-excerpt">
               <div v-for="detail in stepDetails(citation)" :key="detail">{{ detail }}</div>
             </div>
             <div class="citation-meta">
@@ -83,10 +83,11 @@
             </div>
           </div>
         </div>
-        <div v-if="unproven.length" class="citation-unproven" role="note">
-          <strong>{{ $t('chat.citations.unprovenTitle') }}</strong>
-          <span class="citation-unproven-values">{{ unproven.join(', ') }}</span>
-          <span>{{ $t('chat.citations.unprovenHint') }}</span>
+        <div v-if="unproven.length" class="citation-item" role="note">
+          <div class="citation-content">
+            <div class="citation-text">{{ $t('chat.citations.unprovenTitle') }} {{ unproven.join(', ') }}</div>
+            <div class="citation-excerpt">{{ $t('chat.citations.unprovenHint') }}</div>
+          </div>
         </div>
       </div>
     </Transition>
@@ -289,26 +290,6 @@ const citationTitle = (citation: Citation): string => {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   border-radius: var(--radius-full);
-}
-
-.citation-step {
-  font-family: var(--font-mono);
-  overflow-wrap: anywhere;
-}
-
-.citation-unproven {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-1);
-  padding: var(--spacing-2-5) var(--spacing-3-5);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  border-top: 1px solid var(--color-primary-bg);
-}
-
-.citation-unproven-values {
-  font-family: var(--font-mono);
-  color: var(--color-warning);
 }
 
 .citations-list {
