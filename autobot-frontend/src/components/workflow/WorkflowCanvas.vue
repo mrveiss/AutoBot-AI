@@ -234,13 +234,13 @@
              :data-group-kind="groupKind(node)"
              :data-node-id="node.id"
              :style="nodeStyle(node)"
-             role="button"
-             :tabindex="rovingTabStopId === node.id ? 0 : -1"
+             :role="isActivatable(node) ? 'button' : 'group'"
+             :tabindex="isActivatable(node) && rovingTabStopId === node.id ? 0 : -1"
              :aria-label="nodeAriaLabel(node)"
-             :aria-pressed="isNodeSelected(node)"
-             :aria-describedby="instructionsId"
+             :aria-pressed="isActivatable(node) ? isNodeSelected(node) : undefined"
+             :aria-describedby="isActivatable(node) ? instructionsId : undefined"
              @pointerdown="onNodePointerDown(node, $event)"
-             @click.stop="selectNode(node.id, $event)"
+             @click.stop="isActivatable(node) && selectNode(node.id, $event)"
              @contextmenu.prevent.stop="onNodeContextMenu(node, $event)"
              @focus="focusedNodeId = node.id"
              @keydown="onNodeKeydown(node, $event)">
@@ -1137,6 +1137,14 @@ const instructionsId = computed(() =>
 const focusedNodeId = ref<string | null>(null);
 const nodeEls = new Map<string, HTMLElement>();
 
+/** Whether activating a node does anything. An `org-group` container is a
+ *  backdrop with a synthetic id nothing can open, so it is no button, no Tab
+ *  stop (tabindex -1 still lets search move focus there) and has no pressed
+ *  state (#14687); its "…" menu still offers zoom. */
+function isActivatable(node: CanvasNode): boolean {
+  return node.type !== 'org-group';
+}
+
 function registerNodeEl(id: string, el: Element | null): void {
   if (el instanceof HTMLElement) nodeEls.set(id, el);
   else nodeEls.delete(id);
@@ -1149,7 +1157,7 @@ const NODE_ROW_TOLERANCE = 60;
 /** `nodes` sorted into a predictable top-to-bottom, start-to-end reading order —
  *  used only to pick the initial roving tab stop before any focus has occurred. */
 const visualOrder = computed<CanvasNode[]>(() =>
-  [...props.nodes].sort((a, b) => {
+  props.nodes.filter(isActivatable).sort((a, b) => {
     const rowDelta = a.position.y - b.position.y;
     if (Math.abs(rowDelta) > NODE_ROW_TOLERANCE) return rowDelta;
     return a.position.x - b.position.x;
@@ -1159,7 +1167,7 @@ const visualOrder = computed<CanvasNode[]>(() =>
 /** The single node that is a Tab stop. Falls back to reading order when
  *  nothing has been focused yet, or the previously-focused node is gone. */
 const rovingTabStopId = computed<string | null>(() => {
-  if (focusedNodeId.value && props.nodes.some((n) => n.id === focusedNodeId.value)) {
+  if (focusedNodeId.value && props.nodes.some((n) => n.id === focusedNodeId.value && isActivatable(n))) {
     return focusedNodeId.value;
   }
   return visualOrder.value[0]?.id ?? null;
@@ -1593,7 +1601,7 @@ function findNodeInDirection(from: CanvasNode, direction: SpatialDirection): Can
   let best: CanvasNode | null = null;
   let bestScore = Infinity;
   for (const candidate of props.nodes) {
-    if (candidate.id === from.id) continue;
+    if (candidate.id === from.id || !isActivatable(candidate)) continue;
     const point = nodeCenter(candidate);
     const dx = point.x - origin.x;
     const dy = point.y - origin.y;
@@ -1679,7 +1687,7 @@ function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void
  * must reach that control, not be reinterpreted as a node-level shortcut.
  */
 function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
-  if (e.target !== e.currentTarget) return;
+  if (e.target !== e.currentTarget || !isActivatable(node)) return;
 
   // #14612: Shift+Enter/Shift+Space is shift-click's keyboard equivalent —
   // toggles `node` into/out of the multi-selection instead of replacing it.
@@ -2427,7 +2435,7 @@ const contextMenuStyle = computed(() => ({ left: `${contextMenu.x}px`, top: `${c
  * includes the node it was opened on.
  */
 function onNodeContextMenu(node: CanvasNode, e: MouseEvent): void {
-  if (!selectedIds.value.has(node.id)) {
+  if (isActivatable(node) && !selectedIds.value.has(node.id)) {
     selectedIds.value = new Set([node.id]);
     emit('node-selected', node.id);
   }
