@@ -27,8 +27,8 @@ def _timed(fn, text):
 @pytest.mark.parametrize(
     "regex, hit, miss",
     [
-        (_REBASE, "git -c x=y rebase main", "git -c x=y rebasing main"),
-        (_SHELL_GIT, "git -C dir commit -m x", "git -C dir status"),
+        (_REBASE, "git -cx=y rebase main", "git -cx=y rebasing main"),
+        (_SHELL_GIT, "git -Cdir commit -m x", "git -Cdir status"),
         (_QUERY, "systemctl --user is-active foo", "systemctl --user restart foo"),
         (_QUERY, "tool --version", "tool --help"),
         (_APT, "apt-get -y -o Dpkg::X=1 install curl", "apt-get -y list"),

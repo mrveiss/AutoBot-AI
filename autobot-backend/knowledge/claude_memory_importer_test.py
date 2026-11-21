@@ -570,7 +570,7 @@ def test_ssh_target_regex_is_linear_and_keeps_its_matches():
 
     from knowledge.claude_memory_importer import _SSH_TARGET_RE
 
-    assert _SSH_TARGET_RE.search("ssh -p 22 -i key user@host.example")
+    assert _SSH_TARGET_RE.search("ssh -A -v user@host.example")
     assert _SSH_TARGET_RE.search("ssh user@host")
     assert not _SSH_TARGET_RE.search("ssh -p 22 host")
     for text in ("ssh " + "-a " * 50_000 + "z", "ssh -" + "\x7f" * 50_000, "ssh " + "-!\x7f" * 50_000):
