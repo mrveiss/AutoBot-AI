@@ -13,8 +13,6 @@ Both are real attacker techniques (PATH-shadowing of standard binaries,
 linker hijack of any dynamic symbol) and must classify as FORBIDDEN.
 """
 
-import re
-
 import pytest
 
 from autobot_shared.status_enums import CommandRisk
@@ -101,41 +99,40 @@ def test_export_assignment_not_treated_as_prefix(executor: SecureCommandExecutor
     assert _check_dangerous_env_var_prefix("export PATH=/x; ls") is None
 
 
-# #21987: py/redos + py/polynomial-redos — the prefix regex is linear and matches exactly as before.
-_OLD_ENV_VAR_PREFIX_RE = re.compile(r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|\"[^\"]*\"|\S*)\s+)+")
-
-
+# #21987: py/redos + py/polynomial-redos. The prefix regex is linear, and each case's expected match is what the
+# pre-#21987 pattern ``^\s*(?:NAME=(?:'[^']*'|"[^"]*"|\S*)\s+)+`` produced (recorded here, not recompiled: the old
+# pattern is the very ReDoS shape CodeQL flags, so keeping it in a test re-raises the alert).
 @pytest.mark.parametrize(
-    "command",
+    ("command", "expected"),
     [
-        "LD_PRELOAD=/x.so ls",
-        "PATH=/x:$PATH ls",
-        "  A=1 B=2 ls",
-        "PROMPT_COMMAND='rm -rf /' bash",
-        'X="a b" LD_PRELOAD=/x ls',
-        "A='x y'z LD_PRELOAD=/x ls",
-        "A='x' ls",
-        "A='x y=1' B=2 ls",
-        "A='x y'z B=2 ls",
-        "A='x y=1 B=2 ls",
-        "A=\"x y=1\" B='p q' LD_PRELOAD=/x ls",
-        "A='x \"y z' B=1 ls",
-        "A='x\x7fy z'\u3000B=1 ls",
-        "A='x\xa0y'\xa0B=1 ls",
-        "A='x ls",
-        "A=1",
-        "A=\xa01 ls",
-        "LD_PRELOAD=x\xa0ls",
-        "ls A=1 ",
-        "export PATH=/x; ls",
-        "",
+        ("LD_PRELOAD=/x.so ls", "LD_PRELOAD=/x.so "),
+        ("PATH=/x:$PATH ls", "PATH=/x:$PATH "),
+        ("  A=1 B=2 ls", "  A=1 B=2 "),
+        ("PROMPT_COMMAND='rm -rf /' bash", "PROMPT_COMMAND='rm -rf /' "),
+        ('X="a b" LD_PRELOAD=/x ls', 'X="a b" LD_PRELOAD=/x '),
+        ("A='x y'z LD_PRELOAD=/x ls", "A='x "),
+        ("A='x' ls", "A='x' "),
+        ("A='x y=1' B=2 ls", "A='x y=1' B=2 "),
+        ("A='x y'z B=2 ls", "A='x "),
+        ("A='x y=1 B=2 ls", "A='x y=1 B=2 "),
+        ("A=\"x y=1\" B='p q' LD_PRELOAD=/x ls", "A=\"x y=1\" B='p q' LD_PRELOAD=/x "),
+        ("A='x \"y z' B=1 ls", "A='x \"y z' B=1 "),
+        ("A='x\x7fy z'\u3000B=1 ls", "A='x\x7fy z'\u3000B=1 "),
+        ("A='x\xa0y'\xa0B=1 ls", "A='x\xa0y'\xa0B=1 "),
+        ("A='x ls", "A='x "),
+        ("A=1", None),
+        ("A=\xa01 ls", "A=\xa0"),
+        ("LD_PRELOAD=x\xa0ls", "LD_PRELOAD=x\xa0"),
+        ("ls A=1 ", None),
+        ("export PATH=/x; ls", None),
+        ("", None),
     ],
 )
-def test_env_var_prefix_regex_matches_exactly_as_before(command: str) -> None:
+def test_env_var_prefix_regex_matches_exactly_as_before(command: str, expected: str | None) -> None:
     from secure_command_executor import _ENV_VAR_PREFIX_RE
 
-    old, new = _OLD_ENV_VAR_PREFIX_RE.match(command), _ENV_VAR_PREFIX_RE.match(command)
-    assert (old and old.group(0)) == (new and new.group(0))
+    match = _ENV_VAR_PREFIX_RE.match(command)
+    assert (match.group(0) if match else None) == expected
 
 
 @pytest.mark.parametrize(
