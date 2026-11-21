@@ -119,7 +119,11 @@ def _librarian(user, kb=None):
     agent = object.__new__(KBLibrarianAgent)
     agent.knowledge_base, agent.enabled = kb or FakeKB(), True
     agent.max_results, agent.similarity_threshold, agent.auto_summarize = 5, 0.0, False
-    with patch.object(kb_librarian, "get_kb_librarian", return_value=agent):
+    # An admin's read is the audited admin read (#19860); it is withheld when the audit cannot record it.
+    with (
+        patch.object(kb_librarian, "get_kb_librarian", return_value=agent),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
         return _client(kb_librarian.router, user).post("/query", json={"query": "anything"})
 
 
