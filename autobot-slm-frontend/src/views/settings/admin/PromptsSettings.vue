@@ -266,7 +266,7 @@ onMounted(() => {
                   <span class="px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm text-xs">
                     {{ prompt.category }}
                   </span>
-                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-autobot-pill-info-bg text-autobot-pill-info-fg rounded-sm text-xs">
+                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-autobot-illus-1-tint text-autobot-illus-1 rounded-sm text-xs">
                     {{ $t('settings.admin.promptsSettings.default') }}
                   </span>
                 </div>
@@ -354,7 +354,7 @@ onMounted(() => {
             <button
               @click="revertToDefault"
               :disabled="saving || selectedPrompt.is_default"
-              class="px-4 py-2 bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg disabled:opacity-50 flex items-center gap-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />

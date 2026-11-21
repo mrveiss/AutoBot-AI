@@ -83,11 +83,11 @@ const authMethodBadge = computed(() => {
   const method = props.node.auth_method || 'password'
   switch (method) {
     case 'key':
-      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' }
+      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-autobot-illus-1-tint text-autobot-illus-1' }
     case 'pki':
-      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-autobot-pill-info-bg text-autobot-pill-info-fg' }
+      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-autobot-illus-2-tint text-autobot-illus-2' }
     default:
-      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg' }
+      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-autobot-illus-3-tint text-autobot-illus-3' }
   }
 })
 

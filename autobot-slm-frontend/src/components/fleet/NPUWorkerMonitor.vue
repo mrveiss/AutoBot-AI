@@ -240,7 +240,7 @@ onMounted(() => refresh())
 
         <!-- Device Type Badge -->
         <div class="mb-3">
-          <span class="px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-pill-info-bg text-autobot-pill-info-fg">{{ deviceTypeLabel(node.node_id) }}</span>
+          <span class="px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1">{{ deviceTypeLabel(node.node_id) }}</span>
         </div>
 
         <!-- Utilization Bar -->

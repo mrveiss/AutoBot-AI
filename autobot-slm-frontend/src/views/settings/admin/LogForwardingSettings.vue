@@ -407,10 +407,10 @@ onMounted(refreshAll)
               <span
                 :class="[
                   'px-2 py-1 rounded-sm text-xs font-semibold uppercase',
-                  dest.type === 'syslog' ? 'bg-autobot-pill-info-bg text-autobot-pill-info-fg' : '',
+                  dest.type === 'syslog' ? 'bg-autobot-illus-1-tint text-autobot-illus-1' : '',
                   dest.type === 'webhook' ? 'bg-autobot-illus-3-tint text-autobot-illus-3' : '',
                   dest.type === 'file' ? 'bg-autobot-bg-tertiary text-autobot-text-secondary' : '',
-                  dest.type === 'elasticsearch' ? 'bg-autobot-pill-warn-bg text-autobot-pill-warn-fg' : '',
+                  dest.type === 'elasticsearch' ? 'bg-autobot-illus-2-tint text-autobot-illus-2' : '',
                 ]"
               >
                 {{ dest.type }}

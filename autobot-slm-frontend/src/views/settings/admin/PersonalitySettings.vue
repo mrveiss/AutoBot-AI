@@ -399,7 +399,7 @@ onMounted(async () => {
               <span
                 v-for="trait in (editForm.character_traits as string[])"
                 :key="trait"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-info-bg text-autobot-pill-info-fg border border-autobot-primary-light"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-1-tint text-autobot-illus-1 border border-autobot-primary-light"
               >
                 {{ trait }}
                 <button type="button" class="hover:text-autobot-error" @click="removeTag('character_traits', trait)">×</button>

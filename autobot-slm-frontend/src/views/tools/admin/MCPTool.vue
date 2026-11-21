@@ -408,7 +408,7 @@ onUnmounted(() => {
               <span
                 v-for="feature in bridge.features"
                 :key="feature"
-                class="px-2 py-1 text-xs bg-autobot-pill-info-bg text-autobot-pill-info-fg rounded-sm"
+                class="px-2 py-1 text-xs bg-autobot-illus-1-tint text-autobot-illus-1 rounded-sm"
               >
                 {{ feature }}
               </span>

@@ -520,7 +520,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.admin.userManagementSettings.password') }}</label>
             <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.admin.userManagementSettings.changeYourAccountPassword') }}</p>
           </div>
-          <button @click="openPasswordChangeModal()" class="px-4 py-2 bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover flex items-center gap-2">
+          <button @click="openPasswordChangeModal()" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
@@ -690,7 +690,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ user.email }}</td>
                 <td class="py-3 px-4">
                   <div class="flex gap-1 flex-wrap">
-                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-info-bg text-autobot-pill-info-fg">
+                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1">
                       {{ role.name }}
                     </span>
                   </div>
@@ -800,7 +800,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <tr v-for="provider in ssoProviders" :key="provider.id" class="border-b border-autobot-border-subtle hover:bg-autobot-bg-hover">
                 <td class="py-3 px-4 text-sm font-medium text-autobot-text-primary">{{ provider.name }}</td>
                 <td class="py-3 px-4">
-                  <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-pill-info-bg text-autobot-pill-info-fg">
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1">
                     {{ provider.provider_type }}
                   </span>
                 </td>

@@ -369,7 +369,7 @@ onMounted(async () => {
                   <span
                     v-for="scope in key.scopes"
                     :key="scope"
-                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-pill-info-bg text-autobot-pill-info-fg"
+                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1"
                   >
                     {{ scope }}
                   </span>

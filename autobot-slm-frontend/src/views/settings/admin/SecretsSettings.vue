@@ -359,9 +359,9 @@ onMounted(() => {
                 <span
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                   :class="{
-                    'bg-autobot-pill-info-bg text-autobot-pill-info-fg': secret.category === 'system',
+                    'bg-autobot-illus-1-tint text-autobot-illus-1': secret.category === 'system',
                     'bg-autobot-illus-2-tint text-autobot-illus-2': secret.category === 'api_token',
-                    'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg': secret.category === 'service',
+                    'bg-autobot-illus-3-tint text-autobot-illus-3': secret.category === 'service',
                   }"
                 >
                   {{ categoryLabel(secret.category) }}

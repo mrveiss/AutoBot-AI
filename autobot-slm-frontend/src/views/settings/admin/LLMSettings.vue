@@ -493,7 +493,7 @@ onMounted(fetchConfig)
         <div v-if="config.cpu_models.length === 0" class="text-sm text-autobot-text-tertiary py-4 text-center">{{ $t('settings.admin.lLMSettings.noCPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.cpu_models" :key="model"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-info-bg border border-autobot-primary-light text-sm font-mono text-autobot-pill-info-fg">
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-1-tint text-autobot-illus-1 text-sm font-mono">
             {{ model }}
             <button class="text-autobot-text-link hover:text-autobot-pill-info-fg" @click="removeModel('cpu', idx)">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

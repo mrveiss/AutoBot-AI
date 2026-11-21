@@ -175,7 +175,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-yellow-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-yellow-800": 4,
     # The SLM control plane (#17566).
-    "slm:bg-amber-100": 4,  # #20644 SLM Vision/Batch views retired: 19 -> 18
+    "slm:bg-amber-100": 4,  # #20644 SLM Vision/Batch views retired
     "slm:bg-amber-200": 3,  # #20644 SLM Vision/Batch views retired: 4 -> 3
     "slm:bg-amber-300": 1,
     "slm:bg-amber-500": 1,
@@ -183,10 +183,10 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-amber-500/15": 1,
     "slm:bg-amber-500/20": 2,
     "slm:bg-amber-900/30": 1,
-    "slm:bg-blue-100": 28,  # #20644 SLM Vision/Batch views retired: 52 -> 50
+    "slm:bg-blue-100": 28,  # #20644 SLM Vision/Batch views retired
     "slm:bg-blue-200": 4,
-    "slm:bg-blue-50": 7,  # #18863 SLM notices onto BaseAlert (19 -> 17)
-    "slm:bg-blue-500": 4,  # #14777 batch 2: 12 -> 11; #20644 SLM Vision/Batch views retired: 11 -> 10
+    "slm:bg-blue-50": 7,  # #18863 SLM notices onto BaseAlert
+    "slm:bg-blue-500": 4,  # #14777 batch 2; #20644 SLM Vision/Batch views retired
     "slm:bg-blue-600": 23,
     "slm:bg-blue-700": 14,
     "slm:bg-blue-900/30": 1,
@@ -198,22 +198,22 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-emerald-500/20": 2,
     "slm:bg-emerald-600": 3,
     "slm:bg-emerald-700": 1,
-    "slm:bg-gray-100": 88,  # #20644 SLM Vision/Batch views retired: 197 -> 193
-    "slm:bg-gray-200": 25,  # #20644 SLM Vision/Batch views retired: 92 -> 91
+    "slm:bg-gray-100": 88,  # #20644 SLM Vision/Batch views retired
+    "slm:bg-gray-200": 25,  # #20644 SLM Vision/Batch views retired
     "slm:bg-gray-300": 1,
-    "slm:bg-gray-400": 17,  # #20644 SLM Vision/Batch views retired: 41 -> 40
-    "slm:bg-gray-50": 80,  # #20644 SLM Vision/Batch views retired: 235 -> 233
+    "slm:bg-gray-400": 17,  # #20644 SLM Vision/Batch views retired
+    "slm:bg-gray-50": 80,  # #20644 SLM Vision/Batch views retired
     "slm:bg-gray-500": 2,
     "slm:bg-gray-500/20": 2,  # #17562: 4 -> 2
-    "slm:bg-gray-600": 5,  # #14777 batch 2: 9 -> 8
-    "slm:bg-gray-700": 6,  # #14777 batch 2: 12 -> 10
+    "slm:bg-gray-600": 5,  # #14777 batch 2
+    "slm:bg-gray-700": 6,  # #14777 batch 2
     "slm:bg-gray-800": 22,  # #14777: 26 -> 22, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-gray-900": 21,  # #14777 batch 2: 31 -> 30
+    "slm:bg-gray-900": 21,  # #14777 batch 2
     "slm:bg-gray-950": 1,
-    "slm:bg-green-100": 28,  # #20644 SLM Vision/Batch views retired: 62 -> 60
+    "slm:bg-green-100": 28,  # #20644 SLM Vision/Batch views retired
     "slm:bg-green-200": 1,
-    "slm:bg-green-50": 9,  # #18863 SLM notices onto BaseAlert (18 -> 17)
-    "slm:bg-green-500": 11,  # #20644 SLM Vision/Batch views retired: 55 -> 54
+    "slm:bg-green-50": 9,  # #18863 SLM notices onto BaseAlert
+    "slm:bg-green-500": 11,  # #20644 SLM Vision/Batch views retired
     "slm:bg-green-600": 3,
     "slm:bg-green-700": 3,
     "slm:bg-indigo-100": 2,
@@ -221,7 +221,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-indigo-50": 1,
     "slm:bg-indigo-600": 1,
     "slm:bg-indigo-700": 1,
-    "slm:bg-orange-100": 13,  # #14777: 16 -> 15, SLM dialogs moved onto the kit BaseModal
+    "slm:bg-orange-100": 13,  # #14777, SLM dialogs moved onto the kit BaseModal
     "slm:bg-orange-200": 2,
     "slm:bg-orange-50": 1,
     "slm:bg-orange-500": 2,
@@ -234,24 +234,24 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-purple-600": 2,
     "slm:bg-purple-700": 2,
     "slm:bg-purple-900/30": 1,
-    "slm:bg-red-100": 33,  # #20644 SLM Vision/Batch views retired: 69 -> 66
-    "slm:bg-red-200": 5,  # #20644 SLM Vision/Batch views retired: 10 -> 9
+    "slm:bg-red-100": 33,  # #20644 SLM Vision/Batch views retired
+    "slm:bg-red-200": 5,  # #20644 SLM Vision/Batch views retired
     "slm:bg-red-400": 1,
-    "slm:bg-red-50": 8,  # #20644 SLM Vision/Batch views retired: 27 -> 26
-    "slm:bg-red-500": 8,  # #20644 SLM Vision/Batch views retired: 46 -> 45
+    "slm:bg-red-50": 8,  # #20644 SLM Vision/Batch views retired
+    "slm:bg-red-500": 8,  # #20644 SLM Vision/Batch views retired
     "slm:bg-red-500/20": 2,
     "slm:bg-red-600": 3,
     "slm:bg-red-700": 4,
     "slm:bg-red-800": 1,
     "slm:bg-red-900/30": 1,
     "slm:bg-slate-900": 2,
-    "slm:bg-yellow-100": 21,  # #20644 SLM Vision/Batch views retired: 38 -> 37
+    "slm:bg-yellow-100": 21,  # #20644 SLM Vision/Batch views retired
     "slm:bg-yellow-400": 1,
-    "slm:bg-yellow-50": 2,  # #18863 SLM notices onto BaseAlert (17 -> 6)
-    "slm:bg-yellow-500": 4,  # #18863 SLM notices onto BaseAlert (21 -> 20)
+    "slm:bg-yellow-50": 2,  # #18863 SLM notices onto BaseAlert
+    "slm:bg-yellow-500": 4,  # #18863 SLM notices onto BaseAlert
     "slm:border-amber-500/30": 5,
     "slm:border-blue-100": 1,
-    "slm:border-blue-200": 2,  # #18863 SLM notices onto BaseAlert (9 -> 7)
+    "slm:border-blue-200": 2,  # #18863 SLM notices onto BaseAlert
     "slm:border-blue-300": 1,
     "slm:border-blue-400": 1,
     "slm:border-blue-500": 15,
@@ -259,9 +259,9 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-blue-600": 1,
     "slm:border-cyan-500/30": 1,  # #17562: 2 -> 1
     "slm:border-emerald-500/30": 2,
-    "slm:border-gray-100": 12,  # #17562: 55 -> 54
-    "slm:border-gray-200": 73,  # #20644 SLM Vision/Batch views retired: 305 -> 290
-    "slm:border-gray-300": 104,  # #14780 BaseSwitch: 340 -> 322; #20644 SLM Vision/Batch views retired: 322 -> 315
+    "slm:border-gray-100": 12,  # #17562
+    "slm:border-gray-200": 73,  # #20644 SLM Vision/Batch views retired
+    "slm:border-gray-300": 104,  # #14780 BaseSwitch; #20644 SLM Vision/Batch views retired
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 1,
     "slm:border-gray-500/30": 2,  # #17562: 4 -> 2
@@ -269,14 +269,14 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-gray-700": 23,  # #14777 batch 2: 27 -> 26  # #17562: 26 -> 23
     "slm:border-gray-700/50": 1,
     "slm:border-gray-800": 3,  # #17562: 5 -> 3
-    "slm:border-green-200": 1,  # #18863 SLM notices onto BaseAlert (4 -> 3)
+    "slm:border-green-200": 1,  # #18863 SLM notices onto BaseAlert
     "slm:border-green-300": 6,
     "slm:border-orange-200": 1,
     "slm:border-purple-500/30": 1,  # #17562: 2 -> 1
-    "slm:border-red-200": 1,  # #18819: 77 -> 6, hand-rolled notices moved to the kit BaseAlert
+    "slm:border-red-200": 1,  # #18819, hand-rolled notices moved to the kit BaseAlert
     "slm:border-red-300": 6,
     "slm:border-red-500/30": 3,
-    "slm:border-yellow-200": 1,  # #18863 SLM notices onto BaseAlert (13 -> 4)
+    "slm:border-yellow-200": 1,  # #18863 SLM notices onto BaseAlert
     "slm:border-yellow-300": 3,  # #18819: 4 -> 3, hand-rolled notices moved to the kit BaseAlert
     "slm:divide-gray-100": 2,
     "slm:divide-gray-200": 25,
@@ -285,14 +285,14 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-amber-200": 1,
     "slm:text-amber-300": 4,
     "slm:text-amber-400": 2,
-    "slm:text-amber-600": 6,  # #18863 SLM notices onto BaseAlert (22 -> 18)
-    "slm:text-amber-700": 7,  # #20644 SLM Vision/Batch views retired: 19 -> 18
-    "slm:text-amber-800": 3,  # #18863 SLM notices onto BaseAlert (8 -> 6)
+    "slm:text-amber-600": 6,  # #18863 SLM notices onto BaseAlert
+    "slm:text-amber-700": 7,  # #20644 SLM Vision/Batch views retired
+    "slm:text-amber-800": 3,  # #18863 SLM notices onto BaseAlert
     "slm:text-blue-300": 1,  # #17562: 2 -> 1
     "slm:text-blue-400": 3,
-    "slm:text-blue-600": 24,  # #20644 SLM Vision/Batch views retired: 44 -> 42
-    "slm:text-blue-700": 19,  # #18863 SLM notices onto BaseAlert (39 -> 37)
-    "slm:text-blue-800": 11,  # #20644 SLM Vision/Batch views retired: 23 -> 22
+    "slm:text-blue-600": 24,  # #20644 SLM Vision/Batch views retired
+    "slm:text-blue-700": 19,  # #18863 SLM notices onto BaseAlert
+    "slm:text-blue-800": 11,  # #20644 SLM Vision/Batch views retired
     "slm:text-blue-900": 1,  # #18863 SLM notices onto BaseAlert (2 -> 1)
     "slm:text-cyan-300": 1,  # #17562: 2 -> 1
     "slm:text-cyan-400": 4,
@@ -301,24 +301,24 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-cyan-900": 1,
     "slm:text-emerald-300": 2,
     "slm:text-emerald-400": 2,
-    "slm:text-gray-100": 11,  # #14777: 14 -> 12, SLM dialogs moved onto the kit BaseModal
+    "slm:text-gray-100": 11,  # #14777, SLM dialogs moved onto the kit BaseModal
     "slm:text-gray-200": 5,  # #17562: 6 -> 5
-    "slm:text-gray-300": 39,  # #14777 batch 2: 51 -> 50  # #17562: 50 -> 46
-    "slm:text-gray-400": 104,  # #20644 SLM Vision/Batch views retired: 208 -> 205
-    "slm:text-gray-500": 402,  # #20644 SLM Vision/Batch views retired: 866 -> 853
-    "slm:text-gray-600": 100,  # #20644 SLM Vision/Batch views retired: 264 -> 251
-    "slm:text-gray-700": 164,  # #18734: 431 -> 428; #20644 SLM Vision/Batch views retired: 428 -> 421
-    "slm:text-gray-800": 24,  # #20644 SLM Vision/Batch views retired: 40 -> 36
-    "slm:text-gray-900": 146,  # #20644 SLM Vision/Batch views retired: 437 -> 422
+    "slm:text-gray-300": 39,  # #14777 batch 2  # #17562
+    "slm:text-gray-400": 104,  # #20644 SLM Vision/Batch views retired
+    "slm:text-gray-500": 402,  # #20644 SLM Vision/Batch views retired
+    "slm:text-gray-600": 100,  # #20644 SLM Vision/Batch views retired
+    "slm:text-gray-700": 164,  # #18734; #20644 SLM Vision/Batch views retired
+    "slm:text-gray-800": 24,  # #20644 SLM Vision/Batch views retired
+    "slm:text-gray-900": 146,  # #20644 SLM Vision/Batch views retired
     "slm:text-green-300": 3,
     "slm:text-green-400": 2,
-    "slm:text-green-500": 1,  # #18863 SLM notices onto BaseAlert (5 -> 2)
-    "slm:text-green-600": 30,  # #20644 SLM Vision/Batch views retired: 66 -> 64
-    "slm:text-green-700": 21,  # #18863 SLM notices onto BaseAlert (73 -> 47)
-    "slm:text-green-800": 17,  # #20644 SLM Vision/Batch views retired: 26 -> 25
+    "slm:text-green-500": 1,  # #18863 SLM notices onto BaseAlert
+    "slm:text-green-600": 30,  # #20644 SLM Vision/Batch views retired
+    "slm:text-green-700": 21,  # #18863 SLM notices onto BaseAlert
+    "slm:text-green-800": 17,  # #20644 SLM Vision/Batch views retired
     "slm:text-green-900": 1,  # #18863 SLM notices onto BaseAlert (2 -> 1)
     "slm:text-indigo-700": 3,
-    "slm:text-orange-600": 13,  # #14777: 18 -> 17, SLM dialogs moved onto the kit BaseModal
+    "slm:text-orange-600": 13,  # #14777, SLM dialogs moved onto the kit BaseModal
     "slm:text-orange-700": 6,
     "slm:text-orange-800": 5,
     "slm:text-purple-300": 1,  # #17562: 2 -> 1
@@ -329,16 +329,16 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-purple-900": 1,
     "slm:text-red-300": 3,
     "slm:text-red-400": 3,
-    "slm:text-red-500": 5,  # #18819: 23 -> 12, hand-rolled notices moved to the kit BaseAlert
-    "slm:text-red-600": 35,  # #20644 SLM Vision/Batch views retired: 85 -> 81
-    "slm:text-red-700": 33,  # #20644 SLM Vision/Batch views retired: 71 -> 70
-    "slm:text-red-800": 13,  # #20644 SLM Vision/Batch views retired: 31 -> 30
+    "slm:text-red-500": 5,  # #18819, hand-rolled notices moved to the kit BaseAlert
+    "slm:text-red-600": 35,  # #20644 SLM Vision/Batch views retired
+    "slm:text-red-700": 33,  # #20644 SLM Vision/Batch views retired
+    "slm:text-red-800": 13,  # #20644 SLM Vision/Batch views retired
     "slm:text-slate-400": 1,
     "slm:text-yellow-300": 1,
     "slm:text-yellow-400": 2,
-    "slm:text-yellow-600": 18,  # #18863 SLM notices onto BaseAlert (40 -> 32)
-    "slm:text-yellow-700": 11,  # #18863 SLM notices onto BaseAlert (32 -> 24)
-    "slm:text-yellow-800": 13,  # #20644 SLM Vision/Batch views retired: 19 -> 18
+    "slm:text-yellow-600": 18,  # #18863 SLM notices onto BaseAlert
+    "slm:text-yellow-700": 11,  # #18863 SLM notices onto BaseAlert
+    "slm:text-yellow-800": 13,  # #20644 SLM Vision/Batch views retired
 }
 
 # No hand-maintained total (#19283): a raised entry is caught by comparing each entry with this

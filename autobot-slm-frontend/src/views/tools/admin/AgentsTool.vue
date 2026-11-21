@@ -363,7 +363,7 @@ onMounted(() => refreshPoller.start(''))
           </button>
           <button
             @click.stop="restartAgent(agent.id)"
-            class="px-3 py-1.5 text-xs bg-autobot-warning text-(--text-on-warning) rounded-lg hover:bg-autobot-warning-hover"
+            class="px-3 py-1.5 text-xs bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg"
           >
             {{ $t('tools.admin.agentsTool.restart') }}
           </button>
