@@ -558,8 +558,8 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
 import {
   CANVAS_NODE_WIDTH,
-  CANVAS_NODE_HEIGHT,
-  CANVAS_NODE_PORT_Y,
+  nodeExtent,
+  nodePortY,
   CANVAS_GRID_SIZE,
   CANVAS_FIT_PADDING,
   snapToGrid,
@@ -1248,8 +1248,8 @@ const connections = computed(() => {
     node.connections.forEach(targetId => {
       const target = byId.get(targetId);
       if (target) {
-        const x1 = node.position.x + CANVAS_NODE_WIDTH, y1 = node.position.y + CANVAS_NODE_PORT_Y;
-        const x2 = target.position.x, y2 = target.position.y + CANVAS_NODE_PORT_Y;
+        const x1 = node.position.x + nodeExtent(node).width, y1 = node.position.y + nodePortY(node);
+        const x2 = target.position.x, y2 = target.position.y + nodePortY(target);
         const mx = (x1 + x2) / 2;
         result.push({ id: `${node.id}-${targetId}`, path: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` });
       }
@@ -1576,7 +1576,8 @@ function isRtl(): boolean {
 /** A node's approximate visual centre, in canvas space — same anchor the
  *  connection-line paths already use (`CANVAS_NODE_WIDTH`, `CANVAS_NODE_PORT_Y`). */
 function nodeCenter(node: CanvasNode): { x: number; y: number } {
-  return { x: node.position.x + CANVAS_NODE_WIDTH / 2, y: node.position.y + CANVAS_NODE_PORT_Y };
+  const { width } = nodeExtent(node);
+  return { x: node.position.x + width / 2, y: node.position.y + nodePortY(node) };
 }
 
 /**
@@ -1883,16 +1884,6 @@ function onSearchKeydown(e: KeyboardEvent): void {
  * link's own viewport jump — all three share the same centring/fitting math.
  * ------------------------------------------------------------------ */
 
-/** Node footprint the layout builders assume, for a node type that carries no
- *  size of its own — the same row height `endInteraction` below already uses
- *  for its connection-drop hit test, and `org-group`'s own `data.width`/
- *  `data.height` (`nodeStyle` above) when the node IS sized.
- *
- *  #14690: this was a second, independent `100`. The comment already said it
- *  was "the same" height as the hit test, which is exactly the claim a shared
- *  constant should be making instead of prose. */
-const NODE_APPROX_HEIGHT = CANVAS_NODE_HEIGHT;
-
 /** A zoom level comfortable for looking at one node up close — fixed, rather
  *  than a maximal fit, so repeatedly jumping between search hits or deep
  *  links only recentres the view and never also snaps the zoom level around
@@ -1902,19 +1893,6 @@ const FOCUS_ZOOM = 1;
 /** Padding, in canvas px, kept around a fitted bounding box so a fitted node
  *  or selection is never drawn flush against the canvas edge. */
 const FIT_PADDING = CANVAS_FIT_PADDING;
-
-/** The width/height a node occupies for bounding-box math (fit, minimap) —
- *  `org-group` carries its own from `data`, every other type is the fixed
- *  240x100 footprint every layout builder in `orgCanvasGraph.ts` assumes. */
-function nodeExtent(node: CanvasNode): { width: number; height: number } {
-  if (node.type === 'org-group') {
-    const data = node.data as Record<string, unknown>;
-    const width = typeof data.width === 'number' ? data.width : CANVAS_NODE_WIDTH;
-    const height = typeof data.height === 'number' ? data.height : NODE_APPROX_HEIGHT;
-    return { width, height };
-  }
-  return { width: CANVAS_NODE_WIDTH, height: NODE_APPROX_HEIGHT };
-}
 
 /** Move the viewport so `node`'s centre lands in the middle of the visible
  *  canvas area, without changing zoom. */
@@ -2226,8 +2204,8 @@ function startConnect(nodeId: string, port: string, e: PointerEvent) {
   const node = props.nodes.find(n => n.id === nodeId);
   if (node) {
     lineStart.nodeId = nodeId;
-    lineStart.x = node.position.x + (port === 'out' ? CANVAS_NODE_WIDTH : 0);
-    lineStart.y = node.position.y + CANVAS_NODE_PORT_Y;
+    lineStart.x = node.position.x + (port === 'out' ? nodeExtent(node).width : 0);
+    lineStart.y = node.position.y + nodePortY(node);
   }
   mousePos.x = e.clientX; mousePos.y = e.clientY;
   capturePointer(e);
@@ -2303,7 +2281,10 @@ function endInteraction(e: PointerEvent) {
       const y = (e.clientY - rect.top - pan.y) / zoom.value;
       // Geometry from the shared constants (#14690); the connect is recorded
       // so it can be undone (#14612). Both sides of this merge were wanted.
-      const target = props.nodes.find(n => x >= n.position.x && x <= n.position.x + CANVAS_NODE_WIDTH && y >= n.position.y && y <= n.position.y + CANVAS_NODE_HEIGHT);
+      const target = props.nodes.find(n => {
+        const { width, height } = nodeExtent(n);
+        return x >= n.position.x && x <= n.position.x + width && y >= n.position.y && y <= n.position.y + height;
+      });
       if (target && target.id !== lineStart.nodeId) {
         emit('nodes-connected', lineStart.nodeId, target.id);
         pushHistory([{ kind: 'connect', sourceId: lineStart.nodeId, targetId: target.id }]);
