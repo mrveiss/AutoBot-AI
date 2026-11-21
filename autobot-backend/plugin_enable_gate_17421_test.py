@@ -134,7 +134,7 @@ async def test_new_plugin_is_not_imported_until_an_admin_enables_it(store, audit
     assert audit.entries == [], "grandfathering runs once"
 
     admin = {"username": "root"}
-    await pes.apply_decision("gate_new_c", True, admin, second._loader, store)
+    await pes.decide_plugin_enabled("gate_new_c", True, admin, second._loader, store)
     await pes.require_enabled("gate_new_c", store)
     assert await second._loader.load_plugin(_manifest(second, "gate_new_c"))
     assert "gate_new_c" in sys.modules
@@ -160,7 +160,7 @@ async def test_disable_is_audited_persisted_and_silences_hooks(store, audit, plu
     await manager.startup()
     assert await HookRegistry().call_hook("gate_hook") == ["gate_old_a"]
 
-    await pes.apply_decision("gate_old_a", False, {"username": "root"}, manager._loader, store)
+    await pes.decide_plugin_enabled("gate_old_a", False, {"username": "root"}, manager._loader, store)
     entry = audit.entries[-1]
     assert (entry["operation"], entry["user_id"], entry["durable"]) == (AuditAction.PLUGIN_DISABLE, "root", True)
     assert await HookRegistry().call_hook("gate_hook") == []
@@ -176,7 +176,7 @@ async def test_no_decision_without_an_audit_entry(store, audit, plugin_root):
     await manager.startup()
     audit.committed = False
     with pytest.raises(HTTPException) as unavailable:
-        await pes.apply_decision("gate_old_a", False, {"username": "root"}, manager._loader, store)
+        await pes.decide_plugin_enabled("gate_old_a", False, {"username": "root"}, manager._loader, store)
     assert unavailable.value.status_code == 503
     assert await store.enabled_names() == {"gate_old_a"}
     await manager.shutdown()
@@ -185,7 +185,7 @@ async def test_no_decision_without_an_audit_entry(store, audit, plugin_root):
 @pytest.mark.asyncio
 async def test_unknown_plugin_cannot_be_enabled(store, audit):
     with pytest.raises(HTTPException) as missing:
-        await pes.apply_decision("gate_ghost", True, {"username": "root"}, PluginLoader([]), store)
+        await pes.decide_plugin_enabled("gate_ghost", True, {"username": "root"}, PluginLoader([]), store)
     assert missing.value.status_code == 404
     assert audit.entries == []
 

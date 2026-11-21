@@ -31,7 +31,7 @@ from autobot_shared.plugin_sdk.base import PluginLoadError
 from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
-from plugin_enable_state import apply_decision, require_enabled
+from plugin_enable_state import decide_plugin_enabled, require_enabled
 from plugin_install import install_from_git, install_from_zip
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
 from services.provider_key_vault import plugin_credential_resolvers
@@ -361,7 +361,7 @@ async def enable_plugin(
     Returns:
         Success message
     """
-    await apply_decision(plugin_name, True, user, get_plugin_loader())
+    await decide_plugin_enabled(plugin_name, True, user, get_plugin_loader())
     return {
         "status": "success",
         "message": f"Plugin {plugin_name} enabled successfully",
@@ -384,7 +384,7 @@ async def disable_plugin(
     Returns:
         Success message
     """
-    await apply_decision(plugin_name, False, user, get_plugin_loader())
+    await decide_plugin_enabled(plugin_name, False, user, get_plugin_loader())
     return {
         "status": "success",
         "message": f"Plugin {plugin_name} disabled successfully",

@@ -117,7 +117,7 @@ async def require_enabled(plugin_name: str, store: PluginEnableStore | None = No
         )
 
 
-async def apply_decision(
+async def decide_plugin_enabled(
     plugin_name: str,
     enabled: bool,
     user: dict,
