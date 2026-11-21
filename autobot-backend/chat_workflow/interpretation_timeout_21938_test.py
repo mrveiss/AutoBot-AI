@@ -48,3 +48,27 @@ async def test_control_cancellation_still_propagates(monkeypatch):
 
     with pytest.raises(asyncio.CancelledError):
         await _run(monkeypatch, asyncio.CancelledError())
+
+
+async def test_an_interpretation_has_its_own_budget_and_cannot_use_the_turns(monkeypatch):
+    import asyncio
+
+    from chat_workflow import interpretation_guard
+
+    monkeypatch.setattr(interpretation_guard, "INTERPRETATION_TIMEOUT_SECONDS", 0.01)
+
+    async def hangs(*_a, **_kw):
+        await asyncio.sleep(30)
+        yield "never"
+
+    assert [c async for c in interpretation_guard.interpretation_never_fails_the_tool(hangs)()] == []
+
+
+async def test_persisting_uses_the_given_message_not_the_latest_one():
+    handler = _Handler()
+    handler.get_or_create_session = AsyncMock()
+    handler._get_last_user_message = AsyncMock(return_value="a later message")
+    handler._persist_conversation = AsyncMock()
+    await handler._persist_to_conversation_history("s1", "kernel is 6.1", "m", user_message="the original question")
+    assert handler._persist_conversation.await_args.kwargs["message"] == "the original question"
+    handler._get_last_user_message.assert_not_called()

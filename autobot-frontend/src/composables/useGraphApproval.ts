@@ -46,23 +46,23 @@ export type ResumeBody = { approved: boolean; reason: string } | { answer: strin
 export class ResumeRejectedError extends Error {
   constructor(
     readonly status: number,
-    readonly code?: string
+    readonly code?: string,
+    cause?: unknown
   ) {
-    super(`resume failed: ${status}`)
+    super(`resume failed: ${status}`, cause === undefined ? undefined : { cause })
   }
 }
 
 /** The `detail.code` the resume route puts on its "nothing to resume" 409 (backend: `NOTHING_TO_RESUME_CODE`). Its other 409s differ. */
 export const NOTHING_TO_RESUME_CODE = 'nothing_to_resume'
 
-/** The machine-readable code of a refused resume's body, or undefined when the body carries none or is unreadable. */
-async function refusalCode(response: Response): Promise<string | undefined> {
+/** The refusal's machine-readable code, or the failure to read it: a body that cannot be parsed is kept as the error's `cause`. */
+async function refusalDetail(response: Response): Promise<{ code?: string; cause?: unknown }> {
   try {
     const body = await response.json()
-    return typeof body?.detail?.code === 'string' ? body.detail.code : undefined
-  } catch (error) {
-    logger.debug('The refusal body of a resume carried no readable code:', error)
-    return undefined
+    return { code: typeof body?.detail?.code === 'string' ? body.detail.code : undefined }
+  } catch (cause) {
+    return { cause }
   }
 }
 
@@ -95,7 +95,10 @@ function useResumePost() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-        if (!response.ok) throw new ResumeRejectedError(response.status, await refusalCode(response))
+        if (!response.ok) {
+          const { code, cause } = await refusalDetail(response)
+          throw new ResumeRejectedError(response.status, code, cause)
+        }
         accepted = true
         hooks.onAccepted?.()
         if ((await controller.handleStreamingResponse(response, chatId, true)) === true) {

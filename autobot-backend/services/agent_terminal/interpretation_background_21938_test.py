@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,6 +24,7 @@ RESULT = {"status": "success", "stdout": "6.1.0", "stderr": "", "return_code": 0
 def _service(interpret) -> AgentTerminalService:
     service = AgentTerminalService.__new__(AgentTerminalService)
     service.chat_workflow_manager = MagicMock()
+    service.chat_workflow_manager._get_last_user_message = AsyncMock(return_value="the question")
     service.chat_workflow_manager.interpret_terminal_command = interpret
     return service
 
@@ -65,3 +66,12 @@ async def test_a_timing_out_interpreter_fails_neither_the_command_nor_the_turn()
     service = _service(timing_out)
     service._interpret_command_result(_session(), "uname -r", RESULT)
     await asyncio.wait_for(_drain(), 5)  # the failure was logged in the task; nothing propagated
+
+
+async def test_the_interpretation_is_stored_against_the_message_it_answers_not_a_later_one():
+    interpret = AsyncMock()
+    service = _service(interpret)
+    service.chat_workflow_manager._get_last_user_message = AsyncMock(side_effect=["first question", "later question"])
+    service._interpret_command_result(_session(), "uname -r", RESULT)
+    await asyncio.wait_for(_drain(), 5)
+    assert interpret.await_args.kwargs["user_message"] == "first question"

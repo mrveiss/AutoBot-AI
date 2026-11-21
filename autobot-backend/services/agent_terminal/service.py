@@ -564,16 +564,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             return
 
         if session.has_conversation() and self.chat_workflow_manager:
-            try:
-                await self.chat_workflow_manager.interpret_terminal_command(
-                    command=command,
-                    stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
-                    return_code=result.get("return_code", 0),
-                    session_id=session.conversation_id,
-                )
-            except Exception as e:
-                logger.error("Failed to interpret approved command results: %s", e)
+            await self._interpret_with_origin(session.conversation_id, command, result)
 
     async def _update_and_broadcast_approval_status(
         self,

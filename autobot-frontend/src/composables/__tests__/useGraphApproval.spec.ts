@@ -158,6 +158,19 @@ describe('other 409s of the resume route are not "already handled" (#21939)', ()
   })
 })
 
+describe('an unreadable refusal body (#21939)', () => {
+  it('keeps the status and the parse failure as cause, and restores the card', async () => {
+    const { store, id } = seedCard({ session_id: 'chat-1', calls: [{ tool: 'crm' }], approval_status: 'pending' })
+    const parseFailure = new SyntaxError('Unexpected end of JSON input')
+    fetchWithAuth.mockResolvedValue({ ok: false, status: 409, json: async () => Promise.reject(parseFailure) })
+    const failure = await useApprovalRouting(vi.fn())('term-1', true, 'go').catch((e: unknown) => e)
+    expect(failure).toBeInstanceOf(ResumeRejectedError)
+    expect(failure).toMatchObject({ status: 409, code: undefined })
+    expect((failure as Error).cause).toBe(parseFailure)
+    expect(store.currentMessages.find((m) => m.id === id)?.metadata?.approval_status).toBe('pending')
+  })
+})
+
 describe('stall question answers (#21022)', () => {
   const card = () => ({ id: 'q-card', metadata: { session_id: 'chat-1', question_id: 'q1' } })
   const answered = () => fakeStore.currentMessages[0].metadata.answered
