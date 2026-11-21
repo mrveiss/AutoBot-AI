@@ -19,11 +19,12 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_chat_url
 from autobot_shared.ssot_config import get_ollama_url
-from constants.api_constants import PATH_OLLAMA_CHAT
 
 from ..models import LLMRequest, LLMResponse, LLMSettings, ToolCall
 from ..streaming import StreamingManager
+from .message_formatting import openai_function_tool_schemas
 
 logger = get_logger(__name__)
 
@@ -45,7 +46,7 @@ def _model_supports_tools(model: str) -> bool:
     return any(capable in model_lower for capable in _OLLAMA_TOOL_CAPABLE_MODELS)
 
 
-class OllamaProvider:
+class OllamaRequestExecutor:
     """
     Ollama LLM Provider with streaming support and circuit breaker protection.
 
@@ -116,21 +117,11 @@ class OllamaProvider:
                 "top_k": self.settings.top_k,
                 "top_p": self.settings.top_p,
                 "repeat_penalty": self.settings.repeat_penalty,
-                "num_ctx": self.settings.num_ctx,
+                "num_ctx": request.metadata.get("num_ctx", self.settings.num_ctx),
             },
         }
         if tools_will_be_sent:
-            data["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.input_schema,
-                    },
-                }
-                for t in request.tools
-            ]
+            data["tools"] = openai_function_tool_schemas(request.tools)
             if request.tool_choice:
                 data["tool_choice"] = request.tool_choice
         return data
@@ -474,7 +465,7 @@ class OllamaProvider:
             Tuple of (url, headers, model, use_streaming, data, span_attrs)
         """
         self.ollama_host = self.get_host_from_env()
-        url = f"{self.ollama_host}{PATH_OLLAMA_CHAT}"
+        url = ollama_chat_url(self.ollama_host)
         headers = {"Content-Type": "application/json"}
 
         model = request.model_name or self.settings.default_model
@@ -534,5 +525,5 @@ class OllamaProvider:
 
 
 __all__ = [
-    "OllamaProvider",
+    "OllamaRequestExecutor",
 ]

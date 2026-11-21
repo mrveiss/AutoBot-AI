@@ -1,0 +1,7 @@
+# The one-time addition for #21927 (owner ruling 2026-11-21, recorded on #10603, "one-time growth of the baseline"): the
+# approval-gated collection-wide delete route of #21885 (#21383) has no frontend caller, because no collections UI exists
+# yet; the UI that deletes selected facts uses POST /knowledge_base/facts/delete-selected. It is tracked by #10603 with its
+# sibling collections routes and wired in when the collections UI is built; nothing is deleted for being listed.
+# This list is frozen and may only shrink: it may not gain a line against the base (unconnected_code_gate_20512_test.py),
+# and a key leaves it when its baseline line does.
+route:autobot-backend/api/knowledge_collections.py:POST /collections/{collection_id}/bulk-delete

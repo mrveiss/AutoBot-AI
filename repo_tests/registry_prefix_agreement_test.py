@@ -1,10 +1,11 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""``api/registry.py`` must advertise the prefix the app actually mounts (#15120).
+"""The router catalogue must advertise the prefix the app actually mounts (#15120).
 
 Two tables describe the same API surface and nothing held them together:
 
-* ``autobot-backend/api/registry.py`` — ``RouterConfig(module_path=…, prefix=…)``,
+* the ``RouterConfig(module_path=…, prefix=…)`` catalogue, wherever it lives —
+  resolved by ``repo_tests._registry_catalogue`` rather than by path (#16375),
   served to clients through the ``/api/registry/*`` endpoints.
 * ``autobot-backend/initialization/router_registry/*.py`` — the tuples
   ``app_factory`` iterates, mounting each at ``f"/api{prefix}"``.
@@ -45,17 +46,16 @@ mode that let ten entries drift in the first place.
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 from typing import Dict, Set, Tuple
 
 from repo_tests._paths import repo_root
+from repo_tests._registry_catalogue import catalogue_entries, catalogue_files, unreadable_catalogue_entries
 
 from autobot_shared.api_routing.router_prefixes import registry_entries, resolve_registry_targets
 
 _REPO = repo_root()
 _BACKEND = _REPO / "autobot-backend"
-_REGISTRY_FILE = _BACKEND / "api" / "registry.py"
 _MOUNT_DIR = _BACKEND / "initialization" / "router_registry"
 
 #: ``app_factory.py`` mounts every registry tuple at ``f"/api{prefix}"``; the
@@ -71,28 +71,17 @@ _MIN_ENTRIES = 20
 
 
 def _advertised_entries() -> Tuple[Tuple[str, str], ...]:
-    """``(module_path, prefix)`` for every ``RouterConfig`` in ``api/registry.py``.
+    """``(module_path, prefix)`` for every ``RouterConfig`` the catalogue declares.
 
-    Parsed rather than imported: importing the module pulls in the whole
-    backend, and every value read here is a string literal in the source.
+    Parsed rather than imported: importing the module pulls in the whole backend,
+    and every value read here is a string literal in the source.
+
+    The catalogue's FILE is resolved by what it declares, not named (#16375).
+    This guard used to read ``api/registry.py`` by hardcoded path; when the
+    catalogue was split out to ``api/registry_catalog.py`` it parsed zero entries
+    and only the floor below caught it. See ``repo_tests/_registry_catalogue``.
     """
-    tree = ast.parse(_REGISTRY_FILE.read_text(encoding="utf-8"))
-    found = []
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "RouterConfig"):
-            continue
-        kwargs = {kw.arg: kw.value for kw in node.keywords}
-        module = _string_literal(kwargs.get("module_path"))
-        prefix = _string_literal(kwargs.get("prefix"))
-        if module is not None and prefix is not None:
-            found.append((module, prefix.rstrip("/")))
-    return tuple(found)
-
-
-def _string_literal(node: ast.AST | None) -> str | None:
-    """The value of a string-literal argument, or ``None`` if it is computed."""
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
+    return catalogue_entries(_BACKEND)
     return None
 
 
@@ -124,11 +113,28 @@ def _module_is_importable(module_path: str) -> bool:
 # --- non-vacuity: the enumerations the assertions below range over ----------
 
 
+def test_every_catalogue_entry_can_actually_be_compared() -> None:
+    """A dropped entry is worse than an empty table, and the floor cannot see it.
+
+    The resolver used to skip a ``RouterConfig`` whose ``module_path`` or
+    ``prefix`` was computed rather than literal. The floor below defends against
+    *zero* entries; it is silent about a subset quietly missing, so this guard
+    could have reported agreement over 30 of 31 routers and called it agreement.
+    An entry that cannot be read is a hole, not an absence (review, #16375).
+    """
+    unreadable = unreadable_catalogue_entries(_BACKEND)
+    assert not unreadable, (
+        "the catalogue declares entries this guard cannot compare, so the agreement "
+        "assertions below would silently omit them:\n  " + "\n  ".join(unreadable)
+    )
+
+
 def test_the_advertised_table_is_read_and_is_not_empty():
     advertised = _advertised_entries()
 
     assert len(advertised) >= _MIN_ENTRIES, (
-        f"only {len(advertised)} RouterConfig entries parsed out of {_REGISTRY_FILE.name}; "
+        f"only {len(advertised)} RouterConfig entries parsed out of "
+        f"{[p.name for p in catalogue_files(_BACKEND)] or 'no catalogue file at all'}; "
         "the agreement assertions below would range over almost nothing"
     )
 

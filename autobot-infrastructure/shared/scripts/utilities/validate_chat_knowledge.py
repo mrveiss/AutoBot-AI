@@ -15,14 +15,12 @@ import tempfile
 import uuid
 from pathlib import Path
 
-# #14518: the first-party imports below carried a stale ``backend.`` package
-# prefix -- no ``backend`` package exists -- and autobot-backend was never on
-# sys.path, so this script raised ModuleNotFoundError on its own import block
-# before doing any work. Add the directory the way the other operator entry
-# points in this tree do (#14129).
-_BACKEND_DIR = Path(__file__).resolve().parents[4] / "autobot-backend"
-if str(_BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_DIR))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -35,11 +33,10 @@ async def test_chat_knowledge_components():
 
     try:
         # Import the components
-        from api.chat_knowledge import (
-            ChatKnowledgeManager,
-            FileAssociationType,
-            KnowledgeDecision,
-        )
+        # The manager and the two enums moved out of ``api.chat_knowledge`` (the router module)
+        # into ``api.chat_knowledge_manager`` and ``api.schemas_knowledge`` (#18289).
+        from api.chat_knowledge_manager import ChatKnowledgeManager
+        from api.schemas_knowledge import FileAssociationType, KnowledgeDecision
 
         # Initialize manager
         manager = ChatKnowledgeManager()
@@ -113,10 +110,12 @@ def test_frontend_components():
         # Check if Vue components exist and have correct structure
         import os
 
+        # Relative to the repository root, not the caller's directory; the frontend is
+        # ``autobot-frontend/`` (it was ``autobot-vue/``) and ``useToast`` is TypeScript (#18289).
         components_to_check = [
-            "autobot-vue/src/components/KnowledgePersistenceDialog.vue",
-            "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
-            "autobot-vue/src/composables/useToast.js",
+            str(_REPO_ROOT / "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue"),
+            str(_REPO_ROOT / "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue"),
+            str(_REPO_ROOT / "autobot-frontend/src/composables/useToast.ts"),
         ]
 
         for component_path in components_to_check:
@@ -167,6 +166,10 @@ def test_api_endpoints():
 
         found_endpoints = []
         for route in routes:
+            # `include_router` adds a path-less wrapper for the included router (the delete
+            # endpoints); only the router's own routes carry a path (#18289).
+            if not hasattr(route, "path"):
+                continue
             path = str(route.path)
             found_endpoints.append(path)
             logger.info("✅ Endpoint found: %s %s", route.methods, path)

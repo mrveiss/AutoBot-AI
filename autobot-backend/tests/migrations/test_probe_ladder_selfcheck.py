@@ -17,11 +17,13 @@ No database needed — pure static analysis.
 import ast
 from pathlib import Path
 
-import pytest
+# A plain submodule import, never importorskip (#20146): the backend conftest stubs a missing `alembic`
+# with a MagicMock, so only a submodule import fails when the package is absent, and a failure is a
+# collection error that turns the Migration Gate red instead of a skip that keeps it green.
+import alembic.script  # noqa: F401
 
-pytest.importorskip("alembic", reason="probe-ladder self-checks need alembic")
-
-from migrations.baseline import (  # noqa: E402 — after importorskip by design
+from migrations.baseline import (  # noqa: E402 — after the alembic import by design
+    CONSTRAINT_MARKERS,
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
@@ -76,7 +78,9 @@ def test_create_table_calls_are_all_literal():
             "the probe ladder cannot see it; use a string literal"
         )
         if len(art.columns) != _count_calls(path, "add_column"):
-            observable = art.tables or art.columns or sc.revision in TIMESTAMPTZ_MARKERS
+            observable = (
+                art.tables or art.columns or sc.revision in TIMESTAMPTZ_MARKERS or sc.revision in CONSTRAINT_MARKERS
+            )
             assert observable, (
                 f"{path.name}: add_column calls the ladder cannot extract AND "
                 "no other artifact makes this revision observable — use "
@@ -115,7 +119,9 @@ def test_observability_coverage():
     script = _script_directory()
     artifacts = extract_artifacts(script)
     unobservable = {
-        rev for rev, art in artifacts.items() if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS
+        rev
+        for rev, art in artifacts.items()
+        if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS and rev not in CONSTRAINT_MARKERS
     }
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run
@@ -155,6 +161,38 @@ def test_observability_coverage():
         # nothing and the DELETE matches nothing. Both statements are also
         # scoped to rows still in the shape the backfill created, so a row edited
         # since is untouched on the first run and every later one.
+        "20260928_097",  # workspace-lease path unique among LIVE leases only
+        # (#16818) — drops a table-wide UNIQUE constraint and creates a partial
+        # unique index in its place. It creates no table and no column, and
+        # extract_artifacts observes revisions solely through create_table and
+        # add_column, so it cannot be observable by construction. Same structural
+        # category as 20260821_081 (index-only) and 20260906_089 (constraint swap)
+        # above, not a new one. NOTE for anyone reading the assertion message
+        # below: the `_TABLE`-variable hint does not apply here — this revision
+        # has no add_column calls at all, so inlining the literal table name
+        # would change nothing about its observability.
+        #
+        # Extended consciously, and idempotent by inspection rather than by
+        # construction: upgrade() reads get_unique_constraints before dropping
+        # the old constraint and get_indexes before creating the new one, acting
+        # in each case only when the first state is still present. It also
+        # returns early on a non-postgresql dialect or a missing table. So the
+        # adoption re-run this allowlist permits is a genuine no-op rather than a
+        # "constraint does not exist" or "relation already exists" failure.
+        "20261101_108",  # llc_agent_wiki_entries company FK (#20156): a constraint, which the
+        # ladder cannot see; re-run skips an existing constraint, and its orphan count only reads
+        "20261101_110",  # approvals pending cleanup-proposal partial unique index (#20234): index-only,
+        # the same structural category as 20260821_081; upgrade() returns early when the index exists,
+        # so the adoption re-run is a no-op (a duplicate refusal only repeats the first run's message)
+        "20261105_111",  # approvals pending chat-session-owner partial unique index (#20030): index-only,
+        # the same category as 20261101_110; upgrade() returns early when the index exists
+        "20261106_113",  # approvals pending SSH-password-deletion and .env copies-cleanup partial unique
+        # indexes (#20046, #20567): index-only, the same category as 20261105_111; upgrade() skips an index
+        # that already exists, so the adoption re-run is a no-op
+        "20261107_114",  # approvals pending internal-key-realign partial unique index (#20750): index-only,
+        # the same category as 20261106_113; upgrade() returns early when the index exists
+        "20261118_115",  # approvals pending source-run-record-cleanup partial unique index (#21417): index-only,
+        # the same category as 20261107_114; upgrade() returns early when the index exists
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "
@@ -172,3 +210,14 @@ def test_artifacts_dataclass_shape():
     assert isinstance(sample, Artifacts)
     assert isinstance(sample.tables, tuple)
     assert isinstance(sample.columns, tuple)
+
+
+def test_a_constraint_only_revision_is_absent_until_its_constraint_exists():
+    """#17850: without the marker, adoption stamped head over a database that lacked the secrets unique constraint."""
+    from migrations.baseline import DbFacts, applied_status
+
+    rev, (table, constraint) = "20261120_117", CONSTRAINT_MARKERS["20261120_117"][0]
+    artifacts = extract_artifacts(_script_directory())
+    assert applied_status(rev, artifacts, DbFacts(tables={table})) is False
+    assert applied_status(rev, artifacts, DbFacts(tables={table}, constraints={(table, constraint)})) is True
+    assert applied_status(rev, artifacts, DbFacts()) is None  # no secrets table: nothing to verify

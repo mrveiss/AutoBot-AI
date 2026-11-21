@@ -21,8 +21,20 @@ from pathlib import Path
 
 import pytest
 
-from code_intelligence.co_change_test import disable_background_housekeeping, hermetic_git_env
+from autobot_shared.isolated_git import isolated_git_env
+from autobot_shared.paths import strict_git_env
+from code_intelligence.co_change_test import disable_background_housekeeping
 from code_intelligence.code_evolution_miner import GitCommandError, GitHistoryCrawler, _parse_numstat
+
+
+def _git_env() -> dict:
+    """Every inherited ``GIT_`` variable stripped, then the isolated env (#18940).
+
+    ``identity=False``: the fixture configures its own author in the repo, and an
+    env-level identity would outrank it (``test_every_field_downstream_code_reads_is_populated``
+    asserts on that author).
+    """
+    return isolated_git_env(strict_git_env(), identity=False)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -34,7 +46,7 @@ def _git(repo: Path, *args: str) -> None:
     therefore read as a bare "exit status 128" with no indication of the cause,
     which is what made the intermittent failure undiagnosable from the log.
     """
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=hermetic_git_env())
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env=_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git {' '.join(args)} failed in {repo} with exit {result.returncode}\n"
@@ -51,7 +63,7 @@ def _git_init(path: Path) -> None:
     been looked at when the sibling was fixed. A fix applied to one of two
     identical call sites is half a fix.
     """
-    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=hermetic_git_env())
+    result = subprocess.run(["git", "init", "-q", str(path)], capture_output=True, text=True, env=_git_env())
     if result.returncode != 0:
         raise AssertionError(
             f"git init failed in {path} with exit {result.returncode}\n"
@@ -413,7 +425,7 @@ def test_this_file_builds_repos_hermetically_too():
 
     for helper in (_git, _git_init):
         source = inspect.getsource(helper)
-        assert "env=hermetic_git_env()" in source, (
+        assert "env=_git_env()" in source, (
             f"{helper.__name__} runs git without the hermetic environment — "
             "an inherited GIT_ variable makes -C advisory under xdist"
         )
@@ -434,6 +446,6 @@ def test_repos_here_get_the_same_housekeeping_guard_as_co_change_test(tmp_path):
             ["git", "-C", str(tmp_path), "config", "--get", key],
             capture_output=True,
             text=True,
-            env=hermetic_git_env(),
+            env=_git_env(),
         )
         assert result.stdout.strip() == expected, f"{key} = {result.stdout.strip()!r}, expected {expected!r}"

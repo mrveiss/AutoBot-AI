@@ -19,7 +19,9 @@ from autobot_shared.singleton_factory import lazy_singleton
 from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from services.notification_service import NotificationConfig
 
+from . import response_models as rm
 from .approval_support import execute_approval_outcome, validate_approval_request
+from .command_step import require_command_permission
 from .manager import WorkflowAutomationManager
 from .models import (
     AutomatedWorkflowRequest,
@@ -28,6 +30,7 @@ from .models import (
     PlanApprovalMode,
     PlanApprovalResponse,
     PlanPresentationRequest,
+    StepNotAwaitingApproval,
     WorkflowControlRequest,
     WorkflowStartRequest,
     WorkflowStep,
@@ -48,12 +51,13 @@ get_workflow_manager = lazy_singleton(WorkflowAutomationManager)
     operation="create_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/create_workflow")
+@router.post("/create_workflow", response_model=rm.WorkflowCreatedResponse, responses=rm.CREATE_ERRORS)
 async def create_workflow(
     request: AutomatedWorkflowRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """Create new automated workflow"""
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         workflow_steps = [
             WorkflowStep(
@@ -61,7 +65,7 @@ async def create_workflow(
                 command=step.command,
                 description=step.description,
                 explanation=step.explanation,
-                requires_confirmation=step.requires_confirmation,
+                requires_confirmation=True,  # #19807: the creator cannot remove the human gate from a command step
                 risk_level=step.risk_level,
                 dependencies=step.dependencies,
             )
@@ -95,7 +99,7 @@ async def create_workflow(
     operation="start_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/start_workflow/{workflow_id}")
+@router.post("/start_workflow/{workflow_id}", response_model=rm.WorkflowActionResponse, responses=rm.START_ERRORS)
 async def start_workflow(
     workflow_id: str,
     request: WorkflowStartRequest | None = None,
@@ -146,7 +150,7 @@ async def start_workflow(
     operation="control_workflow",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.post("/control_workflow")
+@router.post("/control_workflow", response_model=rm.WorkflowActionResponse, responses=rm.CONTROL_ERRORS)
 async def control_workflow(
     request: WorkflowControlRequest,
     current_user: dict = Depends(get_current_user),
@@ -168,6 +172,8 @@ async def control_workflow(
         else:
             raise HTTPException(status_code=404, detail="Workflow not found or action failed")
 
+    except StepNotAwaitingApproval as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except HTTPException:
         # #17014: without this the 403 below -- and the 404 above, already -- left as
         # a 500. An ownership refusal that surfaces as "Internal server error" is
@@ -175,7 +181,7 @@ async def control_workflow(
         raise
     except Exception as e:
         logger.error("Failed to control workflow: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @with_error_handling(
@@ -183,7 +189,11 @@ async def control_workflow(
     operation="get_workflow_status",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/workflow_status/{workflow_id}")
+@router.get(
+    "/workflow_status/{workflow_id}",
+    response_model=rm.AutomationWorkflowStatusResponse,
+    responses=rm.STATUS_ERRORS,
+)
 async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get_current_user)):
     """Get current workflow status"""
     try:
@@ -207,7 +217,7 @@ async def get_workflow_status(workflow_id: str, current_user: dict = Depends(get
     operation="get_active_workflows",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/active_workflows")
+@router.get("/active_workflows", response_model=rm.AutomationWorkflowListResponse, responses=rm.LIST_ERRORS)
 async def get_active_workflows(
     current_user: dict = Depends(get_current_user),
 ):
@@ -231,7 +241,7 @@ async def get_active_workflows(
     operation="get_completed_workflows",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
-@router.get("/completed_workflows")
+@router.get("/completed_workflows", response_model=rm.AutomationWorkflowListResponse, responses=rm.LIST_ERRORS)
 async def get_completed_workflows(
     current_user: dict = Depends(get_current_user),
 ):
@@ -259,14 +269,21 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
     Create workflow from natural language chat request.
 
     Issue #390: Now presents plan for approval instead of auto-starting.
+    #13809: that is now the default; auto-start must be asked for explicitly.
     """
+    require_command_permission(current_user)  # #19807: its steps run shell commands
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")
-        # Issue #390: Backward compatible - auto_start=True by default
-        # Set require_approval=True to enable plan approval flow
-        auto_start = request.get("auto_start", True)  # Keep backward compatible
-        require_approval = request.get("require_approval", False)  # Opt-in
+        # #13809 (owner ruling 2026-10-03, recorded on the issue): the plan's
+        # commands are now LLM-authored from the user's text, so the default is to
+        # present the plan for approval and start nothing. The #390 default
+        # (auto_start=True, require_approval=False) was set when every step was an
+        # echo. The frontend's only caller already sends requireApproval=true, so
+        # this removes a server/client divergence. Each step also requires
+        # confirmation on its own (manager._steps_from_plan), whatever is passed here.
+        auto_start = request.get("auto_start", False)
+        require_approval = request.get("require_approval", True)
         approval_mode = request.get("approval_mode", "full_plan")
 
         if not user_request or not session_id:
@@ -292,7 +309,8 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
                     "plan": (plan_approval.to_presentation_dict() if plan_approval else None),
                 }
             else:
-                # Legacy behavior: auto-start immediately (backward compatible default)
+                # Started only when the caller opted out of plan approval (#13809);
+                # each step still waits for confirmation before it runs.
                 await get_workflow_manager().start_workflow_execution(workflow_id)
                 return {
                     "success": True,
@@ -306,6 +324,8 @@ async def create_workflow_from_chat(request: dict, current_user: dict = Depends(
                 "message": "Could not create workflow from chat request",
             }
 
+    except HTTPException:
+        raise  # the 400 above is a client error, not a 500
     except Exception as e:
         logger.error("Failed to create workflow from chat: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

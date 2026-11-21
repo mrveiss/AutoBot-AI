@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
@@ -59,9 +59,9 @@ repos:
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=scrubbed_git_env())
+    return git(cwd, *args, check=check)
 
 
 def _seed_repo(tmp_path: Path, *, name: str = "main") -> Path:
@@ -73,9 +73,7 @@ def _seed_repo(tmp_path: Path, *, name: str = "main") -> Path:
     (repo / "tools" / "git-hooks" / "pre-commit").write_bytes(_TEMPLATE.read_bytes())
     (repo / "scripts" / "install-git-hooks.sh").write_bytes(_INSTALLER.read_bytes())
     (repo / ".pre-commit-config.yaml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
-    _git(repo.parent, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     _git(repo, "checkout", "--quiet", "-b", "issue-1")
@@ -218,9 +216,7 @@ def test_negative_control_the_pre_16923_hook_would_not_have_caught_this(tmp_path
     (repo / "tools" / "git-hooks" / "pre-commit").write_text(guard_only, encoding="utf-8")
     (repo / "scripts" / "install-git-hooks.sh").write_bytes(_INSTALLER.read_bytes())
     (repo / ".pre-commit-config.yaml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
-    _git(repo.parent, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     _git(repo, "checkout", "--quiet", "-b", "issue-1")
@@ -245,11 +241,66 @@ def test_negative_control_the_pre_16923_hook_would_not_have_caught_this(tmp_path
 
 
 def test_the_bot_commit_workflow_never_installs_local_hooks() -> None:
-    workflow = _REPO_ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml"
-    assert workflow.is_file(), f"{workflow} is missing — the named exemption's subject vanished"
-    text = workflow.read_text(encoding="utf-8")
-    assert 'user.name "github-actions[bot]"' in text, "this is not the workflow #16923's exemption names"
+    # The caller and, since #18500, the composite action that holds its steps.
+    workflows = [
+        _REPO_ROOT / ".github" / "workflows" / "auto-fix-generated-types.yml",
+        _REPO_ROOT / ".github" / "actions" / "generated-types-autofix" / "action.yml",
+    ]
+    for workflow in workflows:
+        assert workflow.is_file(), f"{workflow} is missing — the named exemption's subject vanished"
+    text = "\n".join(w.read_text(encoding="utf-8") for w in workflows)
+    assert "Report drift with the command that fixes it" in text, "the autofix steps are not in the files read here"
+    # #15362 removed this workflow's commit entirely: it reports the drift with the patch instead
+    # of pushing a fix, and holds `contents: read`, so it CANNOT commit. AC6's exemption was
+    # "this automation's commits are hook-less by construction"; "it makes no commits" satisfies
+    # that more strongly, so the claim is asserted in its new form rather than deleted.
+    assert "git commit" not in text, (
+        "this workflow commits again -- #15362 made it report drift instead of pushing a fix. "
+        "If a commit is deliberately reinstated, AC6's hook-less-by-construction claim has to be "
+        "re-established, and `pull_request_workflows_cannot_push_15362_test.py` will fail too"
+    )
     assert "install-git-hooks.sh" not in text, (
-        "this workflow now installs local hooks -- github-actions[bot]'s commit is no longer "
-        "hook-less by construction, and the #16923 exemption claim is stale"
+        "this workflow now installs local hooks -- if a commit is ever reinstated it would no "
+        "longer be hook-less by construction, and the #16923 exemption claim would be stale"
+    )
+
+
+# ---------------------------------------------------------------------------
+# #13842 F4: format.sh must find the CI-parity interpreter
+# ---------------------------------------------------------------------------
+
+
+def test_format_sh_searches_the_parity_venv_before_falling_back() -> None:
+    """The parity venv is 3.14 and deliberately NOT on PATH.
+
+    `scripts/setup-ci-parity-env.sh` builds CI's exact interpreter at
+    `$HOME/.venv-python-suite` and says so; it is intentionally kept off PATH
+    so it cannot shadow the system python. The consequence F4 recorded is that
+    `format.sh`'s `command -v` search could not see it, skipped a perfectly
+    good 3.14 on the box, and fell through to whatever older interpreter had
+    black -- which emits different output and makes a clean local run fail
+    CI's format check.
+
+    Asserted on the executable lines, not the whole file, so the comment
+    explaining the search cannot satisfy this (#17941).
+    """
+    from tools.lint._comment_syntax import code_text
+
+    script = (repo_root() / "scripts" / "format.sh").read_text(encoding="utf-8")
+    code = code_text(script, name="format.sh")
+
+    assert "venv-python-suite" in code, (
+        "format.sh no longer looks for the CI-parity venv, so a box whose PATH python is "
+        "older than 3.14 formats with the wrong interpreter even when 3.14 is installed (F4)"
+    )
+    assert "CI_PARITY_VENV" in code, (
+        "the parity venv location is hardcoded; setup-ci-parity-env.sh honours CI_PARITY_VENV "
+        "and format.sh must agree or the two disagree about where the interpreter is"
+    )
+
+    parity_at = code.index("venv-python-suite")
+    fallback_at = code.index("python3.13")
+    assert parity_at < fallback_at, (
+        "format.sh checks the fallback chain before the parity venv, so an older interpreter "
+        "with black installed still wins -- which is the drift F4 describes"
     )

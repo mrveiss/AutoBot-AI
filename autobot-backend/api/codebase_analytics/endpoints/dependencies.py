@@ -12,18 +12,25 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import aiofiles
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends
 
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_dependency_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, resolve_scan_root
+from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -334,7 +341,7 @@ def _build_visualization_graph(
         circular_deps: Detected circular dependencies
 
     Returns:
-        Complete response dictionary for JSONResponse
+        Complete response dictionary
     """
     nodes = []
     edges = []
@@ -382,7 +389,7 @@ def _build_visualization_graph(
 async def _load_modules_from_chromadb(
     code_collection,
     modules: Dict[str, Dict],
-    source_id: str | None = None,
+    source_id: str,
 ) -> None:
     """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088.
 
@@ -395,9 +402,11 @@ async def _load_modules_from_chromadb(
     wrong project (fail-closed -- the safe direction). Those pre-scoping
     records don't reappear until their source is reindexed.
     """
+    # #17758/#20513: no unscoped branch; a missing source is an error, not a skipped query.
+    source_id = require_source_id(source_id, "dependency module query")
     try:
         type_filter = {"type": {"$in": ["function", "class"]}}
-        where = {"$and": [type_filter, {"source_id": source_id}]} if source_id else type_filter
+        where = {"$and": [type_filter, {"source_id": source_id}]}
         results = get_all_paginated(
             code_collection,
             where=where,
@@ -424,19 +433,8 @@ async def _scan_filesystem_imports(
     """
     # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
-    excluded_dirs = {
-        ".git",
-        "__pycache__",
-        "node_modules",
-        ".venv",
-        "venv",
-        "env",
-        ".env",
-        "archive",
-        "dist",
-        "build",
-    }
-    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in excluded_dirs)]
+    # Root-relative: a project root that is itself a worktree must not exclude every file (#13602).
+    python_files = [f for f in python_files if EXCLUDED_DIRS.isdisjoint(f.relative_to(project_root).parts)]
     # Prioritize source directories over infrastructure/tooling (#1197)
     _priority = {"autobot-backend", "autobot_shared"}
     python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)
@@ -458,8 +456,9 @@ async def _scan_filesystem_imports(
     operation="get_dependencies",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_dependencies(
-    source_id: str | None = Query(None, description="#12330: scope dependency scan to the selected code source"),
+    source_id: SourceIdQuery,
 ):
     """
     Get file dependency analysis showing imports and module relationships.
@@ -477,13 +476,6 @@ async def get_dependencies(
     - circular_dependencies: Detected circular import issues
     - external_dependencies: Third-party package dependencies
     """
-    # Issue #12330: Resolve the default source once so both the ChromaDB module
-    # load and the filesystem scan below are scoped to the same project.
-    if not source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
-
-        source_id = await get_default_source_id()
-
     code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}
     import_relationships: List[Dict] = []
@@ -493,7 +485,7 @@ async def get_dependencies(
     if code_collection:
         await _load_modules_from_chromadb(code_collection, modules, source_id=source_id)
 
-    project_root = await resolve_scan_root(source_id, use_default=False)
+    project_root = await resolve_scan_root(source_id)
     await _scan_filesystem_imports(
         project_root,
         modules,
@@ -505,7 +497,8 @@ async def get_dependencies(
     # Build module index and detect circular imports (#1197)
     module_index = _build_module_index(modules)
     circular_deps = _detect_circular_deps(runtime_rels, module_index)
-    return JSONResponse(_build_visualization_graph(modules, import_relationships, external_deps, circular_deps))
+    graph = _build_visualization_graph(modules, import_relationships, external_deps, circular_deps)
+    return {**graph, "source_id": source_id}
 
 
 # ------------------------------------------------------------------
@@ -515,42 +508,25 @@ async def get_dependencies(
 
 @router.get("/analytics/dependencies/cached")
 @bounded(60.0)
-async def get_cached_dependency_result(source_id: str = ""):
+async def get_cached_dependency_result(source_id: SourceIdQuery):
     """Return the latest completed dependency analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/analytics/dependencies/analyze")
 @bounded(60.0)
-async def start_dependency_analysis():
+async def start_dependency_analysis(source_id: SourceIdQuery):
     """Enqueue dependency analysis as a Celery task (GH#6505)."""
-    result = run_dependency_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_dependency_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/analytics/dependencies/status/{task_id}")
+@router.get("/analytics/dependencies/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 async def get_dependency_status(task_id: str):
     """Get dependency analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/analytics/dependencies/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_dep_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(router, "/analytics/dependencies/tasks/clear-stuck", name="clear_stuck_dep_tasks", bounded_s=60.0)

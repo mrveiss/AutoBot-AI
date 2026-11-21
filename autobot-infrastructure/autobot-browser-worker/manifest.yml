@@ -8,9 +8,18 @@ deploy:
   destination: /opt/autobot/autobot-browser-worker/
   shared: true
   infrastructure: true
+  # #21852: the ONE list of the worker's shipped modules. Every deploy path reads it through
+  # scripts/lib/browser_worker_files.sh; the compose volume lists cannot, so
+  # repo_tests/browser_worker_one_manifest_21852_test.py holds them to it. A module the worker
+  # requires that is not listed here makes the worker die with MODULE_NOT_FOUND.
+  files:
+    - playwright-server.js
+    - session-store.js
+    - element-index.js
+    - search-snippet.js
 
 system_dependencies:
-  - nodejs              # v20 via NodeSource
+  - nodejs              # major = node_major (= .nvmrc), via NodeSource
   - chromium-browser
   - xvfb               # Virtual display for headed mode
   - libgbm-dev

@@ -108,7 +108,7 @@ class RoutineRunRead(BaseModel):
     created_at: datetime
 
 
-class TriggerResponse(BaseModel):
+class RoutineTriggerResponse(BaseModel):
     routine_id: uuid.UUID
     message: str = "Routine scheduled for immediate execution"
 
@@ -280,7 +280,7 @@ async def list_routine_runs(
 
 @router.post(
     "/routines/{routine_id}/trigger",
-    response_model=TriggerResponse,
+    response_model=RoutineTriggerResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def trigger_routine(
@@ -288,7 +288,7 @@ async def trigger_routine(
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> TriggerResponse:
+) -> RoutineTriggerResponse:
     routine = await _load_owned_routine(session, routine_id, ctx)
     if routine.status != RoutineStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Routine is not active")
@@ -300,4 +300,4 @@ async def trigger_routine(
             await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id}": time.time()}, nx=False)
     except Exception:
         pass
-    return TriggerResponse(routine_id=routine_id)
+    return RoutineTriggerResponse(routine_id=routine_id)

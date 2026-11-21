@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass
 
 from content_reach.base import ContentBackend
-from source_attribution import SourceType
+from source_attribution import SourceKind
 
 
 @dataclass
@@ -18,7 +18,7 @@ class ContentSourceChain:
     """Ordered primary+fallback backends for one content source."""
 
     source: str
-    source_type: SourceType
+    source_type: SourceKind
     backends: list[ContentBackend]
 
     def backend_names(self) -> list[str]:

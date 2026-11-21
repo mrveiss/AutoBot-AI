@@ -41,6 +41,23 @@ export interface SecurityScoreResult {
   owasp_breakdown: Record<string, number>
 }
 
+/** Raw payload of `security/score/cached`; `no_data` carries no score. */
+export interface CachedSecurityScoreRaw {
+  status: 'success' | 'no_data'
+  from_cache?: boolean
+  completed_at?: string
+  security_score?: number
+  grade?: string
+  risk_level?: string
+  status_message?: string
+  total_findings?: number
+  critical_issues?: number
+  high_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
+  owasp_breakdown?: Record<string, number>
+}
+
 export interface PerformanceScoreResult {
   performance_score: number
   grade: string
@@ -171,6 +188,12 @@ export interface EnvRecommendation {
   description: string
   category: string
   priority: string
+}
+
+/** The env-analysis AI filter model, and whether fetching it failed (#15502). */
+export interface AiFilteringModelState {
+  model: string | null
+  unavailable: boolean
 }
 
 export interface EnvironmentAnalysisResult {
@@ -362,5 +385,9 @@ export interface CodeHealthScoreData {
   grade: string
   health_score: number
   breakdown?: Record<string, unknown>
+  /** Fields GET /api/code-intelligence/health-score returns (code_intelligence.py). */
+  total_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
   [key: string]: unknown
 }

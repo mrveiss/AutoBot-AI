@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any, Dict
 from urllib.parse import quote
 
+from autobot_shared.auth.jwt_core import decode_jwt_claims_unverified
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.principal import resolve_principal_id
 
@@ -102,14 +103,7 @@ def jwt_subject_for_audit(authorization: str | None) -> str | None:
 def _decode_jwt_sub(token: str) -> str | None:
     """Decode a JWT's ``sub`` claim without verifying its signature. None on any decode error."""
     try:
-        import base64
-        import json as _json
-
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        claims = _json.loads(base64.urlsafe_b64decode(parts[1] + "=="))
-        return claims.get("sub")
+        return decode_jwt_claims_unverified(token).get("sub")
     except Exception as exc:
         logger.debug("JWT sub decode failed: %s", exc)
         return None

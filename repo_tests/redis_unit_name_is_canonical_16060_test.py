@@ -32,6 +32,9 @@ import re
 
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+from tools.lint._comment_syntax import code_lines
+
 _SLM = repo_root() / "autobot-slm-backend"
 
 #: The unit `roles/redis` installs. Read from the role registry in the test
@@ -52,7 +55,7 @@ def _registry_unit() -> str | None:
     """
     import ast
 
-    tree = ast.parse((_SLM / "services" / "role_registry.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_SLM / "services" / "role_registry.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):
             continue
@@ -95,18 +98,14 @@ def test_no_service_management_path_hardcodes_an_absent_unit():
     """
     offenders = []
     for rel in ("services/backup.py", "services/reconciler.py", "api/services.py"):
-        for line in (_SLM / rel).read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            # A comment naming the old unit is documentation, not a command.
-            # The first draft of this guard flagged its own explanation of the
-            # bug -- #16011's blindness, in the guard written to catch it.
-            if stripped.startswith("#"):
-                continue
+        # A comment naming the old unit is documentation, not a command: the
+        # first draft of this guard flagged its own explanation of the bug --
+        # #16011's blindness, in the guard written to catch it.
+        for _number, line in code_lines((_SLM / rel).read_text(encoding="utf-8")):
             if "systemctl" in line and any(f" {absent}" in line for absent in _ABSENT):
-                offenders.append(f"{rel}: {stripped}")
+                offenders.append(f"{rel}: {line.strip()}")
     assert not offenders, (
-        "these issue systemctl against a unit that does not exist on a "
-        f"provisioned node: {offenders}"
+        "these issue systemctl against a unit that does not exist on a " f"provisioned node: {offenders}"
     )
 
 

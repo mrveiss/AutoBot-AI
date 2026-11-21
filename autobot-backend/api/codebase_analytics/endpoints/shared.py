@@ -8,7 +8,7 @@ Shared utilities and constants for codebase analytics endpoints
 
 from pathlib import Path
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 
 # Issue #13470: ImportContext, STDLIB_MODULES, COMMON_THIRD_PARTY,
 # INTERNAL_MODULE_PREFIXES and is_external_module moved to
@@ -24,15 +24,21 @@ from autobot_shared.code_graph import (
     is_external_module,
 )
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.path_http import require_contained_relative_path
+from utils.file_categorization import SKIP_DIRS
 
 # Logger
 logger = get_logger(__name__)
+
+# Canonical skip dirs plus extras: virtualenv-style env dirs and archived code are not analysed.
+EXCLUDED_DIRS = SKIP_DIRS | {".env", "archive", "env"}
 
 # In-memory storage fallback
 _in_memory_storage = {}
 
 __all__ = [
     "COMMON_THIRD_PARTY",
+    "EXCLUDED_DIRS",
     "INTERNAL_MODULE_PREFIXES",
     "STDLIB_MODULES",
     "ImportContext",
@@ -41,9 +47,10 @@ __all__ = [
     "filter_problems_by_file_existence",
     "get_project_root",
     "require_source_access",
-    "resolve_project_root",
+    "resolve_git_repo_root",
     "resolve_scan_root",
     "resolve_source_root",
+    "UnresolvedSourceError",
     "trigger_auto_index_if_unindexed",
 ]
 
@@ -59,22 +66,48 @@ async def resolve_source_root(source_id: "str | None") -> "Path | None":
         source_id: The source identifier to look up, or None.
 
     Returns:
-        Path to the source clone directory, or None if unresolvable.
+        Path to the source clone directory, or None when the source is unknown
+        or has no clone. Raises ``RegistryUnavailable`` when the lookup itself
+        failed -- not found and lookup failed are different facts (#17982).
     """
     if not source_id:
         return None
-    try:
-        from api.codebase_analytics.source_storage import get_source
+    from api.codebase_analytics.source_storage import RegistryUnavailable, get_source
 
+    try:
         source = await get_source(source_id)
-        if source and source.clone_path:
-            return Path(source.clone_path)
+    except RegistryUnavailable:
+        logger.error("source lookup for %s failed: the registry is unavailable", source_id)
+        raise
     except Exception as exc:
-        logger.debug("Could not resolve source root for %s: %s", source_id, exc)
+        # #17982: a lookup that THREW is not "no such source". This was
+        # `except Exception: logger.debug(...)` followed by `return None`, so a
+        # fault and an unknown id were the same observable and a refused scan
+        # asserted the id was unknown. Surfaced as the registry fault it is.
+        logger.error("source lookup for %s failed: %s", source_id, exc, exc_info=True)
+        raise RegistryUnavailable(f"source lookup for {source_id!r} failed") from exc
+    if source and source.clone_path:
+        return Path(source.clone_path)
     return None
 
 
-async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -> Path:
+class UnresolvedSourceError(HTTPException):
+    """A named ``source_id`` did not resolve to a checkout (#17758, #20513).
+
+    One definition of the refusal AND of its HTTP mapping: this IS the 404, so a
+    route that lets it propagate answers correctly and no route repeats a
+    ``try/except`` to translate it. Background callers catch it by type.
+    The detail never echoes the id (CWE-209).
+    """
+
+    MESSAGE = "This source has no checkout yet; index or clone it before running this analysis."
+
+    def __init__(self, source_id: "str | None") -> None:
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=self.MESSAGE)
+        self.source_id = source_id
+
+
+async def resolve_scan_root(source_id: "str | None") -> Path:
     """Resolve the filesystem root a source-scoped analytics scan must read.
 
     Issue #12330: Several filesystem-scanning analytics endpoints accepted a
@@ -83,39 +116,59 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
     leakage. This resolves the requested source's clone path so scans are scoped
     to the caller's project.
 
-    When ``source_id`` is falsy and ``use_default`` is True, the default (most
-    recently indexed) source is resolved first to avoid silently mixing projects
-    (matches the stats.py/report.py pattern, #2653). Falls back to the resolved
-    AutoBot project root only when no source can be resolved (e.g. dev checkout
-    with no registered sources).
+    #20513: there is no "default source" and no AutoBot-tree fallback. A source
+    that does not resolve to a clone (deleted, no ``clone_path``, no id at all)
+    raises ``UnresolvedSourceError`` (404), because a result for AutoBot's own tree
+    served under another project's name is the leak #12330 closed.
 
-    Issue #12393: The fallback uses ``resolve_project_root()`` (the git-walk-up /
-    deployed ``code_source`` probe, #10730) rather than the plain
-    ``get_project_root()`` (hardcoded ``parents[4]``). In the deployed standalone
-    rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not a git repo --
-    so the plain helper silently scanned the wrong tree in production. In a dev
-    checkout the two are equivalent, so this fallback is unchanged there.
-
-    Args:
-        source_id: The requested source identifier, or None.
-        use_default: When True, resolve the default source if source_id is None.
-
-    Returns:
-        Path to the resolved source clone directory, or the resolved AutoBot
-        project root.
+    Raises:
+        UnresolvedSourceError: ``source_id`` is empty or has no checkout.
     """
-    if not source_id and use_default:
-        try:
-            from api.codebase_analytics.source_storage import get_default_source_id
-
-            source_id = await get_default_source_id()
-        except Exception as exc:
-            logger.debug("resolve_scan_root: default source lookup failed: %s", exc)
-
     source_root = await resolve_source_root(source_id)
-    if source_root:
+    # A clone_path whose directory is absent is no checkout: a scan of it would report an empty success.
+    if source_root and source_root.is_dir():
         return source_root
-    return Path(resolve_project_root())
+    # #17758: whenever `resolve_source_root` returns None -- a deleted source, an
+    # empty clone_path -- a background scan has no user to notice that the result
+    # describes AutoBot's tree instead of theirs.
+    raise UnresolvedSourceError(source_id)
+
+
+async def scan_path_in_source(source_id: str, path: str | None) -> str:
+    """The directory a ``/patterns/*`` scan reads: the source's root, or a sub-path of it (#20513).
+
+    ``path`` is RELATIVE to the source root and is validated to stay inside it, so a
+    client cannot point a scan at the server's own tree or any other directory. The
+    old default was the AutoBot project root, whatever source the caller had selected.
+    """
+    root = await resolve_scan_root(source_id)
+    if not path:
+        return str(root)
+    return str(require_contained_relative_path(path, root))
+
+
+async def confirm_scan_dir_in_source(source_id: str, scan_dir: str) -> str:
+    """Re-check, at execution time, that a queued scan directory still lies inside its source (#20513).
+
+    The route validated ``scan_dir`` when it queued the task; the worker runs later, and a
+    path component may have been swapped for a link since. The worker therefore resolves the
+    directory again, requires the real path to be inside the source's real root, and scans
+    that real path, so a swap after this check cannot redirect which directory is read.
+
+    Raises:
+        UnresolvedSourceError: the source no longer has a checkout.
+        ValueError: ``scan_dir`` now resolves outside the source.
+    """
+    root = (await resolve_scan_root(source_id)).resolve()
+    real = Path(scan_dir).resolve()
+    if real != root and root not in real.parents:
+        raise ValueError("The scan directory is outside the authorised source.")
+    return str(real)
+
+
+def tag_source(response: Response, source_id: str) -> None:
+    """Name the source a list or text result belongs to (#20513), where the body is not a dict."""
+    response.headers["X-Source-Id"] = source_id
 
 
 # Issue #12364: sources whose auto-index has already been fired this process
@@ -188,6 +241,11 @@ def _caller_owner_id(user: "dict | None") -> "str | None":
     return _NO_OWNER_ID
 
 
+def _registry_unavailable_503() -> HTTPException:
+    """The one response for an unreadable source registry; the cause is already logged."""
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Code source registry unavailable")
+
+
 async def authorize_source_access(source_id: "str | None", user: "dict | None") -> None:
     """Enforce that ``user`` may access the code source ``source_id`` (#12358).
 
@@ -204,9 +262,14 @@ async def authorize_source_access(source_id: "str | None", user: "dict | None") 
     """
     if not source_id:
         return
-    from api.codebase_analytics.source_storage import _is_visible, get_source
+    from api.codebase_analytics.source_storage import RegistryUnavailable, _is_visible, get_source
 
-    source = await get_source(source_id)
+    try:
+        source = await get_source(source_id)
+    except RegistryUnavailable:
+        # A fault is not "no such source": answering 404 here told the caller the
+        # id was unknown when the registry could not be read (#17982).
+        raise _registry_unavailable_503() from None
     if source is None or not _is_visible(source, _caller_owner_id(user)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -241,7 +304,7 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def resolve_project_root() -> str:
+def resolve_git_repo_root() -> str:
     """
     Resolve the real git repository root robustly for dev and deployed layouts.
 
@@ -263,7 +326,7 @@ def resolve_project_root() -> str:
     # Walk up the directory tree looking for a .git entry
     for parent in current.parents:
         if (parent / ".git").exists():
-            logger.debug("resolve_project_root: found git root via walk-up: %s", parent)
+            logger.debug("resolve_git_repo_root: found git root via walk-up: %s", parent)
             return str(parent)
 
     # No .git found walking up — check for deployed-layout sibling code_source
@@ -275,11 +338,11 @@ def resolve_project_root() -> str:
         candidate.parent / "code_source",  # one level higher, just in case
     ):
         if (probe / ".git").exists():
-            logger.debug("resolve_project_root: found git root via code_source probe: %s", probe)
+            logger.debug("resolve_git_repo_root: found git root via code_source probe: %s", probe)
             return str(probe)
 
     # Final fallback: original parents[4] (works in dev checkout)
-    logger.debug("resolve_project_root: falling back to parents[4]: %s", candidate)
+    logger.debug("resolve_git_repo_root: falling back to parents[4]: %s", candidate)
     return str(candidate)
 
 
@@ -311,7 +374,7 @@ def filter_problems_by_file_existence(
     if not problems:
         return problems
 
-    base = Path(root_path) if root_path else Path(resolve_project_root())
+    base = Path(root_path) if root_path else Path(resolve_git_repo_root())
 
     validated: list[dict] = []
     dropped = 0

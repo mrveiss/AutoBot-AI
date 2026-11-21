@@ -83,16 +83,17 @@
             </div>
 
     <template #actions>
-      <button class="btn-cancel" @click="$emit('close')" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
-      <button
-        class="btn-submit"
+      <BaseButton variant="secondary" size="sm" @click="$emit('close')" type="button">{{ $t('analytics.sources.form.cancel') }}</BaseButton>
+      <BaseButton
+        variant="success"
+        size="sm"
         @click="handleSubmit"
         :disabled="submitting || !source"
         type="button"
       >
         <i :class="submitting ? 'fas fa-spinner fa-spin' : 'save'"></i>
         {{ submitting ? $t('analytics.sources.form.saving') : $t('analytics.sources.share.updateAccess') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -109,7 +110,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { shareCodeSource } from '@/composables/analytics/useSourceRegistry'
@@ -327,24 +328,5 @@ watch(() => props.source, (source) => {
   font-size: var(--text-xs);
   padding: var(--spacing-1) var(--spacing-2-5);
   border-radius: var(--radius-full);
-}
-
-.btn-submit {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-success);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: var(--bg-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: opacity var(--duration-200);
-}
-
-.btn-submit:hover:not(:disabled) {
-  opacity: 0.85;
 }
 </style>

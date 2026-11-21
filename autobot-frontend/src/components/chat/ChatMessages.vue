@@ -61,8 +61,8 @@
             <div class="message-info">
               <span class="sender-name">
                 {{ getSenderName(message.sender) }}
-                <span v-if="message.sender === 'assistant' && message.metadata?.model" class="model-name">
-                  ({{ message.metadata.model }})
+                <span v-if="message.sender === 'assistant' && shownModel(message.metadata)" class="model-name">
+                  ({{ shownModel(message.metadata) }})
                 </span>
               </span>
               <!-- MVA-1993: Lightweight mode cost indicator -->
@@ -144,13 +144,12 @@
           :plan="message.metadata.plan as any"
           :steps="message.metadata?.steps as any"
         />
-
+        <StallQuestionCard v-else-if="message.type === 'human_question'" :message="message" /> <!-- #21022 -->
         <!-- Issue #690: Overseer Agent Step Message -->
         <OverseerStepMessage
           v-else-if="message.type === 'overseer_step' && message.metadata?.step"
           :step="message.metadata.step as any"
         />
-
         <!-- GH#9015: AI-generated image message -->
         <ImageCell
           v-else-if="(message.type === 'image' || message.metadata?.display_type === 'image') && message.metadata?.image_payload"
@@ -176,7 +175,7 @@
             <summary class="summary-toggle">
               {{ $t('chat.contextWindow.summaryToggle') }}
             </summary>
-            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="summary-content message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
           </details>
         </div>
 
@@ -184,7 +183,7 @@
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
-            <div class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+            <div class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
             <div v-if="store.isTyping && isLastMessage(message)" class="typing-indicator">
               <div class="typing-dots">
                 <span></span>
@@ -195,7 +194,7 @@
           </div>
 
           <!-- Regular message content -->
-          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
+          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)" @click="handleContentClick"></div>
 
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
@@ -204,9 +203,9 @@
               <span v-if="message.sender === 'assistant' && message.metadata.thinking_used" class="metadata-item thinking-used-badge">
                 🧠 {{ $t('chat.messages.thinkingUsed', 'Extended thinking') }}
               </span>
-              <span v-if="message.metadata.model" class="metadata-item">
+              <span v-if="shownModel(message.metadata)" class="metadata-item">
                 <Icon name="robot" />
-                {{ message.metadata.model }}
+                {{ shownModel(message.metadata) }}
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
                 <Icon name="dollar-sign" />
@@ -442,7 +441,8 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline-solid"
+                v-if="!isGraphApproval(message.metadata)"
+                variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
@@ -560,9 +560,13 @@
 </template>
 
 <script setup lang="ts">
+import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
+import { visibleMessages, shownModel } from '@/utils/internalMessage'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { createEntityAnchorClickHandler } from '@/composables/chat/useEntityAnchors'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -578,8 +582,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
+import StallQuestionCard from '@/components/chat/StallQuestionCard.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
@@ -590,6 +594,7 @@ import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandApproval } from '@/composables/useCommandApproval'
+import { isGraphApproval, useApprovalRouting } from '@/composables/useGraphApproval'
 import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
@@ -638,31 +643,8 @@ const {
   getRiskClass,
 } = useCommandApproval()
 
-/**
- * Thin wrapper: calls the composable's approveCommand with the store's
- * message-update callback wired in.
- */
-const approveCommand = (
-  terminal_session_id: string,
-  approved: boolean,
-  comment?: string,
-  command_id?: string,
-  commandInfo?: { command: string; risk_level: string }
-) => {
-  const onMessageUpdate = (sessionId: string, status: string, updateComment?: string) => {
-    const targetMessage = store.currentMessages.find(
-      msg => msg.metadata?.terminal_session_id === sessionId &&
-             msg.metadata?.requires_approval === true
-    )
-    if (targetMessage && targetMessage.metadata) {
-      targetMessage.metadata.approval_status = status
-      targetMessage.metadata.approval_comment = updateComment
-    } else {
-      logger.warn('Could not find message to update approval status')
-    }
-  }
-  return _approveCommand(terminal_session_id, approved, comment, command_id, onMessageUpdate, commandInfo)
-}
+/** A graph-interrupt card posts to /chats/{id}/resume; any other card keeps the terminal route (#20195). */
+const approveCommand = useApprovalRouting(_approveCommand)
 
 // Refs
 const messagesContainer = ref<HTMLElement>()
@@ -710,7 +692,7 @@ const showEmptyState = computed(() => {
 
 // Computed
 const filteredMessages = computed(() => {
-  return store.currentMessages.filter(message => {
+  return visibleMessages(store.currentMessages).filter(message => { // #21846: never an internal marker
     // Issue #650: Check both top-level type AND metadata.display_type for filtering
     // Backend now sends display_type in metadata for proper categorization
     const displayType = message.type || message.metadata?.display_type || 'response'
@@ -883,54 +865,22 @@ const getContentClass = (message: ChatMessage): string => {
  * Key: message id + content length (cheap proxy for content identity).
  * Avoids re-running 11 regex ops for unchanged messages on every render.
  */
+const router = useRouter()
+// #9479: entity anchors rendered by the shared formatter navigate in-app.
+const handleContentClick = createEntityAnchorClickHandler(router)
+
 const formatCache = new Map<string, string>()
 const FORMAT_CACHE_MAX = 500
 
-const formatMessageContentRaw = (content: string): string => {
-  // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
-  let formatted = content
-    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
-    .replace(/\u001b\][0-9;]*[^\u0007]*\u0007/g, '') // OSC sequences: BEL
-    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u001b\\)?/g, '') // OSC sequences: ST
-    .replace(/\u001b[=>]/g, '') // Set numeric keypad mode
-    .replace(/\u001b[()][AB012]/g, '') // Character set selection
-    .replace(/\u001b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
-    .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
-    .trim()
-
-  // Strip message type tags (Issue #680)
-  formatted = formatted
-    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-    .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
-    .trim()
-
-  // Strip TOOL_CALL tags
-  formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
-
-  // Process code blocks
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
-  })
-
-  // Basic markdown formatting
-  formatted = formatted
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-
-  // Links
-  formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
-
-  return sanitizeChatHtml(formatted)
-}
+const formatMessageContentRaw = formatChatMessageHtml
 
 const formatMessageContent = (content: string, messageId?: string): string => {
   const cacheKey = messageId ? `${messageId}:${content.length}` : content
   const cached = formatCache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const result = formatMessageContentRaw(content)
+  // Sanitise at the sink: every v-html binding reads this function (#19118, #21771).
+  const result = sanitizeChatHtml(formatMessageContentRaw(content))
 
   // Evict oldest entries when cache is full
   if (formatCache.size >= FORMAT_CACHE_MAX) {
@@ -1568,13 +1518,13 @@ onUnmounted(() => {
 /* Issue #690: Overseer Agent Message Styles */
 .message-wrapper.type-overseer_plan::after {
   content: 'Plan';
-  @apply bg-autobot-primary text-white;
+  @apply bg-autobot-primary text-autobot-text-on-primary;
 }
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  background: var(--color-info);
-  color: var(--text-inverse);
+  background: var(--color-info-solid);
+  color: var(--text-on-info);
 }
 
 .message-wrapper.type-overseer_plan,
@@ -2046,7 +1996,7 @@ onUnmounted(() => {
 }
 
 .citations-count {
-  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-white rounded-full;
+  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-autobot-text-on-primary rounded-full;
 }
 
 .citations-list {

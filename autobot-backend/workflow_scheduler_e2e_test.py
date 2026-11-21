@@ -13,7 +13,7 @@ from autobot_shared.ssot_config import config
 
 sys.path.append(config.project_root)
 
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 from workflow_scheduler import WorkflowPriority, WorkflowStatus, get_workflow_scheduler
 
 workflow_scheduler = get_workflow_scheduler()
@@ -323,7 +323,7 @@ async def test_scheduler_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(get_test_backend_url() + endpoint) as response:
+                    async with session.get(live_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:

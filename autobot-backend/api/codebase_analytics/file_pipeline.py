@@ -32,12 +32,12 @@ from .analyzers import (
     analyze_javascript_vue_file,
     analyze_python_file,
 )
-from .chromadb_storage import _store_problems_batch_to_chromadb
 from .file_analyzer import (
     _FILE_TYPE_MAP,
     PARALLEL_FILE_CONCURRENCY,
     PARALLEL_MODE_ENABLED,
 )
+from .problem_storage import _store_problems_batch_to_chromadb
 from .progress_tracker import _store_file_hash
 from .stats_aggregation import _aggregate_all_results, _aggregate_file_analysis
 
@@ -258,11 +258,14 @@ async def _iterate_and_process_files_parallel(
     analysis_results = _aggregate_all_results(all_results)
 
     if immediate_store_collection and analysis_results["all_problems"]:
+        # #18055: pass the callback so each chunk ticks the subprocess
+        # watchdog -- this write used to be one silent, unbounded upsert.
         await _store_problems_batch_to_chromadb(
             immediate_store_collection,
             analysis_results["all_problems"],
             0,
             source_id=source_id,
+            progress_callback=progress_callback,
         )
 
     files_processed = sum(1 for r in all_results if r.was_processed)

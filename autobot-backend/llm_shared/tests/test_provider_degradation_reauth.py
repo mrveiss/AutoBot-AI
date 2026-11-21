@@ -20,7 +20,7 @@ cause instead of trimming any assertion to fit under the cap:
   (#1948): fires once per cooldown window, never fires for a transient mark.
 - base_provider.BaseProvider._get_auth_token() wiring against the REAL
   class (not a test stub): TokenExpiredError -> mark needs_reauth, a
-  successful vault-backed resolve -> clear, ApiKeyAuth success leaves the
+  successful vault-backed resolve -> clear, StaticApiKeyAuth success leaves the
   store untouched.
 
 Shared store/global-injection fixtures live in conftest.py (fixtures, not
@@ -34,10 +34,11 @@ from __future__ import annotations
 import pytest
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:
     fakeredis_async = None  # type: ignore[assignment]
-
+    fakeredis = None  # type: ignore[assignment]
 # ---------------------------------------------------------------------------
 # #15022: needs_reauth cause — non-expiry, explicit clear, cause reporting,
 # and the alert wired through the existing AlertCooldownManager (#1948).
@@ -62,7 +63,7 @@ class _NoopCooldown:
 @pytest.mark.asyncio
 async def test_transient_mark_has_positive_ttl(_require_fakeredis, _make_store_with_fake_server):
     """Default (transient) marks keep today's TTL — the baseline this contrasts with."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.mark_degraded("openai", "gpt-4o")
@@ -75,7 +76,7 @@ async def test_transient_mark_has_positive_ttl(_require_fakeredis, _make_store_w
 @pytest.mark.asyncio
 async def test_needs_reauth_mark_has_no_ttl(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """needs_reauth is non-expiring in Redis (ttl() == -1, not merely a long TTL)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
 
@@ -91,7 +92,7 @@ async def test_needs_reauth_mark_has_no_ttl(_require_fakeredis, _make_store_with
 @pytest.mark.asyncio
 async def test_clear_removes_needs_reauth_mark(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """clear() is the only exit for a non-expiring needs_reauth mark."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
 
@@ -107,7 +108,7 @@ async def test_clear_removes_needs_reauth_mark(_require_fakeredis, _make_store_w
 @pytest.mark.asyncio
 async def test_clear_on_unmarked_key_is_a_noop(_require_fakeredis, _make_store_with_fake_server):
     """clear() on a key that was never marked does not raise."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.clear("never-marked")
@@ -118,7 +119,7 @@ async def test_clear_on_unmarked_key_is_a_noop(_require_fakeredis, _make_store_w
 @pytest.mark.asyncio
 async def test_degraded_entries_reports_cause(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """degraded_entries() reports why each entry is degraded (#15022)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
 
@@ -183,7 +184,7 @@ async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown(
     """A repeated needs_reauth mark is deduped by AlertCooldownManager itself —
     not by a second de-dup set in the degradation store (explicit AC in #15022).
     """
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
     from llm_shared.provider_degradation import DegradationCause
 
@@ -214,7 +215,7 @@ async def test_needs_reauth_mark_emits_exactly_one_alert_per_cooldown(
 @pytest.mark.asyncio
 async def test_transient_mark_does_not_alert(_require_fakeredis, _make_store_with_fake_server, _inject_globals):
     """A transient mark never reaches the operator-alert path — only needs_reauth does."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     class _FailIfCalledCooldown:
@@ -286,7 +287,7 @@ async def test_get_auth_token_marks_needs_reauth_on_token_expired(
     _inject_globals,
 ):
     """TokenExpiredError from the auth strategy -> needs_reauth, not generic degraded."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.base_provider import BaseProvider
@@ -315,7 +316,7 @@ async def test_get_auth_token_successful_vault_resolve_clears_needs_reauth(
     _inject_globals,
 ):
     """A successful vault-backed resolve is the explicit clear (#15022)."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.base_provider import BaseProvider
@@ -344,16 +345,16 @@ async def test_get_auth_token_apikey_success_does_not_touch_degradation_store(
     _make_store_with_fake_server,
     _inject_globals,
 ):
-    """ApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
+    """StaticApiKeyAuth (is_vault_backed()==False) never calls the degradation store —
     it can never have raised TokenExpiredError, so there is nothing to clear.
     """
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store_instance = _make_store_with_fake_server(server)
 
     from llm_shared.base_provider import BaseProvider
     from llm_shared.provider_degradation import DegradationCause
 
-    # Pre-mark needs_reauth for a DIFFERENT reason to prove ApiKeyAuth's
+    # Pre-mark needs_reauth for a DIFFERENT reason to prove StaticApiKeyAuth's
     # success path leaves existing store state alone.
     with _inject_globals(store_instance.mark_degraded, _get_alert_cooldown=lambda: _NoopCooldown()):
         await store_instance.mark_degraded("static", cause=DegradationCause.NEEDS_REAUTH)

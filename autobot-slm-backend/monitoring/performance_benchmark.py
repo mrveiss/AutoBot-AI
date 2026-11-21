@@ -15,8 +15,9 @@ import json
 import logging
 import os
 import statistics
+import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -24,10 +25,12 @@ from typing import Any, Dict, List
 import aiohttp
 import matplotlib.pyplot as plt
 import numpy as np
+from benchmark_types import PerfBenchmarkResult, SystemBenchmark
 from performance_monitor import VMS
 from src.constants.model_constants import ModelConstants
 
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.ssot_config import config as ssot_config
 
 logger = logging.getLogger(__name__)
 
@@ -46,87 +49,18 @@ async def _execute_http_request(session: aiohttp.ClientSession, method: str, url
     return False
 
 
-@dataclass
-class BenchmarkResult:
-    """Result of a performance benchmark test."""
-
-    test_name: str
-    category: str  # "api", "database", "network", "system", "multimodal"
-    duration_seconds: float
-    operations_count: int
-    operations_per_second: float
-    average_latency_ms: float
-    p95_latency_ms: float
-    p99_latency_ms: float
-    success_rate: float
-    error_count: int
-    timestamp: str
-    metadata: Dict[str, Any] = None
-
-    def get_summary_line(self) -> str:
-        """Get formatted summary line for logging (Issue #372 - reduces feature envy)."""
-        return (
-            f"{self.test_name}: {self.operations_per_second:.1f} ops/sec, "
-            f"{self.average_latency_ms:.1f}ms avg, {self.success_rate:.1f}% success"
-        )
-
-    def get_latency_only_line(self) -> str:
-        """Get latency-focused summary for network tests (Issue #372 - reduces feature envy)."""
-        return f"{self.test_name}: {self.average_latency_ms:.1f}ms avg, " f"{self.success_rate:.1f}% success"
-
-
-@dataclass
-class SystemBenchmark:
-    """System-level benchmark results."""
-
-    cpu_benchmark_score: float
-    memory_bandwidth_mbps: float
-    disk_io_mbps: float
-    network_throughput_mbps: float
-    gpu_compute_score: float | None = None
-    npu_inference_score: float | None = None
-
-    def get_summary_lines(self) -> List[str]:
-        """Get formatted summary lines for logging (Issue #372 - reduces feature envy)."""
-        lines = [
-            f"  CPU Score: {self.cpu_benchmark_score:.1f}",
-            f"  Memory Bandwidth: {self.memory_bandwidth_mbps:.1f} MB/s",
-            f"  Disk I/O: {self.disk_io_mbps:.1f} MB/s",
-            f"  Network Throughput: {self.network_throughput_mbps:.1f} MB/s",
-        ]
-        if self.gpu_compute_score:
-            lines.append(f"  GPU Score: {self.gpu_compute_score:.1f}")
-        if self.npu_inference_score:
-            lines.append(f"  NPU Score: {self.npu_inference_score:.1f}")
-        return lines
-
-    def to_hardware_summary_dict(self) -> Dict[str, Any]:
-        """Convert to hardware summary dictionary (Issue #372 - reduces feature envy)."""
-        return {
-            "cpu_score": self.cpu_benchmark_score,
-            "memory_bandwidth_mbps": self.memory_bandwidth_mbps,
-            "disk_io_mbps": self.disk_io_mbps,
-            "network_throughput_mbps": self.network_throughput_mbps,
-            "gpu_available": self.gpu_compute_score is not None,
-            "npu_available": self.npu_inference_score is not None,
-            "gpu_score": self.gpu_compute_score,
-            "npu_score": self.npu_inference_score,
-        }
-
-
 class PerformanceBenchmark:
     """Comprehensive performance benchmarking suite for AutoBot."""
 
     def __init__(self, output_dir: str = None):
         self.logger = logging.getLogger(__name__)
         if output_dir is None:
-            _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-            output_dir = f"{_base}/logs/benchmarks"
+            output_dir = f"{ssot_config.path.base_dir}/logs/benchmarks"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.results = []
 
-    async def run_api_benchmark(self, duration_seconds: int = 60) -> List[BenchmarkResult]:
+    async def run_api_benchmark(self, duration_seconds: int = 60) -> List[PerfBenchmarkResult]:
         """Benchmark AutoBot API endpoints performance."""
         self.logger.info(f"🚀 Starting API benchmark (duration: {duration_seconds}s)")
 
@@ -180,7 +114,7 @@ class PerformanceBenchmark:
 
     async def _benchmark_endpoint(
         self, name: str, method: str, url: str, data: Dict, duration_seconds: int
-    ) -> BenchmarkResult:
+    ) -> PerfBenchmarkResult:
         """Benchmark a specific API endpoint."""
         # Issue #339: Refactored to use extracted helper, reducing depth from 7 to 4
         latencies = []
@@ -220,7 +154,7 @@ class PerformanceBenchmark:
         else:
             avg_latency = p95_latency = p99_latency = 0.0
 
-        return BenchmarkResult(
+        return PerfBenchmarkResult(
             test_name=f"API_{name.replace(' ', '_')}",
             category="api",
             duration_seconds=actual_duration,
@@ -235,7 +169,7 @@ class PerformanceBenchmark:
             metadata={"endpoint": url, "method": method},
         )
 
-    async def run_database_benchmark(self, duration_seconds: int = 30) -> List[BenchmarkResult]:
+    async def run_database_benchmark(self, duration_seconds: int = 30) -> List[PerfBenchmarkResult]:
         """Benchmark Redis database performance across different operations."""
         self.logger.info(f"🗄️ Starting database benchmark (duration: {duration_seconds}s)")
 
@@ -290,7 +224,7 @@ class PerformanceBenchmark:
 
         return latencies, success_count, error_count
 
-    async def _benchmark_redis_connections(self, db_num: int, duration_seconds: int) -> BenchmarkResult:
+    async def _benchmark_redis_connections(self, db_num: int, duration_seconds: int) -> PerfBenchmarkResult:
         """Benchmark Redis connection performance using canonical utility.
 
         This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
@@ -313,7 +247,7 @@ class PerformanceBenchmark:
         actual_duration = duration_seconds  # loop ran for duration_seconds
         avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
-        return BenchmarkResult(
+        return PerfBenchmarkResult(
             test_name=f"Redis_DB{db_num}_Connections",
             category="database",
             duration_seconds=actual_duration,
@@ -341,12 +275,12 @@ class PerformanceBenchmark:
             avg_latency = p95_latency = p99_latency = 0.0
         return avg_latency, p95_latency, p99_latency
 
-    def _create_error_benchmark_result(self, db_num: int, error: Exception) -> BenchmarkResult:
+    def _create_error_benchmark_result(self, db_num: int, error: Exception) -> PerfBenchmarkResult:
         """Create error benchmark result for Redis operations.
 
         Helper for _benchmark_redis_operations.
         """
-        return BenchmarkResult(
+        return PerfBenchmarkResult(
             test_name=f"Redis_DB{db_num}_Operations",
             category="database",
             duration_seconds=0,
@@ -399,7 +333,7 @@ class PerformanceBenchmark:
 
         return latencies, success_count, error_count
 
-    async def _benchmark_redis_operations(self, db_num: int, duration_seconds: int) -> BenchmarkResult:
+    async def _benchmark_redis_operations(self, db_num: int, duration_seconds: int) -> PerfBenchmarkResult:
         """Benchmark Redis read/write operations using canonical utility.
 
         This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
@@ -438,7 +372,7 @@ class PerformanceBenchmark:
         actual_duration = time.time() - start_time
         avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
-        return BenchmarkResult(
+        return PerfBenchmarkResult(
             test_name=f"Redis_DB{db_num}_Operations",
             category="database",
             duration_seconds=actual_duration,
@@ -453,7 +387,7 @@ class PerformanceBenchmark:
             metadata={"database": f"Redis_DB_{db_num}", "operation": "read_write"},
         )
 
-    async def run_network_benchmark(self, duration_seconds: int = 30) -> List[BenchmarkResult]:
+    async def run_network_benchmark(self, duration_seconds: int = 30) -> List[PerfBenchmarkResult]:
         """Benchmark inter-VM network performance."""
         self.logger.info(f"🔗 Starting network benchmark (duration: {duration_seconds}s)")
 
@@ -499,7 +433,7 @@ class PerformanceBenchmark:
                 return float(time_part)
         return None
 
-    async def _benchmark_network_latency(self, vm_name: str, vm_ip: str, duration_seconds: int) -> BenchmarkResult:
+    async def _benchmark_network_latency(self, vm_name: str, vm_ip: str, duration_seconds: int) -> PerfBenchmarkResult:
         """Benchmark network latency to a specific VM."""
         latencies = []
         success_count = 0
@@ -523,7 +457,7 @@ class PerformanceBenchmark:
         actual_duration = time.time() - start_time
         avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
-        return BenchmarkResult(
+        return PerfBenchmarkResult(
             test_name=f"Network_Latency_{vm_name}",
             category="network",
             duration_seconds=actual_duration,
@@ -749,8 +683,11 @@ class PerformanceBenchmark:
                 "core = ov.Core(); "
                 "print(core.available_devices)"  # noqa: print
             )
+            # #13842: a known interpreter, not whatever PATH offers. Does not
+            # make the probe correct -- OpenVINO is only in the NPU worker's
+            # venv, so it still cannot answer yes here (#17988).
             process = await asyncio.create_subprocess_exec(
-                "python3",
+                sys.executable,
                 "-c",
                 openvino_script,
                 stdout=asyncio.subprocess.PIPE,
@@ -813,7 +750,7 @@ class PerformanceBenchmark:
         }
 
     def _generate_benchmark_summary(
-        self, results: List[BenchmarkResult], system_benchmark: SystemBenchmark
+        self, results: List[PerfBenchmarkResult], system_benchmark: SystemBenchmark
     ) -> Dict[str, Any]:
         """Generate benchmark summary statistics."""
         if not results:
@@ -860,7 +797,7 @@ class PerformanceBenchmark:
             "performance_grade": self._get_performance_grade(system_score),
         }
 
-    def _calculate_overall_score(self, results: List[BenchmarkResult], system_benchmark: SystemBenchmark) -> float:
+    def _calculate_overall_score(self, results: List[PerfBenchmarkResult], system_benchmark: SystemBenchmark) -> float:
         """Calculate overall system performance score (0-100)."""
         if not results:
             return 0.0
@@ -935,7 +872,7 @@ class PerformanceBenchmark:
 
     async def _save_benchmark_results(
         self,
-        results: List[BenchmarkResult],
+        results: List[PerfBenchmarkResult],
         system_benchmark: SystemBenchmark,
         summary: Dict[str, Any],
     ):
@@ -959,7 +896,7 @@ class PerformanceBenchmark:
         # Generate and save performance charts
         await self._generate_performance_charts(results, timestamp)
 
-    def _plot_throughput_chart(self, ax, results: List[BenchmarkResult]) -> None:
+    def _plot_throughput_chart(self, ax, results: List[PerfBenchmarkResult]) -> None:
         """Helper for _generate_performance_charts. Ref: #1088."""
         test_names = [r.test_name for r in results]
         ops_per_sec = [r.operations_per_second for r in results]
@@ -968,7 +905,7 @@ class PerformanceBenchmark:
         ax.set_title("Throughput Performance")
         ax.tick_params(axis="y", labelsize=8)
 
-    def _plot_latency_distribution_chart(self, ax, results: List[BenchmarkResult]) -> None:
+    def _plot_latency_distribution_chart(self, ax, results: List[PerfBenchmarkResult]) -> None:
         """Helper for _generate_performance_charts. Ref: #1088."""
         latencies = [r.average_latency_ms for r in results if r.average_latency_ms > 0]
         if latencies:
@@ -977,7 +914,7 @@ class PerformanceBenchmark:
             ax.set_ylabel("Frequency")
             ax.set_title("Latency Distribution")
 
-    def _plot_success_rate_chart(self, ax, results: List[BenchmarkResult]) -> None:
+    def _plot_success_rate_chart(self, ax, results: List[PerfBenchmarkResult]) -> None:
         """Helper for _generate_performance_charts. Ref: #1088."""
         categories = list(set([r.category for r in results]))
         success_rates = []
@@ -990,7 +927,7 @@ class PerformanceBenchmark:
         ax.set_title("Success Rate by Category")
         ax.set_ylim(0, 100)
 
-    def _plot_percentile_latency_chart(self, ax, results: List[BenchmarkResult]) -> None:
+    def _plot_percentile_latency_chart(self, ax, results: List[PerfBenchmarkResult]) -> None:
         """Helper for _generate_performance_charts. Ref: #1088."""
         p95_latencies = [r.p95_latency_ms for r in results if r.p95_latency_ms > 0]
         p99_latencies = [r.p99_latency_ms for r in results if r.p99_latency_ms > 0]
@@ -1003,7 +940,7 @@ class PerformanceBenchmark:
             ax.set_title("P95 vs P99 Latency")
             ax.legend()
 
-    async def _generate_performance_charts(self, results: List[BenchmarkResult], timestamp: str):
+    async def _generate_performance_charts(self, results: List[PerfBenchmarkResult], timestamp: str):
         """Generate performance visualization charts."""
         try:
             plt.style.use("dark_background")
@@ -1106,7 +1043,7 @@ async def main():
     parser.add_argument(
         "--output-dir",
         default=os.path.join(
-            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),
+            ssot_config.path.base_dir,
             "logs/benchmarks",
         ),
         help="Output directory for results",

@@ -25,6 +25,7 @@ from typing import Dict, List, Set, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_analytics import (
+    AnalyticsSourceType,
     DataFlowResponse,
     DFAAnalysisResponse,
     DFAAnalyzeFileRequest,
@@ -34,18 +35,18 @@ from api.schemas_analytics import (
     DfaSinksResponse,
     DfaSourcesResponse,
     DfaVulnerabilitiesResponse,
+    DFAVulnerabilityType,
     SinkType,
-    SourceType,
     TaintLevel,
     TaintSummary,
     VariableDefResponse,
     VulnerabilityResponse,
-    VulnerabilityType,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
+from autobot_shared.status_enums import Severity
 
 logger = get_logger(__name__)
 
@@ -74,7 +75,7 @@ class VariableDefinition:
     scope: str  # Function or module scope
     value_node: ast.AST | None = None
     taint_level: TaintLevel = TaintLevel.UNTAINTED
-    source_type: SourceType | None = None
+    source_type: AnalyticsSourceType | None = None
 
 
 @dataclass
@@ -120,10 +121,10 @@ class TaintedPath:
 
 
 @dataclass
-class SecurityVulnerability:
+class DFATaintVulnerability:
     """Detected security vulnerability."""
 
-    vulnerability_type: VulnerabilityType
+    vulnerability_type: DFAVulnerabilityType
     severity: DFASeverity
     line: int
     column: int
@@ -144,7 +145,7 @@ class DataFlowGraph:
     def_use_chains: List[DefUseChain] = field(default_factory=list)
     edges: List[DataFlowEdge] = field(default_factory=list)
     tainted_paths: List[TaintedPath] = field(default_factory=list)
-    vulnerabilities: List[SecurityVulnerability] = field(default_factory=list)
+    vulnerabilities: List[DFATaintVulnerability] = field(default_factory=list)
 
 
 # =============================================================================
@@ -152,113 +153,113 @@ class DataFlowGraph:
 # =============================================================================
 
 # Functions that introduce tainted data
-TAINT_SOURCES: Dict[str, Tuple[SourceType, TaintLevel]] = {
+TAINT_SOURCES: Dict[str, Tuple[AnalyticsSourceType, TaintLevel]] = {
     # User input
-    "input": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "raw_input": (SourceType.USER_INPUT, TaintLevel.TAINTED),
+    "input": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "raw_input": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
     # Web frameworks
-    "request.args.get": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.form.get": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.json": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.data": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.files": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.headers": (SourceType.USER_INPUT, TaintLevel.TAINTED),
-    "request.cookies": (SourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.args.get": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.form.get": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.json": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.data": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.files": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.headers": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
+    "request.cookies": (AnalyticsSourceType.USER_INPUT, TaintLevel.TAINTED),
     # File operations
-    "open": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "read": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "readline": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
-    "readlines": (SourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "open": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "read": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "readline": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
+    "readlines": (AnalyticsSourceType.FILE, TaintLevel.PARTIALLY_TAINTED),
     # Database
-    "fetchone": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
-    "fetchall": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
-    "fetchmany": (SourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchone": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchall": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
+    "fetchmany": (AnalyticsSourceType.DATABASE, TaintLevel.PARTIALLY_TAINTED),
     # Environment
-    "os.environ.get": (SourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
-    "os.getenv": (SourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
+    "os.environ.get": (AnalyticsSourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
+    "os.getenv": (AnalyticsSourceType.ENVIRONMENT, TaintLevel.PARTIALLY_TAINTED),
     # Network
-    "socket.recv": (SourceType.NETWORK, TaintLevel.TAINTED),
-    "requests.get": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
-    "requests.post": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
-    "urllib.request.urlopen": (SourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "socket.recv": (AnalyticsSourceType.NETWORK, TaintLevel.TAINTED),
+    "requests.get": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "requests.post": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
+    "urllib.request.urlopen": (AnalyticsSourceType.EXTERNAL_API, TaintLevel.PARTIALLY_TAINTED),
 }
 
 # Functions that are security-sensitive sinks
-TAINT_SINKS: Dict[str, Tuple[SinkType, VulnerabilityType, DFASeverity]] = {
+TAINT_SINKS: Dict[str, Tuple[SinkType, DFAVulnerabilityType, DFASeverity]] = {
     # SQL injection risks
     "execute": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "executemany": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "raw": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     # Command injection risks
     "os.system": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "os.popen": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "subprocess.call": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     "subprocess.run": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     "subprocess.Popen": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     # Code injection risks
-    "eval": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
-    "exec": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
-    "compile": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.HIGH),
+    "eval": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "exec": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "compile": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.HIGH),
     # Path traversal risks
-    "open": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, DFASeverity.HIGH),
+    "open": (SinkType.FILE_WRITE, DFAVulnerabilityType.PATH_TRAVERSAL, DFASeverity.HIGH),
     "os.path.join": (
         SinkType.FILE_WRITE,
-        VulnerabilityType.PATH_TRAVERSAL,
+        DFAVulnerabilityType.PATH_TRAVERSAL,
         DFASeverity.MEDIUM,
     ),
     # XSS risks (web frameworks)
     "render_template_string": (
         SinkType.HTML_OUTPUT,
-        VulnerabilityType.XSS,
+        DFAVulnerabilityType.XSS,
         DFASeverity.HIGH,
     ),
-    "Markup": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, DFASeverity.MEDIUM),
+    "Markup": (SinkType.HTML_OUTPUT, DFAVulnerabilityType.XSS, DFASeverity.MEDIUM),
     # Deserialization risks
     "pickle.loads": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.CRITICAL,
     ),
     "yaml.load": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.HIGH,
     ),
     "marshal.loads": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.HIGH,
     ),
 }
@@ -310,7 +311,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         # Data flow tracking
         self.edges: List[DataFlowEdge] = []
         self.tainted_paths: List[TaintedPath] = []
-        self.vulnerabilities: List[SecurityVulnerability] = []
+        self.vulnerabilities: List[DFATaintVulnerability] = []
 
     def analyze(self) -> List[DataFlowGraph]:
         """Analyze the source code and return data flow graphs."""
@@ -354,7 +355,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         column: int,
         value_node: ast.AST | None = None,
         taint_level: TaintLevel = TaintLevel.UNTAINTED,
-        source_type: SourceType | None = None,
+        source_type: AnalyticsSourceType | None = None,
     ):
         """Add a variable definition."""
         definition = VariableDefinition(
@@ -454,7 +455,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
             return ".".join(reversed(parts))
         return ""
 
-    def _check_taint_source(self, node: ast.Call) -> Tuple[SourceType, TaintLevel] | None:
+    def _check_taint_source(self, node: ast.Call) -> Tuple[AnalyticsSourceType, TaintLevel] | None:
         """Check if a call is a taint source."""
         call_name = self._get_call_name(node)
 
@@ -469,7 +470,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         return None
 
-    def _check_taint_sink(self, node: ast.Call) -> Tuple[SinkType, VulnerabilityType, DFASeverity] | None:
+    def _check_taint_sink(self, node: ast.Call) -> Tuple[SinkType, DFAVulnerabilityType, DFASeverity] | None:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -593,27 +594,27 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
     def _create_vulnerability(
         self,
-        vuln_type: VulnerabilityType,
+        vuln_type: DFAVulnerabilityType,
         severity: DFASeverity,
         line: int,
         column: int,
         variable: str,
         sink_function: str,
         taint_level: TaintLevel,
-    ) -> SecurityVulnerability:
+    ) -> DFATaintVulnerability:
         """Create a security vulnerability record."""
         recommendations = {
-            VulnerabilityType.SQL_INJECTION: "Use parameterized queries or an ORM",
-            VulnerabilityType.XSS: "Escape output or use a templating engine with auto-escaping",
-            VulnerabilityType.COMMAND_INJECTION: "Use subprocess with list arguments, avoid shell=True",
-            VulnerabilityType.PATH_TRAVERSAL: "Validate and sanitize file paths, use os.path.basename",
-            VulnerabilityType.CODE_INJECTION: "Never use eval/exec with user input",
-            VulnerabilityType.DATA_EXPOSURE: "Sanitize data before logging or exposing",
-            VulnerabilityType.INSECURE_DESERIALIZATION: "Use safe serialization formats like JSON",
-            VulnerabilityType.HARDCODED_SECRET: "Use environment variables or a secrets manager",
+            DFAVulnerabilityType.SQL_INJECTION: "Use parameterized queries or an ORM",
+            DFAVulnerabilityType.XSS: "Escape output or use a templating engine with auto-escaping",
+            DFAVulnerabilityType.COMMAND_INJECTION: "Use subprocess with list arguments, avoid shell=True",
+            DFAVulnerabilityType.PATH_TRAVERSAL: "Validate and sanitize file paths, use os.path.basename",
+            DFAVulnerabilityType.CODE_INJECTION: "Never use eval/exec with user input",
+            DFAVulnerabilityType.DATA_EXPOSURE: "Sanitize data before logging or exposing",
+            DFAVulnerabilityType.INSECURE_DESERIALIZATION: "Use safe serialization formats like JSON",
+            DFAVulnerabilityType.HARDCODED_SECRET: "Use environment variables or a secrets manager",
         }
 
-        vuln = SecurityVulnerability(
+        vuln = DFATaintVulnerability(
             vulnerability_type=vuln_type,
             severity=severity,
             line=line,
@@ -651,7 +652,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
                 taint_level=TaintLevel.PARTIALLY_TAINTED,  # Parameters may be tainted
-                source_type=SourceType.PARAMETER,
+                source_type=AnalyticsSourceType.PARAMETER,
             )
 
         self.generic_visit(node)
@@ -666,7 +667,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
                 line=node.lineno,
                 column=node.col_offset,
                 taint_level=TaintLevel.PARTIALLY_TAINTED,
-                source_type=SourceType.PARAMETER,
+                source_type=AnalyticsSourceType.PARAMETER,
             )
 
         self.generic_visit(node)
@@ -676,7 +677,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         target: ast.AST,
         node: ast.Assign,
         value_taint: TaintLevel,
-        source_type: SourceType | None,
+        source_type: AnalyticsSourceType | None,
     ) -> None:
         """Process a single assignment target. (Issue #315 - extracted)"""
         if isinstance(target, ast.Name):
@@ -1080,8 +1081,7 @@ async def get_vulnerabilities(request: DFAAnalyzeRequest, admin_check: bool = De
                     }
                 )
 
-        # Sort by severity
-        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        severity_order = {s.value: i for i, s in enumerate(reversed(Severity.finding_ladder()))}
         all_vulns.sort(key=lambda v: severity_order.get(v["severity"], 5))
 
         return {

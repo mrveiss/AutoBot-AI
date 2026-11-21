@@ -1,0 +1,55 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: post or update ONE sticky pull-request comment (#12984)
+#
+# The single upsert every workflow uses: find our comment by an invisible HTML marker across
+# ALL pages of the comment list, update it, else create it. Logic and contract live in
+# upsert_pr_comment.py next to this file, where repo_tests/pr_comment_upsert_12984_test.py
+# exercises it against a fake GitHub API.
+#
+# Usage (needs actions/checkout first):
+#   - uses: ./.github/actions/upsert-pr-comment
+#     continue-on-error: true   # a fork PR's token is read-only (#14153)
+#     with:
+#       marker: '<!-- my-report -->'
+#       body-file: ${{ runner.temp }}/report.md
+
+name: Upsert PR comment
+description: >
+  Post or update a single marker-identified pull-request comment, reading every page of
+  existing comments so a long-running PR never accumulates duplicates.
+
+inputs:
+  marker:
+    description: 'Invisible HTML marker (for example an HTML comment) that identifies this report.'
+    required: true
+  body-file:
+    description: 'Path to the file holding the comment body.'
+    required: true
+  number:
+    description: 'Pull request number.'
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  token:
+    description: 'Token allowed to write comments.'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Upsert the comment
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        UPSERT_MARKER: ${{ inputs.marker }}
+        UPSERT_BODY_FILE: ${{ inputs.body-file }}
+        UPSERT_NUMBER: ${{ inputs.number }}
+        UPSERT_REPO: ${{ github.repository }}
+        UPSERT_API_URL: ${{ github.api_url }}
+      run: |
+        python3 "$GITHUB_ACTION_PATH/upsert_pr_comment.py" \
+          --marker "$UPSERT_MARKER" --body-file "$UPSERT_BODY_FILE" \
+          --number "$UPSERT_NUMBER" --repo "$UPSERT_REPO" --api-url "$UPSERT_API_URL"

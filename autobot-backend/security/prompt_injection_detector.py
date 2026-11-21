@@ -17,6 +17,7 @@ This module provides comprehensive prompt injection detection for:
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_float
@@ -162,6 +163,12 @@ CONTEXT_POISON_PATTERNS = (
     r"do\s+the\s+same",
     r"run\s+that\s+again",
 )
+
+# Issue #19566: one compile per (pattern, flags); the pattern set is code-defined, so unbounded.
+_REGEX_FLAGS = re.IGNORECASE | re.MULTILINE
+_compiled_pattern = lru_cache(maxsize=None)(re.compile)
+for _p in INJECTION_PATTERNS + DANGEROUS_PATTERNS + CONTEXT_POISON_PATTERNS:
+    _compiled_pattern(_p, _REGEX_FLAGS)
 
 
 class InjectionRisk(Enum):
@@ -596,33 +603,26 @@ class PromptInjectionDetector:
         use_regex: bool = True,
         case_sensitive: bool = False,
     ) -> List[str]:
-        """
-        Check text against a list of patterns and return matches.
-
-        Issue #281: Extracted helper to reduce repetition in detect_injection.
+        """Check text against a list of patterns and return matches (Issue #281 helper).
 
         Args:
             text: Text to check against patterns
             patterns: List of patterns (regex or literal strings)
             pattern_type: Descriptive name for the pattern type (for logging)
-            use_regex: If True, use re.findall; if False, use 'in' operator
+            use_regex: If True, a precompiled ``search`` (first match decides, #19566); else 'in'
             case_sensitive: Whether matching should be case-sensitive
 
-        Returns:
-            List of matched patterns
+        Returns: List of matched patterns
         """
         matches = []
         search_text = text if case_sensitive else text.lower()
-
+        flags = 0 if case_sensitive else _REGEX_FLAGS
         for pattern in patterns:
             if use_regex:
-                flags = 0 if case_sensitive else (re.IGNORECASE | re.MULTILINE)
-                if re.findall(pattern, text, flags):
+                if _compiled_pattern(pattern, flags).search(text):
                     matches.append(pattern)
-            else:
-                check_pattern = pattern if case_sensitive else pattern.lower()
-                if check_pattern in search_text:
-                    matches.append(pattern)
+            elif (pattern if case_sensitive else pattern.lower()) in search_text:
+                matches.append(pattern)
 
         return matches
 

@@ -36,6 +36,8 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines
+
 #: `repo_root()`, never `__file__.parents[N]` -- #15925 pins one spelling so a
 #: guard cannot silently bind a different tree than the rest of the suite.
 _ROOT = repo_root()
@@ -57,16 +59,15 @@ def _code_lines(path: pathlib.Path):
     its own subject's documentation as a finding is #16750's shape, and it makes
     the correct fix look like a violation.
 
-    LIMIT, stated rather than implied: only whole-line comments are skipped. A
-    trailing `# ...` on a code line is not stripped, because doing that properly
-    needs quote awareness -- a `#` inside a string is not a comment -- and a
-    regex that ignores that would reintroduce the same class one level down.
-    No call site currently uses a trailing comment on these lines.
+    Delegates to the shared stripper (#17941). The LIMIT this docstring used to
+    record -- that a trailing `# ...` was NOT stripped, because a `#` inside a
+    string is not a comment and a regex ignoring that reintroduces the class one
+    level down -- was correct, and is why the shared helper scans with quote
+    state instead of matching a pattern. Trailing stripping stays opt-in and is
+    left off here, so this guard's behaviour is unchanged by the move.
     """
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if line.lstrip().startswith("#"):
-            continue
-        yield n, line
+    for line in code_lines(pathlib.Path(path)):
+        yield line.lineno, line.text
 
 
 def _shell_files() -> list[pathlib.Path]:

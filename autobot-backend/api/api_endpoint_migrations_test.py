@@ -2288,7 +2288,7 @@ class TestSearchManPagesEndpoint:
 
 
 class TestClearAllKnowledgeEndpoint:
-    """Test migrated POST /clear_all endpoint"""
+    """POST /clear_all only PROPOSES a wipe (#21048, #17038); behaviour is covered by kb_wipe_request_21048_test.py"""
 
     def test_clear_all_has_decorator(self):
         """Verify @with_error_handling decorator is applied"""
@@ -2301,78 +2301,25 @@ class TestClearAllKnowledgeEndpoint:
         assert "ErrorCategory.SERVER_ERROR" in source
         assert 'error_code_prefix="KNOWLEDGE"' in source
 
-    def test_clear_all_no_outer_try_catch(self):
-        """Verify outer try-catch block was removed"""
+    def test_clear_all_proposes_through_the_shared_entry(self):
+        """The route delegates to request_kb_wipe: no try block and no store of its own"""
         import inspect
 
         from api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
-        # Should have inner try blocks for non-fatal operations
-        try_count = source.count("try:")
-        assert try_count >= 2  # Stats retrieval + Redis clearing (inner only)
+        assert "request_kb_wipe(current_user, session)" in source
+        assert "try:" not in source and "get_or_create_knowledge_base" not in source
 
-    @pytest.mark.asyncio
-    async def test_clear_all_offline_state(self):
-        """Verify endpoint handles offline state gracefully"""
-        from fastapi import Request
-
-        from api.knowledge import clear_all_knowledge
-
-        mock_request = Mock(spec=Request)
-        mock_request.app = Mock()
-
-        # Mock get_or_create_knowledge_base to return None (offline)
-        with patch(
-            "backend.api.knowledge.get_or_create_knowledge_base",
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            response = await clear_all_knowledge({}, mock_request)
-
-            assert response["status"] == "error"
-            assert "not initialized" in response["message"]
-            assert response["items_removed"] == 0
-
-    @pytest.mark.asyncio
-    async def test_clear_all_uses_clear_all_method(self):
-        """Verify endpoint uses clear_all method when available"""
-        from fastapi import Request
-
-        from api.knowledge import clear_all_knowledge
-
-        mock_request = Mock(spec=Request)
-        mock_request.app = Mock()
-
-        # Mock knowledge base with clear_all method
-        mock_kb = Mock()
-        mock_kb.clear_all = AsyncMock(return_value={"items_removed": 42})
-        mock_kb.get_stats = AsyncMock(return_value={"total_facts": 42})
-
-        with patch(
-            "backend.api.knowledge.get_or_create_knowledge_base",
-            new_callable=AsyncMock,
-            return_value=mock_kb,
-        ):
-            response = await clear_all_knowledge({}, mock_request)
-
-            assert response["status"] == "success"
-            assert response["items_removed"] == 42
-            assert response["items_before"] == 42
-            mock_kb.clear_all.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_clear_all_logs_warning_for_destructive_operation(self):
-        """Verify destructive operation is logged with warning"""
+    def test_clear_all_deletes_nothing_itself(self):
+        """Verify the route cannot reach a delete: no clear_all method call and no Redis access"""
         import inspect
 
         from api.knowledge import clear_all_knowledge
 
         source = inspect.getsource(clear_all_knowledge)
-
-        # Should log warning before clearing
-        assert "logger.warning" in source
-        assert "DESTRUCTIVE" in source
+        assert "kb.clear_all" not in source and "redis" not in source.lower()
+        assert "deletes nothing" in source
 
 
 class TestBatch16MigrationStats:
@@ -2425,12 +2372,12 @@ class TestBatch16MigrationStats:
         # 5. Pattern-specific verification
 
         search_tests = 5  # All aspects covered
-        clear_all_tests = 5  # All aspects covered
+        clear_all_tests = 3  # #21048: the route only proposes
         batch_stats_tests = 4  # Progress, savings, patterns, coverage
 
         total_batch_16_tests = search_tests + clear_all_tests + batch_stats_tests
 
-        assert total_batch_16_tests == 14  # Comprehensive coverage
+        assert total_batch_16_tests == 12  # Comprehensive coverage
 
 
 class TestGetFactsByCategoryEndpoint:
@@ -4544,7 +4491,7 @@ class TestBatch26UploadFile:
         # Should preserve audit logging
         assert "security_layer = get_security_layer(request)" in source
         assert "security_layer.audit_log(" in source
-        assert '"file_upload"' in source
+        assert '"file.upload"' in source  # #18716
 
 
 class TestBatch26MigrationStats:
@@ -4656,7 +4603,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "security_layer.audit_log(" in source
-        assert '"file_download"' in source
+        assert '"file.download"' in source  # #18716
 
 
 class TestBatch27ViewFile:
@@ -19611,7 +19558,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ConfigService.get_full_config", source)
 
         # Check unified config manager usage
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
 
         # Check NetworkConstants usage for hosts
         self.assertIn("NetworkConstants", source)
@@ -21162,7 +21109,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="update_embedding_settings"', source)
         self.assertIn('error_code_prefix="EMBEDDINGS"', source)
-        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=409", source)  # #19377: refuses; no unread settings.json write
 
     def test_batch_126_get_available_embedding_models_simple_pattern(self):
         """Verify get_available_embedding_models endpoint uses Simple Pattern"""
@@ -21238,18 +21185,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertEqual(progress_percentage, 100.0)
 
     def test_batch_126_migration_preserves_config_manager_operations(self):
-        """Verify migration preserves unified_config_manager operations"""
+        """Verify migration preserves config_manager operations"""
         from api import embeddings
 
         # Check get_embedding_settings uses config manager
         source_get = inspect.getsource(embeddings.get_embedding_settings)
-        self.assertIn("unified_config_manager.get_nested", source_get)
+        self.assertIn("config_manager.get_nested", source_get)
         self.assertIn("backend.llm.unified.embedding", source_get)
 
         # Check update_embedding_settings uses config manager
         source_update = inspect.getsource(embeddings.update_embedding_settings)
-        self.assertIn("unified_config_manager.set_nested", source_update)
-        self.assertIn("unified_config_manager.save_settings", source_update)
+        self.assertIn("config_manager.set_nested", source_update)
+        self.assertIn("config_manager.save_settings", source_update)
         self.assertIn("ConfigService.clear_cache", source_update)
 
     def test_batch_126_migration_preserves_default_config_fallback(self):
@@ -21393,7 +21340,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check start uses operator permission
         source_start = inspect.getsource(redis_service.start_redis_service)
-        self.assertIn("check_operator_permission", source_start)
+        self.assertIn("require_human_operator", source_start)  # canonical gate (#18688)
 
         # Check stop uses admin permission
         source_stop = inspect.getsource(redis_service.stop_redis_service)
@@ -21401,7 +21348,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check restart uses operator permission
         source_restart = inspect.getsource(redis_service.restart_redis_service)
-        self.assertIn("check_operator_permission", source_restart)
+        self.assertIn("require_human_operator", source_restart)  # canonical gate (#18688)
 
     def test_batch_127_migration_preserves_service_manager_operations(self):
         """Verify migration preserves RedisServiceManager operations"""
@@ -23251,17 +23198,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(security.get_command_history)
         self.assertIn("user: str = None", source)
         self.assertIn("limit: int = 50", source)
-        self.assertIn("get_command_history(user=user, limit=limit)", source)
+        self.assertIn("await security_layer.get_command_history(user=user, limit=limit)", source)
 
     def test_batch_137_migration_preserves_audit_log_reading(self):
-        """Verify migration preserves audit log file reading"""
+        """Verify the audit log is read from the canonical audit trail (#17225 D6)"""
         from api import security
 
         source = inspect.getsource(security.get_audit_log)
-        self.assertIn("audit_log_file", source)
-        self.assertIn("json.loads", source)
-        self.assertIn("FileNotFoundError", source)
-        self.assertIn("JSONDecodeError", source)
+        self.assertIn("get_audit_entries(limit=limit)", source)
 
     # ==============================================
     # BATCH 138: voice.py - COMPLETE (100%)
@@ -23478,7 +23422,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.get_developer_config)
-        self.assertIn("unified_config_manager.get_nested", source)
+        self.assertIn("config_manager.get_nested", source)
         self.assertIn("enabled", source)
         self.assertIn("enhanced_errors", source)
         self.assertIn("endpoint_suggestions", source)
@@ -23489,7 +23433,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import developer
 
         source = inspect.getsource(developer.update_developer_config)
-        self.assertIn("unified_config_manager.set_nested", source)
+        self.assertIn("config_manager.set_nested", source)
         self.assertIn("save_settings()", source)
         self.assertIn("ConfigService.clear_cache()", source)
         self.assertIn("Developer configuration updated", source)
@@ -23511,12 +23455,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check get_api_endpoints
         source_endpoints = inspect.getsource(developer.get_api_endpoints)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_endpoints)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_endpoints)
         self.assertIn("HTTPException(status_code=403", source_endpoints)
 
         # Check get_system_info
         source_info = inspect.getsource(developer.get_system_info)
-        self.assertIn('unified_config_manager.get_nested("developer.enabled"', source_info)
+        self.assertIn('config_manager.get_nested("developer.enabled"', source_info)
         self.assertIn("HTTPException(status_code=403", source_info)
 
     # ==============================================
@@ -23655,7 +23599,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import services
 
         source = inspect.getsource(services.get_version)
-        self.assertIn("unified_config_manager", source)
+        self.assertIn("config_manager", source)
         self.assertIn("SystemInfo", source)
         self.assertIn("version", source)
         self.assertIn("uptime", source)
@@ -24675,11 +24619,10 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     def test_batch_147_migration_preserves_auth_check(self):
         """Verify migration preserves authorization check"""
         from api import error_monitoring
+        from auth_middleware import check_admin_permission
 
-        source = inspect.getsource(error_monitoring.clear_error_history)
-        self.assertIn("authorization", source)
-        self.assertIn("Bearer admin_token", source)
-        self.assertIn("HTTP_401_UNAUTHORIZED", source)
+        # #17727 identity, not name: three repo functions share it (file PARKED, #15173).
+        self.assertIn(check_admin_permission, {d.dependency for d in (error_monitoring.router.dependencies or [])})
 
     def test_batch_147_migration_preserves_test_error_types(self):
         """Verify migration preserves test error type handling"""
@@ -25609,9 +25552,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves admin authentication dependency"""
         from api import feature_flags
 
-        # Verify require_admin is used in endpoints
+        # Verify require_admin_role is used in endpoints
         status_source = inspect.getsource(feature_flags.get_feature_flags_status)
-        self.assertIn("require_admin", status_source)
+        self.assertIn("require_admin_role", status_source)
         self.assertIn("admin", status_source)
 
     def test_batch_152_migration_preserves_feature_flags_service(self):
@@ -27273,15 +27216,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import npu_workers
 
         # Verify models are imported
-        self.assertTrue(hasattr(npu_workers, "NPUWorkerConfig"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerDefinition"))
         self.assertTrue(hasattr(npu_workers, "NPUWorkerDetails"))
-        self.assertTrue(hasattr(npu_workers, "NPUWorkerMetrics"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerLoadMetrics"))
         self.assertTrue(hasattr(npu_workers, "LoadBalancingConfig"))
         self.assertTrue(hasattr(npu_workers, "WorkerTestResult"))
 
         # Verify models are used in endpoints
         add_source = inspect.getsource(npu_workers.add_worker)
-        self.assertIn("NPUWorkerConfig", add_source)
+        self.assertIn("NPUWorkerDefinition", add_source)
 
         test_source = inspect.getsource(npu_workers.test_worker)
         self.assertIn("WorkerTestResult", test_source)
@@ -27560,18 +27503,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("workflow_template_manager.get_template", details_source)
 
     def test_batch_160_migration_preserves_template_category_enum(self):
-        """Verify migration preserves TemplateCategory enum usage"""
+        """Verify migration preserves WorkflowTemplateCategory enum usage"""
         from api import templates
 
-        # Verify TemplateCategory is imported
-        self.assertTrue(hasattr(templates, "TemplateCategory"))
+        # Verify WorkflowTemplateCategory is imported
+        self.assertTrue(hasattr(templates, "WorkflowTemplateCategory"))
 
         # Verify it's used in endpoints
         list_source = inspect.getsource(templates.list_workflow_templates)
-        self.assertIn("TemplateCategory", list_source)
+        self.assertIn("WorkflowTemplateCategory", list_source)
 
         categories_source = inspect.getsource(templates.list_template_categories)
-        self.assertIn("TemplateCategory", categories_source)
+        self.assertIn("WorkflowTemplateCategory", categories_source)
 
     def test_batch_160_migration_preserves_task_complexity_enum(self):
         """Verify migration preserves TaskComplexity enum usage"""
@@ -29171,7 +29114,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_simple_pattern(self):
         """Verify create_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29181,7 +29124,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_start_workflow_simple_pattern(self):
         """Verify start_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.start_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29191,7 +29134,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_control_workflow_simple_pattern(self):
         """Verify control_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.control_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29201,7 +29144,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_workflow_status_simple_pattern(self):
         """Verify get_workflow_status endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_workflow_status)
         self.assertIn("@with_error_handling", source)
@@ -29211,7 +29154,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_active_workflows_simple_pattern(self):
         """Verify get_active_workflows endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_active_workflows)
         self.assertIn("@with_error_handling", source)
@@ -29221,7 +29164,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_from_chat_simple_pattern(self):
         """Verify create_workflow_from_chat endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow_from_chat)
         self.assertIn("@with_error_handling", source)
@@ -29231,7 +29174,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_websocket_simple_pattern(self):
         """Verify workflow_websocket endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.workflow_websocket)
         self.assertIn("@with_error_handling", source)
@@ -29241,7 +29184,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_all_workflow_automation_endpoints_have_decorator(self):
         """Verify all workflow_automation endpoints have @with_error_handling decorator"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29263,7 +29206,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_automation_100_percent_milestone(self):
         """Verify workflow_automation.py has reached 100% migration"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29288,7 +29231,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify models are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepRequest"))
@@ -29305,7 +29248,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_enums(self):
         """Verify migration preserves WorkflowStepStatus and AutomationMode enums"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify enums are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepStatus"))
@@ -29317,7 +29260,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_llm_judges_integration(self):
         """Verify migration preserves LLM judges integration for workflow evaluation"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Issue #10880: JUDGES_AVAILABLE was removed; judge availability now
         # lives in services.workflow_automation.step_evaluator via a try/except
@@ -29345,7 +29288,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_workflow_templates(self):
         """Verify migration preserves workflow template functionality"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WorkflowAutomationManager has workflow template methods
         manager_class = workflow_automation.WorkflowAutomationManager
@@ -29363,7 +29306,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_websocket_functionality(self):
         """Verify migration preserves WebSocket workflow communication"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WebSocket endpoint exists
         source = inspect.getsource(workflow_automation.workflow_websocket)
@@ -29402,7 +29345,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_dataclasses(self):
         """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify dataclasses are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStep"))
@@ -29479,15 +29422,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="update_llm_provider"', source)
         self.assertIn('error_code_prefix="LLM"', source)
 
-    def test_batch_169_get_available_embedding_models_simple_pattern(self):
-        """Verify get_available_embedding_models endpoint uses Simple Pattern"""
+    def test_batch_169_get_available_embedding_models_redirects(self):
+        """#19378: the old listing redirects to the one options endpoint, which carries the pattern"""
         from api import llm
 
         source = inspect.getsource(llm.get_available_embedding_models)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_available_embedding_models"', source)
-        self.assertIn('error_code_prefix="LLM"', source)
+        self.assertIn('RedirectResponse("/api/embeddings/models", status_code=308)', source)
 
     def test_batch_169_update_embedding_model_simple_pattern(self):
         """Verify update_embedding_model endpoint uses Simple Pattern"""
@@ -30259,11 +30199,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ModalityType.COMBINED", combine_source)
 
     def test_batch_171_migration_preserves_processing_intent(self):
-        """Verify migration preserves ProcessingIntent usage"""
+        """Verify migration preserves MultimodalProcessingIntent usage"""
         from api import multimodal
 
-        # Verify ProcessingIntent is imported
-        self.assertTrue(hasattr(multimodal, "ProcessingIntent"))
+        # Verify MultimodalProcessingIntent is imported
+        self.assertTrue(hasattr(multimodal, "MultimodalProcessingIntent"))
 
         # Verify _get_processing_intent helper exists
         self.assertTrue(hasattr(multimodal, "_get_processing_intent"))

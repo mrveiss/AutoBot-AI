@@ -13,16 +13,23 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import aiofiles
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends
 
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_import_tree_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
 from .shared import (
     INTERNAL_MODULE_PREFIXES,
@@ -157,7 +164,7 @@ def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
 
 
 async def _load_import_tree_from_index(
-    source_id: str | None,
+    source_id: str,
 ) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]] | None:
     """Build the bidirectional import tree from indexed ChromaDB "import" docs.
 
@@ -170,7 +177,9 @@ async def _load_import_tree_from_index(
     if not code_collection:
         return None
 
-    where = {"$and": [{"type": "import"}, {"source_id": source_id}]} if source_id else {"type": "import"}
+    # #17758/#20513: no unscoped branch; a missing source is an error, not "no data".
+    source_id = require_source_id(source_id, "import-tree index query")
+    where = {"$and": [{"type": "import"}, {"source_id": source_id}]}
     results = await asyncio.to_thread(get_all_paginated, code_collection, where=where, include=["metadatas"])
     metadatas = results.get("metadatas", [])
     if not metadatas:
@@ -200,7 +209,7 @@ async def _load_import_tree_from_index(
     return file_imports, file_imported_by
 
 
-async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
+async def _scan_import_tree_live(source_id: str) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
     """Live filesystem walk (fallback path, #12364).
 
     Used only when the indexed store has no import data yet for this
@@ -230,8 +239,9 @@ async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[
     operation="get_import_tree",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_import_tree(
-    source_id: str | None = Query(None, description="#12330: scope import tree to the selected code source"),
+    source_id: SourceIdQuery,
 ):
     """
     Get bidirectional file import relationships for tree visualization.
@@ -248,36 +258,29 @@ async def get_import_tree(
     sub-second); falls back to the live filesystem walk -- and kicks off a
     background index job -- only when the index has no data for this source.
     """
-    effective_source_id = source_id
-    if not effective_source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
-
-        effective_source_id = await get_default_source_id()
-
-    indexed = await _load_import_tree_from_index(effective_source_id)
+    indexed = await _load_import_tree_from_index(source_id)
     if indexed is not None:
         file_imports, file_imported_by = indexed
         storage_type = "chromadb"
     else:
         logger.info(
             "Import-tree index empty for source %s -- falling back to live walk (#12364)",
-            effective_source_id,
+            source_id,
         )
-        await trigger_auto_index_if_unindexed(effective_source_id)
-        file_imports, file_imported_by = await _scan_import_tree_live(effective_source_id)
+        await trigger_auto_index_if_unindexed(source_id)
+        file_imports, file_imported_by = await _scan_import_tree_live(source_id)
         storage_type = "live_walk"
 
     # Build result with bidirectional relationships
     import_tree = _build_import_tree(file_imports, file_imported_by)
 
-    return JSONResponse(
-        {
-            "status": "success",
-            "import_tree": import_tree,
-            "summary": _build_summary(import_tree),
-            "storage_type": storage_type,
-        }
-    )
+    return {
+        "status": "success",
+        "source_id": source_id,
+        "import_tree": import_tree,
+        "summary": _build_summary(import_tree),
+        "storage_type": storage_type,
+    }
 
 
 async def _analyze_file_imports(
@@ -356,42 +359,27 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
 
 @router.get("/analytics/import-tree/cached")
 @bounded(60.0)
-async def get_cached_import_tree_result(source_id: str = ""):
+async def get_cached_import_tree_result(source_id: SourceIdQuery):
     """Return the latest completed import tree analysis result (#1540)."""
-    cached = await get_latest_task_result(_REDIS_PREFIX)
-    if cached and cached.get("result"):
-        return {
-            "status": "success",
-            "from_cache": True,
-            "completed_at": cached.get("completed_at"),
-            **cached["result"],
-        }
-    return {"status": "no_data"}
+    return await cached_task_result(_REDIS_PREFIX, source_id)
 
 
 @router.post("/analytics/import-tree/analyze")
 @bounded(60.0)
-async def start_import_tree_analysis_endpoint():
+async def start_import_tree_analysis_endpoint(source_id: SourceIdQuery):
     """Enqueue import tree analysis as a Celery task (GH#6505)."""
-    result = run_import_tree_analysis.delay()
-    await store_latest_task_id(_REDIS_PREFIX, result.id)
+    result = run_import_tree_analysis.delay(source_id)
+    await store_latest_task_id(source_scoped_prefix(_REDIS_PREFIX, source_id), result.id)
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/analytics/import-tree/status/{task_id}")
+@router.get("/analytics/import-tree/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 async def get_import_tree_status(task_id: str):
     """Get import tree analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/analytics/import-tree/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_import_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(
+    router, "/analytics/import-tree/tasks/clear-stuck", name="clear_stuck_import_tasks", bounded_s=60.0
+)

@@ -82,9 +82,9 @@ class TestCloneSeverity:
         assert CloneSeverity.CRITICAL.value == "critical"
 
     def test_all_severities_present(self):
-        """Verify all expected severities exist."""
-        severities = [s.value for s in CloneSeverity]
-        assert len(severities) == 5
+        """Presence, not an exact count: `CloneSeverity` now aliases canonical (#18098)."""
+        severities = {s.value for s in CloneSeverity}
+        assert {"info", "low", "medium", "high", "critical"} <= severities
 
 
 class TestFingerprintType:

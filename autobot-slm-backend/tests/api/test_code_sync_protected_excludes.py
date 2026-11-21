@@ -25,6 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _code_sync_import import import_code_sync  # noqa: E402
 
 code_sync = import_code_sync()
+# `_rsync_exclude_args` lives in api/_rsync_paths now (#18052 extraction) and
+# resolves `owned_subtrees`/`deploy_only_entries` from THAT module's globals.
+# Taken from sys.modules rather than imported, so the custom code_sync loader
+# above stays the single entry point.
+_rsync_paths = sys.modules["api._rsync_paths"]
 
 from api.code_sync import (  # noqa: E402
     _PROTECTED_EXCLUDES,
@@ -87,8 +92,11 @@ def test_exclude_args_always_include_logs() -> None:
 # themselves are pinned against the real deployment map in
 # services/drift_checker_test.py::TestForeignFilesAreNotDrift.
 def _with_real_ownership(monkeypatch, owned: set[str], entries: set[str]) -> None:
-    monkeypatch.setattr(code_sync, "owned_subtrees", lambda component: frozenset(owned))
-    monkeypatch.setattr(code_sync, "deploy_only_entries", lambda component: frozenset(entries))
+    # Patched on `_rsync_paths`, not `code_sync`: `_rsync_exclude_args` moved
+    # there (#18052 extraction) and resolves these from its OWN module
+    # globals, so patching the old home silently does nothing.
+    monkeypatch.setattr(_rsync_paths, "owned_subtrees", lambda component: frozenset(owned))
+    monkeypatch.setattr(_rsync_paths, "deploy_only_entries", lambda component: frozenset(entries))
 
 
 def test_backend_sync_excludes_the_plugins_subtree(monkeypatch) -> None:

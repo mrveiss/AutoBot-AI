@@ -20,8 +20,17 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from api.chat_knowledge_delete import delete_chat_knowledge_context, router
+# The PARENT router, not `chat_knowledge_delete.router` (#16375). In production
+# the delete routes are reached only through it -- `chat_knowledge.py:96` does
+# `router.include_router(_delete_router)` -- and #16375 put the authentication
+# gate on that parent. Mounting the sub-router bare gave these tests a route
+# reachable past a gate its siblings carry, which is what
+# `router_mount_parity_test` exists to catch. Mounting the parent keeps one
+# description of the gate instead of restating it here.
+from api.chat_knowledge import router
+from api.chat_knowledge_delete import delete_chat_knowledge_context
 from api.chat_knowledge_manager import MANAGER_STATE_KEY
+from api.user_management.dependencies import get_current_user
 from auth_middleware import check_admin_permission
 
 API_PREFIX = "/api/chat-knowledge"
@@ -44,6 +53,10 @@ def _manager(**overrides) -> SimpleNamespace:
 def _app(manager: SimpleNamespace | None) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix=API_PREFIX)
+    # The parent's authentication gate is satisfied here; these tests are about
+    # deletion and the orphan sweep, not about who may call them. Who the gate
+    # admits is asserted in `chat_knowledge_wiring_test.py::TestTheRouterIsGated`.
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "delete-test", "username": "delete-test"}
     if manager is not None:
         setattr(app.state, MANAGER_STATE_KEY, manager)
     return app

@@ -16,8 +16,9 @@ from typing import Any, Dict, List
 
 import psutil
 import yaml
-from performance_monitor import PerformanceMonitor
+from performance_monitor import FleetPerformanceMonitor
 
+from autobot_shared.status_enums import Severity
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,7 @@ async def _handle_continuous_command(optimizer: "PerformanceOptimizer") -> None:
 
 
 @dataclass
-class OptimizationRecommendation:
+class PerformanceTuningAction:
     """Performance optimization recommendation."""
 
     category: str  # "system", "database", "service", "network"
@@ -113,10 +114,10 @@ class OptimizationRecommendation:
 
 
 @dataclass
-class OptimizationResult:
+class PerformanceTuningResult:
     """Result of applying an optimization."""
 
-    recommendation: OptimizationRecommendation
+    recommendation: PerformanceTuningAction
     applied: bool
     success: bool
     error_message: str | None = None
@@ -130,7 +131,7 @@ class PerformanceOptimizer:
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.monitor = PerformanceMonitor()
+        self.monitor = FleetPerformanceMonitor()
         self.redis_client = None
         self.optimization_history = []
         self.optimization_config = self.load_optimization_config()
@@ -191,7 +192,7 @@ class PerformanceOptimizer:
 
         return default_config
 
-    async def analyze_performance_metrics(self, metrics: Dict) -> List[OptimizationRecommendation]:
+    async def analyze_performance_metrics(self, metrics: Dict) -> List[PerformanceTuningAction]:
         """Analyze performance metrics and generate optimization recommendations."""
         recommendations = []
 
@@ -217,7 +218,7 @@ class PerformanceOptimizer:
 
         # Sort by severity and impact
         recommendations.sort(
-            key=lambda x: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(x.severity, 0),
+            key=lambda x: Severity.rank_of(x.severity),
             reverse=True,
         )
 
@@ -240,7 +241,7 @@ class PerformanceOptimizer:
         optimizer: str,
         services: List[str],
         severity_fn=None,
-    ) -> OptimizationRecommendation | None:
+    ) -> PerformanceTuningAction | None:
         """Build a recommendation if resource exceeds threshold.
 
         Helper for _analyze_system_metrics (#825).
@@ -248,7 +249,7 @@ class PerformanceOptimizer:
         if not self._check_resource_threshold(value, threshold_key):
             return None
         severity = severity_fn(value) if severity_fn else "medium"
-        return OptimizationRecommendation(
+        return PerformanceTuningAction(
             category="system",
             severity=severity,
             description=description,
@@ -258,7 +259,7 @@ class PerformanceOptimizer:
             affected_services=services,
         )
 
-    async def _analyze_system_metrics(self, system_metrics) -> List[OptimizationRecommendation]:
+    async def _analyze_system_metrics(self, system_metrics) -> List[PerformanceTuningAction]:
         """Analyze system metrics for optimization opportunities."""
         recommendations = []
 
@@ -305,7 +306,7 @@ class PerformanceOptimizer:
         cpu_cores = psutil.cpu_count()
         if load_avg and max(load_avg) > cpu_cores * 1.5:
             recommendations.append(
-                OptimizationRecommendation(
+                PerformanceTuningAction(
                     category="system",
                     severity="medium",
                     description=f"High load: {max(load_avg):.2f} (cores: {cpu_cores})",
@@ -318,7 +319,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_service_metrics(self, service_metrics) -> List[OptimizationRecommendation]:
+    async def _analyze_service_metrics(self, service_metrics) -> List[PerformanceTuningAction]:
         """Analyze service metrics for optimization opportunities."""
         recommendations = []
 
@@ -328,7 +329,7 @@ class PerformanceOptimizer:
             # Service health optimization
             if not service.is_healthy:
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="service",
                         severity="critical",
                         description=f"Service {service_name} is unhealthy: {service.error_message}",
@@ -343,7 +344,7 @@ class PerformanceOptimizer:
             elif service.response_time > self.optimization_config["thresholds"]["response_time_slow"]:
                 severity = "high" if service.response_time > 10 else "medium"
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="service",
                         severity=severity,
                         description=f"Slow response time for {service_name}: {service.response_time:.2f}s",
@@ -356,7 +357,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_database_metrics(self, database_metrics) -> List[OptimizationRecommendation]:
+    async def _analyze_database_metrics(self, database_metrics) -> List[PerformanceTuningAction]:
         """Analyze database metrics for optimization opportunities."""
         recommendations = []
 
@@ -366,7 +367,7 @@ class PerformanceOptimizer:
             # High error count optimization
             if db.error_count > 0:
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="database",
                         severity="high",
                         description=f"Database {db_type} has {db.error_count} errors",
@@ -383,7 +384,7 @@ class PerformanceOptimizer:
             # Slow connection time optimization
             if db.connection_time > self.optimization_config["thresholds"]["database_slow_query"]:
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="database",
                         severity="medium",
                         description=f"Slow connection to {db_type}: {db.connection_time:.3f}s",
@@ -400,7 +401,7 @@ class PerformanceOptimizer:
             # High memory usage optimization
             if db.memory_usage_mb > 1000:  # 1GB threshold
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="database",
                         severity="medium",
                         description=f"High memory usage for {db_type}: {db.memory_usage_mb:.1f}MB",
@@ -416,7 +417,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_network_metrics(self, network_metrics) -> List[OptimizationRecommendation]:
+    async def _analyze_network_metrics(self, network_metrics) -> List[PerformanceTuningAction]:
         """Analyze inter-VM network metrics for optimization opportunities."""
         recommendations = []
 
@@ -428,7 +429,7 @@ class PerformanceOptimizer:
             if vm_metric.latency_ms > 50:  # 50ms threshold
                 severity = "high" if vm_metric.latency_ms > 100 else "medium"
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="network",
                         severity=severity,
                         description=f"High latency {source_vm} → {target_vm}: {vm_metric.latency_ms:.1f}ms",
@@ -446,7 +447,7 @@ class PerformanceOptimizer:
             if vm_metric.packet_loss_percent > 1.0:  # 1% threshold
                 severity = "critical" if vm_metric.packet_loss_percent > 10 else "high"
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="network",
                         severity=severity,
                         description=f"Packet loss {source_vm} → {target_vm}: {vm_metric.packet_loss_percent:.1f}%",
@@ -463,7 +464,7 @@ class PerformanceOptimizer:
             # High jitter optimization
             if vm_metric.jitter_ms > 20:  # 20ms jitter threshold
                 recommendations.append(
-                    OptimizationRecommendation(
+                    PerformanceTuningAction(
                         category="network",
                         severity="medium",
                         description=f"High network jitter {source_vm} → {target_vm}: {vm_metric.jitter_ms:.1f}ms",
@@ -479,7 +480,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _analyze_hardware_metrics(self, hardware_metrics) -> List[OptimizationRecommendation]:
+    async def _analyze_hardware_metrics(self, hardware_metrics) -> List[PerformanceTuningAction]:
         """Analyze hardware utilization for optimization opportunities."""
         recommendations = []
 
@@ -487,7 +488,7 @@ class PerformanceOptimizer:
         # Ref: #2871 (no fake scores; hardware_metrics["gpu_available"] is set by real detection).
         if hardware_metrics.get("gpu_available", False):
             recommendations.append(
-                OptimizationRecommendation(
+                PerformanceTuningAction(
                     category="hardware",
                     severity="low",
                     description="GPU acceleration can be optimized for AI workloads",
@@ -501,7 +502,7 @@ class PerformanceOptimizer:
         # NPU optimization recommendations
         if hardware_metrics.get("npu_available", False):
             recommendations.append(
-                OptimizationRecommendation(
+                PerformanceTuningAction(
                     category="hardware",
                     severity="low",
                     description="Intel NPU can be better utilized for AI inference",
@@ -514,7 +515,7 @@ class PerformanceOptimizer:
 
         return recommendations
 
-    async def _measure_optimization_impact(self, result: OptimizationResult, metrics_before: Dict) -> None:
+    async def _measure_optimization_impact(self, result: PerformanceTuningResult, metrics_before: Dict) -> None:
         """Measure metrics after optimization and calculate improvement.
 
         Helper for apply_optimization (#825).
@@ -526,12 +527,12 @@ class PerformanceOptimizer:
             metrics_before, metrics_after, result.recommendation.category
         )
 
-    async def apply_optimization(self, recommendation: OptimizationRecommendation) -> OptimizationResult:
+    async def apply_optimization(self, recommendation: PerformanceTuningAction) -> PerformanceTuningResult:
         """Apply a specific optimization recommendation."""
         self.logger.info("Applying optimization: %s", recommendation.description)
 
         metrics_before = await self.monitor.generate_performance_report()
-        result = OptimizationResult(
+        result = PerformanceTuningResult(
             recommendation=recommendation,
             applied=False,
             success=False,
@@ -605,8 +606,8 @@ class PerformanceOptimizer:
         return None
 
     def _filter_applicable_recommendations(
-        self, recommendations: List[OptimizationRecommendation]
-    ) -> List[OptimizationRecommendation]:
+        self, recommendations: List[PerformanceTuningAction]
+    ) -> List[PerformanceTuningAction]:
         """Filter recommendations by severity threshold and auto-applicability.
 
         Helper for run_optimization_cycle (#825).
@@ -615,13 +616,10 @@ class PerformanceOptimizer:
         severity_threshold = auto_config.get("severity_threshold", "medium")
         max_optimizations = auto_config.get("max_optimizations_per_hour", 3)
 
-        severity_levels = {"low": 1, "medium": 2, "high": 3, "critical": 4}
-        threshold_level = severity_levels.get(severity_threshold, 2)
+        threshold_level = Severity.rank_of(severity_threshold, Severity.MEDIUM.rank)
 
         applicable = [
-            rec
-            for rec in recommendations
-            if severity_levels.get(rec.severity, 0) >= threshold_level and rec.auto_applicable
+            rec for rec in recommendations if Severity.rank_of(rec.severity) >= threshold_level and rec.auto_applicable
         ]
         return applicable[:max_optimizations]
 

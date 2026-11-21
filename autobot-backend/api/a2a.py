@@ -46,7 +46,7 @@ from a2a.security import SecurityCardSigner
 from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
-from a2a.trust_score import Capability, TrustAccessDenied, get_trust_manager
+from a2a.trust_score import TrustAccessDenied, TrustCapability, get_trust_manager
 from a2a.types import Task
 from api import a2a_trust
 from api.schemas_agent import (
@@ -72,21 +72,23 @@ router = APIRouter(
 )
 
 # ---------------------------------------------------------------------------
-# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7270/#7271)
+# Rate limiting — per-IP sliding window via the canonical RateLimiter (#7270/#7271)
 # ---------------------------------------------------------------------------
 #
 # #7270: pre-fix, this was an in-process dict with the same multi-worker
-# undercount that #6588 fixed for /v1/chat/completions. State is now shared
-# across all uvicorn workers via Redis sorted-set; the in-process fallback
-# is reserved for Redis outages only.
+# undercount that #6588 fixed for /v1/chat/completions. State is shared across
+# all uvicorn workers; LOCAL (per-worker enforcement) is reserved for Redis
+# outages only, so the control never turns off (#18087).
 
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.proxy_utils import get_client_ip
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
-_a2a_limiter = IPRateLimiter(
-    key_prefix="ratelimit:a2a",
-    limit_env="AUTOBOT_A2A_RATE_LIMIT",
-    default_limit=30,
+_a2a_limiter = WindowQuota.for_scope(
+    "a2a",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=30,
     window_seconds=60,
+    limit_env="AUTOBOT_A2A_RATE_LIMIT",
 )
 
 
@@ -107,11 +109,12 @@ def _task_response(task: Task) -> Dict[str, Any]:
 
 
 def _remote_addr(request: Request) -> str:
-    """Extract the real client IP (respects X-Forwarded-For from nginx)."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """The client address for rate limiting, through the shared trusted-proxy rule.
+
+    #17848: this read the leftmost X-Forwarded-For with no trusted-proxy check,
+    so any caller chose its own rate-limit key.
+    """
+    return get_client_ip(request) or "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +241,7 @@ async def submit_task(
     # so keying on it would let a caller choose the pair whose trust it borrows.
     peer_key = peer_trust_key(credential_subject(current_user), x_a2a_agent_id)
     try:
-        get_trust_manager().require_capability(peer_key, Capability.SUBMIT_TASKS)
+        get_trust_manager().require_capability(peer_key, TrustCapability.SUBMIT_TASKS)
     except TrustAccessDenied as exc:
         raise HTTPException(
             status_code=403,
@@ -508,7 +511,7 @@ async def task_stats() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Capability verification (Issue #968)
+# TrustCapability verification (Issue #968)
 # ---------------------------------------------------------------------------
 
 

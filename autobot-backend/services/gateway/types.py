@@ -24,12 +24,18 @@ class ChannelType(str, Enum):
     WEBSOCKET = "websocket"
     REST_API = "rest_api"
     CLI = "cli"
-    TELEGRAM = "telegram"  # Future
-    DISCORD = "discord"  # Future
-    SLACK = "slack"  # Future
+    TELEGRAM = "telegram"
+    DISCORD = "discord"
+    SLACK = "slack"
+    WHATSAPP = "whatsapp"
+    TEAMS = "teams"
+    WEB = "web"
+    SIGNAL = "signal"
+    MATRIX = "matrix"
+    IMESSAGE = "imessage"
 
 
-class MessageType(str, Enum):
+class GatewayMessageType(str, Enum):
     """Unified message types across all channels."""
 
     # User messages
@@ -55,7 +61,7 @@ class MessageType(str, Enum):
     SESSION_HEARTBEAT = "session_heartbeat"
 
 
-class SessionStatus(str, Enum):
+class GatewaySessionStatus(str, Enum):
     """Session lifecycle status."""
 
     ACTIVE = "active"
@@ -83,7 +89,7 @@ class ChannelMessage:
     message_id: str = field(default_factory=lambda: str(uuid4()))
     session_id: str = ""
     channel: ChannelType = ChannelType.WEBSOCKET
-    message_type: MessageType = MessageType.USER_TEXT
+    message_type: GatewayMessageType = GatewayMessageType.USER_TEXT
     content: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=now_utc)
@@ -107,7 +113,7 @@ class ChannelMessage:
             message_id=data.get("message_id", str(uuid4())),
             session_id=data["session_id"],
             channel=ChannelType(data["channel"]),
-            message_type=MessageType(data["message_type"]),
+            message_type=GatewayMessageType(data["message_type"]),
             content=data.get("content"),
             metadata=data.get("metadata", {}),
             created_at=(parse_utc_iso(data["created_at"]) if "created_at" in data else now_utc()),
@@ -135,7 +141,7 @@ class GatewaySession:
     session_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
     channel: ChannelType = ChannelType.WEBSOCKET
-    status: SessionStatus = SessionStatus.ACTIVE
+    status: GatewaySessionStatus = GatewaySessionStatus.ACTIVE
     context: Dict[str, Any] = field(default_factory=dict)
     message_history: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)

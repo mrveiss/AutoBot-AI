@@ -58,7 +58,7 @@ def _timeout(seconds: float):
     return aiohttp.ClientTimeout(total=seconds)
 
 
-async def list_terminal_sessions() -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+async def fetch_terminal_sessions() -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """Every terminal session the backend knows about.
 
     Returns ``(sessions, None)`` or ``([], error_dict)``.

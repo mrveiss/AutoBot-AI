@@ -46,7 +46,7 @@ except ImportError:
 from autobot_shared.logging_manager import get_logger
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
-from source_attribution import SourceType, track_source
+from source_attribution import SourceKind, track_source
 from utils.display_utils import get_playwright_config
 
 logger = get_logger(__name__)
@@ -270,7 +270,7 @@ class ResearchBrowserSession:
         Track navigation as a source for attribution. Issue #620.
         """
         track_source(
-            SourceType.WEB_SEARCH,
+            SourceKind.WEB_SEARCH,
             f"Navigated to {title}",
             reliability="medium",
             metadata={

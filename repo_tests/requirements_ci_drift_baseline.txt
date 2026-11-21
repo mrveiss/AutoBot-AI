@@ -12,7 +12,7 @@
 #      looking authoritative.
 #
 # THIS LIST ONLY SHRINKS. Seeded from the actual drift measured 2026-08-18,
-# then re-audited against a code-reviewer finding the same day: 9 entries in
+# then re-audited against a review finding the same day: 9 entries in
 # the first version of this file claimed "no CI-scoped test exercising the
 # real library" while a real skipif/importorskip gate existed and was
 # silently skipping. Per the same policy that mirrors pytesseract instead of
@@ -95,7 +95,6 @@ protobuf
 # (see the "Installing CI-safe requirements" step's ~3GB-vs-10-package-closure
 # comment in setup-python-suite/action.yml, and the completion_trainer_test.py
 # 17 tests that import torch directly and pass in CI).
-torch
 torchvision
 
 # tree-sitter-javascript has no CI-scoped test gating on it directly (only

@@ -101,7 +101,7 @@ class TestTrustCapabilityGateMissingHeader:
 
         from fastapi import HTTPException
 
-        from a2a.trust_score import Capability, TrustAccessDenied, TrustLevel
+        from a2a.trust_score import TrustAccessDenied, TrustCapability, TrustLevel
         from api.a2a import submit_task
         from api.schemas_agent import TaskSendRequest
 
@@ -114,7 +114,7 @@ class TestTrustCapabilityGateMissingHeader:
 
         mock_mgr = MagicMock()
         mock_mgr.require_capability.side_effect = TrustAccessDenied(
-            "untrusted-peer", Capability.SUBMIT_TASKS, TrustLevel.UNTRUSTED
+            "untrusted-peer", TrustCapability.SUBMIT_TASKS, TrustLevel.UNTRUSTED
         )
 
         with patch("api.a2a._a2a_limiter") as mock_limiter, patch("api.a2a.get_trust_manager", return_value=mock_mgr):
@@ -135,5 +135,5 @@ class TestTrustCapabilityGateMissingHeader:
         from a2a.peer_identity import peer_trust_key
 
         mock_mgr.require_capability.assert_called_once_with(
-            peer_trust_key("cred-a", "untrusted-peer"), Capability.SUBMIT_TASKS
+            peer_trust_key("cred-a", "untrusted-peer"), TrustCapability.SUBMIT_TASKS
         )

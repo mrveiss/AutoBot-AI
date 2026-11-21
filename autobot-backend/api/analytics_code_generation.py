@@ -19,7 +19,6 @@ Related Issues: #228 (LLM-Powered Code Generation)
 import ast
 import asyncio
 import difflib
-import hashlib
 import json
 import re
 import time
@@ -46,11 +45,15 @@ from api.schemas_analytics import (
     RefactoringType,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.content_digest import content_digest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
+
+# #18070: one ValidationResult -- this module used to declare a second one.
+from code_intelligence.code_generation.types import ValidationResult, ValidationStatus
 from llm_shared.types import LLMType
 
 # LLM Service for real code generation
@@ -240,36 +243,12 @@ class CodeVersion:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class ValidationResult:
-    """Result of code validation"""
-
-    is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    ast_info: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class RefactoringResult:
-    """Result of a refactoring operation"""
-
-    success: bool
-    original_code: str
-    refactored_code: str
-    diff: str
-    changes: List[str]
-    validation: ValidationResult
-    tokens_used: int = 0
-    processing_time: float = 0.0
-
-
 # =============================================================================
 # Code Validation Engine
 # =============================================================================
 
 
-class CodeValidator:
+class MultiLanguageCodeValidator:
     """Validates generated code using AST parsing and static analysis"""
 
     @staticmethod
@@ -309,19 +288,24 @@ class CodeValidator:
     def _process_ast_node(node: ast.AST, functions: list, classes: list, imports: list, warnings: list) -> None:
         """Process a single AST node for validation. (Issue #315 - extracted)"""
         if isinstance(node, ast.FunctionDef):
-            func_info, func_warnings = CodeValidator._extract_function_info(node)
+            func_info, func_warnings = MultiLanguageCodeValidator._extract_function_info(node)
             functions.append(func_info)
             warnings.extend(func_warnings)
         elif isinstance(node, ast.ClassDef):
-            classes.append(CodeValidator._extract_class_info(node))
+            classes.append(MultiLanguageCodeValidator._extract_class_info(node))
         elif isinstance(node, _IMPORT_TYPES):  # Issue #380
-            imports.extend(CodeValidator._extract_imports(node))
+            imports.extend(MultiLanguageCodeValidator._extract_imports(node))
 
     @staticmethod
     def validate_python(code: str) -> ValidationResult:
         """Validate Python code using AST parsing (Issue #315: depth 6→3)"""
-        errors = []
-        warnings = []
+        errors: List[str] = []
+        warnings: List[str] = []
+        # #18071: both `except` branches below read `ast_info`, which used to be
+        # assigned only AFTER `ast.parse` succeeded -- so every syntactically
+        # invalid input (the only input this function exists to reject) raised
+        # UnboundLocalError and discarded the SyntaxError it had just formatted.
+        ast_info: Dict[str, Any] = {}
 
         try:
             tree = ast.parse(code)
@@ -331,7 +315,7 @@ class CodeValidator:
 
             # Process each node using helper (Issue #315 - reduced depth)
             for node in ast.walk(tree):
-                CodeValidator._process_ast_node(node, functions, classes, imports, warnings)
+                MultiLanguageCodeValidator._process_ast_node(node, functions, classes, imports, warnings)
 
             ast_info = {
                 "functions": functions,
@@ -340,14 +324,14 @@ class CodeValidator:
                 "total_lines": len(code.split("\n")),
             }
 
-            return ValidationResult(is_valid=True, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.VALID, True, errors, warnings, ast_info=ast_info)
 
         except SyntaxError as e:
             errors.append(f"Syntax error at line {e.lineno}: {e.msg}")
-            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.SYNTAX_ERROR, False, errors, warnings, ast_info=ast_info)
         except Exception as e:
             errors.append(f"Validation error: {str(e)}")
-            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, ast_info=ast_info)
+            return ValidationResult(ValidationStatus.UNKNOWN, False, errors, warnings, ast_info=ast_info)
 
     @staticmethod
     def validate_typescript(code: str) -> ValidationResult:
@@ -391,12 +375,8 @@ class CodeValidator:
             "total_lines": len(lines),
         }
 
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            ast_info=ast_info,
-        )
+        status = ValidationStatus.VALID if not errors else ValidationStatus.SYNTAX_ERROR
+        return ValidationResult(status, not errors, errors, warnings, ast_info=ast_info)
 
     @classmethod
     def validate(cls, code: str, language: CodeLanguage) -> ValidationResult:
@@ -416,9 +396,9 @@ class CodeValidator:
             )
             if script_match:
                 return cls.validate_typescript(script_match.group(1))
-            return ValidationResult(is_valid=True)
+            return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
         else:
-            return ValidationResult(is_valid=True)
+            return ValidationResult(status=ValidationStatus.VALID, is_valid=True)
 
 
 # =============================================================================
@@ -454,7 +434,7 @@ class CodeGenerationEngine:
 
     def _generate_version_id(self, code: str) -> str:
         """Generate unique version ID from code content"""
-        content_hash = hashlib.sha256(code.encode()).hexdigest()[:12]
+        content_hash = content_digest(code, width=12)
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"v_{timestamp}_{content_hash}"
 
@@ -576,7 +556,7 @@ class CodeGenerationEngine:
             generated_code, tokens = await self._call_llm(prompt)
 
             # Validate generated code
-            validation = CodeValidator.validate(generated_code, request.language)
+            validation = MultiLanguageCodeValidator.validate(generated_code, request.language)
 
             # Track stats
             await self._track_generation_stats("generate", request.language.value, tokens, validation.is_valid)
@@ -618,7 +598,7 @@ class CodeGenerationEngine:
             refactored_code, tokens = await self._call_llm(prompt)
 
             # Validate refactored code
-            validation = CodeValidator.validate(refactored_code, request.language)
+            validation = MultiLanguageCodeValidator.validate(refactored_code, request.language)
 
             # Generate diff
             diff = self._generate_diff(request.code, refactored_code)
@@ -882,7 +862,7 @@ async def validate_code(
 
     Issue #744: Requires admin authentication.
     """
-    validation = CodeValidator.validate(request.code, request.language)
+    validation = MultiLanguageCodeValidator.validate(request.code, request.language)
 
     return {
         "is_valid": validation.is_valid,

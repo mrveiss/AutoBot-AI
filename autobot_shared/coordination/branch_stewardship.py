@@ -33,11 +33,11 @@ the handoff, or proceed knowing what it is about to collide with.
 WHY THERE IS NO TTL HERE. A claim expires because its holder may die; an
 interest ends because its branch merges or closes, and that is a fact someone
 can look up. But this package cannot look it up -- `autobot_shared` has no
-GitHub client and must not grow one -- so :func:`prune` takes the set of live
+GitHub client and must not grow one -- so :func:`prune_closed_branches` takes the set of live
 branches from a caller that does have one. The backstop TTL exists only so an
 abandoned record cannot outlive the repository; it is deliberately long enough
 that it never fires in a healthy fleet, and a record reaching it means nobody
-called :func:`prune`, not that the branch was abandoned.
+called :func:`prune_closed_branches`, not that the branch was abandoned.
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 from autobot_shared.coordination.work_claims import (
-    Claim,
     ClaimConflict,
     ClaimMode,
     ClaimUnavailable,
     Scope,
+    WorkClaim,
     try_acquire,
 )
 from autobot_shared.env_utils import env_int_clamped
@@ -63,7 +63,7 @@ logger = get_logger(__name__)
 
 #: Backstop only. An interest ends when its branch merges or closes; this exists
 #: so a record whose branch nobody ever pruned cannot outlive the repository.
-#: Reaching it means `prune` was never called, not that the work was abandoned.
+#: Reaching it means `prune_closed_branches` was never called, not that the work was abandoned.
 INTEREST_TTL_S = env_int_clamped("AUTOBOT_BRANCH_INTEREST_TTL_S", 1209600, min_v=3600, max_v=7776000)
 
 #: How many times one branch may be handed on before it must land. An unbounded
@@ -81,7 +81,7 @@ class HandoffRefused(RuntimeError):
 
 
 class EmptyLiveSet(RuntimeError):
-    """:func:`prune` was handed no live branches without being told to expect that.
+    """:func:`prune_closed_branches` was handed no live branches without being told to expect that.
 
     A subclass of ``RuntimeError`` so an existing broad ``except`` keeps working,
     and named after the condition rather than the caller's mistake, because both
@@ -194,7 +194,7 @@ async def acquire_aware(
     task_id: str,
     mode: ClaimMode = ClaimMode.EXCLUSIVE,
     intent: str,
-) -> tuple[Claim | ClaimConflict, list[Interest]]:
+) -> tuple[WorkClaim | ClaimConflict, list[Interest]]:
     """Acquire *scope*, and report what unlanded work already touches it.
 
     **The interest never refuses the claim.** Blocking on an open PR would
@@ -244,7 +244,7 @@ async def transfer(
     return moved
 
 
-async def release(scope: str | Scope, *, branch: str) -> bool:
+async def release_stewardship(scope: str | Scope, *, branch: str) -> bool:
     """Drop *branch*'s interest in *scope*. Called when its PR merges or closes.
 
     True when a record went. Releasing something already gone is not an error --
@@ -259,7 +259,7 @@ async def release(scope: str | Scope, *, branch: str) -> bool:
 
 
 def _prune_scope(live_branches: Iterable[str], kind: str | None, allow_empty: bool) -> tuple[set[str], list[str]]:
-    """Validate :func:`prune`'s arguments; return the live set and the kinds to sweep.
+    """Validate :func:`prune_closed_branches`'s arguments; return the live set and the kinds to sweep.
 
     Runs before any Redis I/O, so a bad argument never costs a round trip.
 
@@ -274,7 +274,7 @@ def _prune_scope(live_branches: Iterable[str], kind: str | None, allow_empty: bo
     live = set(live_branches)
     if not live and not allow_empty:
         raise EmptyLiveSet(
-            "prune() received no live branches. If nothing is genuinely open, pass "
+            "prune_closed_branches() received no live branches. If nothing is genuinely open, pass "
             "allow_empty=True; if the branch listing failed, do not prune on its result."
         )
     from autobot_shared.coordination.work_claims import VALID_KINDS, _require_kind
@@ -304,7 +304,7 @@ async def _sweep_kind(client: Any, kind: str, live: set[str]) -> list[Interest]:
     return dropped
 
 
-async def prune(
+async def prune_closed_branches(
     live_branches: Iterable[str],
     *,
     kind: str | None = None,

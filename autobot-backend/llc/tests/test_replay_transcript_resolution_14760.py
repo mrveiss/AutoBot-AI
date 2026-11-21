@@ -31,7 +31,7 @@ from llc.adapters.subprocess_base import (
     is_subprocess_adapter,
     placeholder_run_id,
 )
-from llc.scheduler.heartbeat_scheduler import _resolve_adapter_output_file
+from llc.scheduler.replay_recording import _resolve_adapter_output_file
 
 SUBPROCESS_TYPES = [
     "claude_code",

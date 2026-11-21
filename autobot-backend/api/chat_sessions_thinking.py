@@ -100,15 +100,16 @@ async def update_thinking_preferences(
     if not session_data:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
-    # Update thinking preferences in metadata
-    metadata = session_data.get("metadata", {})
-    metadata["thinking_preferences"] = {
+    # Only the changed key is sent: update_session_metadata merges it into the metadata read under the
+    # session lease, so a concurrent change to another key is not overwritten with this stale copy.
+    thinking_preferences = {
         "enabled": preferences.enabled,
         "budget_tokens": preferences.budget_tokens,
     }
-
-    # Save updated session
-    await chat_history_manager.update_session_metadata(session_id, metadata)
+    if not await chat_history_manager.update_session_metadata(
+        session_id, {"thinking_preferences": thinking_preferences}
+    ):
+        raise HTTPException(status_code=500, detail=f"Could not save thinking preferences for session {session_id}")
 
     logger.info(
         "Updated thinking preferences for session %s: enabled=%s, budget=%d",

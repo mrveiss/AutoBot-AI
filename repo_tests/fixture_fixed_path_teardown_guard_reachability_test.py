@@ -42,9 +42,11 @@ from repo_tests.fixture_fixed_path_teardown_guard import (
     _reached_scopes,
 )
 
+from tools.lint import _parse_cache as parse_cache
+
 
 def _only_fixture(source: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    (func,) = _iter_pytest_fixtures(ast.parse(source))
+    (func,) = _iter_pytest_fixtures(parse_cache.parse(source))
     return func
 
 

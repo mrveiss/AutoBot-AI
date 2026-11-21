@@ -19,10 +19,11 @@ import hashlib
 import time
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.openapi.utils import get_openapi
 
 from api.schemas_agent import SelfCapabilitiesResponse
+from api.user_management.dependencies import get_current_user
 from autobot_shared.api_routing.router_routes import effective_route_count
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -30,7 +31,10 @@ from constants.ttl_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+# #16375: every route here was reachable anonymously. Gated at the ROUTER so a
+# route added later inherits it. Authentication only:
+# a read-only description of the API's own capabilities.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # ---------------------------------------------------------------------------
 # In-process cache (singleton per worker process — acceptable for LLM hints)
