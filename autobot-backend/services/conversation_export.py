@@ -244,10 +244,8 @@ async def import_conversation(
     Args:
         chat_history_manager: Chat history manager instance.
         document: Parsed export document (must conform to AUTOBOT_EXPORT_FORMAT).
-        user_data: The importing user, stamped as the session owner (#14026).
-            Without it an import created an ownerless session, and callers that
-            read "no owner" as "legacy, allow access" made it readable by
-            anyone.
+        user_data: The importing user, stamped as the session owner (#14026); without it the
+            session is ownerless, which callers read as "legacy, allow access".
         company_metadata: the active company's ``{"company_id": ...}``, stamped on a new chat (#21997).
         on_conflict: One of "skip", "replace", or "rename".
             - "skip"    — return without saving when session_id already exists.
@@ -330,32 +328,54 @@ async def _import_under_lease(
     refusal, existing_owner = await _owner_refusal(chat_history_manager, session_id, user_data, exists)
     if refusal is not None:
         return refusal
-    if not (exists and existing_owner is not None and existing_owner == importer):
-        session_id, exists = await _fresh_session_id(chat_history_manager), False
-        logger.info("Import saved under a fresh id %s", session_id)
-    elif on_conflict == "rename":
-        session_id = await _fresh_session_id(chat_history_manager)
-        logger.info("Import renamed to %s due to conflict", session_id)
-    elif on_conflict == "skip":
-        logger.info("Import skipped: session %s already exists", session_id)
-        return _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)")
+    session_id, exists, conflict = await _import_target(
+        chat_history_manager, session_id, exists, existing_owner is not None and existing_owner == importer, on_conflict
+    )
+    if conflict is not None:
+        return conflict
     # #21664: index a new session or one the importer already owns (an ownerless one is refused above, #21668)
     index = not exists or on_conflict == "rename" or existing_owner == importer
     return await _save_import(
-        chat_history_manager,
-        document,
-        session_id,
-        exists,
-        on_conflict,
-        user_data,
-        index,
-        company_metadata,
+        chat_history_manager, document, session_id, exists, on_conflict, user_data, index, company_metadata
     )
+
+
+async def _import_target(manager, session_id: str, exists: bool, owns_it: bool, on_conflict: str):
+    """``(session_id, exists, conflict)``: where the import saves, or the ``skip`` conflict that ends it (#21731).
+
+    Only the session's own owner imports onto the requested id; any other import takes a fresh server-made id.
+    """
+    if not (exists and owns_it):
+        fresh = await _fresh_session_id(manager)
+        logger.info("Import saved under a fresh id %s", fresh)
+        return fresh, False, None
+    if on_conflict == "rename":
+        fresh = await _fresh_session_id(manager)
+        logger.info("Import renamed to %s due to conflict", fresh)
+        return fresh, exists, None
+    if on_conflict == "skip":
+        logger.info("Import skipped: session %s already exists", session_id)
+        return (
+            session_id,
+            exists,
+            _conflict_result(session_id, f"Session {session_id!r} already exists (on_conflict=skip)"),
+        )
+    return session_id, exists, None
 
 
 def _import_metadata(user_data, company_metadata, replaces: bool) -> Dict[str, Any] | None:
     """The owner record, plus the active company on a NEW chat; replacing one's own chat does not re-tag it (#21997)."""
     return {**build_owner_metadata(user_data), **({} if replaces else company_metadata or {})} or None
+
+
+def _import_result(session_id: str, exists: bool, count: int) -> Dict[str, Any]:
+    """The success answer of an import."""
+    return {
+        "success": True,
+        "session_id": session_id,
+        "conflict": exists,
+        "message": f"Imported {count} messages into session {session_id!r}",
+    }
 
 
 async def _save_import(
@@ -383,12 +403,7 @@ async def _save_import(
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))
     if index and (importer := (user_data or {}).get("username")):
         await _index_import_owner(session_id, importer)
-    return {
-        "success": True,
-        "session_id": session_id,
-        "conflict": exists,
-        "message": f"Imported {len(messages)} messages into session {session_id!r}",
-    }
+    return _import_result(session_id, exists, len(messages))
 
 
 async def _owner_validator() -> SessionOwnershipValidator:
