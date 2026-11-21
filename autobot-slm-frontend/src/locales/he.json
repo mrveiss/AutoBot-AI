@@ -496,7 +496,8 @@
     },
     "errors": {
       "withStatus": "{message} (HTTP {status})",
-      "withCause": "{message}: {cause}"
+      "withCause": "{message}: {cause}",
+      "unknown": "שגיאה לא ידועה"
     }
   },
   "deploymentLogViewer": {

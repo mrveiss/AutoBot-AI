@@ -21,6 +21,8 @@ vi.mock('@/stores/fleet', () => ({
   useFleetStore: () => ({ fetchNpuWorkerConfig, fetchNpuNodeMetrics }),
 }))
 
+vi.mock('@/i18n', () => ({ default: { global: { t: (k: string) => k } } }))
+
 // The panel translates its save notice through useI18n; the tests mount without the plugin.
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 
