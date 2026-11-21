@@ -234,7 +234,7 @@ def test_every_auditable_workspace_is_either_blocking_or_staged() -> None:
     which is the outcome the list was introduced to prevent.
     """
     auditable = set(_auditable_workspaces(repo_root()))
-    blocking = {"autobot-frontend"}
+    blocking = {"autobot-frontend", "libs/autobot-ui"}
     unstaged = sorted(auditable - blocking - UNTRIAGED)
 
     assert not unstaged, (
