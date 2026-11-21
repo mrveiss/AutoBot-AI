@@ -6,66 +6,37 @@
 
 ``NO DATA REWRITE``: this adds one unique constraint. No row or column is touched. The create path used to
 insert a second secret for every repeated first-time save, so an installation may hold several rows under one
-``(owner_vault, name)``. Choosing which one survives is a decision about stored credentials: the migration
-NEVER makes it. If any duplicate exists the migration FAILS, naming each group by vault and secret ids (never
-a name or a value), and changes nothing. The fix is a person's. Where a type can be verified, raise the proposals
-(``POST /api/admin/secret-duplicates/requests``): each copy is verified against its target and a human approves the
-removal of the losing copies in the Approvals inbox. Where it cannot (a secret type with no verifier, or zero or
-several copies that verify), the proposal is a flag for a person: they keep the copy they choose and delete the
-others with ``DELETE /api/v2/secrets/<id>`` (the guarded delete). Then run the upgrade again.
+``(owner_vault, name)``. Choosing which one survives is a decision about stored credentials: the migration NEVER
+makes it. It SELF-APPLIES: with no duplicate group it creates the constraint; with any it logs a counts-only warning
+and completes, so the chain finishes on every update path. The app then creates the constraint itself, after the last
+approved removal and at startup (``services/secret_unique_constraint.py``). The DDL has one home,
+``migrations/secret_unique.py``.
 
-The container upgrade stops here, so the routes above are not served. Start the backend held at the revision
-before this one (``AUTOBOT_ALEMBIC_UPGRADE_TARGET=20261120_116``), resolve the duplicates, then unset the variable
-and restart: the entrypoint applies this revision.
+Resolve duplicates with the proposals (``POST /api/admin/secret-duplicates/requests``): each copy is verified against
+its target and a human approves the removal of the losing copies in the Approvals inbox. Where a type cannot be
+verified, a person keeps the copy they choose and deletes the others with ``DELETE /api/v2/secrets/<id>``.
 
 Legacy rows (``owner_vault IS NULL``) are not constrained: SQL treats NULLs as distinct.
 """
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 from migrations.guards import has_table
+from migrations.secret_unique import CONSTRAINT, TABLE, ensure_secret_unique_constraint, has_constraint
 
 revision: str = "20261120_117"
 down_revision: Union[str, None] = "20261120_116"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_TABLE = "secrets"
-_CONSTRAINT = "uq_secrets_owner_vault_name"
-_DUPLICATES = (
-    "SELECT owner_vault, array_agg(id::text ORDER BY id::text) AS ids FROM secrets "
-    "WHERE owner_vault IS NOT NULL GROUP BY owner_vault, name HAVING count(*) > 1 "
-    "ORDER BY owner_vault, min(id::text) LIMIT 20"
-)
-
-
-def _has_constraint() -> bool:
-    inspector = sa.inspect(op.get_bind())
-    return _CONSTRAINT in {c["name"] for c in inspector.get_unique_constraints(_TABLE)}
-
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    if bind.dialect.name != "postgresql" or not has_table(_TABLE) or _has_constraint():
-        return
-    duplicates = bind.execute(sa.text(_DUPLICATES)).all()
-    if duplicates:
-        listed = "; ".join(f"vault {row.owner_vault}: secrets {', '.join(row.ids)}" for row in duplicates)
-        raise RuntimeError(
-            f"cannot create {_CONSTRAINT}: several secrets share one (owner_vault, name) (first 20 groups): "
-            f"{listed}. Nothing was changed and no copy was chosen. Verify and resolve them through the "
-            "Approvals inbox (POST /api/admin/secret-duplicates/requests; add ?re_raise=true after a rejected "
-            "proposal), or keep the copy you choose and delete the others with DELETE /api/v2/secrets/<id>, "
-            "then run the upgrade again. If the backend will not start, set AUTOBOT_ALEMBIC_UPGRADE_TARGET="
-            "20261120_116 first and unset it once the duplicates are gone."
-        )
-    op.create_unique_constraint(_CONSTRAINT, _TABLE, ["owner_vault", "name"])
+    ensure_secret_unique_constraint(op.get_bind())
 
 
 def downgrade() -> None:
     bind = op.get_bind()
-    if bind.dialect.name == "postgresql" and has_table(_TABLE) and _has_constraint():
-        op.drop_constraint(_CONSTRAINT, _TABLE, type_="unique")
+    if bind.dialect.name == "postgresql" and has_table(TABLE) and has_constraint(bind):
+        op.drop_constraint(CONSTRAINT, TABLE, type_="unique")

@@ -20,14 +20,11 @@ USER_MODE="${AUTOBOT_USER_MODE:-single_company}"
 # use ADD VALUE IF NOT EXISTS, and a concurrent index build drops an invalid leftover
 # before rebuilding. repo_tests/docker_admin_seed_18729_test.py pins both.
 
-# AUTOBOT_ALEMBIC_UPGRADE_TARGET (default head) lets an operator hold the schema at a revision so the app can
-# start and serve the duplicate-secret resolution routes before 20261120_117 applies (#17850).
-
 # Subshell keeps the app's cwd at the image WORKDIR (/app) — the backend
 # writes relative paths from there, so leaking the cd into exec would
 # silently relocate runtime data when the user mode flips.
 run_migrations() {
-    (cd /app/autobot-backend && python3 -m alembic -c migrations/alembic.ini upgrade "${AUTOBOT_ALEMBIC_UPGRADE_TARGET:-head}")
+    (cd /app/autobot-backend && python3 -m alembic -c migrations/alembic.ini upgrade head)
 }
 
 echo "Running backend database migrations (user mode: ${USER_MODE})..."

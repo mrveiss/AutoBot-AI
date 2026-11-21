@@ -121,7 +121,9 @@ TIMESTAMPTZ_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
 # nothing and a bracket ending at them would STAMP the head without ever creating the constraint (#17850: the
 # secrets (owner_vault, name) uniqueness would be missing while alembic says it is applied). Each
 # ``(table, constraint)`` is verified only when the table exists: the schema looks applied <=> the constraint is
-# there, so adoption sees the revision as absent and ``upgrade head`` RUNS it.
+# there, so adoption sees the revision as absent and ``upgrade head`` RUNS it. Revision 117 creates the constraint
+# only while no duplicate group exists (``migrations/secret_unique.py``); while duplicates remain it completes
+# without it, which this marker reports as absent -- accurate, and the app creates it once they are resolved.
 CONSTRAINT_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
     "20261120_117": (("secrets", "uq_secrets_owner_vault_name"),),
 }

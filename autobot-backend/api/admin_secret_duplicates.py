@@ -14,8 +14,7 @@ when exactly one verifies and asks a person to choose otherwise. Nothing runs un
 Approvals inbox, and it is never auto-approved. Each call probes at most
 ``AUTOBOT_SECRET_DUPLICATE_MAX_GROUPS_PER_REQUEST`` groups and reports ``remaining``; a group whose proposal was
 rejected stays unproposed until an admin passes ``?re_raise=true``.
-On an installation with duplicates the upgrade to ``20261120_117`` fails, so start the backend held at the revision
-before it (``AUTOBOT_ALEMBIC_UPGRADE_TARGET=20261120_116``), resolve here, then unset the variable and restart.
+Migration ``20261120_117`` skips its constraint while duplicates exist; the app creates it after the last removal.
 The executor lives in ``services.secret_duplicate_cleanup_action``.
 """
 

@@ -14,8 +14,8 @@ Ids only: no name, no value, ever. A proposal with ``survivor_id`` null is a cas
 copies verified, or no verifier exists): approving it acknowledges it and removes NOTHING, because the approval
 carries no choice. That is also the path for a secret type with no verifier, which a proposal can never name a
 survivor for. The person keeps the copy they choose through the envelope delete route
-(``DELETE /api/v2/secrets/<id>``, with its vault authorisation and guarded delete); the migration
-(``20261120_117``) stays blocked until the duplicates are gone.
+(``DELETE /api/v2/secrets/<id>``, with its vault authorisation and guarded delete); the uniqueness
+constraint (skipped by migration ``20261120_117``) is created by the app once the last group is gone (#17850).
 
 At execution the group is checked again from the database -- every named id must still exist, still share one
 ``(owner_vault, name)`` with the survivor and carry the rotation ``version`` it was probed at (a copy rotated since
@@ -42,6 +42,7 @@ from models.secret import Secret
 from services.approval_execution import register_post_approval_action, verified_decider
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
+from services.secret_unique_constraint import ensure_after_duplicate_removal
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor
 
@@ -209,6 +210,7 @@ async def execute_secret_duplicate_cleanup(approval: "Approval", session: "Async
         return
     review = await _review_of(approval, session)
     outcomes = [f"{sid}: {await _remove_one(approval, session, sid, review)}" for sid in review.removals]
+    await ensure_after_duplicate_removal(session)  # the last group gone: the app creates the constraint (#17850)
     await _comment(
         approval, session, f"Secret duplicate cleanup (survivor {review.survivor_id}): " + "; ".join(outcomes)
     )

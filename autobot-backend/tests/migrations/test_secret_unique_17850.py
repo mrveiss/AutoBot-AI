@@ -4,7 +4,8 @@
 # Author: mrveiss
 """One envelope secret per (owner_vault, name) (#17850), against a real disposable Postgres.
 
-AC 1: the migration refuses while duplicates exist, naming them by vault and id, and picks nothing.
+AC 1: the migration completes without the constraint while duplicates exist (picking nothing); the app creates it
+once they are gone -- after the last approved removal and at startup.
 AC 2: two creates of one (owner_vault, name) yield one row and one id -- also when they race.
 """
 
@@ -117,18 +118,57 @@ async def _insert_duplicates(maker) -> list[uuid.UUID]:
     return ids
 
 
-async def test_the_migration_refuses_duplicates_and_names_them_by_id(maker, fresh_db_url):
+async def _has_constraint(maker) -> bool:
+    async with maker() as s:
+        found = await s.execute(text("SELECT 1 FROM pg_constraint WHERE conname = :c"), {"c": _CONSTRAINT})
+        return found.first() is not None
+
+
+async def test_the_migration_with_duplicates_completes_without_the_constraint_and_changes_no_row(maker, fresh_db_url):
     ids = await _insert_duplicates(maker)
     assert run_alembic(["downgrade", _BEFORE], fresh_db_url).returncode == 0
-    refused = run_alembic(["upgrade", "head"], fresh_db_url)
-    assert refused.returncode != 0
-    assert all(str(i) in refused.stderr for i in ids), "the refusal must name the duplicate ids"
-    assert "DUP_KEY" not in refused.stderr, "the refusal must not carry the secret's name"
+    applied = run_alembic(["upgrade", "head"], fresh_db_url)
+    assert applied.returncode == 0, applied.stderr
+    assert "DUP_KEY" not in applied.stderr and not any(str(i) in applied.stderr for i in ids)
+    assert not await _has_constraint(maker)
     async with maker() as s:
         assert await _count(s, "DUP_KEY") == 2, "the migration must not choose or delete a copy"
+
+
+async def test_the_migration_without_duplicates_creates_the_constraint(maker, fresh_db_url):
+    assert await _has_constraint(maker)
+    assert run_alembic(["downgrade", _BEFORE], fresh_db_url).returncode == 0
+    assert not await _has_constraint(maker)
+    assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
+    assert await _has_constraint(maker)
+
+
+async def test_the_startup_ensure_is_idempotent_and_waits_for_the_duplicates_to_go(maker):
+    from services.secret_unique_constraint import ensure_constraint_in
+
+    ids = await _insert_duplicates(maker)
+    async with maker() as s:
+        assert await ensure_constraint_in(s) == "pending_duplicates"
+    assert not await _has_constraint(maker)
+    async with maker() as s:
         await s.execute(text("DELETE FROM secrets WHERE id = :i"), {"i": ids[0]})
         await s.commit()
-    assert run_alembic(["upgrade", "head"], fresh_db_url).returncode == 0
+        assert await ensure_constraint_in(s) == "created"
+        assert await ensure_constraint_in(s) == "exists"
+    assert await _has_constraint(maker)
+
+
+async def test_the_post_removal_hook_creates_the_constraint_when_the_count_reaches_zero(maker):
+    from services.secret_unique_constraint import ensure_after_duplicate_removal
+
+    ids = await _insert_duplicates(maker)
+    async with maker() as s:
+        await ensure_after_duplicate_removal(s)
+        assert not await _has_constraint(maker), "two copies remain"
+        await s.execute(text("DELETE FROM secrets WHERE id = :i"), {"i": ids[0]})
+        await s.commit()
+        await ensure_after_duplicate_removal(s)
+    assert await _has_constraint(maker)
 
 
 async def test_create_refuses_to_choose_among_existing_duplicates(maker):
