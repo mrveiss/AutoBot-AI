@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY, declared_categories_of
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -50,6 +51,30 @@ def send_denied_message(decision: Dict[str, Any], iteration: int, messages: list
         stream_cb(deny_msg)
 
 
+def split_refused(tool_calls: List[Dict[str, Any]], decision: Dict[str, Any]) -> Tuple[list, List[Dict[str, Any]]]:
+    """``(calls still to run, results for the calls the person refused)`` (#19957).
+
+    Only a call the person was shown (``needs_approval``) is refused; an ungated one was never in front of them.
+    The model is told a refused call did not run and why.
+    """
+    from chat_workflow.tool_call_loop import stamp_call_fingerprint
+
+    reason = decision.get("reason") or "no reason given"
+    results = []
+    for tool_call in tool_calls:
+        if not tool_call.get("needs_approval"):
+            continue
+        result = {
+            "tool": tool_call.get("name", ""),
+            "status": "refused",
+            "error": f"The user refused this call, so it did not run and has no result ({reason}). "
+            "Do not retry it; say so, or take a different approach.",
+        }
+        stamp_call_fingerprint([result], tool_call)
+        results.append(result)
+    return [tc for tc in tool_calls if not tc.get("needs_approval")], results
+
+
 async def dispatch_approved_calls(
     manager, exec_ctx, state: Dict[str, Any], tool_calls: list, iteration: int, messages: list, stream_cb
 ) -> Tuple[List[Dict[str, Any]], bool]:
@@ -80,7 +105,11 @@ async def dispatch_approved_calls(
     # approved action (double-block); clearing it supersedes the seam gate on
     # the graph path while leaving it fully active for legacy/MCP callers
     # that never pass through the interrupt.
+    # #19957: a delegate spawned below inherits what this run held before the clear, on both engines.
+    exec_ctx.declared_snapshot = declared_categories_of(exec_ctx)
+    exec_ctx.approval_gates_snapshot = frozenset(exec_ctx.requires_approval_before or ())
     exec_ctx.requires_approval_before = []
+    exec_ctx.context.pop(DECLARED_CATEGORIES_KEY, None)  # #19957: the stamped declared set is cleared with it
 
     async for item in manager._process_tool_calls(
         tool_calls,

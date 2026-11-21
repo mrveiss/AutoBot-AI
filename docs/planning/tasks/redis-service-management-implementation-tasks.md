@@ -2370,7 +2370,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 - Use type hints for all Python code
 - Use proper TypeScript typing for frontend
 - Run pre-commit hooks (Black, flake8, isort)
-- Code review by code-reviewer agent (MANDATORY)
+- Code review by autobot-dev-skills:reviewer (code-reviewer lens) agent (MANDATORY)
 
 ---
 

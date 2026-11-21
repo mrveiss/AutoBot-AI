@@ -46,10 +46,12 @@ import repo_tests.egress_default_guard_17576_test as _egress_default_guard  # no
 import repo_tests.embedding_model_preserved_15502_test as _embedding_render_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_file_family_18555_test as _env_family_guard  # noqa: F401 -- registers its scope
 import repo_tests.env_fork_guard_18094_test as _env_fork_guard  # noqa: F401 -- registers its scope
+import repo_tests.extraction_registry_17995_test as _extraction_registry_guard  # noqa: F401 -- registers its scope
 import repo_tests.github_api_single_module_15411_test as _github_api_guard  # noqa: F401 -- registers its scope
 import repo_tests.infra_scripts_no_backend_imports_18288_test as _infra_backend_guard  # noqa: F401 -- registers its scope
 import repo_tests.kb_read_visibility_guard_test as kb
 import repo_tests.knowledge_metadata_parse_canonical_18220_test as _metadata_parse_guard  # noqa: F401 -- registers its scope
+import repo_tests.llm_quality_seam_16133_test as _quality_seam_guard  # noqa: F401 -- registers its scope
 import repo_tests.migration_gate_filter_covers_what_its_tests_import_test as _migration_gate_guard  # noqa: F401 -- registers its scope
 import repo_tests.model_tier_single_definition_15502_test as _model_tier_guard  # noqa: F401 -- registers its scope
 import repo_tests.no_doubled_api_prefix_18722_test as _doubled_api_prefix_guard  # noqa: F401 -- registers its scope
@@ -61,6 +63,7 @@ import repo_tests.one_bm25_formula_18183_test as _bm25_guard  # noqa: F401 -- re
 import repo_tests.one_brand_mark_and_announcer_18240_test as _brand_mark_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_circuit_breaker_18554_test as _circuit_breaker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_claim_model_18086_test as _claim_model_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_compare_and_delete_script_19631_test as _compare_delete_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_content_digest_15722_test as _content_digest_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_deployment_mode_detector_12771_test as _deployment_mode_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_fact_read_authorization_18184_test as _fact_read_guard  # noqa: F401 -- registers its scope
@@ -70,10 +73,10 @@ import repo_tests.one_internal_api_key_reader_17856_test as _internal_key_reader
 import repo_tests.one_paths_filter_job_15360_test as _paths_filter_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_permission_gate_18263_test as _permission_gate_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_playwright_server_18549_test as _playwright_server_guard  # noqa: F401 -- registers its scope
+import repo_tests.one_rate_limiter_18087_test as _rate_limiter_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_semantic_chunker_14485_test as _semantic_chunker_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_serving_predicate_18820_test as _serving_predicate_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_session_ownership_validator_14016_test as _ownership_validator_guard  # noqa: F401 -- registers its scope
-import repo_tests.one_session_scope_15068_test as _session_scope_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_ssh_restart_executor_18186_test as _ssh_restart_guard
 import repo_tests.one_static_data_copy_18556_test as _static_data_guard  # noqa: F401 -- registers its scope
 import repo_tests.one_sync_command_runner_18180_test as _sync_runner_guard  # noqa: F401 -- registers its scope
@@ -81,6 +84,7 @@ import repo_tests.opt_autobot_literal_ratchet_18880_test as _opt_autobot_guard  
 import repo_tests.optimization_taxonomies_13049_test as _taxonomy_guard  # noqa: F401 -- registers its scope
 import repo_tests.pr_comment_upsert_12984_test as _pr_comment_guard  # noqa: F401 -- registers its scope
 import repo_tests.provider_key_env_reads_route_through_vault_18094_test as _provider_key_env_guard  # noqa: F401 -- registers its scope
+import repo_tests.provider_tool_schema_single_source_16815_test as _provider_tool_schema_guard  # noqa: F401 -- registers its scope
 import repo_tests.redis_direct_constructor_18553_test as _redis_constructor_guard  # noqa: F401 -- registers its scope
 import repo_tests.root_resolver_single_source_18101_test as _root_resolver_guard  # noqa: F401 -- registers its scope
 import repo_tests.script_module_names_unique_14873_test as _script_names_guard  # noqa: F401 -- registers its scope
@@ -88,8 +92,10 @@ import repo_tests.shadowed_literal_routes_18720_test as _shadowed_routes_guard  
 import repo_tests.single_attribute_writer_18240_test as _attribute_writer_guard  # noqa: F401 -- registers its scope
 import repo_tests.single_constant_time_compare_20761_test as _constant_time_guard  # noqa: F401 -- registers its scope
 import repo_tests.slm_backend_no_embedded_playbook_18606_test as _embedded_playbook_guard  # noqa: F401 -- registers its scope
+import repo_tests.test_name_predicate_single_home_21078_test as _test_name_guard  # noqa: F401 -- registers its scope
 from repo_tests._paths import repo_root
 from repo_tests._reach import Reach, ReachScopeError, declare
+from repo_tests._reach_declared_scopes import DECLARED_SCOPES
 from repo_tests._reach_scope import relative_paths, scope_complaint
 
 _ROOT = repo_root()
@@ -205,361 +211,6 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
         overclaiming.verify_scope(_ROOT)
 
 
-#: What each scoped declaration claims, written out BY HAND rather than read from the constant the guard walks (#17844,
-#: review). Every call site passes `roots=SCAN_ROOTS` or the local equivalent, so narrowing that constant narrows the
-#: claim with it and `verify_scope` stays green over the smaller population -- which is the very mutation #17844's AC2
-#: describes. This is the independent second derivation that closes it: narrow a guard's roots constant and this goes
-#: red, because the expectation does not move with it.
-#:
-#: Compared as a SET in both directions. Adding a scoped declaration means adding a line here, and that is the point --
-#: the scope is a decision, so it is written twice on purpose.
-_DECLARED_SCOPES = {
-    "edge-configs-proxying-api-20046": ("autobot-infrastructure", "autobot-slm-backend", "docker"),
-    "inline-lazy-singleton": (
-        ".claude",
-        "autobot-backend",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "libs",
-        "pipeline-scripts",
-        "plugins",
-        "repo_tests",
-        "scripts",
-        "tools",
-    ),
-    "slm-users-db-scan": ("autobot-slm-backend",),
-    "windows-install-scripts-stage-constraints-19681": ("autobot-npu-worker/resources/windows-npu-worker",),
-    "role-source-paths-depth-proof-20509": ("autobot-slm-backend/ansible/roles",),
-    "operational-docs-playbook-references-19611": (
-        ".claude",
-        "autobot-infrastructure",
-        "autobot-slm-backend",
-        "docs",
-        "install.sh",
-    ),
-    "ci-requirements-one-install-workflows": (".github/workflows",),
-    "no_partial_key_mask_18221.sources": ("autobot_shared", "autobot-backend", "autobot-slm-backend"),
-    "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "dead-icon-selector-vue-files": ("autobot-frontend/src",),
-    "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
-    "primary-fill-white-label-files": ("autobot-frontend/src",),
-    "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "duplicate-type-names-ts-files-scanned-14908": (
-        "autobot-frontend/src",
-        "autobot-slm-frontend/src",
-        "libs/autobot-ui",
-    ),
-    "duplicate-util-filenames-scanned-14908": ("autobot-frontend/src/utils", "autobot-slm-frontend/src/utils"),
-    "v-html-sanitiser-sinks": (
-        "autobot-frontend/src",
-        "autobot-slm-frontend/src",
-        "libs/autobot-ui/src",
-        "libs/autobot-ui/index.ts",
-    ),
-    "audit-writer-single-source": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "container-hardening-inline": ("autobot-backend", "autobot_shared"),
-    "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
-    "one-content-digest-scan": ("autobot-backend", "autobot_shared"),
-    "timeout-message-from-constant": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-    ),
-    "one-admin-gate": ("autobot-backend",),
-    "one-aead-core": ("autobot_shared",),
-    "audit-action-vocabulary": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
-    "hand-rolled-redis-pipeline-scan": ("autobot-backend", "autobot-slm-backend"),
-    "one-internal-api-key-reader-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "provider-key-env-read-scan": ("autobot-backend", "autobot_shared", "plugins"),
-    "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
-    "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),
-    "paths-filter-workflow-sweep": (".github/workflows",),
-    "parse-cache-direct-parse-scan": ("repo_tests",),
-    "workflow-visible-name-sweep": (".github/workflows",),
-    "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
-    "compat-module-needs-importer": ("autobot-backend",),
-    "unconnected-code-modules": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "unconnected-code-routes": ("autobot-backend", "autobot-slm-backend"),
-    "unconnected-code-stores": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "autobot-infrastructure"),
-    "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
-    "chat-history-async-calls-awaited": ("autobot-backend/api",),
-    "chat-single-delete-implementation": ("autobot-backend/api",),
-    "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
-    "no-literal-secret-default": ("autobot-slm-backend", "autobot-backend", "autobot_shared"),
-    "hardcoded-ui-literal-scan": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
-    "shadowed-literal-routes": ("autobot-backend", "autobot-slm-backend"),
-    "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
-    "credential-field-name-only-callers": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "plugins",
-        "scripts",
-        "pipeline-scripts",
-        "tools",
-        "repo_tests",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "autobot-tts-worker",
-        "autobot-browser-worker",
-        "libs",
-    ),
-    "chunker-private-hook-scan": ("autobot-backend", "autobot-infrastructure", "autobot_shared"),
-    "chunk-identity-single-home-18142": ("autobot-backend/", "autobot_shared/"),
-    "provenance-accessor-scan": ("autobot-backend",),
-    "embedding-model-literal-sites": (
-        "autobot-backend",
-        "autobot_shared",
-        "autobot-infrastructure/shared/tools/index_documentation.py",
-    ),
-    "single-attribute-writer-scan": ("autobot-frontend/src",),
-    "single-constant-time-compare": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "torch-pair-literals": (
-        ".github",
-        "docker",
-        "autobot-infrastructure",
-        "autobot-slm-backend/ansible",
-        "scripts",
-        "install.sh",
-    ),
-    "tool-effect-table-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "deployment-mode-detector-scan": ("autobot-backend/", "autobot-infrastructure/"),
-    "egress-default-outbound-call-sites": (
-        "autobot-",
-        "autobot_shared/",
-        "debug/",
-        "plugins/",
-        "scripts/",
-        "pipeline-scripts/",
-    ),
-    "egress-default-outbound-call-sweep": (
-        "autobot-",
-        "autobot_shared/",
-        "debug/",
-        "plugins/",
-        "scripts/",
-        "pipeline-scripts/",
-    ),
-    "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
-    "ansible-status-queries-check-mode-sweep": ("autobot-slm-backend/ansible",),
-    "defined-twice-18094-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "scripts",
-    ),
-    "env-fallback-read-sites-18094": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "scripts",
-    ),
-    "env-file-family-18555-scan": (".env", "autobot-frontend/", "autobot-slm-backend/", "docker/"),
-    "user-mode-default-carriers-18729": (
-        ".env",
-        "autobot-frontend/",
-        "autobot-slm-backend/",
-        "docker-compose",
-        "docker/",
-    ),
-    "backend-migrations-resume-safe-18729": ("autobot-backend/migrations/versions",),
-    "opt-autobot-literal-ratchet-18880": ("autobot-slm-backend/ansible",),
-    "disaster-recovery-deployed-units": ("autobot-slm-backend/ansible/roles",),
-    "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
-    "architecture-family-definition-scan": (
-        "autobot-backend",
-        "autobot-npu-worker",
-        "autobot-slm-backend",
-        "autobot_shared",
-    ),
-    "optimization-taxonomy-scan": ("autobot-backend/llm_shared/optimization",),
-    "github-api-single-module": ("pipeline-scripts", "scripts"),
-    "conftest-stubset-primitives": (
-        "autobot-backend",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "autobot-slm-backend",
-        "repo_tests",
-    ),
-    "root-resolver-depth-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "pipeline-scripts",
-        "repo_tests",
-        "scripts",
-        "tools",
-    ),
-    "file-type-sets-one-home-19339": ("autobot-backend",),
-    "llc-actor-id-scan": ("autobot-backend/llc",),
-    "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "node-major-literals": (
-        ".github",
-        "autobot-slm-backend/ansible",
-        "autobot-infrastructure/shared/scripts",
-        "install.sh",
-    ),
-    "service-port-homes-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "scripts",
-        "autobot-frontend",
-        ".env.example",
-    ),
-    "generated-type-redeclarations": ("autobot-frontend/src",),
-    "severity-order-copies": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts"),
-    "llc-sigterm-grace-copies": ("autobot-backend/llc",),
-    "frontend-backend-origin": ("autobot-frontend/src",),
-    "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "frontend-hand-built-relative-time-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "frontend-hand-rolled-file-save-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
-    "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
-    "search-mode-copies": ("autobot-backend",),
-    "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "one-system-knowledge-template-tree": ("autobot-backend",),
-    "one-static-data-copy-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot-infrastructure",
-        "autobot-monitoring",
-    ),
-    "hand-rolled-async-session-scan": ("autobot-backend", "autobot-slm-backend"),
-    "hand-rolled-circuit-breaker-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-npu-worker",
-        "autobot-tts-worker",
-        "autobot-browser-worker",
-        "plugins",
-        "libs",
-    ),
-    "serving-predicate-scan": ("autobot-backend", "autobot_shared", "plugins", "libs"),
-    "anthropic-message-split-scan": ("autobot-backend/llm_shared/providers",),
-    "backoff-formula-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
-    "doubled-api-prefix-scan": ("autobot-backend/api", "autobot-slm-backend/api"),
-    "script-module-name-scan": ("autobot-infrastructure/shared/scripts",),
-    "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "redis-direct-constructor-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "autobot-tts-worker",
-        "autobot-browser-worker",
-        "scripts",
-        "pipeline-scripts",
-        "tools",
-        "plugins",
-        "libs",
-        "debug",
-    ),
-    "slm-backend-embedded-playbook-scan": ("autobot-slm-backend",),
-    "slm-node-enum-members-exist": ("autobot-slm-backend",),
-    "one-playwright-server-scan": ("autobot-browser-worker", "autobot-infrastructure", "autobot-frontend"),
-    "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "one-permission-gate-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "infra-backend-import-scan": ("autobot-infrastructure",),
-    "captcha-type-fork-scan": ("autobot-backend", "autobot_shared"),
-    "severity-enum-fork-scan": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
-    "session-ownership-validator-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "knowledge-metadata-parse-canonical": ("autobot-backend/api",),
-    "monitoring-version-literals": ("docker-compose.yml", "autobot-infrastructure", "autobot-slm-backend/ansible"),
-    "model-tier-map-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "embedding-model-render-sites": ("autobot-slm-backend/ansible",),
-    "ansible-credentials-never-logged": ("autobot-slm-backend/ansible",),
-    "frontend-model-literal-scan": ("autobot-frontend/src",),
-    "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "one-hybrid-search": ("autobot-backend", "autobot_shared"),
-    "shared-authority-callers-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "one-doc-indexer": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "tools",
-        "scripts",
-    ),
-    "pr-comment-upsert-sweep": (".github/workflows", "scripts", "tools", "pipeline-scripts", "autobot_shared"),
-    "sync-command-result-mapping-scan": ("autobot-backend",),
-    "one-claim-model-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
-    "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
-    "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
-    "jekyll-processed-docs": ("docs",),
-    "kb-populate-doc-patterns": ("autobot-infrastructure",),
-    "frontend-url-served-by-scan": (
-        "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-npu-worker",
-        "scripts",
-        ".env",
-    ),
-    "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
-    "kb-construction-18122-scan": (
-        "autobot-backend/",
-        "autobot-infrastructure/",
-        "autobot-slm-backend/",
-        "autobot_shared/",
-        "autobot-npu-worker/",
-        "autobot-tts-worker/",
-        "autobot-browser-worker/",
-        "tools/",
-        "scripts/",
-        "pipeline-scripts/",
-        "plugins/",
-        "libs/",
-        "debug/",
-    ),
-    "kb-read-visibility-production-sweep": (
-        "autobot-backend/",
-        "autobot_shared/",
-        "autobot-infrastructure/shared/mcp/",
-    ),
-    "model-revision-pinning-sweep": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
-    "oauth-bundle-app-secret-scan": ("autobot-backend", "autobot_shared"),
-    "one-claim-registry": (
-        "autobot-backend",
-        "autobot_shared",
-        "autobot-slm-backend",
-        "scripts",
-        "pipeline-scripts",
-    ),
-    "store-fact-chokepoint": ("autobot-backend/", "autobot_shared/"),
-    "ssh-restart-executor-scan": ("autobot-slm-backend",),
-    "ssot-rehardcode-scan-19730": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
-    "browser-service-routes-scan-19490": (
-        "autobot-backend",
-        "autobot_shared",
-        "autobot-infrastructure",
-        "autobot-slm-backend",
-        "scripts",
-    ),
-    "ansible-files-scanned-for-slm-port": ("autobot-slm-backend/ansible",),
-    "venv-builders-use-floor-interpreter-sweep": (
-        "autobot-slm-backend/ansible",
-        "autobot-infrastructure",
-        "autobot-backend/code_analysis",
-        "install.sh",
-    ),
-}
-
-
 def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     """A guard's roots constant cannot be narrowed without this failing.
 
@@ -584,12 +235,12 @@ def test_every_scoped_declaration_claims_the_roots_recorded_here() -> None:
     live = {
         name: reach.roots for name, reach in REGISTRY.items() if reach.roots and not name.startswith("self-check::")
     }
-    assert live == _DECLARED_SCOPES, (
+    assert live == DECLARED_SCOPES, (
         "declared scopes disagree with the hand-written record. Narrowed or widened: "
         + repr(
             {
-                n: (live.get(n), _DECLARED_SCOPES.get(n))
-                for n in set(live) ^ set(_DECLARED_SCOPES) | {n for n in live if live[n] != _DECLARED_SCOPES.get(n)}
+                n: (live.get(n), DECLARED_SCOPES.get(n))
+                for n in set(live) ^ set(DECLARED_SCOPES) | {n for n in live if live[n] != DECLARED_SCOPES.get(n)}
             }
         )
         + "\nA root removed from a guard's own constant shrinks the sweep and the claim "

@@ -28,6 +28,7 @@ from ..models.activity import ActorType
 from ..models.role_rate import LLCRoleRate
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
 
 #: ISO 4217 codes are exactly three letters. Validated rather than trusted so a
 #: free-text unit can never reach a figure people read as money.
@@ -87,10 +88,10 @@ class RoleRateService(LLCServiceBase):
         cost would depend on which row a query happened to read.
         """
         if hourly_rate is None or Decimal(hourly_rate) < 0:
-            raise ValueError("hourly_rate must be zero or positive")
+            raise CompanyOsError("hourly_rate must be zero or positive")
         code = (currency or "").strip().upper()
         if len(code) != CURRENCY_LENGTH or not code.isalpha():
-            raise ValueError("currency must be a three-letter code")
+            raise CompanyOsError("currency must be a three-letter code")
 
         await require_company_admin(session, company_id, actor_user_id)
 

@@ -21,7 +21,7 @@ _ROLE_TASKS = _ANSIBLE / "roles" / "backend" / "tasks"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
 
 _SRC = re.compile(r'src:\s*"\{\{\s*code_source_dir\s*\}\}/([A-Za-z0-9_.-]+)/')
-_INCLUDE_LOCAL = re.compile(r"include_tasks:\s*([A-Za-z0-9_.-]+\.yml)")
+_INCLUDE_LOCAL = re.compile(r"include_tasks:\s*(?:file:\s*)?([A-Za-z0-9_.-]+\.yml)")
 _TASKS_FROM = re.compile(r"tasks_from:\s*([A-Za-z0-9_.-]+?)(?:\.yml)?\s*$", re.M)
 _BACKEND_ROLE_BLOCK = re.compile(r"name:\s*backend\s*\n\s*tasks_from:\s*([A-Za-z0-9_.-]+?)(?:\.yml)?\s*$", re.M)
 

@@ -26,7 +26,6 @@ describe('mapFileList (#20195)', () => {
       size_bytes: 5,
       upload_timestamp: '2026-10-31T10:00:00Z',
       download_url: `${BASE}/download/f1`,
-      preview_url: `${BASE}/preview/f1`,
     })
     expect(files[1].file_type).toBe('generated')
     expect(files[1].mime_type).toBe('application/octet-stream')

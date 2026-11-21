@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any, Mapping
 
 from fastapi import HTTPException, status
@@ -16,7 +15,7 @@ from autobot_shared.auth.interactive_principal import is_interactive_human
 from autobot_shared.auth.permissions import is_admin_role
 
 from ..models.work_item import LLCWorkItem
-from ..services.authz import membership_role
+from ..services.authz import is_company_member
 from ..services.work_item_actor_role import coworking_denial, resolve_actor_role
 
 
@@ -41,11 +40,6 @@ async def handing_off_agent(session: AsyncSession, item: LLCWorkItem, current_us
 
 async def member_reviewer(session: AsyncSession, company_id: Any, reviewer_user_id: str) -> str:
     """The named reviewer, who must belong to the company; an unknown or malformed id reads the same."""
-    try:
-        reviewer = uuid.UUID(reviewer_user_id)
-    except ValueError:
-        reviewer = None
-    role = await membership_role(session, uuid.UUID(str(company_id)), reviewer, for_update=False) if reviewer else None
-    if role is None:
+    if not await is_company_member(session, company_id, reviewer_user_id):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The reviewer is not a member of this company")
     return reviewer_user_id

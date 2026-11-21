@@ -20,9 +20,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from autobot_shared.cron_expression import log_stored_cron_findings
+from config import settings
 from models.database import CodeStatus, Node, UpdateSchedule
 from services.database import db_service
-from services.node_events import split_enrollment_failed
+from services.node_events import get_slm_self_node_id, split_enrollment_failed
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,8 @@ async def get_schedule_target_nodes(db, schedule: UpdateSchedule) -> list:
     result = await db.execute(query)
     nodes = result.scalars().all()
     # Same enrollment filter as update-all (#21036): one operation, one behaviour on every route.
-    targets, _ = await split_enrollment_failed(db, [n.node_id for n in nodes])
+    self_id = await get_slm_self_node_id(db, settings.external_url)
+    targets, _ = await split_enrollment_failed(db, [n.node_id for n in nodes], exempt={self_id} if self_id else set())
     return [n for n in nodes if n.node_id in set(targets)]
 
 

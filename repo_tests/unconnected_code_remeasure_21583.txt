@@ -1,0 +1,42 @@
+# The one-time re-measure of #21629, dated 2026-11-15: the frontend detector (_unconnected_frontend.py) was added to the
+# gate, and these source files of autobot-frontend and autobot-slm-frontend had no importer on the base. They were
+# never connected. Each is debris to be wired in, one class, tracked by #21629; no file is deleted for being listed.
+# This list is frozen and may only shrink: it may not gain a line against the base (unconnected_code_gate_20512_test.py),
+# and a key leaves it when its baseline line does.
+frontend:autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue
+frontend:autobot-frontend/src/components/collaboration/index.ts
+frontend:autobot-frontend/src/components/examples/ThemingPatternExample.vue
+frontend:autobot-frontend/src/components/knowledge/modals/DocumentExportModal.vue
+frontend:autobot-frontend/src/components/manpage/index.ts
+frontend:autobot-frontend/src/components/transcriber/AiAnalysisPanel.vue
+frontend:autobot-frontend/src/components/transcriber/ExportMenu.vue
+frontend:autobot-frontend/src/components/transcriber/KbPushButton.vue
+frontend:autobot-frontend/src/components/transcriber/SpeakerLabel.vue
+frontend:autobot-frontend/src/components/visualizations/index.ts
+frontend:autobot-frontend/src/composables/useAgentEvents.ts
+frontend:autobot-frontend/src/composables/useAnalyticsFetch.ts
+frontend:autobot-frontend/src/composables/useConnectionTester.ts
+frontend:autobot-frontend/src/composables/useDebouncedSearch.ts
+frontend:autobot-frontend/src/composables/useFakeProgress.ts
+frontend:autobot-frontend/src/composables/useHostInventory.ts
+frontend:autobot-frontend/src/composables/useKnowledgeBase.ts
+frontend:autobot-frontend/src/composables/useKnowledgeCollaboration.ts
+frontend:autobot-frontend/src/composables/useLocalStorage.ts
+frontend:autobot-frontend/src/composables/useServiceDiscovery.ts
+frontend:autobot-frontend/src/composables/useSessionSync.ts
+frontend:autobot-frontend/src/composables/useSettingsHandlers.ts
+frontend:autobot-frontend/src/composables/useSvgIcons.ts
+frontend:autobot-frontend/src/composables/useTLSCredentials.ts
+frontend:autobot-frontend/src/composables/useTerminalHistory.ts
+frontend:autobot-frontend/src/composables/useVideoGeneration.ts
+frontend:autobot-frontend/src/utils/StoreMonitor.js
+frontend:autobot-frontend/src/utils/WebSocketMonitor.js
+frontend:autobot-frontend/src/utils/workflowComponents.ts
+frontend:autobot-frontend/src/views/DesktopView.vue
+frontend:autobot-frontend/src/views/SlmNoVncView.vue
+frontend:autobot-frontend/src/views/slm/ThemeManagerView.vue
+frontend:autobot-slm-frontend/src/components/DeploymentLogViewer.vue
+frontend:autobot-slm-frontend/src/components/DeploymentWizard.vue
+frontend:autobot-slm-frontend/src/components/fleet/FleetToolsTab.vue
+frontend:autobot-slm-frontend/src/composables/useFleetHealth.ts
+frontend:autobot-slm-frontend/src/composables/useNodeHealth.ts

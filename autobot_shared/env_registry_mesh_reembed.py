@@ -7,13 +7,31 @@ A sibling of ``env_registry_knowledge.py``, which has no room left under the 600
 
 from __future__ import annotations
 
-from autobot_shared.env_registry import EnvVarSpec, register_env_var
+#: The ONE default for ``AUTOBOT_MESH_REEMBED_INTERVAL_S`` (#21102): seconds between drain passes.
+REEMBED_INTERVAL_DEFAULT_S = 30
+
+#: How many drain intervals the leader lease lives when ``AUTOBOT_MESH_REEMBED_LEASE_TTL_MS`` is unset.
+REEMBED_LEASE_INTERVALS = 4
+
+
+def reembed_lease_ttl_default_ms(interval_s: int) -> int:
+    """The ONE rule for the unset lease TTL (#21102): ``REEMBED_LEASE_INTERVALS`` drain intervals, in ms.
+
+    The registry entry below and ``reembed_consumer.LEASE_TTL_MS`` both call it, so a changed interval
+    moves the consumer's effective default and the registry default cannot name a different one. Defined
+    above the registry import (as ``env_registry_tls`` does) so the consumer can import it while
+    ``env_registry`` is still loading this module and the registry stays importable on a bare interpreter.
+    """
+    return interval_s * REEMBED_LEASE_INTERVALS * 1000
+
+
+from autobot_shared.env_registry import EnvVarSpec, register_env_var  # noqa: E402 -- constants first, see above
 
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_MESH_REEMBED_LEASE_TTL_MS",
         type=int,
-        default=120000,
+        default=reembed_lease_ttl_default_ms(REEMBED_INTERVAL_DEFAULT_S),
         description=(
             "Lifetime of the mesh re-embed leader lease; must exceed the drain interval plus the time one "
             "item takes, since the drain refreshes it per item. Unset: four drain intervals."
@@ -41,7 +59,7 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_MESH_REEMBED_INTERVAL_S",
         type=int,
-        default=30,
+        default=REEMBED_INTERVAL_DEFAULT_S,
         description="Seconds between drain passes of mesh:reembed_queue by the lease-holding worker.",
         component="mesh",
         range=(1, 3600),
