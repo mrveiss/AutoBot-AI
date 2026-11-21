@@ -78,6 +78,7 @@ from llc.models.activity import LLCActivityLog  # noqa: E402
 from llc.models.budget import LLCAgentBudget  # noqa: E402
 from llc.models.company_ceo import LLCCompanyCEO  # noqa: E402
 from llc.models.company_os_cost import CompanyOsCostEvent  # noqa: E402
+from llc.models.contact import LLCContact  # noqa: E402
 from llc.models.goal import LLCGoal  # noqa: E402
 from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
 from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
@@ -129,6 +130,7 @@ _LOOP_MODELS = [
     LLCLabel,
     LLCWorkItemLabel,
     AgentOrgNode,
+    LLCContact,  # #13969/#15907: a company delete purges its contacts beside the heartbeat stop
     User,
 ]
 
