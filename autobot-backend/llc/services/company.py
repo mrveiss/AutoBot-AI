@@ -329,7 +329,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         )
         return list(result.scalars().all())
 
-    async def delete(self, company_id: uuid.UUID) -> None:
+    async def delete(self, company_id: uuid.UUID, actor_user_id: Optional[str] = None) -> None:
         """Soft-delete a company.
 
         Raises CompanyHasChildrenError when active child companies exist, preventing
@@ -353,7 +353,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
                 "re-parent or delete children before deleting the parent"
             )
         org.soft_delete()
-        await CompanyCEOService().stop_company_heartbeats(self.session, company_id)
+        await CompanyCEOService().stop_company_heartbeats(self.session, company_id, actor_user_id)
         await self.session.execute(sa_delete(LLCContact).where(LLCContact.company_id == company_id))
         await self.session.flush()
         logger.info("LLC company soft-deleted: %s (id=%s), its contacts purged, heartbeats off", org.name, org.id)

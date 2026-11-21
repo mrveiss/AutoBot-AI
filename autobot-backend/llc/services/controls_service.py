@@ -28,6 +28,7 @@ from ..exceptions import PublicMessageMixin
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
 from .company import CompanyNotFoundError
+from .heartbeat_activity import record_heartbeat_set
 
 logger = logging.getLogger(__name__)
 
@@ -340,14 +341,12 @@ class ControlsService:
             .where(*_agent_in_company(company_id, agent_id))
             .values(heartbeat_enabled=enabled, heartbeat_cron=cron)
         )
-        await self._activity_log.record(
-            session=session,
-            company_id=company_id,
-            actor_type="user",
-            actor_id=actor_user_id,
-            event_type=ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET,
-            entity_type="agent",
-            entity_id=agent_id,
+        await record_heartbeat_set(
+            self._activity_log,
+            session,
+            company_id,
+            agent_id,
+            actor_user_id,
             before={"heartbeat_enabled": row["heartbeat_enabled"], "heartbeat_cron": row["heartbeat_cron"]},
             after={"heartbeat_enabled": enabled, "heartbeat_cron": cron},
         )

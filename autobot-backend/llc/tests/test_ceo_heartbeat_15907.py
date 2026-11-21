@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from llc.models.company import CompanyCreate, CompanyUpdate
 from llc.models.enums import ActivityEventType, LLCAgentStatus, MembershipRole
 from llc.services.company import CompanyService
-from llc.services.company_ceo import DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
+from llc.services.company_ceo import COMPANY_DELETED_REASON, DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
 from llc.services.controls_service import AgentNotFoundError, AgentNotSchedulableError, ControlsService
 from llc.services.membership_service import MembershipService
 from llc.tests import test_llc_org_chart as _org_chart_harness
@@ -362,8 +362,10 @@ async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_
     await _hire_with_heartbeat(session_factory, other_id, "worker-other")
     assert {ceo.agent_id, "worker-acme"} <= await _scheduler_enabled_slugs(session_factory)
 
+    record = AsyncMock()
     async with session_factory() as session:
-        await CompanyService(session).delete(company_id)
+        with patch("llc.services.activity_log.LLCActivityLogService.record", new=record):
+            await CompanyService(session).delete(company_id, actor_user_id=str(_ACTOR))
         await session.commit()
 
     enabled = await _scheduler_enabled_slugs(session_factory)
@@ -372,3 +374,14 @@ async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_
     assert "worker-other" in enabled  # a different company is untouched
     [node] = await _ceo_nodes(session_factory, company_id)  # retired, never deleted
     assert node.status == DORMANT_CEO_STATUS
+    # One toggle-shaped activity row per switched-off agent of the deleted company, none for the other.
+    rows = {c.kwargs["entity_id"]: c.kwargs for c in record.await_args_list}
+    assert set(rows) == {ceo.agent_id, "worker-acme"}
+    assert record.await_count == 2
+    for kwargs in rows.values():
+        assert kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET
+        assert kwargs["company_id"] == str(company_id)
+        assert kwargs["actor_id"] == str(_ACTOR)
+        assert kwargs["before"]["heartbeat_enabled"] is True
+        assert kwargs["after"]["heartbeat_enabled"] is False
+        assert kwargs["metadata"] == {"reason": COMPANY_DELETED_REASON}
