@@ -604,22 +604,14 @@ class AgentTerminalService(InterpretationOwnershipMixin):
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
-        force_approval: bool = False,
-        person_approved: bool = False,
+        **line_flags: bool,
     ) -> tuple[bool, Metadata | None]:
         """Resolve the command's AI line, then check auto-approve rules or queue it (#665, #18430).
 
         Line 3 is refused and line 1 runs; only line 2 reaches the rules and this terminal's queue.
-        Returns ``(is_auto_approved, queue_or_refusal_response)``.
+        Returns ``(is_auto_approved, queue_or_refusal_response)``; ``line_flags`` go to ``decide_command`` (#21959).
         """
-        is_auto_approved, refusal = await decide_command(
-            self.approval_handler,
-            session,
-            command,
-            risk,
-            force_approval=force_approval,
-            person_approved=person_approved,
-        )
+        is_auto_approved, refusal = await decide_command(self.approval_handler, session, command, risk, **line_flags)
         if refusal is not None:
             return False, session.get_permission_denied_response(refusal, command, risk.value)
         if is_auto_approved:
@@ -654,8 +646,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             session_id: Agent session ID
             command: Command to execute
             description: Optional command description
-            force_approval: Force user approval even for safe commands
-            person_approved: a person approved exactly this command in the chat graph (#21959)
+            force_approval / person_approved: force a yes even for a safe command / a person approved exactly this one
 
         Returns:
             Execution result with security metadata
