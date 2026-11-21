@@ -145,6 +145,7 @@ describe('a multi-selection stays reachable on readonly, for fit-selection (#147
     await node(w, 'n2').trigger('click', { shiftKey: true })
     await node(w, 'n1').trigger('contextmenu', { clientX: 10, clientY: 10 })
     expect(itemIds(w)).toEqual(['select', 'zoom', 'fit-selection'])
+    expect(itemIds(w)).not.toContain('delete')
   })
 
   it('a left-press drag on empty canvas draws the marquee and selects, readonly or not', async () => {
