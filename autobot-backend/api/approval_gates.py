@@ -39,6 +39,7 @@ from services.approval_execution import context_change_violation, is_registered_
 from services.approval_gate_service import ApprovalGateService
 from services.claude_md_reindex_action import register_claude_md_reindex_action
 from services.conversation_file_cleanup_action import register_conversation_file_cleanup_action
+from services.kb_collection_delete_action import register_collection_delete_actions
 from services.knowledge.collection_space_stamp_action import register_stamp_action
 from services.project_backfill_action import register_project_backfill_action
 from services.source_run_record_cleanup_action import register_source_run_record_cleanup_action
@@ -52,6 +53,7 @@ register_project_backfill_action()  # #18978: a person's approval is what back-f
 register_conversation_file_cleanup_action()  # approving a pending file cleanup after a restart needs its handler
 register_source_run_record_cleanup_action()  # same, for a deleted source's run record (#21417)
 register_claude_md_reindex_action()  # #21383: approving the CLAUDE.md chunk deletion after a restart needs its handler
+register_collection_delete_actions()  # #21383: approving a collection delete after a restart needs its handlers
 register_workflow_step_resume()  # #20917: a person's approval is what releases a waiting workflow step
 
 

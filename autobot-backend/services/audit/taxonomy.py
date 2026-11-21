@@ -76,6 +76,10 @@ class AuditAction(str, Enum):
     KNOWLEDGE_WIPE_REFRESH = "knowledge.wipe.refresh"  # #21048: a pending wipe plan re-proposed; nothing deleted
     KNOWLEDGE_CLAUDE_MD_REINDEX_REFRESH = "knowledge.claude_md_reindex.refresh"  # #21383: a pending plan re-proposed
     KNOWLEDGE_CLAUDE_MD_REINDEX = "knowledge.claude_md_reindex"  # #21383: CLAUDE.md chunks deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE = "knowledge.collection.delete"  # #21383: a collection deleted after an approval
+    KNOWLEDGE_COLLECTION_DELETE_REFRESH = "knowledge.collection.delete.refresh"  # #21383: pending plan re-proposed
+    KNOWLEDGE_COLLECTION_BULK_DELETE = "knowledge.collection.bulk_delete"  # #21383: a collection's facts deleted
+    KNOWLEDGE_COLLECTION_BULK_DELETE_REFRESH = "knowledge.collection.bulk_delete.refresh"  # #21383: plan re-proposed
     API_KEY_CREATE = "api_key.create"  # pragma: allowlist secret -- an action name, not a key
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
