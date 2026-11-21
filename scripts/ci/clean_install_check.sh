@@ -45,12 +45,14 @@ step_login() {
     echo "login: ok"
 }
 
+# The node id install.sh registers (its single SLM_NODE_ID assignment) -- never a second literal.
+registered_node_id() {
+    grep -oP '^readonly SLM_NODE_ID="\K[^"]+' "$(dirname "${BASH_SOURCE[0]}")/../../install.sh"
+}
+
 step_node() {
-    local host nodes node_id
+    local host nodes
     host=$(hostname)
-    # The node id install.sh registers (its single SLM_NODE_ID assignment) -- never a second literal.
-    node_id=$(grep -oP '^readonly SLM_NODE_ID="\K[^"]+' "$(dirname "${BASH_SOURCE[0]}")/../../install.sh") \
-        || fail synced "install.sh declares no SLM_NODE_ID"
     nodes=$(curl -sfk --max-time 10 -H "Authorization: Bearer ${TOKEN}" "${SLM_URL}/slm/api/nodes") \
         || fail node "GET /slm/api/nodes failed"
     HOST="${host}" jq -e '.nodes | any(.hostname == env.HOST)' <<<"${nodes}" >/dev/null \
@@ -61,8 +63,10 @@ step_node() {
 # #18663: install.sh marks the local node synced after registering it; Code Sync then reads
 # up_to_date with a commit instead of 'unknown'.
 step_synced() {
-    local host nodes
+    local host nodes node_id
     host=$(hostname)
+    node_id=$(registered_node_id) || fail synced "install.sh declares no SLM_NODE_ID"
+    [[ -n "${node_id}" ]] || fail synced "install.sh declares an empty SLM_NODE_ID"
     nodes=$(curl -sfk --max-time 10 -H "Authorization: Bearer ${TOKEN}" "${SLM_URL}/slm/api/nodes") \
         || fail synced "GET /slm/api/nodes failed"
     HOST="${host}" NODE_ID="${node_id}" jq -e '.nodes[] | select(.hostname == env.HOST and .node_id == env.NODE_ID)

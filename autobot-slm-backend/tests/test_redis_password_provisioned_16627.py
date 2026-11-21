@@ -133,7 +133,9 @@ def _first_use(tasks: list, marker: str) -> int:
 @pytest.mark.parametrize(("rel", "password_var", "username_var", "use"), _CONSUMERS)
 def test_each_consumer_reads_then_adopts_before_it_uses_the_credential(rel, password_var, username_var, use):
     tasks = _tasks(rel)
-    read = next(i for i, t in enumerate(tasks) if str(t.get("ansible.builtin.include_tasks", "")).endswith(_READ_TASK))
+    read = next(
+        i for i, t in enumerate(tasks) if _READ_TASK in str(t.get("ansible.builtin.include_tasks", ""))
+    )  # str of a dict when `apply:` carries the tags (#20941)
     adopt = next(
         i for i, t in enumerate(tasks) if password_var in (t.get("ansible.builtin.set_fact") or {}) and i > read
     )

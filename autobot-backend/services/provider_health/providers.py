@@ -14,6 +14,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
@@ -67,7 +68,7 @@ class OllamaHealth(BaseProviderHealth):
 
         try:
             # Check /api/tags endpoint for available models
-            tags_url = f"{self.ollama_host}/api/tags"
+            tags_url = ollama_tags_url(self.ollama_host)
 
             http_client = get_http_client()
             async with await http_client.get(

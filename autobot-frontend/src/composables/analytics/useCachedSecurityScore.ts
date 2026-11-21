@@ -48,6 +48,7 @@ export function useCachedSecurityScore(options: UseCachedSecurityScoreOptions = 
     {
       path: CACHED_SECURITY_SCORE_PATH,
       scopeToSource: true,
+      requireSource: true, // #21463: the route answers 422 without `source_id`
       label: 'Cached security score',
       // Recorded before the pick so a `no_data` answer is kept too, as callers saw it before.
       pickData: (payload) => {

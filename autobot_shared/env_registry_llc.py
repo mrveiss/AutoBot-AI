@@ -139,6 +139,38 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_ATTEMPTS",
+        type=int,
+        default=6,
+        description=(
+            "How many times startup recovery of interrupted agent runs asks for its leader lease while "
+            "Redis gives no answer (#19601). A definite answer, including another worker holding the "
+            "lease, ends the wait at once; only silence is retried. The default spans the lease TTL, so a"
+            " worker that finds Redis down at boot still recovers once it is back. After the last attempt"
+            " recovery is skipped and the liveness monitor is the backstop."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_RECOVERY_LEASE_RETRY_SECONDS",
+        type=int,
+        default=5,
+        description=(
+            "Seconds between two asks for the startup-recovery leader lease while Redis gives no answer "
+            "(#19601). Recovery runs in the background-services phase, so waiting never delays the app "
+            "becoming ready."
+        ),
+        component="orchestrator",
+        range=(1, 60),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
         type=float,
         default=7.0,
@@ -289,6 +321,36 @@ env_registry.register_env_var(
             "same (or a subset of its) trigger ids (#19759), so a human's rejection is not refiled on "
             "every audit run. Floored at 1 day."
         ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_HIERARCHY_VIOLATIONS_LIMIT",
+        type=int,
+        default=500,
+        description=(
+            "Most work-item hierarchy violations one report returns (#20936). The limit is applied in the "
+            "database query; the response sets truncated when more rows break the rules than are returned."
+        ),
+        range=(1, 5000),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "Seconds the notification router's single-instance lock lives without a renewal (#21456). The "
+            "worker holding it renews it every third of this period; every other started worker tries to take "
+            "it at the same interval, so once the lock has lapsed (holder gone, Redis flushed or failed over) "
+            "another worker takes over routing within one interval."
+        ),
+        range=(3, 3600),
         component="orchestrator",
     )
 )

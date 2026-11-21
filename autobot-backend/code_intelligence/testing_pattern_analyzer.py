@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
+from autobot_shared.testfile_names import is_test_filename
 from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 logger = get_logger(__name__)
@@ -327,7 +328,8 @@ class TestPatternAnalyzer:
         Args:
             exclude_dirs: Directories to exclude from analysis
             exclude_patterns: File patterns to exclude
-            test_file_patterns: Patterns to identify test files
+            test_file_patterns: Name patterns to identify test files; when omitted the
+                canonical ``is_test_filename`` rule applies
         """
         self.exclude_dirs = exclude_dirs or sorted(ANALYSIS_EXCLUDE_DIRS)
         self.exclude_patterns = exclude_patterns or [
@@ -335,22 +337,20 @@ class TestPatternAnalyzer:
             r".*\.pyo$",
             r".*\.egg-info.*",
         ]
-        self.test_file_patterns = test_file_patterns or [
-            r"test_.*\.py$",
-            r".*_test\.py$",
-            r"tests\.py$",
-        ]
+        self.test_file_patterns = test_file_patterns
 
         # Compile patterns
         self._flaky_patterns = [re.compile(p) for p in self.FLAKY_PATTERNS]
         self._external_patterns = [re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS]
         self._database_patterns = [re.compile(p) for p in self.DATABASE_PATTERNS]
         self._exclude_patterns = [re.compile(p) for p in self.exclude_patterns]
-        self._test_patterns = [re.compile(p) for p in self.test_file_patterns]
+        self._test_patterns = [re.compile(p) for p in test_file_patterns or []]
 
     def is_test_file(self, file_path: str) -> bool:
         """Check if a file is a test file based on naming patterns."""
         filename = os.path.basename(file_path)
+        if not self._test_patterns:
+            return is_test_filename(filename, include_js=False, include_conftest=False)
         return any(p.match(filename) for p in self._test_patterns)
 
     def _should_exclude(self, path: str) -> bool:

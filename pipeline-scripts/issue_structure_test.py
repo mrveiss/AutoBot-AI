@@ -355,3 +355,70 @@ def test_open_issues_reads_every_page_and_drops_pull_requests() -> None:
     last = [_listed(500), dict(_listed(501), pull_request={"url": "x"})]
     numbers = [i["number"] for i in mod.open_issues(mod.StructureClient(_PagedApi([full, last])))]
     assert len(numbers) == mod.SWEEP_PAGE_SIZE + 1 and numbers[-1] == 500
+
+
+# ---- window cursor (#21854) -------------------------------------------------------------
+
+
+class WindowClient:
+    """Answers the three reads the window makes: the last successful run, its jobs, the issues."""
+
+    repo = REPO
+
+    def __init__(self, job_names: Optional[List[str]], issues: List[Dict[str, Any]], runs: bool = True) -> None:
+        self.job_names, self.issues, self.runs = job_names, issues, runs
+
+    def call(self, method: str, path: str, payload: Any = None, ok: Any = (200,)) -> Any:
+        if "/workflows/" in path:
+            return {"workflow_runs": [{"id": 7, "run_started_at": "2026-11-19T01:00:00Z"}] if self.runs else []}
+        if "/actions/runs/" in path:
+            return {"jobs": [{"name": n} for n in self.job_names or []]}
+        return self.issues
+
+
+def changed(number: int, stamp: str) -> Dict[str, Any]:
+    return {"number": number, "updated_at": stamp}
+
+
+def test_cursor_present_is_returned_verbatim() -> None:
+    client = WindowClient(["triage", f"{mod.CURSOR_JOB_PREFIX}2026-11-19T02:00:00Z#41"], [])
+    assert mod.last_success_cursor(client) == "2026-11-19T02:00:00Z#41"
+
+
+def test_cursor_absent_falls_back_to_the_run_start() -> None:
+    assert mod.last_success_cursor(WindowClient(["triage"], [])) == "2026-11-19T01:00:00Z"
+
+
+def test_no_successful_run_has_no_cursor() -> None:
+    assert mod.last_success_cursor(WindowClient(None, [], runs=False)) is None
+
+
+def test_a_cursor_that_does_not_parse_fails_loud() -> None:
+    with pytest.raises(mod.StructureError, match="unparseable"):
+        mod.last_success_cursor(WindowClient([f"{mod.CURSOR_JOB_PREFIX}"], []))
+    with pytest.raises(mod.StructureError, match="unparseable"):
+        mod.last_success_cursor(WindowClient([f"{mod.CURSOR_JOB_PREFIX}yesterday"], []))
+
+
+def test_uncapped_window_takes_everything_after_the_cursor() -> None:
+    items = [changed(5, "2026-11-19T02:00:00Z"), changed(3, "2026-11-19T01:30:00Z")]
+    client = WindowClient([f"{mod.CURSOR_JOB_PREFIX}2026-11-19T01:00:00Z"], items)
+    cursor, numbers, until = mod.changed_window(client, cap=10)
+    assert (cursor, numbers) == ("2026-11-19T01:00:00Z", [3, 5])
+    assert mod._CURSOR_RE.match(until) and "#" not in until
+
+
+def test_capped_window_takes_the_oldest_and_stops_the_cursor_at_the_last() -> None:
+    items = [changed(n, f"2026-11-19T02:00:{n:02d}Z") for n in (9, 8, 7, 6)]
+    client = WindowClient([f"{mod.CURSOR_JOB_PREFIX}2026-11-19T01:00:00Z"], items)
+    _, numbers, until = mod.changed_window(client, cap=2)
+    assert numbers == [6, 7] and until == "2026-11-19T02:00:07Z#7"
+
+
+def test_a_tie_on_one_second_is_broken_by_number_and_the_cursor_moves() -> None:
+    items = [changed(n, "2026-11-19T02:00:00Z") for n in (4, 2, 3, 1)]
+    client = WindowClient([f"{mod.CURSOR_JOB_PREFIX}2026-11-19T01:00:00Z"], items)
+    _, first, until = mod.changed_window(client, cap=2)
+    assert first == [1, 2] and until == "2026-11-19T02:00:00Z#2"
+    _, second, _ = mod.changed_window(WindowClient([f"{mod.CURSOR_JOB_PREFIX}{until}"], items), cap=2)
+    assert second == [3, 4]
