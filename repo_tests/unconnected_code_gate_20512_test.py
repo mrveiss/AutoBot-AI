@@ -194,13 +194,14 @@ def test_declared_entries_describe_the_live_references() -> None:
     )
 
 
-#: The frozen one-time re-measures, one list per ruling (#20910, #21428, #21651): the ONLY baseline additions ever allowed
+#: The frozen one-time re-measures, one list per ruling (#20910, #21428, #21651, #21927): the ONLY baseline additions ever allowed
 #: against a base. Adding a list here is a decision a reviewer sees; every list is also held to "never grows".
 REMEASURE_RELS = (
     "repo_tests/unconnected_code_remeasure_20910.txt",
     "repo_tests/unconnected_code_remeasure_21428.txt",
     "repo_tests/unconnected_code_remeasure_21651.txt",
     "repo_tests/unconnected_code_remeasure_21583.txt",
+    "repo_tests/unconnected_code_remeasure_21927.txt",
 )
 
 
