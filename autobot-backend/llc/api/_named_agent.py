@@ -52,9 +52,10 @@ async def agent_in_company(
     would pass the check and then fail on the write; a malformed id or a slug reads as not (422, never a 500).
     *slug_ok* also accepts the company-scoped slug, for a free-text column that may hold either keyspace.
     """
-    if not slug_ok and as_uuid(agent_id) is None:
+    company = as_uuid(company_id)  # the column is a UUID; bind one, as every resolve_agent caller does
+    if company is None or (not slug_ok and as_uuid(agent_id) is None):
         return False
-    return await resolve_agent(session, company_id, agent_id) is not None
+    return await resolve_agent(session, company, agent_id) is not None
 
 
 async def require_member_targets(
