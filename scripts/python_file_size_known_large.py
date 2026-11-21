@@ -73,7 +73,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/browser_mcp.py": 1320,
     "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2624,  # #20195, #20852; #21664: 2625 -> 2624
-    "autobot-backend/api/chat_sessions.py": 1794,  # #21664: 1859 -> 1794
+    "autobot-backend/api/chat_sessions.py": 1712,  # #21664: 1859 -> 1794; #18890: -> 1714; #21898: -> 1712
     "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 786,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
