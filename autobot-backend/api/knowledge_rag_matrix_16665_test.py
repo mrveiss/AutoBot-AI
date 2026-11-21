@@ -17,7 +17,16 @@ from fastapi.testclient import TestClient
 
 from api import knowledge_rag
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, SHARED, FakeKB, QuarantineGatedKB
+from knowledge.read_path_fakes_16665 import (
+    PRIVATE_A,
+    RESEARCH,
+    SHARED,
+    FakeKB,
+    QuarantineGatedKB,
+    all_facts,
+    quarantined_fact,
+)
+from knowledge.search import SearchMixin
 from services.rag_service import RAGService
 
 ALICE = {"user_id": "alice", "role": "user"}
@@ -66,3 +75,37 @@ def test_a_research_quarantined_fact_is_never_returned(user, path, body):
     response = _post(user, path, body, QuarantineGatedKB())
 
     assert response.status_code == 200 and RESEARCH not in response.text and SHARED in response.text
+
+
+class _RealGateKB(SearchMixin, FakeKB):
+    """The real ``SearchMixin.search`` (and its ``gate_response``) over a store that returns the quarantined fact.
+
+    Unlike ``QuarantineGatedKB`` it does not apply the gate itself, so this proves the RAG legs reach
+    the gate through ``KnowledgeBaseAdapter.search`` -> ``KnowledgeBase.search`` (#16665 AC3).
+    """
+
+    def __init__(self, leak: bool = False):
+        FakeKB.__init__(self)
+        self.leak = leak
+
+    async def _dispatch_search(self, *args, **kwargs):
+        return all_facts() + [quarantined_fact()]
+
+    async def search(self, *args, **kwargs):
+        if self.leak:  # the sensitivity control: a search that skips the gate
+            return await self._dispatch_search()
+        return await SearchMixin.search(self, *args, **kwargs)
+
+
+@pytest.mark.parametrize("user", [ALICE, ADMIN])
+@pytest.mark.parametrize("path,body", ROUTES)
+def test_the_adapter_path_reaches_the_real_search_gate(user, path, body):
+    response = _post(user, path, body, _RealGateKB())
+
+    assert response.status_code == 200 and RESEARCH not in response.text and SHARED in response.text
+
+
+def test_the_real_gate_test_is_sensitive_to_a_leak():
+    response = _post(ALICE, "/advanced_search", ROUTES[0][1], _RealGateKB(leak=True))
+
+    assert response.status_code == 200 and RESEARCH in response.text

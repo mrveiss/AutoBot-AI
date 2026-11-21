@@ -709,7 +709,7 @@ async def create_secret(
             outcome="success",
         )
         return JSONResponse(
-            status_code=201,
+            status_code=200 if secret_data.get("already_existed") else 201,
             content={
                 "status": "success",
                 "message": "Secret created successfully",
