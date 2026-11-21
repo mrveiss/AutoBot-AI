@@ -71,6 +71,8 @@ class BucketSection:
 
 _P = KbCollectionManager
 
+CODE_SECTION_KEY = "code"  # the one section that also carries the per-codebase nodes (#20945)
+
 
 def _code_graph_name() -> str:
     """The code-graph collection's name from its one home (#17254); the router stack imports on first match."""
@@ -92,7 +94,7 @@ BUCKET_SECTIONS: Tuple[BucketSection, ...] = (
     BucketSection("docs", "Documentation", names=("autobot_docs",), access=PUBLIC),
     BucketSection("memory", "Memory", names=_MEMORY),
     BucketSection(
-        "code",
+        CODE_SECTION_KEY,
         "Code analysis",
         names=("autobot_code", CODE_INDEX, *PATTERN_INDEXES, "code_kb"),
         late_names=(_code_graph_name,),
@@ -318,6 +320,31 @@ async def build_bucket_sections(
         edges.extend(new_edges)
         report.append(entry)
     return {"nodes": nodes, "edges": edges, "sections": report, "unmapped": unmapped}
+
+
+def attach_section_nodes(built: Dict[str, Any], key: str, nodes: List[Dict], edges: List[Dict]) -> None:
+    """Fold extra nodes into section ``key`` of a ``build_bucket_sections`` result (#20945).
+
+    The section is the registry's, so its key and label stay defined once; when no collection fed it,
+    it is created here. The report's total and returned grow by the nodes added (they sit on page one).
+    """
+    section = next(s for s in BUCKET_SECTIONS if s.key == key)
+    node_id = f"section:{key}"
+    if not any(n["id"] == node_id for n in built["nodes"]):
+        built["nodes"].append(
+            {"id": node_id, "name": section.label, "type": "section", "section": key, "metadata": {"total": 0}}
+        )
+        built["sections"].append(section_report(key, section.label, 0, 0))
+        order = [s.key for s in BUCKET_SECTIONS]
+        built["sections"].sort(key=lambda r: order.index(r["key"]))
+    built["nodes"][0:0] = nodes
+    built["edges"][0:0] = edges
+    meta = next(n for n in built["nodes"] if n["id"] == node_id)["metadata"]
+    entry = next(r for r in built["sections"] if r["key"] == key)
+    for counted in (meta, entry):  # a failed section has no known total to grow
+        if counted["total"] is not None:
+            counted["total"] += len(nodes)
+    entry["returned"] += len(nodes)
 
 
 def section_report(

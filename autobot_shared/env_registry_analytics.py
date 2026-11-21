@@ -167,3 +167,18 @@ register_env_var(
         range=(1, 10000),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CALL_GRAPH_SUMMARY_TTL",
+        type=int,
+        default=2592000,
+        description=(
+            "Seconds the persisted per-source call-graph summary (#20945) is kept after the last build. Unlike the "
+            "5-minute call-graph cache it outlives it, so the knowledge graph can report a codebase's size without "
+            "rebuilding the graph; a rebuild overwrites it. Clamped to 3600-7776000."
+        ),
+        component="analytics",
+        range=(3600, 7776000),
+    )
+)

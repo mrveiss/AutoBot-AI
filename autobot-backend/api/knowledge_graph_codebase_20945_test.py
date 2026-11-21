@@ -2,34 +2,29 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The graph's codebase section: newest-synced code first, reusing the analytics services (#20945)."""
+"""The knowledge graph's per-codebase nodes: persisted summary, provenance ordering, the code section (#20945)."""
 
 import pytest
 from fastapi import HTTPException
 
 from api import knowledge_graph_codebase as cb
+from api.codebase_analytics import call_graph_summary as store
+from api.codebase_analytics.endpoints.call_graph import CALL_GRAPH_CACHE_TTL
 from api.codebase_analytics.source_models import CodeSource, SourceStatus
-from api.knowledge_graph_facts import FactsPage
-from api.knowledge_graph_sections import graph_sections
+from api.knowledge_graph_sections import bucket_sections_for_graph
 from api.schemas_knowledge_graph import GraphRequest
-from knowledge.graph_bucket_visibility import Viewer
-from knowledge.root_read import AdminReadLedger
+from tests.fixtures.graph_buckets_fakes_20945 import ListingKB, client_with, viewer
 
-
-def _viewer(admin: bool = True) -> Viewer:
-    return Viewer("u1", None, (), AdminReadLedger() if admin else False)
-
-
-LEDGER = AdminReadLedger()
-AUTOBOT = CodeSource(id="src-autobot", name="AutoBot", status=SourceStatus.READY, last_synced="2026-11-07T12:00:00")
-OTHER = CodeSource(id="src-other", name="Other", status=SourceStatus.READY, last_synced="2026-11-07T10:00:00")
-SYNCING = CodeSource(id="src-syncing", name="Syncing", status=SourceStatus.SYNCING)
-CALL_GRAPH = {
+ALPHA = CodeSource(id="src-alpha", name="Alpha", status=SourceStatus.READY, last_synced="2026-11-07T12:00:00")
+BETA = CodeSource(id="src-beta", name="Beta", status=SourceStatus.READY, last_synced="2026-11-07T10:00:00")
+SYNCING = CodeSource(id="src-syncing", name="Aaa", status=SourceStatus.SYNCING)
+BUILT = {
     "summary": {
         "total_functions": 7,
         "total_call_relationships": 9,
         "resolution_rate": 80.0,
         "files_scanned": 3,
+        "files_total": 3,
         "truncated": False,
         "top_callers": ["x"],
     }
@@ -37,126 +32,159 @@ CALL_GRAPH = {
 DEPS = {
     "status": "success",
     "dependency_data": {
-        "summary": {
-            "total_modules": 3,
-            "total_import_relationships": 4,
-            "circular_dependency_count": 1,
-            "external_dependency_count": 2,
-        }
+        "summary": {"total_modules": 3, "total_import_relationships": 4, "circular_dependency_count": 1, "extra": 2}
     },
 }
 
 
+class FakeRedis:
+    """An async Redis holding only what the summary store writes; ``ttls`` records each key's expiry."""
+
+    def __init__(self):
+        self.data, self.ttls = {}, {}
+
+    async def set(self, key, value, ex=None):
+        self.data[key], self.ttls[key] = value, ex
+
+    async def get(self, key):
+        return self.data.get(key)
+
+
 @pytest.fixture
-def analytics(monkeypatch):
-    """Stand in for the registry and the two analytics caches; the section must only read them."""
-    seen = {"call_graph_roots": [], "deps": []}
+def analytics(monkeypatch, tmp_path):
+    """The registry, the index root and the dependency result stood in; the summary store runs for real on FakeRedis."""
+    redis = FakeRedis()
+    state = {"root": None, "deps_error": {BETA.id}, "sources": [BETA, SYNCING, ALPHA]}
 
     async def listing(owner):
-        return [OTHER, SYNCING, AUTOBOT]
+        return state["sources"]
 
-    async def root(source_id):
-        return f"/root/{source_id}"
-
-    async def cached_graph(root_path):
-        seen["call_graph_roots"].append(root_path)
-        return CALL_GRAPH if root_path.endswith(AUTOBOT.id) else None
+    async def index_root():
+        return state["root"]
 
     async def cached_deps(prefix, source_id):
-        seen["deps"].append((prefix, source_id))
-        if source_id == OTHER.id:
+        if source_id in state["deps_error"]:
             raise HTTPException(status_code=409, detail="failed")
         return DEPS
 
-    for name, fn in (
-        ("list_sources", listing),
-        ("resolve_scan_root", root),
-        ("_get_cached_call_graph", cached_graph),
-        ("cached_task_result", cached_deps),
-    ):
-        monkeypatch.setattr(cb, name, fn)
-    return seen
+    async def get_redis(database=None):
+        return redis
+
+    monkeypatch.setattr(cb, "list_sources", listing)
+    monkeypatch.setattr(cb, "indexed_root_dir", index_root)
+    monkeypatch.setattr(cb, "cached_task_result", cached_deps)
+    monkeypatch.setattr(store, "get_async_redis_client", get_redis)
+    state["redis"], state["tmp"] = redis, tmp_path
+    return state
 
 
 @pytest.mark.asyncio
-async def test_newest_synced_code_is_first_and_unindexed_sources_are_left_out(analytics):
-    nodes, edges = [{"id": "fact:1", "type": "fact"}], []
-    report = await cb.codebase_section_for_graph(nodes, edges, {"id": "u1"}, _viewer())
-    assert [n["id"] for n in nodes[:4]] == ["section:codebase", "codebase:src-autobot", "codebase:src-other", "fact:1"]
-    assert [e["to"] for e in edges] == ["codebase:src-autobot", "codebase:src-other"]
-    assert report == [
-        {
-            "key": "codebase",
-            "label": "Codebases",
-            "total": 2,
-            "returned": 2,
-            "limited": False,
-            "truncated": False,
-            "budget_exhausted": False,
-            "failed": False,
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_summaries_come_from_the_analytics_caches_call_graph_first(analytics):
-    nodes: list = []
-    await cb.codebase_section_for_graph(nodes, [], None, _viewer())
-    meta = nodes[1]["metadata"]
-    assert list(meta)[-2:] == ["call_graph", "dependencies"]
+async def test_the_summary_outlives_the_call_graph_cache_entry(analytics):
+    await store.store_call_graph_summary(ALPHA.id, BUILT)
+    key = next(iter(analytics["redis"].ttls))
+    assert analytics["redis"].ttls[key] > CALL_GRAPH_CACHE_TTL, "the summary must not carry the 5-minute expiry"
+    # the 5-minute cache entry is gone (nothing in it is read): the node still reports the persisted summary
+    nodes, _ = await cb.codebase_nodes_for_graph(None, viewer(admin=True))
+    meta = {n["metadata"]["source_id"]: n["metadata"] for n in nodes}[ALPHA.id]
     assert meta["call_graph"] == {
         "total_functions": 7,
         "total_call_relationships": 9,
         "resolution_rate": 80.0,
         "files_scanned": 3,
+        "files_total": 3,
         "truncated": False,
     }
     assert meta["dependencies"] == {"total_modules": 3, "total_import_relationships": 4, "circular_dependency_count": 1}
-    assert analytics["deps"][0] == (cb.DEPENDENCIES_PREFIX, AUTOBOT.id)
+    assert list(meta)[-2:] == ["call_graph", "dependencies"]
 
 
 @pytest.mark.asyncio
-async def test_a_codebase_not_analysed_yet_is_listed_with_empty_summaries(analytics):
-    nodes: list = []
-    await cb.codebase_section_for_graph(nodes, [], None, _viewer())
-    other = nodes[2]["metadata"]  # no cached call graph, and its dependency scan failed
-    assert other["call_graph"] is None and other["dependencies"] is None and other["source_id"] == "src-other"
+async def test_a_rebuild_overwrites_the_summary(analytics):
+    await store.store_call_graph_summary(ALPHA.id, BUILT)
+    await store.store_call_graph_summary(ALPHA.id, {"summary": {**BUILT["summary"], "total_functions": 11}})
+    assert (await store.load_call_graph_summary(ALPHA.id))["total_functions"] == 11
+
+
+def _clone(analytics, source, name):
+    path = analytics["tmp"] / name
+    path.mkdir()
+    return source.model_copy(update={"clone_path": str(path)})
 
 
 @pytest.mark.asyncio
-async def test_non_admins_get_no_codebase_section(analytics):
-    nodes: list = []
-    assert await cb.codebase_section_for_graph(nodes, [], None, _viewer(False)) == []
-    assert nodes == []
+@pytest.mark.parametrize("root_of, expected", (("beta", "src-beta"), ("alpha", "src-alpha")))
+async def test_the_source_cloned_at_the_provenance_root_is_first(analytics, root_of, expected):
+    alpha, beta = _clone(analytics, ALPHA, "alpha"), _clone(analytics, BETA, "beta")
+    analytics["sources"] = [beta, SYNCING, alpha]
+    analytics["root"] = str(analytics["tmp"] / root_of)
+    nodes, _ = await cb.codebase_nodes_for_graph(None, viewer(admin=True))
+    assert [n["metadata"]["source_id"] for n in nodes][0] == expected
+    assert len(nodes) == 2  # the source still syncing is not an indexed codebase
 
 
 @pytest.mark.asyncio
-async def test_an_unreadable_registry_omits_the_section(monkeypatch, analytics):
-    async def down():
+async def test_without_provenance_the_order_is_by_name_then_id(analytics):
+    ids = [s.id for s in await cb.indexed_codebases(None)]
+    assert ids == ["src-alpha", "src-beta"]
+
+
+@pytest.mark.asyncio
+async def test_non_admins_get_no_codebase_nodes(analytics):
+    assert await cb.codebase_nodes_for_graph(None, viewer(admin=False)) == ([], [])
+
+
+@pytest.mark.asyncio
+async def test_a_codebase_without_a_readable_summary_is_reported_not_analysed(analytics, monkeypatch):
+    async def unreadable(source_id):
+        raise RuntimeError("redis down")
+
+    monkeypatch.setattr(cb, "load_call_graph_summary", unreadable)
+    nodes, _ = await cb.codebase_nodes_for_graph(None, viewer(admin=True))
+    beta = next(n["metadata"] for n in nodes if n["metadata"]["source_id"] == BETA.id)
+    assert beta["analysed"] is False and beta["call_graph"] is None and beta["dependencies"] is None
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_registry_omits_the_nodes(analytics, monkeypatch):
+    async def down(owner):
         raise cb.RegistryUnavailable("down")
 
-    monkeypatch.setattr(cb, "list_sources", lambda owner: down())
-    nodes: list = []
-    assert await cb.codebase_section_for_graph(nodes, [], None, _viewer()) == []
+    monkeypatch.setattr(cb, "list_sources", down)
+    assert await cb.codebase_nodes_for_graph(None, viewer(admin=True)) == ([], [])
 
 
-@pytest.mark.asyncio
-async def test_graph_sections_lists_codebase_before_facts_and_only_on_the_first_page(analytics, monkeypatch):
-    def facts(page, offset):
-        return {"key": "facts"}
-
-    monkeypatch.setattr("api.knowledge_graph_sections.facts_section", facts)
-    body = GraphRequest(include_buckets=True)
-    first = await graph_sections(None, body, [], [], LEDGER, FactsPage(), {"id": "u1", "role": "admin"})
-    assert [s["key"] for s in first] == ["codebase", "facts"]
-    paged = await graph_sections(
-        None, GraphRequest(offset=50), [], [], LEDGER, FactsPage(), {"id": "u1", "role": "admin"}
+async def _graph(kb, offset=0, admin=True):
+    nodes, edges, ledger = [], [], viewer(admin=admin).ledger
+    sections = await bucket_sections_for_graph(
+        kb, GraphRequest(include_buckets=True, offset=offset), nodes, edges, {"id": "u1"}, ledger
     )
-    assert [s["key"] for s in paged] == ["facts"]
+    return nodes, edges, sections, ledger
 
 
 @pytest.mark.asyncio
-async def test_an_admin_read_of_the_codebase_section_is_recorded_in_the_ledger(analytics):
-    viewer = _viewer()
-    await cb.codebase_section_for_graph([], [], None, viewer)
-    assert viewer.ledger.fact_ids == ["codebase:src-autobot", "codebase:src-other"]
+async def test_the_codebase_nodes_are_inside_the_code_section_and_no_section_of_their_own(analytics):
+    await store.store_call_graph_summary(ALPHA.id, BUILT)
+    kb = ListingKB([], await client_with({"autobot_code": [("r1", {"k": "v"})]}))
+    nodes, edges, sections, _ = await _graph(kb)
+    codebases = [n for n in nodes if n["type"] == "codebase"]
+    assert len(codebases) == 2 and {n["section"] for n in codebases} == {"code"}
+    assert {e["from"] for e in edges if e["to"].startswith("codebase:")} == {"section:code"}
+    assert [s["key"] for s in sections] == ["code"], "no separate codebase section"
+    assert "section:codebase" not in {n["id"] for n in nodes}
+    assert (sections[0]["total"], sections[0]["returned"]) == (3, 3)  # the record + the two codebases
+
+
+@pytest.mark.asyncio
+async def test_the_code_section_exists_for_codebases_when_no_collection_feeds_it(analytics):
+    nodes, _, sections, _ = await _graph(ListingKB([], await client_with({})))
+    assert [s["key"] for s in sections] == ["code"] and sections[0]["label"] == "Code analysis"
+    assert [n["id"] for n in nodes if n["type"] == "section"] == ["section:code"]
+
+
+@pytest.mark.asyncio
+async def test_codebases_are_on_the_first_page_only_and_recorded_in_the_ledger(analytics):
+    kb = ListingKB([], await client_with({}))
+    _, _, sections, ledger = await _graph(kb)
+    assert sorted(ledger.fact_ids) == ["codebase:src-alpha", "codebase:src-beta"]
+    _, _, paged, _ = await _graph(kb, offset=50)
+    assert paged == []

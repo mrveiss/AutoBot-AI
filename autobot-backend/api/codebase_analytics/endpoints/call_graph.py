@@ -28,6 +28,7 @@ from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
+from ..call_graph_summary import store_call_graph_summary
 from .call_graph_shaping import build_connected_nodes as _build_connected_nodes
 from .call_graph_shaping import build_orphaned_nodes as _build_orphaned_nodes
 from .call_graph_shaping import calculate_metrics as _calculate_metrics
@@ -503,13 +504,8 @@ async def get_cached_call_graph(project_root: str) -> dict | None:
     Get cached call graph from Redis.
 
     Issue #711: Cache call graph for 5 minutes to improve load times.
-    Cache key is path-specific to handle different scan paths.
-
-    Args:
-        project_root: The root path being analyzed
-
-    Returns:
-        Cached call graph data or None if not cached/expired
+    Cache key is path-specific to handle different scan paths. Returns the cached
+    graph for ``project_root``, or None if not cached/expired.
     """
     try:
         cache_key = _get_cache_key(project_root)
@@ -740,5 +736,6 @@ async def get_call_graph(
         files_total=files_total,
     )
     await _set_cached_call_graph(str(project_root), response_data)
+    await store_call_graph_summary(source_id, response_data)  # #20945: outlives the 5-minute cache
 
     return JSONResponse({**response_data, "source_id": source_id})
