@@ -204,7 +204,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/integrations/microsoft365_integration.py": 632,
     "autobot-backend/integrations/project_management_integration.py": 743,
     "autobot-backend/integrations/slack_integration.py": 739,
-    "autobot-backend/integrations/whatsapp_integration.py": 754,
+    "autobot-backend/integrations/whatsapp_integration.py": 749,
     "autobot-backend/intelligence/goal_processor.py": 609,
     "autobot-backend/intelligence/intelligent_agent.py": 848,
     "autobot-backend/intelligence/streaming_executor.py": 648,
@@ -334,7 +334,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/llm_service.py": 1147,  # #16845: usage recording and budget gate moved out
     "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 772,
-    "autobot-backend/services/notification_service.py": 614,
+    "autobot-backend/services/notification_service.py": 602,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 772,
     "autobot-backend/services/redis_service_manager_test.py": 839,
