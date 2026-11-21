@@ -1521,12 +1521,23 @@ function addVisionNode(type: WorkflowNode['type']) {
   showVisionDropdown.value = false;
 }
 
-function deleteNode(id: string) {
+/** Removes a node and returns its undo record without pushing history (#14749). */
+function removeNode(id: string): CanvasAtomicAction | null {
   const node = props.nodes.find((n) => n.id === id);
   emit('node-removed', id);
   if (props.selectedNodeId === id) emit('node-selected', null);
   if (selectedIds.value.has(id)) mutateSelection((ids) => ids.delete(id));
-  if (node) pushHistory([{ kind: 'remove', node: structuredClone(toRaw(node)) }]);
+  return node ? { kind: 'remove', node: structuredClone(toRaw(node)) } : null;
+}
+
+/** Deletes `ids` as ONE gesture: one history entry, one Undo. */
+function deleteNodes(ids: string[]) {
+  const removed = ids.map(removeNode).filter((a): a is CanvasAtomicAction => a !== null);
+  pushHistory(removed);
+}
+
+function deleteNode(id: string) {
+  deleteNodes([id]);
 }
 
 /**
@@ -2506,7 +2517,7 @@ const contextMenuActions = computed<CanvasContextMenuAction[]>(() => {
         ? t('workflow.canvas.contextMenuDeleteSelection', { count: selectedIds.value.size })
         : t('common.delete'),
       run: () => {
-        for (const id of bulk ? [...selectedIds.value] : [node.id]) deleteNode(id);
+        deleteNodes(bulk ? [...selectedIds.value] : [node.id]);
       },
     });
   }
