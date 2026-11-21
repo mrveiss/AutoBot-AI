@@ -164,14 +164,14 @@ export function useChatSidebarSessions() {
     }
   }
 
+  /** The strings count chats, and this flow deletes exactly one (#21996). */
   function toastDeleted(total: number, preserved: number): void {
+    const count = 1
     const deleted = total - preserved
-    if (total === 0) return showToast(t('chat.sidebar.deletedSuccess'), 'success')
-    if (preserved > 0 && deleted > 0) {
-      return showToast(t('chat.sidebar.deletedWithFactsMixed', { deleted, preserved }), 'success')
-    }
-    if (deleted > 0) return showToast(t('chat.sidebar.deletedWithFactsRemoved', { count: deleted }), 'success')
-    showToast(t('chat.sidebar.deletedWithFactsPreserved', { count: preserved }), 'success')
+    if (total === 0) return showToast(t('chat.sidebar.deletedSuccess', { count }), 'success')
+    if (preserved > 0 && deleted > 0) return showToast(t('chat.sidebar.deletedWithFactsMixed', { count }), 'success')
+    if (deleted > 0) return showToast(t('chat.sidebar.deletedWithFactsRemoved', { count }), 'success')
+    showToast(t('chat.sidebar.deletedWithFactsPreserved', { count }), 'success')
   }
 
   async function handleDeleteConfirm(

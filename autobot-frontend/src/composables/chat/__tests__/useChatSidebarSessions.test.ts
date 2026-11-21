@@ -118,6 +118,19 @@ describe('rename and share', () => {
 })
 
 describe('delete with the knowledge-fact preview', () => {
+  it.each([
+    [[], [], 'Deleted 1 chats'],
+    [[{ id: 'f1' }, { id: 'f2' }], ['f1', 'f2'], 'Deleted 1 chats (facts preserved in knowledge base)'],
+    [[{ id: 'f1' }, { id: 'f2' }], [], 'Deleted 1 chats and removed associated facts'],
+  ])('toasts the rendered count for %j preserving %j', async (facts, keep, text) => {
+    h.controller.getSessionFacts.mockResolvedValueOnce({ facts })
+    const api = setup()
+    await api.deleteSession('b')
+    await api.handleDeleteConfirm('delete', undefined, keep as string[])
+    expect(h.showToast).toHaveBeenCalledWith(text, 'success')
+    expect(String(h.showToast.mock.calls.at(-1)?.[0])).not.toMatch(/Deleted\s{2}|\{count\}/)
+  })
+
   it('loads the preview, then deletes after preserving the ticked facts', async () => {
     const api = setup()
     await api.deleteSession('b')
@@ -127,7 +140,7 @@ describe('delete with the knowledge-fact preview', () => {
     await api.handleDeleteConfirm('delete', undefined, ['f1'])
     expect(h.controller.preserveSessionFacts).toHaveBeenCalledWith('b', ['f1'], true)
     expect(h.controller.deleteChatSession).toHaveBeenCalledWith('b', 'delete', undefined)
-    expect(h.showToast).toHaveBeenCalledWith(expect.any(String), 'success')
+    expect(h.showToast).toHaveBeenCalledWith('Deleted 1 chats (facts removed from some, preserved in others)', 'success')
     expect(api.showDeleteDialog.value).toBe(false)
   })
 
