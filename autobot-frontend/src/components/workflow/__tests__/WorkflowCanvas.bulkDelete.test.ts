@@ -27,7 +27,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', mes
 describe('bulk delete is one history entry (#14749)', () => {
   it('one Undo re-adds every deleted node, and a second Undo has nothing left', async () => {
     const w = mount(WorkflowCanvas, {
-      props: { nodes: [step('n1', 0), step('n2', 300), step('n3', 600)], selectedNodeId: null },
+      props: { nodes: [{ ...step('n1', 0), connections: ['n2'] }, step('n2', 300), step('n3', 600)], selectedNodeId: null },
       global: { plugins: [i18n] },
     })
     const node = (id: string) => w.get(`[data-node-id="${id}"]`)
@@ -40,6 +40,8 @@ describe('bulk delete is one history entry (#14749)', () => {
     const undo = w.get('[data-testid="canvas-undo"]')
     await undo.trigger('click')
     expect((w.emitted('node-added') as unknown as [CanvasNode][]).map(([n]) => n.id).sort()).toEqual(['n1', 'n2'])
+    const readded = (w.emitted('node-added') as unknown as [CanvasNode][]).map(([n]) => n)
+    expect(readded.find((n) => n.id === 'n1')?.connections).toEqual(['n2'])
     expect(undo.attributes('disabled')).toBeDefined()
   })
 })

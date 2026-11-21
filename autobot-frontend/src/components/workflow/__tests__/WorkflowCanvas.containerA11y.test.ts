@@ -54,6 +54,20 @@ describe('container nodes do not advertise an action they lack (#14687)', () => 
     expect(w.find('[data-testid="canvas-context-menu-item-zoom"]').exists()).toBe(true)
   })
 
+  it('keeps its ContextMenu / Shift+F10 and Escape keys when focused', async () => {
+    const w = mountCanvas()
+    for (const init of [{ key: 'ContextMenu' }, { key: 'F10', shiftKey: true }]) {
+      await node(w, 'org-group:r').trigger('keydown', init)
+      expect(w.find('[data-testid="canvas-context-menu-item-zoom"]').exists()).toBe(true)
+      await w.get('[data-testid="canvas-context-menu"]').trigger('keydown', { key: 'Escape' })
+    }
+    await node(w, 'p1').trigger('click')
+    expect(node(w, 'p1').attributes('aria-pressed')).toBe('true')
+    await node(w, 'org-group:r').trigger('keydown', { key: 'Escape' })
+    expect(node(w, 'p1').attributes('aria-pressed')).toBe('false')
+    expect(w.emitted('node-selected')?.at(-1)).toEqual([null])
+  })
+
   it('arrow navigation from a person never lands on a container', async () => {
     const w = mountCanvas()
     await node(w, 'p1').trigger('keydown', { key: 'ArrowLeft' })

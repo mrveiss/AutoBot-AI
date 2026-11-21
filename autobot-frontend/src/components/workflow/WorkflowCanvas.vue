@@ -1698,11 +1698,11 @@ function moveNodeByKeyboard(node: CanvasNode, direction: SpatialDirection): void
  * must reach that control, not be reinterpreted as a node-level shortcut.
  */
 function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
-  if (e.target !== e.currentTarget || !isActivatable(node)) return;
+  if (e.target !== e.currentTarget) return;
 
   // #14612: Shift+Enter/Shift+Space is shift-click's keyboard equivalent —
   // toggles `node` into/out of the multi-selection instead of replacing it.
-  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+  if (isActivatable(node) && (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar')) {
     e.preventDefault();
     applySelectionIntent(node.id, e.shiftKey);
     return;
@@ -1725,7 +1725,7 @@ function onNodeKeydown(node: CanvasNode, e: KeyboardEvent): void {
   }
 
   const direction = resolveArrowDirection(e.key);
-  if (!direction) return;
+  if (!direction || !isActivatable(node)) return;
   e.preventDefault();
 
   if (e.ctrlKey || e.metaKey) {
