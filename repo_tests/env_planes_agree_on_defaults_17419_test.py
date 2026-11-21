@@ -16,7 +16,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Iterator
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic.fields import PydanticUndefined
 from pydantic_settings import BaseSettings
 
@@ -25,6 +25,8 @@ from autobot_shared.env_registry import REGISTRY
 
 #: Names in both planes on main when this guard landed, less a margin for removals.
 MIN_NAMES_COMPARED = 20
+#: Names bound across the SSOT classes on main when this guard landed (~430), less a wide margin.
+MIN_ALIASES_SCANNED = 300
 
 
 #: Aliases still bound by two fields (the SSH identity in PathConfig and TLSConfig), shrink-only.
@@ -75,12 +77,21 @@ def test_a_different_value_is_caught_and_a_different_spelling_is_not() -> None:
     assert disagreements(registry, ssot) == {"AUTOBOT_A": ("localhost", {"127.0.0.1"})}
 
 
+def _env_names(field: Any) -> Iterator[str]:
+    """Every ``AUTOBOT_*`` name a field binds: ``alias``, a string or an ``AliasChoices`` ``validation_alias``."""
+    validation = field.validation_alias
+    choices = validation.choices if isinstance(validation, AliasChoices) else [validation]
+    for name in (field.alias, *choices):
+        if isinstance(name, str) and name.startswith("AUTOBOT_"):
+            yield name
+
+
 def _own_aliases(cls: type[BaseSettings]) -> Iterator[str]:
-    """Aliases of the fields *cls* itself declares, so an inherited field is not counted per subclass."""
+    """Names of the fields *cls* itself declares, so an inherited field is not counted per subclass."""
     for name in inspect.get_annotations(cls):
         field = cls.model_fields.get(name)
-        if field is not None and (field.alias or "").startswith("AUTOBOT_"):
-            yield field.alias
+        if field is not None:
+            yield from _env_names(field)
 
 
 def double_bindings(classes: Iterator[type[BaseSettings]]) -> set[str]:
@@ -93,6 +104,8 @@ def double_bindings(classes: Iterator[type[BaseSettings]]) -> set[str]:
 
 
 def test_every_alias_binds_one_field() -> None:
+    scanned = sum(1 for cls in _settings_classes() for _ in _own_aliases(cls))
+    assert scanned >= MIN_ALIASES_SCANNED, f"scanned only {scanned} aliases"
     assert double_bindings(_settings_classes()) - KNOWN_DOUBLE_BINDINGS == set()
 
 
@@ -111,3 +124,18 @@ def test_a_second_binding_is_caught_and_an_inherited_field_is_not() -> None:
         again: float = Field(default=1.0, alias="AUTOBOT_X_OWN")
 
     assert double_bindings(iter([Base, Left, Right])) == {"AUTOBOT_X_OWN"}
+
+
+def test_a_double_through_alias_choices_is_caught_and_a_distinct_choice_is_not() -> None:
+    class Plain(BaseSettings):
+        one: int = Field(default=1, alias="AUTOBOT_Y_ONE")
+
+    class Choice(BaseSettings):
+        two: int = Field(default=1, validation_alias=AliasChoices("AUTOBOT_Y_TWO", "AUTOBOT_Y_ONE", "LEGACY_Y"))
+
+    class Distinct(BaseSettings):
+        three: int = Field(default=1, validation_alias=AliasChoices("AUTOBOT_Y_THREE", "LEGACY_Y"))
+        four: int = Field(default=1, validation_alias="AUTOBOT_Y_FOUR")
+
+    assert double_bindings(iter([Plain, Choice])) == {"AUTOBOT_Y_ONE"}
+    assert double_bindings(iter([Plain, Choice, Distinct])) == {"AUTOBOT_Y_ONE"}

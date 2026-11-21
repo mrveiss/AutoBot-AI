@@ -106,7 +106,7 @@ QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
 # Truthy env-var values — shared by every boolean flag below.
 _TRUE_VALUES = {"1", "true", "yes"}
-
+MIN_LLM_TIMEOUT_SECONDS = 1  # the int views of TimeoutConfig.llm (#17419) never round a sub-second value to 0
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
@@ -488,7 +488,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "endpoint": self.get_endpoint_for_agent(agent_id),
             "model": self.get_model_for_agent(agent_id),
             "api_key": self._get_api_key_for_provider(provider),
-            "timeout": int(config.timeout.llm),  # bound once, in TimeoutConfig (#17419)
+            "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(config.timeout.llm)),
         }
 
     def _get_api_key_for_provider(self, provider: str) -> str:
@@ -2746,7 +2746,7 @@ class AutoBotConfig(RedactedSettings):
     @property
     def llm_timeout(self) -> int:
         """Backward-compat: config.llm_timeout → config.timeout.llm."""
-        return int(self.timeout.llm)
+        return max(MIN_LLM_TIMEOUT_SECONDS, int(self.timeout.llm))
 
     @property
     def llm_temperature(self) -> float:
@@ -2958,7 +2958,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
         "endpoint": endpoint,
         "model": model,
         "api_key": api_key,
-        "timeout": int(cfg.timeout.llm),
+        "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(cfg.timeout.llm)),
     }
 
 
