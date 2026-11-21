@@ -8,11 +8,12 @@ Revision ID: 20261121_117
 Revises: 20261120_116
 Create Date: 2026-11-21 00:00:00.000000
 
-``NO DATA LOSS``: a new, empty table. Existing installs are grandfathered at the first start after
-this revision, by the application, not here: only the host knows which plugins it was running.
-Downgrade drops only that table, and with it the enable decisions and the ``__baseline__`` row: a later
-re-upgrade grandfathers again at its first start (the plugins whose files predate the then-recorded
-previous start, which is gone too, so every discovered plugin), and admin disables are forgotten.
+``NO DATA LOSS``: a new, empty table. Rows are written by the application, not here: bundled core plugins
+are enabled on every start (source ``bundled``), and other existing plugins are grandfathered at the first
+start after this revision (only the host knows which plugins it was running).
+Downgrade drops only that table, and with it the enable decisions, the ``__baseline__`` row and the recorded
+start. A later re-upgrade re-enables the bundled plugins, forgets admin disables, and grandfathers other
+plugins only if the updater marker or backend log still gives a previous start.
 """
 
 from typing import Sequence, Union

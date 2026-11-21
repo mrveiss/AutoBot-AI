@@ -39,6 +39,7 @@ LAST_START_ROW = "__last_start__"
 RESERVED_ROWS = frozenset({BASELINE_ROW, LAST_START_ROW})
 SOURCE_GRANDFATHERED = "grandfathered"
 SOURCE_ADMIN = "admin"
+SOURCE_BUNDLED = "bundled"
 SOURCE_SYSTEM = "system"
 SYSTEM_ACTOR = "system"
 
@@ -100,27 +101,35 @@ class PluginEnableStore:
                 )
             await session.commit()
 
-    async def write_baseline(self, rows: List[Row], before_commit: Callable[[], Awaitable[None]]) -> bool:
-        """Claim the baseline, run *before_commit* (the audit), then write *rows*, all in one transaction.
+    async def known_names(self) -> set[str]:
+        """Every plugin with a row, enabled or not (an admin's disable is a row)."""
+        async with self._session() as session:
+            rows = await session.execute(
+                select(PluginEnableState.plugin_name).where(PluginEnableState.plugin_name.not_in(RESERVED_ROWS))
+            )
+            return set(rows.scalars())
 
-        The baseline row is the claim: a concurrent first boot blocks on its primary key until the winner
-        commits, then fails with ``IntegrityError`` and gets False, so the audit runs and the rows are
-        written exactly once. A failing *before_commit* rolls everything back, leaving no baseline.
+    async def write_baseline(self, rows: List[Row], before_commit: Callable[[], Awaitable[None]]) -> bool:
+        """Claim the baseline and write *rows* once; see :meth:`insert_once`."""
+        baseline = (BASELINE_ROW, False, SOURCE_GRANDFATHERED, SYSTEM_ACTOR)
+        return await self.insert_once([baseline] + rows, before_commit)
+
+    async def insert_once(self, rows: List[Row], before_commit: Callable[[], Awaitable[None]]) -> bool:
+        """Insert *rows*, run *before_commit* (the audit), then commit, all in one transaction.
+
+        A concurrent boot inserting the same primary key blocks until the winner commits, then fails with
+        ``IntegrityError`` and gets False: the audit runs and the rows are written exactly once. A failing
+        *before_commit* rolls everything back. Existing rows are never overwritten.
         """
         async with self._session() as session:
-            session.add(
-                PluginEnableState(
-                    plugin_name=BASELINE_ROW, enabled=False, source=SOURCE_GRANDFATHERED, decided_by=SYSTEM_ACTOR
-                )
-            )
+            for name, enabled, source, actor in rows:
+                session.add(PluginEnableState(plugin_name=name, enabled=enabled, source=source, decided_by=actor))
             try:
                 await session.flush()
             except IntegrityError:
                 await session.rollback()
                 return False
             await before_commit()
-            for name, enabled, source, actor in rows:
-                session.add(PluginEnableState(plugin_name=name, enabled=enabled, source=source, decided_by=actor))
             await session.commit()
             return True
 

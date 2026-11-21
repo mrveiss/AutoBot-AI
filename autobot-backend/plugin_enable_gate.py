@@ -4,12 +4,17 @@
 # Author: mrveiss
 """Which discovered plugins this backend may import at startup (#17421).
 
-Upgrade rule (owner, 2026-11-21): the first start after ``plugin_enable_state`` exists grandfathers the
-discovered plugins as enabled, EXCEPT any whose files are newer than the previous start (dropped in
-after the last run); those wait for an admin. Nothing recorded what the previous version loaded, so
-this is the approved approximation. The previous start comes from ``plugin_previous_start`` (recorded
-start, updater marker, backend log); when none exists nothing is grandfathered and the reason is audited.
-File times can be preserved or forged, so this is a heuristic, not a trust boundary.
+Bundled rule (owner, 2026-11-21): a plugin under the core-plugins root is enabled by default, recorded
+with source ``bundled`` and audited, on every admit; only a missing row is filled in, so an admin's
+disable stays. A fresh install works without an admin.
+
+Upgrade rule (owner, 2026-11-21) for everything else: the first start after ``plugin_enable_state``
+exists grandfathers the discovered third-party plugins as enabled, EXCEPT any whose files are newer than
+the previous start (dropped in after the last run); those wait for an admin. Nothing recorded what the
+previous version loaded, so this is the approved approximation. The previous start comes from
+``plugin_previous_start`` (recorded start, updater marker, backend log); when none exists nothing is
+grandfathered and the reason is audited. File times can be preserved or forged, so this is a heuristic,
+not a trust boundary.
 
 Failure rule: if the database or the audit trail cannot answer, no plugin loads, and the start is retried
 in the background with backoff until it does -- no restart needed.
@@ -24,7 +29,9 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.plugin_sdk import PluginManager, PluginManifest
+from autobot_shared.plugin_sdk.credential_binding import is_under_trusted_root
 from plugin_enable_state import (
+    SOURCE_BUNDLED,
     SOURCE_GRANDFATHERED,
     SYSTEM_ACTOR,
     PluginEnableStore,
@@ -93,19 +100,45 @@ async def grandfather(store: PluginEnableStore, manifests: List[PluginManifest],
         logger.info("Plugin gate: grandfathered %d plugin(s): %s", len(names), sorted(names))
 
 
-class DatabaseEnableGate:
-    """``EnableGate`` backed by ``plugin_enable_state``."""
+async def record_bundled(store: PluginEnableStore, names: List[str]) -> None:
+    """Enable the bundled plugins that have no row yet, audited. A row an admin wrote (a disable) is kept."""
+    missing = sorted(set(names) - await store.known_names())
+    if not missing:
+        return
+    rows = [(name, True, SOURCE_BUNDLED, SYSTEM_ACTOR) for name in missing]
 
-    def __init__(self, store: PluginEnableStore | None = None) -> None:
+    async def audit_all() -> None:
+        for name in missing:
+            await audit_decision(AuditAction.PLUGIN_ENABLE, name, SYSTEM_ACTOR, reason="bundled core plugin")
+
+    if await store.insert_once(rows, audit_all):
+        logger.info("Plugin gate: enabled %d bundled plugin(s): %s", len(missing), missing)
+
+
+class DatabaseEnableGate:
+    """``EnableGate`` backed by ``plugin_enable_state``.
+
+    A plugin whose resolved directory is under a core-plugins root (``plugin_paths.trusted_plugin_roots``)
+    is bundled: enabled by default on every admit, unless an admin disabled it. Everything else needs the
+    grandfather rule or an admin.
+    """
+
+    def __init__(self, store: PluginEnableStore | None = None, core_roots: List[Path] | None = None) -> None:
         self._store = store or PluginEnableStore()
+        self._core_roots = core_roots
 
     async def admit(self, manifests: List[PluginManifest], locations: Mapping[str, Path]) -> List[PluginManifest]:
+        roots = self._core_roots if self._core_roots is not None else trusted_plugin_roots()
+        bundled = [m for m in manifests if m.name in locations and is_under_trusted_root(locations[m.name], roots)]
         if not manifests:
             logger.warning(
                 "Plugin gate: discovery found no plugins (directory missing or unmounted?); no baseline written"
             )
-        elif not await self._store.has_baseline():
-            await grandfather(self._store, manifests, locations)
+        else:
+            if not await self._store.has_baseline():
+                third_party = [m for m in manifests if m not in bundled]
+                await grandfather(self._store, third_party, locations)
+            await record_bundled(self._store, [m.name for m in bundled])
         enabled = await self._store.enabled_names()
         await self._store.touch_start()
         return [m for m in manifests if m.name in enabled]
