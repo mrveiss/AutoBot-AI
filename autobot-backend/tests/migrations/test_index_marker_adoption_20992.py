@@ -4,7 +4,7 @@
 # Author: mrveiss
 """An index-only revision is observable to the probe ladder, so adoption RUNS it (#20992, #17038).
 
-``20261119_116`` creates two partial unique indexes and no table or column. Unobservable, a bracket ending
+``20261121_117`` creates two partial unique indexes and no table or column. Unobservable, a bracket ending
 at ``20261118_115`` was advanced through the data-only tail and STAMPED head, so the indexes were never
 built. No database needed: static facts against the real revision chain.
 """
@@ -18,7 +18,7 @@ from migrations.baseline import (
     find_candidate,
 )
 
-_REV = "20261119_116"
+_REV = "20261121_117"
 _PRIOR = "20261118_115"
 _INDEXES = {idx for _t, idx in INDEX_MARKERS[_REV]}
 

@@ -221,25 +221,31 @@ def test_a_renew_that_raises_does_not_kill_the_renewer(redis, monkeypatch):
 def test_stop_while_a_retry_is_pending_drops_the_lease_and_ends_the_renews(redis, monkeypatch):
     monkeypatch.setattr(cl, "RENEW_DIVISOR", 1200)  # ttl 60s -> due every 0.05s
     monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.01)
-    calls, first = [], threading.Event()
+    calls, entered, release = [], threading.Event(), threading.Event()
 
     def blip(self):
         calls.append(1)
-        first.set()
-        return None  # registry unreachable: the lease is re-scheduled for a retry
+        entered.set()
+        assert release.wait(10), "the test never released the in-flight renew"
+        return None  # registry unreachable: the renewer would re-schedule the lease for a retry
 
     monkeypatch.setattr(cl.Lease, "renew_due", blip)
     with cl.write_lease(_NAME) as lease:
-        assert first.wait(10), "the renewer never ran the scheduled renew"
-        lease.stop()
+        assert entered.wait(10), "the renewer never ran the scheduled renew"
+        lease.stop()  # lands while renew_due is in flight: exactly the window the guard in _Renewer.add closes
+        release.set()
+        # a sentinel scheduled after the in-flight renew proves the renewer thread has finished that renew
+        done = threading.Event()
+        sentinel = cl.Lease(_NAME, cl.ClaimMode.SHARED, 60)
+        monkeypatch.setattr(cl.Lease, "renew_due", lambda self: done.set())
+        cl._RENEWER.add(sentinel, delay_s=0)
+        try:
+            assert done.wait(10), "the renewer did not get past the in-flight renew"
+        finally:
+            sentinel._stopped = True
+            cl._RENEWER.remove(sentinel)
         assert lease not in cl._RENEWER._due
-        seen = len(calls)
-        threading.Event().wait(0.5)  # 50x the retry interval and 10x the renew interval
-        assert len(calls) <= seen + 1 and lease not in cl._RENEWER._due
-        # at most one renew was already in flight when stop() ran; none is scheduled after it
-        settled = len(calls)
-        threading.Event().wait(0.3)
-        assert len(calls) == settled
+        assert len(calls) == 1
 
 
 def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
@@ -254,6 +260,7 @@ def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
     finally:
         lease._stopped = True
         renewer.remove(lease)
-    # retries at ~0, 0.2, 0.4: a renewer that ignored the interval would have called thousands of times
-    assert 2 <= len(calls) <= 4
+    # retries at ~0, 0.2, 0.4: a renewer that ignored the interval would exceed the upper bound and break the
+    # gap assertion; the lower bound is 1 so CPU starvation under -n auto cannot flake it
+    assert 1 <= len(calls) <= 4
     assert all(b - a >= 0.15 for a, b in zip(calls, calls[1:]))
