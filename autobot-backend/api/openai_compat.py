@@ -257,6 +257,63 @@ def _estimate_tokens(text: str) -> int:
     return math.ceil(len(text.split()) * 1.3)
 
 
+def _delta_chunk_sse(
+    completion_id: str, created: int, model_name: str, delta: OAIDeltaMessage, finish_reason: str | None
+) -> str:
+    """Render one delta chunk as an SSE line (helper for _stream_generator)."""
+    chunk = ChatCompletionChunk(
+        id=completion_id,
+        created=created,
+        model=model_name,
+        choices=[OAIStreamChoice(index=0, delta=delta, finish_reason=finish_reason)],
+    )
+    return f"data: {chunk.model_dump_json()}\n\n"
+
+
+def _usage_chunk_sse(
+    completion_id: str,
+    created: int,
+    model_name: str,
+    include_usage: bool,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cost_usd: float,
+) -> str | None:
+    """Render the usage or standalone cost chunk, or None (helper for _stream_generator).
+
+    Usage (OpenAI spec: emit only when stream_options.include_usage=true) embeds cost
+    when available; a standalone cost chunk is emitted when include_usage is false so
+    clients get cost info in a valid chunk (#7610).
+    """
+    if include_usage:
+        usage = OAIUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            cost_usd=cost_usd if cost_usd > 0 else None,
+        )
+    elif cost_usd > 0:
+        usage = OAIUsage(cost_usd=cost_usd)
+    else:
+        return None
+    chunk = ChatCompletionChunk(id=completion_id, created=created, model=model_name, choices=[], usage=usage)
+    return f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
+
+
+async def _record_key_spend(
+    api_key_record: LLMApiKeyRecord | None,
+    model_name: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    cost_usd: float,
+) -> None:
+    """Record per-key spend and publish usage event after stream completes (#6590)."""
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
+
+
 async def _stream_generator(
     provider,
     llm_request: LLMRequest,
@@ -271,93 +328,35 @@ async def _stream_generator(
     created = int(time.time())
     completion_text_parts: List[str] = []
 
+    def _sse(delta: OAIDeltaMessage, finish_reason: str | None = None) -> str:
+        return _delta_chunk_sse(completion_id, created, model_name, delta, finish_reason)
+
     # Opening chunk — role delta
-    role_chunk = ChatCompletionChunk(
-        id=completion_id,
-        created=created,
-        model=model_name,
-        choices=[
-            OAIStreamChoice(
-                index=0,
-                delta=OAIDeltaMessage(role="assistant"),
-                finish_reason=None,
-            )
-        ],
-    )
-    yield f"data: {role_chunk.model_dump_json()}\n\n"
+    yield _sse(OAIDeltaMessage(role="assistant"))
 
     async for text_chunk in provider.stream_completion(llm_request):
         if not text_chunk:
             continue
         completion_text_parts.append(text_chunk)
-        chunk = ChatCompletionChunk(
-            id=completion_id,
-            created=created,
-            model=model_name,
-            choices=[
-                OAIStreamChoice(
-                    index=0,
-                    delta=OAIDeltaMessage(content=text_chunk),
-                    finish_reason=None,
-                )
-            ],
-        )
-        yield f"data: {chunk.model_dump_json()}\n\n"
+        yield _sse(OAIDeltaMessage(content=text_chunk))
 
     # Terminal chunk
-    final_chunk = ChatCompletionChunk(
-        id=completion_id,
-        created=created,
-        model=model_name,
-        choices=[
-            OAIStreamChoice(
-                index=0,
-                delta=OAIDeltaMessage(),
-                finish_reason="stop",
-            )
-        ],
-    )
-    yield f"data: {final_chunk.model_dump_json()}\n\n"
+    yield _sse(OAIDeltaMessage(), "stop")
 
     prompt_tokens = _estimate_tokens(prompt_text)
     completion_tokens = _estimate_tokens("".join(completion_text_parts))
     tracker = get_cost_tracker()
     cost_usd = tracker.calculate_cost(model_name, prompt_tokens, completion_tokens)
 
-    # Usage chunk (OpenAI spec: emit only when stream_options.include_usage=true)
-    # Cost is embedded here when available; a standalone cost chunk is emitted
-    # when include_usage is false so clients get cost info in a valid chunk (#7610).
-    if include_usage:
-        usage_chunk = ChatCompletionChunk(
-            id=completion_id,
-            created=created,
-            model=model_name,
-            choices=[],
-            usage=OAIUsage(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens,
-                cost_usd=cost_usd if cost_usd > 0 else None,
-            ),
-        )
-        yield f"data: {usage_chunk.model_dump_json(exclude_none=True)}\n\n"
-    elif cost_usd > 0:
-        cost_chunk = ChatCompletionChunk(
-            id=completion_id,
-            created=created,
-            model=model_name,
-            choices=[],
-            usage=OAIUsage(cost_usd=cost_usd),
-        )
-        yield f"data: {cost_chunk.model_dump_json(exclude_none=True)}\n\n"
+    usage_line = _usage_chunk_sse(
+        completion_id, created, model_name, include_usage, prompt_tokens, completion_tokens, cost_usd
+    )
+    if usage_line is not None:
+        yield usage_line
 
     yield "data: [DONE]\n\n"
 
-    # Record per-key spend and publish usage event after stream completes (#6590)
-    if api_key_record is not None:
-        svc = get_llm_api_key_service()
-        await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
+    await _record_key_spend(api_key_record, model_name, prompt_tokens, completion_tokens, cost_usd)
 
     # #16845: the per-key stream above is telemetry keyed by API key; budget policy
     # reads LLMUsageRecords, and nothing on this path was writing one. Recorded
