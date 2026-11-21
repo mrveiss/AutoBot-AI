@@ -24,7 +24,6 @@ computes those sets from user/agent identity + membership is Task 2.3 / 9.2.
 
 from __future__ import annotations
 
-import hmac
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
@@ -47,6 +46,7 @@ from autobot_shared.secrets_envelope import (
     wrap_dek,
 )
 from autobot_shared.secrets_vault import VaultRef
+from autobot_shared.security.constant_time import equal_bytes
 from knowledge.serving import is_servable
 from models.secret import Secret
 from models.secret_grant import SecretGrant
@@ -82,14 +82,6 @@ class SecretConflictError(Exception):
 
 class SecretAccessError(PermissionError):
     """The caller holds no grant for any of their accessible vaults."""
-
-
-def _same_value(held: bytes, offered: bytes) -> bool:
-    """Constant-time equality of two stored values; unlike ``secure_compare`` two empty values ARE equal.
-
-    ``secure_compare`` fails closed for authentication; here an identical retry of ``value=""`` must reuse the row.
-    """
-    return hmac.compare_digest(held, offered)
 
 
 def _vault_strs(vaults: Iterable[VaultRef]) -> set[str]:
@@ -170,7 +162,7 @@ class EnvelopeSecretsService:
             held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])
         except (SecretAccessError, SecretNotFoundError, DecryptionError, UnsupportedFormatError, KeyError, ValueError):
             raise SecretConflictError("value_differs", existing.id) from None  # unreadable is not "the same"
-        if not _same_value(held, plaintext):
+        if not equal_bytes(held, plaintext):
             raise SecretConflictError("value_differs", existing.id)
         existing.already_existed = True
         return existing
