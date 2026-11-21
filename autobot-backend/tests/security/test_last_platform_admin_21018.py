@@ -37,6 +37,7 @@ from autobot_shared.user_management.last_platform_admin import (
     LastPlatformAdminError,
     LastPlatformAdminRetry,
     ensure_not_last_platform_admin,
+    lock_active_platform_admin_ids,
     lock_platform_admin_rows,
     refuse_last_platform_admin,
 )
@@ -57,6 +58,10 @@ class _User(_Base):
     deleted_at: Mapped[object] = mapped_column(DateTime, nullable=True)
 
 
+#: A harness lock held by a failed session must fail the test, not hang it.
+_ROW_LOCK_TIMEOUT_SECONDS = 10
+
+
 def _with_row_lock(session: AsyncSession, row_lock: asyncio.Lock) -> AsyncSession:
     """Give *session* the FOR UPDATE contract: a locking read waits for the previous holder to commit."""
     held = False
@@ -65,7 +70,7 @@ def _with_row_lock(session: AsyncSession, row_lock: asyncio.Lock) -> AsyncSessio
     async def execute(statement, *args, **kwargs):
         nonlocal held
         if getattr(statement, "_for_update_arg", None) is not None and not held:
-            await row_lock.acquire()
+            await asyncio.wait_for(row_lock.acquire(), timeout=_ROW_LOCK_TIMEOUT_SECONDS)
             held = True
         return await real_execute(statement, *args, **kwargs)
 
@@ -143,12 +148,13 @@ def test_the_production_query_locks_the_target_and_the_active_admins_in_one_id_o
 
     async def run(statement):
         captured.append(statement)
-        return MagicMock(all=lambda: [])
+        return MagicMock(scalars=lambda: MagicMock(all=lambda: []))
 
     session.execute = run
     asyncio.run(lock_platform_admin_rows(session, _User, uuid.uuid4()))
     sql = str(captured[0].compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE" in sql and "ORDER BY users.id" in sql
+    assert captured[0].get_execution_options().get("populate_existing") is True
     assert "is_platform_admin IS true" in sql and "deleted_at IS NULL" in sql and "users.id = " in sql
 
 
@@ -420,3 +426,55 @@ async def test_a_concurrent_promotion_is_guarded_before_the_target_is_locked_on_
         with pytest.raises(LastPlatformAdminError):
             await svc.set_platform_admin(admin, False)
     assert order == ["guard"]  # the only admin is refused before the target was ever locked alone
+
+
+@pytest.mark.asyncio
+async def test_an_admin_row_the_session_already_loaded_is_refreshed_from_the_locked_row(maker):
+    """Another admin demoted and committed after this session loaded it: the guard must judge the committed row."""
+    target, other = await _seed(maker, 2)
+    async with maker() as session, maker() as rival:
+        assert (await session.get(_User, other)).is_platform_admin is True  # now in the identity map
+        assert (await session.get(_User, target)).is_platform_admin is True
+        await rival.execute(update(_User).where(_User.id == other).values(is_platform_admin=False))
+        await rival.commit()
+        with pytest.raises(LastPlatformAdminError):
+            await ensure_not_last_platform_admin(session, _User, target)
+
+
+@pytest.mark.asyncio
+async def test_an_approval_decision_and_a_demotion_interleaved_both_complete_without_a_deadlock(maker):
+    """Smoke test: both callers complete when interleaved under the harness's queueing lock (#21331).
+
+    SQLite has no row locks and cannot deadlock, so this proves the callers compose, not the lock order. The
+    evidence for the order is ``test_the_approval_check_issues_the_guards_id_ordered_set_lock``, which asserts the
+    PostgreSQL-compiled statement is ``FOR UPDATE`` with ``ORDER BY users.id``, the same statement the guard issues.
+    """
+    first, second = await _seed(maker, 2)
+
+    async def approval_decision() -> set[uuid.UUID]:
+        async with maker() as session:
+            eligible = await lock_active_platform_admin_ids(session, _User)
+            await asyncio.sleep(0.05)  # the window in which a demotion would take rows in another order
+            await session.commit()
+            return eligible
+
+    async def demotion() -> None:
+        async with maker() as session:
+            await ensure_not_last_platform_admin(session, _User, first)
+            await session.execute(update(_User).where(_User.id == first).values(is_platform_admin=False))
+            await session.commit()
+
+    eligible, _ = await asyncio.wait_for(asyncio.gather(approval_decision(), demotion()), timeout=5)
+    assert eligible in ({first, second}, {second})
+
+
+def test_the_approval_check_issues_the_guards_id_ordered_set_lock():
+    captured = []
+
+    async def run(statement):
+        captured.append(statement)
+        return MagicMock(scalars=lambda: MagicMock(all=lambda: []))
+
+    asyncio.run(lock_active_platform_admin_ids(MagicMock(execute=run), _User))
+    sql = str(captured[0].compile(dialect=postgresql.dialect()))
+    assert "FOR UPDATE" in sql and "ORDER BY users.id" in sql and "users.id = " not in sql

@@ -52,6 +52,7 @@ from ..models.enums import RoleHolderType
 from ..models.role_assignment import LLCRoleAssignment
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 _HOLDER_COLUMNS = {
     RoleHolderType.AGENT: "holder_agent_id",
@@ -67,22 +68,22 @@ class RolePermissionService(LLCServiceBase):
         result = await session.execute(select(Role).where(Role.id == role_id, Role.org_id == company_id))
         role = result.scalar_one_or_none()
         if role is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+            raise CompanyOsNotFound(f"role {role_id} does not exist in company {company_id}")
         if role.is_system:
-            raise ValueError("a system role's permissions cannot be changed through a company path")
+            raise CompanyOsError("a system role's permissions cannot be changed through a company path")
         return role
 
     async def _resolve_permission(self, session: AsyncSession, name: str) -> Permission:
         cleaned = (name or "").strip()
         if not cleaned:
-            raise ValueError("a permission name is required")
+            raise CompanyOsError("a permission name is required")
         result = await session.execute(select(Permission).where(Permission.name == cleaned))
         permission = result.scalar_one_or_none()
         if permission is None:
             # Deliberately not auto-created: an unknown name is far more likely
             # a typo than a new permission, and silently seeding it would make
             # a misspelt grant look successful while granting nothing.
-            raise ValueError(f"unknown permission {cleaned!r}")
+            raise CompanyOsError(f"unknown permission {cleaned!r}")
         return permission
 
     async def grant(

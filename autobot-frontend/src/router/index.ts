@@ -39,6 +39,7 @@ import { approvalsRoutes, llcCompanyChildren } from './llcRoutes'
 import { preferencesRoutes } from './preferencesRoutes'
 import { slmRedirectRoutes } from './slmRedirectRoutes'
 import { adminRoutes, resolveAdminPermissionRedirect } from './adminRoutes'
+import { userToolRoutes } from './userToolRoutes'
 
 const logger = createLogger('Router');
 
@@ -777,10 +778,9 @@ export const routes: RouteRecordRaw[] = [
   },
   // #19833: the 9 /admin/* routes are children of the /admin parent (adminRoutes.ts)
   ...adminRoutes,
-  // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
-  // Redirect any bookmarked /desktop URLs to /chat.
+  ...userToolRoutes, // #20644: Batch Processing and Vision, moved here from the SLM
+  // /desktop left the nav (noVNC is the Chat tab's noVNC tab); bookmarked /desktop URLs go to /chat.
   { path: '/desktop', redirect: '/chat' },
-  // Issue #3502: Custom Dashboard renamed to /home (see home route above)
 
   // Issue #729 / #20631: legacy infrastructure paths; admins go to the SLM, others to /home
   ...slmRedirectRoutes,

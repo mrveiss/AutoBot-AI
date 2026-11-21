@@ -7,7 +7,29 @@
 from typing import Optional
 
 
-class BudgetExhausted(Exception):
+class PublicMessageMixin:
+    """Marks an exception whose message is author-written text a caller may read (#21579).
+
+    ``public_detail`` is the one text a route may put in an HTTP error. Mix it in only when every
+    raise site builds the message from a fixed template and values the caller supplied; an exception
+    that can carry text from below, or another user's ids, must not carry it.
+    """
+
+    @property
+    def public_detail(self) -> str:
+        return str(self)
+
+
+def refusal_text_keeping_public_reason(exc: BaseException, fixed: str) -> str:
+    """``fixed`` alone, or ``fixed: reason`` when *exc* carries a non-empty str ``public_detail``.
+
+    A wrapper that re-raises a refusal under its own fixed text calls this so a public reason is not lost (#21579).
+    """
+    detail = getattr(exc, "public_detail", None)
+    return f"{fixed}: {detail}" if isinstance(detail, str) and detail else fixed
+
+
+class BudgetExhausted(PublicMessageMixin, Exception):
     """Raised when an agent's budget_spent exceeds budget_limit."""
 
     def __init__(self, agent_id: str, spent: float, limit: float) -> None:
@@ -42,12 +64,17 @@ class UnpricedModel(Exception):
             f"LOCAL_MODEL_NAMES if it is free by construction, rather than letting it accrue nothing."
         )
 
+    @property
+    def public_detail(self) -> str:
+        """The model is the caller's; the operator remedy in the message names internal modules and stays in the log."""
+        return f"Model {self.model!r} has no live catalogue price and is not a recognised local model"
+
 
 class ApiKeyNotFound(Exception):
     """Raised when an API key is not found or not owned by the requesting agent."""
 
 
-class WipLimitExceeded(Exception):
+class WipLimitExceeded(PublicMessageMixin, Exception):
     """Raised when moving a work item into a column would exceed its WIP limit."""
 
     def __init__(self, column_name: str, wip_limit: int, current_count: int) -> None:
@@ -83,6 +110,24 @@ class AdapterAuthFailed(AdapterRunFailed):
     Still an ``AdapterRunFailed``, so the run takes the ordinary FAILED path; the subclass only
     tells the scheduler to pause the agent afterwards, since every further wake fails the same way.
     """
+
+
+class RunKeyIssueFailed(Exception):
+    """The run-scoped API key an agent needs to call the Agent API could not be issued (#20149).
+
+    A woken agent without its key cannot take its task, so the scheduler fails the run with
+    this reason instead of dispatching a keyless agent. The message names the stage only: the
+    underlying error (a database or key-service failure) is logged with its traceback and
+    chained as ``__cause__``, never carried in the text a run record or API caller sees.
+    """
+
+    STAGE = "run key issue"
+
+    def __init__(self, agent_id: str) -> None:
+        self.agent_id = agent_id
+        super().__init__(
+            f"agent {agent_id}: {self.STAGE} failed - the run-scoped API key was not issued, run not dispatched"
+        )
 
 
 class HeartbeatDispatchSkipped(Exception):
@@ -139,7 +184,7 @@ class ProviderRateLimited(Exception):
         super().__init__(msg)
 
 
-class WorkItemNotInCompany(Exception):
+class WorkItemNotInCompany(PublicMessageMixin, Exception):
     """A cost event named a work item that is unknown or belongs to another company (#16016)."""
 
     def __init__(self, work_item_id: str) -> None:

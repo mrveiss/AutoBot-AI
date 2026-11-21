@@ -203,7 +203,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { HttpError, saveUrl } from '@autobot/ui'
+import { HttpError, RequestTimeoutError, saveUrl } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
@@ -349,7 +349,7 @@ const loadVncUrl = async () => {
     } else if (err.message && err.message.includes('Network Error')) {
       error.value = t('desktop.interface.errorNetworkConnectivity');
       connectionStatus.value = 'Network Error';
-    } else if (err.message && err.message.includes('timeout')) {
+    } else if (err instanceof RequestTimeoutError) { // by class only (#21581): this path makes no request today, so only the client's typed timeout counts
       error.value = t('desktop.interface.errorConfigTimeout');
       connectionStatus.value = 'Timeout';
     } else {

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.user_management.login_eligibility import login_refusal
 from autobot_shared.user_management.user_service_errors import UserServiceError
 
 logger = get_logger(__name__)
@@ -67,27 +68,39 @@ class LastPlatformAdminRetry(LastPlatformAdminError):
 
 
 def _is_active_admin(row: Any) -> bool:
-    return bool(row.is_platform_admin and row.is_active and row.deleted_at is None)
+    return bool(row.is_platform_admin and login_refusal(row) is None)
 
 
-async def lock_platform_admin_rows(session: AsyncSession, user_model: Any, user_id: uuid.UUID) -> list[Any]:
-    """The active platform admins plus the target, locked in id order until the transaction ends."""
+async def lock_platform_admin_rows(
+    session: AsyncSession, user_model: Any, user_id: uuid.UUID | None = None
+) -> list[Any]:
+    """The undeleted platform admins plus the target, locked in id order until the transaction ends.
+
+    The ONE row lock over the platform admins (#21331): the last-admin guard and the four-eyes approval check
+    both take it, so every locker queues on the same rows in the same order. *user_id* is the row to lock along
+    with them (``None`` locks the admins alone).
+
+    Whether an admin is *active* is the one login rule (``login_eligibility.login_refusal``, applied by
+    ``_is_active_admin``), not a second ``is_active`` filter here (#18820); a deactivated admin is locked
+    along with the rest and then not counted. ``populate_existing`` refreshes rows the session already holds, so
+    the verdict reads the committed, locked values; every caller runs this before it mutates the target.
+    """
+    admins = and_(user_model.is_platform_admin.is_(True), user_model.deleted_at.is_(None))
     query = (
-        select(user_model.id, user_model.is_platform_admin, user_model.is_active, user_model.deleted_at)
-        .where(
-            or_(
-                user_model.id == user_id,
-                and_(
-                    user_model.is_platform_admin.is_(True),
-                    user_model.is_active.is_(True),
-                    user_model.deleted_at.is_(None),
-                ),
-            )
-        )
+        select(user_model)
+        .where(admins if user_id is None else or_(user_model.id == user_id, admins))
         .order_by(user_model.id)
         .with_for_update()
+        # The caller has already loaded the target (and a request's auth layer may have loaded another admin); the
+        # identity map would hand those copies back with their old flags. The decision is made on the locked rows.
+        .execution_options(populate_existing=True)
     )
-    return list((await session.execute(query)).all())
+    return list((await session.execute(query)).scalars().all())
+
+
+async def lock_active_platform_admin_ids(session: AsyncSession, user_model: Any) -> set[uuid.UUID]:
+    """The ids of the active platform admins, locked (via :func:`lock_platform_admin_rows`) until commit."""
+    return {row.id for row in await lock_platform_admin_rows(session, user_model) if _is_active_admin(row)}
 
 
 def _is_serialization_failure(exc: DBAPIError) -> bool:

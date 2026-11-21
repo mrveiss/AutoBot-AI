@@ -15,7 +15,7 @@ status: current
 Links GitHub Pull Requests to Company OS work items (GH#9625), enabling:
 
 - PR visibility on work item cards (🔗 badge on the Kanban board)
-- Automatic status transition to `in_review` when a linked PR merges
+- Automatic review handoff to a named reviewer when a linked PR merges
 - Webhook-driven auto-linking from branch names or PR bodies
 - Manual linking via the work-items API
 
@@ -50,10 +50,13 @@ Resolves #llc-{work_item_id}
 | PR event | Work item action |
 |----------|------------------|
 | PR opened | PR URL appended to `linked_pr_urls`, comment posted |
-| PR merged | Status → `in_review`, comment posted |
+| PR merged | Item handed to a named reviewer through the review handoff (`in_review`), or left where it is with a comment saying why |
 | PR closed without merge | Comment posted (no status change) |
 
-Work items already in `done` or `cancelled` are never auto-transitioned.
+A merged PR moves an item to `in_review` only when it is `in_progress`, held by an agent, and a reviewer
+resolves: the item's reviewer, else its creator, who must be a current company member. The handoff assigns the
+reviewer, releases the agent's checkout and notifies them. Otherwise the item keeps its status and a comment
+on it says why. Work items already in `done` or `cancelled` are never touched.
 
 ---
 
@@ -109,7 +112,7 @@ repository, links the PR, posts a comment, and transitions status on merge.
 1. Agent creates branch `llc/{work_item_id}`, commits, pushes, opens a PR
 2. GitHub webhook fires → AutoBot links the PR to the work item
 3. Work item card shows the 🔗 badge
-4. PR merges → work item transitions to `in_review`
+4. PR merges → the agent's work item is handed to its reviewer (`in_review`)
 5. Reviewer approves → work item marked `done`
 
 ## See Also

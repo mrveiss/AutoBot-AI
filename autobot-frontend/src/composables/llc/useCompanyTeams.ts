@@ -12,15 +12,15 @@
  * response carries no "may manage" fact, so the controls are shown and a refusal is reported, never
  * guessed from a role here.
  *
- * The view is not remounted when the route moves to another company, so everything is scoped to the
- * company a request was sent for: the id is captured at send time, a change of company drops the rows,
- * and a response for a company no longer shown is discarded.
+ * The company layout remounts the view on a company switch (#21502), but a late answer can still
+ * arrive for a company no longer shown, so the id is captured at send time, a change of company
+ * drops the rows, and such an answer is discarded.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
 import { createLogger } from '@/utils/debugUtils'
-import type { Member as CompanyMember } from '@/composables/llc/useCompanyMembers'
+import { isMembersEnvelope, type Member as CompanyMember, type MembersResponse } from '@/composables/llc/useCompanyMembers'
 
 const logger = createLogger('useCompanyTeams')
 
@@ -75,11 +75,13 @@ export function useCompanyTeams(api: TeamsApi, companyId: () => string) {
    */
   function readMembers(id: string, current: () => boolean): void {
     if (members.value.length === 0) membersPending.value = true
-    void (api.get(`/api/llc/companies/${id}/members`) as Promise<Member[]>).then(
-      (list) => {
+    void (api.get(`/api/llc/companies/${id}/members`) as Promise<MembersResponse>).then(
+      (res) => {
         if (!current()) return
-        membersFailed.value = false
-        members.value = Array.isArray(list) ? list : []
+        // #21096: a reply without the envelope is a failed read, not a company with no members.
+        const ok = isMembersEnvelope(res)
+        membersFailed.value = !ok
+        members.value = ok ? res.members : []
         membersPending.value = false
       },
       () => {

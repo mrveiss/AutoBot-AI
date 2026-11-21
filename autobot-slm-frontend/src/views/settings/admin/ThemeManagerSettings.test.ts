@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { HttpError } from '@autobot/ui'
+import { HttpError, RequestTimeoutError } from '@autobot/ui'
 import ThemeManagerSettings from './ThemeManagerSettings.vue'
 import en from '@/locales/en.json'
 import appI18n from '@/i18n'
@@ -118,7 +118,7 @@ describe('ThemeManagerSettings failed and main app down', () => {
   })
 
   it('says not available when the request timed out', async () => {
-    client.get.mockRejectedValue(new Error('Request timeout after 30000ms'))
+    client.get.mockRejectedValue(new RequestTimeoutError(30000))
     const w = await mountView()
     expect(byId(w, 'slm-themes-unavailable').exists()).toBe(true)
   })

@@ -122,7 +122,7 @@
             v-model.number="settingsForm.token_limit"
             type="number"
             step="100000"
-            min="0"
+            :min="TOKEN_LIMIT_MIN"
             class="field-input"
             :placeholder="$t('llc.cost.tokenLimitPlaceholder')"
           />
@@ -300,7 +300,7 @@ import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import type { components } from '@/types/generated/api'
 import { isPendingApproval } from '@/utils/pendingApproval'
-import { limitPatchBody } from './budgetLimitRequest'
+import { limitPatchBody, tokenLimitInvalid, TOKEN_LIMIT_MIN } from './budgetLimitRequest'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
@@ -384,14 +384,12 @@ const settingsModal = reactive({
 const settingsForm = reactive({
   budget_mode: 'dollars' as 'dollars' | 'tokens',
   budget_limit: 0,
-  token_limit: 0,
+  token_limit: null as number | null | '',
   alert_threshold_pct: 80,
 })
 
 function budgetPct(b: BudgetEntry): number {
-  if (b.budget_mode === 'tokens' && b.token_limit) {
-    return (b.tokens_spent / b.token_limit) * 100
-  }
+  if (b.budget_mode === 'tokens' && b.token_limit) return (b.tokens_spent / b.token_limit) * 100
   const limit = parseFloat(b.budget_limit)
   const spent = parseFloat(b.budget_spent)
   return limit > 0 ? (spent / limit) * 100 : 0
@@ -536,7 +534,7 @@ function openSettings(b: BudgetEntry) {
   settingsModal.error = settingsModal.notice = ''
   settingsForm.budget_mode = b.budget_mode
   settingsForm.budget_limit = parseFloat(b.budget_limit)
-  settingsForm.token_limit = b.token_limit ?? 0
+  settingsForm.token_limit = b.token_limit ? b.token_limit : null
   settingsForm.alert_threshold_pct = Math.round(b.alert_threshold * 100)
   settingsModal.visible = true
 }
@@ -549,8 +547,9 @@ function closeSettings() {
 
 async function saveBudgetSettings() {
   if (!settingsModal.budget) return
-  settingsModal.saving = true
   settingsModal.error = settingsModal.notice = ''
+  if (tokenLimitInvalid(settingsForm)) return void (settingsModal.error = t('llc.cost.tokenLimitMin', { min: TOKEN_LIMIT_MIN }))
+  settingsModal.saving = true
   try {
     const result = await api.patch(`/api/llc/budget/${settingsModal.budget.agent_id}/limit`, limitPatchBody(settingsForm))
     if (isPendingApproval(result)) {
