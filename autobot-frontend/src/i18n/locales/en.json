@@ -10260,6 +10260,12 @@
         "description": "The organizations.subscription_tier column no longer used by AutoBot. Approving it deletes every stored value for good.",
         "present": "The column is still in this database.",
         "absent": "The column is not in this database."
+      },
+      "secretDuplicates": {
+        "title": "Duplicated stored credentials",
+        "description": "Several stored credentials share one name and vault. Each copy is checked against what it connects to; the proposal asks an administrator to remove the copies that do not work, or to choose when that cannot be told. Names and values are never shown.",
+        "copies": "{count} copies in total.",
+        "open": "Review them on the Secrets page"
       }
     },
     "conversations": {
