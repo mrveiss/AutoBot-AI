@@ -103,6 +103,20 @@ def hook():
     return _load()
 
 
+def _engine_bindings(guard):
+    """The script-level names the engine's own methods stand in for, keyed by binding name."""
+    return {
+        "_grandfathered_verdict": guard.grandfathered_verdict,
+        "verdict": guard.verdict,
+        "_vanished_entry_problem": guard.vanished_entry_problem,
+        "_report_unmeasured": guard.report_unmeasured,
+        "_scan_tracked_files": guard.scan_tracked_files,
+        "audit_ceilings": guard.audit_ceilings,
+        "_reach_breach_problem": guard.reach_breach_problem,
+        "run_audit": guard.run_audit,
+    }
+
+
 def _engine(hook, **config):
     """A ``FileSizeGuard`` built over its OWN namespace -- the engine's injection seam (#17377).
 
@@ -125,17 +139,7 @@ def _engine(hook, **config):
     guard = FileSizeGuard(
         ns, floor_name="MIN_TRACKED_PY_FILES", tracked_name="tracked_python_files", summary="%d files, %d grandfathered"
     )
-    bindings = {
-        "_grandfathered_verdict": guard.grandfathered_verdict,
-        "verdict": guard.verdict,
-        "_vanished_entry_problem": guard.vanished_entry_problem,
-        "_report_unmeasured": guard.report_unmeasured,
-        "_scan_tracked_files": guard.scan_tracked_files,
-        "audit_ceilings": guard.audit_ceilings,
-        "_reach_breach_problem": guard.reach_breach_problem,
-        "run_audit": guard.run_audit,
-    }
-    for name, bound in bindings.items():
+    for name, bound in _engine_bindings(guard).items():
         ns.setdefault(name, bound)
     return SimpleNamespace(**{**ns, "guard": guard})
 
