@@ -35,7 +35,7 @@ def test_a_cpu_runaway_is_killed_on_its_cpu_budget(monkeypatch: pytest.MonkeyPat
 
 def test_a_parent_waiting_on_a_cpu_busy_child_is_not_stalled(monkeypatch: pytest.MonkeyPatch) -> None:
     """The busy work is in a LIVE child, so only the process-tree scan sees the CPU."""
-    monkeypatch.setattr(_hang_guard, "STALL_SECONDS", 3.0)
-    spin = "import time; t=time.process_time()\nwhile time.process_time()-t<8: pass"
+    monkeypatch.setattr(_hang_guard, "STALL_SECONDS", 5.0)
+    spin = "import time; t=time.process_time()\nwhile time.process_time()-t<10: pass"
     done = _hang_guard.run_guarded(["bash", "-c", f"{sys.executable} -c '{spin}'; true"], cwd=repo_root())
     assert done.returncode == 0

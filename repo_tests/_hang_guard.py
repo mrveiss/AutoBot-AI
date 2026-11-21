@@ -75,6 +75,7 @@ def _sample_cpu(proc: subprocess.Popen) -> float:
         return cpu_seconds(proc.pid)
     except RuntimeError:
         _kill_group(proc)  # no /proc: never leave the child running unobserved
+        proc.communicate()  # reap it and close its pipes before re-raising
         raise
 
 
@@ -84,6 +85,16 @@ def _verdict(used: float, idle_for: float) -> str | None:
     if idle_for > STALL_SECONDS:
         return f"made no CPU progress for {idle_for:.0f}s (stall limit {STALL_SECONDS:.0f}s)"
     return None
+
+
+def _poll(proc: subprocess.Popen, state: tuple[float, float, float], now: float):
+    """Sample CPU once; return the updated (last_cpu, last_progress, peak_cpu) and a kill reason or None."""
+    last_cpu, last_progress, peak_cpu = state
+    used = _sample_cpu(proc)
+    if used != last_cpu:  # the total can drop (setsid escape, reaped orphan): still a change
+        last_cpu, last_progress = used, now
+    peak_cpu = max(peak_cpu, used)
+    return (last_cpu, last_progress, peak_cpu), _verdict(peak_cpu, now - last_progress)
 
 
 def run_guarded(
@@ -102,20 +113,16 @@ def run_guarded(
         env=None if env is None else dict(env),
         start_new_session=True,
     )
-    started = last_progress = time.monotonic()
-    last_cpu = peak_cpu = 0.0
+    started = time.monotonic()
+    state = (0.0, started, 0.0)  # last_cpu, last_progress, peak_cpu
     while True:
         try:
             out, err = proc.communicate(timeout=_POLL_SECONDS)
             return subprocess.CompletedProcess(argv, proc.returncode, out, err)
         except subprocess.TimeoutExpired:
             pass
-        used = _sample_cpu(proc)
         now = time.monotonic()
-        if used != last_cpu:  # the total can drop (setsid escape, reaped orphan): still a change
-            last_cpu, last_progress = used, now
-        peak_cpu = max(peak_cpu, used)
-        reason = _verdict(peak_cpu, now - last_progress)
+        state, reason = _poll(proc, state, now)
         if reason:
             _kill_group(proc)
             out, err = proc.communicate()
