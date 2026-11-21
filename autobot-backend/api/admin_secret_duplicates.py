@@ -33,7 +33,6 @@ from auth_middleware import check_admin_permission, get_current_user
 from services.secret_duplicate_proposals import group_digest, pending_proposals, propose_duplicate_resolutions
 from services.secret_duplicates import find_duplicate_groups
 from services.secrets_maintenance import MaintenanceActor
-from services.secrets_principal_resolver import ADMIN_PERMISSION
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(check_admin_permission)])
 
@@ -53,7 +52,7 @@ def _maintenance_actor(requester: object) -> MaintenanceActor:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "The request cannot be attributed to an administrator account"
         ) from None
-    return MaintenanceActor(admin_id, frozenset({ADMIN_PERMISSION}), _REQUEST_REFERENCE)
+    return MaintenanceActor(admin_id, _REQUEST_REFERENCE)
 
 
 @router.get("/secret-duplicates", response_model=DuplicateStatus)

@@ -26,10 +26,11 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from autobot_shared.user_management.login_eligibility import login_refusal
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.envelope_secrets_service import SecretAccessError
-from services.secrets_principal_resolver import resolve_principal_facts
+from services.secrets_principal_resolver import ADMIN_PERMISSION
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,17 +42,31 @@ class MaintenanceAuditError(RuntimeError):
 
 @dataclass(frozen=True)
 class MaintenanceActor:
-    """Who a maintenance operation is done for: the administrator, their permissions, and the reason it runs."""
+    """Who a maintenance operation is done for: the administrator and the reason it runs.
+
+    Deliberately carries NO permissions: whether the account is an administrator is read from the stored RBAC
+    tables (:func:`require_maintenance_admin`), never from anything a caller supplies.
+    """
 
     admin_id: uuid.UUID
-    permissions: frozenset[str]
     reference: str  # the approval id, or the request that raised the proposal -- never a secret name
 
 
 async def require_maintenance_admin(session: "AsyncSession", actor: MaintenanceActor) -> None:
-    """Refuse unless *actor* resolves to an active administrator."""
-    facts = await resolve_principal_facts(session, actor.admin_id, set(actor.permissions))
-    if not facts.active or not facts.is_admin:
+    """Refuse unless *actor* is an existing, eligible user whose STORED roles grant the admin permission.
+
+    Both facts come from the database: the account through the same eligibility rule the login uses
+    (``login_refusal``: not deleted, not inactive), the admin permission through ``UserService.get_user_permissions``
+    (the user's roles' platform grants). A user id that does not exist, an ineligible account, or a user without
+    the admin role is refused -- whatever the caller claims.
+    """
+    from user_management.models import User
+    from user_management.services.user_service import UserService
+
+    user = await session.get(User, actor.admin_id)
+    if user is None or login_refusal(user) is not None:
+        raise SecretAccessError("secret maintenance is for an active administrator")
+    if ADMIN_PERMISSION not in await UserService(session).get_user_permissions(actor.admin_id):
         raise SecretAccessError("secret maintenance is for an active administrator")
 
 

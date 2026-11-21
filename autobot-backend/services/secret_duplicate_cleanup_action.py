@@ -43,7 +43,6 @@ from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor
-from services.secrets_principal_resolver import ADMIN_PERMISSION
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,7 +175,7 @@ def _actor_of(approval: "Approval") -> MaintenanceActor:
     decider = verified_decider(approval)
     if decider is None:
         raise ValueError(f"approval {approval.id}: no verified administrator decided it; nothing was removed")
-    return MaintenanceActor(decider, frozenset({ADMIN_PERMISSION}), str(approval.id))
+    return MaintenanceActor(decider, str(approval.id))
 
 
 async def _review_of(approval: "Approval", session: "AsyncSession") -> _Review:

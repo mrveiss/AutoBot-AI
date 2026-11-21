@@ -12,40 +12,27 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared.secrets_vault import VaultRef
+from services import secrets_coordinator as coordinator_module
 from services import secrets_maintenance as maintenance
-from services.envelope_secrets_service import SecretAccessError
-from services.secrets_authz import PrincipalFacts
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
 
 _ADMIN = uuid.UUID(int=7)
 _SECRET = uuid.UUID(int=1)
-_ACTOR = MaintenanceActor(_ADMIN, frozenset({"admin"}), "approval-42")
+_ACTOR = MaintenanceActor(_ADMIN, "approval-42")
 _OWNER = VaultRef.parse("user:" + str(uuid.UUID(int=5)))
 
 
-def _coordinator(monkeypatch, *, is_admin=True, active=True, audit_written=True):
+def _coordinator(monkeypatch, *, audit_written=True):
+    """A coordinator whose ADMIN CHECK is stubbed: this file pins ordering and audit; the check itself is exercised
+    against a real database in ``tests/migrations/test_secrets_maintenance_admin_17850.py``."""
     service = MagicMock(read=AsyncMock(return_value=b"value"), delete=AsyncMock())
     coordinator = SecretsCoordinator(service)
     monkeypatch.setattr(coordinator, "_owner_vault", AsyncMock(return_value=_OWNER))
-    facts = PrincipalFacts(user_id=str(_ADMIN), is_admin=is_admin, active=active)
-    monkeypatch.setattr(maintenance, "resolve_principal_facts", AsyncMock(return_value=facts))
+    monkeypatch.setattr(coordinator_module, "require_maintenance_admin", AsyncMock())
     audit = AsyncMock(return_value=audit_written)
     monkeypatch.setattr(maintenance, "audit_log", audit)
     return coordinator, service, audit
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("flags", [{"is_admin": False}, {"active": False}], ids=["not-admin", "inactive"])
-async def test_a_non_administrator_is_refused_before_anything_is_opened_or_audited(monkeypatch, flags):
-    coordinator, service, audit = _coordinator(monkeypatch, **flags)
-    with pytest.raises(SecretAccessError):
-        await coordinator.maintenance_read(MagicMock(), actor=_ACTOR, secret_id=_SECRET)
-    with pytest.raises(SecretAccessError):
-        await coordinator.maintenance_delete(MagicMock(), actor=_ACTOR, secret_id=_SECRET)
-    service.read.assert_not_called()
-    service.delete.assert_not_called()
-    audit.assert_not_called()
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ _NAME = "OPENAI_API_KEY"
 _A, _B, _C = (uuid.UUID(int=n) for n in (1, 2, 3))
 
 
-_ACTOR = MaintenanceActor(uuid.UUID(int=99), frozenset({"admin"}), "ref-1")
+_ACTOR = MaintenanceActor(uuid.UUID(int=99), "ref-1")
 
 
 def _result(verdicts: dict, name: str = _NAME) -> dup.GroupVerification:
