@@ -8,7 +8,7 @@
 host exceeds a 180 s budget when ``pytest -n auto`` shares 22 cores with other sessions: the flake
 is the budget, not the code. This guard asks the two questions a hang guard actually means:
 
-* *stalled* -- has the process (and the children it has reaped) used no CPU at all for
+* *stalled* -- has the process (and its whole process tree) used no CPU at all for
   ``AUTOBOT_TEST_STALL_SECONDS``? A starved-but-runnable process still accrues CPU time, a hung
   one does not.
 * *runaway* -- has it used more than ``AUTOBOT_TEST_CPU_BUDGET_SECONDS`` of CPU? CPU time is the
@@ -26,24 +26,41 @@ import time
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float_clamped
 
-STALL_SECONDS = env_float("AUTOBOT_TEST_STALL_SECONDS", 120.0)
-CPU_BUDGET_SECONDS = env_float("AUTOBOT_TEST_CPU_BUDGET_SECONDS", 900.0)
+STALL_SECONDS = env_float_clamped("AUTOBOT_TEST_STALL_SECONDS", 120.0, 5.0, 3600.0, positive_finite=True)
+CPU_BUDGET_SECONDS = env_float_clamped("AUTOBOT_TEST_CPU_BUDGET_SECONDS", 900.0, 10.0, 7200.0, positive_finite=True)
 _POLL_SECONDS = 1.0
 _CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
+_PROC = Path("/proc")
 
 
-def cpu_seconds(pid: int) -> float | None:
-    """User+system CPU of *pid* plus its reaped children, or None when it is gone."""
+def _stat_fields(entry: Path) -> list[str] | None:
+    """Fields after the comm of one ``/proc/<pid>/stat`` (field 3 onward), None if it vanished."""
     try:
-        raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        raw = (entry / "stat").read_text(encoding="utf-8")
     except OSError:
-        return None
-    # Fields after the parenthesised comm (which may itself contain spaces/parens).
-    fields = raw.rsplit(")", 1)[1].split()
-    utime, stime, cutime, cstime = (int(fields[i]) for i in (11, 12, 13, 14))
-    return (utime + stime + cutime + cstime) / _CLOCK_TICKS
+        return None  # exited between the listing and the read
+    # comm may itself contain spaces/parens, so split after the LAST ')'.
+    return raw.rsplit(")", 1)[1].split()
+
+
+def cpu_seconds(root_pid: int) -> float:
+    """CPU of the live process tree of *root_pid* plus everything its members reaped.
+
+    The child runs with ``start_new_session=True``, so every descendant shares session id
+    *root_pid*. ``cutime``/``cstime`` count only REAPED children, so live descendants are summed
+    by their own ``utime``/``stime``.
+    """
+    if not _PROC.is_dir():
+        raise RuntimeError("hang guard needs /proc (Linux only); it cannot tell a stall from no data")
+    ticks = 0
+    for entry in _PROC.glob("[0-9]*"):
+        fields = _stat_fields(entry)
+        if fields is None or int(fields[3]) != root_pid:  # field 6: session id
+            continue
+        ticks += sum(int(fields[i]) for i in (11, 12, 13, 14))  # utime stime cutime cstime
+    return ticks / _CLOCK_TICKS
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
@@ -87,7 +104,7 @@ def run_guarded(
             pass
         used = cpu_seconds(proc.pid)
         now = time.monotonic()
-        if used is not None and used > last_cpu:
+        if used > last_cpu:
             last_cpu, last_progress = used, now
         reason = _verdict(last_cpu, now - last_progress)
         if reason:
