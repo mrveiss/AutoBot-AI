@@ -7,13 +7,14 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from autobot_shared.secrets_vault import VaultRef
-from services import secrets_coordinator as coordinator_module
 from services import secrets_maintenance as maintenance
+from services.envelope_secrets_service import SecretAccessError
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor, MaintenanceAuditError
 
@@ -23,13 +24,14 @@ _ACTOR = MaintenanceActor(_ADMIN, "approval-42")
 _OWNER = VaultRef.parse("user:" + str(uuid.UUID(int=5)))
 
 
-def _coordinator(monkeypatch, *, audit_written=True):
-    """A coordinator whose ADMIN CHECK is stubbed: this file pins ordering and audit; the check itself is exercised
+def _coordinator(monkeypatch, *, audit_written=True, check_admin=False):
+    """A coordinator whose ADMIN CHECK is stubbed unless ``check_admin``: this file pins ordering and audit; the check itself is exercised
     against a real database in ``tests/migrations/test_secrets_maintenance_admin_17850.py``."""
     service = MagicMock(read=AsyncMock(return_value=b"value"), delete=AsyncMock())
     coordinator = SecretsCoordinator(service)
     monkeypatch.setattr(coordinator, "_owner_vault", AsyncMock(return_value=_OWNER))
-    monkeypatch.setattr(coordinator_module, "require_maintenance_admin", AsyncMock())
+    if not check_admin:
+        monkeypatch.setattr(coordinator, "_load_maintenance_actor", AsyncMock())
     audit = AsyncMock(return_value=audit_written)
     monkeypatch.setattr(maintenance, "audit_log", audit)
     return coordinator, service, audit
@@ -74,3 +76,37 @@ async def test_the_audit_row_carries_ids_and_a_reference_never_a_value_or_name(m
     coordinator, _, audit = _coordinator(monkeypatch)
     await coordinator.maintenance_read(MagicMock(), actor=_ACTOR, secret_id=_SECRET)
     assert "value" not in repr(audit.await_args)
+
+
+def _session_holding(**user_fields):
+    """A session whose ``get`` returns a user row with *user_fields* (None for no row)."""
+    user = SimpleNamespace(deleted_at=None, **user_fields)
+    return MagicMock(get=AsyncMock(return_value=user))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fields",
+    [{"is_platform_admin": False}, {"is_platform_admin": True, "is_active": False}],
+    ids=["non-admin", "inactive-admin"],
+)
+async def test_the_stored_user_decides_and_a_refused_actor_runs_nothing(monkeypatch, fields):
+    coordinator, service, audit = _coordinator(monkeypatch, check_admin=True)
+    session = _session_holding(**{"is_active": True, **fields})
+    with pytest.raises(SecretAccessError):
+        await coordinator.maintenance_read(session, actor=_ACTOR, secret_id=_SECRET)
+    with pytest.raises(SecretAccessError):
+        await coordinator.maintenance_delete(session, actor=_ACTOR, secret_id=_SECRET)
+    service.read.assert_not_called()
+    service.delete.assert_not_called()
+    audit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_stored_platform_admin_passes_the_canonical_role_check(monkeypatch):
+    coordinator, service, audit = _coordinator(monkeypatch, check_admin=True)
+    await coordinator.maintenance_read(
+        _session_holding(is_active=True, is_platform_admin=True), actor=_ACTOR, secret_id=_SECRET
+    )
+    audit.assert_awaited_once()
+    service.read.assert_awaited_once()

@@ -4,7 +4,8 @@
 # Author: mrveiss
 """The maintenance admin check reads the STORED admin role, never a caller's claim (#17850), on a real database.
 
-Nothing is mocked: the real ``UserService`` permission lookup runs against migration-built tables. In every refused
+Nothing is mocked: the real user row is loaded from migration-built tables and judged by ``is_admin_role``.
+In every refused
 case nothing is audited and nothing is opened or deleted.
 """
 
@@ -18,12 +19,11 @@ from services import secrets_maintenance as maintenance
 from services.envelope_secrets_service import SecretAccessError
 from services.secrets_coordinator import SecretsCoordinator
 from services.secrets_maintenance import MaintenanceActor
-from services.secrets_principal_resolver import ADMIN_PERMISSION
 from tests.migrations.conftest import requires_postgres, run_alembic
 
 pytestmark = [pytest.mark.migration_gate, requires_postgres]
 
-_ADMIN, _PLAIN, _MISSING, _DELETED = (uuid.uuid4() for _ in range(4))
+_ADMIN, _PLAIN, _MISSING, _DELETED, _INACTIVE = (uuid.uuid4() for _ in range(5))
 _SECRET = uuid.uuid4()
 
 
@@ -39,19 +39,14 @@ async def session(fresh_db_url):
 
 
 async def _seed(session) -> None:
-    """An admin (a system role granting the admin permission), a plain user, and a deleted admin."""
-    from user_management.models.role import Permission, Role, RolePermission, UserRole
+    """An admin (``is_platform_admin``, the flag login turns into the admin role), a plain user, a deleted admin and
+    an inactive admin."""
     from user_management.models.user import User
 
-    role_id, permission_id = uuid.uuid4(), uuid.uuid4()
-    for uid, name in ((_ADMIN, "root"), (_PLAIN, "plain"), (_DELETED, "gone")):
-        session.add(User(id=uid, email=f"{name}@example.com", username=name))
-    session.add(Role(id=role_id, name="admin", is_system=True))
-    session.add(Permission(id=permission_id, name=ADMIN_PERMISSION, resource="admin", action="access"))
+    for uid, name, admin in ((_ADMIN, "root", True), (_PLAIN, "plain", False), (_DELETED, "gone", True)):
+        session.add(User(id=uid, email=f"{name}@example.com", username=name, is_platform_admin=admin))
+    session.add(User(id=_INACTIVE, email="idle@example.com", username="idle", is_platform_admin=True, is_active=False))
     await session.flush()
-    session.add(RolePermission(role_id=role_id, permission_id=permission_id))
-    session.add(UserRole(user_id=_ADMIN, role_id=role_id))
-    session.add(UserRole(user_id=_DELETED, role_id=role_id))
     (await session.get(User, _DELETED)).soft_delete()
     await session.commit()
 
@@ -66,7 +61,9 @@ def _coordinator(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "who", [_PLAIN, _MISSING, _DELETED], ids=["non-admin-claiming-admin", "missing-user", "deleted-admin"]
+    "who",
+    [_PLAIN, _MISSING, _DELETED, _INACTIVE],
+    ids=["non-admin-claiming-admin", "missing-user", "deleted-admin", "inactive-admin"],
 )
 async def test_a_refused_actor_opens_nothing_deletes_nothing_and_audits_nothing(session, monkeypatch, who):
     coordinator, service, audit = _coordinator(monkeypatch)
