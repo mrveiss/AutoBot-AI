@@ -47,11 +47,25 @@ _MIXIN_MODULES = {
     "metadata": "MetadataMixin",
     "relations": "RelationsMixin",
     "search": "SearchMixin",
+    "selected_delete": "SelectedFactsDeleteMixin",
     "stats": "StatsMixin",
     "suggestions": "SuggestionsMixin",
     "tags": "TagsMixin",
     "versioning": "VersioningMixin",
 }
+#: `knowledge.*` modules `_composed` imports that are real on purpose (not mixins).
+_REAL_IMPORTS = {"retrieval_invalidation"}
+
+
+def test_every_composed_mixin_import_is_stubbed() -> None:
+    """A new `from knowledge.X import ...` in `_composed` must be stubbed here, or the real module is imported."""
+    tree = parse_cache.parse((repo_root() / COMPOSED).read_text(encoding="utf-8"))
+    imported = {
+        node.module.split(".", 1)[1]
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("knowledge.")
+    }
+    assert imported - _REAL_IMPORTS - set(_MIXIN_MODULES) == set()
 
 
 async def _stub_write(self, *args, **kwargs) -> None:
