@@ -256,22 +256,22 @@ def test_stop_while_a_retry_is_pending_drops_the_lease_and_ends_the_renews(redis
         assert len(calls) == 1
 
 
-_NORMAL_INTERVAL_S = 1.0  # ttl 60s / RENEW_DIVISOR 60
+_LEASE_TTL_S, _DIVISOR = 60, 12  # normal renew interval 5s: far above any CPU stall between two 0.2s retries
 
 
 def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
-    monkeypatch.setattr(cl, "RENEW_DIVISOR", 60)  # ttl 60s -> the normal interval (1s) is above the retry
+    monkeypatch.setattr(cl, "RENEW_DIVISOR", _DIVISOR)  # the normal interval is above the retry
     monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.2)
     calls = []
     monkeypatch.setattr(cl.Lease, "renew_due", lambda self: calls.append(time.monotonic()))  # returns None
-    renewer, lease = cl._Renewer(), cl.Lease(_NAME, cl.ClaimMode.SHARED, 60)
+    renewer, lease = cl._Renewer(), cl.Lease(_NAME, cl.ClaimMode.SHARED, _LEASE_TTL_S)
     try:
         renewer.add(lease, delay_s=0)
         _until(lambda: len(calls) >= 2)
     finally:
         lease._stopped = True
         renewer.remove(lease)
-    # retries at ~0.2 apart: a renewer on the normal interval (1s) would show a gap above the bound; the lower
+    # retries at ~0.2 apart: a renewer on the normal interval would show a gap above the bound; the lower
     # bound is loose so CPU starvation under -n auto cannot flake it
     assert len(calls) >= 2
-    assert all(0.15 <= b - a < _NORMAL_INTERVAL_S for a, b in itertools.pairwise(calls))
+    assert all(0.15 <= b - a < _LEASE_TTL_S / _DIVISOR for a, b in itertools.pairwise(calls))

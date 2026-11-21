@@ -123,7 +123,7 @@ TIMESTAMPTZ_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
 # ``(table, index)`` is verified only when the table exists: the schema looks applied <=> the index is
 # there, so adoption bracketing sees the revision as absent and ``upgrade head`` RUNS it.
 INDEX_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
-    "20261121_117": (
+    "20261121_117b": (
         ("approvals", "uq_approvals_pending_connector_credential_strip"),
         ("approvals", "uq_approvals_pending_empty_collection_delete"),
     ),

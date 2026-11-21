@@ -101,7 +101,7 @@ def test_the_model_where_text_equals_the_migrations():
 
     from models import approval
 
-    migration = importlib.import_module("migrations.versions.20261121_117_approvals_pending_kb_cleanup_unique")
+    migration = importlib.import_module("migrations.versions.20261121_117b_approvals_pending_kb_cleanup_unique")
     expected = {
         "connector_credential_strip": approval.PENDING_CONNECTOR_CREDENTIAL_WHERE,
         "chroma_empty_collection_delete": approval.PENDING_EMPTY_COLLECTION_WHERE,
