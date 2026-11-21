@@ -40,6 +40,7 @@ async def _write(action: str, result: AuditResult, actor: dict, session_id: str,
                 ip_address=actor["ip"],
                 session_id=session_id,
                 resource=session_id,
+                resource_type="chat_session",
                 details={**details, "username": actor["username"]},
                 durable=True,
             )
@@ -72,7 +73,7 @@ async def audited_change(
     if not await _write(action, "attempted", actor, session_id, details):
         raise ShareAuditError(action)
     try:
-        changed = await change()
+        changed = await change()  # a second cancel during the outcome write loses that row; the cancel still propagates
     except (
         Exception,
         asyncio.CancelledError,

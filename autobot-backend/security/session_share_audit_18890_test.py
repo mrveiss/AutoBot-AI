@@ -206,6 +206,22 @@ async def test_a_change_that_raises_records_an_error_outcome_and_reraises(env, s
 
 
 @pytest.mark.asyncio
+async def test_share_and_unshare_rows_carry_the_chat_session_resource(env, monkeypatch):
+    validator, _ = env
+    events = []
+
+    async def insert(event):
+        events.append(event)
+
+    monkeypatch.setattr("services.audit.store.insert_event", insert)
+    monkeypatch.setattr("services.audit.audit.run_redis_write", lambda coro, **_kw: coro.close())
+    await validator.share_session(SESSION_ID, ["carol"], "alice", ACTOR)
+    await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    assert len(events) == 4
+    assert {(e.resource_type, e.resource_id) for e in events} == {("chat_session", SESSION_ID)}
+
+
+@pytest.mark.asyncio
 async def test_a_share_that_is_not_recorded_writes_failed_with_reason_not_recorded(env, monkeypatch):
     validator, factory = env
     events = []
@@ -228,9 +244,18 @@ async def test_a_share_that_is_not_recorded_writes_failed_with_reason_not_record
 @pytest.mark.asyncio
 async def test_a_cancelled_change_records_an_error_outcome_and_propagates(env, store_rows):
     validator, _ = env
-    with patch.object(session_shares, "remove_share", AsyncMock(side_effect=asyncio.CancelledError())):
+    started = asyncio.Event()
+
+    async def hang(*_a, **_kw):
+        started.set()
+        await asyncio.Event().wait()
+
+    with patch.object(session_shares, "remove_share", hang):
+        task = asyncio.create_task(validator.unshare_session(SESSION_ID, "bob", ACTOR))
+        await started.wait()
+        task.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+            await task
     assert store_rows == [
         ("session.unshare", "attempted"),
         ("session.unshare", "error"),
