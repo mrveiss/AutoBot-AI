@@ -16,6 +16,7 @@ import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboar
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getTimezoneOption } from '@/composables/useTimezone'
+import { errorText } from '@/utils/errorText'
 import type { AppLogEntry } from '@/types/api-responses'
 
 const logger = createLogger('LogViewer')
@@ -129,7 +130,7 @@ async function fetchLogs(): Promise<boolean> {
   } catch (err) {
     // #19887: keep the last good rows; a failed read is not an empty result
     logger.error('Failed to fetch logs:', err)
-    logLoadError.value = err instanceof Error ? err.message : String(err)
+    logLoadError.value = errorText(err)
     return false
   } finally {
     isLoading.value = false
@@ -211,7 +212,7 @@ async function fetchAppLogs() {
     logger.error('Failed to fetch application logs:', err)
     appLogEntries.value = []
     appLogTotal.value = 0
-    appLogError.value = err instanceof Error ? err.message : String(err)
+    appLogError.value = errorText(err)
   } finally {
     isAppLogLoading.value = false
   }
