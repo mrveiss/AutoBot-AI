@@ -146,8 +146,8 @@ def _require_kind(kind: str) -> None:
 
 
 _SEGMENT = re.compile(r"^[A-Za-z0-9._@+-]+$")
-_CLAIM_PREFIX = "work_claims:c:{kind}:"
-_INDEX_KEY = "work_claims:idx:{kind}"
+CLAIM_PREFIX = "work_claims:c:{kind}:"
+INDEX_KEY = "work_claims:idx:{kind}"
 
 
 class ClaimMode(str, Enum):
@@ -310,7 +310,7 @@ class ClaimConflictError(RuntimeError):
         self.conflict = conflict
 
 
-def _require_holder(agent_id: str, task_id: str) -> None:
+def require_holder(agent_id: str, task_id: str) -> None:
     """Reject a holder identity that reentrancy could not safely compare.
 
     Load-bearing, not belt-and-braces, and the reason is the storage layer.
@@ -342,13 +342,13 @@ def _text(raw: bytes | str) -> str:
     return raw.decode() if isinstance(raw, bytes) else raw
 
 
-def _decode(raw: bytes | str) -> WorkClaim:
+def decode_claim(raw: bytes | str) -> WorkClaim:
     if isinstance(raw, bytes):
         raw = raw.decode()
     return WorkClaim(**json.loads(raw))
 
 
-def _build(
+def build_claim(
     scope: Scope, agent_id: str, task_id: str, mode: ClaimMode, intent: str, ttl_s: int, company_id: str | None = None
 ) -> WorkClaim:
     acquired = now_utc()
@@ -361,6 +361,20 @@ def _build(
         acquired_at=acquired.isoformat(),
         expires_at=(acquired + timedelta(seconds=ttl_s)).isoformat(),
         company_id=resolve_company(company_id),
+    )
+
+
+def acquire_eval_args(parsed: Scope, claim: WorkClaim, mode: ClaimMode, ttl: int) -> tuple[str, ...]:
+    """KEYS+ARGV for ``_ACQUIRE_LUA``: shared by the async path here and the sync one in ``work_claims_sync``."""
+    return (
+        INDEX_KEY.format(kind=parsed.kind),
+        CLAIM_PREFIX.format(kind=parsed.kind),
+        parsed.path,
+        mode.value,
+        json.dumps(asdict(claim)),
+        str(ttl),
+        claim.agent_id,
+        claim.task_id,
     )
 
 
@@ -381,27 +395,16 @@ async def _acquire(
     the scope its outer block still uses.
     """
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
-    claim = _build(parsed, agent_id, task_id, mode, intent, ttl, company_id)
+    claim = build_claim(parsed, agent_id, task_id, mode, intent, ttl, company_id)
     client = await _redis()
-    outcome = await client.eval(
-        _ACQUIRE_LUA,
-        1,
-        _INDEX_KEY.format(kind=parsed.kind),
-        _CLAIM_PREFIX.format(kind=parsed.kind),
-        parsed.path,
-        mode.value,
-        json.dumps(asdict(claim)),
-        str(ttl),
-        agent_id,
-        task_id,
-    )
+    outcome = await client.eval(_ACQUIRE_LUA, 1, *acquire_eval_args(parsed, claim, mode, ttl))
     verdict = outcome[0].decode() if isinstance(outcome[0], bytes) else outcome[0]
     if len(outcome) > 2 and outcome[2]:  # index members whose TTL ran out unreleased (#18391)
         await record_expired_members(client, parsed.kind, [_text(m) for m in outcome[2]])
     if verdict == "conflict":
-        return verdict, ClaimConflict(requested=str(parsed), holder=_decode(outcome[1]))
+        return verdict, ClaimConflict(requested=str(parsed), holder=decode_claim(outcome[1]))
     return verdict, claim
 
 
@@ -434,14 +437,14 @@ async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> b
     and the attempt is recorded in the ledger (#18391).
     """
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     client = await _redis()
     removed = int(
         await client.eval(
             _RELEASE_LUA,
             1,
-            _INDEX_KEY.format(kind=parsed.kind),
-            _CLAIM_PREFIX.format(kind=parsed.kind),
+            INDEX_KEY.format(kind=parsed.kind),
+            CLAIM_PREFIX.format(kind=parsed.kind),
             parsed.path,
             agent_id,
             task_id,
@@ -455,7 +458,7 @@ async def release_scope(scope: str | Scope, *, agent_id: str, task_id: str) -> b
 async def renew(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int | None = None) -> bool:
     """Extend a held claim's TTL **and** its advertised expiry. False once gone."""
     parsed = Scope.parse(scope)
-    _require_holder(agent_id, task_id)
+    require_holder(agent_id, task_id)
     ttl = CLAIM_TTL_S if ttl_s is None else ttl_s
     expires = (now_utc() + timedelta(seconds=ttl)).isoformat()
     client = await _redis()
@@ -463,7 +466,7 @@ async def renew(scope: str | Scope, *, agent_id: str, task_id: str, ttl_s: int |
         await client.eval(
             _RENEW_LUA,
             0,
-            _CLAIM_PREFIX.format(kind=parsed.kind),
+            CLAIM_PREFIX.format(kind=parsed.kind),
             str(ttl),
             expires,
             parsed.path,
@@ -484,7 +487,7 @@ async def list_claims(kind: str | None = None) -> list[WorkClaim]:
     claims: list[WorkClaim] = []
     for k in kinds:
         _require_kind(k)
-        index, prefix = _INDEX_KEY.format(kind=k), _CLAIM_PREFIX.format(kind=k)
+        index, prefix = INDEX_KEY.format(kind=k), CLAIM_PREFIX.format(kind=k)
         members = [m.decode() if isinstance(m, bytes) else m for m in await client.smembers(index)]
         if not members:
             continue
@@ -493,7 +496,7 @@ async def list_claims(kind: str | None = None) -> list[WorkClaim]:
         if vanished:
             await client.srem(index, *vanished)
             await record_expired_members(client, k, [_text(m) for m in vanished])
-        claims.extend(_decode(raw) for raw in payloads if raw is not None)
+        claims.extend(decode_claim(raw) for raw in payloads if raw is not None)
     return claims
 
 

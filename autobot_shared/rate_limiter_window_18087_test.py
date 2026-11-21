@@ -237,6 +237,69 @@ class TestLocalWindowCounter:
         assert allowed is False and 59 < retry_after <= 60
 
 
+class TestSweepThrottle:
+    """#21907: a full table of live keys is scanned at most once per interval."""
+
+    @staticmethod
+    def _full(interval: float = 10.0):
+        counter = LocalWindowCounter(max_keys=2, sweep_interval=interval)
+        counter.try_acquire("a", 1, 60)
+        counter.try_acquire("b", 1, 60)
+        scans = []
+        real = counter._evict_stale
+        counter._evict_stale = lambda now: (scans.append(now), real(now))[1]
+        return counter, scans
+
+    def test_n_new_keys_on_a_full_live_table_sweep_once_per_interval(self):
+        counter, scans = self._full()
+        results = [counter.try_acquire(f"new{i}", 1, 60)[0] for i in range(50)]
+        assert results == [False] * 50
+        assert len(scans) == 1
+        assert set(counter._hits) == {"a", "b"}
+
+    def test_a_sweep_after_the_interval_still_evicts_stale_keys(self):
+        counter, scans = self._full(interval=10.0)
+        counter.try_acquire("new0", 1, 60)  # first sweep, nothing stale
+        counter._hits["a"][0] = 0.0  # now stale
+        assert counter.try_acquire("new1", 1, 60)[0] is False  # inside the interval: no scan
+        assert len(scans) == 1
+        with patch("autobot_shared.rate_limiter_window.time.monotonic", return_value=counter._last_sweep + 11):
+            assert counter.try_acquire("new2", 1, 60)[0] is True
+        assert len(scans) == 2 and set(counter._hits) == {"b", "new2"}
+
+    def test_refusal_reports_the_full_window(self):
+        counter, _ = self._full()
+        assert counter.try_acquire("new", 1, 60) == (False, 60.0)
+        counter.record("new", 60)
+        assert "new" not in counter._hits
+
+
+class TestSweepIntervalEnv:
+    """#21907: a bad sweep-interval env value falls back instead of disabling the sweep."""
+
+    @pytest.mark.parametrize("raw", ["inf", "nan", "-1", "0", "-inf"])
+    def test_non_positive_or_non_finite_falls_back(self, raw, monkeypatch):
+        import importlib.util
+
+        import autobot_shared.rate_limiter_window as shared
+
+        monkeypatch.setenv("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", raw)
+        # A throwaway copy, never put in sys.modules: reloading the shared module would
+        # rebind WindowFailurePolicy and break `is` checks in already-imported callers.
+        spec = importlib.util.spec_from_file_location("_sweep_interval_probe_21907", shared.__file__)
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        assert probe.LOCAL_WINDOW_SWEEP_INTERVAL == 1.0
+        assert probe.WindowFailurePolicy is not shared.WindowFailurePolicy  # copy is isolated
+
+    def test_reset_clears_the_sweep_throttle(self):
+        counter = LocalWindowCounter(max_keys=1, sweep_interval=10.0)
+        counter.try_acquire("a", 1, 60)
+        counter.try_acquire("b", 1, 60)  # full: sweeps once, refuses
+        counter.reset()
+        assert counter._last_sweep == float("-inf")
+
+
 class TestLocalWindowCounterRecord:
     def test_record_counts_without_checking(self):
         counter = LocalWindowCounter()

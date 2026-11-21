@@ -149,6 +149,7 @@ class AuditAction(str, Enum):
         "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
     )
     CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    CLEANUP_PROPOSAL_LOST_RACE = "cleanup.proposal_lost_race"  # #20992: a creation row whose insert lost to the winner
     APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
     ROLE_CREATE = "role.create"
     ROLE_UPDATE = "role.update"
@@ -159,6 +160,9 @@ class AuditAction(str, Enum):
     CONVERSATION_FILE_CLEANUP = "conversation_file.cleanup"
     CONVERSATION_FILE_CLEANUP_RESET = "conversation_file.cleanup_reset"
     CODE_SOURCE_RUN_RECORD_CLEANUP = "code_source.run_record_cleanup"  # #21417: approved run-record removal
+    SECRET_DUPLICATE_CLEANUP = (
+        "secret.duplicate_cleanup"  # nosec B105  # pragma: allowlist secret -- an action name (#17850)
+    )
     BUDGET_CHAT_REFUSED = "budget.chat_refused"  # #20589 chat over a budget
     LLC_PROJECT_BACKFILL = "llc.project_backfill"  # #18978: an approved project backfill assigned projects
     # #21136: heartbeat control routes record the verified principal who paused, resumed or terminated an agent.

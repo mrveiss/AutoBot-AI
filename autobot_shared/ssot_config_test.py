@@ -96,7 +96,7 @@ class TestLLMConfig:
 
     def test_default_llm_models(self) -> None:
         """Test that default LLM models are correct when no env is set."""
-        from autobot_shared.ssot_config import LLMConfig
+        from autobot_shared.ssot_config import LLMConfig, TimeoutConfig
 
         # Note: Since Pydantic reads from .env file, we test that values are present
         # not necessarily the hardcoded defaults
@@ -106,11 +106,11 @@ class TestLLMConfig:
             assert isinstance(config.default_model, str)
             assert len(config.default_model) > 0
             assert isinstance(config.provider, str)
-            assert config.timeout > 0
+            assert TimeoutConfig(_env_file=None).llm > 0  # AUTOBOT_LLM_TIMEOUT is bound once, here (#17419)
 
     def test_llm_config_from_env(self) -> None:
         """Test that LLM config reads from environment variables."""
-        from autobot_shared.ssot_config import LLMConfig
+        from autobot_shared.ssot_config import LLMConfig, TimeoutConfig
 
         test_env = {
             "AUTOBOT_DEFAULT_LLM_MODEL": "llama3.2:1b",
@@ -119,7 +119,7 @@ class TestLLMConfig:
         with patch.dict(os.environ, test_env, clear=True):
             config = LLMConfig(_env_file=None)
             assert config.default_model == "llama3.2:1b"
-            assert config.timeout == 60
+            assert TimeoutConfig(_env_file=None).llm == 60
 
 
 class TestTimeoutConfig:
