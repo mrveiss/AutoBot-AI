@@ -1217,26 +1217,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/chat/sessions/{session_id}/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Share Session
-         * @description Share a conversation with other users, optionally including KB facts (#689).
-         */
-        post: operations["share_session_api_chat_sessions__session_id__share_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/chat/sessions/{session_id}/share/preview": {
         parameters: {
             query?: never;
@@ -1276,6 +1256,50 @@ export interface paths {
          *     which removes the Redis-backed LangGraph checkpoint data.
          */
         delete: operations["clear_session_checkpoints_api_sessions__session_id__checkpoints_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Session Participants
+         * @description Who the owner has shared this conversation with, from the system of record (#18890).
+         */
+        get: operations["list_session_participants_api_chat_sessions__session_id__share_get"];
+        put?: never;
+        /**
+         * Share Session
+         * @description Owner shares a conversation with other users, optionally including KB facts (#689, #18890).
+         */
+        post: operations["share_session_api_chat_sessions__session_id__share_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/share/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unshare Session
+         * @description Owner removes a participant from a shared conversation; their access ends at once (#18890).
+         */
+        delete: operations["unshare_session_api_chat_sessions__session_id__share__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -73306,6 +73330,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[SessionParticipantsData] */
+        DataResponse_SessionParticipantsData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionParticipantsData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[SessionShareData] */
         DataResponse_SessionShareData_: {
             /**
@@ -73344,6 +73383,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionTraceData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionUnshareData] */
+        DataResponse_SessionUnshareData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionUnshareData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -99704,6 +99758,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SessionParticipantsData
+         * @description data payload for GET /chat/sessions/{session_id}/share (#18890).
+         */
+        SessionParticipantsData: {
+            /** Session Id */
+            session_id: string;
+            /** Participants */
+            participants: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SessionParticipantsResponse
          * @description Session participants list.
          */
@@ -99832,6 +99898,20 @@ export interface components {
             session_id: string;
             /** Turns */
             turns: components["schemas"]["TraceTurn"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionUnshareData
+         * @description data payload for DELETE /chat/sessions/{session_id}/share/{user_id} (#18890).
+         */
+        SessionUnshareData: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string;
+            /** Removed */
+            removed: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -111017,41 +111097,6 @@ export interface operations {
             };
         };
     };
-    share_session_api_chat_sessions__session_id__share_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionShareRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_share_preview_api_chat_sessions__session_id__share_preview_get: {
         parameters: {
             query?: never;
@@ -111101,6 +111146,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SessionCheckpointClearData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_participants_api_chat_sessions__session_id__share_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionParticipantsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_session_api_chat_sessions__session_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshare_session_api_chat_sessions__session_id__share__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionUnshareData_"];
                 };
             };
             /** @description Validation Error */
