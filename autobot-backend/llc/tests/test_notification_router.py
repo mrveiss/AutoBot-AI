@@ -253,7 +253,14 @@ def _producer_msg(channel: str, body: dict) -> dict:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "event_type",
-    ["budget.soft_alert", "budget.hard_stop", "work_item.handoff_ready", "work_item.handoff"],
+    [
+        "budget.soft_alert",
+        "budget.hard_stop",
+        "budget.company_soft_alert",
+        "budget.company_hard_stop",
+        "work_item.handoff_ready",
+        "work_item.handoff",
+    ],
 )
 async def test_notifications_channel_republished_with_channel_company(event_type):
     """Producer events on llc:notifications:{id} reach company:{id} (#21080)."""
