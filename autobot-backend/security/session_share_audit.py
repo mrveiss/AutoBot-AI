@@ -6,11 +6,14 @@
 
 ``attempted`` is written durably BEFORE the table changes (the audit store is not the share table, so one
 transaction cannot cover both) and a record that is not committed refuses the change. The final outcome is
-written after it: the table has already changed, so a failure there cannot refuse anything and is logged by
+written after it, also when the change raises or is cancelled (the write is bounded by
+``AUDIT_DURABLE_TIMEOUT_SECONDS``, so it cannot hold a cancellation open). The table has already changed, so a
+failure there cannot refuse anything and is logged by
 exception class only, as ``api.secrets_audit.audit_secret_op`` does for a non-required record. Both go through
 ``services.audit_logger.audit_log(durable=True)``, the primitive the secrets audit uses.
 """
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
 from autobot_shared.logging_manager import get_logger
@@ -70,7 +73,10 @@ async def audited_change(
         raise ShareAuditError(action)
     try:
         changed = await change()
-    except Exception:
+    except (
+        Exception,
+        asyncio.CancelledError,
+    ):  # a cancelled change is an error outcome too, then re-raised
         await _record_outcome(action, "error", actor, session_id, details)
         raise
     if changed:

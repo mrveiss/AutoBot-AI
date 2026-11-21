@@ -4,6 +4,7 @@
 # Author: mrveiss
 """A share or unshare whose audit record cannot be written is refused and changes nothing (#18890 AC3)."""
 
+import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -190,3 +191,47 @@ async def test_a_failing_outcome_write_is_logged_and_the_change_stands(env, monk
         assert await validator.unshare_session(SESSION_ID, "bob", ACTOR) is True
     assert calls == ["attempted", "success"] and await _rows(factory) == []
     assert "sentinel-host-7" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_change_that_raises_records_an_error_outcome_and_reraises(env, store_rows):
+    validator, _ = env
+    with patch.object(session_shares, "remove_share", AsyncMock(side_effect=RuntimeError("boom"))):
+        with pytest.raises(RuntimeError):
+            await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    assert store_rows == [
+        ("session.unshare", "attempted"),
+        ("session.unshare", "error"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_share_that_is_not_recorded_writes_failed_with_reason_not_recorded(env, monkeypatch):
+    validator, factory = env
+    events = []
+
+    async def insert(event):
+        events.append(event)
+
+    monkeypatch.setattr("services.audit.store.insert_event", insert)
+    monkeypatch.setattr("services.audit.audit.run_redis_write", lambda coro, **_kw: coro.close())
+    with patch.object(session_shares, "durable_add", AsyncMock(side_effect=RuntimeError("db down"))):
+        assert await validator.share_session(SESSION_ID, ["carol"], "alice", ACTOR) is False
+    assert [(e.action, e.outcome) for e in events] == [
+        ("session.share", "attempted"),
+        ("session.share", "failed"),
+    ]
+    assert events[-1].metadata["details"]["reason"] == "not_recorded"
+    assert await _rows(factory) == ["bob"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_change_records_an_error_outcome_and_propagates(env, store_rows):
+    validator, _ = env
+    with patch.object(session_shares, "remove_share", AsyncMock(side_effect=asyncio.CancelledError())):
+        with pytest.raises(asyncio.CancelledError):
+            await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    assert store_rows == [
+        ("session.unshare", "attempted"),
+        ("session.unshare", "error"),
+    ]
