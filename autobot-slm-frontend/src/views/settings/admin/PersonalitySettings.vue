@@ -227,17 +227,17 @@ onMounted(async () => {
     <!-- ================================================================
          LEFT PANEL — Profile List
     ================================================================ -->
-    <div class="w-64 shrink-0 border-r border-gray-200 bg-white flex flex-col">
+    <div class="w-64 shrink-0 border-r border-autobot-border bg-white flex flex-col">
       <!-- Header + toggle -->
-      <div class="px-4 py-4 border-b border-gray-100">
+      <div class="px-4 py-4 border-b border-autobot-border-subtle">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-sm font-semibold text-gray-800">{{ $t('settings.admin.personalitySettings.personality') }}</h2>
+          <h2 class="text-sm font-semibold text-autobot-text-primary">{{ $t('settings.admin.personalitySettings.personality') }}</h2>
           <!-- Enable toggle -->
           <button
             type="button"
             :class="[
               'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-              enabled ? 'bg-indigo-600' : 'bg-gray-300'
+              enabled ? 'bg-autobot-primary' : 'bg-autobot-border-strong'
             ]"
             role="switch"
             :aria-checked="enabled"
@@ -252,7 +252,7 @@ onMounted(async () => {
             />
           </button>
         </div>
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-autobot-text-tertiary">
           {{ enabled ? $t('settings.admin.personalitySettings.activeInjectedIntoSystemPrompt') : $t('settings.admin.personalitySettings.disabledNoPersonalityApplied') }}
         </p>
       </div>
@@ -264,33 +264,33 @@ onMounted(async () => {
           :key="p.id"
           :class="[
             'flex items-center gap-2 px-4 py-2.5 cursor-pointer text-sm transition-colors',
-            selectedId === p.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'
+            selectedId === p.id ? 'bg-autobot-illus-1-tint text-autobot-text-primary' : 'text-autobot-text-secondary hover:bg-autobot-bg-hover'
           ]"
           @click="selectProfile(p.id)"
         >
           <span class="flex-1 truncate font-medium">{{ p.name }}</span>
           <span
             v-if="p.active"
-            class="px-1.5 py-0.5 rounded-sm text-xs bg-indigo-100 text-indigo-700 font-medium"
+            class="px-1.5 py-0.5 rounded-sm text-xs bg-autobot-illus-1-tint text-autobot-text-primary font-medium"
           >{{ $t('settings.admin.personalitySettings.active') }}</span>
           <span
             v-if="p.is_system"
-            class="px-1.5 py-0.5 rounded-sm text-xs bg-gray-100 text-gray-500"
+            class="px-1.5 py-0.5 rounded-sm text-xs bg-autobot-bg-tertiary text-autobot-text-tertiary"
           >{{ $t('settings.admin.personalitySettings.system') }}</span>
         </li>
       </ul>
 
       <!-- New / Duplicate buttons -->
-      <div class="px-4 py-3 border-t border-gray-100 flex gap-2">
+      <div class="px-4 py-3 border-t border-autobot-border-subtle flex gap-2">
         <button
           type="button"
-          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 transition-colors"
+          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-autobot-border-strong text-autobot-text-primary hover:bg-autobot-illus-1-tint transition-colors"
           @click="showNewDialog = true"
         >{{ $t('settings.admin.personalitySettings.new') }}</button>
         <button
           type="button"
           :disabled="!selectedId"
-          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-autobot-border-strong text-autobot-text-secondary hover:bg-autobot-bg-hover disabled:opacity-40 transition-colors"
           @click="handleDuplicate"
         >{{ $t('settings.admin.personalitySettings.duplicate') }}</button>
       </div>
@@ -299,14 +299,14 @@ onMounted(async () => {
     <!-- ================================================================
          RIGHT PANEL — Editor
     ================================================================ -->
-    <div class="flex-1 overflow-y-auto bg-gray-50 px-6 py-6">
+    <div class="flex-1 overflow-y-auto bg-autobot-bg-secondary px-6 py-6">
 
       <!-- Error / success banners -->
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
       <BaseAlert v-if="successMsg" variant="success" class="mb-4" :message="successMsg" />
 
       <!-- Empty state -->
-      <div v-if="!selectedId" class="flex flex-col items-center justify-center h-64 text-gray-400">
+      <div v-if="!selectedId" class="flex flex-col items-center justify-center h-64 text-autobot-text-tertiary">
         <svg class="w-12 h-12 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -319,8 +319,8 @@ onMounted(async () => {
         <!-- Title row -->
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h3 class="text-lg font-semibold text-gray-900">{{ editForm.name }}</h3>
-            <p class="text-xs text-gray-400 mt-0.5">
+            <h3 class="text-lg font-semibold text-autobot-text-primary">{{ editForm.name }}</h3>
+            <p class="text-xs text-autobot-text-tertiary mt-0.5">
               {{ editForm.is_system ? $t('settings.admin.personalitySettings.systemProfile') : `Created by ${editForm.created_by}` }}
             </p>
           </div>
@@ -329,22 +329,22 @@ onMounted(async () => {
             <button
               v-if="!isActive"
               type="button"
-              class="text-xs px-3 py-1.5 rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              class="text-xs px-3 py-1.5 rounded-sm bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover transition-colors"
               @click="handleActivate"
             >{{ $t('settings.admin.personalitySettings.setActive') }}</button>
             <span
               v-else
-              class="text-xs px-3 py-1.5 rounded-sm bg-indigo-100 text-indigo-700 font-medium"
+              class="text-xs px-3 py-1.5 rounded-sm bg-autobot-illus-1-tint text-autobot-text-primary font-medium"
             >{{ $t('settings.admin.personalitySettings.currentlyActive') }}</span>
             <button
               type="button"
-              class="text-xs px-3 py-1.5 rounded-sm border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+              class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-xs px-3 py-1.5 rounded-sm border border-autobot-warning-light text-autobot-pill-warn-fg hover:bg-autobot-warning-bg transition-colors"
               @click="handleReset"
             >{{ $t('settings.admin.personalitySettings.resetToDefault') }}</button>
             <button
               v-if="!editForm.is_system"
               type="button"
-              class="text-xs px-3 py-1.5 rounded-sm border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
+              class="text-xs px-3 py-1.5 rounded-sm border border-autobot-error-light text-autobot-error hover:bg-autobot-error-bg transition-colors"
               @click="confirmDeleteId = selectedId"
             >{{ $t('settings.admin.personalitySettings.delete') }}</button>
           </div>
@@ -355,27 +355,27 @@ onMounted(async () => {
           <!-- Name + Tagline row -->
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.name') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.name') }}</label>
               <input
                 v-model="editForm.name"
                 type="text"
-                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.tagline') }}</label>
+              <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.tagline') }}</label>
               <input
                 v-model="editForm.tagline"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.oneLineDescription')"
-                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
               />
             </div>
           </div>
 
           <!-- Tone selector -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.tone') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.tone') }}</label>
             <div class="flex gap-2 flex-wrap">
               <button
                 v-for="opt in TONE_OPTIONS"
@@ -384,8 +384,8 @@ onMounted(async () => {
                 :class="[
                   'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
                   editForm.tone === opt.value
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                    ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-border-strong'
+                    : 'bg-white text-autobot-text-secondary border-autobot-border-strong hover:border-autobot-border-strong'
                 ]"
                 @click="editForm.tone = opt.value"
               >{{ opt.label }}</button>
@@ -394,15 +394,15 @@ onMounted(async () => {
 
           <!-- Character Traits tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.characterTraits') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.characterTraits') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="trait in (editForm.character_traits as string[])"
                 :key="trait"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-1-tint text-autobot-text-primary border border-autobot-primary-light"
               >
                 {{ trait }}
-                <button type="button" class="hover:text-red-500" @click="removeTag('character_traits', trait)">×</button>
+                <button type="button" class="hover:text-autobot-error" @click="removeTag('character_traits', trait)">×</button>
               </span>
             </div>
             <div class="flex gap-2">
@@ -410,12 +410,12 @@ onMounted(async () => {
                 v-model="traitInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addATrait')"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
                 @keydown.enter.prevent="addTrait"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-autobot-border-strong text-autobot-text-secondary hover:bg-autobot-bg-hover"
                 @click="addTrait"
               >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
@@ -423,15 +423,15 @@ onMounted(async () => {
 
           <!-- Operating Style tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.operatingStyle') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.operatingStyle') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="s in (editForm.operating_style as string[])"
                 :key="s"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-2-tint text-autobot-text-primary border border-autobot-border-strong"
               >
                 {{ s }}
-                <button type="button" class="hover:text-red-500" @click="removeTag('operating_style', s)">×</button>
+                <button type="button" class="hover:text-autobot-error" @click="removeTag('operating_style', s)">×</button>
               </span>
             </div>
             <div class="flex gap-2">
@@ -439,12 +439,12 @@ onMounted(async () => {
                 v-model="styleInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addAStyleGuideline')"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
                 @keydown.enter.prevent="addStyle"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-autobot-border-strong text-autobot-text-secondary hover:bg-autobot-bg-hover"
                 @click="addStyle"
               >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
@@ -452,15 +452,15 @@ onMounted(async () => {
 
           <!-- Off Limits tag list -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.offLimits') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.offLimits') }}</label>
             <div class="flex flex-wrap gap-1.5 mb-2">
               <span
                 v-for="o in (editForm.off_limits as string[])"
                 :key="o"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-50 text-red-700 border border-red-200"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg border border-autobot-error-light"
               >
                 {{ o }}
-                <button type="button" class="hover:text-red-700" @click="removeTag('off_limits', o)">×</button>
+                <button type="button" class="hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg" @click="removeTag('off_limits', o)">×</button>
               </span>
             </div>
             <div class="flex gap-2">
@@ -468,12 +468,12 @@ onMounted(async () => {
                 v-model="limitInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addAHardLimit')"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
                 @keydown.enter.prevent="addLimit"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-autobot-border-strong text-autobot-text-secondary hover:bg-autobot-bg-hover"
                 @click="addLimit"
               >{{ $t('settings.admin.personalitySettings.add') }}</button>
             </div>
@@ -481,21 +481,21 @@ onMounted(async () => {
 
           <!-- Custom Notes -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.customNotes') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.customNotes') }}</label>
             <textarea
               v-model="editForm.custom_notes"
               rows="4"
               :placeholder="$t('settings.admin.personalitySettings.anyAdditionalFreeformInstructions')"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400 resize-none"
+              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1 resize-none"
             />
           </div>
 
           <!-- Voice Assignment (#1135) -->
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">{{ $t('settings.admin.personalitySettings.voice') }}</label>
+            <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.voice') }}</label>
             <select
               v-model="editForm.voice_id"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
+              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
             >
               <option value="">{{ $t('settings.admin.personalitySettings.noneUseUserS') }}</option>
               <option
@@ -504,7 +504,7 @@ onMounted(async () => {
                 :value="v.id"
               >{{ v.name }}{{ v.builtin ? $t('settings.admin.personalitySettings.builtIn') : '' }}</option>
             </select>
-            <p class="mt-1 text-xs text-gray-400">
+            <p class="mt-1 text-xs text-autobot-text-tertiary">
               {{ $t('settings.admin.personalitySettings.whenThisPersonalityIs') }}
             </p>
           </div>
@@ -514,7 +514,7 @@ onMounted(async () => {
             <button
               type="button"
               :disabled="saving"
-              class="px-5 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              class="px-5 py-2 rounded-md bg-autobot-primary text-autobot-text-on-primary text-sm font-medium hover:bg-autobot-primary-hover disabled:opacity-50 transition-colors"
               @click="handleSave"
             >
               {{ saving ? $t('settings.admin.personalitySettings.saving') : $t('settings.admin.personalitySettings.saveChanges') }}
@@ -541,19 +541,19 @@ onMounted(async () => {
         type="text"
         :placeholder="$t('settings.admin.personalitySettings.profileName')"
         autofocus
-        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-400 mb-4"
+        class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1 mb-4"
         @keydown.enter="handleNewProfile"
       />
       <template #actions>
         <button
           type="button"
-          class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
+          class="px-3 py-1.5 text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover rounded-sm border border-autobot-border"
           @click="showNewDialog = false"
         >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
         <button
           type="button"
           :disabled="!newName.trim()"
-          class="px-4 py-1.5 text-sm rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+          class="px-4 py-1.5 text-sm rounded-sm bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover disabled:opacity-40"
           @click="handleNewProfile"
         >{{ $t('settings.admin.personalitySettings.create') }}</button>
       </template>
@@ -569,18 +569,18 @@ onMounted(async () => {
       :close-label="$t('ui.modal.closeDialog')"
       @close="confirmDeleteId = null"
     >
-      <p class="text-sm text-gray-600 mb-4">
+      <p class="text-sm text-autobot-text-secondary mb-4">
         {{ $t('settings.admin.personalitySettings.thisActionCannotBe') }}
       </p>
       <template #actions>
         <button
           type="button"
-          class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
+          class="px-3 py-1.5 text-sm text-autobot-text-secondary hover:bg-autobot-bg-hover rounded-sm border border-autobot-border"
           @click="confirmDeleteId = null"
         >{{ $t('settings.admin.personalitySettings.cancel') }}</button>
         <button
           type="button"
-          class="px-4 py-1.5 text-sm rounded-sm bg-red-600 text-white hover:bg-red-700"
+          class="px-4 py-1.5 text-sm rounded-sm bg-autobot-error-solid text-(--text-on-error) hover:bg-(--color-error-solid-hover)"
           @click="handleDelete"
         >{{ $t('settings.admin.personalitySettings.delete') }}</button>
       </template>
