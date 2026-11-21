@@ -43,6 +43,7 @@ ALLOWLIST: dict[str, str] = {
     "autobot-backend/knowledge/backends/async_memory_adapter.py": _ADAPTER,
     "autobot-backend/knowledge/backends/chromadb_adapter.py": _ADAPTER,
     "autobot-backend/utils/async_chromadb_client.py": _ADAPTER,
+    "autobot-backend/utils/leased_chroma.py": _ADAPTER,
     "autobot-backend/utils/advanced_cache_manager.py": (
         "NOT_KNOWLEDGE: deletes cache keys (knowledge query/embedding caches)"
     ),
