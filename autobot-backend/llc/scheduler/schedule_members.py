@@ -16,7 +16,7 @@ the "set holds one routine and no CEO" observation. Each poller now filters the
 due list to its own members *before* it claims anything.
 """
 
-from typing import Any, Iterable, List
+from typing import Any, Awaitable, Callable, Iterable, List
 
 from autobot_shared.logging_manager import get_logger
 
@@ -49,3 +49,26 @@ async def drop_unschedulable_member(redis: Any, key: str, member: str, agent: An
     await redis.zrem(key, member)
     reason = "no heartbeat-enabled agent row" if agent is None else "empty heartbeat cron"
     logger.warning("Heartbeat agent %s removed from the schedule: %s", member, reason)
+
+
+async def reschedule_after_start(
+    kind: str, reschedule: Callable[..., Awaitable[None]], member_id: Any, *args: Any, **kwargs: Any
+) -> None:
+    """Re-insert a member whose run has ALREADY started; a failure is logged, never raised (#20117).
+
+    The caller's retry path re-queues the member, which would start a second run for work
+    that is already running. The schedule reconciler restores the missing member within one
+    interval instead. ``reschedule(member_id, *args, **kwargs)`` is awaited. One rule for
+    ``LLCHeartbeatScheduler`` and ``RoutineScheduler``; cancellation is not an ``Exception``
+    and still propagates.
+    """
+    try:
+        await reschedule(member_id, *args, **kwargs)
+    except Exception as exc:
+        logger.error(
+            "%s %s ran but rescheduling failed (%s); the reconciler will restore it",
+            kind,
+            member_id,
+            exc,
+            exc_info=True,
+        )

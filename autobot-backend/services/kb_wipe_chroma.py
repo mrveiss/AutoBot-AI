@@ -11,15 +11,16 @@ the active embedding space. The persist directory is never touched, other collec
 memory) are never listed, and a collection is emptied rather than dropped so a live KB's open handle
 stays valid.
 
-The names are resolved by the caller BEFORE anything is deleted and passed in: the active space is read
-from Redis, so resolving it afterwards would read a state the wipe had already changed.
+The names the wipe empties are the ones frozen in the approved plan (``frozen_collections``), checked against
+the KB's current names BEFORE anything is deleted: the active space is read from Redis, so resolving it
+afterwards would read a state the wipe had already changed.
 """
 
 from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from autobot_shared.embedding_model import active_embedding_space
+from autobot_shared.embedding_model import read_embedding_space_strict
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 
@@ -32,14 +33,31 @@ ChromaFactory = Callable[[], Awaitable[Any]]
 
 
 def kb_collection_names() -> list[str]:
-    """The KB's own collection names, deduplicated: configured first, then the active space's."""
+    """The KB's own collection names, deduplicated: configured first, then the active space's.
+
+    The active space is read strict and uncached: an unreadable store raises instead of silently dropping the
+    active collection from the plan, and the validation at execution reads the same way.
+    """
     from config.manager import get_config_manager
 
     names = [get_config_manager().get("memory.chromadb.collection_name", "autobot_memory")]
-    space = active_embedding_space()
+    space = read_embedding_space_strict()
     if space is not None and space.collection:
         names.append(space.collection)
     return list(dict.fromkeys(names))
+
+
+def frozen_collections(plan_collections: list[dict], allowed: list[str]) -> list[str]:
+    """The collection names the approved plan lists, each checked against *allowed*; raises on any other.
+
+    The wipe empties exactly these. A name the KB does not own now (for example an embedding space that has
+    since been switched) refuses the whole wipe before any delete: propose it again against the current state.
+    """
+    names = [item["name"] for item in plan_collections]
+    outside = [name for name in names if name not in allowed]
+    if outside:
+        raise ValueError(f"the approved plan names collections the KB no longer owns ({outside}); nothing was deleted")
+    return names
 
 
 async def default_chroma_client():
@@ -62,27 +80,30 @@ async def plan_chroma(names: list[str], client_factory: ChromaFactory | None = N
     return plan
 
 
-async def _empty(collection) -> None:
+async def _empty(collection, entry: dict) -> None:
+    """Empty *collection* batch by batch; ``entry["deleted"]`` counts the vectors removed so far."""
     while True:
         found = await collection.get(include=[], limit=CLEAR_BATCH)
         ids = found.get("ids") or []
         if not ids:
             return
         await collection.delete(ids=ids)
+        entry["deleted"] += len(ids)
 
 
 async def clear_chroma(names: list[str], record: list[dict], client_factory: ChromaFactory | None = None) -> None:
     """Empty each named collection that exists, recording into *record* as it goes.
 
     An entry is appended BEFORE its collection is emptied, with ``complete=False``, and flipped when
-    the emptying finishes, so a failure mid-way still shows what was started.
+    the emptying finishes, and ``deleted`` grows per successful batch, so a failure mid-way still shows what was
+    started and how many vectors were removed.
     """
     client = await (client_factory or default_chroma_client)()
     for name in names:
         collection = await client.get_collection_or_none(name)
         if collection is None:
             continue
-        entry = {"name": name, "vectors": int(await collection.count()), "complete": False}
+        entry = {"name": name, "vectors": int(await collection.count()), "deleted": 0, "complete": False}
         record.append(entry)
-        await _empty(collection)
+        await _empty(collection, entry)
         entry["complete"] = True

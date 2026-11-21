@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseAlert, BaseModal, useToast, createLogger } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast, createLogger, toDateTimeLocalValue } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
@@ -96,8 +96,8 @@ function openScheduleDialog(window?: MaintenanceWindow): void {
     editingWindow.value = window
     formData.value = {
       node_id: window.node_id || undefined,
-      start_time: formatDateTimeLocal(window.start_time),
-      end_time: formatDateTimeLocal(window.end_time),
+      start_time: toDateTimeLocalValue(window.start_time),
+      end_time: toDateTimeLocalValue(window.end_time),
       reason: window.reason || '',
       auto_drain: window.auto_drain,
       suppress_alerts: window.suppress_alerts,
@@ -109,8 +109,8 @@ function openScheduleDialog(window?: MaintenanceWindow): void {
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000)
     formData.value = {
       node_id: undefined,
-      start_time: formatDateTimeLocal(now.toISOString()),
-      end_time: formatDateTimeLocal(oneHourLater.toISOString()),
+      start_time: toDateTimeLocalValue(now.toISOString()),
+      end_time: toDateTimeLocalValue(oneHourLater.toISOString()),
       reason: '',
       auto_drain: false,
       suppress_alerts: true,
@@ -245,13 +245,6 @@ async function handleResumeNode(nodeId: string): Promise<void> {
 }
 
 // Helpers
-function formatDateTimeLocal(isoString: string): string {
-  const date = new Date(isoString)
-  const offset = date.getTimezoneOffset()
-  const localDate = new Date(date.getTime() - offset * 60 * 1000)
-  return localDate.toISOString().slice(0, 16)
-}
-
 function getStatusBadgeClass(status: string): string {
   switch (status) {
     case 'active':

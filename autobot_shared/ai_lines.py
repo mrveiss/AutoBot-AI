@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Optional
 
-from autobot_shared.tool_catalogue import ToolEffect, canonical_tool_name, tool_effect
+from autobot_shared.tool_catalogue import ALWAYS_AVAILABLE_TOOLS, ToolEffect, canonical_tool_name, tool_effect
 
 
 class AiLine(str, Enum):
@@ -50,6 +50,20 @@ DEFAULT_LINE = AiLine.DRAFT_THEN_SEND
 VERIFIED_COMPANY_KEY = "verified_company_id"
 #: ``context`` key holding the AUTHENTICATED user (never the request's ``user_id`` claim): the personal scope.
 VERIFIED_USER_KEY = "verified_user_id"
+#: ``context`` key holding the categories a work item or the session DECLARED, without the baseline the chat overlay
+#: adds to ``requires_approval_before`` (#19957). Server-set; the resolver adds the baseline itself, and a tool the
+#: owner made always available skips only that baseline, never a declared gate.
+DECLARED_CATEGORIES_KEY = "declared_approval_categories"
+
+
+def declared_categories_of(ctx: Any) -> "tuple[str, ...]":
+    """The categories declared for this turn: the server-stamped declared set, else ``requires_approval_before``."""
+    stamped = (getattr(ctx, "context", None) or {}).get(DECLARED_CATEGORIES_KEY)
+    if isinstance(stamped, (list, tuple)):
+        return tuple(c for c in stamped if isinstance(c, str))
+    return tuple(getattr(ctx, "requires_approval_before", None) or ())
+
+
 #: ``context`` key set by the chat route ONLY when the STRICT session posture (admin, or the recorded owner)
 #: passed for this turn: attached conversation files are read for this turn only then (#20195). Written or removed
 #: on every overlay by ``apply_auth_role``, never left as a client sent it.
@@ -152,8 +166,8 @@ def is_mutating(tool_name: str) -> bool:
     Fail closed (#18430): an unknown tool (MCP, plugin, a new builtin) counts as mutating, so an unset line
     holds it. Only a tool the catalogue declares with no mutating effect, or a conversation tool, is free.
     """
-    if tool_name in CONVERSATION_TOOLS:
-        return False
+    if tool_name in CONVERSATION_TOOLS or canonical_tool_name(tool_name) in ALWAYS_AVAILABLE_TOOLS:
+        return False  # owner ruling 2026-11-17 (#17237): navigate is always available
     declared = tool_effect(tool_name)
     return declared is None or bool(declared & ToolEffect.MUTATING)
 

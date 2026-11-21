@@ -101,20 +101,24 @@ async def _plan():
     return _Plan.value
 
 
+def _stub_wipe_action(monkeypatch):
+    """Stand in for the backend's ``services.kb_wipe_action`` -- an infra test never imports the backend (#18288)."""
+    stub = types.SimpleNamespace(plan_kb_wipe=_plan)
+    monkeypatch.setitem(sys.modules, "services.kb_wipe_action", stub)
+
+
 @pytest.mark.asyncio
 async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypatch, caplog):
     """#21048: ``--dry-run`` only reads; no approval is raised and no delete command is issued."""
-    from services import kb_wipe_action
-
-    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", _plan)
+    _stub_wipe_action(monkeypatch)
     proposed = []
 
     async def fake_propose(plan):
         proposed.append(plan)
         return "id"
 
-    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
-    with caplog.at_level("INFO", logger=fresh_kb_setup.logger.name):
+    monkeypatch.setattr(fresh_kb_setup.kb_wipe_cli, "propose_wipe", fake_propose)
+    with caplog.at_level("INFO", logger=fresh_kb_setup.kb_wipe_cli.logger.name):
         assert await fresh_kb_setup.fresh_setup(dry_run=True) is True
     assert proposed == [] and "Database knowledge: 3 keys" in caplog.text
     assert "Chroma collection autobot_memory: 8 vectors" in caplog.text
@@ -123,16 +127,14 @@ async def test_dry_run_lists_the_plan_and_neither_proposes_nor_deletes(monkeypat
 @pytest.mark.asyncio
 async def test_a_bare_run_only_requests_approval(monkeypatch):
     """#21048: running the script proposes the wipe through the approval gate and deletes nothing itself."""
-    from services import kb_wipe_action
-
-    monkeypatch.setattr(kb_wipe_action, "plan_kb_wipe", _plan)
+    _stub_wipe_action(monkeypatch)
     proposed = []
 
     async def fake_propose(plan):
         proposed.append(plan)
         return "approval-1"
 
-    monkeypatch.setattr(fresh_kb_setup, "_propose_wipe", fake_propose)
+    monkeypatch.setattr(fresh_kb_setup.kb_wipe_cli, "propose_wipe", fake_propose)
     assert await fresh_kb_setup.fresh_setup() is True
     assert proposed == [_Plan.value]
 
@@ -162,6 +164,22 @@ async def test_initialize_reads_the_knowledge_database_never_main(monkeypatch):
     monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
     assert await fresh_kb_setup.fresh_setup(initialize=True) is True
     assert asked == ["knowledge"]
+
+
+@pytest.mark.asyncio
+async def test_initialize_aborts_before_ingesting_when_the_knowledge_redis_is_unavailable(monkeypatch, caplog):
+    """A ``None`` client (Redis disabled or unreachable) stops the run early with a clear error, before any ingest."""
+    built = []
+
+    async def fake_kb():
+        built.append("kb")
+        return FakeKnowledgeBase()
+
+    monkeypatch.setattr(fresh_kb_setup, "get_redis_client", lambda database="main", **_: None)
+    monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=fake_kb))
+    with caplog.at_level("ERROR", logger=fresh_kb_setup.logger.name):
+        assert await fresh_kb_setup.fresh_setup(initialize=True) is False
+    assert built == [] and "unavailable" in caplog.text
 
 
 @pytest.mark.asyncio

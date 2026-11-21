@@ -20,14 +20,14 @@ Features:
 import subprocess  # nosec B404  # read-only git log for co-change coupling (#13639)
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Dict, List
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import strict_git_env
 from code_intelligence.anti_pattern_detector import AntiPatternDetector
-from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, is_excluded
 
 logger = get_logger(__name__)
 
@@ -230,9 +230,9 @@ def _parse_numstat(numstat: str) -> Dict[str, int]:
     return {"files": files, "insertions": insertions, "deletions": deletions, "lines": insertions + deletions}
 
 
-def _is_vendored_path(path: str) -> bool:
-    """True for paths whose co-changes come from tooling rather than from design."""
-    return any(part in ANALYSIS_EXCLUDE_DIRS for part in PurePosixPath(path).parts)
+def _is_vendored_path(path: str, root: Path) -> bool:
+    """True for tooling paths; archive/backup names count only for non-packages (#21004)."""
+    return is_excluded(root / path, root, ANALYSIS_EXCLUDE_DIRS)
 
 
 class GitHistoryCrawler:
@@ -336,7 +336,7 @@ class GitHistoryCrawler:
 
         file_sets: list[set[str]] = []
         for block in output.split("\x00"):
-            paths = {line for line in block.splitlines()[1:] if line.strip() and not _is_vendored_path(line)}
+            paths = {x for x in block.splitlines()[1:] if x.strip() and not _is_vendored_path(x, self.repo_path)}
             if paths:
                 file_sets.append(paths)
         return file_sets

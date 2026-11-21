@@ -565,7 +565,7 @@ register_env_var(
         default=500,
         description=(
             "Keys scanned and unlinked per call while an approved knowledge wipe removes knowledge "
-            "key prefixes (services/kb_wipe_action.py, #21048)."
+            "key prefixes (services/kb_wipe_redis.py, #21048)."
         ),
         component="knowledge",
         range=(1, 10000),
@@ -580,5 +580,20 @@ register_env_var(
         description="Seconds between batch progress lines while the doc indexer embeds chunks (#20886).",
         component="knowledge",
         range=(1.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CODE_INDEX_MAX_CALL_SITES_PER_EDGE",
+        type=int,
+        default=50,
+        description=(
+            "Most call-site lines one code-graph call edge records. Calls past the cap are counted in the "
+            "edge's dropped_call_sites rather than lost silently; raising it stores more lines per edge "
+            "in the vector store's metadata (services/knowledge/code_call_sites.py)."
+        ),
+        component="knowledge",
+        range=(1, 10000),
     )
 )
