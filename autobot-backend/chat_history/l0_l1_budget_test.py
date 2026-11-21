@@ -144,7 +144,8 @@ class TestBudgetDerivesFromTheModel:
         """
         cwm = get_context_window_manager()
 
-        with patch.object(type(cwm), "get_prompt_budget", return_value=40):
+        # The instance: a stale instance attribute would shadow a class-level patch (#21230).
+        with patch.object(cwm, "get_prompt_budget", return_value=40):
             l0, l1 = await builder._fit_l0_l1(_text(5_000, "i"), _text(5_000, "s"), None)
 
         ceiling = max(1, int(40 * TieredContextBuilder._L0_L1_BUDGET_SHARE))

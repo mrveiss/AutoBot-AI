@@ -178,20 +178,6 @@ _SWEEPS: tuple[Sweep, ...] = (
         min_declarations=2,
     ),
     Sweep(
-        "pre-push floor fallback",
-        ("tools/git-hooks/pre-push",),
-        re.compile(r"floor_fallback=\"(\d+\.\d+)\""),
-        min_files_swept=1,
-        min_declarations=1,
-    ),
-    Sweep(
-        "function-length hook interpreter",
-        ("autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length",),
-        re.compile(r"echo \"python(\d+\.\d+)\""),
-        min_files_swept=1,
-        min_declarations=1,
-    ),
-    Sweep(
         "DEPENDENCIES.md python lines",
         ("docs/DEPENDENCIES.md",),
         re.compile(r"^(?:python3 \(|\| Python \| )(\d+\.\d+)\+"),
@@ -507,9 +493,13 @@ def test_python_floor_derives_from_python_version_and_holds_no_literal() -> None
     ), "python_floor.py holds a version literal besides the one swept fallback (#20903)"
 
 
-def test_the_pre_push_hook_reads_the_floor_from_python_version() -> None:
+def test_every_git_hook_reads_the_floor_through_the_one_resolver() -> None:
+    """#21163: the pre-push gate and the pre-commit wrappers hold no floor literal of their own."""
+    resolver = (_REPO_ROOT / "scripts/lib/hook-python.sh").read_text(encoding="utf-8")
+    assert '"$1/.python-version"' in resolver, "the hook resolver no longer reads .python-version (#21163)"
+    assert not re.search(r"\b3\.1\d\b|\(3,\s*1\d\)", re.sub(r"#.*", "", resolver)), "the resolver restates a version"
     text = (_REPO_ROOT / "tools/git-hooks/pre-push").read_text(encoding="utf-8")
-    assert '"$REPO_ROOT/.python-version"' in text, "pre-push no longer reads .python-version (#20903)"
+    assert "resolve_repo_python" in text and "floor_fallback" not in text, "pre-push restates its own floor (#21163)"
     assert "(3, 11)" not in text, "pre-push restates the old 3.11 floor literal (#20903)"
 
 

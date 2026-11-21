@@ -5,12 +5,16 @@ import { useAppStore } from '@/stores/useAppStore'
 import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { extractErrorMessage, streamErrorText } from '@/utils/errorExtract'
+import { extractErrorMessage, isRequestTimeout, streamErrorText } from '@/utils/errorExtract'
 import i18n from '@/i18n'
-import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
+import type { ChatMessage } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
-import { stripBracketTags, stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
+import { stripBracketTags } from '@/utils/llmProtocolTags'
 import { showAttachmentNotice } from '@/utils/attachmentNotice'
+import { keepUnansweredQuestions } from './stallQuestions'
+import { ActiveStreams } from './activeStreams'
+import { StreamThrottle } from './streamThrottle'
+import { mapMessageType } from './streamFormat'
 
 const logger = createLogger('ChatController')
 
@@ -47,6 +51,12 @@ interface SendMessageRequest {
   options: Record<string, unknown>
 }
 
+/** #21357: per-stream state; `sessionId` is the chat the stream was started in, fixed for its whole life. */
+interface StreamState {
+  reportedError: boolean
+  sessionId?: string
+}
+
 export class ChatController {
   // FIXED: Lazy initialization - stores only created when accessed, not at module load
   private _chatStore?: ReturnType<typeof useChatStore>
@@ -54,17 +64,12 @@ export class ChatController {
   private retryAttempts = 3
   private retryDelay = 1000
 
-  // Issue #1312: Streaming update throttle state
-  private _pendingStreamUpdate: {
-    messageId: string
-    content: string
-    type: ChatMessageDisplayType | string | undefined
-    metadata: Record<string, unknown>
-  } | null = null
-  private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
-  private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
-  private static readonly STREAM_FLUSH_INTERVAL_MS = 80
-  private static readonly PREVIEW_THROTTLE_MS = 200
+  private _activeStreams = new ActiveStreams() // #21357
+  private _throttle = new StreamThrottle({ // Issue #1312
+    updateMessage: (id, updates, sid) => this.chatStore.updateMessage(id, updates, sid),
+    setPreview: preview => this.chatStore.setStreamingPreview(preview),
+    isOpenChat: sid => this.isOpenChat(sid)
+  })
 
   constructor() {
     // Stores will be initialized lazily when needed
@@ -93,6 +98,8 @@ export class ChatController {
 
   // Enhanced message operations with comprehensive error handling
   async sendMessage(content: string, options?: Record<string, unknown>): Promise<string> {
+    let originSessionId: string | undefined // #21357: the chat this send started in
+    let registered = false
     try {
       // #6693: don't toggle the global appStore.isLoading flag here. App.vue
       // wraps the entire <router-view> in a UnifiedLoadingView bound to it,
@@ -118,15 +125,15 @@ export class ChatController {
       // #6746: ensure session exists BEFORE addMessage. addMessage no longer
       // creates a session as a side effect (that was a major churn source —
       // see #6745). Order: session-first, then attach message.
-      if (!this.chatStore.currentSessionId) {
-        await this.createNewSession()
-      }
-
+      // #21357: keep the id creation returned; a concurrent send may have selected another chat by now
+      originSessionId = this.chatStore.currentSessionId ?? (await this.createNewSession())
+      this._activeStreams.begin(originSessionId) // before the POST: a switch away and back mid-request keeps the indicator
+      registered = true
       const userMessageId = this.chatStore.addMessage({
         content,
         sender: 'user',
         status: 'sending'
-      })
+      }, originSessionId)
       if (!userMessageId) {
         throw new Error('Failed to add user message — no current session')
       }
@@ -138,7 +145,7 @@ export class ChatController {
         try {
           // Send to backend with timeout and retry logic
           // Issue #6313: Route through requestQueue for concurrency backpressure
-          const chatId = this.chatStore.currentSessionId!
+          const chatId = originSessionId!
           const response = await requestQueue.enqueue({
             fn: () => this.sendMessageWithRetry({
               message: content,
@@ -150,22 +157,22 @@ export class ChatController {
           })
 
           // Update user message status to sent
-          this.chatStore.updateMessage(userMessageId, { status: 'sent' })
+          this.chatStore.updateMessage(userMessageId, { status: 'sent' }, originSessionId)
 
           // Invalidate chat list cache since we added a new message
           apiClient.invalidateCache()
 
           // Handle response based on type
           if (response.type === 'streaming') {
-            await this.handleStreamingResponse(response.response!)
+            await this.handleStreamingResponse(response.response!, originSessionId, true)
           } else {
-            this.handleJsonResponse(response.data)
+            this.handleJsonResponse(response.data, originSessionId)
           }
 
           return userMessageId // Success, exit retry loop
 
         } catch (error: unknown) {
-          lastError = error instanceof Error ? error : new Error(extractErrorMessage(error, 'Unknown error'))
+          lastError = error instanceof Error ? error : Object.assign(new Error(extractErrorMessage(error, 'Unknown error')), { cause: error }) // cause keeps a non-Error rejection's type
           logger.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, lastError.message)
 
           if (attempt < this.retryAttempts) {
@@ -176,13 +183,13 @@ export class ChatController {
             this.chatStore.updateMessage(userMessageId, {
               status: 'sending',
               metadata: { retrying: true, attempt: attempt + 1 }
-            })
+            }, originSessionId)
           }
         }
       }
 
       // All retry attempts failed
-      this.chatStore.updateMessage(userMessageId, { status: 'error' })
+      this.chatStore.updateMessage(userMessageId, { status: 'error' }, originSessionId)
 
       // Add helpful error message for user
       this.chatStore.addMessage({
@@ -192,7 +199,7 @@ export class ChatController {
         }),
         sender: 'system',
         type: 'utility'
-      })
+      }, originSessionId)
 
       throw lastError || new Error('Failed to send message')
 
@@ -202,8 +209,33 @@ export class ChatController {
       this.getAppStore()?.setGlobalError(userFriendlyMessage)
       throw error
     } finally {
-      this.chatStore.setTyping(false)
+      // #21357: typing belongs to the chat that sent; another open chat keeps its own indicator
+      if (registered) this._activeStreams.end(originSessionId)
+      this.syncTyping(originSessionId)
     }
+  }
+
+  /** #21357: the open chat shows typing while it has a generating operation that is not paused for approval. */
+  private syncTyping(sessionId: string | undefined): void {
+    if (!this.isOpenChat(sessionId)) return
+    const generating = sessionId !== undefined && this._activeStreams.has(sessionId) && !this.chatStore.isPendingApproval(sessionId)
+    this.chatStore.setTyping(generating)
+  }
+
+  /** Count `sessionId` as streaming while `run` (a resume POST plus its reply) is in flight; then recompute typing. */
+  async withActiveStream<T>(sessionId: string, run: () => Promise<T>): Promise<T> {
+    this._activeStreams.begin(sessionId)
+    try {
+      return await run()
+    } finally {
+      this._activeStreams.end(sessionId)
+      this.syncTyping(sessionId)
+    }
+  }
+
+  /** #21357: true when `sessionId` is unknown (legacy callers) or is the chat currently open. */
+  private isOpenChat(sessionId: string | undefined): boolean {
+    return sessionId === undefined || this.chatStore.currentSessionId === sessionId
   }
 
   private async sendMessageWithRetry(
@@ -257,7 +289,6 @@ export class ChatController {
 
   private getUserFriendlyErrorMessage(error: unknown): string {
     const status = (error as { status?: number }).status
-    const name = (error as { name?: string }).name
     const message = extractErrorMessage(error, 'Unknown error')
 
     if (status === 422) {
@@ -269,63 +300,28 @@ export class ChatController {
     if (status === 500) {
       return i18n.global.t('chat.errors.serverError')
     }
-    if (name === 'NetworkError') {
+    if ((error as { name?: string }).name === 'NetworkError') {
       return i18n.global.t('chat.errors.networkFailed')
     }
-    if (message.includes('timeout')) {
+    // By type only: the send path is native fetch / the kit client, no producer of ours words a timeout as text (#21581)
+    if (isRequestTimeout(error) || isRequestTimeout((error as { cause?: unknown } | null)?.cause)) {
       return i18n.global.t('chat.errors.timeout')
     }
 
     return i18n.global.t('chat.errors.sendFailed', { error: message })
   }
 
-  /**
-   * Issue #1312: Flush pending streaming update to the store.
-   * Batches rapid chunk updates into a single store mutation per flush interval.
-   */
   private flushStreamUpdate(): void {
-    if (!this._pendingStreamUpdate) return
-    const { messageId, content, type, metadata } = this._pendingStreamUpdate
-    this._pendingStreamUpdate = null
-    this.chatStore.updateMessage(messageId, { content, type, metadata: metadata as ChatMessage["metadata"] })
+    this._throttle.flush()
   }
 
-  /**
-   * Issue #1312: Schedule a throttled streaming update.
-   * Instead of mutating the store on every chunk, we buffer the latest state
-   * and flush at ~12fps (80ms) which is perceptually smooth for text.
-   */
-  private scheduleStreamUpdate(
-    messageId: string,
-    content: string,
-    type: ChatMessageDisplayType | string | undefined,
-    metadata: Record<string, unknown>
-  ): void {
-    this._pendingStreamUpdate = { messageId, content, type, metadata }
-    if (!this._streamFlushTimer) {
-      this._streamFlushTimer = setTimeout(() => {
-        this._streamFlushTimer = null
-        this.flushStreamUpdate()
-      }, ChatController.STREAM_FLUSH_INTERVAL_MS)
-    }
-  }
-
-  /**
-   * Issue #1312: Throttled preview extraction.
-   * Runs at most every 200ms instead of per-chunk.
-   */
-  private schedulePreviewUpdate(content: string, messageType?: string): void {
-    if (this._previewThrottleTimer) return // Already scheduled
-    this._previewThrottleTimer = setTimeout(() => {
-      this._previewThrottleTimer = null
-      const preview = this.extractStreamingPreview(content, messageType)
-      if (preview) {
-        this.chatStore.setStreamingPreview(preview)
-      }
-    }, ChatController.PREVIEW_THROTTLE_MS)
-  }
-
-  async handleStreamingResponse(response: Response): Promise<void> {
+  /** Consume an SSE reply; resolves true when it carried an `error` event (HTTP 200 is not success, #21022). */
+  async handleStreamingResponse(
+    response: Response,
+    sessionId: string | undefined = this.chatStore.currentSessionId ?? undefined, // #21357: bound once, at start
+    registered = false // the caller already counts this stream (sendMessage registers before the POST)
+  ): Promise<boolean> {
+    const streamState: StreamState = { reportedError: false, sessionId } // per stream: overlapping streams must not share it
     const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('No response stream available')
@@ -338,6 +334,7 @@ export class ChatController {
 
     const decoder = new TextDecoder()
     let buffer = ''
+    if (!registered) this._activeStreams.begin(sessionId)
 
     try {
       logger.debug('Starting to read streaming response (Agent Zero pattern)')
@@ -359,12 +356,12 @@ export class ChatController {
         for (const line of lines) {
           if (!line.trim()) continue
           if (line.startsWith('data: ')) {
-            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId)
+            fallbackMessageId = this._processStreamLine(line, messageIdMap, fallbackMessageId, streamState)
           }
         }
       }
 
-      this._finalizeStreamMessages(messageIdMap, fallbackMessageId)
+      this._finalizeStreamMessages(messageIdMap, fallbackMessageId, sessionId)
 
     } catch (error) {
       logger.error('Streaming response error:', error)
@@ -372,19 +369,26 @@ export class ChatController {
         this.chatStore.updateMessage(fallbackMessageId, {
           content: 'Response was interrupted due to an error.',
           status: 'error'
-        })
+        }, sessionId)
       }
       throw error
     } finally {
+      if (!registered) {
+        this._activeStreams.end(sessionId)
+        this.syncTyping(sessionId) // the restored indicator must not outlive its stream
+      }
       reader.releaseLock()
     }
+    return streamState.reportedError
   }
 
   private _processStreamLine(
     line: string,
     messageIdMap: Map<string, string>,
-    fallbackMessageId: string | null
+    fallbackMessageId: string | null,
+    streamState: StreamState = { reportedError: false }
   ): string | null {
+    const sid = streamState.sessionId // #21357: every write below targets the originating chat
     try {
       const jsonStr = line.slice(6).trim()
       if (!jsonStr) return fallbackMessageId
@@ -405,22 +409,23 @@ export class ChatController {
         logger.debug(`Segment complete: ${data.metadata?.completed_type}`)
         const backendId = data.metadata?.message_id
         if (backendId && messageIdMap.has(backendId)) {
-          this.chatStore.updateMessage(messageIdMap.get(backendId)!, { status: 'sent' })
+          this.chatStore.updateMessage(messageIdMap.get(backendId)!, { status: 'sent' }, sid)
         }
         return fallbackMessageId
       }
 
       if (data.type === 'error') {
         logger.error('Stream error:', data.content)
+        streamState.reportedError = true
         const errorMsgId = fallbackMessageId || this.chatStore.addMessage({
           content: '',
           sender: 'assistant'
-        })
+        }, sid)
         if (!errorMsgId) return fallbackMessageId
         this.chatStore.updateMessage(errorMsgId, {
           content: streamErrorText(data),
           status: 'error'
-        })
+        }, sid)
         return fallbackMessageId
       }
 
@@ -431,7 +436,7 @@ export class ChatController {
       // Map backend type to frontend type (must be before addMessage to set type immediately,
       // preventing the 80ms throttle window where the message appears as 'response' then
       // disappears when the real type is applied — issue #1364)
-      const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
+      const messageType = mapMessageType(data.type, data.metadata?.message_type)
 
       // Agent Zero Pattern: Use backend message_id for stable identity
       const backendMessageId = data.metadata?.message_id || data.id
@@ -453,7 +458,8 @@ export class ChatController {
           // #11843: persist the backend message id so a later poll / live-event
           // echo of this reply dedups against it instead of double-rendering.
           ...(backendMessageId ? { message_id: backendMessageId } : {})
-        }) as string
+        }, sid) as string
+        if (!frontendMessageId) return fallbackMessageId // #21357: originating chat is gone: drop the stream's writes
         if (backendMessageId) {
           messageIdMap.set(backendMessageId, frontendMessageId)
         }
@@ -461,9 +467,10 @@ export class ChatController {
       }
 
       if (data.type === 'command_approval_request') {
-        this.chatStore.setTyping(false)
+        // #21357: typing is the open chat's; the approval flag is per chat, so it lands on the stream's own
+        if (this.isOpenChat(sid)) this.chatStore.setTyping(false)
         // Issue #680: Set pending approval flag to prevent polling race conditions
-        this.chatStore.setPendingApproval(true)
+        this.chatStore.setPendingApproval(true, sid)
         this.chatStore.updateMessage(frontendMessageId, {
           content: data.content || 'Command approval required',
           type: 'command_approval_request',
@@ -473,18 +480,18 @@ export class ChatController {
             // Note: approval_status is NOT set here - it's only set after user action
             // This allows the template to show approval buttons when !approval_status
           }
-        })
+        }, sid)
         return fallbackMessageId
       }
 
       // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
       // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
       // This reduces 200+ re-renders to ~20 per streaming response
-      this.scheduleStreamUpdate(frontendMessageId, data.content, messageType, data.metadata || {})
+      this._throttle.schedule({ sessionId: sid, messageId: frontendMessageId, content: data.content, type: messageType, metadata: data.metadata || {} })
 
       // Issue #1312: Throttle preview extraction to max every 200ms
-      if (data.content && this.chatStore.isTyping) {
-        this.schedulePreviewUpdate(data.content, messageType)
+      if (data.content && this.chatStore.isTyping && this.isOpenChat(sid)) {
+        this._throttle.schedulePreview(data.content, messageType, sid)
       }
 
     } catch (e) {
@@ -496,18 +503,12 @@ export class ChatController {
 
   private _finalizeStreamMessages(
     messageIdMap: Map<string, string>,
-    fallbackMessageId: string | null
+    fallbackMessageId: string | null,
+    sessionId?: string
   ): void {
     // Issue #1312: Flush any remaining buffered update before finalization
-    if (this._streamFlushTimer) {
-      clearTimeout(this._streamFlushTimer)
-      this._streamFlushTimer = null
-    }
-    this.flushStreamUpdate()
-    if (this._previewThrottleTimer) {
-      clearTimeout(this._previewThrottleTimer)
-      this._previewThrottleTimer = null
-    }
+    // #21357: the preview timer is shared; another running stream still needs it
+    this._throttle.finish(this._activeStreams.total > 1)
 
     // Issue #1302: Finalize all messages and clean up truly empty ones
     // Check displayable content (after stripping internal tags) not raw content
@@ -518,7 +519,10 @@ export class ChatController {
     }
 
     for (const frontendId of allIds) {
-      const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
+      const owner = sessionId === undefined
+        ? this.chatStore.currentSession
+        : this.chatStore.sessions.find(s => s.id === sessionId) // #21357
+      const msg = owner?.messages.find(m => m.id === frontendId)
       if (!msg) continue
 
       // `true` = strip a truncated marker ANYWHERE, not only at end-of-string.
@@ -528,86 +532,15 @@ export class ChatController {
 
       if (displayContent) {
         if (msg.status !== 'error') {
-          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+          this.chatStore.updateMessage(frontendId, { status: 'sent' }, sessionId)
         }
       } else {
-        this.chatStore.deleteMessage(frontendId)
+        this.chatStore.deleteMessage(frontendId, sessionId)
       }
     }
   }
 
-  /**
-   * Issue #691: Extract a meaningful preview from streaming content.
-   * Used to display real LLM content in the typing indicator instead of placeholder text.
-   *
-   * @param content - The full streaming content so far
-   * @param messageType - The type of message (thought, planning, response, etc.)
-   * @returns A short preview string (max 80 chars) or empty string if no preview available
-   */
-  private extractStreamingPreview(content: string, messageType?: string): string {
-    if (!content || content.length < 3) return ''
-
-    // Strip internal tags that shouldn't be shown to users
-    // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
-    // The two adjacent case-variant replaces this line replaced were the fork
-    // made visible: one defect, patched here and nowhere else (#18065).
-    const preview = stripProtocolTagsForDisplay(content)
-
-    if (!preview) return ''
-
-    // Get the last meaningful portion (most recent thinking)
-    // Take the last sentence or last 80 characters
-    // Issue #691: Filter empty sentences to avoid blank preview when content ends with punctuation
-    const sentences = preview.split(/[.!?]\s+/)
-    const lastSentence = sentences.filter(s => s.trim()).pop() || preview
-
-    // Create a concise preview
-    let result = lastSentence.trim()
-    if (result.length > 80) {
-      // Find a good breaking point (word boundary)
-      result = result.substring(0, 77)
-      const lastSpace = result.lastIndexOf(' ')
-      if (lastSpace > 50) {
-        result = result.substring(0, lastSpace)
-      }
-      result += '...'
-    }
-
-    // Add type-specific prefix for context
-    if (messageType === 'thought') {
-      return `Thinking: ${result}`
-    } else if (messageType === 'planning') {
-      return `Planning: ${result}`
-    }
-
-    return result
-  }
-
-  /**
-   * Map backend message type to frontend message type.
-   * Agent Zero Pattern: Centralized type mapping for consistency.
-   */
-  private mapMessageType(
-    backendType?: string,
-    metadataType?: string
-  ): 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | undefined {
-    const type = backendType || metadataType
-    if (!type) return 'response'
-
-    // Map backend types to frontend types
-    if (type === 'thought' || type.includes('thought')) return 'thought'
-    if (type.includes('planning')) return 'planning'
-    if (type.includes('debug')) return 'debug'
-    if (type.includes('utility')) return 'utility'
-    if (type.includes('source')) return 'sources'
-    if (type.includes('json')) return 'json'
-    if (type === 'response' || type === 'llm_response' || type === 'llm_response_chunk') return 'response'
-
-    // Default to response for unknown types
-    return 'response'
-  }
-
-  private handleJsonResponse(data: ChatJsonResponseData | undefined): void {
+  private handleJsonResponse(data: ChatJsonResponseData | undefined, sessionId?: string): void {
     if (!data) return
     // Add workflow messages first (thoughts, planning, debug, utility, sources)
     if (data.workflow_messages && Array.isArray(data.workflow_messages)) {
@@ -617,7 +550,7 @@ export class ChatController {
           sender: (msg.sender as 'user' | 'assistant' | 'system') || 'assistant',
           type: msg.type, // This enables filtering
           metadata: (msg.metadata || {}) as ChatMessage["metadata"]
-        })
+        }, sessionId)
       })
     }
 
@@ -643,7 +576,7 @@ export class ChatController {
           tokens: data.tokens_used,
           duration: data.response_time || data.processing_time,
         } as ChatMessage["metadata"]
-      })
+      }, sessionId)
     }
   }
 
@@ -710,15 +643,12 @@ export class ChatController {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadSessionsFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
   async loadChatMessages(sessionId: string): Promise<void> {
     try {
-      // Issue #680: Skip loading while streaming or pending approval to prevent race conditions
-      // During SSE streaming, messages are added in real-time and should not be overwritten
-      // by polling which may have stale data from backend
+      // Issue #680: skip while streaming or pending approval (polling data may be stale)
       if (this.chatStore.isTyping) {
         logger.debug(`Skipping message load - streaming in progress (isTyping=true)`)
         return
@@ -730,11 +660,11 @@ export class ChatController {
 
       logger.debug(`Loading messages for session: ${sessionId}`)
 
-      const messages = await chatRepository.getChatMessages(sessionId)
-      logger.debug(`Received ${messages.length} messages from repository`)
-
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
+      const loaded = await chatRepository.getChatMessages(sessionId)
+      // #21022: a poll never replaces a question the person has not answered yet
+      const messages = session ? keepUnansweredQuestions(session.messages, loaded) : loaded
       if (session) {
         // Issue #1371: Never replace local messages with empty/fewer backend
         // messages. The poller can get [] on transient API errors or stale
@@ -773,7 +703,6 @@ export class ChatController {
     } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadMessagesFailed', { error: extractErrorMessage(error, 'Unknown error') }))
-    } finally {
     }
   }
 
@@ -916,6 +845,8 @@ export class ChatController {
   async switchToSession(sessionId: string): Promise<void> {
     logger.debug(`Switching to session: ${sessionId}`)
     this.chatStore.switchToSession(sessionId)
+    // #21357: the store resets typing on a switch; a chat whose stream is still running gets its indicator back
+    if (this._activeStreams.has(sessionId) && !this.chatStore.isPendingApproval(sessionId)) this.chatStore.setTyping(true)
     logger.debug('Calling loadChatMessages...')
     // Load messages from backend when switching sessions
     await this.loadChatMessages(sessionId)
@@ -973,7 +904,6 @@ export class ChatController {
     } catch (error: unknown) {
       this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.clearFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
-    } finally {
     }
   }
 
@@ -1056,7 +986,6 @@ export class ChatController {
     } catch (error) {
       logger.error('Connection test failed:', error)
       return false
-    } finally {
     }
   }
 

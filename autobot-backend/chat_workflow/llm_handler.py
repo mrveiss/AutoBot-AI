@@ -16,9 +16,9 @@ from typing import Any, Dict, List
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
 from middleware.base import HookContext
@@ -28,6 +28,7 @@ from prompt_manager import get_language_instruction, get_prompt, resolve_languag
 
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
+from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
 
 logger = get_logger(__name__)
 
@@ -250,29 +251,10 @@ async def _emit_before_tool_execute(
     tool_permission: str | None = None,
     user_role: str | None = None,
 ) -> bool:
-    """Emit BEFORE_TOOL_EXECUTE hook to registered extensions.
+    """Emit BEFORE_TOOL_EXECUTE (#4181); False means a hook cancelled the call.
 
-    Issue #4181: Fires before executing a tool so extensions can reject
-    or validate the execution.
-
-    Issue #14420: ``tool_permission``/``user_role`` feed
-    ``PermissionEnforcementExtension``. Callers that know the tool's
-    declared permission requirement (e.g. from the MCP registry) and the
-    caller's RBAC role should pass both. #14523: a caller that omits
-    ``tool_permission`` is no longer treated as a legacy tool waved through —
-    the extension refuses a missing declaration outright, so every call site
-    reaching this function must resolve a real permission.
-
-    Args:
-        tool_name: Name of tool to execute
-        tool_params: Tool parameters
-        session_id: Session identifier
-        tool_permission: The dot-style Permission value the tool requires,
-            or None if undeclared/unknown at this call site.
-        user_role: The caller's RBAC role, or None if unauthenticated.
-
-    Returns:
-        False to cancel tool execution, True otherwise
+    ``tool_permission``/``user_role`` feed ``PermissionEnforcementExtension`` (#14420); a caller that omits
+    the permission is refused outright (#14523), so every call site must resolve a real one.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -284,23 +266,24 @@ async def _emit_before_tool_execute(
         },
     )
     results = await get_extension_manager().invoke_hook(HookPoint.BEFORE_TOOL_EXECUTE, ctx)
-    return not any(result is False for result in results)
+    allowed = not any(result is False for result in results)
+    if allowed:
+        mark_tool_started(session_id, tool_name)  # #21879: the clock starts when the tool does
+    return allowed
 
 
-async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id: str, context: Dict[str, Any]) -> Any:
-    """Emit AFTER_TOOL_EXECUTE hook to registered extensions.
+async def _emit_after_tool_execute(
+    tool_name: str,
+    tool_result: Any,
+    session_id: str,
+    context: Dict[str, Any],
+    *,
+    success: bool | None = None,
+) -> Any:
+    """Emit AFTER_TOOL_EXECUTE (#4181); returns the possibly modified result.
 
-    Issue #4181: Fires after tool execution so extensions can inspect
-    or modify the result.
-
-    Args:
-        tool_name: Name of executed tool
-        tool_result: Result returned by tool
-        session_id: Session identifier
-        context: Request-level context dict
-
-    Returns:
-        Possibly modified tool result
+    #21879: the hook data carries the measured ``execution_time`` and the call's ``success`` when known,
+    and omits a key it does not know (no default stands in for it). *success* is the site's outcome.
     """
     ctx = HookContext(
         session_id=session_id,
@@ -308,6 +291,7 @@ async def _emit_after_tool_execute(tool_name: str, tool_result: Any, session_id:
             "tool_name": tool_name,
             "tool_result": tool_result,
             "context": context,
+            **tool_outcome_fields(take_tool_elapsed(session_id, tool_name), success),
         },
     )
     result = await get_extension_manager().invoke_with_transform(HookPoint.AFTER_TOOL_EXECUTE, ctx, "tool_result")
@@ -326,6 +310,7 @@ async def _emit_tool_error(tool_name: str, error: Exception, session_id: str, co
         session_id: Session identifier
         context: Request-level context dict
     """
+    take_tool_elapsed(session_id, tool_name)  # the call ended in error: close its clock
     ctx = HookContext(
         session_id=session_id,
         data={
@@ -525,7 +510,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
         # _ssot_config is already imported at module level
-        return _normalize_outbound_url(f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}")
+        return _normalize_outbound_url(ollama_generate_url(_ssot_config.ollama_url))
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -536,10 +521,7 @@ class LLMHandlerMixin:
         try:
             endpoint = provide_config_manager().get_nested("backend.llm.ollama.endpoint", None)
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
-                # Ensure /api/generate path is included
-                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(endpoint)
+                return _normalize_outbound_url(ollama_generate_url(endpoint))
             logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
@@ -555,9 +537,7 @@ class LLMHandlerMixin:
         try:
             base_url = provide_config_manager().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith(PATH_OLLAMA_GENERATE):
-                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
-                return _normalize_outbound_url(base_url)
+                return _normalize_outbound_url(ollama_generate_url(base_url))
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
@@ -836,9 +816,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
-                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
-            ollama_endpoint = slm_base
+            ollama_endpoint = ollama_generate_url(slm_base)
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
 
@@ -973,7 +951,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         http_client = get_http_client()
         response_data = await http_client.post_json(
-            f"{ollama_endpoint}/api/generate",
+            ollama_generate_url(ollama_endpoint),
             json_data={
                 "model": selected_model,
                 "prompt": interpretation_prompt,
@@ -1016,7 +994,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         full_response = ""
         try:
             async with await http_client.post(
-                f"{ollama_endpoint}/api/generate",
+                ollama_generate_url(ollama_endpoint),
                 json={
                     "model": selected_model,
                     "prompt": interpretation_prompt,

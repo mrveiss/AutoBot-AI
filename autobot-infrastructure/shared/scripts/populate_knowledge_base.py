@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exclude_file
-from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_manager import get_logger, setup_logging
 from autobot_shared.paths import project_root
 
 logger = get_logger(__name__)
@@ -182,4 +182,5 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    setup_logging()  # script startup: file logging on (#20894)
     asyncio.run(add_documentation_to_kb(_parse_args().patterns))

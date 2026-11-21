@@ -1114,7 +1114,6 @@
       "quality": {
         "title": "Calidad del código",
         "overallScore": "Puntuación general",
-        "testCoverage": "Cobertura de prueba",
         "codeDuplicates": "Duplicados de código",
         "technicalDebt": "Deuda Técnica",
         "noMetrics": "No hay métricas de calidad de código disponibles."
@@ -2313,7 +2312,6 @@
       "noCommunicationData": "Sin datos de comunicación",
       "codeQuality": "Calidad del código",
       "overallScore": "Puntuación general",
-      "testCoverage": "Cobertura de pruebas",
       "codeDuplicates": "Duplicados de código",
       "technicalDebt": "Deuda técnica",
       "noQualityMetrics": "Sin métricas de calidad",
@@ -4546,6 +4544,9 @@
       "stepApproved": "Paso aprobado",
       "stepSkipped": "Paso omitido",
       "rerunNotFound": "No se encontró el flujo de trabajo para volver a ejecutarlo",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Volviendo a ejecutar «{name}»",
       "rerunFailed": "No se pudo volver a ejecutar el flujo de trabajo",
       "notificationsSaved": "Configuración de notificaciones guardada"
@@ -6007,6 +6008,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6957,6 +6959,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",

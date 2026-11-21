@@ -21,15 +21,19 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
+import time
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.leader_lease import LeaderLease, worker_identity
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import MS_PER_SECOND
 
 from .publisher import LLCEvent, LLCWebSocketPublisher
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _PATTERNS = [
     "llc:company:*",
@@ -90,9 +94,26 @@ def _event_payload(data: dict) -> dict:
 
 _RECONNECT_DELAY = 5  # seconds between reconnect attempts
 
+_ROUTER_LOCK_KEY = "llc:notification_router:leader"
+# Seconds the lock lives without a renewal (#21456). The holder renews it every ``_HOLD_INTERVAL`` seconds, so it
+# lapses only when its holder stops renewing; every other started worker contests it at the same cadence.
+_ROUTER_LOCK_TTL = env_int_clamped("AUTOBOT_LLC_NOTIFICATION_ROUTER_LOCK_TTL_SECONDS", 30, min_v=3, max_v=3600)
+_ROUTER_LOCK_TTL_MS = _ROUTER_LOCK_TTL * MS_PER_SECOND  # the lease takes milliseconds
+_ATTEMPTS_PER_TTL = 3  # hold attempts that fit in one TTL, so one failed attempt leaves two retries
+_HOLD_INTERVAL = _ROUTER_LOCK_TTL / _ATTEMPTS_PER_TTL
+
+
+async def _main_redis(**kwargs: Any) -> Any:
+    """The Redis client of the lock; looked up per call so the module's getter can be swapped."""
+    return await get_async_redis_client(**kwargs)
+
 
 class LLCNotificationRouter:
     """Subscribes to llc:* Redis pub/sub and fans out events to WebSocket clients.
+
+    Only the worker holding the single-instance lock routes (GH#8547). Every started worker runs a hold loop for
+    its lifetime: the holder renews the lock, any other worker (or one that lost it) contests it, and routing
+    runs exactly while the lock is held (#21456).
 
     Lifecycle:
       await router.start()   # called from lifespan
@@ -101,43 +122,82 @@ class LLCNotificationRouter:
 
     def __init__(self, publisher: Optional[LLCWebSocketPublisher] = None) -> None:
         self._publisher = publisher or LLCWebSocketPublisher()
-        self._task: Optional[asyncio.Task] = None
+        self._task: Optional[asyncio.Task] = None  # the routing task, alive only while the lock is held
+        self._hold_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+        self._lease = LeaderLease(
+            _ROUTER_LOCK_KEY,
+            database="main",
+            ttl_ms=_ROUTER_LOCK_TTL_MS,
+            worker_id=worker_identity(unique=True),
+            label="LLC notification router",
+            client_factory=_main_redis,
+        )
+        self._last_held = 0.0  # time.monotonic() taken BEFORE the last call that confirmed the lock
 
     async def start(self) -> None:
-        if self._task and not self._task.done():
+        if self._hold_task and not self._hold_task.done():
             return
-        # Acquire a distributed lock before subscribing so only one uvicorn
-        # worker runs the router, preventing 4× duplicate events (GH#8547).
-        try:
-            redis = await get_async_redis_client(database="main")
-            if redis is not None:
-                acquired = await redis.set(_ROUTER_LOCK_KEY, "1", nx=True, ex=_ROUTER_LOCK_TTL)
-                if not acquired:
-                    logger.info("LLC notification router: lock held by another worker, skipping")
-                    return
-        except Exception as exc:
-            logger.warning("LLC notification router: lock check failed (%s), starting anyway", exc)
-
         self._stop_event.clear()
-        self._task = asyncio.create_task(self._run(), name="llc-notification-router")
+        await self._hold_step()
+        self._hold_task = asyncio.create_task(self._hold_loop(), name="llc-notification-router-hold")
         logger.info("LLC notification router started")
 
     async def stop(self) -> None:
         self._stop_event.set()
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        try:
-            redis = await get_async_redis_client(database="main")
-            if redis is not None:
-                await redis.delete(_ROUTER_LOCK_KEY)
-        except Exception:
-            pass
+        await self._cancel_task(self._hold_task)
+        self._hold_task = None
+        await self._stop_routing()
+        await self._lease.release()  # deletes the key only while it still holds this instance's token
         logger.info("LLC notification router stopped")
+
+    @staticmethod
+    async def _cancel_task(task: Optional[asyncio.Task]) -> None:
+        if task is None:
+            return
+        task.cancel()
+        # ``asyncio.wait`` never raises the task's own cancellation into the caller, so a cancellation aimed at
+        # the caller (``stop()`` ending the hold task while it stops routing) is not swallowed here.
+        await asyncio.wait([task])
+        if not task.cancelled():
+            task.exception()  # mark it retrieved
+
+    async def _hold_loop(self) -> None:
+        while True:
+            await asyncio.sleep(_HOLD_INTERVAL)
+            try:
+                await self._hold_step()
+            except Exception:
+                logger.warning("LLC notification router: hold step failed, retrying", exc_info=True)
+
+    async def _hold_step(self) -> None:
+        """Take or renew the lock once (owner-checked), then make routing follow the answer.
+
+        Held: route. Another worker's, or gone: stop routing and contest it on the next step. No answer
+        (error, timeout, no Redis): keep the current state until a whole TTL passes without a confirmation, since
+        the key has expired on the server by then; never route without having held the lock.
+        """
+        before = time.monotonic()  # the lease can only be shorter than Redis's, never longer
+        try:
+            held = await asyncio.wait_for(self._lease.hold_or_refresh(), timeout=_HOLD_INTERVAL)
+        except Exception:
+            logger.warning("LLC notification router: lock check failed, retrying", exc_info=True)
+            held = None
+        if held:
+            self._last_held = before
+            self._start_routing()
+        elif held is False or time.monotonic() - self._last_held >= _ROUTER_LOCK_TTL:
+            await self._stop_routing()
+
+    def _start_routing(self) -> None:
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._run(), name="llc-notification-router")
+            logger.info("LLC notification router: lock held, routing")
+
+    async def _stop_routing(self) -> None:
+        if self._task is not None and not self._task.done():
+            logger.warning("LLC notification router: lock not held, stopping routing")
+            await self._cancel_task(self._task)
 
     async def _run(self) -> None:
         while not self._stop_event.is_set():
@@ -170,11 +230,13 @@ class LLCNotificationRouter:
                     continue
                 await self._dispatch(message)
         finally:
-            try:
-                await pubsub.punsubscribe()
-                await pubsub.aclose()
-            except Exception:
-                pass
+            # Each step bounded and in its own try: a hung socket must not hold up the hold loop (it awaits this
+            # when it stops routing), and a failed unsubscribe must not skip closing the connection.
+            for close in (pubsub.punsubscribe, pubsub.aclose):
+                try:
+                    await asyncio.wait_for(close(), timeout=_HOLD_INTERVAL)
+                except Exception:
+                    logger.warning("LLC router: pubsub cleanup failed or timed out", exc_info=True)
 
     async def _dispatch(self, message: dict) -> None:
         raw = message.get("data")
@@ -217,9 +279,6 @@ class LLCNotificationRouter:
 
 
 _router_instance: Optional[LLCNotificationRouter] = None
-
-_ROUTER_LOCK_KEY = "llc:notification_router:leader"
-_ROUTER_LOCK_TTL = 30  # seconds; renewed by the running task
 
 
 def get_llc_notification_router() -> LLCNotificationRouter:

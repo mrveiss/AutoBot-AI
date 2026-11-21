@@ -18,6 +18,7 @@
  */
 import type { RouteRecordRaw } from 'vue-router'
 import { getSLMAdminUrl } from '@/config/ssot-config'
+import { BATCH_JOBS_PATH, VISION_PATH } from './userToolRoutes'
 
 /** Renders nothing: `beforeEnter` always leaves before this would show. */
 const EmptyView = { render: () => null }
@@ -49,9 +50,20 @@ function slmRoute(path: string, slmPath: string): RouteRecordRaw {
   }
 }
 
-export const slmRedirectRoutes: RouteRecordRaw[] = SLM_REDIRECTS.flatMap(
-  ({ path, slmPath, deep }) => [
+/**
+ * #20644: Batch Processing and Vision went the other way, from the SLM to this app. Their old
+ * `/tools/*` paths stay here instead of following the `/tools` wildcard to the SLM. A static path
+ * outranks the `/tools/:pathMatch(.*)*` wildcard, and these come first in the list as well.
+ */
+export const MOVED_FROM_SLM: ReadonlyArray<{ path: string; to: string }> = [
+  { path: '/tools/batch', to: BATCH_JOBS_PATH },
+  { path: '/tools/vision', to: VISION_PATH },
+]
+
+export const slmRedirectRoutes: RouteRecordRaw[] = [
+  ...MOVED_FROM_SLM.map(({ path, to }): RouteRecordRaw => ({ path, redirect: to })),
+  ...SLM_REDIRECTS.flatMap(({ path, slmPath, deep }) => [
     slmRoute(path, slmPath),
     ...(deep ? [slmRoute(`${path}/:pathMatch(.*)*`, slmPath)] : []),
-  ],
-)
+  ]),
+]
