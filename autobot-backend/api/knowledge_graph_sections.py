@@ -6,6 +6,7 @@
 
 from typing import Any, Dict, List
 
+from api.knowledge_graph_codebase import codebase_section_for_graph
 from api.knowledge_graph_facts import FactsPage
 from api.schemas_knowledge_graph import GraphRequest
 from autobot_shared.logging_manager import get_logger
@@ -69,8 +70,12 @@ async def graph_sections(
     page: FactsPage,
     current_user: Any,
 ) -> List[Dict[str, Any]]:
-    """The facts section first, then one per bucket: visible total vs this page for the whole graph."""
+    """The codebase section first (the indexed codebases), then facts, then one per bucket: visible total vs this page."""
+    codebases: List[Dict[str, Any]] = []
+    if body.include_buckets and body.offset == 0 and not body.category_filter:
+        codebases = await codebase_section_for_graph(nodes, edges, current_user, viewer_for(current_user, ledger))
     return [
+        *codebases,
         facts_section(page, body.offset),
         *await bucket_sections_for_graph(kb, body, nodes, edges, current_user, ledger),
     ]
