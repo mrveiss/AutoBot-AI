@@ -45,7 +45,7 @@ from collections import deque
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -56,6 +56,10 @@ logger = get_logger(__name__)
 #: Cap on distinct keys the per-process fallback tracks; expired keys are evicted
 #: first, and a new key is refused only when every tracked key is still live.
 LOCAL_WINDOW_MAX_KEYS = env_int("AUTOBOT_RATE_LIMIT_LOCAL_MAX_KEYS", 10_000)
+
+#: Minimum seconds between full-table eviction sweeps while the table is full; a new
+#: key arriving in between is refused without scanning (#21907).
+LOCAL_WINDOW_SWEEP_INTERVAL = env_float("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", 1.0)
 
 
 class WindowFailurePolicy(str, Enum):
@@ -72,11 +76,17 @@ class LocalWindowCounter:
     Each key keeps the window it was last used with, so a key admitted under a
     long window is not evicted by a call that uses a short one. At most
     ``max_keys`` distinct keys are tracked: once full and nothing has expired, a
-    new key is refused rather than evicting a live quota's history.
+    new key is refused rather than evicting a live quota's history. The sweep that
+    looks for expired keys runs at most once per ``sweep_interval`` seconds, so a
+    flood of new keys on a full live table is refused without scanning (#21907).
     """
 
-    def __init__(self, max_keys: int = LOCAL_WINDOW_MAX_KEYS) -> None:
+    def __init__(
+        self, max_keys: int = LOCAL_WINDOW_MAX_KEYS, sweep_interval: float = LOCAL_WINDOW_SWEEP_INTERVAL
+    ) -> None:
         self._max_keys = max_keys
+        self._sweep_interval = sweep_interval
+        self._last_sweep = float("-inf")  # monotonic; read and written under ``_lock``
         self._hits: dict[str, deque[float]] = {}
         self._windows: dict[str, float] = {}
         self._lock = threading.Lock()
@@ -86,7 +96,7 @@ class LocalWindowCounter:
         hits = self._hits.get(key)
         if hits is None:
             if len(self._hits) >= self._max_keys:
-                self._evict_stale(now)
+                self._sweep_if_due(now)
                 if len(self._hits) >= self._max_keys:
                     return None
             hits = self._hits[key] = deque()
@@ -122,6 +132,14 @@ class LocalWindowCounter:
         with self._lock:
             hits = [h for h in self._hits.get(key, ()) if h > now - window_seconds]
             return len(hits), (max(0.0, window_seconds - (now - hits[0])) if hits else 0.0)
+
+    def _sweep_if_due(self, now: float) -> None:
+        """Run the full-table sweep at most once per interval; caller holds ``_lock``."""
+        mono = time.monotonic()
+        if mono - self._last_sweep < self._sweep_interval:
+            return
+        self._last_sweep = mono
+        self._evict_stale(now)
 
     def _evict_stale(self, now: float) -> None:
         """Drop keys whose every hit has aged out of that key's own window."""
