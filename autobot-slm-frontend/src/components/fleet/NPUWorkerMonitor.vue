@@ -125,10 +125,9 @@ const formatTimestamp = createDateFormatter({ kind: 'time', emptyText: 'Never' }
 
 const { t } = useI18n()
 
-/** The store reports a failed read as null; throw it, so refresh() shows it and the poller counts it. */
+/** The store rethrows a failed read, so refresh() shows it and the poller counts it. */
 async function fetchMetrics(): Promise<void> {
   const fleetMetrics = await fleetStore.fetchNpuFleetMetrics()
-  if (fleetMetrics === null) throw new Error(fleetStore.error ?? t('fleet.nPUWorkerMonitor.metricsUnavailable'))
   if (fleetMetrics.node_metrics) {
     const newMap = new Map<string, NPUWorkerMetrics>()
     for (const m of fleetMetrics.node_metrics) {
