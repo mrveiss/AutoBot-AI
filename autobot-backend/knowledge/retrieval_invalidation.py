@@ -88,6 +88,7 @@ WRITE_ENTRY_POINTS: tuple[WriteEntryPoint, ...] = (
     WriteEntryPoint("knowledge/write_buffer.py", "make_chromadb_flush_fn._flush", "vectors_flushed"),
     WriteEntryPoint("services/knowledge/doc_index_orphans.py", "reindex_file", "doc_indexed"),
     WriteEntryPoint("services/knowledge/doc_index_orphans.py", "drop_collection", "docs_collection_dropped"),
+    WriteEntryPoint("services/knowledge/doc_index_orphans.py", "_bump_after_recreate", "docs_collection_recreated"),
     WriteEntryPoint("services/knowledge/kb_synthesizer.py", "KBSynthesizer._index_documents", "synthesis_indexed"),
 )
 

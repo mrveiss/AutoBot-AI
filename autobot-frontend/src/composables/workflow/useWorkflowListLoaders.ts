@@ -8,7 +8,10 @@
  * The builder survives a company switch, so a read started for the previous company can resolve
  * after the current company's read. Each read claims ownership (useLatestRequest, #21159) and only
  * the owner may write its list; `invalidate()` revokes every in-flight read on a company switch.
- * A read that was superseded is not a failure; one that hit an HTTP error or threw is (returns false).
+ * A read that was superseded is not a failure; one that hit an HTTP error (`success` false) returns false.
+ * A fetcher that THROWS is not caught here: the rejection propagates to the caller of `loadActive` /
+ * `loadCompleted` (the loading flag is still released), and `useWorkflowCompanySwitch.safeReload` turns it
+ * into a failed reload (#21807).
  */
 import type { Ref } from 'vue'
 import type { ApiResponse } from '@/types/api'
@@ -35,7 +38,7 @@ export function useWorkflowListLoaders<W extends { workflow_id: string }>(o: Wor
   const active = useLatestRequest()
   const completed = useLatestRequest()
 
-  /** Returns false when the list could not be loaded (HTTP error or throw). */
+  /** False on an HTTP error; a throwing `fetchActive` propagates (see the header). */
   async function loadActive(): Promise<boolean> {
     const token = active.begin()
     const ok = await o.wrap(async () => {
@@ -53,6 +56,7 @@ export function useWorkflowListLoaders<W extends { workflow_id: string }>(o: Wor
     return ok
   }
 
+  /** False on an HTTP error; a throwing `fetchCompleted` propagates (see the header). */
   async function loadCompleted(): Promise<boolean> {
     const token = completed.begin()
     const response = await o.fetchCompleted()

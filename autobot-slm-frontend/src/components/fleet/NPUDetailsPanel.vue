@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode, NPUNodeStatus, NPUWorkerMetrics, NPUWorkerConfig } from '@/types/slm'
 import { formatFleetDateTime } from '@/composables/useTimezone'
+import { errorText } from '@/utils/errorText'
 
 const props = defineProps<{
   node: SLMNode
@@ -173,7 +174,7 @@ watch(
     const token = ++loadToken
     resetNodeState()
     Promise.all([loadLiveMetrics(token), loadWorkerConfig(token)]).catch((e: unknown) => {
-      if (isCurrent(token)) error.value = e instanceof Error ? e.message : String(e)
+      if (isCurrent(token)) error.value = errorText(e)
     })
   },
   { immediate: true },

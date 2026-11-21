@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.prompt_rules import frame_untrusted_block, sanitize_injected
 from autobot_shared.ssot_config import get_ollama_url
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
@@ -425,7 +426,7 @@ class CommunityGrowthSkill(BaseSkill):
 
         ollama_host = self._config.get("ollama_host", get_ollama_url())
         ollama_model = self._config.get("ollama_model", "mistral")
-        ollama_url = f"{ollama_host}/api/generate"
+        ollama_url = ollama_generate_url(ollama_host)
         payload = {
             "model": ollama_model,
             "prompt": full_prompt,

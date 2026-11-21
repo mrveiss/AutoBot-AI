@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import httpx
 
+from autobot_shared.chat_model_context import num_ctx_for_model
+from autobot_shared.ollama_urls import ollama_generate_url
+
 
 async def call_ollama_generate(
     prompt: str,
@@ -46,16 +49,13 @@ async def call_ollama_generate(
         httpx.HTTPError: On transport failure or non-2xx HTTP status.
             Callers are expected to catch and fall back as appropriate.
     """
-    url = f"{base_url.rstrip('/')}/api/generate"
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-        },
-    }
+    url = ollama_generate_url(base_url)
+    options = {"temperature": temperature, "num_predict": max_tokens}
+    if (
+        num_ctx := num_ctx_for_model(model)
+    ) is not None:  # the chat model's context size, or Ollama reloads it (#21878)
+        options["num_ctx"] = num_ctx
+    payload = {"model": model, "prompt": prompt, "stream": False, "options": options}
     timeout = httpx.Timeout(timeout_ms / 1000.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(url, json=payload)

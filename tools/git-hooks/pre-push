@@ -314,29 +314,39 @@ machine_slot_take() {
   exec 9>&-
   return 1
 }
+# #21905: SECONDS follows the wall clock, which can step back (NTP, a VM resuming) and made a wait read "-1s".
+# The uptime file is monotonic; the fallback clamps so a duration is never negative. Tests point the file at a fake.
+machine_slot_clock() {
+  local up
+  read -r up _ 2>/dev/null < "${AUTOBOT_MACHINE_SLOT_UPTIME:-/proc/uptime}" && [ -n "$up" ] && { echo "${up%.*}"; return; }
+  echo "$SECONDS"
+}
 machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
-  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
+  local start now next every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
+  start=$(machine_slot_clock) next=$start
   mkdir -p "$dir"
   while :; do
     # A slot is taken only while the 1-minute load is under the ceiling.
     if machine_slot_load_high; then
       why="$MACHINE_SLOT_LOAD_MSG"
     elif machine_slot_take "$dir"; then
-      # #21225: a wait is an iteration of this loop; SECONDS is an integer clock and also ticks across a first-attempt take.
+      # #21225: a wait is an earlier iteration of this loop (waited=1), not elapsed clock time: a first-attempt take returns silently.
       [ "$waited" = 1 ] || return 0
-      log "waited $((SECONDS - start))s for a machine slot"
+      now=$(machine_slot_clock)
+      log "waited $((now > start ? now - start : 0))s for a machine slot"
       # #20260: the queue has no time limit, so the marker set before it may be about to expire.
       [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
       return 0
     else
       why="waiting for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
     fi
-    if [ "$SECONDS" -ge "$next" ]; then
-      log "queued $((SECONDS - start))s: $why"
-      next=$((SECONDS + every))
+    now=$(machine_slot_clock)
+    if [ "$now" -ge "$next" ]; then
+      log "queued $((now > start ? now - start : 0))s: $why"
+      next=$((now + every))
     fi
     waited=1
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
@@ -482,6 +492,26 @@ fast_guard_tests() {
     || return 1
   printf '%s\n' "$list" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
 }
+# #20935: the guard pytest on the remote test node (tools/remote_test_node/run.py; settings are
+# AUTOBOT_TEST_NODE_*, documented in ENV_VARS.md). Returns 0 when the node ran and judged it (sets the
+# caller's guard_output and rc), 1 when it could not take the run: not configured, unreachable or not
+# provisioned. That is said, then the caller runs locally. A failing remote test is a failure, never a fallback.
+remote_guard_pytest() {
+  local run="$REPO_ROOT/tools/remote_test_node/run.py"
+  [ -f "$run" ] || return 1
+  local workers="${AUTOBOT_TEST_NODE_WORKERS:-2}"  # registered range 1-12; anything else reads as the default
+  case "$workers" in ''|*[!0-9]*) workers=2 ;; esac
+  { [ "$workers" -ge 1 ] && [ "$workers" -le 12 ]; } || workers=2
+  local node_py=python  # resolved ON the node, where remote_job.sh puts the provisioned venv first on PATH
+  # shellcheck disable=SC2046,SC2086 # word-splitting the file list is intended
+  guard_output=$(cd "$REPO_ROOT" && exec 9>&- && "$PYTEST_PYTHON" "$run" --sha "$local_sha" --timeout "$MAX_BUDGET" -- \
+    "$node_py" -m pytest -q -p no:cacheprovider -m "not reach_floor" -n "$workers" --dist loadscope --tb=line \
+    $(printf '%s\n' "$1" | grep -vxF -f <(printf '%s\n' "$2")) 2>&1) && rc=0 || rc=$?
+  [ "$rc" = "75" ] || return 0
+  warn "$(printf '%s\n' "$guard_output" | grep -m1 'UNAVAILABLE' || echo 'remote test node unavailable'); running the fast guards locally under the machine slot"
+  rc=0
+  return 1
+}
 # The guard tests, then the reach-floor pins (`repin_reach_floors.py --check`: 0 clean, 2 when
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
@@ -499,16 +529,20 @@ run_fast_guards() {
     fail "fast guard list names file(s) absent from ${local_sha:0:10} (fix ${FAST_GUARD_LIST}): $(echo $missing)"
     EXIT_CODE=1
   fi
+  # #20935: the remote test node first; local (under the machine slot) only when it cannot take the run.
+  local where="locally"
+  if remote_guard_pytest "$guards" "$missing"; then where="on the remote test node"; else
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
   guard_output=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
+  fi
   # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
-  if ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
+  if [ "$where" = "locally" ] && ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
     could_not_run "fast guards" "${PYTEST_PYTHON} cannot import pytest, so the guard tests did not run"
   elif [ "$rc" = "124" ]; then did_not_run "fast guards" "$MAX_BUDGET"
-  elif [ "$rc" != "0" ]; then fail "fast guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
-  else ok "fast guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
+  elif [ "$rc" != "0" ]; then fail "fast guards failed ${where}:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
+  else ok "fast guards ${where}: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
   out=$(cd "$REPO_ROOT" && exec 9>&- && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check --changed-since origin/main 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then

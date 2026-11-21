@@ -23,12 +23,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
+from api.secrets_delete_outcome import error_for
 from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.envelope_secrets_service import SecretAccessError
+from services.envelope_secrets_service import AmbiguousSecretError, SecretAccessError, SecretConflictError
 
 logger = get_logger(__name__)
 
@@ -108,17 +109,20 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     user_id, permissions = await _principal(owner_id)
     coordinator = get_coordinator()
     async for session in get_session():
-        secret = await coordinator.create(
-            session,
-            user_id=user_id,
-            permissions=permissions,
-            owner_vault=_SYSTEM_VAULT,
-            name=request.name,
-            secret_type=request.type.value,
-            plaintext=request.value.encode("utf-8"),
-        )
+        try:
+            secret = await coordinator.create(
+                session,
+                user_id=user_id,
+                permissions=permissions,
+                owner_vault=_SYSTEM_VAULT,
+                name=request.name,
+                secret_type=request.type.value,
+                plaintext=request.value.encode("utf-8"),
+            )
+        except (AmbiguousSecretError, SecretConflictError) as exc:
+            raise error_for(exc) from None  # the fixed 409 (#17850); the route re-raises an HTTPException as is
         await session.commit()
-        return _summary(secret)
+        return {**_summary(secret), "already_existed": True} if secret.already_existed else _summary(secret)
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 

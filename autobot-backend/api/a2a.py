@@ -72,22 +72,23 @@ router = APIRouter(
 )
 
 # ---------------------------------------------------------------------------
-# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7270/#7271)
+# Rate limiting — per-IP sliding window via the canonical RateLimiter (#7270/#7271)
 # ---------------------------------------------------------------------------
 #
 # #7270: pre-fix, this was an in-process dict with the same multi-worker
-# undercount that #6588 fixed for /v1/chat/completions. State is now shared
-# across all uvicorn workers via Redis sorted-set; the in-process fallback
-# is reserved for Redis outages only.
+# undercount that #6588 fixed for /v1/chat/completions. State is shared across
+# all uvicorn workers; LOCAL (per-worker enforcement) is reserved for Redis
+# outages only, so the control never turns off (#18087).
 
 from autobot_shared.proxy_utils import get_client_ip
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
-_a2a_limiter = IPRateLimiter(
-    key_prefix="ratelimit:a2a",
-    limit_env="AUTOBOT_A2A_RATE_LIMIT",
-    default_limit=30,
+_a2a_limiter = WindowQuota.for_scope(
+    "a2a",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=30,
     window_seconds=60,
+    limit_env="AUTOBOT_A2A_RATE_LIMIT",
 )
 
 

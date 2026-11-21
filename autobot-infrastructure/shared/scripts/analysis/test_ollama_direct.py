@@ -8,15 +8,25 @@ Test Ollama connection directly without the retry mechanism
 """
 
 import asyncio
+import sys
+from pathlib import Path
 
 import aiohttp
+
+# Runs from any directory with no PYTHONPATH: the repository root goes on the path for `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.ollama_urls import ollama_chat_url  # noqa: E402
 
 
 async def test_ollama_direct():
     """Test Ollama directly with aiohttp"""
     print("🤖 Testing Ollama directly with aiohttp...")
 
-    url = "http://127.0.0.1:11434/api/chat"
+    url = ollama_chat_url(ServiceURLs.OLLAMA_LOCAL)
 
     data = {
         "model": "artifish/llama3.2-uncensored:latest",
@@ -52,7 +62,7 @@ async def test_complex_request():
     """Test with the complex request AutoBot makes"""
     print("\n🔍 Testing complex AutoBot request...")
 
-    url = "http://127.0.0.1:11434/api/chat"
+    url = ollama_chat_url(ServiceURLs.OLLAMA_LOCAL)
 
     data = {
         "model": "artifish/llama3.2-uncensored:latest",
