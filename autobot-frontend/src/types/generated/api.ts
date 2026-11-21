@@ -1305,6 +1305,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/company": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assign Session Company
+         * @description The owner assigns an Unassigned chat to a company; audited, once, never moved (#21997).
+         */
+        post: operations["assign_session_company_api_chat_sessions__session_id__company_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/chats": {
         parameters: {
             query?: never;
@@ -73448,6 +73468,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[SessionCompanyAssignData] */
+        DataResponse_SessionCompanyAssignData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionCompanyAssignData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[SessionCreateData] */
         DataResponse_SessionCreateData_: {
             /**
@@ -99824,6 +99859,31 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * SessionCompanyAssign
+         * @description Body of the assign-company route.
+         */
+        SessionCompanyAssign: {
+            /**
+             * Company Id
+             * Format: uuid
+             */
+            company_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionCompanyAssignData
+         * @description data payload of the assign-company route.
+         */
+        SessionCompanyAssignData: {
+            /** Session Id */
+            session_id: string;
+            /** Company Id */
+            company_id: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** SessionCostResponse */
         SessionCostResponse: {
             /** Session Id */
@@ -99998,6 +100058,15 @@ export interface components {
             sessions: components["schemas"]["ChatSessionSummary"][];
             /** Count */
             count: number;
+            /**
+             * Unassigned
+             * @default []
+             */
+            unassigned: components["schemas"]["ChatSessionSummary"][];
+            /** Unassigned Count */
+            unassigned_count?: number | null;
+            /** Company Id */
+            company_id?: string | null;
             /** Scope */
             scope?: string | null;
             /** Org Id */
@@ -111574,6 +111643,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SessionUnshareData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_session_company_api_chat_sessions__session_id__company_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionCompanyAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionCompanyAssignData_"];
                 };
             };
             /** @description Validation Error */

@@ -25,6 +25,7 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from exceptions import get_exceptions_lazy
+from security.session_company import enforce_session_company, resolve_company_scope
 from services.audit.audit import AuditAction, audit_record
 from services.conversation_export import (
     export_all_conversations_json,
@@ -142,6 +143,7 @@ async def export_conversation(
     _validate_session_id_or_raise(session_id)
     _validate_format_or_raise(format)
 
+    await enforce_session_company(session_id, request)  # #21997: another company's chat is refused
     chat_history_manager = get_chat_history_manager(request)
     content = await _run_export(chat_history_manager, session_id, format)
 
@@ -192,7 +194,10 @@ async def export_all_conversations(
         raise HTTPException(status_code=403, detail="Administrator role required for an instance-wide export")
     chat_history_manager = get_chat_history_manager(request)
     archive = await export_all_conversations_json(
-        chat_history_manager, current_user.get("username"), all_users=all_users
+        chat_history_manager,
+        current_user.get("username"),
+        all_users=all_users,
+        company=await resolve_company_scope(request, current_user),  # #21997: the active company's chats + Unassigned
     )
 
     if archive is None:

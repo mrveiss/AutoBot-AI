@@ -84,7 +84,7 @@ def _payload_sessions(response):
 async def _chat_init(user, manager, validator):
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch.object(chat_sessions, "_build_ownership_validator", return_value=validator):
-            request = SimpleNamespace(app=_app(manager))
+            request = SimpleNamespace(app=_app(manager), headers={})
             response = await batch_jobs.batch_chat_initialization(request, current_user=user)
     return _ids(response["chat_sessions"]["sessions"])
 
@@ -102,7 +102,7 @@ async def _chats_route(user, manager, validator):
     """``GET /api/chats`` and its ``/api/chat/chats`` alias (one handler, ``list_chats``)."""
     with patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()):
         with patch.object(chat_sessions, "_build_ownership_validator", return_value=validator):
-            response = await chat.list_chats(current_user=user, request=SimpleNamespace(app=_app(manager)))
+            response = await chat.list_chats(current_user=user, request=SimpleNamespace(app=_app(manager), headers={}))
     return _ids(_payload_sessions(response))
 
 

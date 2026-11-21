@@ -36,6 +36,7 @@ from fastapi import HTTPException, Request
 from auth_middleware import resolve_human_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from security.session_company import enforce_session_company
 from utils.catalog_http_exceptions import raise_internal_error
 
 logger = get_logger(__name__)
@@ -61,11 +62,16 @@ class NotSessionOwner(HTTPException):
 
 
 async def authenticated_user(session_id: str, request: Request) -> Dict:
-    """The authenticated user from the request, or 401 -- a revoked JWT included (#18688)."""
+    """The authenticated user from the request, or 401 -- a revoked JWT included (#18688).
+
+    The first step of every posture and of ``validate_strict_hidden``, so it is also where a chat that belongs to
+    a company other than the caller's active one is refused (canonical 403, #21997); no active company, no check.
+    """
     user_data = await resolve_human_user(request)
     if not user_data:
         logger.warning("Unauthenticated access attempt to session %s...", session_id[:8])
         raise HTTPException(status_code=401, detail="Authentication required to access conversations")
+    await enforce_session_company(session_id, request, user_data)
     return user_data
 
 

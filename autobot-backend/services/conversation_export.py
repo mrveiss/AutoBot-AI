@@ -137,8 +137,10 @@ async def export_conversation_markdown(chat_history_manager, session_id: str) ->
         return None
 
 
-async def _sessions_to_export(chat_history_manager, username: str | None, all_users: bool) -> list:
-    """The caller's own sessions through the canonical listing (#21666); every user's only when *all_users*.
+async def _sessions_to_export(chat_history_manager, username: str | None, all_users: bool, company=None) -> list:
+    """The caller's own sessions through the canonical listing (#21666), narrowed to *company* (#21997).
+
+    Every user's only when *all_users*, which is not company-scoped: it is the administrator's whole-instance export.
 
     *all_users* is the instance-wide export: the caller (the route) has already required an administrator.
     """
@@ -146,11 +148,11 @@ async def _sessions_to_export(chat_history_manager, username: str | None, all_us
         return await chat_history_manager.list_sessions()
     from api.chat_sessions import list_user_sessions  # noqa: PLC0415 -- api imports this module's siblings
 
-    return await list_user_sessions(chat_history_manager, username)
+    return await list_user_sessions(chat_history_manager, username, company)
 
 
 async def export_all_conversations_json(
-    chat_history_manager, username: str | None = None, *, all_users: bool = False
+    chat_history_manager, username: str | None = None, *, all_users: bool = False, company=None
 ) -> str | None:
     """
     Export the caller's conversations as a bulk JSON archive (#21666).
@@ -161,7 +163,7 @@ async def export_all_conversations_json(
     Returns serialised JSON string, or None on error.
     """
     try:
-        sessions = await _sessions_to_export(chat_history_manager, username, all_users)
+        sessions = await _sessions_to_export(chat_history_manager, username, all_users, company)
         envelopes = []
         for session_info in sessions:
             session_id = session_info.get("chatId") or session_info.get("id", "")

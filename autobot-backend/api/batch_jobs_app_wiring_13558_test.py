@@ -49,6 +49,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from api.batch_jobs import get_chat_sessions, get_settings
+from chat_history.company_scope import CompanyScope
 
 _SOURCE = Path(__file__).with_name("batch_jobs.py")
 _DEAD_MODULE = "fast_app_factory_fix"
@@ -112,8 +113,8 @@ def test_the_repaired_helpers_no_longer_import_the_dead_module() -> None:
 def test_the_repaired_helpers_take_the_app_as_a_parameter() -> None:
     """They must receive the live app, not reach for a global one."""
     source = _SOURCE.read_text(encoding="utf-8")
-    # #21653: get_chat_sessions also takes the caller's username, for the ownership filter.
-    for name, expected in (("get_chat_sessions", ["app", "username"]), ("get_settings", ["app"])):
+    # #21653: get_chat_sessions also takes the caller's username, for the ownership filter; #21997: and the company.
+    for name, expected in (("get_chat_sessions", ["app", "username", "company"]), ("get_settings", ["app"])):
         args = [a.arg for a in _function(source, name).args.args]
         assert args == expected, f"{name} takes {args}, expected {expected}"
 
@@ -153,8 +154,9 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
     app = SimpleNamespace(state=SimpleNamespace(chat_history_manager=manager))
     # A named caller: a nameless one fails closed before the manager is read (#21664).
     with patch("api.chat_sessions._filter_user_sessions", new=AsyncMock(return_value=[])):
-        result = await get_chat_sessions(app, "alice")
-    assert result == {"sessions": []}
+        result = await get_chat_sessions(app, "alice", CompanyScope(None))
+    assert result["sessions"] == []  # #21997: the company's chats; the Unassigned set rides beside them
+    assert result["unassigned"] == []
     # Reaching the mock at all is the proof: a pre-fix ModuleNotFoundError died before
     # app.state was ever touched. `assert_awaited()` takes no message, so this rationale
     # is a comment -- as a trailing string it would build a discarded tuple.
@@ -163,4 +165,6 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
 
 @pytest.mark.asyncio
 async def test_get_chat_sessions_without_a_manager_is_empty_not_an_error() -> None:
-    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace()), "alice") == {"sessions": []}
+    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace()), "alice", CompanyScope(None)) == {
+        "sessions": []
+    }
