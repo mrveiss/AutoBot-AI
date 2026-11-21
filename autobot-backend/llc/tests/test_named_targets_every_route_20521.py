@@ -156,7 +156,8 @@ async def test_a_coworker_outside_the_company_is_refused_before_the_service() ->
     body = work_items_api.CoworkerRequest(co_worker_type="agent", co_worker_agent_id=str(_FOREIGN))
     user = {"id": str(_ME), "user_id": str(_ME)}
     with patch.object(work_items_api, "_service", return_value=svc):
-        await _refused(work_items_api.set_coworker("w", body, _session(_result()), user, _ctx()))
+        # Caller role (membership, then agent lookup) is resolved first; the strict target lookup then finds nothing.
+        await _refused(work_items_api.set_coworker("w", body, _session(_result(), _result(), _result()), user, _ctx()))
 
     svc.enable_coworking.assert_not_awaited()
 
