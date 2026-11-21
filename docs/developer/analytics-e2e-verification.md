@@ -72,7 +72,7 @@ For every panel with MD/JSON export buttons (rows 5, 6, 8, 9, 10, 11, 12, 13, 14
 ## Follow-up
 
 - Any `EMPTY` / `BROKEN` row should generate a GitHub issue immediately with title `bug(codebase-analytics): <panel> <failure-mode>`.
-- Use `/dead-code-audit` and `python3 tools/lint/check_no_orphan_refs.py` to catch the most common orphan-ref + dead-code bug shapes before running this manual checklist.
+- Use `/autobot-dev-skills:audit dead-code-audit` and `python3 tools/lint/check_no_orphan_refs.py` to catch the most common orphan-ref + dead-code bug shapes before running this manual checklist.
 
 ## Historical results
 

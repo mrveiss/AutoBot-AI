@@ -12,11 +12,15 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import aiofiles
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends
 
-from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
 from api.codebase_analytics.task_routes import add_clear_stuck_route
+from api.source_scope import (
+    SourceIdQuery,
+    cached_task_result,
+    require_source_id,
+    source_scoped_prefix,
+)
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -24,6 +28,7 @@ from tasks.analytics_tasks import run_dependency_analysis
 from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
+from ..run_status import with_run_state
 from ..storage import get_code_collection
 from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, resolve_scan_root
 
@@ -336,7 +341,7 @@ def _build_visualization_graph(
         circular_deps: Detected circular dependencies
 
     Returns:
-        Complete response dictionary for JSONResponse
+        Complete response dictionary
     """
     nodes = []
     edges = []
@@ -384,7 +389,7 @@ def _build_visualization_graph(
 async def _load_modules_from_chromadb(
     code_collection,
     modules: Dict[str, Dict],
-    source_id: str | None = None,
+    source_id: str,
 ) -> None:
     """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088.
 
@@ -397,21 +402,10 @@ async def _load_modules_from_chromadb(
     wrong project (fail-closed -- the safe direction). Those pre-scoping
     records don't reappear until their source is reindexed.
     """
+    # #17758/#20513: no unscoped branch; a missing source is an error, not a skipped query.
+    source_id = require_source_id(source_id, "dependency module query")
     try:
         type_filter = {"type": {"$in": ["function", "class"]}}
-        # #17758: no unscoped branch. This docstring already said that without the
-        # clause "the query returns modules indexed for every registered source" --
-        # the conditional made that the behaviour whenever the parameter was omitted.
-        #
-        # Returns rather than raises on a falsy source_id, because the callers
-        # reach here after `get_default_source_id()`, which is legitimately None on
-        # a checkout with no registered sources. Raising would turn a working
-        # filesystem fallback into a 500. Declining to query is fail-closed and
-        # strictly safer than both alternatives: the old code queried EVERY source,
-        # and the caller's next step is the source-scoped filesystem walk.
-        if not source_id:
-            logger.debug("dependency module load skipped: no source_id to scope the index query (#17758)")
-            return
         where = {"$and": [type_filter, {"source_id": source_id}]}
         results = get_all_paginated(
             code_collection,
@@ -462,8 +456,9 @@ async def _scan_filesystem_imports(
     operation="get_dependencies",
     error_code_prefix="CODEBASE",
 )
+@with_run_state
 async def get_dependencies(
-    source_id: str | None = Query(None, description="#12330: scope dependency scan to the selected code source"),
+    source_id: SourceIdQuery,
 ):
     """
     Get file dependency analysis showing imports and module relationships.
@@ -481,13 +476,6 @@ async def get_dependencies(
     - circular_dependencies: Detected circular import issues
     - external_dependencies: Third-party package dependencies
     """
-    # Issue #12330: Resolve the default source once so both the ChromaDB module
-    # load and the filesystem scan below are scoped to the same project.
-    if not source_id:
-        from api.codebase_analytics.endpoints.shared import default_source_id
-
-        source_id = await default_source_id()
-
     code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}
     import_relationships: List[Dict] = []
@@ -497,7 +485,7 @@ async def get_dependencies(
     if code_collection:
         await _load_modules_from_chromadb(code_collection, modules, source_id=source_id)
 
-    project_root = await resolve_scan_root(source_id, use_default=False)
+    project_root = await resolve_scan_root(source_id)
     await _scan_filesystem_imports(
         project_root,
         modules,
@@ -509,7 +497,8 @@ async def get_dependencies(
     # Build module index and detect circular imports (#1197)
     module_index = _build_module_index(modules)
     circular_deps = _detect_circular_deps(runtime_rels, module_index)
-    return JSONResponse(_build_visualization_graph(modules, import_relationships, external_deps, circular_deps))
+    graph = _build_visualization_graph(modules, import_relationships, external_deps, circular_deps)
+    return {**graph, "source_id": source_id}
 
 
 # ------------------------------------------------------------------

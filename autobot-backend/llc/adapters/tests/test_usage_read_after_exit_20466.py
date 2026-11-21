@@ -39,6 +39,16 @@ _CHILD = (
 )
 
 
+_REAP_TIMEOUT = 10
+
+
+async def _reap(proc) -> None:
+    """Kill and reap a child still alive after the test body (pass or fail)."""
+    if proc.returncode is None:
+        proc.kill()
+    await asyncio.wait_for(proc.wait(), timeout=_REAP_TIMEOUT)
+
+
 async def _spawn_run(tmp_path, adapter):
     out = tmp_path / "out.jsonl"
     with open(out, "w", encoding="utf-8") as fh:
@@ -46,9 +56,13 @@ async def _spawn_run(tmp_path, adapter):
             sys.executable, "-c", _CHILD, json.dumps(_RESULT), stdin=asyncio.subprocess.PIPE, stdout=fh
         )
     run_id = f"{proc.pid}/sess"
-    state = adapter._build_state(proc, "sess", "agent-1", str(out), None, 60, 60, 60)
-    with open(_state_path(str(tmp_path), run_id), "w", encoding="utf-8") as fh:
-        json.dump(state, fh)
+    try:
+        state = adapter._build_state(proc, "sess", "agent-1", str(out), None, 60, 60, 60)
+        with open(_state_path(str(tmp_path), run_id), "w", encoding="utf-8") as fh:
+            json.dump(state, fh)
+    except BaseException:  # the caller never receives proc, so reap it here
+        await _reap(proc)
+        raise
     return proc, run_id
 
 
@@ -57,29 +71,32 @@ async def test_status_is_running_while_alive_and_usage_arrives_only_after_exit(t
     adapter = ClaudeCodeAdapter()
     cfg = {"agent_id": "agent-1", "adapter_config": {"output_dir": str(tmp_path)}}
     proc, run_id = await _spawn_run(tmp_path, adapter)
-    polls: list = []
+    try:
+        polls: list = []
 
-    async def status(c, r):
-        res = await adapter.status(c, r)
-        polls.append(res)
-        if len(polls) == _ALIVE_POLLS:  # release the child only after the Nth alive poll
-            proc.stdin.write(b"go\n")
-            await proc.stdin.drain()
-            proc.stdin.close()
-            await proc.wait()  # exited and reaped before the next poll
-        return res
+        async def status(c, r):
+            res = await adapter.status(c, r)
+            polls.append(res)
+            if len(polls) == _ALIVE_POLLS:  # release the child only after the Nth alive poll
+                proc.stdin.write(b"go\n")
+                await proc.stdin.drain()
+                proc.stdin.close()
+                await proc.wait()  # exited and reaped before the next poll
+            return res
 
-    wrapped = AsyncMock()
-    wrapped.status = status
-    with patch.object(hbs, "_ADAPTER_POLL_INTERVAL", 0.01):
-        result = await asyncio.wait_for(hbs._await_adapter_completion(wrapped, cfg, run_id), timeout=30)
+        wrapped = AsyncMock()
+        wrapped.status = status
+        with patch.object(hbs, "_ADAPTER_POLL_INTERVAL", 0.01):
+            result = await asyncio.wait_for(hbs._await_adapter_completion(wrapped, cfg, run_id), timeout=30)
 
-    assert [r.status for r in polls] == [LLCRunStatus.RUNNING] * _ALIVE_POLLS + [LLCRunStatus.COMPLETED]
-    assert all(r.tokens_in is None and r.tokens_out is None for r in polls[:_ALIVE_POLLS])
-    assert result is polls[-1]
-    assert (result.status, result.tokens_in, result.tokens_out) == (LLCRunStatus.COMPLETED, 123, 45)
+        assert [r.status for r in polls] == [LLCRunStatus.RUNNING] * _ALIVE_POLLS + [LLCRunStatus.COMPLETED]
+        assert all(r.tokens_in is None and r.tokens_out is None for r in polls[:_ALIVE_POLLS])
+        assert result is polls[-1]
+        assert (result.status, result.tokens_in, result.tokens_out) == (LLCRunStatus.COMPLETED, 123, 45)
 
-    ingest = AsyncMock()
-    with patch.object(hbs, "ingest_run_cost", ingest), patch.object(hbs, "get_async_session_factory"):
-        await hbs._ingest_adapter_usage({"agent_id": "agent-1", "company_id": "c"}, result)
-    assert ingest.await_args.args[5] == (123, 45)
+        ingest = AsyncMock()
+        with patch.object(hbs, "ingest_run_cost", ingest), patch.object(hbs, "get_async_session_factory"):
+            await hbs._ingest_adapter_usage({"agent_id": "agent-1", "company_id": "c"}, result)
+        assert ingest.await_args.args[5] == (123, 45)
+    finally:
+        await _reap(proc)

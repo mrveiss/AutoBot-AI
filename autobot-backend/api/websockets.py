@@ -22,6 +22,7 @@ from auth_middleware import authenticate_websocket
 from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.message_schema import ATTACHMENT_NOTICE_TYPE
 from events.bus import get_event_bus
 from type_defs.common import BROADCAST_EVENT_TYPES, SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
@@ -273,10 +274,9 @@ MESSAGE_TYPE_FORMATTERS: Dict[str, Callable[[dict], Tuple[str, str]]] = {
 # evict real dialogue from a message_limit-bounded window. `user_message` and
 # `llm_response` are the two keys in this table that ARE a conversation turn
 # (the user's own text; the assistant's own reply) and stay eligible.
-NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES: frozenset[str] = frozenset(MESSAGE_TYPE_FORMATTERS) - {
-    "user_message",
-    "llm_response",
-}
+NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES: frozenset[str] = frozenset(  # + the stored attachment notice (#21006)
+    MESSAGE_TYPE_FORMATTERS
+).union({ATTACHMENT_NOTICE_TYPE}) - {"user_message", "llm_response"}
 
 
 def _format_event_for_chat(message_type: str, raw_data: dict) -> Tuple[str | None, str]:

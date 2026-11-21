@@ -29,7 +29,7 @@
           </div>
           <div class="wf-info">
             <span class="wf-name">{{ wf.name }}</span>
-            <span class="wf-progress">{{ $t('workflow.runner.stepProgress', { current: wf.current_step + 1, total: wf.total_steps }) }}</span>
+            <span class="wf-progress">{{ $t('workflow.runner.stepProgress', { current: getWorkflowStepDisplay(wf).current, total: getWorkflowStepDisplay(wf).total }) }}</span>
           </div>
           <div class="wf-progress-bar">
             <div class="progress-fill" :style="{ width: getProgress(wf) + '%' }"></div>
@@ -90,7 +90,7 @@
             <div class="progress-fill" :style="{ width: getProgress(currentWorkflow) + '%' }"></div>
           </div>
           <div class="progress-stats">
-            <div class="stat"><span class="value">{{ currentWorkflow.current_step + 1 }}</span><span class="label">{{ $t('workflow.runner.current') }}</span></div>
+            <div class="stat"><span class="value">{{ getWorkflowStepDisplay(currentWorkflow).current }}</span><span class="label">{{ $t('workflow.runner.current') }}</span></div>
             <div class="stat"><span class="value">{{ currentWorkflow.total_steps }}</span><span class="label">{{ $t('workflow.runner.total') }}</span></div>
             <div class="stat"><span class="value">{{ completedSteps }}</span><span class="label">{{ $t('workflow.runner.completed') }}</span></div>
             <div class="stat"><span class="value">{{ failedSteps }}</span><span class="label">{{ $t('workflow.runner.failed') }}</span></div>
@@ -162,6 +162,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import { createDateFormatter } from '@/utils/formatHelpers'
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseBadge, BaseModal, RiskBadge, BaseButton } from '@autobot/ui'
 import { ref, computed } from 'vue';
@@ -190,8 +191,7 @@ const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
 
 function getProgress(wf: ActiveWorkflow): number {
-  if (!wf.total_steps) return 0;
-  return Math.round(((wf.current_step + 1) / wf.total_steps) * 100);
+  return getWorkflowStepDisplay(wf).percent;
 }
 
 function getStatusClass(wf: ActiveWorkflow): string {

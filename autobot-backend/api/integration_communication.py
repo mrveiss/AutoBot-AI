@@ -206,13 +206,10 @@ async def send_message(
     # that field is audit-facing only and can carry raw approver-exception text
     # once #14068 registers real approvers (#14539).
     raw_channel_id = getattr(message, "channel_id", None) or getattr(message, "channel", None) or ""
-    verdict = await egress_governor.evaluate(
-        platform=provider_lower,
-        channel_id=str(raw_channel_id),
-        message_id="",
+    verdict = await egress_governor.gate(
+        platform=provider_lower, channel_id=str(raw_channel_id), subject=f"{provider_lower} send"
     )
     if not verdict.allowed:
-        logger.warning("%s send blocked by egress governance (%s): %s", provider_lower, verdict.rule, verdict.reason)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
 
     try:
@@ -314,11 +311,8 @@ async def send_webhook_message(
     # webhook seam already reduces to hostname. Applied here to the audit
     # record and the denial log line alike (channel-identity rule, #14540).
     host = urlparse(webhook.webhook_url).hostname or "unknown"
-    verdict = await egress_governor.evaluate(platform="teams", channel_id=host, message_id="")
+    verdict = await egress_governor.gate(platform="teams", channel_id=host, subject=f"teams webhook send to {host}")
     if not verdict.allowed:
-        logger.warning(
-            "teams webhook send to %s blocked by egress governance (%s): %s", host, verdict.rule, verdict.reason
-        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Outbound send denied by egress policy")
 
     try:

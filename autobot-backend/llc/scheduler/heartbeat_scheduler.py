@@ -60,21 +60,22 @@ from ..org_role_authority import apply_org_role_bound, role_bound_enforced
 from ..services.accessors import get_budget_service
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
-from .auth_failure import adapter_run_failure, pause_after_auth_failure
+from .auth_failure import adapter_run_failure, pause_after_auth_failure, raise_for_scheduler_internal_status
 
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
-from .dispatch_gate import adapter_block_reason, dispatch_block_reason, require_dispatchable
+from .dispatch_gate import adapter_block_reason, dispatch_block_reason, note_refused_wake, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
+from .role_credentials import attach_role_credentials
 from .run_context import enrich_run_context
 from .run_key import ADAPTER_MAX_WAIT_SECONDS
 from .run_key import issue_run_key as _issue_run_key
 from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
-from .schedule_members import agent_due_members, drop_unschedulable_member
-from .usage_billing import ingest_run_cost
+from .schedule_members import agent_due_members, drop_unschedulable_member, reschedule_after_start
+from .usage_billing import agent_company_and_model, budget_session_scope, ingest_run_cost
 
 logger = get_logger(__name__)
 
@@ -308,7 +309,7 @@ class LLCHeartbeatScheduler:
 
             reason = await dispatch_block_reason(session, agent_id, agent.get("company_id"), agent.get("status"))
             if reason is not None:
-                logger.info("Heartbeat skipped for agent %s: %s", agent_id, reason)
+                await note_refused_wake(session, agent.get("company_id"), agent_id, reason)
                 await self._reschedule(agent_id, cron_expr, redis)
                 return
 
@@ -370,7 +371,8 @@ class LLCHeartbeatScheduler:
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
 
-        await self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+        # The adapter task is running: a failed reschedule must not requeue and run the agent again (#20117).
+        await reschedule_after_start("Heartbeat agent", self._reschedule, agent_id, cron_expr, redis, run_id=run.id)
 
     async def _reschedule(self, agent_id: str, cron_expr: str, redis: Any, *, run_id: Any = None) -> None:
         """Advance this agent's sorted-set score to its next fire time.
@@ -736,13 +738,8 @@ class LLCHeartbeatScheduler:
                     )
                 )
                 if company_id:
-                    await ControlsService().pause_agent(
-                        session,
-                        company_id,
-                        agent_id,
-                        actor_user_id=None,
-                        reason=f"subscription quota exhausted (run {run_id})",
-                        actor_type="system",
+                    await ControlsService().auto_pause_agent(
+                        session, company_id, agent_id, f"subscription quota exhausted (run {run_id})"
                     )
                 else:
                     logger.warning("Agent %s quota-exhausted but has no company_id — not auto-paused", agent_id)
@@ -844,7 +841,7 @@ async def _dispatch_autobot_agent(agent: Dict[str, Any], context: Dict[str, Any]
     # GH#8502: use run_blocking() so ProviderRateLimited propagates to _run_adapter
     # and triggers exponential-backoff recovery.  _run_adapter is already a
     # background task, so blocking here does not stall the poll loop.
-    adapter = AutoBotAgentAdapter(agent_config=adapter_config)
+    adapter = AutoBotAgentAdapter(agent_config=adapter_config, budget_session_factory=budget_session_scope)
     scoped = dict(context, agent_id=agent["agent_id"], company_id=str(agent.get("company_id") or ""))
     await adapter.run_blocking(scoped)
 
@@ -889,6 +886,8 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     }
     external_run_id: Optional[str] = None
     try:
+        # #20533; inside try so the run key is revoked on failure
+        await attach_role_credentials(adapter, agent, enriched)
         external_run_id = await adapter.invoke(agent_config, enriched)
         result = await _await_adapter_completion(adapter, agent_config, external_run_id)
         final_status = result.status
@@ -902,23 +901,7 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
         if key_record is not None:
             await _revoke_run_key(agent_id, key_record.id, str(agent_config.get("company_id") or "") or None)
 
-    # GH#9773: RATE_LIMITED is scheduler-internal — translate to ProviderRateLimited
-    # so the GH#8204 backoff path applies uniformly for registry adapters.
-    # This exception is caught by _run_adapter which then calls _handle_rate_limited.
-    # It never reaches the DB as a RATE_LIMITED terminal adapter status.
-    if final_status == LLCRunStatus.RATE_LIMITED:
-        logger.warning(
-            "agent %s: registry adapter signalled RATE_LIMITED for run %s — raising ProviderRateLimited",
-            agent_id,
-            external_run_id,
-        )
-        raise ProviderRateLimited(provider=agent.get("adapter_type") or "registry", retry_after_seconds=0)
-
-    # GH#10218: subscription quota exhausted is terminal-with-no-retry — surface
-    # it so _run_adapter auto-pauses the agent + notifies the board rather than
-    # recording a generic FAILED that the liveness monitor would try to recover.
-    if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
-        raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
+    raise_for_scheduler_internal_status(agent, external_run_id, result)
 
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
@@ -938,18 +921,17 @@ async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus)
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
-    model = (agent.get("adapter_config") or {}).get("model") or agent.get("model") or ""
+    company, model = agent_company_and_model(agent)
     try:
         factory = get_async_session_factory()
         async with factory() as session:
-            company = str(agent.get("company_id") or "")
             usage = (int(result.tokens_in or 0), int(result.tokens_out or 0))
             await ingest_run_cost(get_budget_service(), session, result, agent_id, company, usage, model)
             await session.commit()
     except BudgetExhausted:
         raise  # GH#8215 hard-stop — propagate so the run is recorded FAILED
     except Exception:
-        logger.warning("Budget ingest failed for agent %s (best-effort)", agent_id)
+        logger.exception("Budget ingest failed for agent %s: this run's charge is lost (#20883)", agent_id)
 
 
 async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> None:
