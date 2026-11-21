@@ -30,12 +30,9 @@ from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
 from chat_workflow.reply_persistence import (
-    COMPLETED_KEY,
-    is_redundant_prose,
+    build_final_response_entry,
     iteration_reply_entries,
     later_respond_entries,
-    model_or_unknown,
-    stable_entry_id,
     stamp_model,
 )
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
@@ -2951,25 +2948,7 @@ before summarizing.
         *batch* (the rule in ``reply_persistence``, #21880). Only assistant entries count, so
         a ``terminal_output`` echoing the reply cannot suppress the assistant turn.
         """
-        content = clean_reply_text(llm_response or "")
-        if not content or is_redundant_prose(content, batch):
-            return None
-        return chat_mgr._build_message_dict(
-            "assistant",
-            content,
-            "response",
-            {
-                "message_type": "llm_response",
-                "streamed": True,
-                "model": model_or_unknown(model),
-                "iteration": iteration,
-                COMPLETED_KEY: True,  # a whole reply, never merged as a streaming state on load (#21904)
-            },
-            None,
-            sources=[],
-            message_id=streamed[0] or stable_entry_id(iteration, "response", content),
-            created_at=streamed[1],
-        )
+        return build_final_response_entry(chat_mgr, llm_response, batch, iteration, streamed, model)
 
     def _attach_model_and_citations(
         self,

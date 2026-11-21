@@ -139,3 +139,37 @@ def iteration_reply_entries(
     ]
     final = build_final(answer, judged_against, iteration=iteration, streamed=streamed, model=model)
     return entries + ([final] if final else []), final
+
+
+def build_final_response_entry(
+    chat_mgr: Any,
+    llm_response: str,
+    batch: List[Dict[str, Any]],
+    iteration: int | None = None,
+    streamed: tuple = (None, None),
+    model: str | None = None,
+) -> Dict[str, Any] | None:
+    """The chat-history entry for one iteration's completed prose (#13214), or None.
+
+    None for an empty reply, or prose that repeats an assistant entry already in *batch* (#21880). The entry keeps
+    the streamed id and time (#21846), carries *model* (#21881) and ``completed`` (#21904).
+    """
+    content = clean_reply_text(llm_response or "")
+    if not content or is_redundant_prose(content, batch):
+        return None
+    return chat_mgr._build_message_dict(
+        "assistant",
+        content,
+        "response",
+        {
+            "message_type": "llm_response",
+            "streamed": True,
+            "model": model_or_unknown(model),
+            "iteration": iteration,
+            COMPLETED_KEY: True,  # a whole reply, never merged as a streaming state on load
+        },
+        None,
+        sources=[],
+        message_id=streamed[0] or stable_entry_id(iteration, "response", content),
+        created_at=streamed[1],
+    )

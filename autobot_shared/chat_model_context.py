@@ -48,3 +48,8 @@ def chat_context_options(model: str | None, *, reuses_chat: bool = False) -> dic
     *reuses_chat* is a caller that has already decided it is asking the resident chat model (the verifier).
     """
     return {"num_ctx": ModelConfig.CHAT_NUM_CTX} if reuses_chat or is_chat_model(model) else {}
+
+
+def interpretation_llm_options(model: str | None) -> dict[str, float | int | None]:
+    """The options of a command-interpretation call; the chat model is asked with the chat's context size (#21878)."""
+    return {"temperature": 0.7, "top_p": 0.9, "num_ctx": num_ctx_for_model(model, ModelConfig.DEFAULT_NUM_CTX)}
