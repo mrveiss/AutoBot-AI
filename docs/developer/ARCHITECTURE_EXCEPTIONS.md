@@ -685,3 +685,25 @@ accepted both windows on 2026-11-21.
 
 **Sync cadence:** None. Revisit only if Chroma gains a conditional delete or writers stop being
 fail-open.
+
+---
+
+## SLM API Timeout — `VITE_SLM_API_TIMEOUT_MS` Declared in Both Frontends
+
+**Files:** `autobot-frontend/src/utils/slmClient.ts` (`DEFAULT_TIMEOUT_MS`, line 35),
+`autobot-slm-frontend/src/utils/ApiClient.ts` (`DEFAULT_TIMEOUT_MS`, line 49)
+**Canonical it does not use:** one shared declaration of the setting
+**Issue:** #21810
+
+**Reason:** ADR-012 (`docs/adr/012-slm-first-and-separate.md`) keeps the SLM a separate application,
+built and deployed on its own with no runtime config shared with the main app. Each frontend therefore
+reads `VITE_SLM_API_TIMEOUT_MS` through its own `getEnvPositiveInt` call, both defaulting to 30 s. Both
+requests go to the SLM API, so the two budgets are the same concept. Owner decision 2026-11-21: record
+the duplicate here rather than move it to a shared home.
+
+**Sync rule:** both defaults stay equal. `repo_tests/slm_api_timeout_default_in_sync_21810_test.py`
+reads both files and fails when the two defaults differ or when either site stops reading the variable.
+
+**Revisit when:** ADR-012 changes so the two frontends share a build-time config package.
+
+**Grep check:** `git grep -n VITE_SLM_API_TIMEOUT_MS -- '*.ts'` -- exactly two read sites.
