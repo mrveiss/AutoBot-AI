@@ -24,13 +24,9 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
-
-if TYPE_CHECKING:
-    pass
 
 
 class MaintenanceAuditError(RuntimeError):
