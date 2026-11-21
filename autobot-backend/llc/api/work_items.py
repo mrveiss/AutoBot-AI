@@ -723,11 +723,11 @@ async def set_coworker(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     company_id = str(ctx.org_id)
-    await require_member_targets(session, company_id, body.co_worker_user_id, body.co_worker_agent_id)
     actor_type = "user" if current_user.get("user_id") else "agent"
     try:
         caller_role = await resolve_actor_role(session, actor_id, company_id)
         if body.co_worker_type:
+            await require_member_targets(session, company_id, body.co_worker_user_id, body.co_worker_agent_id)
             item = await _service().enable_coworking(
                 session,
                 work_item_id=work_item_id,

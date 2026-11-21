@@ -20,8 +20,8 @@ export function moveRefusalKey(err: unknown): string | null {
   return null
 }
 
-/** What the board shows for a failed move: the localised refusal reason, else the error's own message. */
+/** What the board shows for a failed move: the localised refusal reason, else the generic text (the raw error is logged). */
 export function moveFailureText(err: unknown, t: (key: string) => string): string {
   const key = moveRefusalKey(err)
-  return key ? t(key) : err instanceof Error ? err.message : String(err)
+  return t(key ?? 'llc.board.moveFailed')
 }

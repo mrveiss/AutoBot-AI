@@ -50,10 +50,10 @@ async def test_a_body_requester_never_becomes_the_requester(forged: str) -> None
 
 @pytest.mark.asyncio
 async def test_the_label_joins_the_callers_context_and_no_label_leaves_it_alone() -> None:
-    labelled = await _create(_body(requested_by_agent="data_hygiene_console", context={"action": "x"}), {"id": _ME})
-    assert labelled["context"] == {"action": "x", "requested_label": "data_hygiene_console"}
-    plain = await _create(_body(context={"action": "x"}), {"id": _ME})
-    assert plain["context"] == {"action": "x"}
+    labelled = await _create(_body(requested_by_agent="data_hygiene_console", context={"note": "x"}), {"id": _ME})
+    assert labelled["context"] == {"note": "x", "requested_label": "data_hygiene_console"}
+    plain = await _create(_body(context={"note": "x"}), {"id": _ME})
+    assert plain["context"] == {"note": "x"}
 
 
 @pytest.mark.asyncio

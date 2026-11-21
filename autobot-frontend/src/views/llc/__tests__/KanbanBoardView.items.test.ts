@@ -263,6 +263,7 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     [422, wipDetail, en.llc.board.moveRefusedWipFull],
     [422, validationDetail, en.llc.board.moveFailed],
     [403, null, en.llc.board.moveRefusedForbidden],
+    [500, null, en.llc.board.moveFailed],
   ])('shows the localised reason when the server refuses a move with %i (#20508)', async (status, details, reason) => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
@@ -276,9 +277,8 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     await flushPromises()
 
     const alert = wrapper.find('.board-load-error[role="alert"]')
-    expect(alert.text()).toContain(en.llc.board.moveFailed)
-    expect(alert.text()).toContain(reason)
+    expect(alert.find('.board-load-error-text').text()).toBe(en.llc.board.moveFailed)
+    expect(alert.find('.board-load-error-detail').text()).toBe(reason)
     expect(alert.text()).not.toContain('server wording')
-    if (status === 422 && details === validationDetail) expect(alert.text()).not.toContain(en.llc.board.moveRefusedWipFull)
   })
 })

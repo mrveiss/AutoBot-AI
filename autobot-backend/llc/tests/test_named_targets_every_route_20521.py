@@ -40,6 +40,7 @@ def _result(row=None, agent_found: bool = False) -> MagicMock:
     return MagicMock(
         scalar_one_or_none=MagicMock(return_value=row),
         all=MagicMock(return_value=[found] if found else []),
+        first=MagicMock(return_value=found),
     )
 
 
@@ -166,4 +167,34 @@ async def test_a_slug_is_refused_unless_the_column_takes_one_and_an_ambiguous_re
     assert await _named_agent.agent_in_company(session, _ORG, "agent-slug") is False  # strict: UUID columns
     session.execute.assert_not_awaited()  # refused before any query, so never a 500 on the write
     two_rows = MagicMock(all=MagicMock(return_value=[("a", "x"), ("b", "x")]))
-    assert await _named_agent.agent_in_company(_session(two_rows), _ORG, str(uuid.uuid4())) is False
+    assert await _named_agent.agent_in_company(_session(two_rows), _ORG, str(uuid.uuid4()), slug_ok=True) is False
+
+
+@pytest.mark.asyncio
+async def test_a_uuid_that_is_only_another_nodes_slug_does_not_pass_in_strict_mode() -> None:
+    """Company A's node has slug S (a UUID string) and company B's node has primary key S: S must not name B's node."""
+    collision = str(uuid.uuid4())
+    session = _session(_result(agent_found=False))
+    assert await _named_agent.agent_in_company(session, _ORG, collision) is False
+
+    sql = str(session.execute.await_args.args[0].compile(compile_kwargs={"literal_binds": True}))
+    where = sql.split("WHERE", 1)[1]
+    assert collision.replace("-", "") in where.replace("-", ""), "matched on the input as the primary key"
+    assert "company_id" in where, "scoped to the company"
+    assert "agent_org_nodes.agent_id" not in where, "the slug column is never matched in strict mode"
+
+
+@pytest.mark.asyncio
+async def test_clearing_a_coworker_is_not_refused_for_a_stale_target() -> None:
+    item = SimpleNamespace(company_id=_ORG)
+    svc = MagicMock(get=AsyncMock(return_value=item), disable_coworking=AsyncMock(return_value=item))
+    body = work_items_api.CoworkerRequest(co_worker_agent_id=str(_FOREIGN))  # no co_worker_type: a clear
+    user = {"id": str(_ME), "user_id": str(_ME)}
+    with (
+        patch.object(work_items_api, "_service", return_value=svc),
+        patch.object(work_items_api, "resolve_actor_role", AsyncMock(return_value="owner")),
+        patch.object(work_items_api, "_item_to_dict", AsyncMock(return_value={})),
+    ):
+        await work_items_api.set_coworker("w", body, _session(_result()), user, _ctx())
+
+    svc.disable_coworking.assert_awaited_once()

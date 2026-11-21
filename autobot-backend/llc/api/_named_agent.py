@@ -15,10 +15,12 @@ import uuid
 from typing import Any, Optional, Union
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
+from models.agent_org import AgentOrgNode
 from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItem
@@ -46,16 +48,21 @@ async def require_may_act_as(session: AsyncSession, ctx: TenantContext, item: LL
 async def agent_in_company(
     session: AsyncSession, company_id: Any, agent_id: Union[str, uuid.UUID], *, slug_ok: bool = False
 ) -> bool:
-    """Whether *agent_id* names exactly one agent of the company, by the canonical ``resolve_agent``.
+    """Whether *agent_id* names an agent of the company.
 
-    By default only a node id (a UUID) counts, because the columns these targets are written to hold UUIDs and a slug
-    would pass the check and then fail on the write; a malformed id or a slug reads as not (422, never a 500).
-    *slug_ok* also accepts the company-scoped slug, for a free-text column that may hold either keyspace.
+    By default the input must equal the PRIMARY KEY of a node of this company: the columns these targets are written
+    to hold node ids, and a slug (or a UUID that is only another node's slug) must not pass for one. A malformed id
+    or a slug reads as not (422, never a 500). *slug_ok* is for a free-text column that may hold either keyspace and
+    goes through the canonical ``resolve_agent`` (company-scoped, an ambiguous reference names nobody).
     """
     company = as_uuid(company_id)  # the column is a UUID; bind one, as every resolve_agent caller does
-    if company is None or (not slug_ok and as_uuid(agent_id) is None):
+    node = as_uuid(agent_id)
+    if company is None or (node is None and not slug_ok):
         return False
-    return await resolve_agent(session, company, agent_id) is not None
+    if slug_ok:
+        return await resolve_agent(session, company, agent_id) is not None
+    stmt = select(AgentOrgNode.id).where(AgentOrgNode.id == node, AgentOrgNode.company_id == company)
+    return (await session.execute(stmt)).first() is not None
 
 
 async def require_member_targets(

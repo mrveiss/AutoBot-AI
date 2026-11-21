@@ -60,4 +60,15 @@ describe('ApprovalsInbox requester (#20521)', () => {
     const wrapper = await mountInbox([row('a2', {})])
     expect(wrapper.text()).toContain(en.llc.approvals.requestedBy.replace('{id}', USER_REQUESTER))
   })
+
+  it('searches the shown requester without regard to case, and keeps its original case on screen', async () => {
+    const wrapper = await mountInbox([
+      row('a3', { requested_label: 'Data_Hygiene_Console' }),
+      row('a4', { requested_label: 'someone else' }),
+    ])
+    await wrapper.get('.filter-search').setValue('DATA_hygiene')
+    const text = wrapper.text()
+    expect(text).toContain('Data_Hygiene_Console')
+    expect(text).not.toContain('someone else')
+  })
 })

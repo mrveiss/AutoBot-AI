@@ -186,7 +186,7 @@ const filteredPending = computed(() => {
     if (filters.value.type && a.type !== filters.value.type) return false
     if (filters.value.search) {
       const q = filters.value.search.toLowerCase()
-      if (!a.type.includes(q) && !requesterText(a).includes(q)) return false
+      if (!a.type.includes(q) && !requesterText(a).toLowerCase().includes(q)) return false
     }
     return true
   })
