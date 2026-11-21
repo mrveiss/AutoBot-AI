@@ -30,8 +30,17 @@ _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 _GENERIC = "internal server error"
 _TEST = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|conftest\.py$)")
 _STATUS_NAME = re.compile(r"HTTP_(\d{3})_")
-_RAISE_HELPER = re.compile(r"raise_(bad_request|unauthorized|forbidden|not_found|conflict|unprocessable\w*)")
-_RAISE_HELPER_CODE = {"bad_request": 400, "unauthorized": 401, "forbidden": 403, "not_found": 404, "conflict": 409}
+_RAISE_HELPER = re.compile(
+    r"raise_(bad_request|invalid_input|unauthorized|forbidden|not_found|conflict|unprocessable\w*)"
+)
+_RAISE_HELPER_CODE = {
+    "bad_request": 400,
+    "invalid_input": 400,
+    "unauthorized": 401,
+    "forbidden": 403,
+    "not_found": 404,
+    "conflict": 409,
+}
 
 
 def _modules(root: Path) -> list[Path]:
@@ -77,16 +86,15 @@ def _call_status(call: ast.Call) -> int | None:
     helper = _RAISE_HELPER.fullmatch(_call_name(call))
     if helper:
         return _RAISE_HELPER_CODE.get(helper.group(1), 422)
-    if _call_name(call) == "HTTPException" and call.args:
-        return _status_of(call.args[0])
-    return None
+    # A positional status on any call: HTTPException(404, ...), error_response("...", 422).
+    return next((st for st in (_status_of(a) for a in call.args) if st is not None), None)
 
 
 def _says_generic(call: ast.Call) -> bool:
-    """A string constant anywhere in the call's arguments reads 'Internal server error' (exact, any case)."""
+    """A string constant in the call's arguments starts with 'Internal server error' (any case, any suffix)."""
     parts = [*call.args, *(kw.value for kw in call.keywords)]
     return any(
-        isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.strip().lower() == _GENERIC
+        isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.strip().lower().startswith(_GENERIC)
         for part in parts
         for n in ast.walk(part)
     )
@@ -126,6 +134,9 @@ _FIRES = [
     ("response_builder", "def h():\n    return error_response('Internal server error', status_code=422)\n"),
     ("raise_helper", _wrap('raise_not_found("Internal server error")')),
     ("json_body", "def h():\n    return JSONResponse({'detail': 'Internal server error'}, status_code=403)\n"),
+    ("prefixed_text", _wrap('HTTPException(404, detail="Internal server error: lookup failed")')),
+    ("builder_positional_status", "def h():\n    return error_response('Internal server error', 422)\n"),
+    ("invalid_input_helper", _wrap('raise_invalid_input("request", "Internal server error")')),
 ]
 _QUIET = [
     ("five_hundred", _wrap('HTTPException(status_code=500, detail="Internal server error")')),
