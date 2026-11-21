@@ -21,6 +21,7 @@ import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/us
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 import { createLogger } from '@/utils/debugUtils'
 import i18n from '@/i18n'
+import { proposeSelectedDelete } from './selectedDelete'
 
 // Create scoped logger for KnowledgeController
 const logger = createLogger('KnowledgeController')
@@ -238,17 +239,16 @@ export class KnowledgeController {
     }
   }
 
-  /** #21383: the backend only proposes the delete for approval, so the list keeps its rows and a notice says so. */
+  /** #21886, #21383: propose deleting exactly the selected documents; the rows stay until a human approves. */
   async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
-    try {
-      const reply = await knowledgeRepository.bulkDeleteDocuments(documentIds)
-      const key = reply.approval_id ? 'knowledge.entries.deleteProposed' : 'knowledge.entries.deleteNotProposed'
-      this.appStore.addSystemNotification({ title: i18n.global.t('knowledge.entries.deleteTitle'), message: i18n.global.t(key), severity: 'info' })
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.deleteProposeFailed', { message: errorMessage }))
-      throw error
-    }
+    await proposeSelectedDelete(documentIds, {
+      notify: message => this.appStore.addSystemNotification({
+        title: i18n.global.t('knowledge.entries.deleteTitle'), message, severity: 'info' }),
+      fail: message => this.appStore.setGlobalError(message),
+      dropRows: ids => this.knowledgeStore.bulkDeleteDocuments(ids),
+      resync: async () => { await this.loadAllDocuments(); await this.refreshStats() },
+      stillListed: ids => this.knowledgeStore.documents.some(doc => ids.includes(doc.id)),
+    })
   }
 
   // Issue #747: Bulk update operations
