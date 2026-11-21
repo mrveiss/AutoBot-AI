@@ -30,26 +30,51 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
   // the selection and runs ahead of it while a load is in flight.
   const loadedCategory = ref<SmellCategory>(SMELL_CATEGORY_DEFAULT)
 
-  let requestedCategory: SmellCategory = smellCategory.value
+  // One request per category (#21784): a callback belongs to the request that made it, so a response
+  // that was superseded by a newer load (another category) is ignored instead of labelling its rows.
+  interface SmellRequest { category: SmellCategory; seq: number }
+  let latestSeq = 0
+  let inFlight: { request: SmellRequest; done: Promise<void> } | null = null
+  const isCurrent = (r: SmellRequest) => r.seq === latestSeq
 
-  const endpoint = useFetchEndpoint<{ status?: string; problems?: Problem[] }, Problem[]>(
+  const endpoint = useFetchEndpoint<{ status?: string; problems?: Problem[] }, Problem[], SmellRequest>(
     {
       path: '/api/analytics/codebase/problems',
       scopeToSource: true,
+      requireSource: true,
       label: 'Code smells endpoint',
       pickData: (raw) => (raw.status === 'no_data' ? [] : raw.problems ?? []),
-      onSuccess: (d) => { smellProblems.value = d; loadedCategory.value = requestedCategory },
+      onSuccess: (d, _raw, r) => {
+        if (!isCurrent(r)) return
+        smellProblems.value = d
+        loadedCategory.value = r.category
+      },
       // A failed load must not leave the previous category's findings on screen.
-      onError: () => { smellProblems.value = []; loadedCategory.value = requestedCategory },
+      onError: (_message, _err, r) => {
+        if (!isCurrent(r)) return
+        smellProblems.value = []
+        loadedCategory.value = r.category
+      },
     },
     { withSourceId },
   )
 
+  /**
+   * Load the selected category. While a load of the SAME category is in flight its request is reused:
+   * `useFetchEndpoint.load` cancels the previous request, so a refresh timer shorter than the response
+   * time would otherwise cancel every request and the panel would never leave the previous category.
+   */
   const loadSmellProblems = () => {
-    requestedCategory = smellCategory.value
-    return endpoint.load(
-      requestedCategory === SMELL_CATEGORY_ALL ? undefined : { file_category: requestedCategory },
-    )
+    const category = smellCategory.value
+    if (inFlight && inFlight.request.category === category) return inFlight.done
+    const request: SmellRequest = { category, seq: ++latestSeq }
+    const done = endpoint
+      .load(category === SMELL_CATEGORY_ALL ? undefined : { file_category: category }, request)
+      .finally(() => {
+        if (inFlight?.request === request) inFlight = null
+      })
+    inFlight = { request, done }
+    return done
   }
 
   /** Drop the loaded rows (cache clear); they are the default category's again. */
@@ -76,6 +101,9 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
       })),
   )
 
+  /** True while the rows on hand belong to another category than the selected one (a load is in flight). */
+  const smellsStale = computed(() => loadedCategory.value !== smellCategory.value)
+
   /** The export's data: the cards' list and the cards' counts, nothing else. */
   const smellsExport = computed(() => buildSmellsExport(smellsForPanel.value, loadedCategory.value))
 
@@ -83,6 +111,7 @@ export function useCodeSmellProblems(withSourceId: (url: string) => string) {
     smellCategory,
     smellsForPanel,
     smellsExport,
+    smellsStale,
     smellsError: endpoint.error,
     smellsLoading: endpoint.loading,
     loadSmellProblems,

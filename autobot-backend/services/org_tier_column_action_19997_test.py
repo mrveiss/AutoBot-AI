@@ -30,7 +30,9 @@ def _session(present: bool = True, admins: tuple = (_ADMIN, _OTHER)) -> MagicMoc
 
     async def _execute(statement):
         session.statements.append(str(statement))
-        rows = MagicMock(all=lambda: list(admins))
+        rows = MagicMock(
+            all=lambda: [SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in admins]
+        )
         return MagicMock(first=lambda: (1,) if present else None, scalars=lambda: rows)
 
     session.execute = _execute

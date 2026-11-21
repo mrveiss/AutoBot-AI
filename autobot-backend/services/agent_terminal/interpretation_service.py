@@ -10,9 +10,12 @@ polling chat turn and the worker that ran the command reach the same key.
 
 from __future__ import annotations
 
+import copy
 import uuid
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
+from type_defs.common import Metadata
 
 from .interpretation_turn import register_turn, release_turn, take_for_command, take_for_turn
 from .models import AgentTerminalSession
@@ -53,3 +56,16 @@ class InterpretationOwnershipMixin:
                 "Interpretation ownership of session %s unconfirmed, interpreting here: %s", session.session_id, exc
             )
             return True
+
+    def _interpret_in_background(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
+        """Interpret an approved command's result AFTER the approve request has answered (#19951).
+
+        The interpretation is an LLM call; awaiting it inside the approve request left the button looking dead for
+        seconds. The task works on a snapshot of the session: ownership of the interpretation is keyed by the
+        pending approval's decision id, which ``settle_pending`` clears moments after this is scheduled.
+        ``_interpret_approved_command`` logs its own failure, and ``fire_and_forget`` logs anything it misses.
+        """
+        fire_and_forget(
+            self._interpret_approved_command(copy.copy(session), command, result),
+            name=f"interpret-approved-{session.session_id}",
+        )

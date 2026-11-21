@@ -55,10 +55,15 @@
         </button>
       </div>
 
+      <div v-if="statisticsFailed" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ $t('views.auditLogs.statisticsError') }}</span>
+      </div>
+
       <!-- Dashboard Tab -->
       <div v-if="activeTab === 'dashboard'" class="tab-content">
         <AuditStatistics
-          :statistics="statistics"
+          :statistics="resolvedStatistics"
           :vm-info="vmInfo"
           :loading="loadingStats"
           @user-click="openUserTrail"
@@ -110,7 +115,7 @@
         </div>
 
         <AuditLogTable
-          :entries="entries"
+          :entries="failureEntries"
           :loading="loading"
           :has-more="false"
           :current-page="1"
@@ -207,7 +212,9 @@ const logger = createLogger('AuditLogsView')
 // Use the audit state composable
 const {
   entries,
-  statistics,
+  failureEntries,
+  statisticsFailed,
+  resolvedStatistics,
   vmInfo,
   operationCategories,
   loading,

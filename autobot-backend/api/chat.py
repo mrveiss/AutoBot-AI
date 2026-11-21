@@ -64,13 +64,14 @@ from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
-from chat_history.deduplication import parse_message_timestamp
+from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
 from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
+from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -324,7 +325,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import log_request_context
+from api.chat_sessions import list_user_sessions, log_request_context
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -953,7 +954,7 @@ async def list_chats(
     request: Request = None,
 ):
     """
-    List all available chat sessions with improved error handling (consolidated).
+    List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
 
     Issue #744: Requires authenticated user.
     """
@@ -973,9 +974,8 @@ async def list_chats(
             details={"component": "chat_history_manager"},
         )
 
-    # Get sessions directly - decorator handles all errors
-    # list_sessions_fast is async (uses asyncio.to_thread internally)
-    sessions = await chat_history_manager.list_sessions_fast()
+    # #21664: the caller's own sessions through the one shared listing, never the instance-wide list
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
     return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",
@@ -1578,11 +1578,10 @@ async def resume_chat_graph(
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
-
     decision = resume_decision(request_data, chat_id)
 
-    return _create_streaming_response(
-        _stream_graph_resume(
+    async def _open():  # #21022
+        return _stream_graph_resume(
             chat_workflow_manager,
             chat_id,
             decision,
@@ -1590,7 +1589,8 @@ async def resume_chat_graph(
             await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request),  # #20195
             auth_scope=principal_scope(current_user),  # the budget gate names this user (#16845, #19241)
         )
-    )
+
+    return _create_streaming_response(await guarded_resume(chat_id, request_data, chat_workflow_manager, _open))
 
 
 async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
@@ -1632,7 +1632,7 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     final_merged = _process_streaming_groups(merged)
 
     # Sort by timestamp to maintain chronological order
-    final_merged.sort(key=lambda m: m.get("timestamp", ""))
+    final_merged.sort(key=timestamp_sort_key)  # #21846: old and new timestamp formats order together
 
     logger.debug(
         f"Merged messages: {len(existing)} existing + {len(new)} new = "

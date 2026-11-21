@@ -6,7 +6,7 @@
 
 - ``fix_kb_dimensions.py`` / ``utilities/fix_settings_loading.py`` import a sibling module; loaded by
   path from another directory with no PYTHONPATH, the sibling must still resolve.
-- ``kb_dimension_utility.fix_dimensions`` aborts before any Redis command when there is no client,
+- ``kb_dimension_utility.fix_dimensions`` holds no Redis client (the wipe is an approved proposal, #21383),
   and ``main`` turns a failure into a non-zero exit code.
 """
 
@@ -16,6 +16,7 @@ import asyncio
 import importlib.util
 import subprocess
 import sys
+import types
 
 import pytest
 from repo_tests._paths import repo_root
@@ -52,19 +53,44 @@ def kb_dim(monkeypatch):
     return mod
 
 
-def test_no_redis_client_aborts_before_any_command(kb_dim, monkeypatch):
-    calls = []
-    monkeypatch.setattr(kb_dim, "get_redis_client", lambda **kw: calls.append(kw) or None)
-    assert asyncio.run(kb_dim.fix_dimensions()) is False
-    assert calls == [{"database": "knowledge"}]  # no per-database cleanup loop after the abort
+def test_the_fix_never_touches_redis_and_initialises_the_kb_only(kb_dim, monkeypatch):
+    """#21383: the destructive Redis cleanup moved to the approved wipe; the fix itself holds no Redis client."""
+    assert not hasattr(kb_dim, "get_redis_client")
+
+    async def no_kb():
+        return None
+
+    monkeypatch.setitem(sys.modules, "knowledge_factory", types.SimpleNamespace(get_knowledge_base_async=no_kb))
+    with pytest.raises(RuntimeError, match="Knowledge base unavailable"):
+        asyncio.run(kb_dim.fix_dimensions())
 
 
 def test_main_exit_code_reflects_the_outcome(kb_dim, monkeypatch):
-    monkeypatch.setattr(kb_dim, "get_redis_client", lambda **kw: None)
-    assert kb_dim.main() == 1
+    async def bad():
+        return False
+
+    monkeypatch.setattr(kb_dim, "fix_dimensions", bad)
+    assert kb_dim.main([]) == 1
 
     async def ok():
         return True
 
     monkeypatch.setattr(kb_dim, "fix_dimensions", ok)
-    assert kb_dim.main() == 0
+    assert kb_dim.main([]) == 0
+
+
+def test_request_wipe_flags_route_to_the_proposal_not_the_fix(kb_dim, monkeypatch):
+    asked = []
+
+    async def fake_request(dry_run):
+        asked.append(dry_run)
+        return True
+
+    async def boom():
+        raise AssertionError("the fix must not run for a wipe request")
+
+    monkeypatch.setattr(kb_dim.kb_wipe_cli, "request_wipe", fake_request)
+    monkeypatch.setattr(kb_dim, "fix_dimensions", boom)
+    assert kb_dim.main(["--request-wipe"]) == 0
+    assert kb_dim.main(["--dry-run"]) == 0
+    assert asked == [False, True]
