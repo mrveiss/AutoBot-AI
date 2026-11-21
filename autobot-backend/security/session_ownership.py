@@ -691,12 +691,14 @@ class SessionOwnershipValidator:
         return removed
 
     async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:
-        """Is the session shared with the user? Decided from the table; Redis is never consulted (#18890).
+        """Is the session shared with the user? Decided from the table (#18890).
 
-        Legacy Redis-only shares are adopted first, so they still grant access. Fails closed.
+        Redis is consulted only to import legacy Redis-only shares until that import is recorded in the table;
+        a Redis outage after that changes nothing. Fails closed.
         """
+        if not await session_shares.adopted_or_denied(self.redis):
+            return False
         try:
-            await session_shares.ensure_adopted(self.redis)
             return await session_shares.durable_is_participant(session_id, user_id)
         except Exception as e:
             logger.error("Failed to check shared status: %s", e)
@@ -704,8 +706,9 @@ class SessionOwnershipValidator:
 
     async def get_shared_sessions(self, user_id: str) -> list[str]:
         """Every session shared with a user, from the table after adopting legacy shares (#689, #18890)."""
+        if not await session_shares.adopted_or_denied(self.redis):
+            return []
         try:
-            await session_shares.ensure_adopted(self.redis)
             return await session_shares.durable_sessions_for(user_id)
         except Exception as e:
             logger.error("Failed to get shared sessions: %s", e)

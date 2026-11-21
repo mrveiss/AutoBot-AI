@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from autobot_shared.coordination.work_claims import ClaimConflictError
@@ -496,3 +496,60 @@ async def test_sharing_writes_only_the_table(env):
     assert await validator.is_shared_with_user(SESSION_ID, "bob")
     await validator.unshare_session(SESSION_ID, "bob", ACTOR)
     assert not await validator.is_shared_with_user(SESSION_ID, "bob")
+
+
+class _DownRedis(FakeRedis):
+    """Every command raises: Redis is in an outage."""
+
+    def __getattribute__(self, name):
+        if name in {"exists", "set", "scan_iter", "smembers", "persist", "sismember", "sadd", "srem", "expire"}:
+            raise ConnectionError("redis down")  # a message that must never reach the log
+        return super().__getattribute__(name)
+
+
+async def _outage(env, *, adopted: bool):
+    validator, _, _ = env
+    await validator.share_session(SESSION_ID, ["bob"], "alice")
+    if not adopted:  # sharing adopts as a side effect; drop the completion row to model a not-yet-migrated install
+        async with session_shares._factory()() as db:
+            await db.execute(delete(SessionShareAdoption))
+            await db.commit()
+    validator.redis = _DownRedis()
+    return validator
+
+
+@pytest.mark.asyncio
+async def test_a_redis_outage_after_adoption_still_answers_from_the_table(env):
+    validator = await _outage(env, adopted=True)
+
+    assert await validator.is_shared_with_user(SESSION_ID, "bob") is True
+    assert await validator.is_shared_with_user(SESSION_ID, "mallory") is False
+
+
+@pytest.mark.asyncio
+async def test_a_redis_outage_before_adoption_fails_closed_with_its_own_log_line(env, caplog):
+    validator = await _outage(env, adopted=False)
+
+    assert await validator.is_shared_with_user(SESSION_ID, "bob") is False
+    assert "Legacy share adoption cannot run" in caplog.text
+    assert "Share adoption failed" in caplog.text
+    assert "redis down" not in caplog.text  # only the exception type is logged
+
+
+@pytest.mark.asyncio
+async def test_listing_and_unsharing_under_a_redis_outage_use_the_table(env):
+    validator = await _outage(env, adopted=True)
+
+    assert await validator.get_shared_sessions("bob") == [SESSION_ID]
+    assert await validator.unshare_session(SESSION_ID, "bob", ACTOR) is True
+    assert await validator.is_shared_with_user(SESSION_ID, "bob") is False
+
+
+@pytest.mark.asyncio
+async def test_unsharing_before_adoption_during_an_outage_raises_and_changes_nothing(env):
+    validator = await _outage(env, adopted=False)
+
+    with pytest.raises(session_shares.AdoptionUnavailable):
+        await validator.unshare_session(SESSION_ID, "bob", ACTOR)
+    assert await validator.get_shared_sessions("bob") == []  # fail closed, no claim of access
+    assert "bob" in await _rows()

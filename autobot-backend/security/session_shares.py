@@ -143,14 +143,32 @@ async def durable_mark_adopted() -> None:
         await db.commit()
 
 
+class AdoptionUnavailable(RuntimeError):
+    """Legacy Redis shares are not yet imported and Redis cannot be read, so the import cannot run (#18890)."""
+
+
 async def _is_adopted(redis) -> bool:
-    """The durable row decides; the Redis marker is only a cache of it, re-written when it was lost."""
-    if await redis.exists(ADOPTED_KEY):
-        return True
+    """The durable row decides; the Redis marker is only a best-effort cache of it, re-written when it was lost.
+
+    A Redis failure is logged (exception type only) and falls through to the table.
+    """
+    try:
+        if await redis.exists(ADOPTED_KEY):
+            return True
+    except Exception as exc:
+        logger.warning("Adoption marker unreadable in Redis (%s); asking the table (#18890)", type(exc).__name__)
     if not await durable_adopted():
         return False
-    await redis.set(ADOPTED_KEY, "1")
+    await _cache_adopted(redis)
     return True
+
+
+async def _cache_adopted(redis) -> None:
+    """Best-effort write of the Redis cache of the durable completion row."""
+    try:
+        await redis.set(ADOPTED_KEY, "1")
+    except Exception as exc:
+        logger.warning("Adoption marker not cached in Redis (%s); the table still answers (#18890)", type(exc).__name__)
 
 
 async def remove_share(redis, session_id: str, user_id: str) -> bool:
@@ -216,9 +234,15 @@ async def _adopt_once(redis) -> int:
     ``durable_add_unless_adopted`` writes nothing once the completion row exists."""
     if await _is_adopted(redis):  # another worker finished between the check before the claim and the claim
         return 0
-    copied = await _adopt_from_session_keys(redis) + await _adopt_from_user_keys(redis)
+    try:
+        copied = await _adopt_from_session_keys(redis) + await _adopt_from_user_keys(redis)
+    except Exception as exc:
+        logger.error(
+            "Legacy share adoption cannot run, Redis is unavailable (%s); failing closed (#18890)", type(exc).__name__
+        )
+        raise AdoptionUnavailable("legacy chat shares are not imported and Redis is unavailable") from exc
     await durable_mark_adopted()
-    await redis.set(ADOPTED_KEY, "1")
+    await _cache_adopted(redis)
     return copied
 
 
@@ -234,6 +258,16 @@ async def _await_marker(redis) -> int:
 async def ensure_adopted(redis) -> None:
     """Lazy fallback for the startup adoption: a no-op once the marker is set."""
     await adopt_redis_shares(redis)
+
+
+async def adopted_or_denied(redis) -> bool:
+    """Import legacy shares if still needed. False, logged apart from a lookup failure, when it cannot run."""
+    try:
+        await ensure_adopted(redis)
+        return True
+    except Exception as exc:
+        logger.error("Share adoption failed, denying: %s", type(exc).__name__)
+        return False
 
 
 def audit_actor(request, user_data: dict | None) -> dict:
