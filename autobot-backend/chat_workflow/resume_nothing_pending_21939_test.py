@@ -18,24 +18,27 @@ from chat_workflow.session_init_guard import NO_TURN_MESSAGE
 pytestmark = pytest.mark.asyncio
 
 
-async def test_an_approval_resume_with_nothing_pending_is_a_409_nothing_to_resume(
-    monkeypatch,
-):
-    monkeypatch.setattr(stall_pending, "pending_interrupts", AsyncMock(return_value=[]))
+def _pause(monkeypatch, interrupts, next_nodes=()):
+    monkeypatch.setattr(
+        stall_pending, "read_pause", AsyncMock(return_value=stall_pending.Pause(interrupts, next_nodes))
+    )
+
+
+async def test_an_approval_resume_with_nothing_pending_is_a_409_with_the_nothing_to_resume_code(monkeypatch):
+    _pause(monkeypatch, [])
     with pytest.raises(HTTPException) as err:
         await stall_pending.check_resume_binding(MagicMock(), "s1", {"approved": True})
     assert err.value.status_code == 409
-    assert err.value.detail == stall_pending.NOTHING_TO_RESUME
+    assert err.value.detail["code"] == stall_pending.NOTHING_TO_RESUME_CODE
 
 
-async def test_control_an_approval_resume_with_an_approval_interrupt_pending_passes(
-    monkeypatch,
-):
-    monkeypatch.setattr(
-        stall_pending,
-        "pending_interrupts",
-        AsyncMock(return_value=[{"type": "command_approval_request"}]),
-    )
+async def test_a_graph_with_nodes_still_to_run_is_not_refused(monkeypatch):
+    _pause(monkeypatch, [], ("execute_tools",))
+    await stall_pending.check_resume_binding(MagicMock(), "s1", {"approved": True})
+
+
+async def test_control_an_approval_resume_with_an_approval_interrupt_pending_passes(monkeypatch):
+    _pause(monkeypatch, [{"type": "command_approval_request"}])
     await stall_pending.check_resume_binding(MagicMock(), "s1", {"approved": True})
 
 

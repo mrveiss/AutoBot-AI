@@ -26,6 +26,7 @@ from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
+from .interpretation_guard import interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
@@ -1030,6 +1031,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if full_response:
                 full_response = await _emit_after_llm_response(full_response, llm_params, session_id)
 
+    @interpretation_never_fails_the_tool
     async def _interpret_command_results(
         self,
         command: str,
@@ -1062,21 +1064,13 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint,
-                selected_model,
-                interpretation_prompt,
-                llm_options,
-                session_id,
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint,
-            selected_model,
-            interpretation_prompt,
-            llm_options,
-            session_id,
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
         ):
             yield msg
 

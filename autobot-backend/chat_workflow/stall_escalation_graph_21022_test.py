@@ -118,7 +118,7 @@ async def _resumed_update(answer: str) -> dict:
 
 def _pending(monkeypatch, value):
     interrupts = [] if value is None else [{"type": stall_pending.QUESTION_TYPE, **value}]
-    monkeypatch.setattr(stall_pending, "pending_interrupts", AsyncMock(return_value=interrupts))
+    monkeypatch.setattr(stall_pending, "read_pause", AsyncMock(return_value=stall_pending.Pause(interrupts, ())))
 
 
 async def test_an_approval_resume_cannot_answer_a_stall_question(monkeypatch):
@@ -152,7 +152,7 @@ async def test_an_answer_or_an_approval_with_nothing_pending_is_refused_with_409
 
 
 async def test_an_unreadable_checkpoint_refuses_an_answer_but_not_an_approval(monkeypatch):
-    monkeypatch.setattr(stall_pending, "pending_interrupts", AsyncMock(side_effect=RuntimeError("redis down")))
+    monkeypatch.setattr(stall_pending, "read_pause", AsyncMock(side_effect=RuntimeError("redis down")))
     with pytest.raises(HTTPException) as err:
         await stall_pending.check_resume_binding(MagicMock(), "s1", {"answer": "x", "question_id": "q1"})
     assert err.value.status_code == 503

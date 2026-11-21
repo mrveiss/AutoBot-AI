@@ -18,7 +18,6 @@ import { useChatController } from '@/models/controllers'
 import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import i18n from '@/i18n'
-import { isAlreadyDecided } from '@/utils/approvalResult'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -45,8 +44,25 @@ export type ResumeBody = { approved: boolean; reason: string } | { answer: strin
 
 /** The server refused the resume request; `status` tells the card why (400: blocked by policy, 409: no longer pending). */
 export class ResumeRejectedError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    readonly code?: string
+  ) {
     super(`resume failed: ${status}`)
+  }
+}
+
+/** The `detail.code` the resume route puts on its "nothing to resume" 409 (backend: `NOTHING_TO_RESUME_CODE`). Its other 409s differ. */
+export const NOTHING_TO_RESUME_CODE = 'nothing_to_resume'
+
+/** The machine-readable code of a refused resume's body, or undefined when the body carries none or is unreadable. */
+async function refusalCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = await response.json()
+    return typeof body?.detail?.code === 'string' ? body.detail.code : undefined
+  } catch (error) {
+    logger.debug('The refusal body of a resume carried no readable code:', error)
+    return undefined
   }
 }
 
@@ -79,7 +95,7 @@ function useResumePost() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-        if (!response.ok) throw new ResumeRejectedError(response.status)
+        if (!response.ok) throw new ResumeRejectedError(response.status, await refusalCode(response))
         accepted = true
         hooks.onAccepted?.()
         if ((await controller.handleStreamingResponse(response, chatId, true)) === true) {
@@ -131,7 +147,7 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
     try {
       await postResume(message, { approved, reason: comment || '' })
     } catch (error) {
-      if (error instanceof ResumeRejectedError && isAlreadyDecided(error)) {
+      if (error instanceof ResumeRejectedError && error.code === NOTHING_TO_RESUME_CODE) {
         // #21939: nothing is waiting on this card (a double click, a stale card, a turn that ended): not a failure.
         store.updateMessageMetadata(message.id, { approval_status: 'handled' }, cardChat)
         showToast(i18n.global.t('chat.interface.approvalAlreadyHandled'), 'info', 3000)
