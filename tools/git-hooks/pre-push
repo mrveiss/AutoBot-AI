@@ -318,7 +318,7 @@ machine_slot_take() {
 # /proc/uptime is monotonic; the fallback clamps so a duration is never negative.
 machine_slot_clock() {
   local up
-  read -r up _ < /proc/uptime 2>/dev/null && [ -n "$up" ] && { echo "${up%.*}"; return; }
+  read -r up _ 2>/dev/null < /proc/uptime && [ -n "$up" ] && { echo "${up%.*}"; return; }
   echo "$SECONDS"
 }
 machine_slot_wait() {
@@ -333,7 +333,7 @@ machine_slot_wait() {
     if machine_slot_load_high; then
       why="$MACHINE_SLOT_LOAD_MSG"
     elif machine_slot_take "$dir"; then
-      # #21225: a wait is an iteration of this loop; SECONDS is an integer clock and also ticks across a first-attempt take.
+      # #21225: a wait is an earlier iteration of this loop (waited=1), not elapsed clock time: a first-attempt take returns silently.
       [ "$waited" = 1 ] || return 0
       now=$(machine_slot_clock)
       log "waited $((now > start ? now - start : 0))s for a machine slot"
