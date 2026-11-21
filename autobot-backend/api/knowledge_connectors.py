@@ -47,6 +47,7 @@ from api._connector_sync_result import record_last_sync
 from api.admin_connector_credentials import router as _credentials_router
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc, parse_utc_iso
@@ -283,7 +284,7 @@ async def _cfg_with_credentials(cfg: ConnectorConfig, auth_cls: type | None) -> 
         full_config = await get_credential_store().load(cfg.secret_id, cfg.config, auth_cls, owner_id)
     except (LookupError, PermissionError) as exc:
         logger.error("Failed to load credentials for connector %s: %s", cfg.connector_id, exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error") from exc
+        raise fixed_refusal(403) from exc
 
     return dataclasses.replace(cfg, config=full_config)
 
@@ -299,7 +300,7 @@ async def _oauth_full_config(cfg: ConnectorConfig, auth_cls: type, owner_id: str
         access_token = await get_credential_store().get_access_token(cfg.secret_id, owner_id)
     except (LookupError, PermissionError) as exc:
         logger.error("Failed to resolve OAuth token for connector %s: %s", cfg.connector_id, exc, exc_info=True)
-        raise HTTPException(status_code=403, detail="Internal server error") from exc
+        raise fixed_refusal(403) from exc
     sensitive = sorted(auth_cls.__sensitive_fields__)
     token_field = sensitive[0] if sensitive else "token"
     return {**cfg.config, token_field: access_token}
@@ -458,10 +459,7 @@ async def create_connector(
 ):
     """Create a new connector, test the connection, and persist the config."""
     if request.connector_type not in _SUPPORTED_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail="connector_type must be one of: %s" % _SUPPORTED_TYPES,
-        )
+        raise HTTPException(status_code=422, detail="connector_type must be one of: %s" % _SUPPORTED_TYPES)
     connector_id = str(uuid.uuid4())
     klass, auth_cls, auth_type = validated_connector_auth(request)
 

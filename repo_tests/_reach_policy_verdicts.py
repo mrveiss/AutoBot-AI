@@ -112,6 +112,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
         "the test-file share drifts.",
     ),
+    "client-error-detail-sweep-21943": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
+        "the test-file share drifts.",
+    ),
     "generated-type-redeclarations": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

@@ -30,6 +30,7 @@ from api.user_management.human_decider import classify_author_type, require_inte
 from auth_middleware import get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.risk_tier import RiskTier
@@ -363,10 +364,7 @@ async def approve(
             decider_id=_user_uuid(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -398,10 +396,7 @@ async def reject(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -433,10 +428,7 @@ async def request_revision(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -466,10 +458,7 @@ async def resubmit(
             body.context,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
     return _to_response(approval)
 
 
@@ -507,10 +496,7 @@ async def add_comment(
             author_type=classify_author_type(current_user),
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     return ApprovalCommentResponse(
         id=str(comment.id),
         approval_id=str(comment.approval_id),
@@ -547,10 +533,7 @@ async def link_task(
             body.task_type,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     return TaskApprovalLinkResponse(
         id=str(link.id),
         approval_id=str(link.approval_id),
@@ -581,10 +564,7 @@ async def unlink_task(
     try:
         removed = await svc.unlink_task(approval_id, task_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_404_NOT_FOUND)
     if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

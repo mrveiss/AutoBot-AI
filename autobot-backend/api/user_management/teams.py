@@ -38,6 +38,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     user_management_route_marker,
 )
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.services import TeamService, TenantContext
@@ -118,10 +119,7 @@ async def create_team(
         )
 
     except DuplicateTeamError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
 
 
 # -------------------------------------------------------------------------
@@ -213,10 +211,7 @@ async def update_team(
             detail=f"Team {team_id} not found",
         )
     except DuplicateTeamError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
 
 
 @router.delete(
@@ -304,10 +299,7 @@ async def add_team_member(
             detail=f"Team {team_id} not found",
         )
     except MembershipError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_409_CONFLICT)
 
 
 @router.delete(
@@ -333,10 +325,7 @@ async def remove_team_member(
         )
 
     except MembershipError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 @router.patch(
@@ -361,10 +350,7 @@ async def update_member_role(
         return _membership_to_response(membership)
 
     except MembershipError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
-        )
+        raise fixed_refusal(status.HTTP_400_BAD_REQUEST)
 
 
 # -------------------------------------------------------------------------

@@ -274,6 +274,7 @@ DECLARED_SCOPES = {
     "llc-api-acting-identity": ("autobot-backend/llc/api",),
     "docker-smoke-context-publishers": (".github/workflows",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "client-error-detail-sweep-21943": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
         ".github",
         "autobot-slm-backend/ansible",

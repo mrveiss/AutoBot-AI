@@ -35,6 +35,11 @@ REACH_ROOTS = {
         "autobot_shared",
     ),
     "repo_tests/ci_requirements_one_install_20191_test.py": (".github/workflows",),
+    "repo_tests/client_error_not_server_error_21943_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/company_os_exception_text_21579_test.py": ("autobot-backend/llc",),
     "repo_tests/compat_module_needs_importer_18552_test.py": ("autobot-backend",),
     "repo_tests/compose_nodes_one_home_19323_test.py": (
