@@ -330,7 +330,6 @@ DECLARED_SCOPES = {
         "autobot-backend/chat_workflow/manager.py",
         "autobot-backend/modern_ai_integration.py",
     ),
-    "post-commit-seed-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "redis-direct-constructor-scan": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -350,6 +349,14 @@ DECLARED_SCOPES = {
     "slm-node-enum-members-exist": ("autobot-slm-backend",),
     "browser-worker-one-manifest-21852": ("autobot-browser-worker",),
     "one-playwright-server-scan": ("autobot-browser-worker", "autobot-infrastructure", "autobot-frontend"),
+    "extraction-registry-sweep": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "tools/lint",
+        "pipeline-scripts",
+        "scripts",
+    ),
     "one-rate-limiter-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "fact-read-authorization-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "llm-quality-seam-scan": ("autobot-backend/judges", "autobot-backend/rlm", "autobot-backend/agent_loop"),
