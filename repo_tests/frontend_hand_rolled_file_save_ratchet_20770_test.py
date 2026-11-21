@@ -11,7 +11,10 @@
 what makes a click save a file, so a hand-rolled save cannot avoid it. The kit
 (`libs/autobot-ui/src/utils/saveFile.ts`) holds the one implementation and is not scanned. A
 `download` attribute written in a template (`<a :href download>`) is a link the user clicks, not a
-script-built save, and is not counted.
+script-built save, and is not counted. Where a form carries a receiver, the receiver is read too
+(#21195): `Object.assign(settings, { download: value })` and a `download` attribute on a
+non-anchor receiver are not saves, and the shorthand `Object.assign(a, { download })` counts like
+the `download: name` spelling does (#21195).
 
 **What the pin holds.** The saves in files that open PRs #21122, #21126, #21132 and #21087 still
 touch; each moves to the kit when its PR lands. The pin goes down as each does, and ends at 0.
@@ -30,17 +33,146 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_text
+
 _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _ASSIGNMENT = re.compile(
     r"\.download\s*=(?!=)"
     r"|\[\s*['\"`]download['\"`]\s*\]\s*=(?!=)"
-    r"|Object\.assign\([^)]*\{[^}]*\bdownload\s*:"
-    r"|setAttribute\(\s*['\"`]download['\"`]"
+    r"|Object\.assign\(\s*(?P<assign_receiver>[^,()]+?)\s*,[^{}()]*?\{\s*"
+    r"(?:[^{}]*?,\s*)?(?:download\b\s*[:,}]|['\"`]download['\"`]\s*:)"
+    r"|(?:(?P<attr_receiver>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*)\s*\??\.)?"
+    r"setAttribute\(\s*['\"`]download['\"`]"
 )
-_COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
+#: A quoted literal on one line, or a template literal. Run over text the shared comment helper has
+#: already cleaned, only to keep a `{` / `}` inside a string from opening or closing a block.
+_STRING_LITERAL = re.compile(r"'(?:\\.|[^'\\\n])*'|\"(?:\\.|[^\"\\\n])*\"|`(?:\\.|[^`\\])*`")
+#: A receiver segment that reads as an anchor (#21195): a bare `a`, or a name carrying
+#: `anchor` / `link` (`anchorEl`, `linkRef`). `settings` and friends carry neither.
+_ANCHOR_RECEIVER = re.compile(r"a|(?:\w*(?:anchor|link)\w*)", re.I)
+#: A same-file `const` / `let` / `var` binding, read for receivers the name cannot
+#: place: `const el = document.querySelector('a')` binds an anchor, `el` alone does not.
+#: An optional type annotation between the name and `=` is skipped, so a typed
+#: declaration (`const el: HTMLAnchorElement = …`) still binds its initializer.
+_BINDING = re.compile(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;\n]*)?=\s*([^;\n]+)")
+#: Evidence, in a binding's initializer, that the variable holds an anchor element:
+#: the tag-a lookups. An id or selector of unknown target is not evidence (#21195).
+_ANCHOR_SOURCE = re.compile(
+    r"querySelector\s*\(\s*['\"`]a['\"`]"
+    r"|createElement\s*\(\s*['\"`]a['\"`]"
+    r"|getElementsByTagName\s*\(\s*['\"`]a['\"`]",
+    re.I,
+)
 
 PIN = 5
+
+
+def _is_anchor(receiver: str | None, bindings: dict[str, str] | None = None) -> bool:
+    """Whether the receiver of an `Object.assign` / `setAttribute` form is an anchor (#21195).
+
+    A receiver the pattern cannot name (`x().setAttribute(…)`) is not evidence of a
+    non-anchor and keeps the pre-#21195 treatment: it counts. A named receiver that
+    reads as an anchor counts across optional chains (`anchorRef?.current`), and a name
+    that says nothing (`el`) is resolved against the file's own `const`/`let`/`var`
+    bindings: bound to an anchor element it counts, bound elsewhere or not bound at all
+    the name decides (`settings` stays out — counting unknowns again is the over-count
+    #21195 asked to remove).
+    """
+    if receiver is None:
+        return True
+    segments = receiver.replace("?.", ".").split(".")
+    if any(_ANCHOR_RECEIVER.fullmatch(segment) for segment in segments):
+        return True
+    init = (bindings or {}).get(segments[0])
+    if init is None:
+        return False
+    return bool(_ANCHOR_SOURCE.search(init)) or bool(_ANCHOR_RECEIVER.fullmatch(init.strip()))
+
+
+def _brace_walk(text: str, starts: list[int]) -> tuple[dict[int, int], dict[int, int | None]]:
+    """One pass over *text*: `{opener: closer}` and each start's enclosing opener.
+
+    The opener a start sits in is the block whose `{` the walk has seen most
+    recently without its `}` — or none for a top-level declaration.
+    """
+    closes: dict[int, int] = {}
+    owners: dict[int, int | None] = {}
+    stack: list[int] = []
+    remaining = set(starts)
+    for pos, char in enumerate(text):
+        if pos in remaining:
+            owners[pos] = stack[-1] if stack else None
+            remaining.discard(pos)
+        if char == "{":
+            stack.append(pos)
+        elif char == "}" and stack:
+            closes[stack.pop()] = pos
+    return closes, owners
+
+
+def _scope_ranges(text: str, starts: list[int]) -> list[tuple[int, int]]:
+    """The lexical scope of each declaration in *starts*: (scope start, scope end).
+
+    The scope starts at the enclosing block's `{` — or the start of the file
+    for a top-level declaration — and ends at that block's matching `}` (or
+    the end of the file). The walk matches braces over the source with strings
+    blanked at the same length (comments are already gone, see `count`), so a `const` inside a function or
+    block ends its scope at that block's `}` and cannot stand in for a later
+    use outside it (#21195). An inline `// }` is comment, not code: it closes
+    nothing, and the declaration keeps the block the source actually gives
+    it. Unbalanced braces degrade to the file-wide end.
+    """
+    masked = _STRING_LITERAL.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    closes, owners = _brace_walk(masked, starts)
+    end = len(masked)
+    return [
+        (0 if owners[s] is None else owners[s], end if owners[s] is None else closes.get(owners[s], end))
+        for s in starts
+    ]
+
+
+def _nearest_init(applicable: list[tuple[int, int, str]], pos: int) -> str:
+    """The init of the declaration in force at *pos* among *applicable*.
+
+    Deepest block first; within one block the latest declaration at or
+    before the use — or the first one when the use precedes them all.
+    """
+    deepest = max(scope_start for scope_start, _, _ in applicable)
+    in_scope = [(start, init) for scope_start, start, init in applicable if scope_start == deepest]
+    before = [(start, init) for start, init in in_scope if start <= pos]
+    chosen = before[-1] if before else min(in_scope, key=lambda item: item[0])
+    return chosen[1]
+
+
+def _binding_in_force(
+    declarations: list[tuple[int, str, str, int, int]], receiver: str | None, pos: int
+) -> dict[str, str] | None:
+    """The declaration of the receiver's root name that applies at `pos`.
+
+    A declaration applies when the use lies inside its lexical scope — from
+    the enclosing block's `{` to that block's `}` — not only when the use
+    follows it in source order: a function that uses a binding declared later
+    in the file still sees it, so `function save() { el.setAttribute(…) }`
+    followed by `const el = document.createElement('a')` counts (#21195).
+    Among declarations whose scope contains the use, the nearest enclosing
+    one wins — deepest block first, and within one block the latest
+    declaration at or before the use (or the first one when the use precedes
+    them all) — so a later redeclaration still must not stand in for the
+    value the use actually sees, and neither may a declaration whose block
+    has already closed.
+    """
+    if receiver is None:
+        return None
+    name = receiver.replace("?.", ".").split(".")[0]
+    applicable = [
+        (scope_start, start, init)
+        for start, decl, init, scope_start, scope_end in declarations
+        if decl == name and scope_start <= pos <= scope_end
+    ]
+    if not applicable:
+        return None
+    return {name: _nearest_init(applicable, pos)}
 
 
 def _sources(root: Path) -> list[Path]:
@@ -56,8 +188,26 @@ def _sources(root: Path) -> list[Path]:
 
 
 def count(paths: list[Path]) -> int:
-    """Anchor `download` assignments over *paths*, comment lines removed."""
-    return sum(len(_ASSIGNMENT.findall(_COMMENT_LINE.sub("", p.read_text(encoding="utf-8")))) for p in paths)
+    """Anchor `download` assignments over *paths*, comments removed.
+
+    Every scan reads the text the shared comment helper returns, so a `download`
+    or a `const` spelled only inside a `//` or `/* */` comment is not a save
+    (#21195) and offsets agree between the binding walk and the match scan.
+    """
+    total = 0
+    for path in paths:
+        text = code_text(path, strip_trailing=True)
+        starts = [m.start() for m in _BINDING.finditer(text)]
+        ranges = _scope_ranges(text, starts)
+        declarations = [
+            (m.start(), m.group(1), m.group(2), ranges[i][0], ranges[i][1])
+            for i, m in enumerate(_BINDING.finditer(text))
+        ]
+        for match in _ASSIGNMENT.finditer(text):
+            receiver = match.group("assign_receiver") or match.group("attr_receiver")
+            if _is_anchor(receiver, _binding_in_force(declarations, receiver, match.start())):
+                total += 1
+    return total
 
 
 def _population(root: Path) -> list[str]:
@@ -99,11 +249,173 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert count([_w(tmp_path, "a/I.vue", "a['download'] = name\n")]) == 1
         assert count([_w(tmp_path, "a/T.vue", "a.setAttribute(`download`, name)\n")]) == 1
 
+    def test_it_counts_a_shorthand_download_property(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/S.vue", "Object.assign(a, { href: u, download })\n")]) == 1
+        assert count([_w(tmp_path, "a/S2.vue", "Object.assign(link, { download })\n")]) == 1
+
+    def test_a_download_on_a_non_anchor_receiver_is_not_a_save(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/N.vue", "Object.assign(settings, { download: value })\n"),
+            _w(tmp_path, "a/N2.ts", "Object.assign(prefs, { download })\n"),
+            _w(tmp_path, "a/N3.vue", "settings.setAttribute('download', value)\n"),
+            _w(tmp_path, "a/N4.vue", "settings?.setAttribute('download', value)\n"),
+        ]
+        assert count(paths) == 0
+
+    def test_a_set_attribute_counts_across_an_optional_chain(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/C1.vue", "anchorRef?.current?.setAttribute('download', name)\n"),
+            _w(tmp_path, "a/C2.vue", "linkEl.current.setAttribute(`download`, name)\n"),
+        ]
+        assert count(paths) == 2
+
+    def test_a_receiver_named_by_a_binding_reads_its_initializer(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/B1.vue", "const el = document.querySelector('a')\nel?.setAttribute('download', name)\n"),
+            _w(tmp_path, "a/B2.ts", "const node = document.createElement('a')\nnode.setAttribute('download', name)\n"),
+        ]
+        assert count(paths) == 2
+
+    def test_a_binding_that_is_not_an_anchor_does_not_make_the_receiver_one(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/N5.vue",
+                "const el = document.querySelector('#share')\nel?.setAttribute('download', name)\n",
+            ),
+            _w(
+                tmp_path,
+                "a/N6.ts",
+                "const box = document.querySelector('.toolbar')\nbox.setAttribute('download', name)\n",
+            ),
+        ]
+        assert count(paths) == 0
+
+    def test_a_typed_binding_still_reads_its_initializer(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/T1.ts",
+                "const el: HTMLAnchorElement = document.createElement('a')\nel.setAttribute('download', name)\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_each_use_resolves_the_declaration_in_force_at_that_point(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/R.ts",
+                "function save() { const el = document.createElement('a'); el.setAttribute('download', name) }\n"
+                "function other() { const el = document.createElement('div'); el.setAttribute('download', name) }\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_a_declaration_in_a_closed_block_does_not_hide_the_outer_one(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/SB.ts",
+                "function save() {\n"
+                "  const el = document.createElement('a');\n"
+                "  {\n"
+                "    const el = document.createElement('div');\n"
+                "  }\n"
+                "  el.setAttribute('download', name);\n"
+                "}\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_an_inline_comment_brace_does_not_close_the_binding_scope(self, tmp_path: Path) -> None:
+        planted = _w(
+            tmp_path,
+            "a/IC.ts",
+            "function save() {\n"
+            "  const el = document.createElement('a'); // }\n"
+            "  el.setAttribute('download', name);\n"
+            "}\n",
+        )
+        assert count([planted]) == 1
+
+    def test_a_use_before_its_declaration_in_the_same_scope_still_counts(self, tmp_path: Path) -> None:
+        paths = [
+            _w(
+                tmp_path,
+                "a/F.ts",
+                "function save() { el.setAttribute('download', n) }\n" "const el = document.createElement('a')\n",
+            ),
+        ]
+        assert count(paths) == 1
+
+    def test_a_use_before_a_non_anchor_declaration_is_still_not_a_save(self, tmp_path: Path) -> None:
+        # Control for the F.ts test above: an unbound `el` counts 0 even
+        # without the later-declaration lookup, so this passes on its own.
+        paths = [
+            _w(
+                tmp_path,
+                "a/F2.ts",
+                "function save() { el.setAttribute('download', n) }\n" "const el = document.createElement('div')\n",
+            ),
+        ]
+        assert count(paths) == 0
+
+    def test_a_save_spelled_only_inside_an_inline_comment_is_not_counted(self, tmp_path: Path) -> None:
+        paths = [
+            _w(tmp_path, "a/C1.ts", "const b = 1; // a.download = x\n"),
+            _w(tmp_path, "a/C2.ts", "const b = 1; /* a.setAttribute('download', x) */\n"),
+        ]
+        assert count(paths) == 0
+
+    def test_a_real_save_with_a_trailing_comment_still_counts(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/T.ts", "a.download = name // save it\n")]) == 1
+
+    def test_a_save_after_a_url_string_is_not_masked_as_a_comment(self, tmp_path: Path) -> None:
+        assert count([_w(tmp_path, "a/U.ts", 'const u = "http://example.com"; a.download = name\n')]) == 1
+
+    def test_a_non_anchor_receiver_and_a_non_download_call_are_not_saves(self, tmp_path: Path) -> None:
+        # Each fixture would be counted if comments / strings were not masked.
+        paths = [
+            _w(
+                tmp_path,
+                "a/NC.ts",
+                "function save() {\n"
+                "  const box = document.createElement('div');\n"
+                "  // const box = document.createElement('a');\n"
+                "  /* const box = document.createElement('a'); */\n"
+                "  box.setAttribute('download', name);\n"
+                "}\n",
+            ),
+            _w(
+                tmp_path,
+                "a/NC2.ts",
+                "function make() {\n"
+                "  const note = '}';\n"
+                "  // }\n"
+                "  const el = document.createElement('a');\n"
+                "}\n"
+                "el.setAttribute('download', name);\n",
+            ),
+        ]
+        assert count(paths) == 0
+
+    def test_an_apostrophe_in_template_text_does_not_hide_a_later_comment(self, tmp_path: Path) -> None:
+        planted = _w(
+            tmp_path,
+            "a/V.vue",
+            "<template><p>Don't</p></template>\n"
+            "const el = document.createElement('a'); // x.download = 1\n"
+            'const note = "it\'s";\n'
+            "el.setAttribute('download', name);\n",
+        )
+        assert count([planted]) == 1
+
     def test_a_kit_call_a_comparison_a_comment_and_a_template_attribute_are_not_saves(self, tmp_path: Path) -> None:
         paths = [
             _w(tmp_path, "a/A.vue", "saveBlob(blob, 'x.csv')\nsaveTextFile(t, 'y.md', 'text/markdown')\n"),
             _w(tmp_path, "a/B.ts", "if (a.download == name) {}\nif (a.download === name) {}\n"),
-            _w(tmp_path, "a/C.vue", "// a.download = name\n * link.download = name\n"),
+            _w(tmp_path, "a/C.vue", "// a.download = name\n/*\n * link.download = name\n */\n"),
             _w(tmp_path, "a/D.vue", '<template><a :href="url" download>x</a></template>\n'),
         ]
         assert count(paths) == 0
