@@ -69,3 +69,29 @@ class InterpretationOwnershipMixin:
             self._interpret_approved_command(copy.copy(session), command, result),
             name=f"interpret-approved-{session.session_id}",
         )
+
+    def _interpret_command_result(self, session: AgentTerminalSession, command: str, result: Metadata) -> None:
+        """Schedule the LLM interpretation of an auto-approved command; the tool result never waits on it (#21938).
+
+        The interpretation is auxiliary: a slow or failing model must not hold the command's result or fail the
+        turn. It runs as a background task like the approve path's (``_interpret_in_background``).
+        """
+        if session.has_conversation() and self.chat_workflow_manager:
+            fire_and_forget(
+                self._run_auto_interpretation(session.conversation_id, command, result),
+                name=f"interpret-auto-{session.session_id}",
+            )
+
+    async def _run_auto_interpretation(self, conversation_id: str, command: str, result: Metadata) -> None:
+        """The background half: a failure is logged here and goes no further (#21938)."""
+        try:
+            logger.info("[INTERPRETATION] Starting LLM interpretation for command: %s", command)
+            await self.chat_workflow_manager.interpret_terminal_command(
+                command=command,
+                stdout=result.get("stdout", ""),
+                stderr=result.get("stderr", ""),
+                return_code=result.get("return_code", 0),
+                session_id=conversation_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - auxiliary step; the command already succeeded
+            logger.error("[INTERPRETATION] Failed to interpret results: %s", exc)

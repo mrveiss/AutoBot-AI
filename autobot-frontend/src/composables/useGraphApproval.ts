@@ -16,6 +16,9 @@
 import { getApiBase } from '@/config/ssot-config'
 import { useChatController } from '@/models/controllers'
 import { useChatStore, type ChatMessage } from '@/stores/useChatStore'
+import { useNotificationBus } from '@/composables/useNotificationBus'
+import i18n from '@/i18n'
+import { isAlreadyDecided } from '@/utils/approvalResult'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -110,6 +113,7 @@ export function useStallAnswer() {
 
 export function useApprovalRouting(terminalApprove: TerminalApprove) {
   const store = useChatStore()
+  const { showToast } = useNotificationBus()
   const postResume = useResumePost()
 
   const findPending = (sessionId: string) =>
@@ -127,6 +131,12 @@ export function useApprovalRouting(terminalApprove: TerminalApprove) {
     try {
       await postResume(message, { approved, reason: comment || '' })
     } catch (error) {
+      if (error instanceof ResumeRejectedError && isAlreadyDecided(error)) {
+        // #21939: nothing is waiting on this card (a double click, a stale card, a turn that ended): not a failure.
+        store.updateMessageMetadata(message.id, { approval_status: 'handled' }, cardChat)
+        showToast(i18n.global.t('chat.interface.approvalAlreadyHandled'), 'info', 3000)
+        return
+      }
       // The graph is still waiting: give the person the controls back so the decision can be retried (#21022).
       store.updateMessageMetadata(message.id, previous, cardChat)
       store.setPendingApproval(wasPending, cardChat)
