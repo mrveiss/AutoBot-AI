@@ -359,7 +359,7 @@ onMounted(async () => {
               <input
                 v-model="editForm.name"
                 type="text"
-                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
               />
             </div>
             <div>
@@ -368,7 +368,7 @@ onMounted(async () => {
                 v-model="editForm.tagline"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.oneLineDescription')"
-                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+                class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
               />
             </div>
           </div>
@@ -410,7 +410,7 @@ onMounted(async () => {
                 v-model="traitInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addATrait')"
-                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
                 @keydown.enter.prevent="addTrait"
               />
               <button
@@ -439,7 +439,7 @@ onMounted(async () => {
                 v-model="styleInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addAStyleGuideline')"
-                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
                 @keydown.enter.prevent="addStyle"
               />
               <button
@@ -468,7 +468,7 @@ onMounted(async () => {
                 v-model="limitInput"
                 type="text"
                 :placeholder="$t('settings.admin.personalitySettings.addAHardLimit')"
-                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+                class="flex-1 px-3 py-1.5 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
                 @keydown.enter.prevent="addLimit"
               />
               <button
@@ -486,7 +486,7 @@ onMounted(async () => {
               v-model="editForm.custom_notes"
               rows="4"
               :placeholder="$t('settings.admin.personalitySettings.anyAdditionalFreeformInstructions')"
-              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1 resize-none"
+              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary resize-none"
             />
           </div>
 
@@ -495,7 +495,7 @@ onMounted(async () => {
             <label class="block text-xs font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.personalitySettings.voice') }}</label>
             <select
               v-model="editForm.voice_id"
-              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1"
+              class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
             >
               <option value="">{{ $t('settings.admin.personalitySettings.noneUseUserS') }}</option>
               <option
@@ -541,7 +541,7 @@ onMounted(async () => {
         type="text"
         :placeholder="$t('settings.admin.personalitySettings.profileName')"
         autofocus
-        class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-autobot-illus-1 mb-4"
+        class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-autobot-primary mb-4"
         @keydown.enter="handleNewProfile"
       />
       <template #actions>

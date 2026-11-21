@@ -269,7 +269,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Last Updated Card -->
-      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 border-l-4 border-l-autobot-illus-2">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 border-l-4 border-l-autobot-border-strong">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-sm font-medium text-autobot-text-tertiary uppercase">{{ $t('tools.admin.mCPTool.lastUpdated') }}</h3>

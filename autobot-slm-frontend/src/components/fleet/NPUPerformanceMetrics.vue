@@ -47,7 +47,7 @@ function utilizationBarColor(pct: number): string {
 
 function utilizationTextColor(pct: number): string {
   if (pct > 80) return 'text-autobot-error'
-  if (pct >= 60) return 'text-autobot-pill-warn-fg'
+  if (pct >= 60) return 'text-autobot-text-primary'
   return 'text-autobot-success'
 }
 
@@ -58,7 +58,7 @@ function utilizationTextColor(pct: number): string {
 function temperatureColor(temp: number | null | undefined): string {
   if (temp === null || temp === undefined) return 'text-autobot-text-tertiary'
   if (temp > 75) return 'text-autobot-error'
-  if (temp >= 60) return 'text-autobot-pill-warn-fg'
+  if (temp >= 60) return 'text-autobot-text-primary'
   return 'text-autobot-success'
 }
 

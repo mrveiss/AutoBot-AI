@@ -115,7 +115,7 @@ function connectionColor(node: SLMNode): string {
   if (node.status === 'online') {
     return 'text-autobot-success'
   }
-  if (node.status === 'degraded') return 'text-autobot-pill-warn-fg'
+  if (node.status === 'degraded') return 'text-autobot-text-primary'
   return 'text-autobot-error'
 }
 
