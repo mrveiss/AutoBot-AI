@@ -126,7 +126,7 @@ Options:
   --stop             Stop AutoBot services
   --restart          Restart AutoBot services
   --health-check     Validate all services are healthy
-  --rollback         Unavailable: refuses with an error. No builtin rollback or pinned deploy yet (#20214)
+  --rollback         Unavailable: refuses with an error; use the SLM updater to roll back (Maintenance > Updates > Code Sync, gated by SLM_ROLLBACK_ENABLED)
   --help             Show this help message
 ```
 
