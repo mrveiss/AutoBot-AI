@@ -73,7 +73,7 @@ from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
-from ._named_agent import require_may_act_as
+from ._named_agent import require_may_act_as, require_member_targets
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -377,6 +377,7 @@ async def create_work_item(
     # Tenant guard (#14168): reject cross-tenant creation before touching the DB —
     # body.company_id is client-controlled and must match the caller's authenticated org.
     assert_company_access(ctx, body.company_id)
+    await require_member_targets(session, body.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().create(
             session,
@@ -429,12 +430,8 @@ async def list_work_items(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    # Tenant guard (#14168): the ``company_id`` query param is client-controlled;
-    # require_org_context already membership-checks it when it is the sole org
-    # source, but a caller can still supply a different, still-valid
-    # ``X-Organization-Id`` header alongside a foreign ``company_id`` query
-    # value (header wins in get_tenant_context's precedence). Reject any
-    # mismatch explicitly rather than relying on precedence order.
+    # Tenant guard (#14168): the client-controlled ``company_id`` query param may differ from a still-valid
+    # ``X-Organization-Id`` header (header wins in get_tenant_context): reject any mismatch explicitly.
     assert_company_access(ctx, company_id)
     items = await _service().list_by_project(
         session,
@@ -483,6 +480,7 @@ async def update_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    await require_member_targets(session, existing.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().update(session, work_item_id, **fields)
     except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
@@ -798,6 +796,7 @@ async def handoff_to_agent(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_member_targets(session, existing.company_id, None, body.target_agent_id)
     atts = [
         HandoffAttachment(
             attachment_id=a.attachment_id,

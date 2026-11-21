@@ -256,18 +256,21 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     expect(vm.items.find(i => i.id === 'wi-1')?.column_id).toBe('col-ready')
   })
 
+  const wipDetail = { detail: { code: 'WIP_LIMIT_EXCEEDED', column: 'Done', wip_limit: 1, current_count: 1 } }
+  const validationDetail = { detail: [{ loc: ['body', 'column_id'], msg: 'bad', type: 'value_error' }] }
   it.each([
-    [409, en.llc.board.moveRefusedStatus],
-    [422, en.llc.board.moveRefusedWipFull],
-    [403, en.llc.board.moveRefusedForbidden],
-  ])('shows the localised reason when the server refuses a move with %i (#20508)', async (status, reason) => {
+    [409, null, en.llc.board.moveRefusedStatus],
+    [422, wipDetail, en.llc.board.moveRefusedWipFull],
+    [422, validationDetail, en.llc.board.moveFailed],
+    [403, null, en.llc.board.moveRefusedForbidden],
+  ])('shows the localised reason when the server refuses a move with %i (#20508)', async (status, details, reason) => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       items: WorkItemLike[]
       onDragStart(item: WorkItemLike): void
       onDrop(col: string): Promise<void>
     }
-    post.mockRejectedValue(Object.assign(new Error('server wording that must not be shown'), { status }))
+    post.mockRejectedValue(Object.assign(new Error('server wording that must not be shown'), { status, details }))
     vm.onDragStart(vm.items.find(i => i.id === 'wi-1') as WorkItemLike)
     await vm.onDrop('col-progress')
     await flushPromises()
@@ -276,5 +279,6 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
     expect(alert.text()).toContain(en.llc.board.moveFailed)
     expect(alert.text()).toContain(reason)
     expect(alert.text()).not.toContain('server wording')
+    if (status === 422 && details === validationDetail) expect(alert.text()).not.toContain(en.llc.board.moveRefusedWipFull)
   })
 })

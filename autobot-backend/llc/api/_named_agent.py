@@ -12,6 +12,7 @@ through its own credential (the ``/agent`` routes), never through this body fiel
 from __future__ import annotations
 
 import uuid
+from typing import Any, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -23,7 +24,7 @@ from models.agent_org import AgentOrgNode
 from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItem
-from ..services.authz import NotAuthorisedError, require_company_admin_unless_platform
+from ..services.authz import NotAuthorisedError, is_company_member, require_company_admin_unless_platform
 
 logger = get_logger(__name__)
 
@@ -39,8 +40,30 @@ async def require_may_act_as(session: AsyncSession, ctx: TenantContext, item: LL
     except NotAuthorisedError as exc:
         logger.warning("Refused acting as a named agent on item %s: %s", item.id, safe_log_text(repr(exc)))
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=_NOT_ALLOWED) from exc
-    node_company = (
-        await session.execute(select(AgentOrgNode.company_id).where(AgentOrgNode.id == uuid.UUID(agent_id)))
-    ).scalar_one_or_none()
-    if node_company is None or str(node_company) != str(item.company_id):
+    if not await agent_in_company(session, item.company_id, agent_id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="That agent does not belong to this company")
+
+
+async def agent_in_company(session: AsyncSession, company_id: Any, agent_id: str) -> bool:
+    """Whether *agent_id* is an agent node of the company; a malformed or unknown id reads as not."""
+    try:
+        node = uuid.UUID(str(agent_id))
+    except ValueError:
+        return False
+    company = (
+        await session.execute(select(AgentOrgNode.company_id).where(AgentOrgNode.id == node))
+    ).scalar_one_or_none()
+    return company is not None and str(company) == str(company_id)
+
+
+async def require_member_targets(
+    session: AsyncSession,
+    company_id: Any,
+    user_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
+) -> None:
+    """A named assignee or handoff target stays allowed in the body but must belong to the company (#20521, 422)."""
+    if user_id and not await is_company_member(session, company_id, user_id):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The assignee is not a member of this company")
+    if agent_id and not await agent_in_company(session, company_id, agent_id):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The agent does not belong to this company")
