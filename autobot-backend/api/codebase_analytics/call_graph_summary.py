@@ -49,7 +49,7 @@ async def store_call_graph_summary(source_id: str, response_data: Dict[str, Any]
                 _summary_key(source_id), json.dumps(summarize_call_graph(response_data)), ex=CALL_GRAPH_SUMMARY_TTL
             )
     except Exception as exc:
-        logger.warning("Call graph summary for source %s not persisted: %s", source_id, exc)
+        logger.warning("Call graph summary for source %s not persisted: %s", source_id, exc, exc_info=True)
 
 
 async def load_call_graph_summary(source_id: str) -> Dict[str, Any] | None:
