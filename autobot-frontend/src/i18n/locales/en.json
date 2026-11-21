@@ -301,6 +301,7 @@
       "executionCompleted": "Execution completed",
       "feedbackSent": "Feedback sent",
       "alreadyDecided": "This command was already decided",
+      "approvalAlreadyHandled": "This approval has already been handled",
       "feedbackFailed": "Failed to send feedback",
       "toolApprovalTitle": "Agent Tool Approval Required",
       "toolApprovalTool": "Tool",

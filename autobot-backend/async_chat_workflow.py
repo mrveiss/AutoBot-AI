@@ -90,6 +90,7 @@ class WorkflowMessage:
             "content": (self.content),  # Changed from 'text' to 'content' for frontend compatibility
             "sender": "assistant",
             "timestamp": time.strftime("%H:%M:%S", time.localtime(self.timestamp)),
+            "created_at": self.timestamp,  # #21904: epoch seconds, so a rebuilt message keeps its real time
             "metadata": self.metadata,
         }
 
