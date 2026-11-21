@@ -62,21 +62,31 @@ async def mirror_in_session(
     vault = VaultRef(VaultKind.USER, str(owner_id))
     svc = EnvelopeSecretsService(root_key=root_key)
     row = await _find_by_marker(session, sqlite_id, owner_uuid)
-    if row is not None:
+    if row is None and name and secret_type:
+        await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
+    elif row is not None:
         await svc.rotate_value(session, secret_id=row.id, new_plaintext=value.encode("utf-8"), actor_vaults={vault})
-    elif name and secret_type:
-        created = await svc.create(
-            session,
-            owner_vault=vault,
-            name=name,
-            secret_type=secret_type,
-            plaintext=value.encode("utf-8"),
-            created_by=owner_uuid,
-        )
-        created.extra_data = {_MARKER: str(sqlite_id)}
-        await session.flush()
     else:
         logger.debug("No envelope copy for credential %s and no name/type to create one — skipping mirror", sqlite_id)
+
+
+async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type) -> None:
+    """No marker row: rotate a same-name row of THIS vault and mark it; create only when none exists.
+
+    ``create`` never replaces a value (unique ``(owner_vault, name)``), so a live same-name row with no
+    marker would raise ``SecretConflictError`` and leave the new credential unmirrored. Nothing is deleted.
+    """
+    plaintext = value.encode("utf-8")
+    existing = await svc.find_by_name(session, owner_vault=vault.to_str(), name=name)
+    if existing is not None and existing.owner_vault == vault.to_str():
+        await svc.rotate_value(session, secret_id=existing.id, new_plaintext=plaintext, actor_vaults={vault})
+        target = existing
+    else:
+        target = await svc.create(
+            session, owner_vault=vault, name=name, secret_type=secret_type, plaintext=plaintext, created_by=owner_uuid
+        )
+    target.extra_data = {**(target.extra_data or {}), _MARKER: str(sqlite_id)}
+    await session.flush()
 
 
 async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: bytes) -> None:
