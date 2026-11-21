@@ -185,6 +185,8 @@ async def set_agent_heartbeat(
         raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
     except AgentNotSchedulableError as exc:
         raise http_refusal(409, exc, scope="controls.set_agent_heartbeat") from None
+    except CompanyNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Company {company_id} not found")
     await session.commit()
     # After the commit: the poll loop re-reads the row, and must see it enabled.
     result["scheduled"] = bool(body.heartbeat_enabled) and await schedule_heartbeat(agent_id, result["heartbeat_cron"])
