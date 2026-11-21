@@ -77,13 +77,14 @@ def test_a_different_value_is_caught_and_a_different_spelling_is_not() -> None:
     assert disagreements(registry, ssot) == {"AUTOBOT_A": ("localhost", {"127.0.0.1"})}
 
 
-def _env_names(field: Any) -> Iterator[str]:
-    """Every ``AUTOBOT_*`` name a field binds: ``alias``, a string or an ``AliasChoices`` ``validation_alias``."""
+def _env_names(field: Any) -> set[str]:
+    """The distinct ``AUTOBOT_*`` names ONE field binds: ``alias``, a string or an ``AliasChoices`` ``validation_alias``.
+
+    Pydantic mirrors ``alias`` into ``validation_alias``, so the names are a set: a field is never a double of itself.
+    """
     validation = field.validation_alias
     choices = validation.choices if isinstance(validation, AliasChoices) else [validation]
-    for name in (field.alias, *choices):
-        if isinstance(name, str) and name.startswith("AUTOBOT_"):
-            yield name
+    return {name for name in (field.alias, *choices) if isinstance(name, str) and name.startswith("AUTOBOT_")}
 
 
 def _own_aliases(cls: type[BaseSettings]) -> Iterator[str]:
@@ -139,3 +140,11 @@ def test_a_double_through_alias_choices_is_caught_and_a_distinct_choice_is_not()
 
     assert double_bindings(iter([Plain, Choice])) == {"AUTOBOT_Y_ONE"}
     assert double_bindings(iter([Plain, Choice, Distinct])) == {"AUTOBOT_Y_ONE"}
+
+
+def test_a_plain_alias_that_pydantic_mirrors_is_not_a_double_of_itself() -> None:
+    class Mirrored(BaseSettings):
+        only: int = Field(default=1, alias="AUTOBOT_Z_ONLY")
+
+    assert _env_names(Mirrored.model_fields["only"]) == {"AUTOBOT_Z_ONLY"}
+    assert double_bindings(iter([Mirrored])) == set()
