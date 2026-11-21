@@ -7,8 +7,8 @@
 The action tests stand a fake knowledge base in for it; this file runs the mixin itself, composed with the real
 ``CollectionsMixin`` and ``FactProjectionMixin``. ``delete_fact`` is a faithful stand-in for the one write it
 delegates to (it reads through ``_read_fact_for_write``, removes the projection and the durable row, and reports
-``status``); it is wrapped by the production ``invalidating_writes`` under the production class name, so the
-retrieval-cache bump on this path is the real wrapper's.
+``status``); it carries the production ``invalidates_retrieval_caches`` wrapper, so the retrieval-cache bump on this
+path is the real wrapper's.
 """
 
 from unittest.mock import AsyncMock
@@ -18,7 +18,7 @@ import pytest
 from knowledge import retrieval_invalidation
 from knowledge.collections import CollectionsMixin
 from knowledge.fact_projection import FactProjectionMixin
-from knowledge.retrieval_invalidation import WRITE_ENTRY_POINTS, invalidating_writes
+from knowledge.retrieval_invalidation import WRITE_ENTRY_POINTS, invalidates_retrieval_caches
 from knowledge.selected_delete import SelectedFactsDeleteMixin
 
 
@@ -51,7 +51,7 @@ class FakeRedis:
 
 
 class KnowledgeBase(SelectedFactsDeleteMixin, CollectionsMixin, FactProjectionMixin):
-    """Named as the production class so ``invalidating_writes`` wraps ``delete_fact`` exactly as it does there."""
+    """The production class's name, with the mixins under test and a faithful ``delete_fact``."""
 
     def __init__(self, redis: FakeRedis, rows: dict) -> None:
         self._redis, self.redis_client, self.rows = redis, redis, rows
@@ -77,7 +77,10 @@ class KnowledgeBase(SelectedFactsDeleteMixin, CollectionsMixin, FactProjectionMi
         return {"status": "success", "fact_id": fact_id}
 
 
-invalidating_writes(KnowledgeBase)
+DELETE_FACT_REASON = next(e.reason for e in WRITE_ENTRY_POINTS if e.qualname == "KnowledgeBase.delete_fact")
+# The production wrapper, applied to the one write this mixin delegates to (``invalidating_writes`` would also look
+# for every other entry point on this partial class).
+KnowledgeBase.delete_fact = invalidates_retrieval_caches(DELETE_FACT_REASON)(KnowledgeBase.delete_fact)
 
 
 @pytest.fixture
@@ -153,7 +156,6 @@ async def test_a_partial_delete_failure_is_reported_and_leaves_the_failed_fact_l
 
 @pytest.mark.asyncio
 async def test_each_deleted_fact_bumps_the_retrieval_epoch_through_the_wrapped_delete_fact(kb):
-    reason = next(e.reason for e in WRITE_ENTRY_POINTS if e.qualname == "KnowledgeBase.delete_fact")
     await kb.delete_selected_facts(["f1", "f2"], confirm=True)
-    assert [call.args for call in kb.bump.await_args_list] == [(reason,), (reason,)]
+    assert [call.args for call in kb.bump.await_args_list] == [(DELETE_FACT_REASON,)] * 2
     assert kb.bm25_refreshes == 1

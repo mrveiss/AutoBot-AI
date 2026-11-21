@@ -482,7 +482,7 @@ async def test_a_collection_delete_with_facts_still_refuses_a_higher_count(world
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("op", action.OPS)
+@pytest.mark.parametrize("op", (action.DELETE, action.BULK_DELETE))  # the selected-facts op has no collection identity
 async def test_a_collection_recreated_under_the_same_id_is_refused(world, op):
     approval = _approval(op, action.selector_for(op, "c1", True), 3)
     world.kb.created["c1"] = "t-later"  # deleted and re-created after the approval
@@ -533,7 +533,7 @@ async def test_a_fact_added_after_the_count_check_is_not_deleted_with_the_approv
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("op", action.OPS)
+@pytest.mark.parametrize("op", (action.DELETE, action.BULK_DELETE))  # the selected-facts op has no collection identity
 async def test_a_collection_recreated_during_the_intent_audit_is_not_deleted(world, op):
     approval = _approval(op, action.selector_for(op, "c1", True), 3)
     real = world.audit.side_effect
