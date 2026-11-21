@@ -28,7 +28,7 @@ from autobot_shared.testfile_names import is_test_filename
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
 from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
-from .lifecycle import reload_with_fresh_code, reverse_registrations
+from .lifecycle import initialize_attributed, reload_with_fresh_code, reverse_registrations
 from .registry import get_registry
 
 if TYPE_CHECKING:
@@ -367,44 +367,41 @@ class PluginLoader:
             plugin.credential_resolver = bound_resolver(
                 manifest.name, plugin_dir, self.credential_resolvers, self.trusted_roots
             )
-            await plugin.initialize()
+            await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
             plugin.status = PluginStatus.LOADED
-
-            # Register with plugin registry and unified registry
             self.registry.register(plugin)
-            get_registry().register(manifest)
+            try:
+                get_registry().register(manifest)
+            except Exception:
+                self.registry.unregister(manifest.name)  # half-registered: leave neither (#19302)
+                raise
 
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
 
         except Exception as e:
             logger.error("Failed to load plugin %s: %s", manifest.name, e, exc_info=True)
+            if not self.registry.get_plugin(manifest.name):
+                reverse_registrations(manifest.name)  # what a raising initialize() registered (#19302)
             return None
 
     async def unload_plugin(self, name: str) -> bool:
-        """
-        Unload a plugin.
-
-        Args:
-            name: Plugin name
-
-        Returns:
-            True if successfully unloaded
-        """
+        """Unload a plugin; True if it was unloaded. A raising shutdown() still leaves nothing registered (#19302)."""
         try:
             plugin = self.registry.get_plugin(name)
             if not plugin:
                 logger.warning("Plugin not found: %s", name)
                 return False
 
-            # Shutdown plugin
-            await plugin.shutdown()
-            plugin.status = PluginStatus.UNLOADED
-            reverse_registrations(name)  # #19302
-
-            # Unregister from plugin registry and unified registry
-            self.registry.unregister(name)
-            get_registry().unregister(name)
+            try:
+                await plugin.shutdown()
+            finally:
+                plugin.status = PluginStatus.UNLOADED
+                try:
+                    reverse_registrations(name)
+                finally:  # the registries are cleared even when reversal itself raises
+                    self.registry.unregister(name)
+                    get_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
