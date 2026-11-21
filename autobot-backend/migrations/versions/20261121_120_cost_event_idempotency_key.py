@@ -5,7 +5,7 @@
 """A cost event can carry the idempotency key it was charged under (#21972, part of #21332).
 
 Revision ID: 20261121_120
-Revises: 20261120_117
+Revises: 20261121_118
 Create Date: 2026-11-21 00:00:01.000000
 
 ``NO DATA LOSS``: adds one nullable column and one partial unique index over (company_id, agent_id,
@@ -16,7 +16,8 @@ transaction that inserted the row may charge; a repeat replays the stored cost.
 ``downgrade`` drops the index only. The nullable column stays: dropping it would delete the recorded keys, and
 a column nothing constrains is harmless.
 
-Open PRs also claim 20261121_118 and 20261121_119; re-parent ``down_revision`` onto whichever of them lands first.
+Re-parented onto 20261121_118 (#21835) once it landed. An open PR still claims
+20261121_119 and re-parents onto this one if it lands later.
 """
 
 from typing import Sequence, Union
@@ -27,7 +28,7 @@ from alembic import op
 from migrations.guards import has_column, has_index, has_table
 
 revision: str = "20261121_120"
-down_revision: Union[str, None] = "20261120_117"
+down_revision: Union[str, None] = "20261121_118"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
