@@ -38,9 +38,9 @@ ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 SSOT_MODULE = "autobot_shared.ssot_config"
 FIELD = "ollama_host"
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
-#: Measured 3742 production modules under ROOTS (2026-11-21), no growth allowance, so the pin is exact. A new guard
+#: Measured 3752 production modules under ROOTS (2026-11-21), no growth allowance, so the pin is exact. A new guard
 #: pins `floor=` until it lands on the base (#19676).
-_FILES_FLOOR = 3742
+_FILES_FLOOR = 3752
 
 
 def _is_scanned(rel: str) -> bool:
