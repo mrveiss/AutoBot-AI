@@ -16,6 +16,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
+from api import chat_session_sharing as _sharing  # #18890, #21898: share routes + the owner-only gate
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
 from api.chat_session_messages import fetch_session_messages
 from api.chat_session_team_access import require_team_member
@@ -32,9 +33,7 @@ from api.schemas_chat import (
     SessionCreate,
     SessionCreateData,
     SessionDeleteData,
-    SessionShareData,
     SessionSharePreviewData,
-    SessionShareRequest,
     SessionUpdate,
     SessionUpdateData,
 )
@@ -58,8 +57,6 @@ from chat_workflow.session_handler import _emit_session_create, _emit_session_de
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
-
-# CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
@@ -868,7 +865,7 @@ async def update_session(
     session_id: str,
     session_data: SessionUpdate,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -1171,7 +1168,7 @@ def _build_delete_session_response(
 async def delete_session(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: str | None = None,
 ):
@@ -1182,6 +1179,7 @@ async def delete_session(
     """
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
+    _sharing.require_owner(ownership)  # SECURITY: owner-only for every caller, incl. DELETE /chats/{id} (#21898)
 
     parsed_file_options = _validate_delete_session_params(session_id, file_action, file_options)
 
@@ -1356,7 +1354,7 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         # resolves a path parameter. Reset clears another user's conversation,
         # so the caller must own it. Only reachable when an id was supplied; an
         # absent one mints a new session above, which has no owner to check.
-        await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
+        _sharing.require_owner(await validate_session_ownership(session_id, request))  # SECURITY: owner-only (#21898)
 
         if clear_context:
             await _clear_session_messages(chat_history_manager, session_id)
@@ -1625,84 +1623,6 @@ async def get_session_activities(
 # ====================================================================
 
 
-async def _share_session_facts(
-    request: Request,
-    session_id: str,
-    share_with: list[str],
-    shared_by: str,
-    knowledge_facts: list[str] | None,
-) -> Dict:
-    """Share KB facts from a session with other users.
-
-    Helper for share_session (#689).
-    """
-    kb_manager = getattr(request.app.state, "kb_manager", None)
-    if not kb_manager:
-        return {"shared_count": 0, "errors": ["KB manager unavailable"]}
-
-    if knowledge_facts:
-        fact_ids = knowledge_facts
-    else:
-        fact_ids = await kb_manager.get_facts_by_session(session_id)
-
-    if not fact_ids:
-        return {"shared_count": 0, "errors": []}
-
-    return await kb_manager.share_facts(fact_ids, share_with, shared_by)
-
-
-@router.post("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionShareData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_session",
-    error_code_prefix="CHAT_SESSIONS",
-)
-async def share_session(
-    session_id: str,
-    share_data: SessionShareRequest,
-    request: Request,
-    ownership: Dict = Depends(validate_session_ownership),
-):
-    """Share a conversation with other users, optionally including KB facts (#689)."""
-    request_id = generate_request_id()
-    log_request_context(request, "share_session", request_id)
-
-    _validate_session_id_or_raise(session_id)
-
-    user_data = ownership.get("user_data", {})
-    shared_by = user_data.get("username", "unknown")
-
-    # Share session access
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from security.session_ownership import SessionOwnershipValidator
-
-    redis = await get_redis_mgr(async_client=True, database="main")
-    validator = SessionOwnershipValidator(redis)
-    await validator.share_session(session_id, share_data.share_with, shared_by)
-
-    # Optionally share KB facts
-    facts_result = None
-    if share_data.include_knowledge:
-        facts_result = await _share_session_facts(
-            request,
-            session_id,
-            share_data.share_with,
-            shared_by,
-            share_data.knowledge_facts,
-        )
-
-    return create_chat_response(
-        data={
-            "session_id": session_id,
-            "shared_with": share_data.share_with,
-            "include_knowledge": share_data.include_knowledge,
-            "facts_shared": facts_result,
-        },
-        message="Session shared successfully",
-        request_id=request_id,
-    )
-
-
 @router.get("/chat/sessions/{session_id}/share/preview", response_model=DataResponse[SessionSharePreviewData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1787,3 +1707,6 @@ async def clear_session_checkpoints(
             message="Failed to clear checkpoints",
             status_code=500,
         )
+
+
+router.include_router(_sharing.router)
