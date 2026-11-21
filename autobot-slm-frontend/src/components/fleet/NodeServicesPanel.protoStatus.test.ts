@@ -85,7 +85,7 @@ describe('NodeServicesPanel status tally ignores prototype keys (#17497)', () =>
     'a row with status %s gets the unknown styling, not an inherited member',
     async (status) => {
       const wrapper = await mountPanel([svc('b', status)])
-      const row = wrapper.find('div.bg-autobot-warning-bg')
+      const row = wrapper.find('div.bg-autobot-pill-warn-bg')
       expect(row.exists()).toBe(true)
       expect(row.classes()).toContain('text-autobot-pill-warn-fg')
     },

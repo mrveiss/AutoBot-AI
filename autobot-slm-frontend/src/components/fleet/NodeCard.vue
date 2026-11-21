@@ -83,11 +83,11 @@ const authMethodBadge = computed(() => {
   const method = props.node.auth_method || 'password'
   switch (method) {
     case 'key':
-      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-autobot-illus-1-tint text-autobot-illus-1' }
+      return { label: t('fleet.nodeCard.authMethodKey'), class: 'bg-autobot-illus-1-tint text-autobot-text-primary' }
     case 'pki':
-      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-autobot-illus-2-tint text-autobot-illus-2' }
+      return { label: t('fleet.nodeCard.authMethodPki'), class: 'bg-autobot-illus-2-tint text-autobot-text-primary' }
     default:
-      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-autobot-illus-3-tint text-autobot-illus-3' }
+      return { label: t('fleet.nodeCard.authMethodPassword'), class: 'bg-autobot-illus-3-tint text-autobot-text-primary' }
   }
 })
 
@@ -297,7 +297,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <!-- A2A Agent Card badge (Issue #962) -->
     <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
       <span
-        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-autobot-illus-1-tint text-autobot-illus-1 border border-autobot-illus-1"
+        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-autobot-illus-1-tint text-autobot-text-primary border border-autobot-border-strong"
         :title="$t('fleet.nodeCard.a2aAgentCardAria', { count: a2aSkillCount, plural: a2aSkillCount !== 1 ? 's' : '' })"
       >
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

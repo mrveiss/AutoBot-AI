@@ -47,7 +47,7 @@ function utilizationBarColor(pct: number): string {
 
 function utilizationTextColor(pct: number): string {
   if (pct > 80) return 'text-autobot-error'
-  if (pct >= 60) return 'text-autobot-warning'
+  if (pct >= 60) return 'text-autobot-pill-warn-fg'
   return 'text-autobot-success'
 }
 
@@ -58,7 +58,7 @@ function utilizationTextColor(pct: number): string {
 function temperatureColor(temp: number | null | undefined): string {
   if (temp === null || temp === undefined) return 'text-autobot-text-tertiary'
   if (temp > 75) return 'text-autobot-error'
-  if (temp >= 60) return 'text-autobot-warning'
+  if (temp >= 60) return 'text-autobot-pill-warn-fg'
   return 'text-autobot-success'
 }
 
@@ -168,7 +168,7 @@ onMounted(() => metricsPoller.start(''))
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-autobot-illus-2-tint">
               <!-- Clock icon -->
-              <svg class="w-5 h-5 text-autobot-illus-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>

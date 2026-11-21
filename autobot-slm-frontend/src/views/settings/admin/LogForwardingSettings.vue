@@ -361,7 +361,7 @@ onMounted(refreshAll)
         <h3 class="font-semibold text-autobot-text-primary">{{ $t('settings.admin.logForwardingSettings.destinations') }}</h3>
         <button
           @click="openAddModal"
-          class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -407,10 +407,10 @@ onMounted(refreshAll)
               <span
                 :class="[
                   'px-2 py-1 rounded-sm text-xs font-semibold uppercase',
-                  dest.type === 'syslog' ? 'bg-autobot-illus-1-tint text-autobot-illus-1' : '',
-                  dest.type === 'webhook' ? 'bg-autobot-illus-3-tint text-autobot-illus-3' : '',
+                  dest.type === 'syslog' ? 'bg-autobot-illus-1-tint text-autobot-text-primary' : '',
+                  dest.type === 'webhook' ? 'bg-autobot-illus-3-tint text-autobot-text-primary' : '',
                   dest.type === 'file' ? 'bg-autobot-bg-tertiary text-autobot-text-secondary' : '',
-                  dest.type === 'elasticsearch' ? 'bg-autobot-illus-2-tint text-autobot-illus-2' : '',
+                  dest.type === 'elasticsearch' ? 'bg-autobot-illus-2-tint text-autobot-text-primary' : '',
                 ]"
               >
                 {{ dest.type }}

@@ -258,7 +258,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="p-2 bg-autobot-illus-2-tint rounded-lg">
-                <svg class="w-6 h-6 text-autobot-illus-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
@@ -325,13 +325,13 @@ onUnmounted(() => {
           </div>
 
           <!-- AI Response -->
-          <div v-if="aiResponse" class="mt-4 p-4 bg-primary-50 rounded-lg max-w-lg w-full">
+          <div v-if="aiResponse" class="mt-4 p-4 bg-autobot-bg-secondary rounded-lg max-w-lg w-full">
             <div class="flex items-center justify-between mb-1">
               <p class="text-sm text-primary-600">{{ $t('tools.admin.voiceTool.aIResponse') }}</p>
               <button
                 v-if="isSpeaking"
                 @click="stopSpeaking"
-                class="text-xs text-autobot-error hover:text-autobot-pill-bad-fg"
+                class="text-xs text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg"
               >
                 {{ $t('tools.admin.voiceTool.stopSpeaking') }}
               </button>
@@ -366,7 +366,7 @@ onUnmounted(() => {
               :key="index"
               :class="[
                 'p-2 rounded-sm text-sm',
-                msg.role === 'user' ? 'bg-autobot-bg-tertiary ml-8' : 'bg-primary-50 mr-8'
+                msg.role === 'user' ? 'bg-autobot-bg-tertiary ml-8' : 'bg-autobot-bg-secondary mr-8'
               ]"
             >
               <p class="text-xs text-autobot-text-tertiary mb-1">

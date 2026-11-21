@@ -168,7 +168,7 @@ onMounted(() => {
               }"
             ></div>
             <span class="text-xs text-autobot-text-secondary">{{ $t(`tools.admin.browserTool.status.${browserStatus}`) }}</span>
-            <span v-if="fleetDegraded" class="text-xs text-autobot-pill-warn-fg">
+            <span v-if="fleetDegraded" class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-xs text-autobot-pill-warn-fg">
               {{ $t('tools.admin.browserTool.fleetDegraded') }}
             </span>
           </div>

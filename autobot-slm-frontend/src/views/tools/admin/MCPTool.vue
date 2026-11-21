@@ -276,7 +276,7 @@ onUnmounted(() => {
             <p class="mt-2 text-lg font-bold text-autobot-text-primary">{{ lastUpdatedTime }}</p>
             <button
               @click="refreshPoller.start('')"
-              class="mt-2 text-sm text-autobot-illus-2 hover:text-autobot-illus-2 flex items-center gap-1"
+              class="mt-2 text-sm text-autobot-text-primary flex items-center gap-1"
               :disabled="isRefreshing"
             >
               <svg class="w-4 h-4" :class="{ 'animate-spin': isRefreshing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,7 +285,7 @@ onUnmounted(() => {
               {{ $t('tools.admin.mCPTool.refreshNow') }}
             </button>
           </div>
-          <svg class="w-8 h-8 text-autobot-illus-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-8 h-8 text-autobot-text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
@@ -408,7 +408,7 @@ onUnmounted(() => {
               <span
                 v-for="feature in bridge.features"
                 :key="feature"
-                class="px-2 py-1 text-xs bg-autobot-illus-1-tint text-autobot-illus-1 rounded-sm"
+                class="px-2 py-1 text-xs bg-autobot-illus-1-tint text-autobot-text-primary rounded-sm"
               >
                 {{ feature }}
               </span>

@@ -237,7 +237,7 @@ onMounted(async () => {
             type="button"
             :class="[
               'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-              enabled ? 'bg-autobot-illus-1' : 'bg-autobot-border-strong'
+              enabled ? 'bg-autobot-primary' : 'bg-autobot-border-strong'
             ]"
             role="switch"
             :aria-checked="enabled"
@@ -264,14 +264,14 @@ onMounted(async () => {
           :key="p.id"
           :class="[
             'flex items-center gap-2 px-4 py-2.5 cursor-pointer text-sm transition-colors',
-            selectedId === p.id ? 'bg-autobot-illus-1-tint text-autobot-illus-1' : 'text-autobot-text-secondary hover:bg-autobot-bg-hover'
+            selectedId === p.id ? 'bg-autobot-illus-1-tint text-autobot-text-primary' : 'text-autobot-text-secondary hover:bg-autobot-bg-hover'
           ]"
           @click="selectProfile(p.id)"
         >
           <span class="flex-1 truncate font-medium">{{ p.name }}</span>
           <span
             v-if="p.active"
-            class="px-1.5 py-0.5 rounded-sm text-xs bg-autobot-illus-1-tint text-autobot-illus-1 font-medium"
+            class="px-1.5 py-0.5 rounded-sm text-xs bg-autobot-illus-1-tint text-autobot-text-primary font-medium"
           >{{ $t('settings.admin.personalitySettings.active') }}</span>
           <span
             v-if="p.is_system"
@@ -284,7 +284,7 @@ onMounted(async () => {
       <div class="px-4 py-3 border-t border-autobot-border-subtle flex gap-2">
         <button
           type="button"
-          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-autobot-illus-1 text-autobot-illus-1 hover:bg-autobot-illus-1-tint transition-colors"
+          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-autobot-border-strong text-autobot-text-primary hover:bg-autobot-illus-1-tint transition-colors"
           @click="showNewDialog = true"
         >{{ $t('settings.admin.personalitySettings.new') }}</button>
         <button
@@ -334,11 +334,11 @@ onMounted(async () => {
             >{{ $t('settings.admin.personalitySettings.setActive') }}</button>
             <span
               v-else
-              class="text-xs px-3 py-1.5 rounded-sm bg-autobot-illus-1-tint text-autobot-illus-1 font-medium"
+              class="text-xs px-3 py-1.5 rounded-sm bg-autobot-illus-1-tint text-autobot-text-primary font-medium"
             >{{ $t('settings.admin.personalitySettings.currentlyActive') }}</span>
             <button
               type="button"
-              class="text-xs px-3 py-1.5 rounded-sm border border-autobot-warning-light text-autobot-pill-warn-fg hover:bg-autobot-warning-bg transition-colors"
+              class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-xs px-3 py-1.5 rounded-sm border border-autobot-warning-light text-autobot-pill-warn-fg hover:bg-autobot-warning-bg transition-colors"
               @click="handleReset"
             >{{ $t('settings.admin.personalitySettings.resetToDefault') }}</button>
             <button
@@ -384,8 +384,8 @@ onMounted(async () => {
                 :class="[
                   'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
                   editForm.tone === opt.value
-                    ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-illus-1'
-                    : 'bg-white text-autobot-text-secondary border-autobot-border-strong hover:border-autobot-illus-1'
+                    ? 'bg-autobot-primary text-autobot-text-on-primary border-autobot-border-strong'
+                    : 'bg-white text-autobot-text-secondary border-autobot-border-strong hover:border-autobot-border-strong'
                 ]"
                 @click="editForm.tone = opt.value"
               >{{ opt.label }}</button>
@@ -399,7 +399,7 @@ onMounted(async () => {
               <span
                 v-for="trait in (editForm.character_traits as string[])"
                 :key="trait"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-1-tint text-autobot-illus-1 border border-autobot-primary-light"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-1-tint text-autobot-text-primary border border-autobot-primary-light"
               >
                 {{ trait }}
                 <button type="button" class="hover:text-autobot-error" @click="removeTag('character_traits', trait)">×</button>
@@ -428,7 +428,7 @@ onMounted(async () => {
               <span
                 v-for="s in (editForm.operating_style as string[])"
                 :key="s"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-2-tint text-autobot-illus-2 border border-autobot-illus-2"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-illus-2-tint text-autobot-text-primary border border-autobot-border-strong"
               >
                 {{ s }}
                 <button type="button" class="hover:text-autobot-error" @click="removeTag('operating_style', s)">×</button>
@@ -457,10 +457,10 @@ onMounted(async () => {
               <span
                 v-for="o in (editForm.off_limits as string[])"
                 :key="o"
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-error-bg text-autobot-pill-bad-fg border border-autobot-error-light"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg border border-autobot-error-light"
               >
                 {{ o }}
-                <button type="button" class="hover:text-autobot-pill-bad-fg" @click="removeTag('off_limits', o)">×</button>
+                <button type="button" class="hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg" @click="removeTag('off_limits', o)">×</button>
               </span>
             </div>
             <div class="flex gap-2">

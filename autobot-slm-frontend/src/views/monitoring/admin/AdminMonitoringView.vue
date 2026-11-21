@@ -70,10 +70,10 @@ const healthStatus = computed(() => {
 // The backend's probe vocabulary (#6909): ok / degraded / down
 const healthStatusClass = computed(() => {
   switch (healthStatus.value) {
-    case 'ok': return 'bg-autobot-pill-ok-bg border-autobot-success'
-    case 'degraded': return 'bg-autobot-pill-warn-bg border-autobot-warning'
-    case 'down': return 'bg-autobot-pill-bad-bg border-autobot-error'
-    default: return 'bg-autobot-bg-tertiary border-autobot-border-strong'
+    case 'ok': return 'bg-autobot-pill-ok-bg border-autobot-success text-autobot-pill-ok-fg'
+    case 'degraded': return 'bg-autobot-pill-warn-bg border-autobot-warning text-autobot-pill-warn-fg'
+    case 'down': return 'bg-autobot-pill-bad-bg border-autobot-error text-autobot-pill-bad-fg'
+    default: return 'bg-autobot-bg-tertiary border-autobot-border-strong text-autobot-text-primary'
   }
 })
 

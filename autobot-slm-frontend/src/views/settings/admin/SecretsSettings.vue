@@ -359,9 +359,9 @@ onMounted(() => {
                 <span
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                   :class="{
-                    'bg-autobot-illus-1-tint text-autobot-illus-1': secret.category === 'system',
-                    'bg-autobot-illus-2-tint text-autobot-illus-2': secret.category === 'api_token',
-                    'bg-autobot-illus-3-tint text-autobot-illus-3': secret.category === 'service',
+                    'bg-autobot-illus-1-tint text-autobot-text-primary': secret.category === 'system',
+                    'bg-autobot-illus-2-tint text-autobot-text-primary': secret.category === 'api_token',
+                    'bg-autobot-illus-3-tint text-autobot-text-primary': secret.category === 'service',
                   }"
                 >
                   {{ categoryLabel(secret.category) }}
@@ -387,7 +387,7 @@ onMounted(() => {
                     />
                     <button
                       :disabled="!editValue || saving"
-                      class="text-autobot-success hover:text-autobot-pill-ok-fg disabled:opacity-50"
+                      class="text-autobot-success hover:bg-autobot-pill-ok-bg hover:text-autobot-pill-ok-fg disabled:opacity-50"
                       @click="updateSecretValue(secret.key)"
                     >
                       {{ $t('settings.admin.secretsSettings.save') }}
@@ -401,7 +401,7 @@ onMounted(() => {
                   <button
                     v-if="hasDependentRoles(secret.key)"
                     :disabled="applyingKey === secret.key"
-                    class="text-autobot-warning hover:text-autobot-pill-warn-fg mr-3 disabled:opacity-50"
+                    class="text-autobot-warning hover:bg-autobot-pill-warn-bg hover:text-autobot-pill-warn-fg mr-3 disabled:opacity-50"
                     @click="applyToServices(secret.key)"
                   >
                     {{ applyingKey === secret.key
@@ -409,13 +409,13 @@ onMounted(() => {
                       : $t('settings.admin.secretsSettings.applyToServices') }}
                   </button>
                   <button
-                    class="text-autobot-text-link hover:text-autobot-pill-info-fg mr-3"
+                    class="text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg mr-3"
                     @click="startEdit(secret.key)"
                   >
                     {{ $t('settings.admin.secretsSettings.update') }}
                   </button>
                   <button
-                    class="text-autobot-error hover:text-autobot-pill-bad-fg"
+                    class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg"
                     @click="removeSecret(secret.key)"
                   >
                     {{ $t('settings.admin.secretsSettings.delete') }}
@@ -425,7 +425,7 @@ onMounted(() => {
             </tr>
             <tr v-if="applyResult && applyResult.key === secret.key">
               <td colspan="5" class="px-6 py-3 bg-autobot-bg-secondary">
-                <p class="text-xs font-medium mb-1" :class="applyResult.success ? 'text-autobot-pill-ok-fg' : 'text-autobot-pill-bad-fg'">
+                <p class="text-xs font-medium mb-1" :class="applyResult.success ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'">
                   {{ applyResult.success
                     ? $t('settings.admin.secretsSettings.applySuccess')
                     : $t('settings.admin.secretsSettings.applyFailed') }}

@@ -268,17 +268,17 @@ onMounted(() => dataPoller.start(''))
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-error-light p-4">
         <p class="text-sm text-autobot-error">{{ $t('monitoring.errorMonitor.last24Hours') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-bad-fg">{{ stats.errors_24h }}</p>
+        <p class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-bad-fg">{{ stats.errors_24h }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
         <p class="text-sm text-autobot-warning">{{ $t('monitoring.errorMonitor.unresolved') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-warn-fg">
+        <p class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-warn-fg">
           {{ stats.unresolved_count }}
         </p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-success-light p-4">
         <p class="text-sm text-autobot-success">{{ $t('monitoring.errorMonitor.resolved') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-ok-fg">
+        <p class="bg-autobot-pill-ok-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-ok-fg">
           {{ stats.resolved_count }}
         </p>
       </div>
@@ -584,7 +584,7 @@ onMounted(() => dataPoller.start(''))
         <button
           v-if="!selectedError.resolved"
           @click="resolveError(selectedError.event_id)"
-          class="px-4 py-2 text-sm font-medium text-(--text-on-success) bg-autobot-success rounded-lg hover:bg-autobot-success-hover"
+          class="px-4 py-2 text-sm font-medium text-autobot-text-on-primary bg-autobot-primary rounded-lg hover:bg-autobot-primary-hover"
         >
           {{ $t('monitoring.errorMonitor.markResolved') }}
         </button>

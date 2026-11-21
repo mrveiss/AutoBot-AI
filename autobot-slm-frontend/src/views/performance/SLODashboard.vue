@@ -218,7 +218,7 @@ async function handleDelete(): Promise<void> {
             ></div>
             <!-- Target indicator line -->
             <div
-              class="absolute top-0 h-2 w-0.5 bg-autobot-bg-hover"
+              class="absolute top-0 h-2 w-0.5 bg-autobot-bg-hover outline outline-1 outline-autobot-text-primary"
               :style="{ left: `${Math.min(slo.target_percent, 100)}%` }"
               :title="$t('performance.sLODashboard.targetPercentTitle', { percent: slo.target_percent })"
             ></div>
@@ -249,7 +249,7 @@ async function handleDelete(): Promise<void> {
         <div class="flex justify-end">
           <button
             @click="confirmDelete(slo)"
-            class="text-xs text-autobot-error hover:text-autobot-pill-bad-fg transition-colors"
+            class="text-xs text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg transition-colors"
           >
             {{ $t('performance.sLODashboard.delete') }}
           </button>

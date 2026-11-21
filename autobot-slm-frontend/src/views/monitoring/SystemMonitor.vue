@@ -206,7 +206,7 @@ function getMetricColor(value: number): string {
           class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div class="flex items-center gap-3 mb-4">
-            <div :class="['w-3 h-3 rounded-full', getStatusColor(node.status)]"></div>
+            <div :class="['w-3 h-3 rounded-full border border-autobot-border-strong', getStatusColor(node.status)]"></div>
             <div>
               <h3 class="font-semibold text-autobot-text-primary">{{ node.hostname }}</h3>
               <p class="text-xs text-autobot-text-tertiary">{{ node.ip_address }}</p>

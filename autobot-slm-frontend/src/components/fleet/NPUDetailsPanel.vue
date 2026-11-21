@@ -95,7 +95,7 @@ const tempColor = computed(() => {
   const t = liveMetrics.value?.temperature_celsius
   if (t == null) return 'text-autobot-text-tertiary'
   if (t >= 75) return 'text-autobot-error'
-  if (t >= 60) return 'text-autobot-warning'
+  if (t >= 60) return 'text-autobot-pill-warn-fg'
   return 'text-autobot-success'
 })
 
@@ -224,7 +224,7 @@ watch(
             <dt class="text-sm text-autobot-text-tertiary">{{ $t('fleet.nPUDetailsPanel.detectionStatus') }}</dt>
             <dd class="text-sm font-medium">
               <span v-if="npuStatus?.detectionStatus === 'detected'" class="text-autobot-success">{{ $t('fleet.nPUDetailsPanel.detected') }}</span>
-              <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-autobot-warning">{{ $t('fleet.nPUDetailsPanel.pending') }}</span>
+              <span v-else-if="npuStatus?.detectionStatus === 'pending'" class="text-autobot-pill-warn-fg">{{ $t('fleet.nPUDetailsPanel.pending') }}</span>
               <span v-else-if="npuStatus?.detectionStatus === 'failed'" class="text-autobot-error">{{ $t('fleet.nPUDetailsPanel.failed') }}</span>
               <span v-else class="text-autobot-text-secondary">{{ $t('fleet.nPUDetailsPanel.unknown') }}</span>
             </dd>

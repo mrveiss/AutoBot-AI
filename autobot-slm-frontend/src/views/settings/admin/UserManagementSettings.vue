@@ -597,7 +597,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.userManagementSettings.sLMFleetAdministrators') }}</h2>
             <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.userManagementSettings.usersWhoManageThe') }}</p>
           </div>
-          <button @click="showCreateUserModal = true" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover flex items-center gap-2">
+          <button @click="showCreateUserModal = true" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -623,7 +623,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ user.email }}</td>
                 <td class="py-3 px-4">
                   <div class="flex gap-1 flex-wrap">
-                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-2-tint text-autobot-illus-2">
+                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-2-tint text-autobot-text-primary">
                       {{ role.name }}
                     </span>
                   </div>
@@ -636,12 +636,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
-                    <button @click="openPasswordChangeModal(user, 'slm')" class="text-autobot-warning hover:text-autobot-pill-warn-fg p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
+                    <button @click="openPasswordChangeModal(user, 'slm')" class="text-autobot-warning hover:bg-autobot-pill-warn-bg hover:text-autobot-pill-warn-fg p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </button>
-                    <button @click="deleteSlmUser(user.id)" class="text-autobot-error hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
+                    <button @click="deleteSlmUser(user.id)" class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -664,7 +664,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.userManagementSettings.autoBotApplicationUsers') }}</h2>
             <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.userManagementSettings.usersWhoAccessAutoBot') }}</p>
           </div>
-          <button @click="showCreateUserModal = true" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover flex items-center gap-2">
+          <button @click="showCreateUserModal = true" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -690,7 +690,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ user.email }}</td>
                 <td class="py-3 px-4">
                   <div class="flex gap-1 flex-wrap">
-                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1">
+                    <span v-for="role in user.roles" :key="role.id" class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary">
                       {{ role.name }}
                     </span>
                   </div>
@@ -703,12 +703,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ formatFleetDateTime(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex items-center justify-end gap-1">
-                    <button @click="openPasswordChangeModal(user, 'autobot')" class="text-autobot-warning hover:text-autobot-pill-warn-fg p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
+                    <button @click="openPasswordChangeModal(user, 'autobot')" class="text-autobot-warning hover:bg-autobot-pill-warn-bg hover:text-autobot-pill-warn-fg p-1" :title="$t('settings.admin.userManagementSettings.resetPassword')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                       </svg>
                     </button>
-                    <button @click="deleteAutobotUser(user.id)" class="text-autobot-error hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
+                    <button @click="deleteAutobotUser(user.id)" class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteUser')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -731,7 +731,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.userManagementSettings.autoBotTeams') }}</h2>
             <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.userManagementSettings.organizeUsersIntoTeams') }}</p>
           </div>
-          <button @click="showCreateTeamModal = true" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover flex items-center gap-2">
+          <button @click="showCreateTeamModal = true" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -755,7 +755,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ team.description || '-' }}</td>
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ formatFleetDateTime(team.created_at) }}</td>
                 <td class="py-3 px-4 text-right">
-                  <button @click="deleteTeam(team.id)" class="text-autobot-error hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
+                  <button @click="deleteTeam(team.id)" class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteTeam')">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
@@ -777,7 +777,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.userManagementSettings.sSOProviders') }}</h2>
             <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.userManagementSettings.configureOAuth2LDAPAnd') }}</p>
           </div>
-          <button @click="showCreateProviderModal = true" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover flex items-center gap-2">
+          <button @click="showCreateProviderModal = true" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -800,7 +800,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
               <tr v-for="provider in ssoProviders" :key="provider.id" class="border-b border-autobot-border-subtle hover:bg-autobot-bg-hover">
                 <td class="py-3 px-4 text-sm font-medium text-autobot-text-primary">{{ provider.name }}</td>
                 <td class="py-3 px-4">
-                  <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1">
+                  <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary">
                     {{ provider.provider_type }}
                   </span>
                 </td>
@@ -812,12 +812,12 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 <td class="py-3 px-4 text-sm text-autobot-text-secondary">{{ formatFleetDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
-                    <button @click="testSsoProvider(provider.id)" class="text-autobot-text-link hover:text-autobot-pill-info-fg p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">
+                    <button @click="testSsoProvider(provider.id)" class="text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg p-1" :title="$t('settings.admin.userManagementSettings.testConnection')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                     </button>
-                    <button @click="deleteSsoProvider(provider.id)" class="text-autobot-error hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteProvider')">
+                    <button @click="deleteSsoProvider(provider.id)" class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg p-1" :title="$t('settings.admin.userManagementSettings.deleteProvider')">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
@@ -924,7 +924,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <button @click="showCreateUserModal = false" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active">
           {{ $t('settings.admin.userManagementSettings.cancel') }}
         </button>
-        <button @click="createUser" :disabled="saving" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover disabled:opacity-50 flex items-center gap-2">
+        <button @click="createUser" :disabled="saving" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2">
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -956,7 +956,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
         <button @click="showCreateTeamModal = false" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active">
           {{ $t('settings.admin.userManagementSettings.cancel') }}
         </button>
-        <button @click="createTeam" :disabled="saving || !newTeamForm.name" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover disabled:opacity-50 flex items-center gap-2">
+        <button @click="createTeam" :disabled="saving || !newTeamForm.name" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2">
           <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -1050,7 +1050,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
       </div>
       <template #actions>
         <button @click="showCreateProviderModal = false" class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active">{{ $t('settings.admin.userManagementSettings.cancel') }}</button>
-        <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover disabled:opacity-50">{{ $t('settings.admin.userManagementSettings.createProvider') }}</button>
+        <button @click="createSsoProvider" :disabled="saving" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50">{{ $t('settings.admin.userManagementSettings.createProvider') }}</button>
       </template>
     </BaseModal>
   </div>

@@ -313,7 +313,7 @@ async function handleDelete(): Promise<void> {
                   </button>
                   <button
                     @click="confirmDelete(rule)"
-                    class="text-xs text-autobot-error hover:text-autobot-pill-bad-fg transition-colors"
+                    class="text-xs text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg transition-colors"
                   >
                     {{ $t('performance.alertRulesView.delete') }}
                   </button>

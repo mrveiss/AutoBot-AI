@@ -176,7 +176,7 @@ onMounted(() => refreshPoller.start(''))
           v-if="alertCounts.total > 0"
           @click="clearAlerts"
           :disabled="isClearing"
-          class="px-4 py-2 text-sm font-medium text-autobot-pill-bad-fg bg-white border border-autobot-error-light rounded-lg hover:bg-autobot-error-bg disabled:opacity-50 flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-autobot-pill-bad-fg bg-autobot-pill-bad-bg border border-autobot-error-light rounded-lg hover:bg-autobot-error-bg disabled:opacity-50 flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -205,7 +205,7 @@ onMounted(() => refreshPoller.start(''))
       v-if="clearError"
       role="alert"
       data-testid="clear-alerts-error"
-      class="mb-6 rounded-lg border border-autobot-error-light bg-autobot-error-bg px-4 py-3 text-sm text-autobot-pill-bad-fg"
+      class="mb-6 rounded-lg border border-autobot-error-light bg-autobot-pill-bad-bg px-4 py-3 text-sm text-autobot-pill-bad-fg"
     >
       {{ $t('monitoring.alertsMonitor.clearFailed', { message: clearError }) }}
     </div>
@@ -218,19 +218,19 @@ onMounted(() => refreshPoller.start(''))
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-error-light p-4">
         <p class="text-sm text-autobot-error">{{ $t('monitoring.alertsMonitor.critical') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-bad-fg">{{ alertCounts.critical }}</p>
+        <p class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-bad-fg">{{ alertCounts.critical }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
         <p class="text-sm text-autobot-warning">{{ $t('monitoring.alertsMonitor.high') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.high }}</p>
+        <p class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.high }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-warning-light p-4">
         <p class="text-sm text-autobot-warning">{{ $t('monitoring.alertsMonitor.warning') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.warning }}</p>
+        <p class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-warn-fg">{{ alertCounts.warning }}</p>
       </div>
       <div class="bg-white rounded-lg shadow-xs border border-autobot-primary-light p-4">
         <p class="text-sm text-autobot-text-link">{{ $t('monitoring.alertsMonitor.info') }}</p>
-        <p class="text-2xl font-bold text-autobot-pill-info-fg">{{ alertCounts.info }}</p>
+        <p class="bg-autobot-pill-info-bg px-2 rounded-sm w-fit text-2xl font-bold text-autobot-pill-info-fg">{{ alertCounts.info }}</p>
       </div>
     </div>
 

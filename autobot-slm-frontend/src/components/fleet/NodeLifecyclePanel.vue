@@ -214,7 +214,7 @@ function getSeverityClasses(severity: SeverityLevel): {
       icon: 'text-autobot-text-link',
     },
     warning: {
-      bg: 'bg-autobot-warning-bg',
+      bg: 'bg-autobot-pill-warn-bg',
       text: 'text-autobot-pill-warn-fg',
       icon: 'text-autobot-warning',
     },
@@ -606,7 +606,7 @@ onUnmounted(() => {
               <span v-if="updatesSummary.codeUpdateAvailable" class="font-medium">{{ $t('fleet.nodeLifecyclePanel.codeUpdateAvailable') }}</span>
             </div>
             <span v-if="updatesSummary.security > 0" class="text-sm text-autobot-error">{{ $t('fleet.nodeLifecyclePanel.value0Security', { value0: updatesSummary.security }) }}</span>
-            <span v-if="updatesSummary.critical > 0" class="text-sm font-medium text-autobot-pill-bad-fg">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
+            <span v-if="updatesSummary.critical > 0" class="bg-autobot-pill-bad-bg px-2 rounded-sm w-fit text-sm font-medium text-autobot-pill-bad-fg">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
           </template>
           <template v-else-if="availableUpdates">
             <div class="flex items-center gap-2 text-success-600">

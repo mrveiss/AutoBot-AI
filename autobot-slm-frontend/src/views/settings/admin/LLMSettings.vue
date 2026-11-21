@@ -233,7 +233,7 @@ onMounted(fetchConfig)
         </button>
         <button
           :disabled="hasUnsavedChanges || applying"
-          class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="applyToFleet"
         >
           {{ applying ? $t('settings.admin.lLMSettings.applying') : $t('settings.admin.lLMSettings.applyToFleet') }}
@@ -353,7 +353,7 @@ onMounted(fetchConfig)
                 {{ provider.enabled ? $t('settings.admin.lLMSettings.enabled') : $t('settings.admin.lLMSettings.disabled') }}
               </span>
             </div>
-            <button class="text-autobot-error hover:text-autobot-pill-bad-fg text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
+            <button class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg text-sm" @click="removeProvider(idx)">{{ $t('settings.admin.lLMSettings.remove') }}</button>
           </div>
           <div class="text-sm text-autobot-text-secondary space-y-1">
             <div v-if="provider.model"><span class="font-medium">{{ $t('settings.admin.lLMSettings.model1') }}</span> {{ provider.model }}</div>
@@ -361,11 +361,11 @@ onMounted(fetchConfig)
             <div><span class="font-medium">{{ $t('settings.admin.lLMSettings.temperature') }}</span> {{ provider.temperature }}</div>
           </div>
           <div class="flex items-center gap-2 mt-3 pt-3 border-t border-autobot-border-subtle">
-            <button class="text-sm text-autobot-text-link hover:text-autobot-pill-info-fg" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
+            <button class="text-sm text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg" @click="setActiveProvider(provider.name)">{{ $t('settings.admin.lLMSettings.setActive') }}</button>
             <button class="text-sm text-autobot-text-secondary hover:text-autobot-text-primary" @click="toggleProvider(idx)">
               {{ provider.enabled ? $t('settings.admin.lLMSettings.disable') : $t('settings.admin.lLMSettings.enable') }}
             </button>
-            <button class="text-sm text-autobot-success hover:text-autobot-pill-ok-fg" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
+            <button class="text-sm text-autobot-success hover:bg-autobot-pill-ok-bg hover:text-autobot-pill-ok-fg" @click="testProvider(provider)">{{ $t('settings.admin.lLMSettings.test') }}</button>
           </div>
         </div>
       </div>
@@ -466,9 +466,9 @@ onMounted(fetchConfig)
         <div v-if="config.gpu_models.length === 0" class="text-sm text-autobot-text-tertiary py-4 text-center">{{ $t('settings.admin.lLMSettings.noGPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.gpu_models" :key="model"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-2-tint border border-autobot-illus-2 text-sm font-mono text-autobot-illus-2">
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-2-tint border border-autobot-border-strong text-sm font-mono text-autobot-text-primary">
             {{ model }}
-            <button class="text-autobot-illus-2 hover:text-autobot-illus-2" @click="removeModel('gpu', idx)">
+            <button class="text-autobot-text-primary" @click="removeModel('gpu', idx)">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -493,9 +493,9 @@ onMounted(fetchConfig)
         <div v-if="config.cpu_models.length === 0" class="text-sm text-autobot-text-tertiary py-4 text-center">{{ $t('settings.admin.lLMSettings.noCPUModelsConfigured') }}</div>
         <div v-else class="flex flex-wrap gap-2">
           <span v-for="(model, idx) in config.cpu_models" :key="model"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-1-tint text-autobot-illus-1 text-sm font-mono">
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-autobot-illus-1-tint text-autobot-text-primary text-sm font-mono">
             {{ model }}
-            <button class="text-autobot-text-link hover:text-autobot-pill-info-fg" @click="removeModel('cpu', idx)">
+            <button class="text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg" @click="removeModel('cpu', idx)">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>

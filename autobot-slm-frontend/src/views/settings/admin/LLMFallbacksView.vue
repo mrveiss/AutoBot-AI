@@ -148,7 +148,7 @@ onMounted(() => statusPoller.start(''))
               <td class="px-4 py-3 text-autobot-text-secondary">{{ chain.fallback_chain }}</td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ chain.provider }}
                 </span>
@@ -213,7 +213,7 @@ onMounted(() => statusPoller.start(''))
               </td>
               <td class="px-4 py-3">
                 <span
-                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1"
+                  class="px-2 py-0.5 rounded-full text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                 >
                   {{ fallback.fallback_provider }}
                 </span>

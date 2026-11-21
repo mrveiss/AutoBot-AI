@@ -419,7 +419,7 @@ onMounted(fetchProviders)
       <p class="text-autobot-text-tertiary">{{ $t('settings.admin.sSOSettings.noSSOProvidersConfigured') }}</p>
       <button
         @click="openCreateForm"
-        class="mt-4 text-autobot-text-link hover:text-autobot-pill-info-fg"
+        class="mt-4 text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg"
       >{{ $t('settings.admin.sSOSettings.addYourFirstProvider') }}</button>
     </div>
 

@@ -459,7 +459,7 @@ onMounted(() => {
             v-for="r in proposalResults"
             :key="r.key"
             class="text-sm px-3 py-2 rounded-lg"
-            :class="r.ok ? 'bg-autobot-success-bg text-autobot-pill-ok-fg' : 'bg-autobot-error-bg text-autobot-pill-bad-fg'"
+            :class="r.ok ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
             :data-testid="r.ok ? 'proposal-result-success' : 'proposal-result-failure'"
             role="status"
           >
@@ -576,7 +576,7 @@ onMounted(() => {
                 <div
                   v-if="repairResults[o.resource_id]"
                   class="mt-1 text-xs"
-                  :class="repairResults[o.resource_id].ok ? 'text-autobot-pill-ok-fg' : 'text-autobot-pill-bad-fg'"
+                  :class="repairResults[o.resource_id].ok ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'"
                   :data-testid="repairResults[o.resource_id].ok ? 'repair-result-success' : 'repair-result-failure'"
                   role="status"
                 >

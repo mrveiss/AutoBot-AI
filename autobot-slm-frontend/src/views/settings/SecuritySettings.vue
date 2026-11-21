@@ -369,7 +369,7 @@ onMounted(async () => {
                   <span
                     v-for="scope in key.scopes"
                     :key="scope"
-                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-illus-1"
+                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                   >
                     {{ scope }}
                   </span>
@@ -385,7 +385,7 @@ onMounted(async () => {
               <td class="px-4 py-3 whitespace-nowrap text-sm">
                 <button
                   @click="revokeAPIKey(key.id)"
-                  class="text-autobot-error hover:text-autobot-pill-bad-fg"
+                  class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg"
                 >
                   {{ $t('settings.securitySettings.revoke') }}
                 </button>
@@ -454,7 +454,7 @@ onMounted(async () => {
         <button
           @click="cancelMFASetup"
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-dot-idle"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -534,7 +534,7 @@ onMounted(async () => {
             (showDisableModal = false), (disablePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-dot-idle"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -577,7 +577,7 @@ onMounted(async () => {
               (regeneratePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-dot-idle"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -666,7 +666,7 @@ onMounted(async () => {
         <button
           @click="showCreateKeyModal = false"
           :disabled="loading"
-          class="px-4 py-2 bg-autobot-border-strong text-autobot-text-secondary rounded-lg hover:bg-autobot-dot-idle"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>

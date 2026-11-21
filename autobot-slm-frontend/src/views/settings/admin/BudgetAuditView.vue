@@ -60,12 +60,12 @@ function actionLabel(action: string): string {
 
 function actionClass(action: string): string {
   if (action === 'pause') {
-    return 'bg-autobot-illus-3-tint text-autobot-illus-3'
+    return 'bg-autobot-illus-3-tint text-autobot-text-primary'
   }
   if (action === 'alert_then_pause') {
-    return 'bg-autobot-illus-2-tint text-autobot-illus-2'
+    return 'bg-autobot-illus-2-tint text-autobot-text-primary'
   }
-  return 'bg-autobot-illus-1-tint text-autobot-illus-1'
+  return 'bg-autobot-illus-1-tint text-autobot-text-primary'
 }
 
 function isPausing(policy: BudgetPolicy): boolean {

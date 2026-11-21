@@ -266,7 +266,7 @@ onMounted(() => {
                   <span class="px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm text-xs">
                     {{ prompt.category }}
                   </span>
-                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-autobot-illus-1-tint text-autobot-illus-1 rounded-sm text-xs">
+                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-autobot-illus-1-tint text-autobot-text-primary rounded-sm text-xs">
                     {{ $t('settings.admin.promptsSettings.default') }}
                   </span>
                 </div>
@@ -339,7 +339,7 @@ onMounted(() => {
             <button
               @click="savePrompt"
               :disabled="saving || !hasUnsavedChanges"
-              class="px-4 py-2 bg-autobot-success text-(--text-on-success) rounded-lg hover:bg-autobot-success-hover disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
             >
               <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

@@ -117,7 +117,7 @@ const statusCounts = computed(() => {
 function getStatusClasses(status: ServiceStatus): { bg: string; text: string; dot: string } {
   const classes: Record<ServiceStatus, { bg: string; text: string; dot: string }> = {
     running: {
-      bg: 'bg-autobot-success-bg',
+      bg: 'bg-autobot-pill-ok-bg',
       text: 'text-autobot-pill-ok-fg',
       dot: 'bg-autobot-dot-ok',
     },
@@ -127,21 +127,21 @@ function getStatusClasses(status: ServiceStatus): { bg: string; text: string; do
       dot: 'bg-autobot-dot-idle',
     },
     failed: {
-      bg: 'bg-autobot-error-bg',
+      bg: 'bg-autobot-pill-bad-bg',
       text: 'text-autobot-pill-bad-fg',
       dot: 'bg-autobot-dot-bad',
     },
     unknown: {
-      bg: 'bg-autobot-warning-bg',
+      bg: 'bg-autobot-pill-warn-bg',
       text: 'text-autobot-pill-warn-fg',
       dot: 'bg-autobot-dot-warn',
     },
     // #15401: the rest of the agent's run-state vocabulary. These fell through
     // to the `unknown` styling, so a crash-looping service looked the same as
     // one the probe could not read.
-    'crash-loop': { bg: 'bg-autobot-error-bg', text: 'text-autobot-pill-bad-fg', dot: 'bg-autobot-dot-bad' },
-    starting: { bg: 'bg-autobot-info-bg', text: 'text-autobot-pill-info-fg', dot: 'bg-autobot-primary' },
-    stopping: { bg: 'bg-autobot-info-bg', text: 'text-autobot-pill-info-fg', dot: 'bg-autobot-primary' },
+    'crash-loop': { bg: 'bg-autobot-pill-bad-bg', text: 'text-autobot-pill-bad-fg', dot: 'bg-autobot-dot-bad' },
+    starting: { bg: 'bg-autobot-pill-info-bg', text: 'text-autobot-pill-info-fg', dot: 'bg-autobot-primary' },
+    stopping: { bg: 'bg-autobot-pill-info-bg', text: 'text-autobot-pill-info-fg', dot: 'bg-autobot-primary' },
     completed: { bg: 'bg-autobot-bg-secondary', text: 'text-autobot-text-secondary', dot: 'bg-autobot-dot-idle' },
   }
   return Object.prototype.hasOwnProperty.call(classes, status) ? classes[status] : classes.unknown
@@ -469,7 +469,7 @@ onUnmounted(() => {
               </div>
               <div
                 v-if="service.extra_data?.engine_degraded && service.extra_data?.degraded_reason"
-                class="mt-1 text-xs text-autobot-pill-warn-fg"
+                class="bg-autobot-pill-warn-bg px-2 rounded-sm w-fit mt-1 text-xs text-autobot-pill-warn-fg"
               >
                 {{ service.extra_data.degraded_reason }}
               </div>
@@ -479,7 +479,7 @@ onUnmounted(() => {
               >
                 <button
                   @click="toggleErrorDetail(service.service_name)"
-                  class="text-autobot-error hover:text-autobot-pill-bad-fg underline"
+                  class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg underline"
                 >{{ $t('fleet.nodeServicesPanel.value0ErrorContext', { value0: expandedErrors.has(service.service_name) ? $t('fleet.nodeServicesPanel.hide') : $t('fleet.nodeServicesPanel.show') }) }}</button>
                 <BaseAlert v-if="expandedErrors.has(service.service_name)" variant="error" size="compact" class="mt-1">
                   <p class="font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">{{ service.extra_data.error_message }}</p></BaseAlert>
