@@ -99,8 +99,14 @@ async def env(monkeypatch):
     monkeypatch.setattr(session_shares, "work_claim", claim)
     validator = SessionOwnershipValidator.__new__(SessionOwnershipValidator)
     validator.redis = redis
-    with patch("services.audit.audit.audit_record") as audit:
-        yield validator, redis, audit
+    events: list = []  # every audit row the working store committed, in order
+
+    async def insert(event):
+        events.append(event)
+
+    monkeypatch.setattr("services.audit.store.insert_event", insert)
+    monkeypatch.setattr("services.audit.audit.run_redis_write", lambda coro, **_kw: coro.close())
+    yield validator, redis, events
     await engine.dispose()
 
 
@@ -163,13 +169,13 @@ async def test_redis_only_shares_on_an_installed_system_are_adopted(env):
 
 @pytest.mark.asyncio
 async def test_share_and_unshare_each_write_an_audit_record(env):
-    validator, _, audit = env
+    validator, _, events = env
     await validator.share_session(SESSION_ID, ["bob"], "alice")
     await validator.unshare_session(SESSION_ID, "bob", ACTOR)
 
-    actions = [c.kwargs["action"].value for c in audit.call_args_list]
-    assert actions == ["session.share", "session.unshare"]
-    assert audit.call_args.kwargs["metadata"]["participants"] == ["bob"]
+    done = [e.action for e in events if e.outcome == "success"]
+    assert done == ["session.share", "session.unshare"]
+    assert events[-1].metadata["details"]["participants"] == ["bob"]
 
 
 @pytest.mark.asyncio
@@ -453,16 +459,16 @@ async def test_startup_adoption_copies_shares_and_clears_every_ttl(env):
 
 @pytest.mark.asyncio
 async def test_audit_records_the_uuid_and_client_ip_with_the_username_in_metadata(env):
-    validator, _, audit = env
+    validator, _, events = env
     request = _request()
     actor = session_shares.audit_actor(request, {"user_id": "u-uuid-1", "username": "alice"})
 
     await validator.share_session(SESSION_ID, ["bob"], "alice", actor)
 
-    kwargs = audit.call_args.kwargs
-    assert kwargs["user_id"] == "u-uuid-1"
-    assert kwargs["ip_address"] == "203.0.113.7"
-    assert kwargs["metadata"]["username"] == "alice"
+    event = events[0]
+    assert event.actor_id == "u-uuid-1"
+    assert event.ip_address == "203.0.113.7"
+    assert event.metadata["details"]["username"] == "alice"
 
 
 @pytest.mark.asyncio
