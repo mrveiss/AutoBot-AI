@@ -13,20 +13,18 @@ claimed this); this module reads the loaded manifests and augments
 ``role_registry``'s static catalog with the manifest's values, so a future
 edit to one ``manifest.yml`` is the only place those facts have to change.
 
-Phase 1 scope (#16025). NOT derived here, and deliberately: ``display_name``,
-``sync_type``, ``auto_restart``, ``source_paths``, ``target_path``,
+Phase 1 (#16025) derived the identifier, units, health and ports. Phase 2 derives ``source_paths`` and
+``target_path`` from ``deploy.source`` / ``deploy.sync`` / ``deploy.sync_target`` (and a service's own
+``sync_target``), for every role a manifest resolves to. ``sync_target`` is what the code-sync rsyncs INTO, which
+is not the manifest's ``destination`` (the install directory); the two disagree for several roles, and that
+discrepancy is tracked separately rather than settled here -- the fields hold exactly what the registry did.
+NOT derived, and still declared only in ``role_registry.py``: ``display_name``, ``sync_type``, ``auto_restart``,
 ``post_sync_cmd``, ``required``, ``degraded_without``, ``ansible_playbook``.
-None of these has a manifest field today, and at least two roles' manifests
-were found to actively disagree with a value role_registry.py's own code
-comments prove correct (ai-stack's placeholder-README source, #14275;
-slm-agent's source/destination depth) -- deriving the rest blind would risk
-shipping a regression under the banner of removing one. Moving them into the
-manifest schema is tracked as a phase 2 follow-up (issue linked from #16025).
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Mapping, Tuple
 from urllib.parse import urlparse
 
 from models.manifest import RoleManifest, ServiceType
@@ -35,16 +33,13 @@ _DEFAULT_HTTPS_PORT = 443
 _DEFAULT_HTTP_PORT = 80
 
 # #16025: fields apply_manifest_shape never sets -- role_registry.py's static
-# dicts remain their sole declaration until a phase 2 follow-up gives each one
-# a manifest field (see the module docstring for why that is not done here).
+# dicts remain their sole declaration until each gets a manifest field.
 # Pinned so this set can only shrink as fields migrate out of it, never grow.
 REGISTRY_ONLY_FIELDS: frozenset = frozenset(
     {
         "display_name",
         "sync_type",
         "auto_restart",
-        "source_paths",
-        "target_path",
         "post_sync_cmd",
         "required",
         "degraded_without",
@@ -115,6 +110,26 @@ def systemd_units(role_name: str, manifest: RoleManifest, owns_whole_manifest: b
     return [svc.system_service or svc.name for svc in services if svc.type == ServiceType.SYSTEMD]
 
 
+def sync_from_manifest(
+    role_name: str, manifest: RoleManifest, owns_whole_manifest: bool, placeholders: Mapping[str, str]
+) -> Tuple[List[str], str]:
+    """(source_paths, target_path) the code-sync uses for role_name, per the resolved manifest.
+
+    A manifest with ``deploy.sync: false`` ships nothing. The target is the deploy-level ``sync_target`` unless a
+    service tagging role_name carries its own; ``{base_dir}`` / ``{agent_dir}`` come from ``placeholders`` so the
+    registry's AUTOBOT_BASE_DIR / SLM_AGENT_DIR override still decides them.
+    """
+    deploy = manifest.deploy
+    target = deploy.sync_target
+    if not owns_whole_manifest:
+        own = [
+            svc.sync_target for svc in manifest.services if role_name in svc.slm_roles and svc.sync_target is not None
+        ]
+        if own:
+            target = own[0]
+    return ([deploy.source] if deploy.sync else []), target.format_map(placeholders)
+
+
 def health_from_manifest(manifest: RoleManifest) -> Tuple[int | None, str | None]:
     """(port, path) implied by the manifest's ``health.endpoint``, or (None, None)."""
     if manifest.health is None:
@@ -154,7 +169,7 @@ def _as_unit_list(value) -> List[str] | None:
 _default_roles_cache: List[Dict] | None = None
 
 
-def default_roles_for(static_roles: List[Dict]) -> List[Dict]:
+def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] | None = None) -> List[Dict]:
     """Memoized ``role_registry.DEFAULT_ROLES``: static_roles, each manifest-augmented.
 
     A shallow ``dict(role)`` copy per entry -- ``apply_manifest_shape`` mutates
@@ -167,16 +182,19 @@ def default_roles_for(static_roles: List[Dict]) -> List[Dict]:
         from services.manifest_loader import get_manifest_loader
 
         manifests = get_manifest_loader().load_all()
-        _default_roles_cache = [apply_manifest_shape(dict(role), manifests) for role in static_roles]
+        _default_roles_cache = [apply_manifest_shape(dict(role), manifests, placeholders) for role in static_roles]
     return _default_roles_cache
 
 
-def apply_manifest_shape(role_data: Dict, manifests: Dict[str, RoleManifest]) -> Dict:
+def apply_manifest_shape(
+    role_data: Dict, manifests: Dict[str, RoleManifest], placeholders: Mapping[str, str] | None = None
+) -> Dict:
     """Return role_data augmented with its manifest-derived identifier/units/health/ports.
 
     Mutates and returns the same (already-copied) dict the caller passes in;
-    every registry-only field (source paths, target path, post_sync_cmd, ...)
-    is left untouched -- see the module docstring for why.
+    every registry-only field (post_sync_cmd, ansible_playbook, ...) is left
+    untouched. A role no manifest resolves to keeps its own static
+    ``source_paths`` / ``target_path``.
     """
     name = role_data["name"]
     manifest, owns_whole = find_role_manifest(name, manifests)
@@ -188,6 +206,9 @@ def apply_manifest_shape(role_data: Dict, manifests: Dict[str, RoleManifest]) ->
 
     role_data["canonical_name"] = manifest.role
     role_data["ports"] = manifest_ports(manifest)
+    role_data["source_paths"], role_data["target_path"] = sync_from_manifest(
+        name, manifest, owns_whole, placeholders or {}
+    )
 
     units = systemd_units(name, manifest, owns_whole)
     if units:

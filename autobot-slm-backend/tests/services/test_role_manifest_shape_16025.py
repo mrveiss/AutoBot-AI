@@ -206,7 +206,8 @@ def test_registry_only_fields_are_never_touched():
 
 def test_registry_only_fields_may_only_shrink():
     """Ratchet (#16025): a phase 2 migration removes names from here, never adds."""
-    assert len(rms.REGISTRY_ONLY_FIELDS) <= 9
+    assert len(rms.REGISTRY_ONLY_FIELDS) <= 7
+    assert not {"source_paths", "target_path"} & rms.REGISTRY_ONLY_FIELDS, "derived from the manifest since #16025 AC1"
 
 
 def test_derivation_reflects_the_manifest_it_is_given_not_a_frozen_copy():
@@ -259,3 +260,82 @@ def test_the_real_backend_manifest_also_yields_celery_and_scheduler_alone():
     for role_name, expected in (("celery", ["autobot-celery"]), ("scheduler", ["autobot-celery-beat"])):
         resolved, owns_whole = rms.find_role_manifest(role_name, manifests)
         assert rms.systemd_units(role_name, resolved, owns_whole) == expected
+
+
+# ---------------------------------------------------------------------------
+# #16025 AC1 -- source_paths / target_path are derived, and derived to what the registry declared before
+# ---------------------------------------------------------------------------
+
+_BASE = "/opt/autobot"
+_AGENT = "/opt/autobot/autobot-slm-agent"
+_PLACEHOLDERS = {"base_dir": _BASE, "agent_dir": _AGENT}
+
+#: (source_paths, target_path) every manifest-backed role declared in role_registry.py before the move, with the
+#: default AUTOBOT_BASE_DIR / SLM_AGENT_DIR. A change here is a change to what the code-sync does on a node.
+_BEFORE_THE_MOVE = {
+    "slm-backend": (["autobot-slm-backend/"], _BASE),
+    "slm-frontend": (["autobot-slm-frontend/"], _BASE),
+    "slm-database": ([], ""),
+    "slm-monitoring": ([], ""),
+    "backend": (["autobot-backend/"], _BASE),
+    "celery": (["autobot-backend/"], _BASE),
+    "scheduler": (["autobot-backend/"], _BASE),
+    "frontend": (["autobot-frontend/"], _BASE),
+    "redis": ([], ""),
+    "postgres": ([], "/var/lib/postgresql"),
+    "chromadb": ([], ""),
+    "ai-stack": (["autobot-infrastructure/shared/docker/ai-stack/"], f"{_BASE}/autobot-ai-stack"),
+    "npu-worker": (["autobot-npu-worker/"], f"{_BASE}/autobot-npu-worker"),
+    "browser-service": (["autobot-browser-worker/"], f"{_BASE}/autobot-browser-worker"),
+    "autobot-llm-cpu": ([], ""),
+    "autobot-llm-gpu": ([], ""),
+    "autobot_shared": (["autobot_shared/"], f"{_BASE}/autobot_shared"),
+    "slm-agent": (["autobot-slm-backend/slm/agent/"], _AGENT),
+}
+
+
+def _real_manifests():
+    from repo_tests._paths import repo_root
+
+    return ManifestLoader(infra_base=repo_root() / "autobot-infrastructure").load_all()
+
+
+def test_derived_sync_fields_equal_what_the_registry_declared_before():
+    manifests = _real_manifests()
+    for role_name, expected in _BEFORE_THE_MOVE.items():
+        derived = rms.apply_manifest_shape({"name": role_name}, manifests, _PLACEHOLDERS)
+        assert (derived["source_paths"], derived["target_path"]) == expected, role_name
+
+
+def test_the_environment_override_still_decides_the_roots():
+    manifests = _real_manifests()
+    placeholders = {"base_dir": "/srv/ab", "agent_dir": "/srv/agent"}
+    backend = rms.apply_manifest_shape({"name": "backend"}, manifests, placeholders)
+    shared = rms.apply_manifest_shape({"name": "autobot_shared"}, manifests, placeholders)
+    agent = rms.apply_manifest_shape({"name": "slm-agent"}, manifests, placeholders)
+    assert backend["target_path"] == "/srv/ab"
+    assert shared["target_path"] == "/srv/ab/autobot_shared"
+    assert agent["target_path"] == "/srv/agent"
+
+
+def test_every_real_manifest_declares_its_sync_fields_explicitly():
+    for role, manifest in _real_manifests().items():
+        raw = manifest.deploy.model_fields_set
+        assert "sync_target" in raw, f"{role}: deploy.sync_target not declared"
+        assert manifest.deploy.sync or "sync" in raw, role
+        if manifest.deploy.sync:
+            assert manifest.deploy.sync_target, f"{role}: syncs but names no target"
+
+
+def test_a_no_sync_manifest_ships_nothing():
+    manifest = _manifest("autobot-x")
+    manifest.deploy.sync = False
+    assert rms.sync_from_manifest("x", manifest, True, _PLACEHOLDERS) == ([], "")
+
+
+def test_a_service_sync_target_overrides_the_deploy_one_for_its_own_role_only():
+    manifest = _manifest(
+        "autobot-db", services=[_svc("pg", slm_roles=["postgres"], sync_target="/data"), _svc("r", slm_roles=["redis"])]
+    )
+    assert rms.sync_from_manifest("postgres", manifest, False, _PLACEHOLDERS)[1] == "/data"
+    assert rms.sync_from_manifest("redis", manifest, False, _PLACEHOLDERS)[1] == ""

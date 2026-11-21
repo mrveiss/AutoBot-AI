@@ -74,6 +74,22 @@ class ManifestDeploy(BaseModel):
         default_factory=list,
         description="Additional source dirs to sync (e.g. autobot-ollama/)",
     )
+    sync: bool = Field(
+        default=True,
+        description=(
+            "Whether the SLM code-sync ships `source` to nodes (#16025). False for a role that is provisioned "
+            "(packages, units) but has no repo code of its own to rsync."
+        ),
+    )
+    sync_target: str = Field(
+        default="",
+        description=(
+            "Directory the SLM code-sync rsyncs `source` INTO, and the path the role detector probes (#16025). "
+            "Not the install directory (`destination`). `{base_dir}` and `{agent_dir}` are filled in by "
+            "`role_registry` from AUTOBOT_BASE_DIR / SLM_AGENT_DIR, so the environment override stays the one "
+            "place those roots are decided; empty for a role with no sync target."
+        ),
+    )
     files: List[str] = Field(
         default_factory=list,
         description=(
@@ -104,6 +120,9 @@ class ManifestService(BaseModel):
     #: match in `role_registry._find_role_manifest`), never through this
     #: narrower lookup.
     slm_roles: List[str] = Field(default_factory=list)
+    #: #16025: overrides the manifest's `deploy.sync_target` for the registry role(s) this service narrows to, when
+    #: that role's detected path differs from its siblings' (`postgres` probes its data directory; `redis` has none).
+    sync_target: str | None = None
 
 
 class ManifestPort(BaseModel):
