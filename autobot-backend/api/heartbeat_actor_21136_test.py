@@ -11,11 +11,14 @@ import pytest
 from fastapi import HTTPException
 
 from api import heartbeat
+from api.heartbeat_scope import AgentScope
 from api.schemas_heartbeat import AgentPauseRequest, AgentResumeRequest, AgentTerminateRequest
 from models.heartbeat import HeartbeatStatus
+from services.audit import outcome
 from services.audit.taxonomy import AuditAction, action_name
 
 CALLER = {"id": "principal-7", "username": "alice", "role": "admin"}
+SCOPE = AgentScope(company_id=None, platform_admin=True)
 
 
 def _state(status, paused_by=None):
@@ -36,7 +39,7 @@ def harness(monkeypatch):
         audits.append({"user_id": event.actor_id, "action": event.action, "resource_id": event.resource_id})
         return True
 
-    monkeypatch.setattr(heartbeat, "record_committed", _record)
+    monkeypatch.setattr(outcome, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_state_to_response", lambda state, *a: state)
     session = MagicMock(commit=AsyncMock(), refresh=AsyncMock())
     monkeypatch.setattr(heartbeat, "_paused_by_name", AsyncMock(return_value=None))
@@ -54,7 +57,7 @@ async def test_pause_records_principal_and_ignores_forged_body_actor(harness):
     state = _state(HeartbeatStatus.ACTIVE)
     install(state)
     body = AgentPauseRequest(reason="r", paused_by="system:forged")
-    await heartbeat.pause_agent("a1", body, session, scheduler, CALLER)
+    await heartbeat.pause_agent("a1", body, session, scheduler, SCOPE, CALLER)
     assert state.paused_by == "principal-7"
     assert audits[0]["user_id"] == "principal-7"
     assert audits[0]["action"] == action_name(AuditAction.AGENT_PAUSE)
@@ -65,7 +68,7 @@ async def test_pause_records_principal_and_ignores_forged_body_actor(harness):
 async def test_resume_emits_audit_event_naming_caller(harness):
     audits, session, scheduler, install = harness
     install(_state(HeartbeatStatus.PAUSED, paused_by="principal-1"))
-    await heartbeat.resume_agent("a1", AgentResumeRequest(), session, scheduler, CALLER)
+    await heartbeat.resume_agent("a1", AgentResumeRequest(), session, scheduler, SCOPE, CALLER)
     assert audits[0]["user_id"] == "principal-7"
     assert audits[0]["action"] == action_name(AuditAction.AGENT_RESUME)
 
@@ -75,7 +78,7 @@ async def test_terminate_stores_principal_id_not_username(harness):
     audits, session, scheduler, install = harness
     state = _state(HeartbeatStatus.ACTIVE)
     install(state)
-    await heartbeat.terminate_agent("a1", AgentTerminateRequest(reason="r"), session, scheduler, CALLER)
+    await heartbeat.terminate_agent("a1", AgentTerminateRequest(reason="r"), session, scheduler, SCOPE, CALLER)
     assert state.paused_by == "principal-7"
     assert audits[0]["action"] == action_name(AuditAction.AGENT_TERMINATE)
 
@@ -89,7 +92,7 @@ async def test_event_is_written_before_the_commit(harness):
     audits, session, scheduler, install = harness
     install(_state(HeartbeatStatus.ACTIVE))
     session.commit.side_effect = lambda: audits.append("commit")
-    await heartbeat.pause_agent("a1", AgentPauseRequest(reason="r"), session, scheduler, CALLER)
+    await heartbeat.pause_agent("a1", AgentPauseRequest(reason="r"), session, scheduler, SCOPE, CALLER)
     assert audits[0]["action"] == action_name(AuditAction.AGENT_PAUSE)
     assert audits[1] == "commit"
 
@@ -98,7 +101,7 @@ async def test_event_is_written_before_the_commit(harness):
 @pytest.mark.parametrize("route", ["pause", "resume", "terminate"])
 async def test_failed_audit_write_is_503_and_changes_nothing(harness, monkeypatch, route):
     audits, session, scheduler, install = harness
-    monkeypatch.setattr(heartbeat, "record_committed", AsyncMock(return_value=False))
+    monkeypatch.setattr(outcome, "record_committed", AsyncMock(return_value=False))
     paused = HeartbeatStatus.PAUSED if route == "resume" else HeartbeatStatus.ACTIVE
     state = _state(paused, paused_by="principal-1")
     before = dict(vars(state))
@@ -106,7 +109,7 @@ async def test_failed_audit_write_is_503_and_changes_nothing(harness, monkeypatc
     bodies = {"pause": AgentPauseRequest(), "resume": AgentResumeRequest(), "terminate": AgentTerminateRequest()}
     handler = getattr(heartbeat, f"{route}_agent")
     with pytest.raises(HTTPException) as exc:
-        await handler("a1", bodies[route], session, scheduler, CALLER)
+        await handler("a1", bodies[route], session, scheduler, SCOPE, CALLER)
     assert exc.value.status_code == 503
     assert exc.value.detail == "Audit trail unavailable; nothing was changed"
     assert vars(state) == before
