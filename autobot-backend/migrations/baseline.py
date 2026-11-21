@@ -123,10 +123,21 @@ TIMESTAMPTZ_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
 # ``(table, index)`` is verified only when the table exists: the schema looks applied <=> the index is
 # there, so adoption bracketing sees the revision as absent and ``upgrade head`` RUNS it.
 INDEX_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
-    "20261121_117b": (
+    "20261121_118": (
         ("approvals", "uq_approvals_pending_connector_credential_strip"),
         ("approvals", "uq_approvals_pending_empty_collection_delete"),
     ),
+}
+
+# Structural markers for constraint-only revisions: they create no table and no column, so the AST probe sees
+# nothing and a bracket ending at them would STAMP the head without ever creating the constraint (#17850: the
+# secrets (owner_vault, name) uniqueness would be missing while alembic says it is applied). Each
+# ``(table, constraint)`` is verified only when the table exists: the schema looks applied <=> the constraint is
+# there, so adoption sees the revision as absent and ``upgrade head`` RUNS it. Revision 117 creates the constraint
+# only while no duplicate group exists (``migrations/secret_unique.py``); while duplicates remain it completes
+# without it, which this marker reports as absent -- accurate, and the app creates it once they are resolved.
+CONSTRAINT_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
+    "20261120_117": (("secrets", "uq_secrets_owner_vault_name"),),
 }
 
 # applied_status() result for a revision whose artifacts are partially
@@ -150,6 +161,7 @@ class DbFacts:
     columns: set[tuple[str, str]] = field(default_factory=set)
     column_types: dict[tuple[str, str], str] = field(default_factory=dict)
     indexes: set[tuple[str, str]] = field(default_factory=set)
+    constraints: set[tuple[str, str]] = field(default_factory=set)
     version_rows: list[str] = field(default_factory=list)
 
 
@@ -223,6 +235,13 @@ async def inspect_database(url: str) -> DbFacts:
                 text("SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'public'")
             )
             facts.indexes = {(table, index) for table, index in indexed}
+            named = await conn.execute(
+                text(
+                    "SELECT table_name, constraint_name FROM information_schema.table_constraints "
+                    "WHERE table_schema = 'public'"
+                )
+            )
+            facts.constraints = {(table, name) for table, name in named}
             if "alembic_version" in facts.tables:
                 stamped = await conn.execute(text("SELECT version_num FROM alembic_version"))
                 facts.version_rows = [r[0] for r in stamped]
@@ -245,6 +264,7 @@ def applied_status(rev: str, artifacts: dict[str, Artifacts], facts: DbFacts):
         if table in facts.tables:
             checks.append(facts.column_types.get((table, column)) == "timestamp with time zone")
     checks.extend((t, i) in facts.indexes for t, i in INDEX_MARKERS.get(rev, ()) if t in facts.tables)
+    checks.extend((t, c) in facts.constraints for t, c in CONSTRAINT_MARKERS.get(rev, ()) if t in facts.tables)
     if not checks:
         return None
     if all(checks):
