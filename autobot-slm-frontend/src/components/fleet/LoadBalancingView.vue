@@ -166,9 +166,13 @@ async function refreshData(): Promise<void> {
 
     // Fetch per-worker configs for priority/weight display
     const nodeMetrics = fleetMetrics.value?.node_metrics ?? []
-    await Promise.all(
+    // One node's failed config read is logged and does not hide the others' (the store rethrows it).
+    const results = await Promise.allSettled(
       nodeMetrics.map(m => fleetStore.fetchNpuWorkerConfig(m.node_id))
     )
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') logger.warn(`Worker config load failed for ${nodeMetrics[i].node_id}`, r.reason)
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToLoadData')
     error.value = msg

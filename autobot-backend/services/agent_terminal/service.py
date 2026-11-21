@@ -323,7 +323,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             )
             await log_autobot_command(self.terminal_logger, session, command, status, result)
             await self._save_command_to_chat(session.conversation_id, command, result, command_type="agent")
-            await self._interpret_command_result(session, command, result)
+            self._interpret_command_result(session, command, result)  # #21938: never awaited inline
             await self._finalize_auto_approved_execution(session, command, risk, result)
 
         return result
@@ -331,35 +331,6 @@ class AgentTerminalService(InterpretationOwnershipMixin):
     # ============================================================================
     # Helper Methods for auto-approved execution (Issue #665)
     # ============================================================================
-
-    async def _interpret_command_result(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        result: Metadata,
-    ) -> None:
-        """
-        Interpret command result using LLM if available.
-
-        Issue #665: Extracted from _execute_auto_approved_command.
-
-        Args:
-            session: Terminal session
-            command: Executed command
-            result: Execution result
-        """
-        if session.has_conversation() and self.chat_workflow_manager:
-            try:
-                logger.info(f"[INTERPRETATION] Starting LLM interpretation for command: {command}")
-                await self.chat_workflow_manager.interpret_terminal_command(
-                    command=command,
-                    stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
-                    return_code=result.get("return_code", 0),
-                    session_id=session.conversation_id,
-                )
-            except Exception as e:
-                logger.error("[INTERPRETATION] Failed to interpret results: %s", e)
 
     async def _finalize_auto_approved_execution(
         self,
@@ -593,16 +564,7 @@ class AgentTerminalService(InterpretationOwnershipMixin):
             return
 
         if session.has_conversation() and self.chat_workflow_manager:
-            try:
-                await self.chat_workflow_manager.interpret_terminal_command(
-                    command=command,
-                    stdout=result.get("stdout", ""),
-                    stderr=result.get("stderr", ""),
-                    return_code=result.get("return_code", 0),
-                    session_id=session.conversation_id,
-                )
-            except Exception as e:
-                logger.error("Failed to interpret approved command results: %s", e)
+            await self._interpret_with_origin(session.conversation_id, command, result)
 
     async def _update_and_broadcast_approval_status(
         self,

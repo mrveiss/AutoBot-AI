@@ -15,6 +15,7 @@ import { PollingPausedAlert, createLogger, createDateFormatter, createRecencyFor
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import { slmApiClient } from '@/utils/ApiClient'
+import { errorText } from '@/utils/errorText'
 
 const logger = createLogger('AlertsMonitor')
 
@@ -145,7 +146,7 @@ async function clearAlerts() {
     await refresh()
   } catch (e) {
     logger.error('Failed to clear alerts:', e)
-    clearError.value = e instanceof Error ? e.message : String(e)
+    clearError.value = errorText(e)
   } finally {
     isClearing.value = false
   }
