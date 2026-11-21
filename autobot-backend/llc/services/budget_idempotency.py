@@ -25,7 +25,7 @@ The ``Idempotency-Key`` HTTP middleware also sees the header on the ingest route
 only 2xx); this layer is the authority because it also covers the adapter and the scheduler.
 
 Two accepted windows, both closed only by a DB-side unique idempotency row written in the charge's own
-transaction (tracked in #TRACKING_ISSUE):
+transaction (tracked in #21972):
 
 * (a) A crash, or a failed ``_record``, after ``session.commit()`` leaves the claim held until
   ``IDEMPOTENCY_CLAIM_TTL_SECONDS``. A retry inside that window gets ``IngestInFlight`` (409); a retry after
