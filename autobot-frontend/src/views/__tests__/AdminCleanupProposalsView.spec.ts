@@ -22,7 +22,7 @@ vi.mock('@autobot/ui', () => ({
     props: ['disabled'],
     template: '<button :disabled="disabled"><slot /></button>',
   },
-  BaseCard: { template: '<section><slot /></section>' },
+  BaseCard: { props: ['title', 'subtitle'], template: '<section><h2>{{ title }}</h2><p>{{ subtitle }}</p><slot /></section>' },
   BaseAlert: { props: ['message'], template: '<p>{{ message }}</p>' },
   PageHeader: { template: '<header />' },
   isHttpError: (e: unknown) => !!(e as { isHttpError?: boolean })?.isHttpError,
