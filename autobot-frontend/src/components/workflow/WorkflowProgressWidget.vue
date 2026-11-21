@@ -82,6 +82,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { createLogger } from '@/utils/debugUtils'
+import { getWorkflowStepDisplay } from '@/utils/workflowStepProgress'
 import { apiService } from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { usePollingJob } from '@/composables/usePollingJob'
@@ -111,11 +112,11 @@ const { start: _startRefresh, stop: _stopRefresh } = usePollingJob(
 // Computed properties
 const progressPercentage = computed(() => {
   if (!activeWorkflow.value) return 0
-  return (activeWorkflow.value.current_step / activeWorkflow.value.total_steps) * 100
+  return getWorkflowStepDisplay(activeWorkflow.value, { indexBase: 0 }).percent
 })
 
 const currentStep = computed(() => {
-  return activeWorkflow.value ? activeWorkflow.value.current_step + 1 : 0
+  return activeWorkflow.value ? getWorkflowStepDisplay(activeWorkflow.value, { indexBase: 0 }).current : 0
 })
 
 const totalSteps = computed(() => {

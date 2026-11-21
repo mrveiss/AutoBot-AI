@@ -104,13 +104,16 @@ class AudioIngestResponse(BaseModel):
 class ClearAllResponse(BaseModel):
     """Shape of ``POST /api/knowledge_base/clear_all``.
 
-    DESTRUCTIVE operation. ``items_removed`` counts fact rows, not
-    vectors — vector store is cleared as part of ``kb.clear_all()``.
+    The route deletes nothing (#21048, #17038): it proposes a knowledge wipe, and the wipe runs only after a
+    human approves it. ``approval_id`` names the pending approval; ``items_removed`` and ``items_before`` stay
+    for compatibility and are 0 because nothing was removed by this request.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    status: str = Field(..., description="'success' | 'error'")
+    status: str = Field(..., description="Approval status of the wipe request, 'pending' until a human decides")
     items_removed: int = 0
     items_before: int = 0
     message: str = ""
+    approval_id: str | None = Field(None, description="Id of the pending wipe approval in the Approvals inbox")
+    action: str | None = Field(None, description="The approval action the wipe runs under")

@@ -20,7 +20,7 @@ def _body(response) -> dict:
 async def test_put_refuses_and_names_the_switch(monkeypatch):
     monkeypatch.setattr(emb, "active_embedding_model", lambda: "nomic-embed-text:latest")
     writes = []
-    monkeypatch.setattr(emb.unified_config_manager, "set_nested", lambda *a: writes.append(a))
+    monkeypatch.setattr(emb.config_manager, "set_nested", lambda *a: writes.append(a))
 
     response = await emb.update_embedding_settings.__wrapped__(
         EmbeddingUpdate(provider="ollama", selected_model="mxbai-embed-large:latest"), admin_check=True
@@ -35,7 +35,7 @@ async def test_put_refuses_and_names_the_switch(monkeypatch):
 async def test_settings_and_status_report_the_resolver_model(monkeypatch):
     monkeypatch.setattr(emb, "active_embedding_model", lambda: "mxbai-embed-large:latest")
     file_copy = {"provider": "ollama", "providers": {"ollama": {"selected_model": "phi3:mini", "endpoint": "e"}}}
-    monkeypatch.setattr(emb.unified_config_manager, "get_nested", lambda *a, **k: json.loads(json.dumps(file_copy)))
+    monkeypatch.setattr(emb.config_manager, "get_nested", lambda *a, **k: json.loads(json.dumps(file_copy)))
 
     settings = _body(await emb.get_embedding_settings.__wrapped__(current_user={}))
     status = _body(await emb.get_embedding_status.__wrapped__(current_user={}))

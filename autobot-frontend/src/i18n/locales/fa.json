@@ -491,7 +491,6 @@
       "quality": {
         "title": "Code Quality",
         "overallScore": "Overall Score",
-        "testCoverage": "Test Coverage",
         "codeDuplicates": "Code Duplicates",
         "technicalDebt": "Technical Debt",
         "noMetrics": "No code quality metrics available."
@@ -1680,7 +1679,6 @@
       "noCommunicationData": "No communication data available",
       "codeQuality": "Code Quality",
       "overallScore": "Overall Score",
-      "testCoverage": "Test Coverage",
       "codeDuplicates": "Code Duplicates",
       "technicalDebt": "Technical Debt",
       "noQualityMetrics": "No quality metrics available",
@@ -3952,6 +3950,9 @@
       "stepApproved": "مرحله تأیید شد",
       "stepSkipped": "از مرحله صرف‌نظر شد",
       "rerunNotFound": "گردش کار برای اجرای دوباره پیدا نشد",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "در حال اجرای دوبارهٔ «{name}»",
       "rerunFailed": "اجرای دوبارهٔ گردش کار ناموفق بود",
       "notificationsSaved": "تنظیمات اعلان ذخیره شد"
@@ -6235,6 +6236,7 @@
       "automationDetails": "Automation Details",
       "executeAction": "Execute Action",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "close": "Close",
       "refresh": "Refresh",
       "execute": "Execute"
@@ -6336,6 +6338,7 @@
   },
   "views": {
     "auditLogs": {
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data",
       "last7Days": "Last 7 Days",
       "last24Hours": "Last 24 Hours",

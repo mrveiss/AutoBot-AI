@@ -159,6 +159,10 @@ class IndexMixin:
         if not self.initialized:
             return {"status": "error", "message": "Knowledge base not initialized"}
 
+        target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
+        if target_name == self.chromadb_collection:  # the target is deleted first: never the live collection (#21383)
+            return {"status": "error", "message": "The target collection must not be the live collection"}
+
         try:
             from knowledge.backends import get_default_client as create_chromadb_client
 
@@ -177,7 +181,6 @@ class IndexMixin:
                     "old_count": 0,
                 }
 
-            target_name = new_collection_name or "%s_optimized" % self.chromadb_collection
             return await self._execute_index_migration(chroma_client, target_name, old_collection, old_count)
 
         except Exception as e:

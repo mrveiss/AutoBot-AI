@@ -11,12 +11,14 @@ storage to the chat_history subsystem.
 """
 
 import json
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
+from api.chat_session_messages import fetch_session_messages
+from api.chat_session_team_access import require_team_member
 from api.chat_sessions_update import apply_session_update
 from api.schemas_chat import (
     ActivityAddData,
@@ -54,6 +56,7 @@ from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
 
 # CRITICAL SECURITY FIX: Import session ownership validation
@@ -220,53 +223,6 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int, offset: int = 0) -> List:
-    """
-    Fetch session messages and raise ResourceNotFoundError if session not found.
-
-    Issue #620.
-    Issue #1797: Granular exception mapping for session load failures.
-
-    Args:
-        chat_history_manager: Chat history manager instance
-        session_id: Session ID to fetch messages for
-        limit: Maximum messages to return
-        offset: Messages to skip, counting back from the newest (#15186)
-
-    Returns:
-        List of messages
-
-    Raises:
-        ResourceNotFoundError: If session does not exist
-        ValidationError: If session data is corrupted (ValueError)
-        InternalError: If session cannot be accessed (PermissionError)
-    """
-    (
-        AutoBotError,
-        InternalError,
-        ResourceNotFoundError,
-        ValidationError,
-        get_error_code,
-    ) = get_exceptions_lazy()
-
-    try:
-        messages = await chat_history_manager.get_session_messages(session_id, limit=limit, offset=offset)
-    except FileNotFoundError:
-        logger.warning("Session file not found for session %s", session_id)
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-    except PermissionError:
-        logger.error("Permission denied accessing session %s", session_id)
-        raise InternalError("Unable to access chat session")
-    except ValueError as exc:
-        logger.error("Corrupted session data for session %s: %s", session_id, exc)
-        raise ValidationError("Chat session data is corrupted")
-
-    if messages is None:
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
-    return messages
-
-
 def _validate_export_format_or_raise(export_format: str) -> None:
     """
     Validate export format and raise ValidationError if invalid.
@@ -362,7 +318,7 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page, (page - 1) * per_page)
+    messages = await fetch_session_messages(request, chat_history_manager, session_id, per_page, (page - 1) * per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
     return create_chat_response(
@@ -422,19 +378,8 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode)
-    sessions = await chat_history_manager.list_sessions_fast()
-
-    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
-    # from the ordinary user list — first-class scoping fields, not a title
-    # parse. See _is_agent_scoped_session for the migration story on sessions
-    # created before this fix.
-    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-
-    # Filter to authenticated user's own sessions
-    username = current_user.get("username")
-    if username:
-        sessions = await _filter_user_sessions(sessions, username)
+    # Default: the caller's own ordinary sessions (fast mode)
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
 
     # Issue #4352: Signal intentional empty to distinguish from API failure.
     # When an authenticated request returns 0 sessions, mark it explicitly so
@@ -478,41 +423,46 @@ def _is_agent_scoped_session(session: dict) -> bool:
     return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
 
-async def _filter_user_sessions(sessions: list, username: str) -> list:
-    """Filter sessions to those owned by the user.
+async def list_user_sessions(chat_history_manager, username: str | None) -> list:
+    """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
 
-    Uses Redis ownership data. Falls back to all sessions
-    if Redis is unavailable.
+    Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
+    so both apply the same ownership filter (``_filter_user_sessions``) and the same
+    agent-scoped exclusion. No role bypass: an administrator lists only their own.
+    Fails closed (#21664): a principal with no username owns nothing, so it gets ``[]``.
+    """
+    if not username:
+        return []
+    sessions = await chat_history_manager.list_sessions_fast()
+    # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
+    # user chats — first-class scoping fields, not a title parse.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
+    return await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
 
-    Helper for list_sessions (#684).
+
+async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:
+    """Filter sessions to those owned by the user (#684).
+
+    Uses the owner index, rebuilt from the session files' durable owner through
+    *read_owner* when the Redis set is empty (``security.session_owner_index``), and
+    fails closed: an unavailable store raises, and a caller who owns nothing gets
+    ``[]`` (#21664). Sessions that predate ownership tracking stay unlisted until an
+    owner is assigned through the approval queue; nothing here assigns or deletes them.
     """
     from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_owner_index import owned_session_ids
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
         validator = _build_ownership_validator(redis)
-        user_session_ids = set(await validator.get_user_sessions(username))
+        candidate_ids = [s.get("id") for s in sessions if s.get("id")]
+        user_session_ids = await owned_session_ids(validator, username, candidate_ids, read_owner)
     except Exception as e:
-        # #12685: this used to `return sessions` — the UNFILTERED list — whenever
-        # the ownership lookup failed. On a tenancy filter that is the wrong
-        # direction to fail: a Redis blip silently exposed every session on the
-        # instance, including other companies' agent conversations. Surfacing an
-        # error lets the UI say "could not load your sessions" instead of
-        # showing someone else's.
+        # #12685: never the unfiltered list on a failed lookup; a 503 lets the UI say "could not
+        # load your sessions" (and carries no intentional_empty, so it keeps its local copy, #21664).
         logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
         raise OwnershipUnavailableError("Could not verify session ownership") from e
-
-    if not user_session_ids:
-        # No ownership records for this user. Kept as-is pending #12685's
-        # decision on pre-ownership legacy sessions: failing closed here would
-        # hide a user's own history on installs that predate ownership
-        # tracking. Logged so the exposure is visible rather than silent.
-        logger.warning(
-            "No ownership records for %s — returning the unfiltered session list (#12685)",
-            username,
-        )
-        return sessions
 
     return [s for s in sessions if s.get("id") in user_session_ids]
 
@@ -558,15 +508,8 @@ async def _list_scoped_sessions(
 
     # scope == "team"
     if not team_id:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("team_id required for team scope")
-
+        raise ScopeValidationError("team_id required for team scope")
+    await require_team_member(user_data, team_id)  # #21667
     return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 
 
@@ -703,14 +646,12 @@ async def _register_session_ownership(
         return
     try:
         from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+        from security.session_owner_index import index_owner_or_unmark
 
-        redis = await get_redis_mgr(async_client=True, database="main")
-        validator = _build_ownership_validator(redis)
-        await validator.set_session_owner(
-            session_id=session_id,
-            username=user_data["username"],
-            org_id=user_data.get("org_id"),
-            team_id=team_id,
+        validator = _build_ownership_validator(await get_redis_mgr(async_client=True, database="main"))
+        # #21664: index it, or unmark the owner's index so their next list rebuilds and shows it
+        await index_owner_or_unmark(
+            validator, session_id, user_data["username"], org_id=user_data.get("org_id"), team_id=team_id
         )
     except Exception as e:
         logger.warning("Failed to register session ownership: %s", e)

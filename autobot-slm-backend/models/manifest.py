@@ -74,6 +74,13 @@ class ManifestDeploy(BaseModel):
         default_factory=list,
         description="Additional source dirs to sync (e.g. autobot-ollama/)",
     )
+    files: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Files of `source` that the shell deploy paths copy one by one (#21852); empty ships the whole directory. "
+            "No SLM consumer reads this yet: the SLM and Ansible paths ship the whole `source` directory."
+        ),
+    )
 
 
 class ManifestService(BaseModel):

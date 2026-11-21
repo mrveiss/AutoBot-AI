@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from autobot_shared.env_registry import REGISTRY
+from autobot_shared.logging_once import reset_log_once
 from chat_workflow import llm_provider
 from chat_workflow.plan_runner import PlanTracker, _build_planner
 from llm_shared.types import ProviderType
@@ -100,7 +101,7 @@ def test_unknown_provider_falls_back_to_default_with_one_warning(caplog):
     from autobot_shared import ssot_chat_graph_settings as mod
     from autobot_shared.ssot_config import LLMConfig
 
-    mod._PROVIDER_WARNED = False
+    reset_log_once()
     with caplog.at_level("WARNING", logger=mod.__name__):
         first = LLMConfig(AUTOBOT_LLM_PROVIDER="olama")
         second = LLMConfig(AUTOBOT_LLM_PROVIDER="olama")

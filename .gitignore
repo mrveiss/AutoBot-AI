@@ -561,3 +561,6 @@ autobot-slm-backend/ansible/tests/inventory/group_vars/
 
 # Offline OpenAPI dump for the main app (npm run gen:types:openapi); regenerated, never committed (#12363)
 /autobot-frontend/openapi.json
+
+# Per-session handoff notes (docs/developer/SESSION_END.md); never committed (#21676)
+.notes/
