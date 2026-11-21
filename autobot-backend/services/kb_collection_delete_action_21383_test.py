@@ -515,7 +515,7 @@ async def test_the_name_is_display_only_and_never_part_of_the_scope(world):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("op", action.OPS)
+@pytest.mark.parametrize("op", (action.DELETE, action.BULK_DELETE))  # selected-facts: see selected_delete_21886_test
 async def test_a_fact_added_after_the_count_check_is_not_deleted_with_the_approved_ones(world, op):
     approval = _approval(op, action.selector_for(op, "c1", True), 3)
     real = world.audit.side_effect
