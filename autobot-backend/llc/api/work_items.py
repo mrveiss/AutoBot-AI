@@ -73,6 +73,7 @@ from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
+from ._named_agent import require_may_act_as, require_member_targets
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -376,6 +377,7 @@ async def create_work_item(
     # Tenant guard (#14168): reject cross-tenant creation before touching the DB —
     # body.company_id is client-controlled and must match the caller's authenticated org.
     assert_company_access(ctx, body.company_id)
+    await require_member_targets(session, body.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().create(
             session,
@@ -428,12 +430,8 @@ async def list_work_items(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    # Tenant guard (#14168): the ``company_id`` query param is client-controlled;
-    # require_org_context already membership-checks it when it is the sole org
-    # source, but a caller can still supply a different, still-valid
-    # ``X-Organization-Id`` header alongside a foreign ``company_id`` query
-    # value (header wins in get_tenant_context's precedence). Reject any
-    # mismatch explicitly rather than relying on precedence order.
+    # Tenant guard (#14168): the client-controlled ``company_id`` query param may differ from a still-valid
+    # ``X-Organization-Id`` header (header wins in get_tenant_context): reject any mismatch explicitly.
     assert_company_access(ctx, company_id)
     items = await _service().list_by_project(
         session,
@@ -482,6 +480,7 @@ async def update_work_item(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     fields = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    await require_member_targets(session, existing.company_id, body.assignee_user_id, body.assignee_agent_id)
     try:
         item = await _service().update(session, work_item_id, **fields)
     except ValueError as exc:  # hierarchy breach -> 422; else 400, e.g. unknown approval category (GH#11206)
@@ -532,6 +531,7 @@ async def checkout_work_item(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().checkout(
             session,
@@ -543,11 +543,7 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        # #12740 (same defect class, found alongside): the status code was
-        # already correct, but the useful reason ("Work item X already checked
-        # out by agent Y") was still replaced with a generic string, so a caller
-        # could not tell WHO holds the checkout. Domain-level message, safe to
-        # surface.
+        # #12740: the reason ("Work item X already checked out by agent Y") is domain-level and safe to surface.
         logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
         raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
@@ -562,12 +558,13 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
+    """Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+    equal to the stored assignee when there is one; an item held by a person is refused (409)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
@@ -726,6 +723,7 @@ async def set_coworker(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     company_id = str(ctx.org_id)
+    await require_member_targets(session, company_id, body.co_worker_user_id, body.co_worker_agent_id)
     actor_type = "user" if current_user.get("user_id") else "agent"
     try:
         caller_role = await resolve_actor_role(session, actor_id, company_id)
@@ -799,6 +797,7 @@ async def handoff_to_agent(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_member_targets(session, existing.company_id, None, body.target_agent_id)
     atts = [
         HandoffAttachment(
             attachment_id=a.attachment_id,
@@ -908,6 +907,7 @@ async def review_request_changes(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_member_targets(session, existing.company_id, None, body.return_to_agent_id)
     try:
         item = await _handoff_service().request_changes(
             session,
