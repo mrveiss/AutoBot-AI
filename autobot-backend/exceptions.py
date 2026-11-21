@@ -105,8 +105,8 @@ class WorkflowError(AutoBotError):
 class WorkflowExecutionError(WorkflowError):
     """Raised when workflow execution fails."""
 
-    # Was 422 in the removed ERROR_CODES; no category maps to 422, VALIDATION (400) is the closest.
-    error_category = ErrorCategory.VALIDATION
+    # A run that failed is a server-side fault, never the caller's: 500, logged at ERROR (was 422).
+    error_category = ErrorCategory.SERVER_ERROR
 
 
 class WorkflowValidationError(WorkflowError):

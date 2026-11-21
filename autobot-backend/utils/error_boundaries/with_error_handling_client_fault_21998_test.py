@@ -134,7 +134,7 @@ def test_get_error_code_and_boundary_agree_for_every_exception_class(cls):
         (exceptions.ResourceLimitError, 429),
         (exceptions.InternalError, 500),
         (exceptions.WorkflowValidationError, 400),  # was 422: no 422 category exists
-        (exceptions.WorkflowExecutionError, 400),  # was 422: closest client-error category
+        (exceptions.WorkflowExecutionError, 500),  # a failed run is a server fault (was 422)
         (exceptions.LLMTimeoutError, 502),  # was 504: closest upstream-failure category
     ],
 )
