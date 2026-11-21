@@ -57,10 +57,12 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.step_outcome import exit_code_field
 from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
+    COMMAND_APPROVED_KEY,
     COMMAND_FORCE_APPROVAL_KEY,
     enforce_ai_line,
     enforce_config_protection,
@@ -861,7 +863,7 @@ def _record_failed_step(
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": stderr,
-            "return_code": result.get("return_code", 1),
+            **exit_code_field(result),  # a refused command has none (#21959)
             "status": "error",
             "error": error,
         }
@@ -1330,7 +1332,13 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             )
 
     async def _execute_terminal_command(
-        self, session_id: str, command: str, host: str = "main", description: str = "", force_approval: bool = False
+        self,
+        session_id: str,
+        command: str,
+        host: str = "main",
+        description: str = "",
+        force_approval: bool = False,
+        person_approved: bool = False,
     ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
@@ -1360,7 +1368,11 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 return session_result
 
         result = await self.terminal_tool.execute_command(
-            conversation_id=session_id, command=command, description=description, force_approval=force_approval
+            conversation_id=session_id,
+            command=command,
+            description=description,
+            force_approval=force_approval,
+            person_approved=person_approved,
         )
 
         return result
@@ -1386,11 +1398,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 terminal_session_id,
             )
         except Exception as persist_error:
-            logger.error(
-                "Failed to persist approval request immediately: %s",
-                persist_error,
-                exc_info=True,
-            )
+            logger.error("Failed to persist approval request immediately: %s", persist_error, exc_info=True)
 
     def _check_empty_command_history(self, elapsed_time: float) -> tuple:
         """Handle empty command history case. Issue #620."""
@@ -1996,20 +2004,11 @@ class ToolHandlerMixin(InterpretationTurnMixin):
             user_role=role,
         )
         if not should_execute:
-            logger.info(
-                "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
-                command,
-                host,
-            )
+            logger.info("[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s", command, host)
             yield WorkflowMessage(
                 type="error",
                 content=f"Command execution cancelled: {command}",
-                metadata={
-                    "command": command,
-                    "host": host,
-                    "cancelled_by_hook": True,
-                    "reason": "permission_denied",
-                },
+                metadata={"command": command, "host": host, "cancelled_by_hook": True, "reason": "permission_denied"},
             )
             return
 
@@ -2020,6 +2019,7 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 host=host,
                 description=description,
                 force_approval=bool(tool_call.get(COMMAND_FORCE_APPROVAL_KEY)),
+                person_approved=bool(tool_call.get(COMMAND_APPROVED_KEY)),
             )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
