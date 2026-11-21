@@ -28,9 +28,19 @@
           </select>
         </template>
       </BaseFormField>
-      <p v-if="selectedProjectId && !isLoadingSprints && sprints.length === 0" class="text-xs text-autobot-text-secondary">
+      <div v-if="selectedProjectId && !isLoadingSprints && sprintsFailed" class="flex flex-col items-start gap-2">
+        <BaseAlert variant="error" :message="t('llc.backlog.sprintsLoadFailed')" />
+        <BaseButton variant="outline" size="sm" data-testid="retry-sprints" @click="onProjectSelect(selectedProjectId)">
+          {{ t('common.retry') }}
+        </BaseButton>
+      </div>
+      <p
+        v-else-if="selectedProjectId && !isLoadingSprints && sprints.length === 0"
+        class="text-xs text-autobot-text-secondary"
+      >
         {{ t('llc.backlog.noSprints') }}
       </p>
+      <BaseAlert v-if="assignError" variant="error" :message="assignError" />
     </div>
 
     <template #actions>
@@ -47,7 +57,7 @@
 // (non-archived) projects and (open) sprints are offered so a user never pastes a raw Sprint UUID (#10853).
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseButton, BaseFormField, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseFormField, BaseModal } from '@autobot/ui'
 import { CONTROL_CLASS } from './controlClass'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -73,35 +83,52 @@ const selectedProjectId = ref('')
 const sprintId = ref('')
 const isLoadingSprints = ref(false)
 const isAssigning = ref(false)
+const sprintsFailed = ref(false)
+const assignError = ref('')
+// Bumped on every opening, reset and project change; a sprint or assignment response from an earlier one is ignored.
+let sprintRequest = 0
 
 async function onProjectSelect(projectId: string) {
+  const request = ++sprintRequest
   selectedProjectId.value = projectId
   sprintId.value = ''
   sprints.value = []
+  sprintsFailed.value = false
+  assignError.value = ''
+  isLoadingSprints.value = false
   if (!projectId) return
   isLoadingSprints.value = true
   try {
     const result = await api.get<SprintOpt[]>(`/api/llc/projects/${projectId}/sprints`)
+    if (request !== sprintRequest) return
     sprints.value = (result ?? []).filter(sp => sp.status !== 'closed' && sp.status !== 'archived')
   } catch (err) {
+    if (request !== sprintRequest) return
     logger.error('Failed to load sprints', err)
+    sprintsFailed.value = true
   } finally {
-    isLoadingSprints.value = false
+    if (request === sprintRequest) isLoadingSprints.value = false
   }
 }
 
 async function assign() {
   if (!sprintId.value) return
+  const request = sprintRequest
   isAssigning.value = true
+  assignError.value = ''
   try {
     await api.post<unknown>(`/api/llc/backlog/bulk-assign-sprint`, {
+      company_id: props.companyId,
       work_item_ids: props.workItemIds,
       sprint_id: sprintId.value,
     })
-    sprintId.value = ''
+    if (request === sprintRequest) sprintId.value = ''
     emit('assigned')
   } catch (err) {
     logger.error('Bulk assign failed', err)
+    if (request !== sprintRequest) return
+    const detail = err instanceof Error ? err.message : ''
+    assignError.value = detail ? t('llc.backlog.assignErrorDetail', { detail }) : t('llc.backlog.assignError')
   } finally {
     isAssigning.value = false
   }
