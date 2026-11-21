@@ -4,8 +4,8 @@
 # Author: mrveiss
 """The operator's decision to let a plugin run in the backend process (#17421).
 
-Revision ID: 20261121_116
-Revises: 20261118_115
+Revision ID: 20261121_117
+Revises: 20261120_116
 Create Date: 2026-11-21 00:00:00.000000
 
 ``NO DATA LOSS``: a new, empty table. Existing installs are grandfathered at the first start after
@@ -22,8 +22,8 @@ from alembic import op
 
 from migrations.guards import has_table
 
-revision: str = "20261121_116"
-down_revision: Union[str, None] = "20261118_115"
+revision: str = "20261121_117"
+down_revision: Union[str, None] = "20261120_116"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

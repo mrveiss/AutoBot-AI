@@ -13,7 +13,13 @@ this sets false. Unset, the variable defaults to true, so installs and normal sy
 before.
 """
 
+import asyncio
+import logging
 from typing import Any, Dict, Iterable, Optional
+
+from autobot_shared.backend_start_marker import BACKEND_UNIT, parse_unix_timestamp, write_marker
+
+logger = logging.getLogger(__name__)
 
 RESTART_TAG = "restart"
 RESTART_VAR = "autobot_restart_services"
@@ -31,3 +37,31 @@ def reject_negated_tags(tags: Optional[Iterable[str]]) -> None:
     negated = [t for t in tags or () if t.startswith("!")]
     if negated:
         raise ValueError(f"--tags cannot negate {negated}; pass them as skip_tags")
+
+
+async def record_backend_start(services: Iterable[str]) -> None:
+    """Just before the user backend restarts, record when the running one started (#17421).
+
+    The new backend's plugin enable gate reads this on the upgrade boot as the previous start. Never raises:
+    a missing marker only makes the gate fall back to the backend log.
+    """
+    if BACKEND_UNIT not in services:
+        return
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl",
+            "show",
+            "-p",
+            "ActiveEnterTimestamp",
+            "--value",
+            "--timestamp=unix",
+            BACKEND_UNIT,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+        started = parse_unix_timestamp(out.decode("utf-8", "replace"))
+        if started is not None:
+            await asyncio.to_thread(write_marker, started)
+    except (OSError, asyncio.TimeoutError) as exc:
+        logger.warning("could not record the previous %s start: %s", BACKEND_UNIT, exc)

@@ -7,9 +7,9 @@
 Upgrade rule (owner, 2026-11-21): the first start after ``plugin_enable_state`` exists grandfathers the
 discovered plugins as enabled, EXCEPT any whose files are newer than the previous start (dropped in
 after the last run); those wait for an admin. Nothing recorded what the previous version loaded, so
-this is the approved approximation. The previous start is the ``__last_start__`` row, touched on every
-admit; when none was ever recorded (the upgrade boot itself) there is nothing to compare to and every
-discovered plugin is grandfathered.
+this is the approved approximation. The previous start comes from ``plugin_previous_start`` (recorded
+start, updater marker, backend log); when none exists nothing is grandfathered and the reason is audited.
+File times can be preserved or forged, so this is a heuristic, not a trust boundary.
 
 Failure rule: if the database or the audit trail cannot answer, no plugin loads, and the start is retried
 in the background with backoff until it does -- no restart needed.
@@ -31,6 +31,7 @@ from plugin_enable_state import (
     audit_decision,
 )
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
+from plugin_previous_start import previous_start
 from services.audit.taxonomy import AuditAction
 from services.provider_key_vault import plugin_credential_resolvers
 
@@ -54,13 +55,8 @@ def _newest_mtime(root: Path) -> float:
     return newest
 
 
-async def eligible_names(
-    manifests: List[PluginManifest], locations: Mapping[str, Path], since: datetime | None
-) -> List[str]:
-    """The manifests old enough to grandfather: no file newer than *since*; all of them when *since* is None."""
-    if since is None:
-        logger.warning("Plugin gate: no previous start recorded; grandfathering every discovered plugin")
-        return [m.name for m in manifests]
+async def eligible_names(manifests: List[PluginManifest], locations: Mapping[str, Path], since: datetime) -> List[str]:
+    """The manifests with no file newer than *since*; the rest wait for an admin."""
     kept = []
     for manifest in manifests:
         root = locations.get(manifest.name)
@@ -72,12 +68,25 @@ async def eligible_names(
 
 
 async def grandfather(store: PluginEnableStore, manifests: List[PluginManifest], locations: Mapping[str, Path]) -> None:
-    """Record the eligible plugins as enabled, once, with a durable audit entry each."""
-    names = await eligible_names(manifests, locations, await store.last_start())
+    """Record the eligible plugins as enabled, once, with a durable audit entry each.
+
+    A boot that fails after the audit rolls back the baseline, so its retry audits again; the duplicate
+    entries are accepted (each is true: that attempt decided that).
+    """
+    since, source = await previous_start(store)
+    if since is None:
+        names: List[str] = []
+        reason = "no previous start is known (no recorded start, updater marker or backend log): nothing grandfathered"
+        logger.warning("Plugin gate: %s", reason)
+    else:
+        names = await eligible_names(manifests, locations, since)
+        reason = f"running before the gate (previous start from the {source})"
 
     async def audit_all() -> None:
+        if not names:
+            await audit_decision(AuditAction.PLUGIN_GRANDFATHER, "*", SYSTEM_ACTOR, reason=reason, granted=0)
         for name in names:
-            await audit_decision(AuditAction.PLUGIN_GRANDFATHER, name, SYSTEM_ACTOR, reason="running before the gate")
+            await audit_decision(AuditAction.PLUGIN_GRANDFATHER, name, SYSTEM_ACTOR, reason=reason)
 
     rows = [(name, True, SOURCE_GRANDFATHERED, SYSTEM_ACTOR) for name in names]
     if await store.write_baseline(rows, audit_all):
@@ -110,8 +119,9 @@ def build_plugin_manager() -> PluginManager:
 
 
 async def retry_until_started(manager: PluginManager, delay: float) -> None:
-    """Re-run the manager's own ``retry_discovery`` with backoff until a start completes."""
-    while True:
+    """Re-run the manager's own ``retry_discovery`` with backoff until a start completes or it is shut down."""
+    delay = min(delay, RETRY_MAX_S)
+    while manager.started:
         await asyncio.sleep(delay)
         try:
             if (await manager.retry_discovery())["completed"]:
@@ -128,4 +138,6 @@ async def start_plugin_manager(manager: PluginManager) -> None:
         await manager.startup()
     except Exception as exc:  # noqa: BLE001 -- fail closed, then retry
         logger.error("Plugin gate failed at boot, no plugin loaded; retrying in the background: %s", exc, exc_info=True)
-        fire_and_forget(retry_until_started(manager, RETRY_INITIAL_S), name="plugin-gate-retry")
+        manager.start_retry_task = fire_and_forget(
+            retry_until_started(manager, RETRY_INITIAL_S), name="plugin-gate-retry"
+        )

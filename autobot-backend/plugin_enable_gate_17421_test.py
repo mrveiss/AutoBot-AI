@@ -112,6 +112,7 @@ async def test_upgrade_grandfathers_what_was_running_and_audits_each(store, audi
     root, names = plugin_root
     _add_plugin(root, names, "gate_old_a")
     _add_plugin(root, names, "gate_old_b")
+    await store.touch_start()  # the previous backend started after the plugins were dropped in
     manager = _manager(root, store)
     await manager.startup()
     assert {"gate_old_a", "gate_old_b"} <= set(PluginRegistry().get_all_plugins())
@@ -126,6 +127,7 @@ async def test_upgrade_grandfathers_what_was_running_and_audits_each(store, audi
 async def test_new_plugin_is_not_imported_until_an_admin_enables_it(store, audit, plugin_root):
     root, names = plugin_root
     _add_plugin(root, names, "gate_old_a")
+    await store.touch_start()
     first = _manager(root, store)
     await first.startup()
     await first.shutdown()
@@ -163,6 +165,7 @@ async def test_load_route_refuses_a_plugin_nobody_enabled(store):
 async def test_disable_is_audited_persisted_and_silences_hooks(store, audit, plugin_root):
     root, names = plugin_root
     _add_plugin(root, names, "gate_old_a")
+    await store.touch_start()
     manager = _manager(root, store)
     await manager.startup()
     assert await HookRegistry().call_hook("gate_hook") == ["gate_old_a"]
@@ -179,6 +182,7 @@ async def test_disable_is_audited_persisted_and_silences_hooks(store, audit, plu
 async def test_no_decision_without_an_audit_entry(store, audit, plugin_root):
     root, names = plugin_root
     _add_plugin(root, names, "gate_old_a")
+    await store.touch_start()
     manager = _manager(root, store)
     await manager.startup()
     audit.committed = False
@@ -244,6 +248,7 @@ async def test_two_concurrent_first_boots_grandfather_once(plugin_root, audit, t
         await conn.run_sync(Base.metadata.create_all, tables=[PluginEnableState.__table__])
     factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
     audit.delay = 0.05
+    await pes.PluginEnableStore(factory).touch_start()
     manifests = PluginLoader([root]).discover_plugins()
     locations = {"gate_old_a": root / "gate_old_a"}
     gates = [peg.DatabaseEnableGate(pes.PluginEnableStore(factory)) for _ in range(2)]
@@ -273,6 +278,7 @@ class _FlakyStore:
 async def test_gate_failure_loads_nothing_then_retries_without_a_restart(store, audit, plugin_root, monkeypatch):
     root, names = plugin_root
     _add_plugin(root, names, "gate_old_a")
+    await store.touch_start()
     monkeypatch.setattr(peg, "RETRY_INITIAL_S", 0.01)
     manager = PluginManager([root], enable_gate=peg.DatabaseEnableGate(_FlakyStore(store, failures=2)))
     await peg.start_plugin_manager(manager)

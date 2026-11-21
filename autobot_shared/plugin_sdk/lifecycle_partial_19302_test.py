@@ -9,10 +9,12 @@ import textwrap
 
 import pytest
 
+from autobot_shared.plugin_sdk import loader as loader_module
 from autobot_shared.plugin_sdk.base import PluginManifest, PluginRegistry
 from autobot_shared.plugin_sdk.hooks import HookRegistry, is_plugin_active
 from autobot_shared.plugin_sdk.lifecycle import enable_attributed
 from autobot_shared.plugin_sdk.loader import PluginLoader
+from autobot_shared.plugin_sdk.registry import get_registry
 from autobot_shared.tool_sdk.registry import get_tool_registry
 
 _MODULE = """
@@ -88,7 +90,8 @@ async def test_a_raising_shutdown_still_reverses_registrations(tmp_path, monkeyp
     assert not await loader.unload_plugin(manifest.name)
     assert HookRegistry().get_hook_count("part_hook") == 0
     assert not any(m.name == f"{manifest.name}_tool" for m in get_tool_registry().list_tools())
-    PluginRegistry().unregister(manifest.name)
+    assert PluginRegistry().get_plugin(manifest.name) is None, "a raising shutdown() must not strand the plugin"
+    assert get_registry().get(manifest.name) is None
 
 
 @pytest.mark.asyncio
@@ -118,3 +121,18 @@ async def test_a_tool_registered_from_enable_is_attributed_and_reversed(tmp_path
     assert any(m.name == f"{manifest.name}_tool" for m in get_tool_registry().list_tools())
     assert await loader.unload_plugin(manifest.name)
     assert not any(m.name == f"{manifest.name}_tool" for m in get_tool_registry().list_tools())
+
+
+@pytest.mark.asyncio
+async def test_a_failing_unified_registration_leaves_nothing_half_registered(tmp_path, monkeypatch):
+    init = _HOOK.format(who="None")
+    loader, manifest = _plugin(tmp_path, monkeypatch, initialize=init)
+
+    class RefusingRegistry:
+        def register(self, manifest):
+            raise ValueError("already registered")
+
+    monkeypatch.setattr(loader_module, "get_registry", lambda: RefusingRegistry())
+    assert await loader.load_plugin(manifest) is None
+    assert PluginRegistry().get_plugin(manifest.name) is None
+    assert HookRegistry().get_hook_count("part_hook") == 0

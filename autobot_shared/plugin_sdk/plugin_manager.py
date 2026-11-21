@@ -55,6 +55,8 @@ class PluginManager:
         """
         self._enable_gate = enable_gate
         self._gated: List[str] = []
+        #: The host's background start-retry task (#17421); cancelled by ``shutdown()``.
+        self.start_retry_task: asyncio.Task[Any] | None = None
         self._loader = PluginLoader(plugin_dirs or [], credential_resolvers, trusted_roots)
         self._registry = PluginRegistry()
         self._hook_registry = HookRegistry()
@@ -194,6 +196,9 @@ class PluginManager:
         Called during application shutdown.  Errors are logged and do not
         prevent other plugins from shutting down.
         """
+        if self.start_retry_task is not None:
+            self.start_retry_task.cancel()
+            self.start_retry_task = None
         await self._hook_registry.call_hook("on_shutdown")
 
         for name in list(self._registry.get_all_plugins()):
@@ -225,6 +230,11 @@ class PluginManager:
     # ------------------------------------------------------------------
     # Accessors
     # ------------------------------------------------------------------
+
+    @property
+    def started(self) -> bool:
+        """True from ``startup()`` until ``shutdown()``, including a start that failed and awaits a retry."""
+        return self._started
 
     @property
     def hook_registry(self) -> HookRegistry:

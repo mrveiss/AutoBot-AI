@@ -369,8 +369,12 @@ class PluginLoader:
             )
             await initialize_attributed(plugin)  # its tools are recorded for host-side reversal (#19302)
             plugin.status = PluginStatus.LOADED
-            self.registry.register(plugin)  # plugin registry and unified registry
-            get_registry().register(manifest)
+            self.registry.register(plugin)
+            try:
+                get_registry().register(manifest)
+            except Exception:
+                self.registry.unregister(manifest.name)  # half-registered: leave neither (#19302)
+                raise
 
             logger.info("Loaded plugin: %s v%s", manifest.name, manifest.version)
             return plugin
@@ -382,15 +386,7 @@ class PluginLoader:
             return None
 
     async def unload_plugin(self, name: str) -> bool:
-        """
-        Unload a plugin.
-
-        Args:
-            name: Plugin name
-
-        Returns:
-            True if successfully unloaded
-        """
+        """Unload a plugin; True if it was unloaded. A raising shutdown() still leaves nothing registered (#19302)."""
         try:
             plugin = self.registry.get_plugin(name)
             if not plugin:
@@ -399,11 +395,11 @@ class PluginLoader:
 
             try:
                 await plugin.shutdown()
-            finally:  # a raising shutdown() still has its hooks, tools and grants reversed (#19302)
+            finally:
                 plugin.status = PluginStatus.UNLOADED
                 reverse_registrations(name)
-            self.registry.unregister(name)
-            get_registry().unregister(name)
+                self.registry.unregister(name)
+                get_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True
