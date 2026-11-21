@@ -32,7 +32,10 @@ def _ctx() -> SimpleNamespace:
 def _session(agent_company: uuid.UUID | None) -> AsyncMock:
     """A session whose only query, the named agent's company lookup, answers *agent_company*."""
     session = AsyncMock()
-    session.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=agent_company))
+    found = object() if agent_company == _ORG else None  # the query is scoped to the item's company
+    session.execute.return_value = MagicMock(
+        scalars=MagicMock(return_value=MagicMock(first=MagicMock(return_value=found)))
+    )
     return session
 
 
