@@ -31,6 +31,7 @@ from llc.models.work_item import LLCWorkItem
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
 from .base import LLCServiceBase
+from .budget_idempotency import charge_once
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,29 @@ class BudgetService(LLCServiceBase):
         return row, True
 
     async def ingest_cost_event(
+        self,
+        session: AsyncSession,
+        agent_id: str,
+        company_id: str,
+        tokens_in: int,
+        tokens_out: int,
+        model: str,
+        work_item_id: Optional[str] = None,
+        bill_dollars: bool = True,
+        idempotency_key: Optional[str] = None,
+    ) -> Decimal:
+        """Record token cost and enforce limits; see ``_charge_cost_event`` for the charge itself (GH#8215).
+
+        ``idempotency_key`` (#21332): a repeat with the same key for the same agent charges once and
+        returns the first result (``budget_idempotency`` has the policies). With a key the charge is
+        committed here before the result is recorded; ``IngestInFlight`` is raised for a concurrent repeat.
+        """
+        args = (session, agent_id, company_id, tokens_in, tokens_out, model, work_item_id, bill_dollars)
+        if not idempotency_key:
+            return await self._charge_cost_event(*args)
+        return await charge_once(session, agent_id, company_id, idempotency_key, lambda: self._charge_cost_event(*args))
+
+    async def _charge_cost_event(
         self,
         session: AsyncSession,
         agent_id: str,

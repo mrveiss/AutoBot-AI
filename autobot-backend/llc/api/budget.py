@@ -6,9 +6,9 @@
 
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +26,7 @@ from llc.services.accessors import get_budget_service
 from llc.services.approval import ApprovalService
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.budget import BudgetService
+from llc.services.budget_idempotency import IngestInFlight
 from llc.services.budget_raise import (
     BudgetRaisePending,
     company_requires_budget_approval,
@@ -281,6 +282,7 @@ async def ingest_cost(
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> IngestResponse:
     # The row the tenant check already loaded carries the company this slug belongs
     # to; the result was previously discarded. Binding it avoids a second lookup and
@@ -296,8 +298,18 @@ async def ingest_cost(
     svc = get_budget_service()
     try:
         cost = await svc.ingest_cost_event(
-            session, agent_id, row.company_id, body.tokens_in, body.tokens_out, body.model
+            session,
+            agent_id,
+            row.company_id,
+            body.tokens_in,
+            body.tokens_out,
+            body.model,
+            idempotency_key=idempotency_key,
         )
+    except IngestInFlight as exc:  # same key still being charged (#21332): the caller retries, nothing double-charges
+        raise HTTPException(
+            status_code=409, detail="A cost event with this Idempotency-Key is still in flight"
+        ) from exc
     except BudgetExhausted as exc:
         # 402 is right; the detail was not. It said "Internal server error" for a
         # budget the caller had exhausted, which is a client-actionable condition
