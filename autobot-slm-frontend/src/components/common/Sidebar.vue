@@ -13,7 +13,7 @@
  */
 
 import { BrandMark, usePollingJob } from '@autobot/ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -125,8 +125,11 @@ const navButtons = ref<HTMLElement[]>([])
 
 function setNavButton(el: unknown, index: number): void {
   if (el instanceof HTMLElement) navButtons.value[index] = el
-  else delete navButtons.value[index]
 }
+
+// Keep one slot per visible item: a removed tail item (admin-only entry after a role change)
+// must not leave a hole that End / wrap-around would target. Post-flush, after the refs settle.
+watch(() => visibleNavItems.value.length, (count) => { navButtons.value.length = count }, { flush: 'post' })
 
 // Arrow / Home / End navigation of the menu comes from the shared a11y composable (#754).
 const navKeys = useKeyboardNav(navButtons, { orientation: 'vertical', wrap: true })
