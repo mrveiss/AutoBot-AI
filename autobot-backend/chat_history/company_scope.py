@@ -35,7 +35,7 @@ def is_agent_kind(session: dict) -> bool:
 
 
 @dataclass(frozen=True)
-class CompanyScope:
+class ActiveCompany:
     """The company the caller is acting in (``None`` when they name none) and what it makes visible."""
 
     active: str | None = None

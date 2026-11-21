@@ -27,7 +27,7 @@ from security import session_shares
 from security.session_company import (
     company_exists,
     company_of_session,
-    is_company_member,
+    may_act_in_company,
 )
 from security.session_share_audit import ShareAuditError, audited_change
 from utils.chat_utils import (
@@ -45,7 +45,7 @@ async def _require_assignable(request: Request, session_id: str, company_id: uui
         raise fixed_refusal(404)
     if await company_of_session(request, session_id):
         raise fixed_refusal(409)
-    if not await is_company_member(company_id, user):
+    if not await may_act_in_company(company_id, user):
         raise fixed_refusal(403)
     if not await company_exists(company_id):
         raise fixed_refusal(404)

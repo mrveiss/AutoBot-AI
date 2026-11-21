@@ -50,7 +50,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from chat_history.company_scope import CompanyScope, is_agent_kind
+from chat_history.company_scope import ActiveCompany, is_agent_kind
 from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
@@ -406,7 +406,7 @@ def _is_agent_scoped_session(session: dict) -> bool:
     return is_agent_kind(session)
 
 
-async def list_user_sessions(chat_history_manager, username: str | None, company: CompanyScope | None = None) -> list:
+async def list_user_sessions(chat_history_manager, username: str | None, company: ActiveCompany | None = None) -> list:
     """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
 
     Shared by ``GET /chat/sessions`` (default scope), ``/api/batch-jobs/chat-init``, ``GET /chats`` and the bulk
@@ -456,7 +456,7 @@ def _build_ownership_validator(redis):
     return SessionOwnershipValidator(redis)
 
 
-def _company_listing(sessions: list, company: CompanyScope | None) -> dict:
+def _company_listing(sessions: list, company: ActiveCompany | None) -> dict:
     """The ``sessions``/``count`` fields narrowed to the active company, the Unassigned set beside them (#21997)."""
     return company.listing(sessions) if company is not None else {"sessions": sessions, "count": len(sessions)}
 
@@ -467,7 +467,7 @@ async def _list_scoped_sessions(
     chat_history_manager,
     scope: str,
     team_id: str | None,
-    company: CompanyScope | None = None,
+    company: ActiveCompany | None = None,
 ):
     """List sessions scoped to org or team.
 
@@ -506,7 +506,7 @@ async def _list_org_sessions(
     validator,
     chat_history_manager,
     request_id: str,
-    company: CompanyScope | None = None,
+    company: ActiveCompany | None = None,
 ):
     """List all sessions in the user's organization.
 
@@ -551,7 +551,7 @@ async def _list_team_sessions(
     validator,
     chat_history_manager,
     request_id: str,
-    company: CompanyScope | None = None,
+    company: ActiveCompany | None = None,
 ):
     """List all sessions for a specific team.
 
@@ -577,7 +577,7 @@ async def _list_shared_sessions(
     request: Request,
     request_id: str,
     chat_history_manager,
-    company: CompanyScope | None = None,
+    company: ActiveCompany | None = None,
 ):
     """List sessions shared with the authenticated user (#689).
 

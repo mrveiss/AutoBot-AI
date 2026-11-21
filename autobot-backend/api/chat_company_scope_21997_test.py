@@ -18,7 +18,7 @@ import pytest
 from fastapi import HTTPException
 
 from api import chat_session_company, chat_sessions
-from chat_history.company_scope import CompanyScope
+from chat_history.company_scope import ActiveCompany
 from security import session_company
 
 CO_A = str(uuid.uuid4())
@@ -68,7 +68,7 @@ async def _list(company: str | None, scope=None, member=True):
         patch("autobot_shared.redis_client.get_redis_client", new=AsyncMock()),
         patch.object(chat_sessions, "get_chat_history_manager", return_value=_manager()),
         patch.object(chat_sessions, "_build_ownership_validator", return_value=_owning_everything()),
-        patch.object(session_company, "is_company_member", new=AsyncMock(return_value=member)),
+        patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=member)),
     ):
         return await chat_sessions.list_sessions(_request(company), dict(_USER), scope=scope, team_id=None)
 
@@ -117,7 +117,7 @@ class TestEveryListingRouteAppliesTheSameFilter:
     async def test_org_scope(self):
         validator = MagicMock(get_org_sessions=AsyncMock(return_value=[s["id"] for s in _ALL]))
         user = {"org_id": "org", "role": "admin"}
-        response = await chat_sessions._list_org_sessions(user, validator, _manager(), "r", CompanyScope(CO_A))
+        response = await chat_sessions._list_org_sessions(user, validator, _manager(), "r", ActiveCompany(CO_A))
         data = _payload(response)
         assert _ids(data["sessions"]) == {"a1", "a2"}  # the agent chat "ceo" is in the id list and still absent
         assert "b1" not in _ids(data["sessions"]) and "u1" in _ids(data["unassigned"])
@@ -125,7 +125,7 @@ class TestEveryListingRouteAppliesTheSameFilter:
     @pytest.mark.asyncio
     async def test_team_scope(self):
         validator = MagicMock(get_team_sessions=AsyncMock(return_value=["b1", "u1"]))
-        data = _payload(await chat_sessions._list_team_sessions("t", validator, _manager(), "r", CompanyScope(CO_B)))
+        data = _payload(await chat_sessions._list_team_sessions("t", validator, _manager(), "r", ActiveCompany(CO_B)))
         assert _ids(data["sessions"]) == {"b1"} and _ids(data["unassigned"]) == {"u1"}
 
     @pytest.mark.asyncio
@@ -137,14 +137,14 @@ class TestEveryListingRouteAppliesTheSameFilter:
             patch.object(chat_sessions, "get_auth_middleware") as auth,
         ):
             auth.return_value.get_user_from_request.return_value = dict(_USER)
-            response = await chat_sessions._list_shared_sessions(MagicMock(), "r", _manager(), CompanyScope(CO_A))
+            response = await chat_sessions._list_shared_sessions(MagicMock(), "r", _manager(), ActiveCompany(CO_A))
         data = _payload(response)
         assert _ids(data["sessions"]) == {"a1"} and _ids(data["unassigned"]) == {"u1"}
 
     @pytest.mark.asyncio
     async def test_the_shared_listing_every_flat_route_uses(self):
         with patch.object(chat_sessions, "_filter_user_sessions", new=AsyncMock(side_effect=lambda s, *_: s)):
-            rows = await chat_sessions.list_user_sessions(_manager(), "alice", CompanyScope(CO_A))
+            rows = await chat_sessions.list_user_sessions(_manager(), "alice", ActiveCompany(CO_A))
         assert _ids(rows) == {"a1", "a2", "u1", "legacy-ceo"}
 
     @pytest.mark.asyncio
@@ -158,7 +158,7 @@ class TestEveryListingRouteAppliesTheSameFilter:
             return [{"id": "a1"}]
 
         with patch("api.chat_sessions.list_user_sessions", new=fake_listing):
-            rows = await conversation_export._sessions_to_export(MagicMock(), "alice", False, CompanyScope(CO_A))
+            rows = await conversation_export._sessions_to_export(MagicMock(), "alice", False, ActiveCompany(CO_A))
         assert rows == [{"id": "a1"}] and seen["company"].active == CO_A
 
     def test_every_user_facing_lister_passes_the_company(self):
@@ -182,7 +182,7 @@ class TestCreationStampsTheActiveCompany:
 
     @pytest.mark.asyncio
     async def test_stamps_the_active_company(self):
-        with patch.object(session_company, "is_company_member", new=AsyncMock(return_value=True)):
+        with patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)):
             stamped = await session_company.creation_company_metadata(_request(CO_A), {}, dict(_USER))
         assert stamped == {"company_id": CO_A}
 
@@ -192,7 +192,7 @@ class TestCreationStampsTheActiveCompany:
 
     @pytest.mark.asyncio
     async def test_a_client_naming_the_active_company_is_stamped_with_it(self):
-        with patch.object(session_company, "is_company_member", new=AsyncMock(return_value=True)):
+        with patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)):
             stamped = await session_company.creation_company_metadata(
                 _request(CO_A), {"company_id": CO_A, "session_kind": "agent"}, dict(_USER)
             )
@@ -200,14 +200,14 @@ class TestCreationStampsTheActiveCompany:
 
     @pytest.mark.asyncio
     async def test_a_client_naming_another_company_is_refused(self):
-        with patch.object(session_company, "is_company_member", new=AsyncMock(return_value=True)):
+        with patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)):
             with pytest.raises(HTTPException) as refused:
                 await session_company.creation_company_metadata(_request(CO_A), {"company_id": CO_B}, dict(_USER))
         assert refused.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_a_client_naming_a_company_with_none_active_must_be_a_member(self):
-        with patch.object(session_company, "is_company_member", new=AsyncMock(return_value=False)):
+        with patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=False)):
             with pytest.raises(HTTPException):
                 await session_company.creation_company_metadata(_request(None), {"company_id": CO_B}, dict(_USER))
 
@@ -229,7 +229,7 @@ class TestAnotherCompanysChatIsRefused:
     async def test_cross_company_session_is_refused(self):
         doc = {"metadata": {"company_id": CO_B}}
         with (
-            patch.object(session_company, "is_company_member", new=AsyncMock(return_value=True)),
+            patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)),
             patch("utils.chat_utils.get_chat_history_manager", return_value=_manager(doc=doc)),
         ):
             with pytest.raises(HTTPException) as refused:
@@ -240,7 +240,7 @@ class TestAnotherCompanysChatIsRefused:
     @pytest.mark.parametrize("stored", [None, {"metadata": {}}, {"metadata": {"company_id": CO_A.upper()}}])
     async def test_unassigned_or_same_company_session_passes(self, stored):
         with (
-            patch.object(session_company, "is_company_member", new=AsyncMock(return_value=True)),
+            patch.object(session_company, "may_act_in_company", new=AsyncMock(return_value=True)),
             patch("utils.chat_utils.get_chat_history_manager", return_value=_manager(doc=stored)),
         ):
             await session_company.enforce_session_company("s", _request(CO_A))
@@ -296,7 +296,7 @@ async def _assign(manager, company=CO_A, member=True, exists=True, audit=None):
     with (
         patch.object(chat_session_company, "get_chat_history_manager", return_value=manager),
         patch("utils.chat_utils.get_chat_history_manager", return_value=manager),
-        patch.object(chat_session_company, "is_company_member", new=AsyncMock(return_value=member)),
+        patch.object(chat_session_company, "may_act_in_company", new=AsyncMock(return_value=member)),
         patch.object(chat_session_company, "company_exists", new=AsyncMock(return_value=exists)),
         patch.object(chat_session_company, "publish_session_updated", new=AsyncMock()),
         patch("security.session_share_audit.audit_log", new=audit),

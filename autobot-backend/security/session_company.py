@@ -19,7 +19,7 @@ from fastapi import Request
 
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
-from chat_history.company_scope import CompanyScope
+from chat_history.company_scope import ActiveCompany
 
 logger = get_logger(__name__)
 
@@ -34,21 +34,19 @@ def _parse(value) -> uuid.UUID | None:
         return None
 
 
-async def is_company_member(company_id: uuid.UUID, user: dict) -> bool:
-    """Whether *user* may act in *company_id*: a platform admin, or a member of it."""
-    from api.user_management.dependencies import (
-        _check_org_membership,
-        _is_platform_admin_claim,
-    )
+async def may_act_in_company(company_id: uuid.UUID, user: dict) -> bool:
+    """Whether *user* may act in *company_id*: a platform admin, or a member of it (``llc.services.authz``)."""
+    from api.user_management.dependencies import _is_platform_admin_claim
+    from llc.services.authz import is_company_member
     from user_management.database import get_async_session_factory
 
     if _is_platform_admin_claim(user):
         return True
-    user_id = _parse(user.get("user_id") or user.get("id") or user.get("sub"))
-    if user_id is None:
+    user_id = user.get("user_id") or user.get("id") or user.get("sub")
+    if not user_id:
         return False
     async with get_async_session_factory()() as session:
-        return await _check_org_membership(session, company_id, user_id)
+        return await is_company_member(session, company_id, str(user_id))
 
 
 def _caller(request: Request) -> dict | None:
@@ -57,18 +55,18 @@ def _caller(request: Request) -> dict | None:
     return get_auth_middleware().get_user_from_request(request)
 
 
-async def resolve_company_scope(request: Request, user: dict | None = None) -> CompanyScope:
-    """The caller's ``CompanyScope``; a header naming a company they may not act in is the canonical 403."""
+async def resolve_company_scope(request: Request, user: dict | None = None) -> ActiveCompany:
+    """The caller's ``ActiveCompany``; a header naming a company they may not act in is the canonical 403."""
     user = user if user is not None else _caller(request)
     if not user or user.get("service") or user.get("auth_disabled"):
-        return CompanyScope(None)
+        return ActiveCompany(None)
     named = _parse(request.headers.get(ACTIVE_COMPANY_HEADER))
     if named is None:
-        return CompanyScope(_parse(user.get("org_id")))
-    if not await is_company_member(named, user):
+        return ActiveCompany(_parse(user.get("org_id")))
+    if not await may_act_in_company(named, user):
         logger.warning("Active company refused: caller is not a member of the company the header names")
         raise fixed_refusal(403)
-    return CompanyScope(named)
+    return ActiveCompany(named)
 
 
 async def company_of_session(request: Request, session_id: str) -> str | None:
@@ -102,7 +100,7 @@ async def creation_company_metadata(request: Request, client_metadata: dict | No
         return {"company_id": scope.active} if scope.active else {}
     if scope.active is not None and str(named) != scope.active:
         raise fixed_refusal(403)
-    if scope.active is None and not (user and await is_company_member(named, user)):
+    if scope.active is None and not (user and await may_act_in_company(named, user)):
         raise fixed_refusal(403)
     return {"company_id": str(named)}
 

@@ -49,7 +49,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from api.batch_jobs import get_chat_sessions, get_settings
-from chat_history.company_scope import CompanyScope
+from chat_history.company_scope import ActiveCompany
 
 _SOURCE = Path(__file__).with_name("batch_jobs.py")
 _DEAD_MODULE = "fast_app_factory_fix"
@@ -154,7 +154,7 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
     app = SimpleNamespace(state=SimpleNamespace(chat_history_manager=manager))
     # A named caller: a nameless one fails closed before the manager is read (#21664).
     with patch("api.chat_sessions._filter_user_sessions", new=AsyncMock(return_value=[])):
-        result = await get_chat_sessions(app, "alice", CompanyScope(None))
+        result = await get_chat_sessions(app, "alice", ActiveCompany(None))
     assert result["sessions"] == []  # #21997: the company's chats; the Unassigned set rides beside them
     assert result["unassigned"] == []
     # Reaching the mock at all is the proof: a pre-fix ModuleNotFoundError died before
@@ -165,6 +165,6 @@ async def test_get_chat_sessions_reaches_the_chat_history_manager() -> None:
 
 @pytest.mark.asyncio
 async def test_get_chat_sessions_without_a_manager_is_empty_not_an_error() -> None:
-    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace()), "alice", CompanyScope(None)) == {
+    assert await get_chat_sessions(SimpleNamespace(state=SimpleNamespace()), "alice", ActiveCompany(None)) == {
         "sessions": []
     }

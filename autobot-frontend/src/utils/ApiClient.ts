@@ -353,8 +353,11 @@ export class ApiClient extends ApiClientBase<RequestOptions, paths> {
   }
 
   /** Assign an Unassigned chat to a company (#21997); owner only, audited, refused (409) once it has one. */
-  async assignChatCompany(chatId: string, companyId: string): Promise<Record<string, unknown>> {
-    return await this.post(`${getApiBase()}/chat/sessions/${chatId}/company`, { company_id: companyId });
+  async assignChatCompany(chatId: string, companyId: string) {
+    return await this.call('post', '/api/chat/sessions/{session_id}/company', {
+      path: { session_id: chatId },
+      body: { company_id: companyId },
+    });
   }
 
   // ==================================================================================

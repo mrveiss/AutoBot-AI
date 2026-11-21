@@ -6,15 +6,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { ApiClient } from '@/utils/ApiClient';
 
 describe('ApiClient.assignChatCompany (#21997)', () => {
-  it('posts the company id to the chat session company route', async () => {
+  it('posts the company id to the chat session company route through the typed contract', async () => {
     const client = new ApiClient();
-    const post = vi.spyOn(client, 'post').mockResolvedValue({ data: { session_id: 'c1' } });
+    const call = vi.spyOn(client, 'call').mockResolvedValue({ data: { session_id: 'c1' } } as never);
 
     const result = await client.assignChatCompany('c1', 'company-1');
 
-    expect(post).toHaveBeenCalledTimes(1);
-    expect(post.mock.calls[0][0]).toMatch(/\/chat\/sessions\/c1\/company$/);
-    expect(post.mock.calls[0][1]).toEqual({ company_id: 'company-1' });
+    expect(call).toHaveBeenCalledWith('post', '/api/chat/sessions/{session_id}/company', {
+      path: { session_id: 'c1' },
+      body: { company_id: 'company-1' },
+    });
     expect(result).toEqual({ data: { session_id: 'c1' } });
   });
 });
