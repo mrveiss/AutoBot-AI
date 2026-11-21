@@ -85,7 +85,7 @@ const isLoadingSprints = ref(false)
 const isAssigning = ref(false)
 const sprintsFailed = ref(false)
 const assignError = ref('')
-// Bumped on every project change and reset; a sprint response from an earlier request is ignored (#21791).
+// Bumped on every opening, reset and project change; a sprint or assignment response from an earlier one is ignored.
 let sprintRequest = 0
 
 async function onProjectSelect(projectId: string) {
@@ -113,6 +113,7 @@ async function onProjectSelect(projectId: string) {
 
 async function assign() {
   if (!sprintId.value) return
+  const request = sprintRequest
   isAssigning.value = true
   assignError.value = ''
   try {
@@ -121,10 +122,11 @@ async function assign() {
       work_item_ids: props.workItemIds,
       sprint_id: sprintId.value,
     })
-    sprintId.value = ''
+    if (request === sprintRequest) sprintId.value = ''
     emit('assigned')
   } catch (err) {
     logger.error('Bulk assign failed', err)
+    if (request !== sprintRequest) return
     const detail = err instanceof Error ? err.message : ''
     assignError.value = detail ? t('llc.backlog.assignErrorDetail', { detail }) : t('llc.backlog.assignError')
   } finally {

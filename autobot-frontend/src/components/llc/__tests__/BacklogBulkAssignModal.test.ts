@@ -124,6 +124,23 @@ describe('BacklogBulkAssignModal', () => {
     expect(wrapper.findAll('select')[1].text()).toContain('Sprint 1')
   })
 
+  it('ignores an assignment failure that arrives after the modal was closed and reopened', async () => {
+    get.mockResolvedValue([{ id: 's-1', name: 'Sprint 1', status: 'open' }])
+    let rejectPost: (e: unknown) => void = () => {}
+    post.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPost = reject }))
+    const wrapper = mountModal()
+    await pickProject(wrapper, 'p-1')
+    await pickSprint(wrapper, 's-1')
+    await assignButton(wrapper).trigger('click')
+    await wrapper.setProps({ modelValue: false })
+    await wrapper.setProps({ modelValue: true })
+    rejectPost(new Error('forbidden'))
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect((assignButton(wrapper).element as HTMLButtonElement).disabled).toBe(true) // no sprint chosen yet
+    expect(wrapper.text()).not.toContain('llc.backlog.assigning') // the finished request released the button
+  })
+
   it('ignores a sprint response from an earlier project selection', async () => {
     let resolveFirst: (v: unknown) => void = () => {}
     get.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
