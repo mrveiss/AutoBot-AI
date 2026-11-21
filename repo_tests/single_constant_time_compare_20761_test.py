@@ -17,6 +17,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -81,7 +82,11 @@ def _production_files(root: Path = _ROOT):
         return  # an empty tree is the floor's refusal to make (ReachFloorError), not a discover error
     for name in names:
         rel = Path(name)
-        if rel == _HELPER or "tests" in rel.parts or rel.name.startswith("test_") or rel.name.endswith("_test.py"):
+        if (
+            rel == _HELPER
+            or "tests" in rel.parts
+            or is_test_filename(rel.name, include_js=False, include_conftest=False)
+        ):
             continue
         yield rel, root / rel
 

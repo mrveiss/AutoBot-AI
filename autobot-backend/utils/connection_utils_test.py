@@ -10,57 +10,57 @@ the SSOT `AutoBotConfig` proxy (`from config import config`, attribute-access
 only) under the name `global_config_manager`, then called `.get()` /
 `.get_nested()` on it — both raise AttributeError because the SSOT proxy has
 no such methods. Fixed by importing the legacy `config_manager` instance
-instead (`from config import config_manager as global_config_manager`),
+instead (`from config import config_manager`),
 which does implement `.get()` / `.get_nested()` / `.get_llm_config()`
 (backed by config.yaml + defaults.py).
 """
 
 import pytest
 
-from utils.connection_utils import ConnectionTester, ModelManager, global_config_manager
+from utils.connection_utils import ConnectionTester, ModelManager, config_manager
 
 
 class TestGlobalConfigManagerApi:
     """Directly exercise every config lookup used by connection_utils.py."""
 
     def test_get_nested_backend_ollama_endpoint(self):
-        """Line ~140 call site: global_config_manager.get_nested(...)."""
-        result = global_config_manager.get_nested("backend.ollama_endpoint", "default-endpoint")
+        """Line ~140 call site: config_manager.get_nested(...)."""
+        result = config_manager.get_nested("backend.ollama_endpoint", "default-endpoint")
         assert result is not None
 
     def test_get_nested_backend_ollama_model(self):
-        """Line ~145 call site: global_config_manager.get_nested(...)."""
-        result = global_config_manager.get_nested("backend.ollama_model", "default-model")
+        """Line ~145 call site: config_manager.get_nested(...)."""
+        result = config_manager.get_nested("backend.ollama_model", "default-model")
         assert result is not None
 
     def test_get_task_transport(self):
-        """Line ~232 call site: global_config_manager.get("task_transport", {})."""
-        result = global_config_manager.get("task_transport", {})
+        """Line ~232 call site: config_manager.get("task_transport", {})."""
+        result = config_manager.get("task_transport", {})
         assert isinstance(result, dict)
 
     def test_get_backend_llm_nested_chain(self):
-        """Line ~125 call site: global_config_manager.get("backend", {}).get("llm", {})."""
-        llm_config = global_config_manager.get("backend", {}).get("llm", {})
+        """Line ~125 call site: config_manager.get("backend", {}).get("llm", {})."""
+        llm_config = config_manager.get("backend", {}).get("llm", {})
         assert isinstance(llm_config, dict)
 
     def test_get_memory_config(self):
-        """Line ~241 call site: global_config_manager.get("memory", {})."""
-        result = global_config_manager.get("memory", {})
+        """Line ~241 call site: config_manager.get("memory", {})."""
+        result = config_manager.get("memory", {})
         assert isinstance(result, dict)
 
     def test_get_llm_config_method(self):
-        """Line ~336 call site: global_config_manager.get_llm_config()."""
-        result = global_config_manager.get_llm_config()
+        """Line ~336 call site: config_manager.get_llm_config()."""
+        result = config_manager.get_llm_config()
         assert isinstance(result, dict)
 
     def test_get_llm_config_key(self):
-        """Line ~444 call site: global_config_manager.get("llm_config", {})."""
-        result = global_config_manager.get("llm_config", {})
+        """Line ~444 call site: config_manager.get("llm_config", {})."""
+        result = config_manager.get("llm_config", {})
         assert isinstance(result, dict)
 
     def test_get_nested_llm_config_ollama(self):
-        """Line ~491 call site: global_config_manager.get_nested("llm_config.ollama", {})."""
-        result = global_config_manager.get_nested("llm_config.ollama", {})
+        """Line ~491 call site: config_manager.get_nested("llm_config.ollama", {})."""
+        result = config_manager.get_nested("llm_config.ollama", {})
         assert isinstance(result, dict)
 
 

@@ -5,11 +5,15 @@
 """#10200: a change reaches the SLM copy, and a failed delivery is visible and retried."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
+from user_management.models.person_link import PersonLink
 from user_management.services import person_copy_sync as sync
 
 _USER_ID = uuid.UUID(int=1)
@@ -141,3 +145,99 @@ async def test_a_release_error_after_a_good_push_keeps_the_success(caplog) -> No
     assert (pair[0].push_error, pair[0].push_failed_at) == (None, None)
     assert session.rollbacks == 0
     assert any("release" in r.message and "ConnectionError" in r.message for r in caplog.records)
+
+
+def _response(status: int, body):
+    async def json():
+        if isinstance(body, Exception):
+            raise body
+        return body
+
+    return SimpleNamespace(status=status, json=json)
+
+
+async def test_the_slms_last_admin_refusal_is_recognised() -> None:
+    refusal = {"detail": {"code": "last_platform_admin", "message": "m"}}
+    with pytest.raises(sync.PersonCopyRefused):
+        await sync._raise_if_refused(_response(409, refusal))
+
+
+async def test_other_409s_and_other_statuses_are_left_to_raise_for_status() -> None:
+    await sync._raise_if_refused(_response(409, {"detail": {"code": "something_else"}}))
+    await sync._raise_if_refused(_response(409, {"detail": "text"}))
+    await sync._raise_if_refused(_response(409, ValueError("not json")))
+    await sync._raise_if_refused(_response(500, {"detail": {"code": "last_platform_admin"}}))
+
+
+async def test_a_refused_push_is_shown_on_the_link_and_stamps_the_attempt() -> None:
+    pair = _pair()
+    with _no_lock(), patch.object(sync, "_post_copy", AsyncMock(side_effect=sync.PersonCopyRefused("x"))):
+        await sync._push_person(_session_with([pair, pair]), _USER_ID)
+    assert pair[0].push_error == "PersonCopyRefused" and pair[0].push_failed_at is not None
+    assert pair[0].updated_at is not None  # the refused-retry cadence counts from this attempt
+
+
+async def test_a_refused_link_is_skipped_inside_the_interval_and_retried_after_it(tmp_path) -> None:
+    """The real due-query on a real table: only a refused link attempted within the interval is left out."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'links.db'}")  # canonical: ignore py-adhoc-db-engine
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda sync_conn: PersonLink.__table__.create(sync_conn))
+    now = datetime.now(timezone.utc)
+    interval = sync.PERSON_COPY_REFUSED_RETRY_INTERVAL_S
+    rows = {  # name: (push_error, seconds since the last attempt)
+        "never_failed": (None, 0),
+        "transport_failure": ("ConnectionError", 0),
+        "refused_inside_interval": ("PersonCopyRefused", interval - 60),
+        "refused_after_interval": ("PersonCopyRefused", interval + 60),
+    }
+    ids = {name: uuid.uuid4() for name in rows}
+    async with AsyncSession(engine) as session:
+        for name, (error, age) in rows.items():
+            session.add(
+                PersonLink(
+                    user_id=ids[name],
+                    slm_user_id=uuid.uuid4(),
+                    push_error=error,
+                    updated_at=now - timedelta(seconds=age),
+                )
+            )
+        await session.commit()
+        due = set((await session.execute(sync._due_link_ids())).scalars().all())
+    await engine.dispose()
+    assert {name for name, user_id in ids.items() if user_id in due} == {
+        "never_failed",
+        "transport_failure",
+        "refused_after_interval",
+    }
+
+
+async def test_after_another_admin_exists_the_retry_succeeds_and_clears_the_refusal() -> None:
+    pair = _pair()
+    pair[0].push_error, pair[0].push_failed_at = "PersonCopyRefused", datetime.now(timezone.utc)
+    with _no_lock(), patch.object(sync, "_post_copy", AsyncMock()):
+        await sync._push_person(_session_with([pair]), _USER_ID)
+    assert pair[0].push_error is None and pair[0].push_failed_at is None
+
+
+async def test_a_transient_lock_failure_503_is_a_transport_failure_never_a_refusal() -> None:
+    import aiohttp
+
+    pair = _pair()
+    busy = aiohttp.ClientResponseError(MagicMock(), (), status=503)
+    with _no_lock(), patch.object(sync, "_post_copy", AsyncMock(side_effect=busy)):
+        await sync._push_person(_session_with([pair, pair]), _USER_ID)
+    assert pair[0].push_error == "ClientResponseError"
+    await sync._raise_if_refused(_response(503, {"detail": {"code": "last_platform_admin_retry"}}))
+
+
+async def test_the_periodic_pass_selects_the_due_links() -> None:
+    session = FakeAsyncSession(results=[FakeResult([_USER_ID])], strict=False)
+    session.execute = AsyncMock(return_value=MagicMock(scalars=lambda: MagicMock(all=lambda: [])))
+    await sync.push_people(session)
+    statement = session.execute.await_args.args[0]
+    assert "push_error" in str(statement)
+
+
+def test_an_orphaned_link_is_never_due_for_a_push():
+    """A link whose person was deleted (``user_id`` NULL) has nothing to push, so the periodic pass skips it (#21018)."""
+    assert "person_links.user_id IS NOT NULL" in str(sync._due_link_ids().compile())
