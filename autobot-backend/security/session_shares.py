@@ -279,32 +279,3 @@ def audit_actor(request, user_data: dict | None) -> dict:
         "username": user_data.get("username", "unknown"),
         "ip": client.host if client else "unknown",
     }
-
-
-class ShareAuditError(Exception):
-    """The audit record could not be written, so the share change was not made (#18890)."""
-
-
-def audit(action: str, actor: dict, session_id: str, participants: list[str]) -> None:
-    """Share/unshare audit record through ``audit_record``, the logger session create/delete/export use.
-
-    Required, and written BEFORE the change (the audit store is not the share table, so one transaction cannot
-    cover both): a failure raises ``ShareAuditError`` and the caller must not change the share. Only the
-    exception class is logged, never its message.
-    """
-    from services.audit.audit import AuditAction, audit_record
-
-    try:
-        audit_record(
-            user_id=actor["user_id"],
-            action=AuditAction.SESSION_SHARE if action == "share" else AuditAction.SESSION_UNSHARE,
-            resource_type="chat_session",
-            resource_id=session_id,
-            ip_address=actor["ip"],
-            session_id=session_id,
-            metadata={"participants": participants, "username": actor["username"]},
-            outcome="success",
-        )
-    except Exception as exc:
-        logger.error("Failed to write %s audit record, share change refused: %s", action, type(exc).__name__)
-        raise ShareAuditError(action) from None

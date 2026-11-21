@@ -23,6 +23,7 @@ from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.redis_client import get_redis_client
 from security import session_shares
 from security.session_ownership import SessionOwnershipValidator, validate_session_ownership
+from security.session_share_audit import ShareAuditError
 from utils.chat_utils import create_chat_response, generate_request_id
 
 router = APIRouter(tags=["chat-sessions"])
@@ -97,7 +98,7 @@ async def unshare_session(
         removed = await validator.unshare_session(
             session_id, user_id, session_shares.audit_actor(request, ownership.get("user_data"))
         )
-    except session_shares.ShareAuditError:
+    except ShareAuditError:
         raise fixed_refusal(503) from None  # no audit record, no change (#18890)
 
     return create_chat_response(
@@ -145,7 +146,7 @@ async def share_session(
     validator = SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
     try:
         shared = await validator.share_session(session_id, share_data.share_with, actor["username"], actor)
-    except session_shares.ShareAuditError:
+    except ShareAuditError:
         raise fixed_refusal(503) from None  # no audit record, no change (#18890)
     if not shared:
         raise HTTPException(status_code=500, detail="Session could not be shared")
