@@ -70,6 +70,7 @@ from events.types import (
     create_message_event,
 )
 from planner import PlannerModule
+from services.verifier_audit import audit_verifier_degraded
 from tools.parallel import ParallelToolExecutor
 
 logger = get_logger(__name__)
@@ -1717,13 +1718,8 @@ Duration: {self._current_context.get_duration_ms():.0f}ms{belief_summary}
             return None
         task_id = self._current_context.task_id if self._current_context else None
         try:
-
-            result = await self._verifier.verify(
-                tool_name=tool_name,
-                args=args,
-                reason=reason,
-                task_id=task_id,
-            )
+            result = await self._verifier.verify(tool_name=tool_name, args=args, reason=reason, task_id=task_id)
+            await audit_verifier_degraded(result, task_id)  # #21844
             return result
         except Exception as exc:
             logger.warning(

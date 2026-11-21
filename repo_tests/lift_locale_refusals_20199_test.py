@@ -88,6 +88,38 @@ def test_shipped_mappings_point_at_real_matching_keys() -> None:
         assert slm[app_key] == main[main_key]
 
 
+_DURATION_KEYS = (
+    "agents.processMonitorTab.durationSeconds",
+    "agents.processMonitorTab.durationMinutes",
+)
+
+
+def _ar_labels_not_translated(mappings, en: dict, ar: dict) -> list[str]:
+    """The mapped keys whose Arabic label is missing, blank, not a string, or equal to the English one."""
+    return [key for key in mappings if not (isinstance(ar.get(key), str) and ar[key].strip()) or ar[key] == en.get(key)]
+
+
+def test_the_duration_keys_are_mapped() -> None:
+    """Removing a key must fail here, not silently stop the Arabic check covering it (#21314)."""
+    assert set(_DURATION_KEYS) <= set(lift.KEY_MAPPINGS)
+
+
+def test_the_arabic_check_passes_a_translated_label() -> None:
+    assert _ar_labels_not_translated({"k": "m"}, {"k": "s"}, {"k": "ث"}) == []
+
+
+def test_the_arabic_check_reports_a_missing_label() -> None:
+    assert _ar_labels_not_translated({"k": "m"}, {"k": "s"}, {}) == ["k"]
+
+
+def test_the_arabic_check_reports_a_blank_label() -> None:
+    assert _ar_labels_not_translated({"k": "m"}, {"k": "s"}, {"k": "  "}) == ["k"]
+
+
+def test_the_arabic_check_reports_a_label_equal_to_the_english() -> None:
+    assert _ar_labels_not_translated({"k": "m"}, {"k": "s"}, {"k": "s"}) == ["k"]
+
+
 def test_shipped_arabic_duration_labels_stay_translated() -> None:
     """A removed or English source label must not be retained silently (#21192)."""
     from autobot_shared.locale_tree import flatten
@@ -95,6 +127,5 @@ def test_shipped_arabic_duration_labels_stay_translated() -> None:
     base = repo_root() / "autobot-slm-frontend" / "src" / "locales"
     en = flatten(json.loads((base / "en.json").read_text(encoding="utf-8")))
     ar = flatten(json.loads((base / "ar.json").read_text(encoding="utf-8")))
-    for app_key in lift.KEY_MAPPINGS:
-        assert isinstance(ar.get(app_key), str) and ar[app_key].strip(), app_key
-        assert ar[app_key] != en[app_key], f"{app_key} fell back to English in ar"
+    assert _ar_labels_not_translated(_DURATION_KEYS, en, ar) == []
+    assert _ar_labels_not_translated(lift.KEY_MAPPINGS, en, ar) == []

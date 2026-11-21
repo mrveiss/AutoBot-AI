@@ -103,6 +103,15 @@ async def membership_role(
     return None if role is None else getattr(role, "value", role)
 
 
+async def is_company_member(session: AsyncSession, company_id: object, user_id: str) -> bool:
+    """Whether *user_id* is a current member of the company; a malformed id reads as a non-member."""
+    try:
+        user = uuid.UUID(str(user_id))
+    except ValueError:
+        return False
+    return await membership_role(session, uuid.UUID(str(company_id)), user, for_update=False) is not None
+
+
 async def may_attach_under(
     session: AsyncSession,
     parent_id: uuid.UUID,

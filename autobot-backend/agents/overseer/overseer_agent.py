@@ -22,8 +22,8 @@ from typing import Any, AsyncGenerator, Dict
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-from constants.api_constants import PATH_OLLAMA_GENERATE
 from dependencies import provide_config_manager
 
 from .types import AgentTask, OverseerStepStatus, OverseerUpdate, StepRunResult, TaskPlan
@@ -110,14 +110,12 @@ class OverseerAgent:
         """Get Ollama endpoint from config."""
         try:
             endpoint = provide_config_manager().get_ollama_url()
-            if not endpoint.endswith(PATH_OLLAMA_GENERATE):
-                endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
-            return endpoint
+            return ollama_generate_url(endpoint)
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
             from autobot_shared.ssot_config import config as _ssot
 
-            return f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}" + PATH_OLLAMA_GENERATE
+            return ollama_generate_url(f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}")
 
     def _get_model(self) -> str:
         """Get LLM model from config."""

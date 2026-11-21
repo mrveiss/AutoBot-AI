@@ -71,21 +71,23 @@ router = APIRouter(tags=["openai-compat"])
 _AUTO_MODEL_NAMES = frozenset({"auto", "auto-fast", "auto-quality"})
 
 # ---------------------------------------------------------------------------
-# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7271)
+# Rate limiting — per-IP sliding window via the canonical RateLimiter (#7271)
 # ---------------------------------------------------------------------------
 #
-# #6588 originally hand-rolled the Redis sorted-set + in-process fallback
-# directly here. #7271 extracted that into autobot_shared/rate_limit.py so
-# it can be reused by /a2a (#7270) and any future per-IP limiter.
+# #6588 hand-rolled the Redis sorted-set + in-process fallback here; #7271 and
+# #18087 folded it into autobot_shared.rate_limiter. LOCAL keeps enforcing per
+# worker while Redis is down (this endpoint is public; fail-open would switch
+# the control off), which is what the per-IP limiter did before.
 
 from autobot_shared.proxy_utils import get_client_ip
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
-_oai_limiter = IPRateLimiter(
-    key_prefix="ratelimit:oai",
-    limit_env="AUTOBOT_OAI_RATE_LIMIT",
-    default_limit=60,
+_oai_limiter = WindowQuota.for_scope(
+    "oai",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=60,
     window_seconds=60,
+    limit_env="AUTOBOT_OAI_RATE_LIMIT",
 )
 
 

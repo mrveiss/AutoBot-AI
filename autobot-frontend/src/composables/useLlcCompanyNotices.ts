@@ -39,6 +39,33 @@ interface NoticeSpec {
   level: NoticeLevel
 }
 
+/**
+ * Producer fields of a Company OS event. The backend publisher
+ * (llc/notifications/publisher.py) wraps them in an envelope that the live
+ * channel delivers as the event's `payload`, so they sit at `payload.payload`.
+ */
+export interface LlcNoticeFields {
+  agent_id?: string
+  reason?: string
+}
+
+/** Envelope the Company OS publisher puts in `LiveEvent.payload`. */
+export interface LlcEventEnvelope {
+  event_type: string
+  company_id: string
+  entity_type: string
+  entity_id: string
+  payload: LlcNoticeFields
+  actor_id?: string | null
+  ts?: string
+}
+
+/** Producer fields carried by a Company OS live event (empty when absent). */
+export function noticeFields(ev: Pick<LiveEvent, 'payload'>): LlcNoticeFields {
+  const inner = (ev.payload as Partial<LlcEventEnvelope> | undefined)?.payload
+  return inner && typeof inner === 'object' ? inner : {}
+}
+
 const IGNORED_EVENTS = new Set(['heartbeat_ok', 'llc:activity_created'])
 
 /** Notices whose text names an agent; each has a `<key>NoAgent` fallback. */
@@ -71,7 +98,7 @@ const PREFIX_NOTICES: Array<[string, NoticeSpec]> = [
 export function resolveNotice(ev: Pick<LiveEvent, 'event_type' | 'payload'>): NoticeSpec | null {
   const type = String(ev.event_type)
   if (IGNORED_EVENTS.has(type)) return null
-  if (type === 'heartbeat_missed' && ev.payload?.reason === 'recovery_unfiled') {
+  if (type === 'heartbeat_missed' && noticeFields(ev).reason === 'recovery_unfiled') {
     return { key: 'llc.notices.heartbeatRecoveryUnfiled', level: 'warning' }
   }
   const exact = EXACT_NOTICES[type]
@@ -108,7 +135,7 @@ export function useLlcCompanyNotices(companyId: Ref<string | null | undefined>):
     const notice = resolveNotice(ev)
     if (!notice) return
     const type = String(ev.event_type)
-    const agent = String(ev.payload?.agent_id ?? '')
+    const agent = String(noticeFields(ev).agent_id ?? '')
     if (isDuplicate(type, agent)) return
     logger.debug('company notice', type)
     const key = !agent && AGENT_NOTICE_KEYS.has(notice.key) ? `${notice.key}NoAgent` : notice.key

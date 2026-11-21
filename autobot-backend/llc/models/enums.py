@@ -479,6 +479,9 @@ class ActivityEventType(str, Enum):
     ADAPTER_RUN_COMPLETED = "adapter_run.completed"
     ADAPTER_RUN_FAILED = "adapter_run.failed"
 
+    # Budget (#21212): a dispatch the gate refused because the agent's budget is exhausted.
+    BUDGET_DISPATCH_REFUSED = "budget.dispatch_refused"
+
     # Notification
     NOTIFICATION_SENT = "notification.sent"
 

@@ -23,6 +23,12 @@ export interface RunnerSelectionDeps {
   executingWorkflow: Ref<boolean>;
   startWorkflow: (workflowId: string) => Promise<boolean>;
   getWorkflowStatus: (workflowId: string) => Promise<ActiveWorkflow | null>;
+  /**
+   * False while the selected company and the one whose lists are on screen disagree (#21520): a Start
+   * would carry the NEW company's X-Organization-Id for a workflow loaded under the OLD one. The caller
+   * tells the user; this only refuses. Omitted = always agrees.
+   */
+  companyAgrees?: () => boolean;
 }
 
 export function useRunnerSelection(deps: RunnerSelectionDeps) {
@@ -81,6 +87,7 @@ export function useRunnerSelection(deps: RunnerSelectionDeps) {
 
   async function handleStartWorkflow(workflowId: string): Promise<void> {
     if (deps.executingWorkflow.value) return;
+    if (deps.companyAgrees && !deps.companyAgrees()) return;
     let started: boolean;
     try {
       started = await deps.startWorkflow(workflowId);

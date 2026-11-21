@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import valid_approval_categories
 from llc.services.slm_policy import fetch_slm_policy_json
@@ -64,6 +65,26 @@ def union_categories(*groups: Optional[Iterable[str]]) -> List[str]:
     for group in groups:
         merged.update(c for c in (group or ()) if isinstance(c, str))
     return sorted(merged)
+
+
+def stamp_declared_categories(
+    context: Optional[Dict[str, Any]], session_categories: Optional[Iterable[str]] = ()
+) -> Dict[str, Any]:
+    """Record what the work item and the session declared, before the baseline overlay mixes it in (#19957).
+
+    Overwrites any client-supplied value: only the server decides what was declared. ``None`` (the session's
+    declaration could not be read) stamps EVERY valid category as declared, so none holds less than before, even one
+    the administrator relaxed in the baseline.
+    """
+    base = dict(context or {})
+    if session_categories is None:
+        base[DECLARED_CATEGORIES_KEY] = sorted(valid_approval_categories())
+        return base
+    declared = base.get("requires_approval_before")
+    base[DECLARED_CATEGORIES_KEY] = union_categories(
+        session_categories, declared if isinstance(declared, (list, tuple)) else ()
+    )
+    return base
 
 
 async def with_baseline_categories(

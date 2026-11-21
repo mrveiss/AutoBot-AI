@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """#21045: Company OS notices are wired into the layout; the parallel transport is gone."""
 
-from pathlib import Path
+from repo_tests._paths import repo_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = repo_root()
 FRONTEND = ROOT / "autobot-frontend" / "src"
 
 

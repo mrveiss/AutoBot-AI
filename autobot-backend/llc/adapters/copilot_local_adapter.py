@@ -116,6 +116,7 @@ class CopilotLocalAdapter(SubprocessLifecycleAdapter):
     _state_path = staticmethod(_state_path)
     _output_path = staticmethod(_output_path)
     _required_cli = "gh"  # GH#9793: CLI-availability gate in heartbeat dispatch
+    injects_role_credentials = True  # role credentials may enter the child env (#20533)
 
     async def _invoke(self, agent_config: dict, context: dict) -> str:
         gh_cli = _resolve_gh_cli()

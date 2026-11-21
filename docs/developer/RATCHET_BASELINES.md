@@ -613,7 +613,26 @@ folder cannot read as a clean 0.
   measured, a floor of zero or less, or a declaration the base does not have (a new guard) raises
   `BaseUnavailable`: a new guard pins `floor=` until it lands. Such a floor never goes stale and is
   never re-pinned. A guard whose `discover` reads untracked or generated files keeps an explicit
-  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`.
+  `floor=` and is listed with its reason in `_reach_base.PINNED_BY_DESIGN`. That mapping is empty
+  now; existing explicit pins are transitional and are retired in follow-up batches.
+
+## Path-filter entries are declared in place, not in a table (#21205)
+
+`repo_tests/changes_job_equivalence_15360_test.py` used to carry `ALLOWED_ADDITIONS`, a pinned
+count of the migration gate's entries and a SHA-256 of each filter file, so two PRs that each
+widened a filter edited the same lines. The rules in `repo_tests/_filter_entries.py` replace them:
+
+1. Every entry of the pre-#15360 snapshot (`fixtures/pre_15360_changes_jobs.json`, `content` only)
+   is still in head, in order.
+2. Every head entry the snapshot lacks cites `#NNNN` on its own line or in the comment block
+   directly above its run of entries. A blank line ends the run. Write the citation when you add
+   the entry; there is nothing else to edit.
+3. No entry the merge base had is gone (`_ratchet_base.base_text`, fail-closed: `BaseUnavailable`
+   is never a pass). A deliberate removal leaves `# retired #NNNN: '<entry>'` in the head file.
+4. The migration gate's inline `migrations` entries are mirrored in its `on.push.paths`.
+
+The line reader must agree with `yaml.safe_load` (aliases expanded). Controls and the planted
+pair of non-conflicting PRs are in `repo_tests/filter_equivalence_base_21205_test.py`.
 
 ## Checklist for a new ratchet
 

@@ -34,16 +34,17 @@ from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..deps import require_board_role
-from ..models.enums import LLCRunStatus, MembershipRole
+from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..scheduler.dispatch_gate import BUDGET_EXHAUSTED, dispatch_block_reason
 from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
+from ..services.authz import GRANTING_ROLES
 from ..services.membership_service import MembershipService
 from ..services.replay_service import ReplayLogNotFoundError, RunReplayService
 
 router = APIRouter(prefix="/agents", tags=["llc-replay"])
 
-_ALLOWED_ROLES = {MembershipRole.OWNER, MembershipRole.ADMIN}
+_ALLOWED_ROLES = GRANTING_ROLES  # the one owner/admin set (#21588)
 
 _get_membership = lazy_singleton(MembershipService)
 _get_replay_svc = lazy_singleton(RunReplayService)
