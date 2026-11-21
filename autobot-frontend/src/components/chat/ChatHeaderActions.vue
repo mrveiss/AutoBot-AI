@@ -8,7 +8,7 @@
   collaboration panel stay visible in Minimal mode.
 -->
 <template>
-  <div role="group" :aria-label="$t('chat.header.voiceControls')" class="chat-header-voice-group">
+  <div role="group" :aria-label="$t('chat.header.voiceControls')" class="flex items-center gap-1 rounded-md bg-[var(--surface2)]">
     <ChatHeaderIconButton
       :label="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
       :icon="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'"
@@ -82,14 +82,3 @@ const emit = defineEmits<{
   'button-el': [panel: ChatSidePanel, element: HTMLElement | null]
 }>()
 </script>
-
-<style scoped>
-/* GH#8755: proximity grouping for the audio actions, on the kit surface token. */
-.chat-header-voice-group {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-1);
-  border-radius: var(--aui-radius-md);
-  background: var(--surface2);
-}
-</style>

@@ -19,13 +19,13 @@ const h = vi.hoisted(() => ({
   },
   confirm: vi.fn().mockResolvedValue(true),
   showToast: vi.fn(),
-  get: vi.fn().mockResolvedValue({ files: [] }),
+  call: vi.fn().mockResolvedValue({ files: [] }),
 }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.store }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
 vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: h.showToast }) }))
-vi.mock('@/utils/ApiClient', () => ({ default: { get: h.get } }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call } }))
 vi.mock('@/utils/conversationFileList', () => ({ mapFileList: () => ({ stats: { total: 0 } }) }))
 
 import { useChatSidebarSessions } from '../useChatSidebarSessions'
@@ -123,6 +123,7 @@ describe('delete with the knowledge-fact preview', () => {
     await api.deleteSession('b')
     expect(api.showDeleteDialog.value).toBe(true)
     expect(api.deleteKBFacts.value).toHaveLength(2)
+    expect(h.call).toHaveBeenCalledWith('get', '/api/conversation-files/conversation/{session_id}/list', { path: { session_id: 'b' } })
     await api.handleDeleteConfirm('delete', undefined, ['f1'])
     expect(h.controller.preserveSessionFacts).toHaveBeenCalledWith('b', ['f1'], true)
     expect(h.controller.deleteChatSession).toHaveBeenCalledWith('b', 'delete', undefined)
@@ -132,7 +133,7 @@ describe('delete with the knowledge-fact preview', () => {
 
   it('still deletes when the file list or preserving fails, and reports a failed delete', async () => {
     const api = setup()
-    h.get.mockRejectedValueOnce(new Error('files down'))
+    h.call.mockRejectedValueOnce(new Error('files down'))
     await api.deleteSession('b')
     expect(api.deleteFileStats.value).toBeNull()
     h.controller.preserveSessionFacts.mockRejectedValueOnce(new Error('x'))

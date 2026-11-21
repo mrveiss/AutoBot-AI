@@ -7,8 +7,8 @@
   the SLM console's Advanced control in step 5f (#18248); until that home exists it stays here.
 -->
 <template>
-  <section class="adv chat-system-control">
-    <h3 class="chat-system-control__title">{{ $t('chat.sidebar.systemControl') }}</h3>
+  <section class="adv flex shrink-0 flex-col gap-2 border-t border-[var(--aui-color-border)] p-4">
+    <h3 class="m-0 text-base font-semibold text-[var(--aui-color-text)]">{{ $t('chat.sidebar.systemControl') }}</h3>
     <BaseButton
       block
       size="sm"
@@ -19,7 +19,7 @@
       <template #icon-left><Icon name="sync" /></template>
       {{ isReloading ? $t('chat.sidebar.reloading') : $t('chat.sidebar.reloadSystem') }}
     </BaseButton>
-    <p class="chat-system-control__status">{{ $t('chat.sidebar.system') }}: {{ systemStatus }}</p>
+    <p class="m-0 text-center text-xs text-[var(--aui-color-text-muted)]">{{ $t('chat.sidebar.system') }}: {{ systemStatus }}</p>
   </section>
 </template>
 
@@ -29,7 +29,6 @@ import { useI18n } from 'vue-i18n'
 import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import ApiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatSidebar')
@@ -41,11 +40,10 @@ async function reloadSystem(): Promise<void> {
   isReloading.value = true
   systemStatus.value = t('chat.sidebar.reloading')
   try {
-    const response = await ApiClient.post<unknown>(`${getApiBase()}/system/reload_config`)
-    const data = await (response as { json: () => Promise<Record<string, unknown>> }).json()
-    if (data && data.success) {
+    const data = await ApiClient.call('post', '/api/system/reload_config')
+    // The route answers { status: 'success', message, timestamp }; there is no `success` key.
+    if (data?.status === 'success') {
       systemStatus.value = t('status.ready')
-      if (data.reloaded_components) logger.debug('Reloaded components:', data.reloaded_components)
       return
     }
     systemStatus.value = t('common.error')
@@ -58,28 +56,3 @@ async function reloadSystem(): Promise<void> {
   }
 }
 </script>
-
-<style scoped>
-.chat-system-control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-2);
-  flex-shrink: 0;
-  padding: var(--aui-space-4);
-  border-top: 1px solid var(--aui-color-border);
-}
-
-.chat-system-control__title {
-  margin: 0;
-  font-size: var(--aui-text-base);
-  font-weight: var(--aui-font-weight-semibold);
-  color: var(--aui-color-text);
-}
-
-.chat-system-control__status {
-  margin: 0;
-  text-align: center;
-  font-size: var(--aui-text-xs);
-  color: var(--aui-color-text-muted);
-}
-</style>

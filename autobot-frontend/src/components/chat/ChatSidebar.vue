@@ -1,6 +1,6 @@
 <template>
   <div
-    class="chat-sidebar"
+    class="flex h-full shrink-0 flex-col overflow-hidden border-e border-[var(--aui-color-border)] bg-[var(--aui-color-surface)] transition-all duration-300"
     :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
   >
     <!-- Toggle Button row: desktop collapse toggle + mobile close button (#1804) -->
@@ -36,7 +36,7 @@
     </div>
 
     <!-- Sidebar Content -->
-    <div v-if="!store.sidebarCollapsed" class="chat-sidebar__content">
+    <div v-if="!store.sidebarCollapsed" class="flex min-h-0 flex-1 flex-col overflow-hidden">
 
       <!-- Folders Section (GH#8987) -->
       <section v-if="folderStore.folders.length > 0" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
@@ -75,8 +75,8 @@
       </section>
 
       <!-- Chat History: toolbar (new chat, select, search) over the scrollable list -->
-      <section class="chat-sidebar__history">
-        <h3 class="chat-sidebar__heading">{{ $t('chat.sidebar.chatHistory') }}</h3>
+      <section class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pt-4">
+        <h3 class="m-0 text-base font-semibold text-[var(--aui-color-text)]">{{ $t('chat.sidebar.chatHistory') }}</h3>
         <ChatSidebarToolbar
           v-model:search="searchQuery"
           :selection-mode="selectionMode"
@@ -85,7 +85,7 @@
           @toggle-selection="selectionMode ? cancelSelection() : enableSelectionMode()"
         />
         <ChatSessionList
-          class="chat-sidebar__list"
+          class="min-h-0 flex-1 overflow-y-auto"
           :sessions="filteredSessions"
           :total-count="store.sessions.length"
           :current-session-id="store.currentSessionId"
@@ -102,7 +102,7 @@
         />
 
         <!-- Chat actions stay at the bottom of the history area -->
-        <div v-if="!selectionMode" class="chat-sidebar__actions">
+        <div v-if="!selectionMode" class="flex shrink-0 flex-wrap gap-2 border-t border-[var(--aui-color-border)] py-2">
           <BaseButton
             variant="secondary"
             size="xs"
@@ -133,7 +133,7 @@
             {{ $t('common.refresh') }}
           </BaseButton>
         </div>
-        <div v-else class="chat-sidebar__actions">
+        <div v-else class="flex shrink-0 flex-wrap gap-2 border-t border-[var(--aui-color-border)] py-2">
           <BaseButton
             variant="error"
             size="xs"
@@ -257,57 +257,3 @@ function openSession(session: ChatSession): void {
   emit('close-mobile')
 }
 </script>
-
-<style scoped>
-.chat-sidebar {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  block-size: 100%;
-  overflow: hidden;
-  background: var(--aui-color-surface);
-  border-inline-end: 1px solid var(--aui-color-border);
-  transition: all 0.3s;
-}
-
-.chat-sidebar__content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-block-size: 0;
-  overflow: hidden;
-}
-
-.chat-sidebar__history {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--aui-space-2);
-  min-block-size: 0;
-  padding: var(--aui-space-4) var(--aui-space-4) 0;
-  overflow: hidden;
-}
-
-.chat-sidebar__heading {
-  margin: 0;
-  font-size: var(--aui-text-base);
-  font-weight: var(--aui-font-weight-semibold);
-  color: var(--aui-color-text);
-}
-
-.chat-sidebar__list {
-  flex: 1;
-  min-block-size: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-.chat-sidebar__actions {
-  display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  gap: var(--aui-space-2);
-  padding: var(--aui-space-2) 0;
-  border-top: 1px solid var(--aui-color-border);
-}
-</style>

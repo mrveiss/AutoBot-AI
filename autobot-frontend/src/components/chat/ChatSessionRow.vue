@@ -9,8 +9,11 @@
 -->
 <template>
   <div
-    class="chat-session-row"
-    :class="{ 'chat-session-row--current': current, 'chat-session-row--selected': selected }"
+    class="chat-session-row group flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm text-[var(--aui-color-text)] hover:bg-[var(--surface2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aui-color-focus-ring)]"
+    :class="[
+      current ? 'border-[var(--aui-color-border)] bg-[var(--surface2)] font-medium' : 'border-transparent',
+      selected && 'border-[var(--aui-color-primary)]',
+    ]"
     :tabindex="focused ? 0 : -1"
     :aria-selected="focused"
     :aria-current="current ? 'page' : undefined"
@@ -22,18 +25,21 @@
     <input
       v-if="selectionMode"
       type="checkbox"
-      class="chat-session-row__check"
       :checked="selected"
       :aria-label="title"
       @click.stop="emit('toggle-select')"
     />
-    <span class="chat-session-row__dot" aria-hidden="true" />
-    <span class="chat-session-row__title">{{ title }}</span>
-    <span class="chat-session-row__meta">{{ $t('chat.sidebar.nMsgs', { count: messageCount }) }}</span>
+    <span
+      class="size-2 shrink-0 rounded-full"
+      :class="current ? 'bg-[var(--aui-color-primary)]' : 'bg-[var(--aui-color-border-strong)]'"
+      aria-hidden="true"
+    />
+    <span class="chat-session-row__title min-w-0 grow truncate">{{ title }}</span>
+    <span class="shrink-0 text-xs font-normal text-[var(--aui-color-text-muted)]">{{ $t('chat.sidebar.nMsgs', { count: messageCount }) }}</span>
     <BaseDropdownMenu v-if="!selectionMode" :items="menuItems" size="sm" align="end" @select="onMenuSelect">
       <template #trigger>
         <BaseButton
-          class="chat-session-row__actions"
+          class="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
           variant="ghost"
           size="xs"
           :aria-label="$t('chat.sidebar.sessionActions')"
@@ -95,74 +101,3 @@ function onMenuSelect(key: string): void {
   else if (key.startsWith(FOLDER_PREFIX)) emit('assign-folder', key === NO_FOLDER ? null : key.slice(FOLDER_PREFIX.length))
 }
 </script>
-
-<style scoped>
-.chat-session-row {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-2);
-  padding: var(--aui-space-2) var(--aui-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--aui-radius-md);
-  font-size: var(--aui-text-sm);
-  color: var(--aui-color-text);
-  cursor: pointer;
-}
-
-.chat-session-row:hover {
-  background: var(--surface2);
-}
-
-.chat-session-row--current {
-  background: var(--surface2);
-  border-color: var(--aui-color-border);
-  font-weight: var(--aui-font-weight-medium);
-}
-
-.chat-session-row--selected {
-  border-color: var(--aui-color-primary);
-}
-
-.chat-session-row:focus-visible {
-  outline: var(--aui-focus-ring-width) solid var(--aui-color-focus-ring);
-  outline-offset: 2px;
-}
-
-.chat-session-row__dot {
-  flex-shrink: 0;
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-radius: var(--aui-radius-full);
-  background: var(--aui-color-border-strong);
-}
-
-.chat-session-row--current .chat-session-row__dot {
-  background: var(--aui-color-primary);
-}
-
-.chat-session-row__title {
-  flex-grow: 1;
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-session-row__meta {
-  flex-shrink: 0;
-  font-size: var(--aui-text-xs);
-  font-weight: 400;
-  color: var(--aui-color-text-muted);
-}
-
-/* Shown on hover and keyboard focus within the row; always reachable by the menu key. */
-.chat-session-row__actions {
-  opacity: 0;
-}
-
-.chat-session-row:hover .chat-session-row__actions,
-.chat-session-row:focus-within .chat-session-row__actions,
-.chat-session-row__actions[aria-expanded='true'] {
-  opacity: 1;
-}
-</style>

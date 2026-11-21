@@ -7,9 +7,9 @@
   a Cancel button and the selected count is shown. Emits intents only; state lives in the parent.
 -->
 <template>
-  <div class="chat-sidebar-toolbar">
-    <div class="chat-sidebar-toolbar__row">
-      <BaseButton class="chat-sidebar-toolbar__new" variant="primary" size="sm" @click="emit('new-chat')">
+  <div class="flex shrink-0 flex-col gap-2">
+    <div class="flex gap-2">
+      <BaseButton class="grow" variant="primary" size="sm" @click="emit('new-chat')">
         <template #icon-left><Icon name="plus" /></template>
         {{ $t('chat.newChat') }}
       </BaseButton>
@@ -28,7 +28,7 @@
         </template>
       </BaseTooltip>
     </div>
-    <p v-if="selectionMode" class="chat-sidebar-toolbar__count" role="status">
+    <p v-if="selectionMode" class="m-0 text-xs text-[var(--aui-color-text-muted)]" role="status">
       {{ $t('chat.sidebar.nSelected', { count: selectedCount }) }}
     </p>
     <BaseInput
@@ -55,27 +55,3 @@ const emit = defineEmits<{
   'update:search': [value: string]
 }>()
 </script>
-
-<style scoped>
-.chat-sidebar-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-2);
-  flex-shrink: 0;
-}
-
-.chat-sidebar-toolbar__row {
-  display: flex;
-  gap: var(--aui-space-2);
-}
-
-.chat-sidebar-toolbar__new {
-  flex-grow: 1;
-}
-
-.chat-sidebar-toolbar__count {
-  margin: 0;
-  font-size: var(--aui-text-xs);
-  color: var(--aui-color-text-muted);
-}
-</style>

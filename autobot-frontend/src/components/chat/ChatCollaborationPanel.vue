@@ -1,15 +1,15 @@
 <template>
   <div
     tabindex="-1" role="complementary" :aria-label="$t('collaboration.panel.title')"
-    class="chat-collab-panel"
+    class="flex h-full w-80 min-w-80 max-w-80 flex-col border-s border-[var(--aui-color-border)] bg-[var(--aui-color-surface)]"
   >
     <!-- Header -->
-    <div class="chat-collab-panel__header">
-      <div class="chat-collab-panel__title">
+    <div class="flex shrink-0 items-center justify-between border-b border-[var(--aui-color-border)] p-3">
+      <div class="flex items-center gap-2 text-[var(--aui-color-text-muted)]">
         <Icon name="users" />
-        <h3>{{ $t('collaboration.panel.title') }}</h3>
+        <h3 class="m-0 text-sm font-semibold text-[var(--aui-color-text)]">{{ $t('collaboration.panel.title') }}</h3>
       </div>
-      <div class="chat-collab-panel__actions">
+      <div class="flex items-center gap-1">
         <BaseButton
           variant="ghost"
           size="xs"
@@ -46,11 +46,11 @@
       id="chat-collab-tabpanel"
       role="tabpanel"
       :aria-labelledby="`chat-collab-tab-${activeTab}`"
-      class="chat-collab-panel__body"
+      class="min-h-0 flex-1 overflow-y-auto"
     >
       <template v-if="activeTab === 'participants'">
         <!-- #21993: who is present, above the roster -->
-        <PresenceIndicator expanded class="chat-collab-panel__presence" />
+        <PresenceIndicator expanded class="border-b border-[var(--aui-color-border)] p-3" />
         <ParticipantList
           allow-management
           @invite="showInviteDialog = true"
@@ -159,56 +159,3 @@ const handleRemoveParticipant = async (userId: string) => {
   }
 }
 </script>
-
-<style scoped>
-.chat-collab-panel {
-  display: flex;
-  flex-direction: column;
-  block-size: 100%;
-  inline-size: 20rem;
-  min-inline-size: 20rem;
-  max-inline-size: 20rem;
-  background: var(--aui-color-surface);
-  border-inline-start: 1px solid var(--aui-color-border);
-}
-
-.chat-collab-panel__header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--aui-space-3);
-  border-block-end: 1px solid var(--aui-color-border);
-}
-
-.chat-collab-panel__title {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-2);
-  color: var(--aui-color-text-muted);
-}
-
-.chat-collab-panel__title h3 {
-  margin: 0;
-  font-size: var(--aui-text-sm);
-  font-weight: var(--aui-font-weight-semibold);
-  color: var(--aui-color-text);
-}
-
-.chat-collab-panel__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-1);
-}
-
-.chat-collab-panel__body {
-  flex: 1;
-  min-block-size: 0;
-  overflow-y: auto;
-}
-
-.chat-collab-panel__presence {
-  padding: var(--aui-space-3);
-  border-block-end: 1px solid var(--aui-color-border);
-}
-</style>

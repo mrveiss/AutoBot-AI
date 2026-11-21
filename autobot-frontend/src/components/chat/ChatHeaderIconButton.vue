@@ -15,7 +15,7 @@
         ref="button"
         variant="ghost"
         size="sm"
-        class="chat-header-btn"
+        class="min-w-11 min-h-11 sm:min-w-8 sm:min-h-8"
         :aria-label="label"
         :aria-describedby="describedby"
         :aria-pressed="pressed"
@@ -48,18 +48,3 @@ const emit = defineEmits<{ click: []; el: [element: HTMLElement | null] }>()
 const button = ref<{ $el: HTMLElement } | null>(null)
 watch(button, (instance) => emit('el', instance?.$el ?? null), { flush: 'post' })
 </script>
-
-<style scoped>
-/* A 44px touch target on mobile (#1804), the kit's compact size from sm up. */
-.chat-header-btn {
-  min-inline-size: 2.75rem;
-  min-block-size: 2.75rem;
-}
-
-@media (min-width: 640px) {
-  .chat-header-btn {
-    min-inline-size: 2rem;
-    min-block-size: 2rem;
-  }
-}
-</style>

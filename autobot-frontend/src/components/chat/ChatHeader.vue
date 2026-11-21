@@ -1,5 +1,5 @@
 <template>
-  <PageHeader class="chat-header">
+  <PageHeader class="shrink-0">
     <!-- Left: Mobile sidebar toggle + session avatar -->
     <template #leading>
       <!-- Mobile hamburger to open chat sidebar (#1804) -->
@@ -10,7 +10,7 @@
         @click="$emit('toggle-mobile-sidebar')"
       />
 
-      <div class="chat-header__tile" aria-hidden="true">
+      <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-[var(--aui-color-primary)] text-[var(--aui-color-primary-contrast)]" aria-hidden="true">
         <Icon name="robot" />
       </div>
     </template>
@@ -20,7 +20,7 @@
     <!-- Right: Actions + connection status -->
     <template #actions>
       <!-- Minimal mode: say what is hidden and how to get it back (#18243) -->
-      <div class="only-min chat-header__note">
+      <div class="only-min items-center gap-2 text-sm text-[var(--aui-color-text-muted)]">
         <span>{{ $t('chat.header.essentialsNote') }}</span>
         <BaseButton variant="link" size="sm" @click="showAllFeatures">
           {{ $t('chat.header.showAllFeatures') }}
@@ -35,7 +35,7 @@
       />
       <span
         v-else-if="contextWindowProps?.loadError"
-        class="adv hidden sm:inline chat-header__warn"
+        class="adv hidden sm:inline text-xs text-[var(--aui-color-warning)]"
         role="status"
         :title="contextWindowProps.loadError"
       >
@@ -141,33 +141,3 @@ const connectionStatusIcon = computed(() => {
   return 'check-circle'
 })
 </script>
-
-<style scoped>
-.chat-header {
-  flex-shrink: 0;
-}
-
-.chat-header__tile {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  border-radius: var(--aui-radius-md);
-  background: var(--aui-color-primary);
-  color: var(--aui-color-primary-contrast);
-}
-
-.chat-header__note {
-  align-items: center;
-  gap: var(--aui-space-2);
-  font-size: var(--aui-text-sm);
-  color: var(--aui-color-text-muted);
-}
-
-.chat-header__warn {
-  font-size: var(--aui-text-xs);
-  color: var(--aui-color-warning);
-}
-</style>

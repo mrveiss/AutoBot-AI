@@ -60,10 +60,10 @@
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
-      <div class="chat-tab-remote">
+      <div class="flex flex-1 flex-col bg-[var(--aui-color-surface-sunken)]">
         <!-- Host selector header for VNC -->
-        <div class="chat-host-bar">
-          <div class="chat-host-bar__group">
+        <div class="flex items-center justify-between gap-3 bg-[var(--surface2)] px-4 py-2 text-sm text-[var(--aui-color-text)]">
+          <div class="flex items-center gap-3">
             <Icon name="desktop" />
             <HostSelector
               ref="vncHostSelectorRef"
@@ -85,7 +85,7 @@
         <!-- Empty state when no host selected -->
         <EmptyState
           v-else
-          class="chat-tab-empty"
+          class="flex-1 justify-center bg-[var(--surface2)]"
           :title="$t('chat.tabContent.selectVncHost')"
           :description="$t('chat.tabContent.selectVncHostDesc')"
         >
@@ -101,7 +101,7 @@
       class="absolute inset-0 flex flex-col min-h-0"
     >
       <!-- SSH Host selector header for terminal -->
-      <div class="chat-host-bar chat-host-bar--ruled">
+      <div class="flex items-center gap-3 border-b border-[var(--aui-color-border)] bg-[var(--surface2)] px-4 py-2 text-sm text-[var(--aui-color-text)]">
         <HostSelector
           ref="sshHostSelectorRef"
           v-model="selectedSshHost"
@@ -110,7 +110,7 @@
           @host-selected="onSshHostSelected"
           @open-secrets-manager="emit('open-secrets-manager')"
         />
-        <span v-if="selectedSshHost" class="chat-host-bar__note">
+        <span v-if="selectedSshHost" class="text-xs text-[var(--aui-color-text-muted)]">
           {{ $t('chat.tabContent.connectedTo', { name: selectedSshHost.name }) }}
         </span>
       </div>
@@ -125,7 +125,7 @@
       <!-- Empty state when no host selected -->
       <EmptyState
         v-else
-        class="chat-tab-empty"
+        class="flex-1 justify-center bg-[var(--surface2)]"
         :title="$t('chat.tabContent.selectSshHost')"
         :description="$t('chat.tabContent.selectSshHostDesc')"
       >
@@ -263,44 +263,5 @@ const handleToolCallDetected = (toolCall: ToolCall) => {
 </script>
 
 <style scoped>
-.chat-tab-remote {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  background: var(--aui-color-surface-sunken);
-}
-
-/* Host selector bars of the Terminal and Remote desktop tabs (#18243). */
-.chat-host-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--aui-space-3);
-  padding: var(--aui-space-2) var(--aui-space-4);
-  background: var(--surface2);
-  color: var(--aui-color-text);
-  font-size: var(--aui-text-sm);
-}
-
-.chat-host-bar--ruled {
-  justify-content: flex-start;
-  border-block-end: 1px solid var(--aui-color-border);
-}
-
-.chat-host-bar__group {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-3);
-}
-
-.chat-host-bar__note {
-  font-size: var(--aui-text-xs);
-  color: var(--aui-color-text-muted);
-}
-
-.chat-tab-empty {
-  flex: 1;
-  justify-content: center;
-  background: var(--surface2);
-}
+/* Content styling handled by child components */
 </style>

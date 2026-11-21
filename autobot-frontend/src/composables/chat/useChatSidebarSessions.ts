@@ -16,7 +16,6 @@ import type { FileStats } from '@/composables/useConversationFiles'
 import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import ApiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ChatSidebar')
@@ -137,8 +136,8 @@ export function useChatSidebarSessions() {
     deleteKBFacts.value = null
     const [files, facts] = await Promise.allSettled([
       // #20195: the list response is adapted to the dialog's stats shape
-      ApiClient.get<BackendFileList>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`).then(
-        (data) => (data ? mapFileList(data, '').stats : null),
+      ApiClient.call('get', '/api/conversation-files/conversation/{session_id}/list', { path: { session_id: sessionId } }).then(
+        (data) => (data ? mapFileList(data as BackendFileList, '').stats : null),
       ),
       controller.getSessionFacts(sessionId),
     ])

@@ -17,8 +17,7 @@ const h = vi.hoisted(() => ({
     loadChatSessions: vi.fn(), updateSessionTitle: vi.fn(), deleteChatSession: vi.fn().mockResolvedValue(undefined),
     getSessionFacts: vi.fn().mockResolvedValue({ facts: [] }), preserveSessionFacts: vi.fn(),
   },
-  post: vi.fn(),
-  get: vi.fn().mockResolvedValue(null),
+  call: vi.fn(),
   confirm: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.store }))
@@ -26,8 +25,7 @@ vi.mock('@/stores/useFolderStore', () => ({ useFolderStore: () => h.folders }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
 vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => ({ showToast: vi.fn() }) }))
-vi.mock('@/utils/ApiClient', () => ({ default: { get: h.get, post: h.post } }))
-vi.mock('@/config/ssot-config', () => ({ getApiBase: () => '/api' }))
+vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call } }))
 vi.mock('../ChatFolderTree.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('../ChatFolderNode.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('../DeleteConversationDialog.vue', () => ({ default: { props: ['visible'], template: '<div v-if="visible" data-testid="delete-dialog" />' } }))
@@ -45,7 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.store.sessions = reactive([session('a', 'Fleet check'), session('b', 'NPU plan')])
   h.store.sidebarCollapsed = false
-  h.post.mockResolvedValue({ json: async () => ({ success: true }) })
+  h.call.mockResolvedValue(null)
 })
 
 describe('ChatSidebar', () => {
@@ -105,16 +103,29 @@ describe('ChatSidebar', () => {
     const w = render()
     const section = w.get('section.adv')
     expect(section.text()).toContain('System Control')
+    h.call.mockResolvedValueOnce({ status: 'success' })
     await section.get('button').trigger('click')
     await flushPromises()
-    expect(h.post).toHaveBeenCalledWith('/api/system/reload_config')
+    expect(h.call).toHaveBeenCalledWith('post', '/api/system/reload_config')
+    expect(section.text()).toContain('Ready')
+    w.unmount()
+  })
+
+  it('System Control reports an error when the reload does not succeed', async () => {
+    const w = render()
+    const section = w.get('section.adv')
+    h.call.mockRejectedValueOnce(new Error('down'))
+    await section.get('button').trigger('click')
+    await flushPromises()
+    expect(section.text()).toContain('Error')
     w.unmount()
   })
 
   it('collapsed: shows only the toggle', () => {
     h.store.sidebarCollapsed = true
     const w = render()
-    expect(w.find('.chat-sidebar__content').exists()).toBe(false)
+    expect(w.find('.chat-session-row').exists()).toBe(false)
+    expect(w.find('input[type="search"]').exists()).toBe(false)
     w.unmount()
   })
 

@@ -7,7 +7,7 @@
   empty states. Opening, selecting and the row actions are reported to the parent.
 -->
 <template>
-  <div class="chat-session-list">
+  <div class="flex flex-col gap-1">
     <ChatSessionRow
       v-for="(session, index) in sessions"
       :key="session.id"
@@ -106,11 +106,3 @@ function onKeydown(event: KeyboardEvent, session: ChatSession, index: number): v
   if (next !== null) moveFocus(next)
 }
 </script>
-
-<style scoped>
-.chat-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--aui-space-1);
-}
-</style>

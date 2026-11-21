@@ -1,18 +1,14 @@
 <template>
   <BaseTooltip v-if="hasData" :text="tooltip" placement="bottom">
     <template #default="{ describedby }">
-      <div
-        class="ctx-indicator"
-        :class="{ 'ctx-indicator--summarizing': isSummarizing }"
-        tabindex="0"
-        :aria-describedby="describedby"
-      >
+      <div class="ctx-indicator flex min-w-0 select-none items-center gap-2" tabindex="0" :aria-describedby="describedby">
         <!-- Token count text -->
-        <span class="ctx-indicator__text" :class="`ctx-indicator__text--${variant}`">
+        <span class="shrink-0 whitespace-nowrap font-mono text-xs" :class="textClass">
           {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
         </span>
         <BaseProgress
-          class="ctx-indicator__bar"
+          class="w-12 shrink-0"
+          :class="{ 'animate-pulse': isSummarizing }"
           size="sm"
           :variant="variant"
           :value="usagePercent"
@@ -55,6 +51,13 @@ const variant = computed<SemanticVariant>(() => {
   return props.isWarning ? 'warning' : 'success'
 })
 
+const TEXT_CLASS: Record<string, string> = {
+  warning: 'text-[var(--aui-color-warning)]',
+  error: 'text-[var(--aui-color-error)]',
+  info: 'text-[var(--aui-color-info)]',
+}
+const textClass = computed(() => TEXT_CLASS[variant.value] ?? 'text-[var(--aui-color-text-muted)]')
+
 const formattedUsed = computed(() => formatTokens(props.tokensUsed))
 const formattedMax = computed(() => formatTokens(props.contextWindow))
 
@@ -66,50 +69,3 @@ const tooltip = computed(() =>
   }),
 )
 </script>
-
-<style scoped>
-.ctx-indicator {
-  display: flex;
-  align-items: center;
-  gap: var(--aui-space-2);
-  min-inline-size: 0;
-  user-select: none;
-}
-
-.ctx-indicator__bar {
-  inline-size: 3rem;
-  flex-shrink: 0;
-}
-
-.ctx-indicator__text {
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-family: var(--aui-font-mono);
-  font-size: var(--aui-text-xs);
-  color: var(--aui-color-text-muted);
-}
-
-.ctx-indicator__text--warning {
-  color: var(--aui-color-warning);
-}
-.ctx-indicator__text--error {
-  color: var(--aui-color-error);
-}
-.ctx-indicator__text--info {
-  color: var(--aui-color-info);
-}
-
-.ctx-indicator--summarizing .ctx-indicator__bar {
-  animation: ctx-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes ctx-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-</style>
