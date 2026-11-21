@@ -19,10 +19,13 @@ from pydantic import BaseModel
 from autobot_shared.auth.permissions import is_admin_role
 from services.kb_collection_delete_action import (
     BULK_DELETE,
+    COLLECTION_ID_RE,
     DELETE,
+    DOCUMENTS_DELETE,
     CollectionOp,
     count_collection_facts,
     plan_collection_delete,
+    plan_selected_facts_delete,
     propose,
 )
 from services.kb_wipe_request import require_human_requester
@@ -44,6 +47,24 @@ class KnowledgeCollectionDeleteProposal(BaseModel):
     message: str
 
 
+class KnowledgeSelectedFactsDeleteProposal(BaseModel):
+    """Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886)."""
+
+    status: str
+    facts_selected: int
+    approval_id: str
+    approval_status: str | None = None
+    action: str
+    message: str
+
+
+def _human_admin_requester(current_user: dict) -> str:
+    """The requesting human admin; 403 for a non-admin or a service key (no proposal is filed for either)."""
+    if not is_admin_role(current_user.get("role")):
+        raise HTTPException(403, "Requesting a knowledge deletion needs the admin role")
+    return require_human_requester(current_user)
+
+
 async def _propose(
     op: CollectionOp,
     kb,
@@ -52,9 +73,7 @@ async def _propose(
     cid: str,
     delete_facts: bool,
 ) -> dict:
-    if not is_admin_role(current_user.get("role")):
-        raise HTTPException(403, "Requesting a knowledge collection deletion needs the admin role")
-    requester = require_human_requester(current_user)
+    requester = _human_admin_requester(current_user)
     plan = await plan_collection_delete(op, kb, cid, delete_facts)
     if plan is None:
         raise HTTPException(404, f"Collection not found: {cid}")
@@ -78,6 +97,32 @@ async def request_collection_delete(kb, current_user: dict, session: "AsyncSessi
 async def request_collection_bulk_delete(kb, current_user: dict, session: "AsyncSession", cid: str) -> dict:
     """Propose deleting every fact in a collection. Deletes nothing."""
     return await _propose(BULK_DELETE, kb, current_user, session, cid, False)
+
+
+def _selected_ids(fact_ids: list[str]) -> list[str]:
+    """The selected ids, de-duplicated and sorted; 400 for one that is not a well-formed fact id."""
+    if any(COLLECTION_ID_RE.match(i) is None for i in fact_ids):
+        raise HTTPException(400, "Invalid fact id format: only alphanumeric, hyphens, underscores")
+    return sorted(set(fact_ids))
+
+
+async def request_selected_facts_delete(kb, current_user: dict, session: "AsyncSession", fact_ids: list[str]) -> dict:
+    """Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886)."""
+    requester = _human_admin_requester(current_user)
+    plan = await plan_selected_facts_delete(kb, _selected_ids(fact_ids))
+    if plan["facts"] == 0:
+        raise HTTPException(
+            409, {"code": "selected_facts_gone", "message": "None of the selected facts exist any more"}
+        )
+    approval = await propose(session, DOCUMENTS_DELETE, requester, plan)
+    return {
+        "status": "pending_approval",
+        "facts_selected": plan["facts"],
+        "approval_id": str(approval.id),
+        "approval_status": approval.status,
+        "action": DOCUMENTS_DELETE.action,
+        "message": "Deletion proposed; nothing is deleted until a human approves it in the Approvals inbox",
+    }
 
 
 async def preview_collection_bulk_delete(kb, cid: str) -> dict:
