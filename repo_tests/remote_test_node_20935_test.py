@@ -9,9 +9,9 @@ check (stubbed commands), and the pre-push hook's fallback to local runs.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -19,92 +19,24 @@ import time
 from pathlib import Path
 
 import pytest
-from repo_tests._paths import repo_root
-
-from autobot_shared.isolated_git import git, make_repo
-
-_ROOT = repo_root()
-_TOOL = _ROOT / "tools/remote_test_node"
-_spec = importlib.util.spec_from_file_location("remote_test_node_run", _TOOL / "run.py")
-run = importlib.util.module_from_spec(_spec)
-sys.modules["remote_test_node_run"] = run
-_spec.loader.exec_module(run)
-sys.modules.pop("remote_test_node_run", None)  # needed only while the dataclass is built
-
-_FAKE_SSH = """#!/usr/bin/env bash
-# Stand-in for ssh: ignores the options and the destination, runs the remote command in $FAKE_HOME.
-cd "$FAKE_HOME" || exit 255
-args=("$@")
-last="${args[${#args[@]}-1]}"
-bash -c "$last"
-"""
-
-
-def _git(cwd: Path, *args: str) -> str:
-    return git(cwd, *args).stdout.strip()
+from repo_tests.remote_test_node_20935_support import (
+    BASE_ENV,
+    ROOT,
+    TOOL,
+    checked_out,
+    git_out,
+    leftovers,
+    make_node,
+    refs,
+    run,
+    run_job,
+    wait_for,
+)
 
 
 @pytest.fixture()
 def node(tmp_path: Path):
-    """A fake home with a provisioned mirror and venv, plus a source repo with one commit on main."""
-    home, src = tmp_path / "home", tmp_path / "src"
-    home.mkdir()
-    src.mkdir()
-    make_repo(src, default_branch="main")
-    (src / "hello.txt").write_text("hi\n", encoding="utf-8")
-    _git(src, "add", "-A")
-    _git(src, "commit", "-q", "-m", "first")
-    base = home / "base"
-    (base / "venv/bin").mkdir(parents=True)
-    (base / "venv/bin/python").symlink_to(sys.executable)
-    _git(home, "init", "-q", "--bare", str(base / "mirror.git"))
-    _git(base, "--git-dir=mirror.git", "remote", "add", "origin", str(src))
-    ssh = tmp_path / "fake-ssh"
-    ssh.write_text(_FAKE_SSH, encoding="utf-8")
-    ssh.chmod(0o755)
-    env = dict(
-        os.environ,
-        FAKE_HOME=str(home),
-        AUTOBOT_TEST_NODE_HOST="node.invalid",
-        AUTOBOT_TEST_NODE_USER="u",
-        AUTOBOT_TEST_NODE_BASE="base",
-        AUTOBOT_TEST_NODE_SSH_BIN=str(ssh),
-        AUTOBOT_TEST_NODE_SLOTS="2",
-    )
-    return {"home": home, "src": src, "base": base, "env": env, "sha": _git(src, "rev-parse", "HEAD")}
-
-
-def _run(node: dict, *cmd: str, timeout: int = 30) -> subprocess.Popen:
-    argv = [sys.executable, str(_TOOL / "run.py"), "--sha", node["sha"], "--timeout", str(timeout), "--", *cmd]
-    return subprocess.Popen(
-        argv, cwd=node["src"], env=node["env"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
-
-
-def _leftovers(node: dict) -> list[str]:
-    runs = node["base"] / "runs"
-    refs = _git(node["base"], "--git-dir=mirror.git", "for-each-ref", "refs/runs")
-    dirs = sorted(os.listdir(runs)) if runs.is_dir() else []
-    return dirs + ([refs] if refs else [])
-
-
-def _refs(node: dict) -> set[str]:
-    out = _git(node["base"], "--git-dir=mirror.git", "for-each-ref", "--format=%(refname)", "refs/runs")
-    return set(out.split())
-
-
-def _checked_out(node: dict) -> bool:
-    runs = node["base"] / "runs"
-    return any((runs / name / "tree/hello.txt").is_file() for name in (os.listdir(runs) if runs.is_dir() else []))
-
-
-def _wait_for(pred, secs: float = 20.0) -> bool:
-    end = time.time() + secs
-    while time.time() < end:
-        if pred():
-            return True
-        time.sleep(0.2)
-    return False
+    return make_node(tmp_path)
 
 
 def test_unconfigured_node_is_reported_not_silent():
@@ -123,45 +55,45 @@ def test_unconfigured_and_unreachable_exit_75_with_a_reason(capfd):
 
 
 def test_a_run_sees_the_pushed_tree_and_leaves_nothing(node):
-    proc = _run(node, "cat", "hello.txt")
+    proc = run_job(node, "cat", "hello.txt")
     out, _ = proc.communicate(timeout=60)
     assert proc.returncode == 0 and "hi" in out
-    assert _leftovers(node) == []
+    assert leftovers(node) == []
 
 
 def test_a_failing_command_reports_its_status_and_cleans_up(node):
-    proc = _run(node, "sh", "-c", "exit 3")
+    proc = run_job(node, "sh", "-c", "exit 3")
     proc.communicate(timeout=60)
     assert proc.returncode == 3
-    assert _leftovers(node) == []
+    assert leftovers(node) == []
 
 
 def test_a_timeout_stops_the_command_and_cleans_up(node):
-    proc = _run(node, "sleep", "60", timeout=2)
+    proc = run_job(node, "sleep", "60", timeout=2)
     proc.communicate(timeout=60)
     assert proc.returncode == 124
-    assert _leftovers(node) == []
+    assert leftovers(node) == []
 
 
 def test_sigterm_mid_run_leaves_no_checkout(node):
-    proc = _run(node, "sleep", "60")
-    assert _wait_for(lambda: _checked_out(node))
+    proc = run_job(node, "sleep", "60")
+    assert wait_for(lambda: checked_out(node))
     proc.send_signal(signal.SIGTERM)
     proc.communicate(timeout=60)
     assert proc.returncode == 128 + signal.SIGTERM
-    assert _wait_for(lambda: _leftovers(node) == [])
+    assert wait_for(lambda: leftovers(node) == [])
 
 
 def test_a_lost_ssh_session_removes_the_checkout(node):
-    proc = _run(node, "sleep", "60")
-    assert _wait_for(lambda: _checked_out(node))
+    proc = run_job(node, "sleep", "60")
+    assert wait_for(lambda: checked_out(node))
     # Only this runner's own session: another run's stand-in on the same machine must never be hit.
     found = subprocess.run(
         ["pgrep", "-P", str(proc.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
     ).stdout.split()
     assert found, "no stand-in ssh session found under the runner"
     os.kill(int(found[0]), signal.SIGKILL)
-    assert _wait_for(lambda: _leftovers(node) == [], 30), "the node must clean up when its session vanishes"
+    assert wait_for(lambda: leftovers(node) == [], 30), "the node must clean up when its session vanishes"
     proc.kill()
     proc.communicate()
 
@@ -171,41 +103,59 @@ def test_a_stale_dir_from_a_hard_kill_is_swept_at_the_next_start(node):
     stale.mkdir(parents=True)
     old = time.time() - 3 * 3600
     os.utime(stale, (old, old))
-    _git(node["base"], "--git-dir=mirror.git", "fetch", "-q", str(node["src"]), "HEAD:refs/runs/dead")
-    proc = _run(node, "true")
+    git_out(node["base"], "--git-dir=mirror.git", "fetch", "-q", str(node["src"]), "HEAD:refs/runs/dead")
+    proc = run_job(node, "true")
     proc.communicate(timeout=60)
-    assert not stale.exists() and _leftovers(node) == []
+    assert not stale.exists() and leftovers(node) == []
+
+
+def test_a_stale_dir_whose_ref_cannot_be_deleted_is_logged_and_kept(node, tmp_path):
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    real_git = shutil.which("git")
+    (stubs / "git").write_text(
+        f'#!/usr/bin/env bash\n[[ "$*" == *"update-ref -d"* ]] && exit 1\nexec "{real_git}" "$@"\n', encoding="utf-8"
+    )
+    (stubs / "git").chmod(0o755)
+    node["env"]["PATH"] = f"{stubs}{os.pathsep}{node['env']['PATH']}"
+    stale = node["base"] / "runs/job.dead"
+    stale.mkdir(parents=True)
+    old = time.time() - 3 * 3600
+    os.utime(stale, (old, old))
+    out, _ = run_job(node, "true").communicate(timeout=60)
+    assert stale.exists(), "a stale dir whose ref survives must stay: removing it would orphan the ref"
+    assert "could not delete the ref of stale run job.dead; its dir stays" in out, out
 
 
 def test_a_live_run_is_not_swept_by_a_run_with_a_shorter_ttl(node):
-    live = _run(node, "sleep", "60", timeout=3600)
-    assert _wait_for(lambda: _checked_out(node))
+    live = run_job(node, "sleep", "60", timeout=3600)
+    assert wait_for(lambda: checked_out(node))
     dirs = list((node["base"] / "runs").iterdir())
     old = time.time() - 5 * 3600
     for d in dirs:
         os.utime(d, (old, old))
-    short = _run(node, "true", timeout=60)  # ttl 31 min: the live run's dir is older than that
+    short = run_job(node, "true", timeout=60)  # ttl 31 min: the live run's dir is older than that
     short.communicate(timeout=60)
     assert all(d.exists() for d in dirs), "a run holding its liveness lock must survive another run's sweep"
     live.send_signal(signal.SIGTERM)
     live.communicate(timeout=60)
-    assert _wait_for(lambda: _leftovers(node) == [])
+    assert wait_for(lambda: leftovers(node) == [])
 
 
 def test_a_queued_job_whose_caller_left_never_takes_a_slot(node):
-    holders = [_run(node, "sleep", "60") for _ in range(2)]  # SLOTS=2: both slots busy
+    holders = [run_job(node, "sleep", "60") for _ in range(2)]  # SLOTS=2: both slots busy
     runs = node["base"] / "runs"
-    assert _wait_for(lambda: len(os.listdir(runs)) >= 2 if runs.is_dir() else False)
-    held_dirs, held_refs = sorted(os.listdir(runs)), _refs(node)
-    queued = _run(node, "true")
-    assert _wait_for(lambda: len(_refs(node) - held_refs) == 1), "the queued job's ref never appeared"
-    queued_ref = next(iter(_refs(node) - held_refs))
+    assert wait_for(lambda: len(os.listdir(runs)) >= 2 if runs.is_dir() else False)
+    held_dirs, held_refs = sorted(os.listdir(runs)), refs(node)
+    queued = run_job(node, "true")
+    assert wait_for(lambda: len(refs(node) - held_refs) == 1), "the queued job's ref never appeared"
+    queued_ref = next(iter(refs(node) - held_refs))
     found = subprocess.run(
         ["pgrep", "-P", str(queued.pid), "-f", "fake-ssh"], capture_output=True, text=True, check=False
     ).stdout.split()
     assert found, "the queued job's stand-in ssh session was not found"
     os.kill(int(found[0]), signal.SIGKILL)
-    assert _wait_for(lambda: queued_ref not in _refs(node), 30), "the queued job's ref survived its caller"
+    assert wait_for(lambda: queued_ref not in refs(node), 30), "the queued job's ref survived its caller"
     assert sorted(os.listdir(runs)) == held_dirs, "a dir appeared for the queued job: it took a slot"
     for proc in (queued, *holders):
         proc.kill()
@@ -213,7 +163,7 @@ def test_a_queued_job_whose_caller_left_never_takes_a_slot(node):
 
 
 def _provision(tmp_path: Path, body: str) -> subprocess.CompletedProcess:
-    script = f'PROVISION_SOURCE_ONLY=1 . "{_TOOL}/provision.sh"; set +e\n{body}'
+    script = f'PROVISION_SOURCE_ONLY=1 . "{TOOL}/provision.sh"; set +e\n{body}'
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path, check=False)
 
 
@@ -271,7 +221,7 @@ def test_below_the_floor_fails_with_a_clear_message(tmp_path):
 def test_run_reads_the_floor_from_the_repo(tmp_path):
     (tmp_path / ".python-version").write_text("3.14.2\n", encoding="utf-8")
     assert run.python_floor(tmp_path) == "3.14"
-    assert (_ROOT / ".python-version").is_file()
+    assert (ROOT / ".python-version").is_file()
 
 
 def test_ensure_python_falls_back_from_the_base_package_to_uv(tmp_path):
@@ -293,7 +243,7 @@ def test_ensure_python_prefers_the_base_package_when_it_has_one(tmp_path):
     assert "pkg python3.14 python3.14-venv" in done.stderr and "uv-route" not in done.stdout
 
 
-_HOOK = (_ROOT / "tools/git-hooks/pre-push").read_text(encoding="utf-8")
+_HOOK = (ROOT / "tools/git-hooks/pre-push").read_text(encoding="utf-8")
 
 
 def _hook_fn() -> str:
@@ -327,7 +277,7 @@ def test_a_remote_test_failure_is_a_failure_not_a_fallback(tmp_path):
     assert "handled=0 rc=1" in _call_hook_fn(tmp_path, 1).stdout
 
 
-_TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh")
+TOOL_FILES = ("run.py", "remote_job.sh", "provision.sh")
 
 
 def _hardcoded_secrets(text: str) -> list[str]:
@@ -347,7 +297,7 @@ def test_the_detector_passes_version_strings_and_plain_words(text):
 
 
 def test_no_address_or_credential_is_written_into_the_tooling():
-    for path in (_TOOL / name for name in _TOOL_FILES):
+    for path in (TOOL / name for name in TOOL_FILES):
         assert _hardcoded_secrets(path.read_text(encoding="utf-8")) == [], path.name
 
 
@@ -356,87 +306,9 @@ def test_shipping_a_commit_does_not_run_the_repos_own_pre_push_hook(node):
     hook = node["src"] / ".git/hooks/pre-push"
     hook.write_text("#!/bin/sh\necho hook-ran >&2\nexit 1\n", encoding="utf-8")
     hook.chmod(0o755)
-    proc = _run(node, "true")
+    proc = run_job(node, "true")
     out, _ = proc.communicate(timeout=60)
     assert proc.returncode == 0 and "hook-ran" not in out
-
-
-_BASE_ENV = {"AUTOBOT_TEST_NODE_HOST": "h", "AUTOBOT_TEST_NODE_USER": "u"}
-
-
-def _expire(*_args, **_kwargs):
-    raise subprocess.TimeoutExpired("ssh", 1)
-
-
-def test_a_missing_ssh_executable_is_unavailable_not_a_failure(capfd):
-    env = {**_BASE_ENV, "AUTOBOT_TEST_NODE_SSH_BIN": "/nonexistent/ssh"}
-    assert run.probe(run.load_config(env)) == "ssh to the test node could not start (FileNotFoundError)"
-    assert run.main(["--sha", "HEAD", "--", "true"], env=env) == run.UNAVAILABLE
-    assert "UNAVAILABLE" in capfd.readouterr().err
-
-
-def test_a_hung_probe_is_unavailable_not_a_failure(monkeypatch, capfd):
-    monkeypatch.setattr(run.subprocess, "run", _expire)
-    assert run.probe(run.load_config(_BASE_ENV)) == "ssh to the test node timed out"
-    assert run.main(["--sha", "HEAD", "--", "true"], env=_BASE_ENV) == run.UNAVAILABLE
-    assert "UNAVAILABLE" in capfd.readouterr().err
-
-
-def test_a_hung_ship_is_unavailable_not_124(monkeypatch):
-    monkeypatch.setattr(run.subprocess, "run", _expire)
-    cfg = run.load_config(_BASE_ENV)
-    assert "timed out" in run.ship_commit(cfg, "abc", "job")
-    monkeypatch.setattr(run, "probe", lambda _cfg: None)
-    assert run.main(["--sha", "HEAD", "--", "true"], env=_BASE_ENV) == run.UNAVAILABLE
-
-
-def test_a_hung_cleanup_cannot_mask_the_result(monkeypatch):
-    monkeypatch.setattr(run.subprocess, "run", _expire)
-    run.remote_cleanup(run.load_config(_BASE_ENV), "job")  # does not raise
-    monkeypatch.setattr(run, "ship_commit", lambda *_a: None)
-    monkeypatch.setattr(run, "_script_command", lambda *_a: "true")
-    monkeypatch.setattr(
-        run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": lambda s, timeout: 7, "poll": lambda s: 7})()
-    )
-    assert run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 30) == 7
-
-
-@pytest.mark.parametrize(
-    "name,value,attr,expected",
-    [
-        ("AUTOBOT_TEST_NODE_SLOTS", "0", "slots", 3),
-        ("AUTOBOT_TEST_NODE_SLOTS", "99", "slots", 3),
-        ("AUTOBOT_TEST_NODE_SLOTS", "abc", "slots", 3),
-        ("AUTOBOT_TEST_NODE_SLOTS", "5", "slots", 5),
-        ("AUTOBOT_TEST_NODE_TIMEOUT", "1", "timeout", 600),
-        ("AUTOBOT_TEST_NODE_CONNECT_TIMEOUT", "0", "connect_timeout", 10),
-    ],
-)
-def test_env_ints_are_validated_against_the_registered_ranges(name, value, attr, expected):
-    assert getattr(run.load_config({**_BASE_ENV, name: value}), attr) == expected
-
-
-def test_host_key_trust_is_first_use_unless_pinned():
-    assert "StrictHostKeyChecking=accept-new" in run.ssh_argv(run.load_config(_BASE_ENV))
-    pinned = run.ssh_argv(run.load_config({**_BASE_ENV, "AUTOBOT_TEST_NODE_KNOWN_HOSTS": "/pins/kh"}))
-    assert "StrictHostKeyChecking=yes" in pinned and "UserKnownHostsFile=/pins/kh" in pinned
-    assert "GlobalKnownHostsFile=/dev/null" in pinned  # the pinned file is the only trust source
-    assert "StrictHostKeyChecking=accept-new" not in pinned
-    assert pinned[pinned.index("-F") + 1] == "/dev/null"  # a user ssh config cannot widen trust
-    first_use = run.ssh_argv(run.load_config(_BASE_ENV))
-    assert first_use[first_use.index("-F") + 1] == "/dev/null" and "-p" in pinned  # no user config either way
-
-
-def test_the_stale_sweep_ttl_follows_the_effective_timeout(monkeypatch):
-    sent = []
-    monkeypatch.setattr(run, "ship_commit", lambda *_a: None)
-    monkeypatch.setattr(run, "remote_cleanup", lambda *_a: None)
-    monkeypatch.setattr(run, "_script_command", lambda *a: sent.append(a) or "true")
-    monkeypatch.setattr(
-        run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": lambda s, timeout: 0, "poll": lambda s: 0})()
-    )
-    run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 3600)
-    assert sent[0][4] == "90"  # 3600 s -> 60 min + 30
 
 
 def test_the_hook_ignores_an_invalid_worker_count(tmp_path):
@@ -454,25 +326,25 @@ def test_the_hook_ignores_an_invalid_worker_count(tmp_path):
 
 
 def test_the_node_collects_its_mirror_and_pins_what_it_installs():
-    job = (_TOOL / "remote_job.sh").read_text(encoding="utf-8")
+    job = (TOOL / "remote_job.sh").read_text(encoding="utf-8")
     assert "gc_mirror" in job and 'git --git-dir="$mirror" gc' in job
-    prov = (_TOOL / "provision.sh").read_text(encoding="utf-8")
+    prov = (TOOL / "provision.sh").read_text(encoding="utf-8")
     assert "pip==${AUTOBOT_TEST_NODE_PIP_VERSION" in prov and "--upgrade pip" not in prov
 
 
 def _split(tmp_path: Path, payload: bytes) -> tuple[subprocess.CompletedProcess, str, str]:
     body = 'reqs="$PWD/reqs.out"; cons="$PWD/cons.out"; : > "$reqs"; : > "$cons"\n' 'split_payload; echo "rc=$?"'
-    script = f'PROVISION_SOURCE_ONLY=1 . "{_TOOL}/provision.sh"; set +e\n{body}'
+    script = f'PROVISION_SOURCE_ONLY=1 . "{TOOL}/provision.sh"; set +e\n{body}'
     done = subprocess.run(["bash", "-c", script], input=payload, capture_output=True, cwd=tmp_path, check=False)
     read = lambda n: (tmp_path / n).read_text(encoding="utf-8") if (tmp_path / n).exists() else ""  # noqa: E731
     return done, read("reqs.out"), read("cons.out")
 
 
 def test_the_payload_splits_into_requirements_and_exactly_the_shared_constraints(tmp_path):
-    payload = run._requirements_payload(_ROOT)
+    payload = run._requirements_payload(ROOT)
     done, reqs, cons = _split(tmp_path, payload.encode("utf-8"))
     assert "rc=0" in done.stdout.decode()
-    assert cons == (_ROOT / run.CONSTRAINTS).read_text(encoding="utf-8")
+    assert cons == (ROOT / run.CONSTRAINTS).read_text(encoding="utf-8")
     assert reqs.strip()
     assert not re.search(r"^\s*(-c|--constraint)", reqs, re.MULTILINE)
 
@@ -539,7 +411,7 @@ def test_provision_refuses_before_touching_the_node(tmp_path, monkeypatch, capfd
     if bad == "pin":
         monkeypatch.setenv("AUTOBOT_TEST_NODE_UV_VERSION", "1.0; echo x")
     monkeypatch.setattr(run.subprocess, "run", _no_ship)
-    assert run.provision(run.load_config(_BASE_ENV), root) == 1
+    assert run.provision(run.load_config(BASE_ENV), root) == 1
     assert "provision refused" in capfd.readouterr().err
 
 
@@ -553,7 +425,7 @@ def test_provision_without_an_origin_remote_is_refused_not_a_traceback(tmp_path,
     (root / ".python-version").write_text("3.14.2\n", encoding="utf-8")
     monkeypatch.setattr(run, "_origin_url", lambda: (_ for _ in ()).throw(subprocess.CalledProcessError(2, "git")))
     monkeypatch.setattr(run.subprocess, "run", _no_ship)
-    assert run.provision(run.load_config(_BASE_ENV), root) == 1
+    assert run.provision(run.load_config(BASE_ENV), root) == 1
     assert "provision refused" in capfd.readouterr().err
 
 
@@ -567,7 +439,7 @@ def test_a_session_that_gives_no_result_is_unavailable_not_a_124(monkeypatch):
     monkeypatch.setattr(
         run.subprocess, "Popen", lambda *_a, **_k: type("P", (), {"wait": _hang, "poll": lambda s: 0})()
     )
-    assert run.run_remote(run.load_config(_BASE_ENV), "abc", ["true"], 30) == run.UNAVAILABLE
+    assert run.run_remote(run.load_config(BASE_ENV), "abc", ["true"], 30) == run.UNAVAILABLE
 
 
 def test_an_unsupported_distro_stops_a_package_step_instead_of_passing_it(tmp_path):

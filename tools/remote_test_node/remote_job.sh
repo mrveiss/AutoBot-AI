@@ -78,7 +78,12 @@ session_lost() {
   # An empty answer (no ps on the node) means the parent is unknown, which is not a lost session.
   local now
   now=$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')
-  [ -n "$now" ] && [ "$now" != "$parent" ]
+  if [ -z "$now" ]; then
+    # ps is there but says nothing (e.g. a hidden /proc): say so once, on the job's real stderr
+    [ -n "${parent_unknown_logged:-}" ] || { parent_unknown_logged=1; echo "remote_job: ps gave no parent pid; a lost SSH session cannot be detected" >&2; }
+    return 1
+  fi
+  [ "$now" != "$parent" ]
 }
 
 wait_child() {
