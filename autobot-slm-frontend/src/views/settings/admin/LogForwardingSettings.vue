@@ -486,8 +486,8 @@ onMounted(refreshAll)
           :disabled="!!editingDestination"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
-          <option v-for="t in destinationTypes" :key="t.value" :value="t.value">
-            {{ t.label }}
+          <option v-for="dest in destinationTypes" :key="dest.value" :value="dest.value">
+            {{ dest.labelKey ? t(dest.labelKey) : dest.label }}
           </option>
         </select>
       </div>
