@@ -11,6 +11,7 @@
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useAppStore } from '@/stores/useAppStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
+import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE } from '@/models/repositories/knowledgeFactMapping'
 import type {
   SearchKnowledgeRequest,
   AddTextRequest,
@@ -109,7 +110,7 @@ export class KnowledgeController {
       const request: AddTextRequest = {
         content,
         title: title || this.generateTitleFromContent(content),
-        category: category || 'General',
+        category: category || DEFAULT_FACT_CATEGORY,
         tags: tags || [],
         access_level: accessOptions?.access_level || 'user',
         visibility: accessOptions?.visibility || 'private'
@@ -122,8 +123,8 @@ export class KnowledgeController {
         title: request.title || this.generateTitleFromContent(content),
         content,
         source: 'Manual Entry',
-        type: 'document',
-        category: request.category || 'General',
+        type: DEFAULT_FACT_TYPE,
+        category: request.category || DEFAULT_FACT_CATEGORY,
         tags: request.tags || []
       })
 
@@ -432,7 +433,7 @@ export class KnowledgeController {
             source: (metadata.source as string) || (metadata.url as string) || 'Unknown',
             type: this.determineDocumentType(metadata),
             tags: (metadata.tags as string[]) || [],
-            category: (metadata.category as string) || 'General',
+            category: (metadata.category as string) || DEFAULT_FACT_CATEGORY,
             createdAt: metadata.created_at ? new Date(metadata.created_at as string) : new Date(entry.created_at || Date.now()),
             updatedAt: metadata.updated_at ? new Date(metadata.updated_at as string) : new Date(entry.updated_at || Date.now()),
             metadata: {
@@ -470,7 +471,7 @@ export class KnowledgeController {
     if (typeof metadata.source === 'string' && metadata.source.toLowerCase().includes('api')) {
       return 'api'
     }
-    return 'document'
+    return DEFAULT_FACT_TYPE
   }
 
   async getDetailedStats(): Promise<unknown> {

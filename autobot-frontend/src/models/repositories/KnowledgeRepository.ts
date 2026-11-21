@@ -31,6 +31,7 @@ import type {
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
 import apiClient from '@/utils/ApiClient'
+import { DEFAULT_FACT_CATEGORY, DEFAULT_FACT_TYPE } from './knowledgeFactMapping'
 import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
@@ -202,8 +203,8 @@ function toSearchResult(result: BackendSearchResult, score: number): SearchResul
       id: meta?.fact_id || result.node_id,
       title: meta?.title || 'Untitled',
       content: result.content,
-      type: meta?.type || 'document',
-      category: meta?.category || 'General',
+      type: meta?.type || DEFAULT_FACT_TYPE,
+      category: meta?.category || DEFAULT_FACT_CATEGORY,
       source: meta?.source || 'Unknown',
       tags: [],
       createdAt: new Date(),
