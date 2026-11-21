@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_mcp
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, FakeKB, text_of
+from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB, text_of
 from knowledge.schemas.mcp import KnowledgeSearchRequest
 from knowledge.search_filters import filter_for_caller, filter_for_user_id
 
@@ -143,8 +143,8 @@ def _mcp_reads():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("tool", ["summarize", "vector", "qa", "resource"])
-async def test_every_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
+@pytest.mark.parametrize("tool", ["vector", "resource"])
+async def test_plain_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
     read = _mcp_reads()[tool]
     with (
         patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
@@ -153,3 +153,19 @@ async def test_every_mcp_read_tool_gives_an_admin_another_users_private_fact(too
         as_admin, as_bob = text_of(await read(ADMIN)), text_of(await read(BOB))
 
     assert PRIVATE_A in as_admin and PRIVATE_A not in as_bob
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["summarize", "qa"])
+async def test_prompt_feeding_mcp_tool_gives_an_admin_no_cross_user_fact(tool, audit):
+    """Owner 2026-11-21: summarize and qa feed a prompt, so an admin reads by the normal rules (no bypass)."""
+    read = _mcp_reads()[tool]
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
+        patch.object(knowledge_mcp, "_get_chat_ollama", return_value=None),
+    ):
+        as_admin = text_of(await read(ADMIN))
+
+    assert SHARED in as_admin, "the system fact still reads, so an error or empty result cannot pass"
+    assert PRIVATE_A not in as_admin and PRIVATE_B not in as_admin
+    audit.assert_not_awaited()
