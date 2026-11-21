@@ -7,9 +7,18 @@
 import asyncio
 
 from autobot_shared.redis_client import get_redis_client
+from knowledge.connectors.job_state import JOB_KEY_SUFFIX
 
 _REDIS_KEY_PREFIX = "connector:"
 _HISTORY_KEY_SUFFIX = ":history"
+#: Suffixes / infixes that mark non-config Redis keys under the ``connector:`` namespace.
+NON_CONFIG_INFIXES = (_HISTORY_KEY_SUFFIX, JOB_KEY_SUFFIX, ":schedule:", "scheduler:")
+
+
+def is_config_key(key: str) -> bool:
+    """True when *key* is a connector's config record, not its history, job state or schedule."""
+    stripped = key[len(_REDIS_KEY_PREFIX) :]
+    return not any(infix in stripped for infix in NON_CONFIG_INFIXES)
 
 
 def _connector_key(connector_id: str) -> str:
