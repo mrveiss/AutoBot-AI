@@ -223,6 +223,7 @@
             v-if="message.sender === 'assistant' && messageCitations(message).length > 0"
             :citations="messageCitations(message)"
             :unproven="unprovenValues(message)"
+            :partial="proofIsPartial(message)"
             @citation-click="openCitationStep"
           />
 
@@ -559,7 +560,7 @@
 <script setup lang="ts">
 import { formatChatMessageHtml } from '@/utils/chatMessageFormat'
 import { visibleMessages, shownModel } from '@/utils/internalMessage'
-import { messageCitations, unprovenValues } from '@/utils/messageCitations'
+import { messageCitations, proofIsPartial, unprovenValues } from '@/utils/messageCitations'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'

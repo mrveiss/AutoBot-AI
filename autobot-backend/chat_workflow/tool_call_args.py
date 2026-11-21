@@ -21,6 +21,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from chat_workflow import limits
+from chat_workflow.thought_markers import mask_code_regions
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_COMPLETE_RE,
     TOOL_CALL_OPENING_RE,
@@ -234,9 +235,15 @@ def _drop_unmatched_fragments(text: str) -> str:
 
 
 def mark_tool_calls(text: str, mark: str) -> str:
-    """*text* with every complete tool call replaced by *mark* (#21880).
+    """*text* with every complete tool call replaced by *mark* (#21880), except calls inside a code region.
 
     A sibling of ``clean_reply_text``, which keeps parsed calls and which other callers rely on. Only the stored
     reply (``reply_persistence``) uses this: a stored reply never carries a call, the call is a step, not prose.
+    A call quoted in a fenced block or code span is an example in the prose, not a call: it keeps its text.
     """
-    return TOOL_CALL_PATTERN.sub(mark, normalize_tool_call_brackets(text or ""))
+    normalized = normalize_tool_call_brackets(text or "")
+    out, pos = [], 0
+    for match in TOOL_CALL_PATTERN.finditer(mask_code_regions(normalized)):
+        out.append(normalized[pos : match.start()] + mark)
+        pos = match.end()
+    return "".join(out) + normalized[pos:]

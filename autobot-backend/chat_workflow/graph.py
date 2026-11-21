@@ -1104,15 +1104,14 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
     all_llm_responses = state.get("all_llm_responses", [])
-    # Review B3 makes ``all_llm_responses`` carry "" for an iteration with no
-    # prose, so the blanks must be dropped here or a leading/interior "\n\n"
-    # reaches conversation_history — which feeds the NEXT turn's LLM context —
-    # plus the transcript file and the LOOP_COMPLETE/BEFORE_RESPONSE_SEND hooks.
+    # Review B3: ``all_llm_responses`` carries "" for an iteration with no prose; drop the blanks here or a stray
+    # "\n\n" reaches conversation_history (the NEXT turn's LLM context), the transcript and the response hooks.
     combined_response = "\n\n".join(r for r in all_llm_responses if r)
 
     # Emit LOOP_COMPLETE hook to notify extensions
     await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
 
+    proof = None
     try:
         session = await manager.get_or_create_session(session_id)
         # #4263: extensions may edit the response. #13295: that edit feeds only the combined view below, not
@@ -1133,8 +1132,6 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             history=state.get("execution_history", []),
             user_message=state.get("user_message", ""),
         )
-        if proof is not None and (stream_cb := config["configurable"].get("stream_callback")):
-            stream_cb(proof)  # #21976: the answer's sources and proof, live as stored
 
         logger.info(
             "Persisted conversation for session=%s, messages=%d",
@@ -1148,6 +1145,8 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     except Exception as exc:
         logger.error("Failed to persist conversation: %s", exc, exc_info=True)
 
+    if proof is not None and (stream_cb := config["configurable"].get("stream_callback")):
+        stream_cb(proof)  # #21976: sources and proof, live as stored; outside the try: not a persist failure
     return {}
 
 

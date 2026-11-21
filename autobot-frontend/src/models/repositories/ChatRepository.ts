@@ -7,7 +7,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { clearStoredAuth } from '@/utils/authToken'
 import { storedMessageText } from '@/utils/attachmentNotice'
-import { toSource } from '@/utils/messageCitations'
+import { toSource, type StoredSource } from '@/utils/messageCitations'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -123,13 +123,8 @@ interface BackendSessionEntry {
   lastModified?: string
 }
 
-/** RAG source entry persisted at the top level of a backend message (Issue #4448). */
-interface BackendRagSource {
-  title?: string
-  path?: string
-  score?: number
-  chunk_id?: string
-}
+/** RAG or tool-step source persisted at the top level of a backend message (#4448, #21976). */
+type BackendRagSource = StoredSource
 
 /** Minimal message shape returned by the backend get-session endpoint */
 interface BackendMessageEntry {

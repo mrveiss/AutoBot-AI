@@ -17,7 +17,7 @@ const webSearch = {
   type: 'web_search',
   reliability: 'medium',
   title: 'web_search: weather in Riga',
-  url: 'https://weather.example/riga',
+  url: '',
   step_id: 'step-1',
   metadata: { tool: 'web_search', args: { query: 'weather in Riga' }, origin: { urls: ['https://weather.example/riga'] } },
 }
@@ -45,10 +45,24 @@ describe('CitationsDisplay with tool steps (#21976)', () => {
     expect(text).toContain('Exit code: 0')
   })
 
-  it('links a safe result URL and not an unsafe one', () => {
-    const link = mountList([webSearch]).find('a.citation-link')
-    expect(link.attributes('href')).toBe('https://weather.example/riga')
-    expect(mountList([{ ...webSearch, url: 'javascript:alert(1)' }]).find('a.citation-link').exists()).toBe(false)
+  it('lists every safe result link of a search with no primary link, and drops an unsafe one', () => {
+    const origin = { urls: ['https://a.example/1', 'https://b.example/2', 'javascript:alert(1)'] }
+    const links = mountList([{ ...webSearch, metadata: { ...webSearch.metadata, origin } }]).findAll('a.citation-link')
+    expect(links.map((l) => l.attributes('href'))).toEqual(['https://a.example/1', 'https://b.example/2'])
+    expect(mountList([webSearch]).find('.citation-text a.citation-link').exists()).toBe(false)
+  })
+
+  it('links a visited page by its url', () => {
+    const page = { ...command, url: 'https://weather.example/riga' }
+    expect(mountList([page]).find('.citation-text a.citation-link').attributes('href')).toBe('https://weather.example/riga')
+  })
+
+  it('says the check was partial', () => {
+    const wrapper = mount(CitationsDisplay, {
+      props: { citations: [command] as never[], partial: true, initiallyExpanded: true },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.get('[role="note"]').text()).toContain('partial')
   })
 
   it('emits the clicked citation with its step id', async () => {

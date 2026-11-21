@@ -58,6 +58,18 @@
             <div v-if="stepDetails(citation).length" class="citation-excerpt">
               <div v-for="detail in stepDetails(citation)" :key="detail">{{ detail }}</div>
             </div>
+            <div v-if="resultLinks(citation).length" class="citation-excerpt">
+              {{ $t('chat.citations.resultLinks') }}
+              <a
+                v-for="link in resultLinks(citation)"
+                :key="link"
+                :href="link"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="citation-link"
+                @click.stop
+              >{{ link }}</a>
+            </div>
             <div class="citation-meta">
               <span
                 class="citation-reliability"
@@ -83,10 +95,11 @@
             </div>
           </div>
         </div>
-        <div v-if="unproven.length" class="citation-item" role="note">
+        <div v-if="unproven.length || partial" class="citation-item" role="note">
           <div class="citation-content">
-            <div class="citation-text">{{ $t('chat.citations.unprovenTitle') }} {{ unproven.join(', ') }}</div>
-            <div class="citation-excerpt">{{ $t('chat.citations.unprovenHint') }}</div>
+            <div v-if="unproven.length" class="citation-text">{{ $t('chat.citations.unprovenTitle') }} {{ unproven.join(', ') }}</div>
+            <div v-if="unproven.length" class="citation-excerpt">{{ $t('chat.citations.unprovenHint') }}</div>
+            <div v-if="partial" class="citation-excerpt">{{ $t('chat.citations.checkPartial') }}</div>
           </div>
         </div>
       </div>
@@ -138,6 +151,8 @@ interface Props {
   citations: Citation[]
   /** Quoted values found in no tool result of the turn (#21976). */
   unproven?: string[]
+  /** The check read only part of a step's output (or could not read it): say so (#21976). */
+  partial?: boolean
   maxLength?: number
   initiallyExpanded?: boolean
 }
@@ -150,6 +165,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   maxLength: 200,
   unproven: () => [],
+  partial: false,
   initiallyExpanded: false
 })
 
@@ -224,6 +240,12 @@ const stepDetails = (citation: Citation): string[] => {
     origin.host && `${t('chat.citations.host')} ${origin.host}`,
     origin.return_code != null && `${t('chat.citations.exitCode')} ${origin.return_code}`,
   ].filter((line): line is string => typeof line === 'string' && line !== '')
+}
+
+/** The safe result URLs of a search step: all of them, none primary (#21976). */
+const resultLinks = (citation: Citation): string[] => {
+  const urls = (citation.metadata?.origin as { urls?: unknown } | undefined)?.urls
+  return Array.isArray(urls) ? urls.filter((u): u is string => typeof u === 'string' && isSafeUrl(u)) : []
 }
 
 const isSafeUrl = (url: string): boolean => {

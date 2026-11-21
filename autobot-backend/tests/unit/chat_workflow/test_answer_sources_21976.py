@@ -49,7 +49,7 @@ def test_web_search_step_is_one_source_with_tool_args_urls_step_id_and_time():
     assert source["metadata"]["tool"] == "web_search"
     assert source["metadata"]["args"] == {"query": "weather in Riga"}
     assert source["metadata"]["origin"]["urls"] == ["https://weather.example/riga"]
-    assert source["url"] == "https://weather.example/riga"
+    assert source["url"] == ""  # a search has result links, no primary one
     assert source["step_id"] and source["metadata"]["started_at"] <= source["metadata"]["ended_at"]
 
 
@@ -101,8 +101,7 @@ def test_arguments_pass_the_canonical_redactor():
 
 def test_the_uname_case_shows_the_wrong_value_as_unproven():
     proof = check_quoted_values("The kernel is 5.18.33.2-microsoft-standard-WSL2.", _uname(), "what kernel", [])
-    assert proof["unproven"] == ["5.18.33.2"]
-    assert "WSL2" in proof["found"]
+    assert proof["unproven"] == ["5.18.33.2"] and proof["checked"] == 1
 
 
 def test_a_matching_value_is_found_in_its_step():
@@ -196,3 +195,108 @@ async def test_the_graph_path_streams_the_proof_it_persisted(monkeypatch):
     assert sent == [proof]
     kwargs = manager._persist_workflow_messages.call_args.kwargs
     assert kwargs["history"] is state["execution_history"] and kwargs["user_message"] == "weather?"
+
+
+# --- review round: bounded scan, redacted URLs, honest partial proof, no streamed literals ---------------------
+
+
+def test_a_large_digit_free_output_is_read_fast_and_bounded():
+    import time
+
+    from chat_workflow import step_evidence
+
+    started = time.perf_counter()
+    assert value_literals("a" * 1_000_000 + " 6.18.33.2") == []  # the value lies past the scan cap
+    assert value_literals("x" * 1_000_000) == []
+    assert time.perf_counter() - started < 2.0
+    assert step_evidence.SCAN_MAX_CHARS < 1_000_000
+
+
+FAKE_URL = "https://user:hunter2pw@weather.example/riga?token=sekret123&q=1"  # pragma: allowlist secret
+
+
+def test_urls_in_a_step_are_redacted():
+    results = _executed(
+        "navigate",
+        {"url": FAKE_URL},
+        [{"tool": "navigate", "status": "success", "output": "x"}],
+    )
+    (source,) = build_answer_sources(results, [], False, "m")
+    shown = str(source)
+    assert "hunter2pw" not in shown and "sekret123" not in shown and "q=1" in shown
+
+
+def test_result_urls_of_a_search_are_redacted_and_there_is_no_primary_link():
+    results = _executed(
+        "web_search",
+        {"query": "x"},
+        [{"tool": "web_search", "status": "success", "output": "https://a.example/p?api_key=sekret123 ok"}],
+    )
+    (source,) = build_answer_sources(results, [], False, "m")
+    assert "sekret123" not in str(source) and source["url"] == ""
+    assert len(source["metadata"]["origin"]["urls"]) == 1
+
+
+def test_a_host_that_is_an_address_is_shown_as_a_label():
+    for host, shown in (("main", "main"), ("10.1.2.3", "remote"), ("box.corp.example", "remote")):
+        results = _executed(
+            "execute_command",
+            {"command": "id", "host": host},
+            [{"command": "id", "host": host, "stdout": "ok", "return_code": 0, "status": "success"}],
+        )
+        assert build_answer_sources(results, [], False, "m")[0]["metadata"]["origin"]["host"] == shown
+
+
+def test_every_literal_of_a_big_output_is_kept_and_found():
+    output = " ".join(f"v{i}.{i}.{i}" for i in range(5000)) + " last9.9.9"
+    history = _executed("web_search", {}, [{"tool": "web_search", "status": "success", "output": output}])
+    assert check_quoted_values("It is last9.9.9.", history, "", [])["unproven"] == []
+
+
+def test_an_output_past_the_scan_cap_marks_the_proof_partial(monkeypatch):
+    from chat_workflow import step_evidence
+
+    monkeypatch.setattr(step_evidence, "SCAN_MAX_CHARS", 20)
+    history = _executed(
+        "web_search", {}, [{"tool": "web_search", "status": "success", "output": "a" * 50 + " 12.34.56"}]
+    )
+    assert check_quoted_values("It is 12.34.56.", history, "", [])["truncated"] is True
+
+
+def test_a_complete_check_is_not_marked_partial():
+    assert check_quoted_values("It is 6.18.33.2.", _uname(), "", [])["truncated"] is False
+
+
+def test_literals_no_longer_held_make_the_proof_partial():
+    from chat_workflow import step_evidence
+
+    history = _uname()
+    step_evidence._LITERALS.clear()
+    proof = check_quoted_values("It is 6.18.33.2.", history, "", [])
+    assert proof["truncated"] is True
+
+
+def test_trivial_values_are_neither_found_nor_flagged():
+    proof = check_quoted_values("1 of 5°C, v2 and 42°F.", _uname(), "", [])
+    assert proof["checked"] == 1 and proof["unproven"] == ["42°F"]
+
+
+def test_literals_never_reach_the_stream_or_the_stored_summary():
+    from chat_workflow.persisted_metadata import persisted_metadata
+
+    history = _uname()
+    summary = WorkflowMessage(type="execution_summary", content="", metadata={"execution_results": history})
+    assert "literals" not in str(summary.to_dict()) and "literals" not in str(persisted_metadata(summary))
+
+
+def test_the_proof_message_replaces_the_streamed_respond_bubble():
+    batch, respond = _persist(_search())
+    (stored,) = [e for e in batch if e["sender"] == "assistant"]
+    assert proof_message(stored).to_dict()["id"] == respond.to_dict()["id"] == stored["id"]
+
+
+def test_a_fenced_example_tool_call_in_prose_keeps_its_text():
+    from chat_workflow.reply_persistence import reply_prose_text
+
+    example = 'Write it like this:\n```\n<TOOL_CALL name="web_search" params=\'{"query":"x"}\'>go</TOOL_CALL>\n```'
+    assert "TOOL_CALL" in reply_prose_text(example)

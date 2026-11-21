@@ -18,14 +18,6 @@ _SUMMARY_TYPE = "execution_summary"
 _IMAGE_KEY = "base64_image"
 
 
-def _without_bulk(result: dict[str, Any]) -> dict[str, Any]:
-    """*result* without its raw screenshot and without the step's value literals (#21976: kept in flight only)."""
-    kept = {k: v for k, v in result.items() if k != _IMAGE_KEY}
-    if isinstance(kept.get("step"), dict):
-        kept["step"] = {k: v for k, v in kept["step"].items() if k != "literals"}
-    return kept
-
-
 def persisted_metadata(message: Any) -> dict[str, Any] | None:
     """``message.metadata`` for the history entry; an execution summary's copy has no raw screenshots.
 
@@ -37,5 +29,5 @@ def persisted_metadata(message: Any) -> dict[str, Any] | None:
     results = metadata.get("execution_results")
     if not isinstance(results, list):
         return metadata
-    stripped = [_without_bulk(r) if isinstance(r, dict) else r for r in results]
+    stripped = [{k: v for k, v in r.items() if k != _IMAGE_KEY} if isinstance(r, dict) else r for r in results]
     return {**metadata, "execution_results": stripped}

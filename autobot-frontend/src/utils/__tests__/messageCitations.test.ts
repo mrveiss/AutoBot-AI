@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
 import type { ChatMessage } from '@/types/api'
-import { messageCitations, toSource, unprovenValues } from '../messageCitations'
+import { messageCitations, proofIsPartial, toSource, unprovenValues } from '../messageCitations'
 
 const message = (extra: Record<string, unknown>) => ({ id: 'm', sender: 'assistant', content: '', ...extra }) as ChatMessage
 
@@ -32,5 +32,13 @@ describe('messageCitations (#21976)', () => {
   it('reads the unproven values of the proof block', () => {
     expect(unprovenValues(message({ metadata: { proof: { checked: 2, found: {}, unproven: ['5.18.33.2'] } } }))).toEqual(['5.18.33.2'])
     expect(unprovenValues(message({ metadata: {} }))).toEqual([])
+  })
+})
+
+describe('proofIsPartial (#21976)', () => {
+  it('reads the proof truncation flag', () => {
+    expect(proofIsPartial(message({ metadata: { proof: { checked: 1, found: {}, unproven: [], truncated: true } } }))).toBe(true)
+    expect(proofIsPartial(message({ metadata: { proof: { checked: 1, found: {}, unproven: [], truncated: false } } }))).toBe(false)
+    expect(proofIsPartial(message({ metadata: {} }))).toBe(false)
   })
 })

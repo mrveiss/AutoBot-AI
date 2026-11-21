@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List
 
 from async_chat_workflow import WorkflowMessage
 from chat_workflow.reply_persistence import RESPOND_TOOL_TYPE, stamp_model
-from chat_workflow.step_evidence import STEP_KEY, value_literals
+from chat_workflow.step_evidence import STEP_KEY, is_quotable_value, kept_literals, value_literals
 from chat_workflow.step_outcome import did_execute
 from source_attribution import Source, SourceKind, SourceReliability
 
@@ -95,7 +95,7 @@ def step_source(record: Dict[str, Any]) -> Dict[str, Any]:
     """One tool step as a source (``Source.to_dict`` shape, plus the title, link and step id the UI uses)."""
     kind = _kind(record)
     origin = record["origin"]
-    link = origin.get("url") or next(iter(origin.get("urls") or []), "")
+    link = origin.get("url") or ""  # a search has result links, never one primary link (the UI lists them all)
     reliability = (
         SourceReliability.MEDIUM if kind in (SourceKind.WEB_PAGE, SourceKind.WEB_SEARCH) else SourceReliability.VERIFIED
     )
@@ -127,23 +127,28 @@ def build_answer_sources(
 def check_quoted_values(
     answer: str, history: Iterable[Dict[str, Any]], user_message: str, kb_citations: List[Dict[str, Any]]
 ) -> Dict[str, Any] | None:
-    """``{"checked", "found": {value: where}, "unproven": [value]}``, or None when no tool step ran this turn.
+    """``{"checked", "found": {value: where}, "unproven": [value], "truncated"}``, or None if no tool step ran.
 
     Only an answer that rests on tool output has values to account for. A value is found when it is among the
-    literals of an executed step (its step id), of the user's message, or of a retrieved passage.
+    literals of an executed step (its step id), of the user's message, or of a retrieved passage. ``truncated`` is
+    true when any step's output was longer than the scan cap or its literals are no longer held: the check is then
+    partial, and the UI says so. A value of fewer than 3 characters or 2 digits is not checked (``is_quotable_value``).
     """
     records = _executed_records(history)
     if not records:
         return None
-    homes: List[tuple[str, set]] = [(r["id"], set(r["literals"])) for r in records]
+    kept = {r["id"]: kept_literals(r["id"]) for r in records}
+    partial = any(r.get("partial") or kept[r["id"]] is None for r in records)
+    homes: List[tuple[str, set]] = [(step_id, set(lits or ())) for step_id, lits in kept.items()]
     homes.append((FOUND_IN_USER, set(value_literals(user_message))))
     homes.append((FOUND_IN_KB, {v for c in kb_citations for v in value_literals(str(c.get("content") or ""))}))
-    checked = value_literals(answer)[:_MAX_CHECKED]
+    checked = [v for v in value_literals(answer) if is_quotable_value(v)][:_MAX_CHECKED]
     found = {v: next((name for name, lits in homes if v in lits), None) for v in checked}
     return {
         "checked": len(checked),
         "found": {v: where for v, where in found.items() if where},
         "unproven": [v for v, where in found.items() if not where],
+        "truncated": partial,
     }
 
 

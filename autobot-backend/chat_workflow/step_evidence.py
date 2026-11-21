@@ -6,9 +6,9 @@
 
 ``begin_step`` is called before a tool call is dispatched; ``DispatchedStep.tag`` stamps its id on each message the
 call yields, and ``DispatchedStep.finish`` stamps the call's execution results with one ``step`` record (id, tool,
-redacted arguments, start and end time, origin, and the literals the output contains). ``answer_sources`` turns the
-records of a turn into the answer's sources. The record rides on the execution result, so it follows the result into the
-turn's execution history on both the legacy and the graph path.
+redacted arguments, start and end time, origin; the literals the output contains are held aside, never streamed).
+``answer_sources`` turns the records of a turn into the answer's sources. The record rides on the execution result,
+so it follows the result into the turn's execution history on both the legacy and the graph path.
 """
 
 from __future__ import annotations
@@ -16,10 +16,18 @@ from __future__ import annotations
 import re
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, FrozenSet, Iterable, List
 
-from autobot_shared.secret_redaction import redact_nested, redact_text
+from autobot_shared.env_utils import env_int
+from autobot_shared.secret_redaction import (
+    MatchPolicy,
+    redact_nested,
+    redact_text,
+    redact_url_credentials,
+    redact_url_userinfo,
+)
 from chat_workflow.step_outcome import exit_code_field
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
 
@@ -29,12 +37,25 @@ STEP_KEY = "step"
 OUTPUT_KEYS = ("output", "result", "stdout", "stderr")
 _MAX_ARG_CHARS = 500
 _MAX_URLS = 10
-_MAX_LITERALS = 2000
+#: Most characters of one step's output (or of an answer) read for quotable values; more is read up to this and the
+#: proof is marked partial (#21976). Bounds the work on the request path.
+SCAN_MAX_CHARS: int = env_int("AUTOBOT_PROOF_SCAN_MAX_CHARS", default=200000)
+#: Steps whose literals are held between a step's end and its turn's end; the oldest are dropped first.
+KEPT_STEPS: int = env_int("AUTOBOT_PROOF_KEPT_STEPS", default=256)
+#: A host that is not a bare label (an IP address, a dotted name) is shown as this, never as itself.
+UNLABELLED_HOST = "remote"
+_LABEL_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}")
+#: Literals of recent steps by step id. Kept out of the execution results: those are streamed to the client.
+_LITERALS: "OrderedDict[str, FrozenSet[str]]" = OrderedDict()
 
 _URL_RE = re.compile(r"https?://[^\s<>\"'`)\]]+")
-#: A run of characters holding a digit; ``-_/=:,;()[]{}|<>`'"`` and whitespace separate runs ("6.18.33.2-microsoft").
-_VALUE_RE = re.compile(r"[^\s,;:()\[\]{}\"'`<>|=/\\_-]*\d[^\s,;:()\[\]{}\"'`<>|=/\\_-]*")
+#: A run of characters with none of ``-_/=:,;()[]{}|<>`'"`` or whitespace ("6.18.33.2-microsoft" is two runs).
+#: Linear: a run is matched as it is; whether it holds a digit is tested after.
+_TOKEN_RE = re.compile(r"[^\s,;:()\[\]{}\"'`<>|=/\\_-]+")
+_DIGIT_RE = re.compile(r"\d")
 _EDGE = ".*~!?"
+_MIN_VALUE_CHARS = 3
+_MIN_VALUE_DIGITS = 2
 
 
 def url_list(text: str, limit: int = _MAX_URLS) -> List[str]:
@@ -46,19 +67,56 @@ def url_list(text: str, limit: int = _MAX_URLS) -> List[str]:
 
 
 def value_literals(text: str) -> List[str]:
-    """The checkable values in *text*: its URLs and every token that contains a digit, distinct, in order.
+    """The quotable values in *text*: its URLs and every token that contains a digit, distinct, in order.
 
     Separators are those of ``6.18.33.2-microsoft-standard-WSL2``: the value ``6.18.33.2`` and ``WSL2`` are two
-    literals. The same function reads the answer and a tool's output, so the two sides split alike.
+    literals. The same function reads the answer and a tool's output, so the two sides split alike. At most
+    ``SCAN_MAX_CHARS`` characters are read.
     """
+    text = (text or "")[:SCAN_MAX_CHARS]
     found: Dict[str, None] = {}
     for url in url_list(text, limit=10**6):
         found.setdefault(url, None)
-    for token in _VALUE_RE.findall(_URL_RE.sub(" ", text or "")):
+    for token in _TOKEN_RE.findall(_URL_RE.sub(" ", text)):
         token = token.strip(_EDGE)
-        if token:
+        if token and _DIGIT_RE.search(token):
             found.setdefault(token, None)
     return list(found)
+
+
+def is_quotable_value(literal: str) -> bool:
+    """Whether a literal can count as evidence either way: a URL, or 3+ characters with 2+ digits.
+
+    ``1`` or ``5°C`` appear in almost any output by chance, so finding them proves nothing and missing them
+    flags nothing.
+    """
+    if _URL_RE.fullmatch(literal):
+        return True
+    return len(literal) >= _MIN_VALUE_CHARS and len(_DIGIT_RE.findall(literal)) >= _MIN_VALUE_DIGITS
+
+
+def safe_url(url: str) -> str:
+    """*url* with its userinfo and credential-named query params masked (the canonical URL redactors)."""
+    return redact_url_userinfo(redact_url_credentials(url, MatchPolicy.BROAD), mask_username=True)
+
+
+def node_label(host: Any) -> Any:
+    """*host* when it is a bare label such as ``main``; ``UNLABELLED_HOST`` for an address or a dotted name."""
+    if not isinstance(host, str) or not host:
+        return host
+    return host if _LABEL_RE.fullmatch(host) else UNLABELLED_HOST
+
+
+def keep_literals(step_id: str, literals: Iterable[str]) -> None:
+    """Hold a step's literals until its turn's answer is checked; the oldest steps are dropped past ``KEPT_STEPS``."""
+    _LITERALS[step_id] = frozenset(literals)
+    while len(_LITERALS) > max(KEPT_STEPS, 1):
+        _LITERALS.popitem(last=False)
+
+
+def kept_literals(step_id: str) -> FrozenSet[str] | None:
+    """The literals held for *step_id*, or None when they are gone (evicted, or the turn resumed elsewhere)."""
+    return _LITERALS.get(step_id)
 
 
 def _output_text(results: Iterable[Dict[str, Any]]) -> str:
@@ -85,11 +143,12 @@ def step_origin(tool: str, params: Dict[str, Any], results: List[Dict[str, Any]]
     """Where the result of a step came from: host and exit code, the page, or the result URLs."""
     first = results[0] if results else {}
     if "command" in first or tool == "execute_command":
-        return {"host": first.get("host"), "command": safe_args(first.get("command")), **exit_code_field(first)}
+        host = node_label(first.get("host"))
+        return {"host": host, "command": safe_args(first.get("command")), **exit_code_field(first)}
     url = params.get("url") if isinstance(params, dict) else None
     if isinstance(url, str) and url:
-        return {"url": url}
-    return {"urls": url_list(_output_text(results))}
+        return {"url": safe_url(url)}
+    return {"urls": [safe_url(u) for u in url_list(_output_text(results))]}
 
 
 @dataclass
@@ -110,6 +169,8 @@ class DispatchedStep:
         """Fingerprint *results* (#19715) and give each the step's proof record (#21976)."""
         stamp_call_fingerprint(results, tool_call)
         tool, params = str(tool_call.get("name", "")), tool_call.get("params") or {}
+        text = _output_text(results)
+        keep_literals(self.step_id, value_literals(text))
         record = {
             "id": self.step_id,
             "tool": tool,
@@ -117,7 +178,7 @@ class DispatchedStep:
             "started_at": self.started_at,
             "ended_at": time.time(),
             "origin": step_origin(tool, params, results),
-            "literals": value_literals(_output_text(results))[:_MAX_LITERALS],
+            "partial": len(text) > SCAN_MAX_CHARS,  # more output than the proof reads
         }
         for result in results:
             result[STEP_KEY] = record
