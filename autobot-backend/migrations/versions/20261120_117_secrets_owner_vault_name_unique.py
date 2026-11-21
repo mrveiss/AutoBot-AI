@@ -12,7 +12,11 @@ a name or a value), and changes nothing. The fix is a person's. Where a type can
 (``POST /api/admin/secret-duplicates/requests``): each copy is verified against its target and a human approves the
 removal of the losing copies in the Approvals inbox. Where it cannot (a secret type with no verifier, or zero or
 several copies that verify), the proposal is a flag for a person: they keep the copy they choose and delete the
-others with ``DELETE /api/secrets/<id>`` (the guarded delete). Then run the upgrade again.
+others with ``DELETE /api/v2/secrets/<id>`` (the guarded delete). Then run the upgrade again.
+
+The container upgrade stops here, so the routes above are not served. Start the backend held at the revision
+before this one (``AUTOBOT_ALEMBIC_UPGRADE_TARGET=20261120_116``), resolve the duplicates, then unset the variable
+and restart: the entrypoint applies this revision.
 
 Legacy rows (``owner_vault IS NULL``) are not constrained: SQL treats NULLs as distinct.
 """
@@ -54,8 +58,9 @@ def upgrade() -> None:
             f"cannot create {_CONSTRAINT}: several secrets share one (owner_vault, name) (first 20 groups): "
             f"{listed}. Nothing was changed and no copy was chosen. Verify and resolve them through the "
             "Approvals inbox (POST /api/admin/secret-duplicates/requests; add ?re_raise=true after a rejected "
-            "proposal), or keep the copy you choose and delete the others with DELETE /api/secrets/<id>, "
-            "then run the upgrade again."
+            "proposal), or keep the copy you choose and delete the others with DELETE /api/v2/secrets/<id>, "
+            "then run the upgrade again. If the backend will not start, set AUTOBOT_ALEMBIC_UPGRADE_TARGET="
+            "20261120_116 first and unset it once the duplicates are gone."
         )
     op.create_unique_constraint(_CONSTRAINT, _TABLE, ["owner_vault", "name"])
 

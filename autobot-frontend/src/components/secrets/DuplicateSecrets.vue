@@ -75,6 +75,7 @@ async function load(): Promise<void> {
   try {
     const loaded: Schemas['DuplicateStatus'] = await apiClient.get(STATUS_URL)
     status.value = loaded
+    loadFailed.value = false
   } catch (err) {
     loadFailed.value = true
     logger.error('Could not load duplicate secrets', err)

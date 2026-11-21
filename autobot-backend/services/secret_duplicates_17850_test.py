@@ -232,8 +232,9 @@ def test_an_ambiguous_secret_is_a_fixed_409_never_a_pick():
 # --- review round: active-only lookup, value-aware create, re-raise, per-call cap -------------------------------
 
 
-def _held(value: bytes, active: bool = True):
-    return SimpleNamespace(id=_A, is_active=active, already_existed=False), AsyncMock(return_value=value)
+def _held(value: bytes, active: bool = True, expired: bool = False):
+    row = SimpleNamespace(id=_A, is_active=active, is_expired=expired, already_existed=False)
+    return row, AsyncMock(return_value=value)
 
 
 @pytest.mark.asyncio
@@ -257,6 +258,43 @@ async def test_a_differing_or_deactivated_name_is_refused_never_reused(held, act
         await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"zq-new-7")
     assert raised.value.reason == reason and "zq-" not in str(raised.value)
     assert not row.already_existed
+
+
+@pytest.mark.asyncio
+async def test_an_identical_empty_value_reuses_the_row():
+    row, read = _held(b"")
+    service = EnvelopeSecretsService(root_key=bytes(32))
+    service.read = read
+    got = await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"")
+    assert got is row and row.already_existed is True
+
+
+@pytest.mark.asyncio
+async def test_an_expired_row_is_refused_not_reused():
+    row, read = _held(b"same", expired=True)
+    service = EnvelopeSecretsService(root_key=bytes(32))
+    service.read = read
+    with pytest.raises(SecretConflictError) as raised:
+        await service._settle_existing(MagicMock(), row, VaultRef.parse("system"), b"same")
+    assert raised.value.reason == "inactive" and not row.already_existed
+
+
+@pytest.mark.asyncio
+async def test_a_copy_is_probed_with_its_exact_stored_value_unstripped(monkeypatch):
+    from services.provider_health.base import ProviderHealthStatus
+
+    seen = []
+
+    class _Checker:
+        async def check_health(self):
+            seen.append(self.api_key)
+            return MagicMock(status=ProviderHealthStatus.UNAVAILABLE)
+
+    monkeypatch.setattr(dup, "_probe_classes", lambda: {_NAME: _Checker})
+    coordinator = MagicMock(maintenance_read=AsyncMock(return_value=b"key-1\n"))
+    group = dup.SecretDuplicateGroup(_VAULT, _NAME, (_A,))
+    await dup.verify_copy(MagicMock(), coordinator, _ACTOR, group, _A)
+    assert seen == ["key-1\n"]
 
 
 @pytest.mark.asyncio

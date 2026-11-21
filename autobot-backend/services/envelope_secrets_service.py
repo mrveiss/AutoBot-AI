@@ -24,6 +24,7 @@ computes those sets from user/agent identity + membership is Task 2.3 / 9.2.
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
@@ -46,7 +47,6 @@ from autobot_shared.secrets_envelope import (
     wrap_dek,
 )
 from autobot_shared.secrets_vault import VaultRef
-from autobot_shared.security.constant_time import secure_compare
 from knowledge.serving import is_servable
 from models.secret import Secret
 from models.secret_grant import SecretGrant
@@ -82,6 +82,14 @@ class SecretConflictError(Exception):
 
 class SecretAccessError(PermissionError):
     """The caller holds no grant for any of their accessible vaults."""
+
+
+def _same_value(held: bytes, offered: bytes) -> bool:
+    """Constant-time equality of two stored values; unlike ``secure_compare`` two empty values ARE equal.
+
+    ``secure_compare`` fails closed for authentication; here an identical retry of ``value=""`` must reuse the row.
+    """
+    return hmac.compare_digest(held, offered)
 
 
 def _vault_strs(vaults: Iterable[VaultRef]) -> set[str]:
@@ -156,13 +164,13 @@ class EnvelopeSecretsService:
         self, session: AsyncSession, existing: Secret, owner_vault: VaultRef, plaintext: bytes
     ) -> Secret:
         """Reuse *existing* only when it is active and already holds *plaintext*; the value is never logged."""
-        if not is_servable(existing):  # the one serving predicate (#18820): a deactivated row is not reused
+        if not is_servable(existing) or existing.is_expired:  # #18820 serving predicate, plus expires_at
             raise SecretConflictError("inactive", existing.id)
         try:
             held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])
         except (SecretAccessError, SecretNotFoundError, DecryptionError, UnsupportedFormatError, KeyError, ValueError):
             raise SecretConflictError("value_differs", existing.id) from None  # unreadable is not "the same"
-        if not secure_compare(held, plaintext):
+        if not _same_value(held, plaintext):
             raise SecretConflictError("value_differs", existing.id)
         existing.already_existed = True
         return existing

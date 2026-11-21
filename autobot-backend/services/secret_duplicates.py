@@ -131,7 +131,7 @@ async def _open_copy(
     does not work": that would let a missing permission recommend the removal of a working credential.
     """
     try:
-        return (await coordinator.maintenance_read(session, actor=actor, secret_id=secret_id)).decode("utf-8").strip()
+        return (await coordinator.maintenance_read(session, actor=actor, secret_id=secret_id)).decode("utf-8")
     except (SecretAccessError, MaintenanceAuditError):
         raise
     except Exception as exc:  # unreadable or undecodable: it did not verify

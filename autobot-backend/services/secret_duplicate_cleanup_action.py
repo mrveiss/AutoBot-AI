@@ -13,8 +13,9 @@ Several envelope secrets can share one ``(owner_vault, name)``. Each copy is ver
 Ids only: no name, no value, ever. A proposal with ``survivor_id`` null is a case for a person (none or several
 copies verified, or no verifier exists): approving it acknowledges it and removes NOTHING, because the approval
 carries no choice. That is also the path for a secret type with no verifier, which a proposal can never name a
-survivor for. The person keeps the copy they choose through the secrets delete route (``DELETE /api/secrets/<id>``);
-the migration (``20261120_117``) stays blocked until the duplicates are gone.
+survivor for. The person keeps the copy they choose through the envelope delete route
+(``DELETE /api/v2/secrets/<id>``, with its vault authorisation and guarded delete); the migration
+(``20261120_117``) stays blocked until the duplicates are gone.
 
 At execution the group is checked again from the database -- every named id must still exist, still share one
 ``(owner_vault, name)`` with the survivor and carry the rotation ``version`` it was probed at (a copy rotated since

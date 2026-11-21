@@ -17,6 +17,21 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_ALEMBIC_UPGRADE_TARGET",
+        type=str,
+        default="head",
+        description=(
+            "Alembic revision the backend container entrypoint upgrades to. Set it to 20261120_116 on an "
+            "installation whose secrets table holds duplicate (owner_vault, name) rows, so the backend starts and "
+            "serves the admin duplicate-resolution routes; resolve them through the Approvals inbox, then unset it "
+            "to apply 20261120_117 (docker/backend/entrypoint.sh, #17850). Leave it at head otherwise."
+        ),
+        component="postgres",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_POSTGRES_DB",
         type=str,
         default=postgres_identity.USERS_DB_NAME,
