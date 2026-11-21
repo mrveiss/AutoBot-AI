@@ -8514,7 +8514,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/knowledge_base/collections/{collection_id}/delete-selected": {
+    "/api/knowledge_base/facts/delete-selected": {
         parameters: {
             query?: never;
             header?: never;
@@ -8524,10 +8524,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Delete Selected Collection Facts
-         * @description Propose deleting exactly the selected facts of this collection. It deletes nothing (#21886, #17038).
+         * Delete Selected Facts
+         * @description Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886).
          */
-        post: operations["delete_selected_collection_facts_api_knowledge_base_collections__collection_id__delete_selected_post"];
+        post: operations["delete_selected_facts_api_knowledge_base_facts_delete_selected_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -83614,6 +83614,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * KnowledgeSelectedFactsDeleteProposal
+         * @description Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886).
+         */
+        KnowledgeSelectedFactsDeleteProposal: {
+            /** Status */
+            status: string;
+            /** Facts Selected */
+            facts_selected: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action: string;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * KnowledgeShareResponse
          * @description Response for POST /knowledge/collaboration/facts/{id}/share.
          */
@@ -120637,14 +120657,11 @@ export interface operations {
             };
         };
     };
-    delete_selected_collection_facts_api_knowledge_base_collections__collection_id__delete_selected_post: {
+    delete_selected_facts_api_knowledge_base_facts_delete_selected_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Collection UUID */
-                collection_id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -120659,7 +120676,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
+                    "application/json": components["schemas"]["KnowledgeSelectedFactsDeleteProposal"];
                 };
             };
             /** @description Validation Error */
