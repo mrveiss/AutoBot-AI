@@ -57,7 +57,7 @@ from tools.lint._scan_helpers import tracked_paths
 
 _TREES = ("autobot-frontend/src", "autobot-slm-frontend/src")
 # The closing tag tolerates whitespace and attributes (`</script >`), as browsers do (CodeQL py/bad-tag-filter).
-_SCRIPT = re.compile(r"<(script|style)\b[^>]*>.*?</\1\b[^>]*>", re.DOTALL | re.IGNORECASE)
+_SCRIPT = re.compile(r"<(script|style)(?=[\s>/])[^>]*>.*?</\1(?=[\s>/])[^>]*>", re.DOTALL | re.IGNORECASE)
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _TEMPLATE = re.compile(r"<template\b.*</template>", re.DOTALL)
 _TEXT = re.compile(r"""> *\s*([A-Za-z][A-Za-z ,.!?'’()-]{2,}?)\s*<""")
