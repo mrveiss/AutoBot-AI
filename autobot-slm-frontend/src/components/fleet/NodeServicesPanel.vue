@@ -105,7 +105,8 @@ const filteredServices = computed(() => {
 const statusCounts = computed(() => {
   const counts = { running: 0, stopped: 0, failed: 0, unknown: 0 }
   services.value.forEach(s => {
-    if (s.status in counts) {
+    // Own keys only: `in` also admits `constructor`/`toString`/`__proto__` from a network payload (#17497).
+    if (Object.prototype.hasOwnProperty.call(counts, s.status)) {
       counts[s.status as keyof typeof counts]++
     }
   })
@@ -143,7 +144,7 @@ function getStatusClasses(status: ServiceStatus): { bg: string; text: string; do
     stopping: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
     completed: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
   }
-  return classes[status] || classes.unknown
+  return Object.prototype.hasOwnProperty.call(classes, status) ? classes[status] : classes.unknown
 }
 
 // #13138: `memory_bytes` is optional AND nullable in the contract; the body

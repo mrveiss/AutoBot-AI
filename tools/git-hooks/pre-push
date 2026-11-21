@@ -314,29 +314,39 @@ machine_slot_take() {
   exec 9>&-
   return 1
 }
+# #21905: SECONDS follows the wall clock, which can step back (NTP, a VM resuming) and made a wait read "-1s".
+# The uptime file is monotonic; the fallback clamps so a duration is never negative. Tests point the file at a fake.
+machine_slot_clock() {
+  local up
+  read -r up _ 2>/dev/null < "${AUTOBOT_MACHINE_SLOT_UPTIME:-/proc/uptime}" && [ -n "$up" ] && { echo "${up%.*}"; return; }
+  echo "$SECONDS"
+}
 machine_slot_wait() {
   [ -z "${CI:-}" ] && [ -z "${AUTOBOT_MACHINE_SLOT_HELD:-}" ] || return 0
   command -v flock >/dev/null 2>&1 || { warn "flock is missing: this push did not queue for a machine slot"; return 0; }
   local dir="${AUTOBOT_MACHINE_SLOT_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/autobot-machine-slots-$(id -u)}"
-  local start=$SECONDS next=$SECONDS every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
+  local start now next every="${AUTOBOT_MACHINE_SLOT_REPORT:-60}" why waited=0
+  start=$(machine_slot_clock) next=$start
   mkdir -p "$dir"
   while :; do
     # A slot is taken only while the 1-minute load is under the ceiling.
     if machine_slot_load_high; then
       why="$MACHINE_SLOT_LOAD_MSG"
     elif machine_slot_take "$dir"; then
-      # #21225: a wait is an iteration of this loop; SECONDS is an integer clock and also ticks across a first-attempt take.
+      # #21225: a wait is an earlier iteration of this loop (waited=1), not elapsed clock time: a first-attempt take returns silently.
       [ "$waited" = 1 ] || return 0
-      log "waited $((SECONDS - start))s for a machine slot"
+      now=$(machine_slot_clock)
+      log "waited $((now > start ? now - start : 0))s for a machine slot"
       # #20260: the queue has no time limit, so the marker set before it may be about to expire.
       [ -z "${branch_name:-}" ] || push_marker_set "$branch_name" "${remote_sha:-$ZERO}"
       return 0
     else
       why="waiting for a machine slot, held by: $(cat "$dir"/slot-* 2>/dev/null | tr '\n' ';')"
     fi
-    if [ "$SECONDS" -ge "$next" ]; then
-      log "queued $((SECONDS - start))s: $why"
-      next=$((SECONDS + every))
+    now=$(machine_slot_clock)
+    if [ "$now" -ge "$next" ]; then
+      log "queued $((now > start ? now - start : 0))s: $why"
+      next=$((now + every))
     fi
     waited=1
     sleep "${AUTOBOT_MACHINE_SLOT_POLL:-5}"
