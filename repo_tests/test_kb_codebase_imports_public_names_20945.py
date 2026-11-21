@@ -9,12 +9,12 @@ other package's internals. The home module exports a public name instead.
 """
 
 import ast
-from pathlib import Path
+
+from repo_tests._paths import repo_root
 
 from tools.lint import _parse_cache as parse_cache
 
-REPO = Path(__file__).resolve().parent.parent
-TARGET = REPO / "autobot-backend" / "api" / "knowledge_graph_codebase.py"
+TARGET = repo_root() / "autobot-backend" / "api" / "knowledge_graph_codebase.py"
 PACKAGE = "api.codebase_analytics"
 
 
