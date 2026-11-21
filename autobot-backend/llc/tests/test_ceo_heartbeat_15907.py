@@ -508,3 +508,25 @@ async def test_agent_control_rows_are_keyed_by_the_node_uuid_not_the_slug(contro
     kwargs = log.record.await_args.kwargs
     assert kwargs["entity_id"] == str(node_id)
     _build_real_entry(kwargs)  # the real log accepts it
+
+
+@pytest.mark.asyncio
+async def test_a_session_holding_the_organization_still_sees_a_concurrent_soft_delete(session_factory):  # noqa: ANN001
+    """The locked re-read refreshes an Organization already in the enabling session's identity map."""
+    from llc.services.company import CompanyNotFoundError
+    from user_management.models.organization import Organization
+
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    async with session_factory() as session_a:
+        held = await session_a.get(Organization, company_id)  # retained with deleted_at = None
+        assert held.deleted_at is None
+        async with session_factory() as session_b:
+            await CompanyService(session_b).delete(company_id)
+            await session_b.commit()
+
+        with pytest.raises(CompanyNotFoundError):
+            await ControlsService(activity_log=AsyncMock()).set_agent_heartbeat(
+                session_a, str(company_id), ceo.agent_id, True, str(uuid.uuid4()), _CRON
+            )
+    assert ceo.agent_id not in await _scheduler_enabled_slugs(session_factory)
