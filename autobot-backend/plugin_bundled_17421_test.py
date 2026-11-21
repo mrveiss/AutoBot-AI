@@ -54,7 +54,7 @@ def audit(monkeypatch):
 @pytest.fixture
 def fresh_install(tmp_path, monkeypatch):
     """No recorded start, no updater marker, no backend log: nothing can be grandfathered."""
-    monkeypatch.setattr(marker, "marker_path", lambda: tmp_path / "marker")
+    monkeypatch.setattr(marker, "marker_path", lambda data_dir=None: tmp_path / "marker")
     logs = tmp_path / "logs"
     logs.mkdir()
     monkeypatch.setattr(pps, "resolve_logs_dir", lambda: logs)

@@ -397,9 +397,11 @@ class PluginLoader:
                 await plugin.shutdown()
             finally:
                 plugin.status = PluginStatus.UNLOADED
-                reverse_registrations(name)
-                self.registry.unregister(name)
-                get_registry().unregister(name)
+                try:
+                    reverse_registrations(name)
+                finally:  # the registries are cleared even when reversal itself raises
+                    self.registry.unregister(name)
+                    get_registry().unregister(name)
 
             logger.info("Unloaded plugin: %s", name)
             return True

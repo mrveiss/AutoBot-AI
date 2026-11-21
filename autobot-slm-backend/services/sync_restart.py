@@ -15,11 +15,17 @@ before.
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 from autobot_shared.backend_start_marker import BACKEND_UNIT, parse_unix_timestamp, write_marker
+from autobot_shared.env_utils import env_int_clamped
+from services.secrets_store_snapshot import BACKEND_DATA_DIR
 
 logger = logging.getLogger(__name__)
+
+#: How long the updater waits for ``systemctl show`` before it gives up recording the start.
+SYSTEMCTL_TIMEOUT_S = env_int_clamped("SLM_BACKEND_START_PROBE_TIMEOUT_S", 10, min_v=1, max_v=120)
 
 RESTART_TAG = "restart"
 RESTART_VAR = "autobot_restart_services"
@@ -42,11 +48,14 @@ def reject_negated_tags(tags: Optional[Iterable[str]]) -> None:
 async def record_backend_start(services: Iterable[str]) -> None:
     """Just before the user backend restarts, record when the running one started (#17421).
 
-    The new backend's plugin enable gate reads this on the upgrade boot as the previous start. Never raises:
-    a missing marker only makes the gate fall back to the backend log.
+    The new backend's plugin enable gate reads this on the upgrade boot as the previous start. It writes
+    into the backend's data directory (``SLM_BACKEND_DATA_DIR``, as the secrets-store backup does), where
+    the backend reads its own ``AUTOBOT_DATA_DIR``. Never raises and never waits past
+    ``SYSTEMCTL_TIMEOUT_S``: a missing marker only makes the gate fall back to the backend log.
     """
     if BACKEND_UNIT not in services:
         return
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             "systemctl",
@@ -59,9 +68,13 @@ async def record_backend_start(services: Iterable[str]) -> None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        out, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=SYSTEMCTL_TIMEOUT_S)
         started = parse_unix_timestamp(out.decode("utf-8", "replace"))
         if started is not None:
-            await asyncio.to_thread(write_marker, started)
-    except (OSError, asyncio.TimeoutError) as exc:
+            await asyncio.to_thread(write_marker, started, Path(BACKEND_DATA_DIR))
+    except Exception as exc:  # noqa: BLE001 -- nothing here may block or abort the restart
         logger.warning("could not record the previous %s start: %s", BACKEND_UNIT, exc)
+    finally:
+        if proc is not None and proc.returncode is None:
+            proc.kill()
+            await proc.wait()

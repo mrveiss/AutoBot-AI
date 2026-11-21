@@ -12,7 +12,7 @@ import asyncio
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
@@ -72,7 +72,7 @@ def plugins(tmp_path):
 @pytest.fixture
 def isolated(tmp_path, monkeypatch):
     """No marker, an empty log directory, and a boot that began now."""
-    monkeypatch.setattr(marker, "marker_path", lambda: tmp_path / "marker")
+    monkeypatch.setattr(marker, "marker_path", lambda data_dir=None: tmp_path / "marker")
     logs = tmp_path / "logs"
     logs.mkdir()
     monkeypatch.setattr(pps, "resolve_logs_dir", lambda: logs)
@@ -100,11 +100,46 @@ async def test_backend_log_is_the_fallback_and_ignores_this_boots_own_line(store
     stamp = "%Y-%m-%d %H:%M:%S"
     previous = time.strftime(stamp, time.localtime(time.time() - 60))
     own = time.strftime(stamp, time.localtime(time.time() + 120))  # written by this boot, after it began
-    line = "%s,123 - autobot_shared.plugin_sdk.plugin_manager - INFO - " + pps.START_LINE + "\n"
+    line = "%s,123 - autobot_shared.plugin_sdk.plugin_manager - INFO - " + pps.START_MESSAGE + "\n"
+    # This boot's own line (+120s) sits BETWEEN the plugins' file times: the old one (-1h) is older than either
+    # reading, the new one (+60s) is older than the own line but newer than the genuine previous start. Without
+    # the exclusion the previous start would read +120s and the new plugin would be grandfathered.
+    manifests, locations = plugins
+    when = time.time() + 60
+    os.utime(locations["prev_new"] / "plugin.json", (when, when))
     log = logs / "backend.log"
     await asyncio.to_thread(log.write_text, (line % previous) + (line % own), encoding="utf-8")
     assert await _admitted(store, plugins) == ["prev_old"]
     assert "backend log" in audit.entries[0]["details"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_the_log_fallback_ignores_compressed_files_other_loggers_and_unreadable_lines(isolated, caplog):
+    _, logs = isolated
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 60))
+    real = "%s,1 - autobot_shared.plugin_sdk.plugin_manager - INFO - " + pps.START_MESSAGE + "\n"
+    await asyncio.to_thread((logs / "old.log.1.gz").write_bytes, b"\x1f\x8b not text " + real.encode() % stamp.encode())
+    await asyncio.to_thread((logs / "other.log").write_text, f"{stamp},1 - some.other - INFO - {pps.START_MESSAGE}\n")
+    assert pps.last_logged_start(logs, time.time()) is None
+    await asyncio.to_thread(
+        (logs / "bad.log").write_text,
+        "not a time - autobot_shared.plugin_sdk.plugin_manager - INFO - " + pps.START_MESSAGE + "\n",
+    )
+    with caplog.at_level("WARNING"):
+        assert pps.last_logged_start(logs, time.time()) is None
+    assert "unreadable timestamp" in caplog.text
+
+
+def test_the_marker_rejects_future_ancient_and_reads_naive_as_utc(tmp_path, monkeypatch):
+    path = tmp_path / "marker"
+    monkeypatch.setattr(marker, "marker_path", lambda data_dir=None: path)
+    now = datetime.now(timezone.utc)
+    for bad in ((now + timedelta(hours=1)).isoformat(), "2001-01-01T00:00:00+00:00", "garbage"):
+        path.write_text(bad, encoding="utf-8")
+        assert marker.read_marker() is None, bad
+    naive = (now - timedelta(hours=1)).replace(tzinfo=None, microsecond=0)
+    path.write_text(naive.isoformat(), encoding="utf-8")
+    assert marker.read_marker() == naive.replace(tzinfo=timezone.utc)
 
 
 @pytest.mark.asyncio

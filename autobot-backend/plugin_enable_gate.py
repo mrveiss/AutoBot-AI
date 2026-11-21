@@ -101,18 +101,18 @@ async def grandfather(store: PluginEnableStore, manifests: List[PluginManifest],
 
 
 async def record_bundled(store: PluginEnableStore, names: List[str]) -> None:
-    """Enable the bundled plugins that have no row yet, audited. A row an admin wrote (a disable) is kept."""
-    missing = sorted(set(names) - await store.known_names())
-    if not missing:
-        return
-    rows = [(name, True, SOURCE_BUNDLED, SYSTEM_ACTOR) for name in missing]
+    """Enable the bundled plugins that have no row yet, audited, one row at a time.
 
-    async def audit_all() -> None:
-        for name in missing:
-            await audit_decision(AuditAction.PLUGIN_ENABLE, name, SYSTEM_ACTOR, reason="bundled core plugin")
+    A row an admin wrote (a disable) is kept. Each plugin is its own transaction, so a row a concurrent
+    boot already wrote costs only that plugin, never the others.
+    """
+    for name in sorted(set(names) - await store.known_names()):
 
-    if await store.insert_once(rows, audit_all):
-        logger.info("Plugin gate: enabled %d bundled plugin(s): %s", len(missing), missing)
+        async def audit_one(plugin: str = name) -> None:
+            await audit_decision(AuditAction.PLUGIN_ENABLE, plugin, SYSTEM_ACTOR, reason="bundled core plugin")
+
+        if await store.insert_once([(name, True, SOURCE_BUNDLED, SYSTEM_ACTOR)], audit_one):
+            logger.info("Plugin gate: enabled bundled plugin %s", name)
 
 
 class DatabaseEnableGate:

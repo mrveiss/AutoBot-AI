@@ -13,10 +13,11 @@ A plugin's age is read from file times, which an archive can preserve or forge: 
 
 import asyncio
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple
+from typing import Iterator, Tuple
 
 import psutil
 
@@ -27,9 +28,16 @@ from plugin_enable_state import PluginEnableStore
 
 logger = get_logger(__name__)
 
-#: The line ``PluginManager.startup`` logs first; one per backend start.
-START_LINE = "PluginManager: starting plugin discovery"
-_STAMP = "%Y-%m-%d %H:%M:%S"  # the default log format's asctime, to the second
+#: ``PluginManager.startup`` logs this first, once per backend start, through this logger.
+START_LOGGER = "autobot_shared.plugin_sdk.plugin_manager"
+START_MESSAGE = "PluginManager: starting plugin discovery"
+#: The default log format is ``<asctime> - <logger> - <level> - <message>``.
+START_LINE = re.compile(rf" - {re.escape(START_LOGGER)} - [A-Z]+ - {re.escape(START_MESSAGE)}")
+#: Only the end of a log file is read: the previous start is recent, and a rotated file can be large.
+LOG_TAIL_BYTES = 8 * 1024 * 1024
+#: ``asctime`` is the process's LOCAL time with no zone, so it is read with ``mktime`` as local time. A
+#: host whose zone changed since the line was written shifts the result by the difference.
+_STAMP = "%Y-%m-%d %H:%M:%S"
 
 
 def boot_started_at() -> float:
@@ -45,24 +53,54 @@ def boot_started_at() -> float:
 def _line_time(line: str) -> float | None:
     try:
         return time.mktime(time.strptime(line[:19], _STAMP))
-    except ValueError:
+    except (ValueError, OverflowError):
         return None
 
 
+def _tail_lines(log: Path) -> Iterator[str]:
+    """The lines in the last ``LOG_TAIL_BYTES`` of *log*, streamed; a cut first line is dropped."""
+    with log.open("rb") as handle:
+        size = handle.seek(0, os.SEEK_END)
+        cut = size > LOG_TAIL_BYTES
+        handle.seek(max(0, size - LOG_TAIL_BYTES))
+        for index, raw in enumerate(handle):
+            if not (cut and index == 0):
+                yield raw.decode("utf-8", errors="replace")
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def last_logged_start(logs_dir: Path, boot_started: float) -> datetime | None:
-    """The newest start line in *logs_dir* written before *boot_started* (so never this boot's own)."""
-    best = None
-    for log in sorted(logs_dir.glob("*.log*"), key=lambda p: p.stat().st_mtime, reverse=True):
+    """The newest start line in *logs_dir* written before *boot_started* (so never this boot's own).
+
+    Newest file first, compressed rotations skipped. A start line whose timestamp cannot be read is
+    counted and logged, then ignored.
+    """
+    candidates = [p for p in logs_dir.glob("*.log*") if p.suffix != ".gz"]
+    for log in sorted(candidates, key=_mtime, reverse=True):
+        stamps, unparsable = [], 0
         try:
-            lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
+            for line in _tail_lines(log):
+                if START_LINE.search(line):
+                    stamp = _line_time(line)
+                    if stamp is None:
+                        unparsable += 1
+                    else:
+                        stamps.append(stamp)
+        except OSError as exc:
+            logger.warning("Plugin gate: cannot read %s for a previous start: %s", log, exc)
             continue
-        stamps = [_line_time(ln) for ln in lines if START_LINE in ln]
-        earlier = [t for t in stamps if t is not None and t < boot_started]
+        if unparsable:
+            logger.warning("Plugin gate: %d start line(s) in %s had an unreadable timestamp", unparsable, log)
+        earlier = [t for t in stamps if t < boot_started]
         if earlier:
-            best = max(earlier)
-            break
-    return datetime.fromtimestamp(best, tz=timezone.utc) if best else None
+            return datetime.fromtimestamp(max(earlier), tz=timezone.utc)
+    return None
 
 
 async def previous_start(store: PluginEnableStore) -> Tuple[datetime | None, str]:
