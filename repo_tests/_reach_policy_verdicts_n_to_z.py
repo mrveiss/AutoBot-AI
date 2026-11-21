@@ -19,6 +19,13 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Non-test Python under three of the source trees (#18221); no tracked count moves with that "
         "subset, because the test share and the other trees grow at their own rate.",
     ),
+    "no-unterminated-construct-21571": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked non-test file with a block-comment suffix, so a file ending inside a construct in any "
+        "component is seen (#21571); the share of the tree that has those suffixes drifts, so an exact floor "
+        "would fail any new file.",
+    ),
     "node-major-literals": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
