@@ -32,6 +32,15 @@
         {{ t('admin.cleanup.propose') }}
       </BaseButton>
     </BaseCard>
+
+    <!-- #17850: duplicated credentials are managed on the Secrets page; this is an access point to it. -->
+    <BaseCard
+      :title="t('admin.cleanup.secretDuplicates.title')"
+      :subtitle="t('admin.cleanup.secretDuplicates.description')"
+      data-testid="cleanup-secretDuplicates"
+    >
+      <router-link :to="{ name: 'secrets-manager', query: { view: 'duplicates' } }">{{ t('admin.cleanup.secretDuplicates.open') }}</router-link>
+    </BaseCard>
   </div>
 </template>
 

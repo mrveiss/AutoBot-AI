@@ -233,7 +233,8 @@ async def _store_credential(
         user_id=user_id,
         permissions=set(),
         owner_vault=VaultRef(VaultKind.USER, str(user_id)),
-        name=f"issue-claims client for {username}",
+        # one name per mint: (owner_vault, name) is unique (#17850)
+        name=f"issue-claims client for {username} {uuid.uuid4().hex[:8]}",
         secret_type=CLAIMS_SECRET_TYPE,
         plaintext=verifier.encode("utf-8"),
         extra_data=meta,
