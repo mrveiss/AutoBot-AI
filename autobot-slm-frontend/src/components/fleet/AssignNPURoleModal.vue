@@ -16,6 +16,7 @@ import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode } from '@/types/slm'
 import { BaseAlert, BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
+import { errorText } from '@/utils/errorText'
 
 const { t } = useI18n()
 const props = defineProps<{
@@ -66,7 +67,7 @@ async function assignRole(): Promise<void> {
     emit('assigned')
     close()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('fleet.assignNPURoleModal.failedToAssignNpuRole')
+    error.value = errorText(e, t('fleet.assignNPURoleModal.failedToAssignNpuRole'))
   } finally {
     loading.value = false
   }

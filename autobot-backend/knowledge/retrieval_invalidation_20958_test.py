@@ -385,7 +385,7 @@ _VECTOR_WRITES: dict[tuple[str, str], str] = {
     (
         "services/knowledge/doc_indexer.py",
         "_handle_dim_mismatch",
-    ): "sync init path; the re-index it forces runs reindex_file",
+    ): "sync init path; doc_index_orphans.resolve_collection awaits the registered _bump_after_recreate (#20992)",
     ("services/knowledge/kb_synthesizer.py", "_index_documents"): _ENTRY,
     ("services/knowledge/lineage_service.py", "rollback_entity"): _NOT_RAG,
     ("services/knowledge/lineage_service.py", "stamp_entity_version"): _NOT_RAG,
