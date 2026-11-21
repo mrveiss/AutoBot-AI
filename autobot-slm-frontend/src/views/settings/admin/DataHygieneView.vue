@@ -47,6 +47,7 @@ import {
 import type { SlmUserResponse } from '@/composables/useSlmUserApi'
 import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import { BaseAlert, BaseModal, formatFileSize, createLogger } from '@autobot/ui'
+import KnowledgeCleanupSection from './KnowledgeCleanupSection.vue'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()
@@ -55,7 +56,6 @@ const api = useAutobotApi()
 const { t } = useI18n()
 
 // -- Unreferenced storage -----------------------------------------------
-
 const orphanStorage = ref<OrphanStorageListResponse | null>(null)
 const storageLoading = ref(false)
 const storageError = ref('')
@@ -176,7 +176,6 @@ async function confirmPreview(): Promise<void> {
 }
 
 // -- Unreachable resources -------------------------------------------------
-
 const RESOURCE_TYPES = ['knowledge_fact', 'secret'] as const
 type ResourceType = (typeof RESOURCE_TYPES)[number]
 
@@ -589,6 +588,7 @@ onMounted(() => {
       </div>
     </section>
 
+    <KnowledgeCleanupSection />
     <!-- ============================= Audit trail ============================= -->
     <section class="bg-white rounded-lg shadow p-6" aria-labelledby="data-hygiene-audit-heading">
       <div class="flex items-center justify-between mb-1">
