@@ -20,7 +20,6 @@
             size="sm"
             :aria-label="selectionMode ? $t('common.cancel') : $t('chat.sidebar.selectChats')"
             :aria-describedby="describedby"
-            :aria-pressed="selectionMode"
             @click="emit('toggle-selection')"
           >
             <Icon :name="selectionMode ? 'times' : 'check-square'" />

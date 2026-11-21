@@ -72,9 +72,18 @@ export function useChatSidePanels(
     active.value = null
   }
 
+  /**
+   * Advanced chrome (`.adv`) is display:none in Minimal mode, and a hidden element cannot take
+   * focus; the voice button is one. Focus then goes to the first panel button that is shown.
+   */
+  const isShown = (el: HTMLElement | null): el is HTMLElement =>
+    !!el && !(document.documentElement.dataset.ui === 'minimal' && el.closest('.adv'))
+
   const restoreFocus = (el: HTMLElement | null): void => {
     const current = document.activeElement
-    if (!current || current === document.body) el?.focus()
+    if (current && current !== document.body) return
+    const target = isShown(el) ? el : Object.values(btnRefs).map((r) => r.value).find(isShown)
+    target?.focus()
   }
 
   // Open: focus moves into the panel (every panel root is tabindex=-1).

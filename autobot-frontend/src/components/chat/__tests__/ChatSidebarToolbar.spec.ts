@@ -23,15 +23,18 @@ describe('ChatSidebarToolbar', () => {
   it('toggles selection mode from a named, pressed-aware icon button', async () => {
     const w = render()
     const toggle = w.get('[aria-label="Select chats"]')
-    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(toggle.attributes('aria-pressed')).toBeUndefined()
     await toggle.trigger('click')
     expect(w.emitted('toggle-selection')).toHaveLength(1)
     w.unmount()
   })
 
-  it('in selection mode offers Cancel and the selected count', () => {
+  it('in selection mode offers Cancel and the selected count', async () => {
     const w = render({ selectionMode: true, selectedCount: 3 })
-    expect(w.get('[aria-label="Cancel"]').attributes('aria-pressed')).toBe('true')
+    const cancel = w.get('[aria-label="Cancel"]')
+    expect(cancel.attributes('aria-pressed')).toBeUndefined()
+    await cancel.trigger('click')
+    expect(w.emitted('toggle-selection')).toHaveLength(1)
     expect(w.text()).toContain('3 selected')
     w.unmount()
   })

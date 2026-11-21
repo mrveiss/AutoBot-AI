@@ -34,15 +34,20 @@ import { ref, watch } from 'vue'
 import { BaseButton, BaseTooltip } from '@autobot/ui'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 
-defineProps<{
-  label: string
-  icon: IconName
-  iconClass?: string
-  pressed?: boolean
-  expanded?: boolean
-  controls?: string
-  adv?: boolean
-}>()
+// pressed / expanded default to undefined, not false: Vue casts an absent Boolean prop to false, which
+// would put aria-pressed="false" and aria-expanded="false" on buttons that are neither toggles nor disclosures.
+withDefaults(
+  defineProps<{
+    label: string
+    icon: IconName
+    iconClass?: string
+    pressed?: boolean
+    expanded?: boolean
+    controls?: string
+    adv?: boolean
+  }>(),
+  { iconClass: undefined, pressed: undefined, expanded: undefined, controls: undefined, adv: false },
+)
 const emit = defineEmits<{ click: []; el: [element: HTMLElement | null] }>()
 
 const button = ref<{ $el: HTMLElement } | null>(null)

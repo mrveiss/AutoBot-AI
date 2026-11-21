@@ -43,7 +43,7 @@
           variant="ghost"
           size="xs"
           :aria-label="$t('chat.sidebar.sessionActions')"
-          tabindex="-1"
+          :tabindex="focused ? 0 : -1"
           @focus="onTriggerFocus"
           @click.stop
         >

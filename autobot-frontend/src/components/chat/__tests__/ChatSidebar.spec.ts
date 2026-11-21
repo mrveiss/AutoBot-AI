@@ -11,6 +11,7 @@ import en from '@/i18n/locales/en.json'
 
 const h = vi.hoisted(() => ({
   store: { sessions: [] as unknown[], currentSessionId: 'a' as string | null, sidebarCollapsed: false },
+  rs: null as never,
   folders: { folders: [] as unknown[], archivedFolders: [] as unknown[], fetchFolders: vi.fn(), assignSessionToFolder: vi.fn() },
   controller: {
     createNewSession: vi.fn(), switchToSession: vi.fn(), toggleSidebar: vi.fn(), resetCurrentChat: vi.fn(),
@@ -20,7 +21,7 @@ const h = vi.hoisted(() => ({
   call: vi.fn(),
   confirm: vi.fn().mockResolvedValue(true),
 }))
-vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.store }))
+vi.mock('@/stores/useChatStore', () => ({ useChatStore: () => h.rs }))
 vi.mock('@/stores/useFolderStore', () => ({ useFolderStore: () => h.folders }))
 vi.mock('@/models/controllers', () => ({ useChatController: () => h.controller }))
 vi.mock('@/composables/useConfirmDialog', () => ({ useConfirmDialog: () => ({ confirm: h.confirm }) }))
@@ -28,10 +29,13 @@ vi.mock('@/composables/useNotificationBus', () => ({ useNotificationBus: () => (
 vi.mock('@/utils/ApiClient', () => ({ default: { call: h.call } }))
 vi.mock('../ChatFolderTree.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('../ChatFolderNode.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('../DeleteConversationDialog.vue', () => ({ default: { props: ['visible'], template: '<div v-if="visible" data-testid="delete-dialog" />' } }))
+vi.mock('../DeleteConversationDialog.vue', () => ({ default: { props: ['visible', 'sessionId'], template: '<div v-if="visible" data-testid="delete-dialog" :data-session="sessionId" />' } }))
 vi.mock('../ShareConversationDialog.vue', () => ({ default: { props: ['visible'], template: '<div v-if="visible" data-testid="share-dialog" />' } }))
 
 import ChatSidebar from '../ChatSidebar.vue'
+
+// The store is read through a reactive proxy, so collapsing it re-renders the sidebar.
+h.rs = reactive(h.store)
 
 const session = (id: string, title: string) => ({ id, title, updatedAt: new Date(), messages: [{ sender: 'user', content: 'x' }] })
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
@@ -41,8 +45,8 @@ const rowTitles = (w: ReturnType<typeof render>) => w.findAll('.chat-session-row
 
 beforeEach(() => {
   vi.clearAllMocks()
-  h.store.sessions = reactive([session('a', 'Fleet check'), session('b', 'NPU plan')])
-  h.store.sidebarCollapsed = false
+  h.rs.sessions = reactive([session('a', 'Fleet check'), session('b', 'NPU plan')])
+  h.rs.sidebarCollapsed = false
   h.call.mockResolvedValue(null)
 })
 
@@ -82,20 +86,22 @@ describe('ChatSidebar', () => {
   })
 
   it('Delete Chat opens the delete dialog for the open chat', async () => {
+    h.rs.currentSessionId = 'a'
     const w = render()
     await byLabel(w, 'Delete Chat').trigger('click')
     await flushPromises()
     expect(w.find('[data-testid="delete-dialog"]').exists()).toBe(true)
+    expect(w.get('[data-testid="delete-dialog"]').attributes('data-session')).toBe('a')
     w.unmount()
   })
 
   it('keeps Reset Chat and Refresh List, disabling Reset without an open chat', async () => {
-    h.store.currentSessionId = null
+    h.rs.currentSessionId = null
     const w = render()
     expect(byLabel(w, 'Reset Chat').attributes('disabled')).toBeDefined()
     await byLabel(w, 'Refresh List').trigger('click')
     expect(h.controller.loadChatSessions).toHaveBeenCalled()
-    h.store.currentSessionId = 'a'
+    h.rs.currentSessionId = 'a'
     w.unmount()
   })
 
@@ -122,10 +128,26 @@ describe('ChatSidebar', () => {
   })
 
   it('collapsed: shows only the toggle', () => {
-    h.store.sidebarCollapsed = true
+    h.rs.sidebarCollapsed = true
     const w = render()
-    expect(w.find('.chat-session-row').exists()).toBe(false)
-    expect(w.find('input[type="search"]').exists()).toBe(false)
+    expect(w.get('input[type="search"]').isVisible()).toBe(false)
+    expect(w.get('section.adv').isVisible()).toBe(false)
+    w.unmount()
+  })
+
+  it('keeps a pending reload when the sidebar collapses and expands', async () => {
+    let finish!: (v: unknown) => void
+    h.call.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const w = render()
+    await w.get('section.adv button').trigger('click')
+    h.rs.sidebarCollapsed = true
+    await flushPromises()
+    h.rs.sidebarCollapsed = false
+    await flushPromises()
+    expect(w.get('section.adv').text()).toContain('Reloading')
+    finish({ status: 'success' })
+    await flushPromises()
+    expect(w.get('section.adv').text()).toContain('Ready')
     w.unmount()
   })
 

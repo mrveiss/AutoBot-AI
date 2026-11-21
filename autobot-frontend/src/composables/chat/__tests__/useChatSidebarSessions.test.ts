@@ -119,16 +119,17 @@ describe('rename and share', () => {
 
 describe('delete with the knowledge-fact preview', () => {
   it.each([
-    [[], [], 'Deleted 1 chats'],
-    [[{ id: 'f1' }, { id: 'f2' }], ['f1', 'f2'], 'Deleted 1 chats (facts preserved in knowledge base)'],
-    [[{ id: 'f1' }, { id: 'f2' }], [], 'Deleted 1 chats and removed associated facts'],
-  ])('toasts the rendered count for %j preserving %j', async (facts, keep, text) => {
+    [[], [], 0, 'Deleted 1 chat'],
+    [[{ id: 'f1' }, { id: 'f2' }], ['f1', 'f2'], 2, 'Deleted 1 chat (facts preserved in knowledge base)'],
+    [[{ id: 'f1' }, { id: 'f2' }], [], 0, 'Deleted 1 chat and removed associated facts'],
+  ])('toasts the singular rendered count for %j preserving %j', async (facts, keep, confirmed, text) => {
     h.controller.getSessionFacts.mockResolvedValueOnce({ facts })
+    if (keep.length) h.controller.preserveSessionFacts.mockResolvedValueOnce({ updated_count: confirmed })
     const api = setup()
     await api.deleteSession('b')
     await api.handleDeleteConfirm('delete', undefined, keep as string[])
     expect(h.showToast).toHaveBeenCalledWith(text, 'success')
-    expect(String(h.showToast.mock.calls.at(-1)?.[0])).not.toMatch(/Deleted\s{2}|\{count\}/)
+    expect(String(h.showToast.mock.calls.at(-1)?.[0])).not.toMatch(/Deleted\s{2}|\{count\}|chats/)
   })
 
   it('loads the preview, then deletes after preserving the ticked facts', async () => {
@@ -140,7 +141,7 @@ describe('delete with the knowledge-fact preview', () => {
     await api.handleDeleteConfirm('delete', undefined, ['f1'])
     expect(h.controller.preserveSessionFacts).toHaveBeenCalledWith('b', ['f1'], true)
     expect(h.controller.deleteChatSession).toHaveBeenCalledWith('b', 'delete', undefined)
-    expect(h.showToast).toHaveBeenCalledWith('Deleted 1 chats (facts removed from some, preserved in others)', 'success')
+    expect(h.showToast).toHaveBeenCalledWith('Deleted 1 chat (facts removed from some, preserved in others)', 'success')
     expect(api.showDeleteDialog.value).toBe(false)
   })
 
@@ -156,6 +157,40 @@ describe('delete with the knowledge-fact preview', () => {
     h.controller.deleteChatSession.mockRejectedValueOnce(new Error('boom'))
     await api.handleDeleteConfirm('delete')
     expect(h.showToast).toHaveBeenLastCalledWith(en.chat.sidebar.deleteFailed, 'error')
+  })
+
+  it('reports only the facts the backend confirmed, and warns when some were not preserved', async () => {
+    h.controller.preserveSessionFacts.mockResolvedValueOnce({ updated_count: 1 })
+    const api = setup()
+    await api.deleteSession('b')
+    await api.handleDeleteConfirm('delete', undefined, ['f1', 'f2'])
+    expect(h.showToast).toHaveBeenCalledWith(en.chat.sidebar.preserveFailed, 'warning')
+    expect(h.showToast).toHaveBeenCalledWith(expect.stringContaining('Deleted 1 chat'), 'success')
+  })
+
+  it('keeps a failed preview distinct from an empty one', async () => {
+    const api = setup()
+    h.controller.getSessionFacts.mockResolvedValueOnce({ facts: [] })
+    await api.deleteSession('b')
+    expect(api.deletePreviewFailed.value).toBe(false)
+    h.controller.getSessionFacts.mockRejectedValueOnce(new Error('kb down'))
+    await api.deleteSession('b')
+    expect(api.deletePreviewFailed.value).toBe(true)
+    expect(api.deleteKBFacts.value).toBeNull()
+    expect(h.showToast).toHaveBeenCalledWith(en.chat.sidebar.previewFailed, 'warning')
+  })
+
+  it('ignores the previews of a superseded request', async () => {
+    const api = setup()
+    let release!: (v: unknown) => void
+    h.controller.getSessionFacts.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+    const first = api.deleteSession('a')
+    h.controller.getSessionFacts.mockResolvedValueOnce({ facts: [{ id: 'only-b' }] })
+    await api.deleteSession('b')
+    release({ facts: [{ id: 'from-a' }, { id: 'from-a2' }] })
+    await first
+    expect(api.deleteTargetSessionId.value).toBe('b')
+    expect(api.deleteKBFacts.value).toEqual([{ id: 'only-b' }])
   })
 
   it('cancelling closes the dialog and forgets the target', async () => {

@@ -21,7 +21,7 @@
       :folders="folders"
       @open="open(session, index)"
       @toggle-select="emit('toggle-select', session)"
-      @focus="focusedIndex = index"
+      @focus="setFocused(index)"
       @keydown="onKeydown($event, session, index)"
       @share="emit('share', session.id)"
       @rename="emit('rename', session)"
@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { EmptyState } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import ChatSessionRow from './ChatSessionRow.vue'
@@ -65,7 +65,24 @@ const emit = defineEmits<{
 }>()
 
 const focusedIndex = ref(0)
+const focusedId = ref<string | null>(null)
+
+// The roving tab stop must always be a row that exists: keep the focused session when it is still
+// listed (it may have moved), otherwise the nearest valid row, so the list never loses its Tab entry.
+watch(
+  () => props.sessions.map((s) => s.id),
+  (ids) => {
+    const kept = focusedId.value === null ? -1 : ids.indexOf(focusedId.value)
+    focusedIndex.value = kept >= 0 ? kept : Math.min(focusedIndex.value, Math.max(ids.length - 1, 0))
+    focusedId.value = ids[focusedIndex.value] ?? null
+  },
+)
 const rowEls = ref<(HTMLElement | null)[]>([])
+
+function setFocused(index: number): void {
+  focusedIndex.value = index
+  focusedId.value = props.sessions[index]?.id ?? null
+}
 
 function setRowRef(row: unknown, index: number): void {
   const el = (row as { $el?: HTMLElement } | null)?.$el
@@ -74,13 +91,13 @@ function setRowRef(row: unknown, index: number): void {
 
 /** A mouse click or keyboard activation: select in selection mode, open otherwise. */
 function open(session: ChatSession, index: number): void {
-  focusedIndex.value = index
+  setFocused(index)
   if (props.selectionMode) emit('toggle-select', session)
   else emit('open', session)
 }
 
 function moveFocus(index: number): void {
-  focusedIndex.value = index
+  setFocused(index)
   void nextTick(() => rowEls.value[index]?.focus())
 }
 

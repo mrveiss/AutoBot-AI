@@ -70,4 +70,40 @@ describe('ChatSessionList', () => {
     expect(render({ sessions: [], totalCount: 0 }).text()).toContain('No chat sessions yet')
     expect(render({ sessions: [], totalCount: 3 }).text()).toContain('No chats match your search')
   })
+
+  it('ignores keys from a control inside a row (the actions trigger)', async () => {
+    const w = render()
+    await rows(w)[0].get('[aria-label="Chat actions"]').trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('open')).toBeUndefined()
+    w.unmount()
+  })
+
+  describe('the roving tab stop stays on a listed row', () => {
+    const tabStops = (w: ReturnType<typeof render>) => rows(w).filter((r) => r.attributes('tabindex') === '0').length
+
+    it('after filtering below the focused index', async () => {
+      const w = render()
+      await rows(w)[2].trigger('focus')
+      await w.setProps({ sessions: [SESSIONS[0]] })
+      expect(tabStops(w)).toBe(1)
+      w.unmount()
+    })
+
+    it('follows the focused session when the list reorders, and after deleting it', async () => {
+      const w = render()
+      await rows(w)[1].trigger('focus')
+      await w.setProps({ sessions: [SESSIONS[2], SESSIONS[1], SESSIONS[0]] })
+      expect(rows(w)[1].attributes('tabindex')).toBe('0')
+      await w.setProps({ sessions: [SESSIONS[2], SESSIONS[0]] })
+      expect(tabStops(w)).toBe(1)
+      w.unmount()
+    })
+
+    it('when an empty list becomes non-empty', async () => {
+      const w = render({ sessions: [], totalCount: 0 })
+      await w.setProps({ sessions: SESSIONS, totalCount: 3 })
+      expect(tabStops(w)).toBe(1)
+      w.unmount()
+    })
+  })
 })

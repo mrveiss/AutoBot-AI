@@ -36,7 +36,8 @@
     </div>
 
     <!-- Sidebar Content -->
-    <div v-if="!store.sidebarCollapsed" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <!-- v-show, not v-if: a reload started in System Control must survive collapsing and expanding the sidebar. -->
+    <div v-show="!store.sidebarCollapsed" class="flex min-h-0 flex-1 flex-col overflow-hidden">
 
       <!-- Folders Section (GH#8987) -->
       <section v-if="folderStore.folders.length > 0" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
@@ -183,7 +184,7 @@
   >
     <BaseInput
       v-model="editingName"
-      ref="editInput"
+      data-autofocus
       :aria-label="$t('chat.sidebar.editChatName')"
       :placeholder="$t('chat.sidebar.enterChatName')"
       @keyup.enter="saveSessionName"
@@ -237,7 +238,7 @@ const folderStore = useFolderStore()
 const {
   getSessionPreview, searchQuery, filteredSessions,
   selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
-  showEditModal, editingName, editInput, editSessionName, saveSessionName, cancelEdit,
+  showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
   showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
   showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading,
   deleteSession, deleteCurrentSession, handleDeleteConfirm, handleDeleteCancel,

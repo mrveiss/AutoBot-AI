@@ -116,9 +116,9 @@ type PanelTab = 'participants' | 'activity' | 'notifications' | 'invitations'
 const activeTab = ref<PanelTab>('participants')
 const showInviteDialog = ref(false)
 
-/** A tab's text carries its pending count, so the number is read with the name. */
+/** A tab's text carries its pending count, so the number is read with the name; the template is translated. */
 function withCount(label: string, count: number): string {
-  return count > 0 ? `${label} (${count})` : label
+  return count > 0 ? t('collaboration.panel.tabCounted', { label, count }) : label
 }
 
 const tabItems = computed<TabItem[]>(() => [

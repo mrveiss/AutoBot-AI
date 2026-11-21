@@ -5,7 +5,7 @@
  * moved out of ChatSidebar.vue unchanged in behaviour: title search, multi-select with bulk
  * delete, rename, share, and single delete with the file-stats and knowledge-fact preview.
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBatchSelection } from '@/composables/useBatchSelection'
@@ -83,14 +83,12 @@ export function useChatSidebarSessions() {
   const showEditModal = ref(false)
   const editingName = ref('')
   const editingSession = ref<ChatSession | null>(null)
-  const editInput = ref<{ focus: () => void }>()
 
-  async function editSessionName(session: ChatSession): Promise<void> {
+  // The dialog's text field carries `data-autofocus`, so BaseModal's initial focus lands on it.
+  function editSessionName(session: ChatSession): void {
     editingSession.value = session
     editingName.value = session.title || ''
     showEditModal.value = true
-    await nextTick()
-    editInput.value?.focus()
   }
   function cancelEdit(): void {
     showEditModal.value = false
@@ -122,6 +120,8 @@ export function useChatSidebarSessions() {
   const deleteFileStats = ref<FileStats | null>(null)
   const deleteKBFacts = ref<SessionFact[] | null>(null)
   const kbFactsLoading = ref(false)
+  /** True when the file or knowledge preview failed to load: a failure, not an empty result. */
+  const deletePreviewFailed = ref(false)
 
   function resetDeleteDialog(): void {
     showDeleteDialog.value = false
@@ -133,6 +133,7 @@ export function useChatSidebarSessions() {
   async function deleteSession(sessionId: string): Promise<void> {
     deleteTargetSessionId.value = sessionId
     kbFactsLoading.value = true
+    deletePreviewFailed.value = false
     deleteKBFacts.value = null
     const [files, facts] = await Promise.allSettled([
       // #20195: the list response is adapted to the dialog's stats shape
@@ -141,37 +142,54 @@ export function useChatSidebarSessions() {
       ),
       controller.getSessionFacts(sessionId),
     ])
+    // A newer deleteSession retargeted the dialog while this one loaded: its previews are not ours to publish.
+    if (deleteTargetSessionId.value !== sessionId) return
+    publishPreview(files, facts)
+    showDeleteDialog.value = true
+  }
+
+  function publishPreview(
+    files: PromiseSettledResult<FileStats | null>,
+    facts: PromiseSettledResult<{ facts?: SessionFact[] } | null | undefined>,
+  ): void {
     if (files.status === 'rejected') logger.warn('Failed to fetch file stats, proceeding without file info:', files.reason)
     if (facts.status === 'rejected') logger.warn('Failed to fetch KB facts:', facts.reason)
+    deletePreviewFailed.value = files.status === 'rejected' || facts.status === 'rejected'
+    if (deletePreviewFailed.value) showToast(t('chat.sidebar.previewFailed'), 'warning')
     deleteFileStats.value = files.status === 'fulfilled' ? files.value : null
     deleteKBFacts.value = facts.status === 'fulfilled' ? facts.value?.facts || null : null
     kbFactsLoading.value = false
-    showDeleteDialog.value = true
   }
   function deleteCurrentSession(): void {
     if (store.currentSessionId) void deleteSession(store.currentSessionId)
   }
 
-  /** Issue #547: keep the facts the user ticked; a failure here never blocks the deletion. */
-  async function preserveFacts(sessionId: string, factIds: string[]): Promise<void> {
-    if (factIds.length === 0) return
+  /**
+   * Issue #547: keep the facts the user ticked; a failure here never blocks the deletion.
+   * Returns how many facts the backend confirmed as preserved (0 on failure).
+   */
+  async function preserveFacts(sessionId: string, factIds: string[]): Promise<number> {
+    if (factIds.length === 0) return 0
     try {
       const result = await controller.preserveSessionFacts(sessionId, factIds, true)
       if (result.updated_count > 0) logger.debug(`Preserved ${result.updated_count} facts before deletion`)
       if (result.errors) logger.warn('Some facts could not be preserved:', result.errors)
+      return result.updated_count ?? 0
     } catch (error) {
       logger.error('Failed to preserve facts, but continuing with deletion:', error)
+      return 0
     }
   }
 
-  /** The strings count chats, and this flow deletes exactly one (#21996). */
+  /** The strings count chats (singular or plural), and this flow deletes exactly one (#21996). */
   function toastDeleted(total: number, preserved: number): void {
     const count = 1
     const deleted = total - preserved
-    if (total === 0) return showToast(t('chat.sidebar.deletedSuccess', { count }), 'success')
-    if (preserved > 0 && deleted > 0) return showToast(t('chat.sidebar.deletedWithFactsMixed', { count }), 'success')
-    if (deleted > 0) return showToast(t('chat.sidebar.deletedWithFactsRemoved', { count }), 'success')
-    showToast(t('chat.sidebar.deletedWithFactsPreserved', { count }), 'success')
+    const say = (key: string) => showToast(t(key, { count }, count), 'success')
+    if (total === 0) return say('chat.sidebar.deletedSuccess')
+    if (preserved > 0 && deleted > 0) return say('chat.sidebar.deletedWithFactsMixed')
+    if (deleted > 0) return say('chat.sidebar.deletedWithFactsRemoved')
+    say('chat.sidebar.deletedWithFactsPreserved')
   }
 
   async function handleDeleteConfirm(
@@ -182,9 +200,11 @@ export function useChatSidebarSessions() {
     const sessionId = deleteTargetSessionId.value
     if (!sessionId) return
     try {
-      await preserveFacts(sessionId, selectedFactIds)
+      const preserved = await preserveFacts(sessionId, selectedFactIds)
       await controller.deleteChatSession(sessionId, fileAction as FileAction, fileOptions)
-      toastDeleted(deleteKBFacts.value?.length || 0, selectedFactIds.length)
+      // The toast reports what the backend confirmed, not what was ticked.
+      toastDeleted(deleteKBFacts.value?.length || 0, preserved)
+      if (preserved < selectedFactIds.length) showToast(t('chat.sidebar.preserveFailed'), 'warning')
       resetDeleteDialog()
     } catch (error) {
       logger.error('Failed to delete session:', error)
@@ -196,9 +216,9 @@ export function useChatSidebarSessions() {
     getSessionPreview,
     searchQuery, filteredSessions, clearSearch,
     selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
-    showEditModal, editingName, editInput, editSessionName, saveSessionName, cancelEdit,
+    showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
     showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
-    showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading,
+    showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading, deletePreviewFailed,
     deleteSession, deleteCurrentSession, handleDeleteConfirm, handleDeleteCancel: resetDeleteDialog,
   }
 }

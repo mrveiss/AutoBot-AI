@@ -224,6 +224,13 @@ describe('BaseButton', () => {
     expect(buttonSource).toMatch(/\.aui-btn\[aria-pressed='true'\]/)
   })
 
+  it('keeps the contrast text on a pressed primary button while hovered or active', () => {
+    // fails if the pressed rule's dark text wins over the primary hover fill
+    expect(buttonSource).toMatch(
+      /\.aui-btn--primary\[aria-pressed='true'\]:hover[^{]*\{[^}]*color: var\(--aui-color-primary-contrast\)/,
+    )
+  })
+
   it('styles through kit tokens only: no literal colour or box-shadow in the source', () => {
     // fails if a raw palette value or a shadow enters the component (design system: tokens, no shadows)
     expect(buttonSource).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|box-shadow/)

@@ -36,6 +36,13 @@ describe('ContextWindowIndicator', () => {
     expect(render({ isSummarizing: true }).text()).toContain('Summarizing...')
   })
 
+  it('keeps the header visibility classes on a plain root, with the width on a wrapper', () => {
+    const w = mount(ContextWindowIndicator, { props: base, attrs: { class: 'hidden sm:flex' }, global: { plugins: [i18n] } })
+    expect(w.element.tagName).toBe('DIV')
+    expect(w.classes()).toEqual(expect.arrayContaining(['hidden', 'sm:flex']))
+    expect(w.get('[role="progressbar"]').element.parentElement?.classList.contains('w-12')).toBe(true)
+  })
+
   it('renders nothing without data', () => {
     expect(render({ hasData: false }).find('[role="progressbar"]').exists()).toBe(false)
   })

@@ -60,6 +60,20 @@ describe('ChatSessionRow', () => {
     w.unmount()
   })
 
+  it('puts the actions trigger in the Tab order only while its row is the tab stop', () => {
+    expect(render({ focused: true }).get('[aria-label="Chat actions"]').attributes('tabindex')).toBe('0')
+    expect(render().get('[aria-label="Chat actions"]').attributes('tabindex')).toBe('-1')
+  })
+
+  it('Enter on the trigger does not open the chat through the row', async () => {
+    const w = render({ focused: true })
+    const trigger = w.get('[aria-label="Chat actions"]')
+    await trigger.trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('keydown')?.length).toBe(1) // reported to the list, which ignores a nested target
+    expect(w.emitted('open')).toBeUndefined()
+    w.unmount()
+  })
+
   it('does not use aria-selected, which is invalid on a button', () => {
     expect(render({ focused: true }).get('[role="button"]').attributes('aria-selected')).toBeUndefined()
   })

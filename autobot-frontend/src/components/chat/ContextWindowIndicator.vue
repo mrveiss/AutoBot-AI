@@ -1,22 +1,25 @@
 <template>
-  <BaseTooltip v-if="hasData" :text="tooltip" placement="bottom">
-    <template #default="{ describedby }">
-      <div class="ctx-indicator flex min-w-0 select-none items-center gap-2" tabindex="0" :aria-describedby="describedby">
-        <!-- Token count text -->
-        <span class="shrink-0 whitespace-nowrap font-mono text-xs" :class="textClass">
-          {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
-        </span>
-        <BaseProgress
-          class="w-12 shrink-0"
-          :class="{ 'animate-pulse': isSummarizing }"
-          size="sm"
-          :variant="variant"
-          :value="usagePercent"
-          :label="t('chat.contextWindow.ariaLabel', { used: formattedUsed, max: formattedMax })"
-        />
-      </div>
-    </template>
-  </BaseTooltip>
+  <div v-if="hasData"><!-- A plain outer element: the header's responsive classes (hidden sm:flex) must not land on BaseTooltip, whose own display wins. -->
+    <BaseTooltip :text="tooltip" placement="bottom">
+      <template #default="{ describedby }">
+        <div class="ctx-indicator flex min-w-0 select-none items-center gap-2" tabindex="0" :aria-describedby="describedby">
+          <!-- Token count text -->
+          <span class="shrink-0 whitespace-nowrap font-mono text-xs" :class="textClass">
+            {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
+          </span>
+          <!-- The compact width lives on a wrapper: BaseProgress fills its container (inline-size: 100%). -->
+          <div class="w-12 shrink-0" :class="{ 'animate-pulse': isSummarizing }">
+            <BaseProgress
+              size="sm"
+              :variant="variant"
+              :value="usagePercent"
+              :label="t('chat.contextWindow.ariaLabel', { used: formattedUsed, max: formattedMax })"
+            />
+          </div>
+        </div>
+      </template>
+    </BaseTooltip>
+  </div>
 </template>
 
 <script setup lang="ts">

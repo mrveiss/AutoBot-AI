@@ -262,10 +262,10 @@
       "showSources": "Show Sources",
       "autoScroll": "Auto-scroll",
       "confirmDeleteSelected": "Delete {count} selected chats? This cannot be undone.",
-      "deletedWithFactsMixed": "Deleted {count} chats (facts removed from some, preserved in others)",
-      "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
-      "deletedWithFactsPreserved": "Deleted {count} chats (facts preserved in knowledge base)",
-      "deletedSuccess": "Deleted {count} chats",
+      "deletedWithFactsMixed": "Deleted {count} chat (facts removed from some, preserved in others) | Deleted {count} chats (facts removed from some, preserved in others)",
+      "deletedWithFactsRemoved": "Deleted {count} chat and removed associated facts | Deleted {count} chats and removed associated facts",
+      "deletedWithFactsPreserved": "Deleted {count} chat (facts preserved in knowledge base) | Deleted {count} chats (facts preserved in knowledge base)",
+      "deletedSuccess": "Deleted {count} chat | Deleted {count} chats",
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
@@ -274,7 +274,9 @@
       "selectChats": "Select chats",
       "sessionActions": "Chat actions",
       "moveToFolder": "Move to {name}",
-      "untitledChat": "Chat {id}..."
+      "untitledChat": "Chat {id}...",
+      "previewFailed": "Could not load the file and knowledge previews for this chat. You can still delete it.",
+      "preserveFailed": "Some knowledge facts could not be preserved; they were deleted with the chat."
     },
     "folders": {
       "folders": "Folders",
@@ -6881,7 +6883,8 @@
       "tabActivity": "Activity",
       "tabNotifications": "Notifications",
       "tabInvitations": "Invitations",
-      "tabsLabel": "Collaboration sections"
+      "tabsLabel": "Collaboration sections",
+      "tabCounted": "{label} ({count})"
     },
     "invitations": {
       "loading": "Loading invitations...",

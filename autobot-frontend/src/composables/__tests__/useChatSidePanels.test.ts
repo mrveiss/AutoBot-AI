@@ -124,4 +124,27 @@ describe('useChatSidePanels', () => {
     expect(p.showVoicePanel.value).toBe(false)
     expect([p.voiceExpanded.value, p.voiceControlsId.value]).toEqual([true, VOICE_OVERLAY_ID])
   })
+
+  it('falls back to a shown panel button when the voice button is hidden in Minimal mode', async () => {
+    const p = useChatSidePanels()
+    const adv = document.createElement('div')
+    adv.className = 'adv'
+    const voice = document.createElement('button')
+    adv.append(voice)
+    const files = document.createElement('button')
+    document.body.append(adv, files)
+    p.voiceBtnRef.value = voice
+    p.fileBtnRef.value = files
+    document.documentElement.dataset.ui = 'minimal'
+    try {
+      p.toggle('voice')
+      await nextTick()
+      p.toggle('voice')
+      await nextTick()
+      await nextTick()
+      expect(document.activeElement).toBe(files)
+    } finally {
+      delete document.documentElement.dataset.ui
+    }
+  })
 })

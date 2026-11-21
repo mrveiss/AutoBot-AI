@@ -236,3 +236,13 @@ describe('BaseTabs icon slot, item class and list-only mode (#18243)', () => {
     expect(wrapper?.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
 })
+
+describe('BaseTabs panels follow a custom trigger id (#18243)', () => {
+  it('ignores a custom id and controls with kit-owned panels, so panel and trigger ids stay paired', async () => {
+    await render({ items: [{ value: 'a', label: 'A', id: 'my-tab-a', controls: 'elsewhere' }, { value: 'b', label: 'B' }], modelValue: 'a' })
+    const panel = document.querySelector('[role="tabpanel"]:not([hidden])')
+    expect(tabs()[0].id).not.toBe('my-tab-a')
+    expect(panel?.getAttribute('aria-labelledby')).toBe(tabs()[0].id)
+    expect(tabs()[0].getAttribute('aria-controls')).toBe(panel?.id)
+  })
+})

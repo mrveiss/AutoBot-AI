@@ -38,6 +38,16 @@ describe('ChatHeader', () => {
     w.unmount()
   })
 
+  it('puts no toggle or disclosure state on the plain action buttons', () => {
+    const w = render()
+    for (const label of [en.chat.openSettings, en.chat.exportChat, en.chat.clearChat]) {
+      const b = w.findAll('button').find((x) => x.attributes('aria-label') === label)!
+      expect(b.attributes('aria-pressed')).toBeUndefined()
+      expect(b.attributes('aria-expanded')).toBeUndefined()
+    }
+    w.unmount()
+  })
+
   it('emits settings, export and clear', async () => {
     const w = render()
     for (const label of [en.chat.openSettings, en.chat.exportChat, en.chat.clearChat]) {

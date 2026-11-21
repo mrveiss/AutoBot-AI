@@ -74,9 +74,14 @@ describe('ChatHeaderActions', () => {
 
   it('shows a tooltip bubble naming the button when focused', async () => {
     const w = render()
-    await btn(w, 'Toggle file panel').trigger('focus')
+    const bubble = () => document.querySelector('.aui-tooltip__bubble')
+    expect(bubble()?.classList.contains('aui-tooltip__bubble--open')).toBeFalsy()
+    await btn(w, 'Toggle file panel').trigger('focusin')
     await flushPromises()
-    expect(document.body.textContent).toContain('Toggle file panel')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const open = document.querySelector('.aui-tooltip__bubble--open')
+    expect(open?.textContent).toContain('Toggle file panel')
+    expect(btn(w, 'Toggle file panel').attributes('aria-describedby')).toBe(open?.id)
     w.unmount()
   })
 })

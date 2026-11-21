@@ -15,7 +15,8 @@
     slots  : `panel-<value>` — the content of the tab with that value;
              `icon` — scoped by `{ item }`, rendered before each tab's text
     item   : `class` reaches the trigger; `id` and `controls` replace the trigger's generated
-             id and aria-controls (for a panel the caller owns, see `listOnly`)
+             id and aria-controls, in `listOnly` mode only (a caller-owned panel); with kit panels the
+             generated ids stay, so a panel never references a trigger id that is gone
     listOnly: renders the tablist only. The caller owns the tabpanel (it is routed content, not
              a slot), so the kit emits no `tabpanel` of its own.
     emits  : update:modelValue
@@ -81,9 +82,12 @@ const active = computed(() => {
 
 /** Overrides for the generated id / aria-controls; a list-only trigger controls no kit panel. */
 function triggerAttrs(item: TabItem): Record<string, string | undefined> {
+  // A kit-owned panel is labelled by Reka's generated trigger id and cannot be pointed elsewhere, so
+  // `id` and `controls` apply only when the caller owns the panel (`listOnly`).
+  if (!props.listOnly) return {}
   const attrs: Record<string, string | undefined> = {}
   if (item.id !== undefined) attrs.id = item.id
-  if (item.controls !== undefined || props.listOnly) attrs['aria-controls'] = item.controls
+  attrs['aria-controls'] = item.controls
   return attrs
 }
 
