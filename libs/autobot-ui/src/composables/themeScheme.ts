@@ -5,7 +5,7 @@
  * Author: mrveiss
  *
  * themeScheme.ts - the theme names, their storage and their `data-theme` application,
- * shared by the user frontend (useTheme) and the SLM frontend (useTheme) so the two
+ * shared by the user frontend (useTheme) and the SLM frontend (useSlmTheme) so the two
  * apps cannot drift (#18239). One definition of: which themes exist, the localStorage
  * key the choice lives under, and how a choice reaches the document root.
  */

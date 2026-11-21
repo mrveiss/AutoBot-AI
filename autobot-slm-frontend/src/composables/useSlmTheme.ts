@@ -44,12 +44,17 @@ const LEGACY_DARK_MODE_KEY = 'autobot-dark-mode'
 const currentTheme = ref<SlmTheme>(DEFAULT_THEME)
 
 /**
- * Carries a choice saved by the legacy toggles over to the theme key: the old high-contrast
- * palette becomes `contrast`, dark mode becomes `dark` (high contrast won, as it did before).
- * An already stored theme is never overwritten. Returns the migrated theme, if any.
+ * The single legacy-theme migration. Carries a choice saved by the legacy toggles over to
+ * the theme key: the old high-contrast palette becomes `contrast`, dark mode becomes `dark`
+ * (high contrast won, as it did before), and a stored `high-contrast` theme value is read
+ * as `contrast`. An already stored theme is never overwritten by the legacy toggles.
+ * Returns the migrated theme, if any.
  */
 export function migrateLegacyTheme(): SlmTheme | null {
   try {
+    if (localStorage.getItem(THEME_STORAGE_KEY) === 'high-contrast') {
+      writeStoredTheme('contrast')
+    }
     const highContrast = localStorage.getItem(LEGACY_HIGH_CONTRAST_KEY) === 'true'
     const dark = localStorage.getItem(LEGACY_DARK_MODE_KEY) === 'true'
     const hadLegacy = localStorage.getItem(LEGACY_HIGH_CONTRAST_KEY) !== null
@@ -66,16 +71,9 @@ export function migrateLegacyTheme(): SlmTheme | null {
   }
 }
 
-/** The stored theme, with a legacy `high-contrast` value read as `contrast`. */
+/** The stored theme, after the legacy migration. */
 function loadTheme(): SlmTheme {
   migrateLegacyTheme()
-  try {
-    if (localStorage.getItem(THEME_STORAGE_KEY) === 'high-contrast') {
-      writeStoredTheme('contrast')
-    }
-  } catch {
-    // localStorage may be unavailable
-  }
   return (readStoredTheme(SLM_THEMES) as SlmTheme | null) ?? DEFAULT_THEME
 }
 
