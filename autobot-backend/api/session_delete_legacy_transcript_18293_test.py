@@ -280,10 +280,11 @@ def test_the_routes_driven_here_use_the_default_posture() -> None:
     """
     import inspect
 
-    from security.session_ownership import validate_session_ownership
+    from api.chat_session_sharing import validate_session_owner
 
     delete_dep = inspect.signature(chat_sessions.delete_session).parameters["ownership"].default.dependency
-    assert delete_dep is validate_session_ownership
+    assert delete_dep is validate_session_owner  # owner-only (#21898); it calls the DEFAULT-posture dependency
+    assert "STRICT" not in inspect.getsource(validate_session_owner)
     for route in (chat_api.save_chat_by_id, chat_api.delete_chat_by_id):
         assert inspect.signature(route).parameters["ownership"].default.dependency is chat_api.validate_chat_ownership
     assert "STRICT" not in inspect.getsource(chat_api.validate_chat_ownership)

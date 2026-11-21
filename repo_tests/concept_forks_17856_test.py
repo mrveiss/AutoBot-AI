@@ -27,7 +27,7 @@ import functools
 import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-from repo_tests.one_session_scope_15068_test import _is_source_python
+from repo_tests.extraction_registry_17995_test import _is_source_python
 
 from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
