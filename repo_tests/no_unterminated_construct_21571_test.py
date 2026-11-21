@@ -44,26 +44,33 @@ REACH = declare(
 )
 
 
-def _unterminated(rels: list[str], root: Path) -> dict[str, str]:
+def _unterminated(rels: list[str], root: Path) -> tuple[dict[str, str], list[str]]:
+    """(file -> what it ended inside, files that could not be read): an unreadable file is not a clean one."""
     found: dict[str, str] = {}
+    unreadable: list[str] = []
     for rel in rels:
         try:
             text = (root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
+            unreadable.append(rel)
             continue
         ended = unterminated_construct(text, name=rel)
         if ended is not None:
             found[rel] = ended
-    return found
+    return found, unreadable
 
 
 def test_no_tracked_source_file_ends_inside_a_comment_or_a_quote() -> None:
     root = repo_root()
     files = _discover(root)
     REACH.completed(files, root)
-    assert _unterminated(files, root) == {}, (
+    found, unreadable = _unterminated(files, root)
+    assert (
+        unreadable == []
+    ), f"#21571: these tracked files could not be read, so the scan was blind to them: {unreadable}"
+    assert found == {}, (
         "#21571: these files end inside a construct, so every line after the opener is blanked for every guard "
-        "that reads through `code_lines`; close the comment or the quote"
+        "that reads through `code_lines`; close the comment or the quote: " + repr(found)
     )
 
 
@@ -78,11 +85,17 @@ def test_no_tracked_source_file_ends_inside_a_comment_or_a_quote() -> None:
 def test_contrast_a_planted_unterminated_file_is_flagged(tmp_path: Path, rel: str, text: str, ended: str) -> None:
     """The detector can fire: a synthetic file ending inside a construct is reported, by kind."""
     (tmp_path / rel).write_text(text, encoding="utf-8")
-    assert _unterminated([rel], tmp_path) == {rel: ended}
+    assert _unterminated([rel], tmp_path) == ({rel: ended}, [])
 
 
 def test_contrast_a_closed_file_is_not_flagged(tmp_path: Path) -> None:
     """...and it stays quiet on a file whose comments and quotes all close, in the same tree."""
     (tmp_path / "ok.ts").write_text("const a = 'x' /* closed */\nconst b = `y`\n", encoding="utf-8")
     (tmp_path / "bad.ts").write_text("const a = 1 /* never closed\n", encoding="utf-8")
-    assert _unterminated(["ok.ts", "bad.ts"], tmp_path) == {"bad.ts": "block comment"}
+    assert _unterminated(["ok.ts", "bad.ts"], tmp_path) == ({"bad.ts": "block comment"}, [])
+
+
+def test_contrast_an_unreadable_file_is_reported_not_skipped(tmp_path: Path) -> None:
+    """A missing or non-UTF-8 file comes back in the unreadable list, so the guard cannot go blind silently."""
+    (tmp_path / "bin.ts").write_bytes(b"\xff\xfe\x00")
+    assert _unterminated(["bin.ts", "gone.ts"], tmp_path) == ({}, ["bin.ts", "gone.ts"])
