@@ -26,3 +26,19 @@ register_env_var(
         component="rate_limit",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL",
+        type=float,
+        default=1.0,
+        description=(
+            "Minimum seconds between full-table eviction sweeps of the per-process rate-limit "
+            "fallback while its key table is full (#21907). A new key arriving between sweeps is "
+            "refused without scanning, so a flood of distinct keys during a Redis outage cannot "
+            "cost a table scan per request. A key expiring after a sweep frees its slot only at the "
+            "next sweep, up to one interval later."
+        ),
+        component="rate_limit",
+    )
+)
