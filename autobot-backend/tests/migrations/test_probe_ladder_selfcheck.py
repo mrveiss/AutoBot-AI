@@ -24,6 +24,7 @@ import alembic.script  # noqa: F401
 
 from migrations.baseline import (  # noqa: E402 — after the alembic import by design
     CONSTRAINT_MARKERS,
+    INDEX_MARKERS,
     TIMESTAMPTZ_MARKERS,
     Artifacts,
     _script_directory,
@@ -79,7 +80,11 @@ def test_create_table_calls_are_all_literal():
         )
         if len(art.columns) != _count_calls(path, "add_column"):
             observable = (
-                art.tables or art.columns or sc.revision in TIMESTAMPTZ_MARKERS or sc.revision in CONSTRAINT_MARKERS
+                art.tables
+                or art.columns
+                or sc.revision in TIMESTAMPTZ_MARKERS
+                or sc.revision in INDEX_MARKERS
+                or sc.revision in CONSTRAINT_MARKERS
             )
             assert observable, (
                 f"{path.name}: add_column calls the ladder cannot extract AND "
@@ -121,7 +126,13 @@ def test_observability_coverage():
     unobservable = {
         rev
         for rev, art in artifacts.items()
-        if not art.tables and not art.columns and rev not in TIMESTAMPTZ_MARKERS and rev not in CONSTRAINT_MARKERS
+        if (
+            not art.tables
+            and not art.columns
+            and rev not in TIMESTAMPTZ_MARKERS
+            and rev not in INDEX_MARKERS
+            and rev not in CONSTRAINT_MARKERS
+        )
     }
     allowed = {
         "20260525_043",  # guarded enum-value add — idempotent re-run
