@@ -512,7 +512,7 @@ async def test_agent_control_rows_are_keyed_by_the_node_uuid_not_the_slug(contro
 
 @pytest.mark.asyncio
 async def test_a_session_holding_the_organization_still_sees_a_concurrent_soft_delete(session_factory):  # noqa: ANN001
-    """The locked re-read refreshes an Organization already in the enabling session's identity map."""
+    """A soft-delete committed by another session is refused on enable, though this session held the row."""
     from llc.services.company import CompanyNotFoundError
     from user_management.models.organization import Organization
 
@@ -530,3 +530,23 @@ async def test_a_session_holding_the_organization_still_sees_a_concurrent_soft_d
                 session_a, str(company_id), ceo.agent_id, True, str(uuid.uuid4()), _CRON
             )
     assert ceo.agent_id not in await _scheduler_enabled_slugs(session_factory)
+
+
+@pytest.mark.asyncio
+async def test_the_locked_read_refreshes_an_organization_already_in_the_identity_map(session_factory):  # noqa: ANN001
+    """Pins ``populate_existing``: a column the lookup does not filter on must come back fresh."""
+    from user_management.models.organization import Organization
+
+    company_id = await _create(session_factory, "Acme")
+    async with session_factory() as session_a:
+        held = await session_a.get(Organization, company_id)
+        assert held.name == "Acme"
+        async with session_factory() as session_b:
+            other = await session_b.get(Organization, company_id)
+            other.name = "Renamed"
+            await session_b.commit()
+
+        locked = await CompanyService(session_a).get_live_for_update(company_id)
+
+    assert locked is held  # the same identity-map object ...
+    assert locked.name == "Renamed"  # ... refreshed by the locked re-read
