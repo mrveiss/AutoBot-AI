@@ -1579,15 +1579,12 @@ async def resume_chat_graph(
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
     decision = resume_decision(request_data, chat_id)
+    strict = await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request)  # #21939
 
     async def _open():  # #21022
+        # auth_scope: the budget gate names this user (#16845, #19241)
         return _stream_graph_resume(
-            chat_workflow_manager,
-            chat_id,
-            decision,
-            request_id,
-            await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request),  # #20195
-            auth_scope=principal_scope(current_user),  # the budget gate names this user (#16845, #19241)
+            chat_workflow_manager, chat_id, decision, request_id, strict, auth_scope=principal_scope(current_user)
         )
 
     return _create_streaming_response(await guarded_resume(chat_id, request_data, chat_workflow_manager, _open))

@@ -271,6 +271,7 @@ appears outside the known overlays.
 | `AUTOBOT_INJECTION_HARDBLOCK_ENABLED` | auth | bool | false | Hard-block prompt injection rather than only flagging it. When on and confidence clears the threshold, the request is refused instead of annotated. |
 | `AUTOBOT_INJECTION_HARDBLOCK_THRESHOLD` | auth | float | `0.75` | Confidence in [0.0, 1.0] at or above which a detected injection is hard-blocked. 0.75 maps to HIGH; 1.0 would block only CRITICAL. |
 | `AUTOBOT_INTERNAL_API_KEY` | auth | str | `""` | Shared secret used to authenticate internal service-to-service calls. |
+| `AUTOBOT_INTERPRETATION_TIMEOUT_SECONDS` | chat | float | `60.0` | Own time budget of one post-command LLM interpretation (chat_workflow/interpretation_guard.py, #21938), so an auxiliary call cannot use up the chat turn's budget. On expiry the interpretation is dropped and the command's result stands. |
 | `AUTOBOT_ISSUE_CLAIMS_API_TIMEOUT_S` | orchestration | int | `10` | Per-request timeout of the issue-claims CLI's API transport; expiry fails closed (#18811). Range: 1–120. |
 | `AUTOBOT_ISSUE_CLAIMS_API_URL` | orchestration | str | `""` | Base URL of AutoBot's backend for the issue-claims CLI (#18811). When set, `python -m autobot_shared.coordination.issue_claims` talks to /api/coordination/issue-claims instead of Redis, so a developer checkout needs no registry credential. Must be https, or http to a loopback host. Authenticate once with `issue_claims login` (credential kept in the kernel keyring, cleared on reboot). Never derived from the SSOT backend URL. Unset keeps the direct Redis transport. |
 | `AUTOBOT_ISSUE_CLAIMS_CREDENTIAL_TTL_S` | orchestration | int | `604800` | Lifetime of an issue-claims client credential minted by `issue_claims login` (#18811). The credential is a secret in the minting user's vault; past this age it is refused, so one orphaned by a reboot (the kernel keyring is cleared) stops working without a revoke. Range: 3600–7776000. |
@@ -580,6 +581,20 @@ appears outside the known overlays.
 | `AUTOBOT_TELEGRAM_POLL_LEASE_MARGIN_SECONDS` | gateway | int | `5` | Seconds a Telegram poller tick must leave unused before its 30s leader lease expires, so a stalled getUpdates can never outlive the lease and overlap a second worker's poll. Range: 1–15. |
 | `AUTOBOT_TELEGRAM_POLL_TIMEOUT_SECONDS` | gateway | int | `20` | Long-poll window of each Telegram getUpdates call in polling ingest mode. Capped so the whole HTTP budget (window + HTTP slack) ends inside the poller's 30s leader-lease lifetime minus the lease margin: 20 at the default margin and slack (services/telegram_polling.py). Range: 1–28. |
 | `AUTOBOT_TERMINAL_SESSION_TTL_SECONDS` | terminal | int | `86400` | TTL for terminal:session_config:* Redis keys — the cross-worker terminal session registry (services/terminal_session_store.py, #14961). A session config outlives the connection it was created for (the WebSocket may attach on a different uvicorn worker, or reconnect after one), so this is deliberately generous: 24h matches the sibling chat:session:* cache TTL (chat_history/cache.py) rather than the lifetime of any single PTY process. Range: 60–604800. |
+| `AUTOBOT_TEST_NODE_BASE` | testing | str | `'.autobot-test-node'` | Directory on the node (relative to its home) holding the mirror, venv, slots and runs. |
+| `AUTOBOT_TEST_NODE_CONNECT_TIMEOUT` | testing | int | `10` | Seconds to wait for the node's SSH connection before falling back to local. Range: 1–120. |
+| `AUTOBOT_TEST_NODE_ENABLED` | testing | str | `'1'` | 0 turns the remote test node off even when it is configured; runs stay local. |
+| `AUTOBOT_TEST_NODE_HOST` | testing | str | `""` | Address of the remote test node (tools/remote_test_node/run.py); empty means not configured, so runs stay local. |
+| `AUTOBOT_TEST_NODE_KNOWN_HOSTS` | testing | str | `""` | Path to a known_hosts file that pins the test node's host key. Set: the connection is made with StrictHostKeyChecking=yes against that file only. Empty: the key is trusted on first use (StrictHostKeyChecking=accept-new) and later changes are refused. |
+| `AUTOBOT_TEST_NODE_PIP_VERSION` | testing | str | `'25.3'` | Version of pip that --provision upgrades the node's venv to before installing the test requirements. |
+| `AUTOBOT_TEST_NODE_PORT` | testing | str | `'22'` | SSH port of the remote test node. |
+| `AUTOBOT_TEST_NODE_SLOTS` | testing | int | `3` | Jobs the remote test node runs at once (a counting lock on the node). Default 3, measured on a 12-core, 14 GB node: 3 jobs of the fast-guard suite at 2 workers each took 2.3x one job's wall time (209 s against 89 s) at peak load 8.6 and a 6.0 GB memory low-water; 4 jobs at 4 workers each left 0.85 GB free. Re-measure on different hardware. Range: 1–12. |
+| `AUTOBOT_TEST_NODE_SSH_BIN` | testing | str | `'ssh'` | The ssh executable used to reach the node (tests substitute a stand-in). |
+| `AUTOBOT_TEST_NODE_SSH_KEY` | testing | str | `""` | Path to the SSH private key for the test node; the key itself stays in the secrets manager or key file. |
+| `AUTOBOT_TEST_NODE_TIMEOUT` | testing | int | `600` | Seconds a remote job may run before the node stops it and removes its checkout. Range: 30–3600. |
+| `AUTOBOT_TEST_NODE_USER` | testing | str | `""` | SSH user on the remote test node. |
+| `AUTOBOT_TEST_NODE_UV_VERSION` | testing | str | `'0.9.0'` | Version of uv that --provision installs from PyPI on the node when the base has no Python at the floor. |
+| `AUTOBOT_TEST_NODE_WORKERS` | testing | int | `2` | pytest-xdist workers per remote job (-n). Default 2, measured: one job took 104 s at 1 worker, 89 s at 2, 114 s at 4 and 136 s at 8, so more workers add load without finishing sooner. Range: 1–12. |
 | `AUTOBOT_THREAT_AGENT_ACTION_RATE_LIMIT_PER_MINUTE` | security | int | `120` | Agent tool calls per minute for one verified user before threat detection flags a volume anomaly (#18844); overridden by thresholds.agent_action_rate_limit_per_minute in the threat-detection config. |
 | `AUTOBOT_THREAT_INTEL_CACHE_TTL` | security | int | `7200` | Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process (#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
@@ -681,3 +696,17 @@ appears outside the known overlays.
 | `VERIFIER_MAX_TOKENS` | verifier | int | `512` | Token budget of the verifier LLM call (un-prefixed legacy name, kept for existing configs). Range: 1–8192. |
 | `VERIFIER_TIMEOUT_S` | verifier | float | `10.0` | Seconds the verifier LLM call may take (un-prefixed legacy name, kept for existing configs); past it the pass is a 'timeout' degradation (#21844). Range: 0.1–600.0. |
 <!-- END_AUTOGEN_ENV_DOCS -->
+
+## Remote test node (`AUTOBOT_TEST_NODE_*`, #20935)
+
+- **Host-key trust.** By default the connection uses `StrictHostKeyChecking=accept-new`: the node's key is trusted on
+  first use (TOFU) and any later change is refused. The first connection is therefore not authenticated; to pin the
+  key, put it in a known_hosts file and set `AUTOBOT_TEST_NODE_KNOWN_HOSTS` to that path. The tool then uses
+  `StrictHostKeyChecking=yes` with only that file.
+- **Values are validated against the registered ranges.** A non-integer or out-of-range value (for example
+  `AUTOBOT_TEST_NODE_SLOTS=0`) is reported or warned about and the default is used.
+- **Provisioning prerequisite.** `--provision` installs packages with `sudo -n`, so the SSH user needs passwordless
+  sudo for the package manager when the base lacks git, flock, setsid or a Python at the floor. The uv and pip
+  versions installed are pinned by `AUTOBOT_TEST_NODE_UV_VERSION` and `AUTOBOT_TEST_NODE_PIP_VERSION`.
+- **Fallback.** A missing ssh executable, an SSH timeout or an unreachable node exits 75, and the pre-push hook then
+  runs the guards locally; a failing test on the node is a failure, never a fallback.

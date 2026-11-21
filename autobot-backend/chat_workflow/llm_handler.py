@@ -14,18 +14,19 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import interpretation_llm_options
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
 from middleware.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
+from .interpretation_guard import interpretation_never_fails_the_tool
 from .models import WorkflowSession
 from .outbound_url import _VALID_URL_SCHEMES, _normalize_outbound_url
 from .tool_timing import mark_tool_started, take_tool_elapsed, tool_outcome_fields
@@ -925,13 +926,9 @@ Return code: {return_code}
 Briefly explain what this output shows. Keep it concise (2-3 sentences max).
 Do NOT conclude the task or provide a final summary - just explain this specific result."""
 
-    def _get_interpretation_llm_options(self) -> Dict[str, Any]:
-        """Get LLM options for command interpretation."""
-        return {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
-        }
+    def _get_interpretation_llm_options(self, model: str | None = None) -> Dict[str, Any]:
+        """Get LLM options for command interpretation (#21878: the chat model keeps the chat's context)."""
+        return interpretation_llm_options(model)
 
     async def _interpret_non_streaming(
         self,
@@ -1034,6 +1031,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             if full_response:
                 full_response = await _emit_after_llm_response(full_response, llm_params, session_id)
 
+    @interpretation_never_fails_the_tool
     async def _interpret_command_results(
         self,
         command: str,
@@ -1062,25 +1060,17 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             WorkflowMessage chunks
         """
         interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
-        llm_options = self._get_interpretation_llm_options()
+        llm_options = self._get_interpretation_llm_options(selected_model)
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
-                ollama_endpoint,
-                selected_model,
-                interpretation_prompt,
-                llm_options,
-                session_id,
+                ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
             ):
                 yield msg
             return
 
         async for msg in self._interpret_streaming(
-            ollama_endpoint,
-            selected_model,
-            interpretation_prompt,
-            llm_options,
-            session_id,
+            ollama_endpoint, selected_model, interpretation_prompt, llm_options, session_id
         ):
             yield msg
 
@@ -1148,7 +1138,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             logger.warning(f"[interpret_terminal_command] Redis timeout getting session " f"data for {session_id}")
             return None
 
-    async def _persist_to_conversation_history(self, session_id: str, interpretation: str, model: str = "") -> None:
+    async def _persist_to_conversation_history(
+        self, session_id: str, interpretation: str, model: str = "", user_message: str | None = None
+    ) -> None:
         """
         Persist terminal interpretation to conversation history for LLM context.
 
@@ -1159,6 +1151,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             session_id: Chat session ID
             interpretation: Interpretation text to persist
             model: The model that produced it; the rolling-summary refresh folds with it (#20852)
+            user_message: The message the command answered, captured when it ran; else the latest one (#21938)
 
         Raises:
             Exception: If persistence fails (logged, not propagated)
@@ -1168,7 +1161,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             session = await self.get_or_create_session(session_id)
 
             # Get the last user message from chat:session (most recent context)
-            last_user_message = await self._get_last_user_message(session_id)
+            last_user_message = user_message or await self._get_last_user_message(session_id)
 
             if not last_user_message:
                 logger.warning(
@@ -1234,7 +1227,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         return interpretation
 
     async def interpret_terminal_command(
-        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str
+        self, command: str, stdout: str, stderr: str, return_code: int, session_id: str, user_message: str | None = None
     ) -> str:
         """
         Public method to interpret terminal command results.
@@ -1252,7 +1245,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
             await self._save_to_chat_history(session_id, interpretation)
             model = provide_config_manager().get_selected_model()  # the rolling-summary refresh folds with it
-            await self._persist_to_conversation_history(session_id, interpretation, model)
+            await self._persist_to_conversation_history(session_id, interpretation, model, user_message)
 
             return interpretation
 
