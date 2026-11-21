@@ -415,10 +415,14 @@ class AutoBotAgentAdapter:
 
         try:
             from llc.services.accessors import get_budget_service
+            from llc.services.budget_idempotency import retry_while_in_flight
 
             async with self._budget_session_factory() as session:
-                await get_budget_service().ingest_cost_event(
-                    session, agent_id, company_id, tokens_in, tokens_out, model, idempotency_key=run_id
+                await retry_while_in_flight(
+                    lambda: get_budget_service().ingest_cost_event(
+                        session, agent_id, company_id, tokens_in, tokens_out, model, idempotency_key=run_id
+                    ),
+                    run_id,
                 )
         except BudgetExhausted:
             raise  # Hard-stop from GH#8215: propagate so run is marked FAILED

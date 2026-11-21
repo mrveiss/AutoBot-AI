@@ -354,3 +354,30 @@ env_registry.register_env_var(
         component="orchestrator",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_BUDGET_INGEST_RETRY_ATTEMPTS",
+        type=int,
+        default=5,
+        description=(
+            "How many times the native adapter retries a cost ingest whose idempotency key is still being "
+            "charged by another caller before it logs an error with the run id (llc/services/budget_idempotency.py, "
+            "#21332)."
+        ),
+        component="backend",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_BUDGET_INGEST_RETRY_DELAY_SECONDS",
+        type=float,
+        default=0.5,
+        description=(
+            "Base delay, in seconds, between retries of an in-flight cost ingest; doubles each attempt "
+            "(llc/services/budget_idempotency.py, #21332)."
+        ),
+        component="backend",
+    )
+)

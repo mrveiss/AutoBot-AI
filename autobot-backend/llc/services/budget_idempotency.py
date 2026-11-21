@@ -24,24 +24,32 @@ Policies, each decided on purpose:
 The ``Idempotency-Key`` HTTP middleware also sees the header on the ingest route as a fast path (it caches
 only 2xx); this layer is the authority because it also covers the adapter and the scheduler.
 
-Two accepted windows, both closed only by a DB-side unique idempotency row written in the charge's own
-transaction (tracked in #21972):
+THE DATABASE IS THE AUTHORITY, REDIS IS THE FAST PATH (#21972)
+--------------------------------------------------------------
+``company_os_cost_events`` carries a unique (company_id, agent_id, idempotency_key) index, and the charge writes
+that row in its own transaction BEFORE it touches spend. Only the transaction that inserts the row may change
+spend; a loser hits the constraint (``CostEventAlreadyRecorded``), its charge never starts, and it replays the
+winner's stored cost. This closes what the Redis claim alone could not:
 
-* (a) A crash, or a failed ``_record``, after ``session.commit()`` leaves the claim held until
-  ``IDEMPOTENCY_CLAIM_TTL_SECONDS``. A retry inside that window gets ``IngestInFlight`` (409); a retry after
-  it charges again.
-* (b) An ambiguous commit (``commit`` raises or is cancelled after the DB committed) releases the claim, so
-  a retry can double-charge.
+* a claim that expires mid-charge (a second caller claims the same key; both reach the database, one wins);
+* (a) a crash, or a failed ``_record``, after ``session.commit()`` -- the retry finds the row;
+* (b) an ambiguous commit (raised or cancelled after the database committed) -- the retry finds the row.
+
+Left as is: a replay answered from the database returns the first cost, not a repeat of a stored hard stop
+(only the Redis record keeps the 402); a retry that lands inside window (a) still gets ``IngestInFlight`` until
+the claim lapses, but can no longer double-charge.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 from decimal import Decimal
 from typing import Any, Awaitable, Callable, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.env_utils import env_float_clamped, env_int_clamped
 from autobot_shared.idempotency import KeyClaim, ReplayedResponse, claim, complete, release_key, storage_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -52,6 +60,11 @@ logger = get_logger(__name__)
 #: Fixed "path" half of the storage key: namespaces budget-ingest keys apart from the HTTP middleware's.
 _SCOPE = "budget.ingest_cost_event"
 _OK, _EXHAUSTED = 200, 402
+
+#: How often a caller with no HTTP client to retry for it (the native adapter) re-tries an in-flight ingest, and
+#: the base delay between tries (doubles each attempt). Env-backed per the repository's constant rule.
+INGEST_RETRY_ATTEMPTS = env_int_clamped("AUTOBOT_BUDGET_INGEST_RETRY_ATTEMPTS", 5, min_v=1, max_v=20)
+INGEST_RETRY_DELAY_SECONDS = env_float_clamped("AUTOBOT_BUDGET_INGEST_RETRY_DELAY_SECONDS", 0.5, min_v=0.0, max_v=30.0)
 
 
 class IngestInFlight(Exception):
@@ -132,3 +145,21 @@ async def _run_claimed(
         raise
     await _record(redis, key, token, _OK, {"cost": str(cost)})
     return cost
+
+
+async def retry_while_in_flight(ingest: Callable[[], Awaitable[Any]], run_id: str) -> None:
+    """Run *ingest*, retrying with bounded backoff while another caller holds the same key (#21332).
+
+    Safe because the database row (#21972) makes a repeat charge impossible. When the last attempt is still in
+    flight the charge is NOT dropped silently: it is logged at error level with the run id.
+    """
+    for attempt in range(INGEST_RETRY_ATTEMPTS):
+        try:
+            await ingest()
+            return
+        except IngestInFlight:
+            if attempt + 1 < INGEST_RETRY_ATTEMPTS:
+                await asyncio.sleep(INGEST_RETRY_DELAY_SECONDS * (2**attempt))
+    logger.error(
+        "cost ingest for run %s still in flight after %d attempts; charge not confirmed", run_id, INGEST_RETRY_ATTEMPTS
+    )

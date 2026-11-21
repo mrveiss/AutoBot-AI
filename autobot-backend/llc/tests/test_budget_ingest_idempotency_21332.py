@@ -10,6 +10,7 @@ Redis commands, so what is asserted is the stored spend, not a mock call count.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from decimal import Decimal
 from types import SimpleNamespace
@@ -27,8 +28,9 @@ from llc.models.budget import LLCAgentBudget
 from llc.models.enums import BudgetMode
 from llc.scheduler.heartbeat_scheduler import _ingest_adapter_usage
 from llc.scheduler.usage_billing import ingest_run_cost
+from llc.services import budget_idempotency
 from llc.services.budget import BudgetService
-from llc.services.budget_idempotency import IngestInFlight
+from llc.services.budget_idempotency import IngestInFlight, retry_while_in_flight
 from llc.tests import _e2e_harness as harness
 from llc.tests.test_autobot_agent_adapter import _FAKE_AGENT_PATH
 
@@ -111,10 +113,13 @@ COMPANY = str(uuid.uuid4())
 
 
 async def _ingest(factory, agent: str, key: str | None, tokens: int = EVENT) -> Decimal:  # noqa: ANN001
+    """One caller's ingest. The caller owns the commit on the unkeyed and Redis-fallback paths, as a route does."""
     async with factory() as session:
-        return await BudgetService().ingest_cost_event(
+        cost = await BudgetService().ingest_cost_event(
             session, agent, COMPANY, tokens, 0, "llama3", idempotency_key=key
         )
+        await session.commit()
+        return cost
 
 
 async def _spent(factory, agent: str) -> int:  # noqa: ANN001
@@ -197,6 +202,87 @@ async def test_no_redis_client_warns_and_charges_once(factory, caplog) -> None: 
     with patch(_STORE, AsyncMock(return_value=None)), caplog.at_level("WARNING"):
         await _ingest(factory, "agent-a", "run-1")
     assert "charging without dedupe" in caplog.text
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
+async def test_two_transactions_racing_on_one_key_charge_once(factory) -> None:  # noqa: ANN001
+    """No Redis claim at all: the unique row decides, and the loser replays the winner's cost."""
+    with patch(_STORE, AsyncMock(return_value=None)):
+        first, second = await asyncio.gather(_ingest(factory, "agent-a", "run-1"), _ingest(factory, "agent-a", "run-1"))
+    assert first == second
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_a_commit_whose_result_was_never_stored_does_not_charge_twice(
+    factory, redis  # noqa: ANN001
+) -> None:
+    """Windows (a) and (b): the charge committed, the Redis record did not, and the claim is gone."""
+    with patch.object(budget_idempotency, "complete", AsyncMock(side_effect=ConnectionError("lost"))):
+        await _ingest(factory, "agent-a", "run-1")
+    redis.data.clear()  # the claim lapsed
+    await _ingest(factory, "agent-a", "run-1")
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
+async def test_a_claim_that_expired_mid_charge_cannot_double_charge(factory, redis) -> None:  # noqa: ANN001
+    """A second caller claims the same key while the first is mid-charge; the database still admits one charge."""
+    real = BudgetService._charge_cost_event
+
+    async def slow_then_expire(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        redis.data.clear()  # the claim lapses before this charge finishes
+        return await real(self, *args, **kwargs)
+
+    with patch.object(BudgetService, "_charge_cost_event", slow_then_expire):
+        await asyncio.gather(
+            _ingest(factory, "agent-a", "run-1"), _ingest(factory, "agent-a", "run-1"), return_exceptions=True
+        )
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
+async def test_in_flight_ingest_is_retried_until_the_claimant_completes() -> None:
+    calls = AsyncMock(side_effect=[IngestInFlight("x"), IngestInFlight("x"), Decimal("1")])
+    with patch.object(budget_idempotency, "INGEST_RETRY_DELAY_SECONDS", 0):
+        await retry_while_in_flight(calls, "run-1")
+    assert calls.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_in_flight_ingest_that_never_clears_is_logged_with_the_run_id(caplog) -> None:  # noqa: ANN001
+    calls = AsyncMock(side_effect=IngestInFlight("x"))
+    with patch.object(budget_idempotency, "INGEST_RETRY_DELAY_SECONDS", 0), caplog.at_level("ERROR"):
+        await retry_while_in_flight(calls, "run-42")
+    assert calls.await_count == budget_idempotency.INGEST_RETRY_ATTEMPTS
+    assert "run-42" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_claimant_that_failed_is_retried_into_a_real_charge(factory, redis) -> None:  # noqa: ANN001
+    """The claim is held when the adapter first asks (in flight); the claimant then fails and releases it."""
+    from autobot_shared.idempotency import claim, release_key, storage_key
+
+    key = storage_key(f"{COMPANY}:agent-a", "POST", "budget.ingest_cost_event", "run-1")
+    held = await claim(redis, key)
+    attempts = {"n": 0}
+
+    async def ingest() -> Decimal:
+        attempts["n"] += 1
+        if attempts["n"] == 2:
+            await release_key(redis, key, str(held.token))  # the claimant failed
+        return await _ingest(factory, "agent-a", "run-1")
+
+    with patch.object(budget_idempotency, "INGEST_RETRY_DELAY_SECONDS", 0):
+        await retry_while_in_flight(ingest, "run-1")
+    assert attempts["n"] == 2 and await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
+async def test_a_claimant_that_completed_means_the_retry_does_not_charge_again(factory, redis) -> None:  # noqa: ANN001
+    await _ingest(factory, "agent-a", "run-1")  # the claimant completed
+    await retry_while_in_flight(lambda: _ingest(factory, "agent-a", "run-1"), "run-1")
     assert await _spent(factory, "agent-a") == EVENT
 
 

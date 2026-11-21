@@ -27,8 +27,24 @@ from user_management.models.base import Base
 SYSTEM_OF_RECORD = system_of_record("company_os_model")
 
 
+#: One cost event per (company, agent, idempotency key): the DB-side half of the budget ingest idempotency (#21972).
+#: Partial, because most events carry no key and NULLs would otherwise have to be distinct by the engine's grace.
+COST_EVENT_IDEMPOTENCY_INDEX = "uq_company_os_cost_events_idempotency"
+
+
 class CompanyOsCostEvent(Base):
     __tablename__ = "company_os_cost_events"
+    __table_args__ = (
+        sa.Index(
+            COST_EVENT_IDEMPOTENCY_INDEX,
+            "company_id",
+            "agent_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=sa.text("idempotency_key IS NOT NULL"),
+            sqlite_where=sa.text("idempotency_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(as_uuid=True), nullable=False, index=True)
@@ -43,6 +59,7 @@ class CompanyOsCostEvent(Base):
     tokens_in: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     tokens_out: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     cost: Mapped[Decimal] = mapped_column(sa.Numeric(15, 6), nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
