@@ -5,6 +5,7 @@
 // manual activation, v-model, and the arrow-key direction under dir="rtl".
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { h } from 'vue'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import BaseTabs from '../BaseTabs.vue'
 import { installRekaDomStubs, press } from './rekaTestEnv'
@@ -195,5 +196,43 @@ describe('BaseTabs items and defaults (#20382)', () => {
     await wrapper?.setProps({ items: [...ITEMS] })
     await flushPromises()
     expect(selected()).toBe(2)
+  })
+})
+
+describe('BaseTabs icon slot, item class and list-only mode (#18243)', () => {
+  it('renders the icon slot per item, before the label', async () => {
+    wrapper = mount(BaseTabs, {
+      props: { items: ITEMS, label: 'Sections' },
+      slots: { icon: ({ item }: { item: { value: string } }) => h('i', { 'data-icon': item.value }) },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(document.querySelectorAll('[role="tab"] [data-icon]')).toHaveLength(ITEMS.length)
+    expect(tabs()[0].querySelector('[data-icon="one"]')).not.toBeNull()
+  })
+
+  it('puts the item class on its trigger only', async () => {
+    await render({ items: [{ value: 'a', label: 'A', class: 'adv' }, { value: 'b', label: 'B' }] })
+    expect(tabs()[0].classList.contains('adv')).toBe(true)
+    expect(tabs()[1].classList.contains('adv')).toBe(false)
+  })
+
+  it('renders no tabpanel in list-only mode and lets the item name its id and panel', async () => {
+    await render({
+      listOnly: true,
+      items: [{ value: 'a', label: 'A', id: 'tab-a', controls: 'tabpanel-a' }, { value: 'b', label: 'B', id: 'tab-b' }],
+      modelValue: 'a',
+    })
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(0)
+    expect(tabs()[0].id).toBe('tab-a')
+    expect(tabs()[0].getAttribute('aria-controls')).toBe('tabpanel-a')
+    expect(tabs()[1].hasAttribute('aria-controls')).toBe(false)
+  })
+
+  it('still moves selection with the arrow keys in list-only mode', async () => {
+    await render({ listOnly: true, items: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], modelValue: 'a' })
+    tabs()[0].focus()
+    await press(tabs()[0], 'ArrowRight')
+    expect(wrapper?.emitted('update:modelValue')?.[0]).toEqual(['b'])
   })
 })

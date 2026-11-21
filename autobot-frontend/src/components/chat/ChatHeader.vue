@@ -3,17 +3,15 @@
     <!-- Left: Mobile sidebar toggle + session avatar -->
     <template #leading>
       <!-- Mobile hamburger to open chat sidebar (#1804) -->
-      <button
-        class="header-btn lg:hidden shrink-0"
-        :title="$t('chat.sidebar.expandSidebar')"
-        :aria-label="$t('chat.sidebar.expandSidebar')"
+      <ChatHeaderIconButton
+        class="lg:hidden shrink-0"
+        :label="$t('chat.sidebar.expandSidebar')"
+        icon="bars"
         @click="$emit('toggle-mobile-sidebar')"
-      >
-        <Icon name="bars" />
-      </button>
+      />
 
-      <div class="w-7 h-7 sm:w-8 sm:h-8 bg-electric-600 rounded-full flex items-center justify-center shrink-0">
-        <Icon name="robot" class="text-white text-xs sm:text-sm" />
+      <div class="chat-header__tile" aria-hidden="true">
+        <Icon name="robot" />
       </div>
     </template>
     <template #title>{{ currentSessionTitle }}</template>
@@ -21,15 +19,23 @@
 
     <!-- Right: Actions + connection status -->
     <template #actions>
+      <!-- Minimal mode: say what is hidden and how to get it back (#18243) -->
+      <div class="only-min chat-header__note">
+        <span>{{ $t('chat.header.essentialsNote') }}</span>
+        <BaseButton variant="link" size="sm" @click="showAllFeatures">
+          {{ $t('chat.header.showAllFeatures') }}
+        </BaseButton>
+      </div>
+
       <!-- GH#8990: context window usage indicator (hidden on mobile to save space) -->
       <ContextWindowIndicator
         v-if="contextWindowProps?.hasData"
-        class="hidden sm:flex"
+        class="adv hidden sm:flex"
         v-bind="contextWindowProps"
       />
       <span
         v-else-if="contextWindowProps?.loadError"
-        class="hidden sm:inline text-xs text-warning"
+        class="adv hidden sm:inline chat-header__warn"
         role="status"
         :title="contextWindowProps.loadError"
       >
@@ -40,47 +46,52 @@
       <slot name="actions"></slot>
 
       <!-- Session Actions -->
-      <button
-        v-if="currentSessionId"
-        @click="$emit('open-settings')"
-        class="header-btn"
-        :title="$t('chat.openSettings')"
-      >
-        <Icon name="cog" />
-      </button>
-
-      <button
-        v-if="currentSessionId"
-        @click="$emit('export-session')"
-        class="header-btn"
-        :title="$t('chat.exportChat')"
-      >
-        <Icon name="download" />
-      </button>
-
-      <button
-        v-if="currentSessionId"
-        @click="$emit('clear-session')"
-        class="header-btn"
-        :title="$t('chat.clearChat')"
-      >
-        <Icon name="trash" />
-      </button>
+      <template v-if="currentSessionId">
+        <ChatHeaderIconButton
+          adv
+          :label="$t('chat.openSettings')"
+          icon="cog"
+          @click="$emit('open-settings')"
+        />
+        <ChatHeaderIconButton
+          adv
+          :label="$t('chat.exportChat')"
+          icon="download"
+          @click="$emit('export-session')"
+        />
+        <ChatHeaderIconButton
+          :label="$t('chat.clearChat')"
+          icon="trash"
+          @click="$emit('clear-session')"
+        />
+      </template>
 
       <!-- Connection Status — icon only on mobile, full label on sm+ -->
-      <div class="connection-status" :class="connectionStatusClass">
-        <Icon :name="connectionStatusIcon" />
-        <span class="text-sm hidden sm:inline">{{ connectionStatus }}</span>
-      </div>
+      <BaseTooltip :text="connectionStatus" placement="bottom">
+        <template #default="{ describedby }">
+          <BaseBadge
+            :variant="connectionVariant"
+            :aria-describedby="describedby"
+            role="status"
+            tabindex="0"
+          >
+            <template #icon><Icon :name="connectionStatusIcon" /></template>
+            <span class="hidden sm:inline">{{ connectionStatus }}</span>
+          </BaseBadge>
+        </template>
+      </BaseTooltip>
     </template>
   </PageHeader>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { PageHeader } from '@autobot/ui'
+import { BaseBadge, BaseButton, BaseTooltip, PageHeader } from '@autobot/ui'
+import type { SemanticVariant } from '@autobot/ui'
 import ContextWindowIndicator from './ContextWindowIndicator.vue'
+import ChatHeaderIconButton from './ChatHeaderIconButton.vue'
 import { computed } from 'vue'
+import { useUiMode, useUiModeAnnouncer } from '@/composables/useUiMode'
 
 interface ContextWindowProps {
   tokensUsed: number
@@ -111,11 +122,18 @@ interface Emits {
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
-const connectionStatusClass = computed(() => ({
-  'text-green-600': props.isConnected,
-  'text-red-600': !props.isConnected,
-  'text-yellow-600': props.connectionStatus === 'Connecting'
-}))
+const { setMode } = useUiMode()
+const announceMode = useUiModeAnnouncer()
+
+function showAllFeatures(): void {
+  setMode('full')
+  announceMode('full')
+}
+
+const connectionVariant = computed<SemanticVariant>(() => {
+  if (!props.isConnected) return 'error'
+  return props.connectionStatus === 'Connecting' ? 'warning' : 'success'
+})
 
 const connectionStatusIcon = computed(() => {
   if (!props.isConnected) return 'exclamation-circle'
@@ -125,26 +143,31 @@ const connectionStatusIcon = computed(() => {
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
 .chat-header {
-  @apply flex-shrink-0;
+  flex-shrink: 0;
 }
 
-.header-btn {
-  /* min 44px touch target on mobile (#1804) */
-  @apply w-8 h-8 sm:w-8 sm:h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
-  min-width: 44px;
-  min-height: 44px;
+.chat-header__tile {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--aui-radius-md);
+  background: var(--aui-color-primary);
+  color: var(--aui-color-primary-contrast);
 }
 
-@media (min-width: 640px) {
-  .header-btn {
-    min-width: 2rem;
-    min-height: 2rem;
-  }
+.chat-header__note {
+  align-items: center;
+  gap: var(--aui-space-2);
+  font-size: var(--aui-text-sm);
+  color: var(--aui-color-text-muted);
 }
 
-.connection-status {
-  @apply flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-md bg-autobot-bg-tertiary;
+.chat-header__warn {
+  font-size: var(--aui-text-xs);
+  color: var(--aui-color-warning);
 }
 </style>

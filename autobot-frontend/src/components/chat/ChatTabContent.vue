@@ -60,10 +60,10 @@
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
-      <div class="flex-1 flex flex-col bg-black">
+      <div class="chat-tab-remote">
         <!-- Host selector header for VNC -->
-        <div class="vnc-header flex justify-between items-center bg-autobot-bg-secondary text-autobot-text-primary px-4 py-2 text-sm">
-          <div class="flex items-center gap-3">
+        <div class="chat-host-bar">
+          <div class="chat-host-bar__group">
             <Icon name="desktop" />
             <HostSelector
               ref="vncHostSelectorRef"
@@ -83,15 +83,14 @@
           class="flex-1"
         />
         <!-- Empty state when no host selected -->
-        <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
-          <div class="text-center">
-            <Icon name="desktop" class="text-5xl mb-4 opacity-50" />
-            <p class="text-lg mb-2">{{ $t('chat.tabContent.selectVncHost') }}</p>
-            <p class="text-sm text-autobot-text-muted">
-              {{ $t('chat.tabContent.selectVncHostDesc') }}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          v-else
+          class="chat-tab-empty"
+          :title="$t('chat.tabContent.selectVncHost')"
+          :description="$t('chat.tabContent.selectVncHostDesc')"
+        >
+          <template #icon><Icon name="desktop" size="xl" /></template>
+        </EmptyState>
       </div>
     </div>
 
@@ -102,7 +101,7 @@
       class="absolute inset-0 flex flex-col min-h-0"
     >
       <!-- SSH Host selector header for terminal -->
-      <div class="terminal-host-header flex items-center gap-3 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border">
+      <div class="chat-host-bar chat-host-bar--ruled">
         <HostSelector
           ref="sshHostSelectorRef"
           v-model="selectedSshHost"
@@ -111,7 +110,7 @@
           @host-selected="onSshHostSelected"
           @open-secrets-manager="emit('open-secrets-manager')"
         />
-        <span v-if="selectedSshHost" class="text-xs text-autobot-text-muted">
+        <span v-if="selectedSshHost" class="chat-host-bar__note">
           {{ $t('chat.tabContent.connectedTo', { name: selectedSshHost.name }) }}
         </span>
       </div>
@@ -124,21 +123,21 @@
         class="flex-1"
       />
       <!-- Empty state when no host selected -->
-      <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-muted">
-        <div class="text-center">
-          <Icon name="terminal" class="text-5xl mb-4 opacity-50" />
-          <p class="text-lg mb-2">{{ $t('chat.tabContent.selectSshHost') }}</p>
-          <p class="text-sm text-autobot-text-muted">
-            {{ $t('chat.tabContent.selectSshHostDesc') }}
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        v-else
+        class="chat-tab-empty"
+        :title="$t('chat.tabContent.selectSshHost')"
+        :description="$t('chat.tabContent.selectSshHostDesc')"
+      >
+        <template #icon><Icon name="terminal" size="xl" /></template>
+      </EmptyState>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { EmptyState } from '@autobot/ui'
 import DesktopAccessDenied from '@/components/desktop/DesktopAccessDenied.vue'
 import { usePermissions } from '@/composables/usePermissions'
 import { ref, watch, computed, defineAsyncComponent } from 'vue'
@@ -264,5 +263,44 @@ const handleToolCallDetected = (toolCall: ToolCall) => {
 </script>
 
 <style scoped>
-/* Content styling handled by child components */
+.chat-tab-remote {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  background: var(--aui-color-surface-sunken);
+}
+
+/* Host selector bars of the Terminal and Remote desktop tabs (#18243). */
+.chat-host-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aui-space-3);
+  padding: var(--aui-space-2) var(--aui-space-4);
+  background: var(--surface2);
+  color: var(--aui-color-text);
+  font-size: var(--aui-text-sm);
+}
+
+.chat-host-bar--ruled {
+  justify-content: flex-start;
+  border-block-end: 1px solid var(--aui-color-border);
+}
+
+.chat-host-bar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--aui-space-3);
+}
+
+.chat-host-bar__note {
+  font-size: var(--aui-text-xs);
+  color: var(--aui-color-text-muted);
+}
+
+.chat-tab-empty {
+  flex: 1;
+  justify-content: center;
+  background: var(--surface2);
+}
 </style>

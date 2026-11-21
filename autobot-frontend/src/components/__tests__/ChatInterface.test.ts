@@ -282,7 +282,7 @@ describe('ChatInterface', () => {
         // exactly once.
         expect(screen.getByText('chat.sidebar.chatHistory')).toBeInTheDocument()
       })
-      expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument()
       expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
       expect(screen.getByLabelText('chat.sidebar.deleteChat')).toBeInTheDocument()
       expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
@@ -462,10 +462,10 @@ describe('ChatInterface', () => {
       renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
-        expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument()
       })
 
-      const newChatButton = screen.getByLabelText('chat.sidebar.createNew')
+      const newChatButton = screen.getByRole('button', { name: 'chat.newChat' })
       await user.click(newChatButton)
 
       // Clicking "new" triggers controller.createNewSession()
@@ -711,7 +711,7 @@ describe('ChatInterface', () => {
       renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
-        expect(screen.getByLabelText('chat.sidebar.createNew')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument()
       })
 
       expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
@@ -733,7 +733,7 @@ describe('ChatInterface', () => {
       })
 
       // Verify the sidebar has interactive elements
-      const createButton = screen.getByLabelText('chat.sidebar.createNew')
+      const createButton = screen.getByRole('button', { name: 'chat.newChat' })
       expect(createButton).toBeInTheDocument()
 
       // Test keyboard activation on sidebar button

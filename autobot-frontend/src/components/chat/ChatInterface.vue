@@ -56,67 +56,23 @@
           @open-settings="showChatSettings = true"
           class="shrink-0"
         >
-          <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
-            <!-- Voice controls group (GH#8755): proximity grouping for audio actions -->
-            <div role="group" aria-label="Voice controls" class="header-btn-group">
-              <!-- Voice Output Toggle (#928) -->
-              <button
-                @click="toggleVoiceOutput"
-                class="header-btn"
-                :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-                :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
-              >
-                <Icon :name="isSpeaking || voiceOutputEnabled ? 'volume-up' : 'volume-mute'" :class="isSpeaking ? 'animate-pulse' : ''" />
-              </button>
-              <!-- Voice Conversation (#1029) -->
-              <button
-                ref="voiceBtnRef"
-                @click="toggleVoiceConversation"
-                class="header-btn"
-                :class="{ 'bg-electric-100 text-electric-600': voiceExpanded }"
-                :aria-expanded="voiceExpanded"
-                :aria-controls="voiceControlsId"
-                :title="$t('chat.interface.voiceChat')"
-              >
-                <Icon name="headset" />
-              </button>
-            </div>
-            <!-- Divider between voice group and utility actions -->
-            <div class="header-btn-divider" aria-hidden="true"></div>
-            <button
-              v-if="store.currentSessionId"
-              ref="fileBtnRef"
-              @click="togglePanel('files')"
-              class="header-btn"
-              :aria-expanded="showFilePanel"
-              aria-controls="chat-panel-files"
-              :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
-              :title="$t('chat.interface.toggleFilePanel')"
-            >
-              <Icon name="paperclip" />
-            </button>
-            <!-- Issue #4414: multi-model comparison toggle -->
-            <button
-              @click="showComparePanel = !showComparePanel"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showComparePanel }"
-              :title="$t('chat.compare.toggleTitle')"
-              :aria-pressed="showComparePanel"
-            >
-              <Icon name="columns" />
-            </button>
-            <!-- #16443: collaboration panel toggle, collaborative sessions only -->
-            <button
-              v-if="isCollaborativeSession" ref="collabBtnRef"
-              @click="togglePanel('collaboration')"
-              class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showCollaborationPanel }"
-              :title="$t('collaboration.panel.title')"
-              :aria-expanded="showCollaborationPanel" aria-controls="chat-panel-collaboration"
-            >
-              <Icon name="users" />
-            </button>
+            <ChatHeaderActions
+              :voice-output-enabled="voiceOutputEnabled"
+              :is-speaking="isSpeaking"
+              :voice-expanded="voiceExpanded"
+              :voice-controls-id="voiceControlsId"
+              :has-session="!!store.currentSessionId"
+              :is-collaborative="isCollaborativeSession"
+              :show-file-panel="showFilePanel"
+              :show-compare-panel="showComparePanel"
+              :show-collaboration-panel="showCollaborationPanel"
+              @toggle-voice-output="toggleVoiceOutput"
+              @toggle-voice-conversation="toggleVoiceConversation"
+              @toggle-panel="togglePanel"
+              @toggle-compare="showComparePanel = !showComparePanel"
+              @button-el="setPanelButton"
+            />
             <!-- #16470 follow-up: always-mountable, independent of session
                  mode -- an invitee usually has no collaborative session of
                  their own yet, so this can't be gated the same way. -->
@@ -327,12 +283,13 @@ const logger = createLogger('ChatInterface')
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
-import { useChatSidePanels } from '@/composables/useChatSidePanels'
+import { useChatSidePanels, type ChatSidePanel } from '@/composables/useChatSidePanels'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
 import ChatCollaborationPanel from './ChatCollaborationPanel.vue'
 import PendingInvitationsBell from '@/components/collaboration/PendingInvitationsBell.vue'
+import ChatHeaderActions from './ChatHeaderActions.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
@@ -519,6 +476,10 @@ const showVoiceOverlay = ref(false)
 // One right-hand panel at a time; focus handled in the composable (#18243)
 const { showFilePanel, showVoicePanel, showCollaborationPanel, fileBtnRef, voiceBtnRef,
   collabBtnRef, voiceExpanded, voiceControlsId, toggle: togglePanel, closeAll: closeAllPanels } = useChatSidePanels(showVoiceOverlay)
+// ChatHeaderActions reports each toggle button's element, so a closing panel can return focus to it.
+const setPanelButton = (panel: ChatSidePanel, el: HTMLElement | null): void => {
+  ({ files: fileBtnRef, voice: voiceBtnRef, collaboration: collabBtnRef })[panel].value = el
+}
 const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 
 function openVoiceConversation(): void {
@@ -1453,24 +1414,6 @@ watch(
 
 .workflow-progress-widget {
   animation: slideInFromRight 0.3s ease-out;
-}
-
-/* Header button styling for file panel toggle */
-.header-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
-}
-
-/* GH#8755: voice action group — subtle pill wraps related audio controls */
-.header-btn-group {
-  @apply flex items-center gap-0.5 rounded-md px-0.5;
-  background: var(--bg-tertiary);
-}
-
-/* GH#8755: vertical divider between voice group and utility buttons */
-.header-btn-divider {
-  @apply self-stretch my-1 mx-1;
-  width: 1px;
-  background: var(--border-light);
 }
 
 /* Agent-loop tool approval dialog (#4952) */

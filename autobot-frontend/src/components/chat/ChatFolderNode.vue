@@ -55,51 +55,60 @@
         @click.stop
       >
         <!-- Pin -->
-        <button
-          class="p-0.5 rounded hover:bg-autobot-bg-card"
-          :class="folder.pinned ? 'text-electric-500' : 'text-autobot-text-muted'"
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          :aria-label="folder.pinned ? $t('chat.folders.unpin') : $t('chat.folders.pin')"
           :title="folder.pinned ? $t('chat.folders.unpin') : $t('chat.folders.pin')"
           @click="folderStore.togglePin(folder.id)"
         >
           <Icon name="thumbtack" class="text-xs" />
-        </button>
+        </BaseButton>
 
         <!-- Add sub-folder (only if depth < 2, i.e. max depth 3) -->
-        <button
+        <BaseButton
+          variant="ghost"
+          size="xs"
           v-if="depth < 2"
-          class="p-0.5 rounded hover:bg-autobot-bg-card text-autobot-text-muted hover:text-autobot-text-secondary"
+          :aria-label="$t('chat.folders.addSubfolder')"
           :title="$t('chat.folders.addSubfolder')"
           @click="startChildCreate"
         >
           <Icon name="folder-plus" class="text-xs" />
-        </button>
+        </BaseButton>
 
         <!-- Rename -->
-        <button
-          class="p-0.5 rounded hover:bg-autobot-bg-card text-autobot-text-muted hover:text-autobot-text-secondary"
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          :aria-label="$t('chat.folders.rename')"
           :title="$t('chat.folders.rename')"
           @click="startRename"
         >
           <Icon name="edit" class="text-xs" />
-        </button>
+        </BaseButton>
 
         <!-- Archive / Unarchive -->
-        <button
-          class="p-0.5 rounded hover:bg-autobot-bg-card text-autobot-text-muted hover:text-autobot-text-secondary"
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          :aria-label="folder.archived ? $t('chat.folders.unarchive') : $t('chat.folders.archive')"
           :title="folder.archived ? $t('chat.folders.unarchive') : $t('chat.folders.archive')"
           @click="folderStore.toggleArchive(folder.id)"
         >
           <Icon :name="folder.archived ? 'box-open' : 'archive'" class="text-xs" />
-        </button>
+        </BaseButton>
 
         <!-- Delete -->
-        <button
-          class="p-0.5 rounded hover:bg-autobot-bg-card text-red-400 hover:text-red-500"
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          :aria-label="$t('common.delete')"
           :title="$t('common.delete')"
           @click="deleteThisFolder"
         >
           <Icon name="trash" class="text-xs" />
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -150,6 +159,7 @@
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useFolderStore, type ChatFolder } from '@/stores/useFolderStore'
 import type { ChatSession } from '@/stores/useChatStore'

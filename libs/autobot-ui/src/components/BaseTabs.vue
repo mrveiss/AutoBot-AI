@@ -11,8 +11,13 @@
   the app.
 
     props  : items, label, modelValue (v-model) | defaultValue, variant (underline | pill),
-             size (sm | md), orientation, activationMode, dir
-    slots  : `panel-<value>` — the content of the tab with that value
+             size (sm | md), orientation, activationMode, dir, listOnly
+    slots  : `panel-<value>` — the content of the tab with that value;
+             `icon` — scoped by `{ item }`, rendered before each tab's text
+    item   : `class` reaches the trigger; `id` and `controls` replace the trigger's generated
+             id and aria-controls (for a panel the caller owns, see `listOnly`)
+    listOnly: renders the tablist only. The caller owns the tabpanel (it is routed content, not
+             a slot), so the kit emits no `tabpanel` of its own.
     emits  : update:modelValue
 -->
 <script setup lang="ts">
@@ -26,6 +31,12 @@ export interface TabItem {
   value: string
   label: string
   disabled?: boolean
+  /** Extra class on this tab's trigger (e.g. a ui-mode class). */
+  class?: string
+  /** Replaces the trigger's generated id. */
+  id?: string
+  /** Replaces the trigger's aria-controls: the id of a tabpanel the caller owns. */
+  controls?: string
 }
 
 const props = withDefaults(
@@ -41,6 +52,8 @@ const props = withDefaults(
     /** `automatic` selects a tab as it takes focus; `manual` waits for Enter or Space. */
     activationMode?: 'automatic' | 'manual'
     dir?: KitDirection
+    /** Render the tablist only; the caller supplies the `role="tabpanel"`. */
+    listOnly?: boolean
   }>(),
   {
     modelValue: undefined,
@@ -50,6 +63,7 @@ const props = withDefaults(
     orientation: 'horizontal',
     activationMode: 'automatic',
     dir: undefined,
+    listOnly: false,
   },
 )
 
@@ -64,6 +78,14 @@ const active = computed(() => {
   const kept = props.items.some((item) => item.value === chosen.value)
   return kept ? chosen.value : props.items.find((item) => !item.disabled)?.value
 })
+
+/** Overrides for the generated id / aria-controls; a list-only trigger controls no kit panel. */
+function triggerAttrs(item: TabItem): Record<string, string | undefined> {
+  const attrs: Record<string, string | undefined> = {}
+  if (item.id !== undefined) attrs.id = item.id
+  if (item.controls !== undefined || props.listOnly) attrs['aria-controls'] = item.controls
+  return attrs
+}
 
 function onSelect(value: string | number): void {
   chosen.value = String(value)
@@ -82,18 +104,22 @@ function onSelect(value: string | number): void {
     @update:model-value="onSelect"
   >
     <TabsList class="aui-tabs__list" :aria-label="label">
-      <TabsTrigger
-        v-for="item in items"
-        :key="item.value"
-        class="aui-tabs__trigger"
-        :value="item.value"
-        :disabled="item.disabled"
-      >
-        {{ item.label }}
+      <!-- as-child: Reka merges its roles and roving focus onto this button, and the button's own
+           id / aria-controls win -- which is how an item names a panel the caller owns. -->
+      <TabsTrigger v-for="item in items" :key="item.value" :value="item.value" :disabled="item.disabled" as-child>
+        <button
+          type="button"
+          class="aui-tabs__trigger"
+          :class="item.class"
+          v-bind="triggerAttrs(item)"
+        >
+          <slot name="icon" :item="item" />
+          {{ item.label }}
+        </button>
       </TabsTrigger>
     </TabsList>
     <TabsContent
-      v-for="item in items"
+      v-for="item in listOnly ? [] : items"
       :key="item.value"
       class="aui-tabs__panel"
       :value="item.value"
@@ -135,6 +161,9 @@ function onSelect(value: string | number): void {
 }
 
 .aui-tabs__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aui-space-2);
   --aui-tabs-pad-y: var(--aui-space-2);
   --aui-tabs-pad-x: var(--aui-space-4);
   padding: var(--aui-tabs-pad-y) var(--aui-tabs-pad-x);
@@ -149,6 +178,9 @@ function onSelect(value: string | number): void {
 }
 
 .aui-tabs--sm .aui-tabs__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aui-space-2);
   --aui-tabs-pad-y: var(--aui-space-1);
   --aui-tabs-pad-x: var(--aui-space-3);
   font-size: var(--aui-text-xs);

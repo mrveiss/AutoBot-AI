@@ -225,6 +225,13 @@ function blockInertClick(event: MouseEvent): void {
   text-decoration: underline;
 }
 
+/* ---- pressed (toggle) state: a surface fill and an accent border ---- */
+.aui-btn[aria-pressed='true'] {
+  background-color: var(--aui-color-surface-raised);
+  border-color: var(--aui-color-primary);
+  color: var(--aui-color-text);
+}
+
 /* ---- loading spinner ---- */
 .aui-btn__spinner {
   width: 1em;

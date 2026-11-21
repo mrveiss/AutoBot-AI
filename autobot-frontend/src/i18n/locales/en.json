@@ -270,7 +270,11 @@
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
       "noSearchResults": "No chats match your search",
-      "showFallbackChip": "Show fallback badge"
+      "showFallbackChip": "Show fallback badge",
+      "selectChats": "Select chats",
+      "sessionActions": "Chat actions",
+      "moveToFolder": "Move to {name}",
+      "untitledChat": "Chat {id}..."
     },
     "folders": {
       "folders": "Folders",
@@ -857,6 +861,11 @@
       "empty": "\"{filename}\" has no readable text, so it was not used.",
       "truncated": "\"{filename}\" is long, so only the start of it was used.",
       "over_budget": "The attached files reached the size limit, so \"{filename}\" was not used."
+    },
+    "header": {
+      "voiceControls": "Voice controls",
+      "essentialsNote": "Showing essentials",
+      "showAllFeatures": "Show all features"
     }
   },
   "settings": {
@@ -6871,7 +6880,8 @@
       "tabParticipants": "Participants",
       "tabActivity": "Activity",
       "tabNotifications": "Notifications",
-      "tabInvitations": "Invitations"
+      "tabInvitations": "Invitations",
+      "tabsLabel": "Collaboration sections"
     },
     "invitations": {
       "loading": "Loading invitations...",
