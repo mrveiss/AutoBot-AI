@@ -26,7 +26,9 @@ STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
 def _is_streaming_type(msg: Dict[str, Any]) -> bool:
     """Check if message is a streaming type (Issue #315 - extracted)."""
     msg_type = msg.get("messageType", msg.get("type", "default"))
-    metadata = msg.get("metadata") or {}
+    metadata = msg.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
     if metadata.get("completed") is True or metadata.get("iteration") is not None:
         return False  # #21904: a completed reply is a whole message, never an accumulated state
     return msg_type in STREAMING_TYPES

@@ -119,6 +119,7 @@ class ChatState(TypedDict, total=False):
     iteration_count: int
     execution_history: List[Dict[str, Any]]
     all_llm_responses: List[str]
+    turn_id: str  # #21904
 
     # Knowledge / RAG
     used_knowledge: bool
@@ -200,6 +201,7 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
         return {
             "terminal_session_id": terminal_session_id,
             "user_wants_exit": user_wants_exit,
+            "turn_id": str(uuid.uuid4()),  # #21904: scopes the stored reply ids to this turn; survives a resume
             "iteration_count": 0,
             "all_llm_responses": [],
             "execution_history": [],
@@ -1131,6 +1133,7 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             selected_model=(state.get("llm_params") or {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
+            turn_id=state.get("turn_id", ""),
         )
 
         logger.info(

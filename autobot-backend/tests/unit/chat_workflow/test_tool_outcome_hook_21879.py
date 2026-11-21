@@ -121,4 +121,5 @@ async def test_end_to_end_a_failing_tool_is_logged_as_failed(logging_manager, ca
     with caplog.at_level(logging.INFO):
         await _run_tool(logging_manager, seconds=0.02, success=False)
     line = _tool_line(caplog)
-    assert "FAILED" in line and "SUCCESS" not in line and "0.00s" not in line
+    duration = float(line.rsplit("(", 1)[1].rstrip("s)"))
+    assert "FAILED" in line and "SUCCESS" not in line and duration > 0

@@ -62,8 +62,12 @@ def later_respond_entries(workflow_messages: Iterable[Any], iteration: int) -> L
     return found
 
 
+_REASONING_TYPES = frozenset({"thought", "planning"})
+
+
 def _assistant_entries(batch: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [e for e in batch if e.get("sender") == "assistant"]
+    """The assistant entries an answer is judged against: replies, never reasoning (a thought "42" is no answer)."""
+    return [e for e in batch if e.get("sender") == "assistant" and e.get("messageType") not in _REASONING_TYPES]
 
 
 def _is_respond_entry(entry: Dict[str, Any]) -> bool:
@@ -101,12 +105,16 @@ def stamp_model(entry: Dict[str, Any], model: Any) -> None:
         entry["metadata"] = {**metadata, "model": model_or_unknown(model)}
 
 
-def stable_entry_id(iteration: int | None, kind: str, text: str) -> str:
-    """The id of a prose entry that was not streamed under one: the same reply persisted twice has the same id (#21904).
+def stable_entry_id(turn_id: str, iteration: int | None, kind: str, text: str, occurrence: int = 0) -> str:
+    """The id of a prose entry that was not streamed under one (#21904).
 
-    The append merge drops an id that is already stored, so a re-persist (a graph resume) adds nothing twice.
+    Scoped to the *turn* (iteration numbers restart every turn) and the entry's *occurrence* among identical ones in
+    its iteration. The same turn persisted twice (a graph resume) gives the same ids, which the append merge drops;
+    the same words in another turn give other ids. With no *turn_id* there is nothing to scope to: a fresh id.
     """
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"autobot-reply:{iteration}:{kind}:{text}"))
+    if not turn_id:
+        return str(uuid.uuid4())
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"autobot-reply:{turn_id}:{iteration}:{kind}:{occurrence}:{text}"))
 
 
 def iteration_reply_entries(
@@ -117,6 +125,7 @@ def iteration_reply_entries(
     model: Any,
     streamed: tuple,
     judged_against: List[Dict[str, Any]],
+    turn_id: str = "",
 ) -> tuple[List[Dict[str, Any]], Dict[str, Any] | None]:
     """(an iteration's thought/planning entries then its answer entry, the answer entry or None) (#21904).
 
@@ -124,19 +133,25 @@ def iteration_reply_entries(
     *build_final* and judged for redundancy against *judged_against*.
     """
     blocks, answer = split_reasoning_blocks(clean_reply_text(text or ""))
-    entries = [
-        chat_mgr._build_message_dict(
-            "assistant",
-            body,
-            kind,
-            {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model), COMPLETED_KEY: True},
-            None,
-            sources=[],
-            message_id=stable_entry_id(iteration, kind, body),
-            created_at=streamed[1],
+    seen: Dict[tuple, int] = {}
+    entries = []
+    for kind, body in blocks:
+        occurrence = seen[(kind, body)] = seen.get((kind, body), -1) + 1
+        meta = {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model), COMPLETED_KEY: True}
+        entries.append(
+            chat_mgr._build_message_dict(
+                "assistant",
+                body,
+                kind,
+                meta,
+                None,
+                sources=[],
+                message_id=stable_entry_id(turn_id, iteration, kind, body, occurrence),
+                created_at=streamed[1],
+            )
         )
-        for kind, body in blocks
-    ]
+    if streamed[0] is None:
+        streamed = (stable_entry_id(turn_id, iteration, "response", answer), streamed[1])
     final = build_final(answer, judged_against, iteration=iteration, streamed=streamed, model=model)
     return entries + ([final] if final else []), final
 
@@ -170,6 +185,6 @@ def build_final_response_entry(
         },
         None,
         sources=[],
-        message_id=streamed[0] or stable_entry_id(iteration, "response", content),
+        message_id=streamed[0],
         created_at=streamed[1],
     )

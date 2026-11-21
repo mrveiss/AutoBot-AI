@@ -35,10 +35,10 @@ def _tool_steps(iteration):
     return steps
 
 
-def _stored(wf_messages, responses):
+def _stored(wf_messages, responses, turn_id="turn-1"):
     chat_mgr = SimpleNamespace(_build_message_dict=lambda *a, **k: MessagesMixin._build_message_dict(None, *a, **k))
     manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
-    batch = manager._build_persist_batch(chat_mgr, wf_messages, responses, "m", None, False)
+    batch = manager._build_persist_batch(chat_mgr, wf_messages, responses, "m", None, False, turn_id)
     distinct_ordered_times(batch)
     dedupe = DeduplicationMixin()._dedupe_streaming_messages
     return dedupe(dedupe(batch))  # a reload sorts by time; the next save or load then groups the sorted list
@@ -173,14 +173,58 @@ def test_a_completed_reply_without_an_iteration_is_still_not_merged():
 def test_persisting_the_same_turn_twice_adds_nothing_the_second_time():
     from chat_history.session_merge import combine_messages
 
-    messages = _through_state(_tool_steps(1))
-    first = _stored(messages, [NARRATION, ANSWER])
-    again = _stored(_through_state(_tool_steps(1)), [NARRATION, ANSWER])
-    # the tool steps are rebuilt with fresh ids here; the replies must carry the same id both times
-    reply_ids = lambda batch: [e["id"] for e in batch if e["messageType"] == "response"]  # noqa: E731
-    assert reply_ids(first) == reply_ids(again)
-    merged = combine_messages(first, [e for e in first], append=True, replace=False)
-    assert [e["id"] for e in merged] == [e["id"] for e in first]
+    state = [m.to_dict() for m in _tool_steps(1)]  # one serialised state, as a graph resume re-reads it
+    replies = [f"[THOUGHT]check[/THOUGHT]{NARRATION}", ANSWER]
+    first = _stored(_through_state_entries(state), replies)
+    again = _stored(_through_state_entries(state), replies)
+    merged = combine_messages(first, again, append=True, replace=False)
+    assert merged == first
+
+
+def test_the_same_words_in_two_turns_are_both_kept():
+    from chat_history.session_merge import combine_messages
+
+    replies = [f"[THOUGHT]check[/THOUGHT]{NARRATION}", ANSWER]
+    one = _stored(_through_state(_tool_steps(1)), replies, "turn-1")
+    two = _stored(_through_state(_tool_steps(1)), replies, "turn-2")
+    merged = combine_messages(one, two, append=True, replace=False)
+    assert [e["text"] for e in merged if e["text"] == ANSWER] == [ANSWER, ANSWER]
+    assert len([e for e in merged if e["messageType"] == "thought"]) == 2
+
+
+def test_identical_thought_blocks_in_one_iteration_keep_distinct_ids():
+    stored = _stored([], ["[THOUGHT]same[/THOUGHT][THOUGHT]same[/THOUGHT]answer"])
+    thoughts = [e for e in stored if e["messageType"] == "thought"]
+    assert len(thoughts) == 2 and len({e["id"] for e in thoughts}) == 2
+
+
+def test_an_answer_equal_to_an_earlier_thought_is_not_suppressed():
+    stored = _stored(_through_state(_tool_steps(1)), ["[THOUGHT]42[/THOUGHT]I will verify this.", "42"])
+    assert [e["text"] for e in stored if e["messageType"] == "response"][-1] == "42"
+
+
+def test_a_non_mapping_metadata_does_not_stop_the_dedupe():
+    entries = [
+        {
+            "id": "a",
+            "sender": "assistant",
+            "text": "x",
+            "messageType": "response",
+            "metadata": "oops",
+            "timestamp": "2026-11-20T19:00:01+00:00",
+        },
+        {
+            "id": "b",
+            "sender": "assistant",
+            "text": "yy",
+            "messageType": "response",
+            "metadata": ["l"],
+            "timestamp": "2026-11-20T19:00:02+00:00",
+        },
+    ]
+    assert [e["id"] for e in DeduplicationMixin()._dedupe_streaming_messages(entries)] == [
+        "b"
+    ]  # streaming rule applies
 
 
 def test_a_state_entry_with_no_created_at_is_stamped_at_persist_time():

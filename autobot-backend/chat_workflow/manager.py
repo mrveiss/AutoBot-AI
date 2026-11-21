@@ -3022,6 +3022,7 @@ before summarizing.
         iteration: int,
         batch: List[Dict[str, Any]],
         selected_model: str = "",
+        turn_id: str = "",
     ) -> tuple[List[Dict[str, Any]], set, Dict[str, Any] | None]:
         """Build one iteration's prose + tool-message entries, in that order.
 
@@ -3046,7 +3047,7 @@ before summarizing.
         judged = batch + tool_entries + later_respond_entries(workflow_messages, iteration)
         build = functools.partial(self._build_final_response_entry, chat_mgr)
         entries, final_entry = iteration_reply_entries(
-            chat_mgr, build, response_text, iteration, model, streamed, judged
+            chat_mgr, build, response_text, iteration, model, streamed, judged, turn_id
         )
         entries.extend(tool_entries)
         for entry in tool_entries:
@@ -3061,6 +3062,7 @@ before summarizing.
         selected_model: str,
         rag_citations: List[Dict[str, Any]] | None,
         used_knowledge: bool,
+        turn_id: str = "",
     ) -> List[Dict[str, Any]]:
         """Build the full persisted batch for one turn, in true chronological order.
 
@@ -3106,6 +3108,7 @@ before summarizing.
                 iteration,
                 batch,
                 selected_model,
+                turn_id,
             )
             if final_entry is not None:
                 last_prose_entry = final_entry
@@ -3136,6 +3139,7 @@ before summarizing.
         selected_model: str = "",
         rag_citations: List[Dict[str, Any]] | None = None,
         used_knowledge: bool = False,
+        turn_id: str = "",
     ) -> None:
         """Persist WorkflowMessages to chat history in a single batch.
 
@@ -3162,7 +3166,7 @@ before summarizing.
         try:
             chat_mgr = ChatHistoryManager()
             batch = self._build_persist_batch(
-                chat_mgr, workflow_messages, all_llm_responses, selected_model, rag_citations, used_knowledge
+                chat_mgr, workflow_messages, all_llm_responses, selected_model, rag_citations, used_knowledge, turn_id
             )
 
             if batch:
