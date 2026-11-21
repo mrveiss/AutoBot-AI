@@ -267,7 +267,12 @@ class TerminalTool:
         }
 
     async def execute_command(
-        self, conversation_id: str, command: str, description: str | None = None, force_approval: bool = False
+        self,
+        conversation_id: str,
+        command: str,
+        description: str | None = None,
+        force_approval: bool = False,
+        person_approved: bool = False,
     ) -> Dict[str, Any]:
         """Execute a command in the agent's terminal session with auto-session recovery.
 
@@ -288,7 +293,7 @@ class TerminalTool:
             logger.error("No terminal session for conversation %s", conversation_id, exc_info=True)
             return self._session_setup_failed(command, exc)
 
-        return await self._run_and_format(session_id, command, description, force_approval)
+        return await self._run_and_format(session_id, command, description, force_approval, person_approved)
 
     @staticmethod
     def _session_setup_failed(command: str, exc: BaseException) -> Dict[str, Any]:
@@ -306,7 +311,12 @@ class TerminalTool:
         }
 
     async def _run_and_format(
-        self, session_id: str, command: str, description: str | None, force_approval: bool = False
+        self,
+        session_id: str,
+        command: str,
+        description: str | None,
+        force_approval: bool = False,
+        person_approved: bool = False,
     ) -> Dict[str, Any]:
         """Execute, then format, distinguishing a failed command from failed bookkeeping.
 
@@ -318,7 +328,11 @@ class TerminalTool:
         """
         try:
             result = await self.agent_terminal_service.execute_command(
-                session_id=session_id, command=command, description=description, force_approval=force_approval
+                session_id=session_id,
+                command=command,
+                description=description,
+                force_approval=force_approval,
+                person_approved=person_approved,
             )
             with post_execution_guard(result):
                 return self._bound_to(session_id, self._format_execution_result(result, command, description))
