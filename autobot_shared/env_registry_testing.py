@@ -359,3 +359,36 @@ register_env_var(
         range=(1, 500),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TEST_STALL_SECONDS",
+        type=float,
+        default=120.0,
+        description=(
+            "Seconds a CPU-bound test subprocess may go without consuming ANY CPU time before "
+            "repo_tests._hang_guard declares it hung and kills it. Progress, not wall-clock: a "
+            "process that is merely slow because the host is loaded keeps accruing CPU time and is "
+            "never killed, which a fixed `subprocess.run(timeout=N)` cannot tell apart from a hang "
+            "(#21862, #21910)."
+        ),
+        component="testing",
+        range=(5.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TEST_CPU_BUDGET_SECONDS",
+        type=float,
+        default=900.0,
+        description=(
+            "Ceiling on the CPU seconds (user+system, children included) a CPU-bound test "
+            "subprocess may consume under repo_tests._hang_guard before it is killed as a runaway. "
+            "CPU time does not stretch with host load, so unlike a wall-clock timeout this budget "
+            "is the same on an idle box and at load 30 (#21862, #21910)."
+        ),
+        component="testing",
+        range=(10.0, 7200.0),
+    )
+)
