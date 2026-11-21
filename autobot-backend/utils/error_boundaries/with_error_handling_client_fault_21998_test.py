@@ -122,3 +122,24 @@ def test_get_error_code_and_boundary_agree_for_every_exception_class(cls):
     expected = 500 if cls.error_category is None else APIErrorResponse.get_status_code_for_category(cls.error_category)
     assert exceptions.get_error_code(instance) == expected
     assert not hasattr(exceptions, "ERROR_CODES")
+
+
+@pytest.mark.parametrize(
+    "cls,status",
+    [
+        (exceptions.ValidationError, 400),
+        (exceptions.AuthenticationError, 401),
+        (exceptions.AuthorizationError, 403),
+        (exceptions.ResourceNotFoundError, 404),
+        (exceptions.ResourceLimitError, 429),
+        (exceptions.InternalError, 500),
+        (exceptions.WorkflowValidationError, 400),  # was 422: no 422 category exists
+        (exceptions.WorkflowExecutionError, 400),  # was 422: closest client-error category
+        (exceptions.LLMTimeoutError, 502),  # was 504: closest upstream-failure category
+    ],
+)
+def test_status_table_is_written_out_not_recomputed(cls, status):
+    """Literal expected statuses, so a wrongly declared category is caught (#21998)."""
+    instance = cls.__new__(cls)
+    instance.details = {}
+    assert exceptions.get_error_code(instance) == status

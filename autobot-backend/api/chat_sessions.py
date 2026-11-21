@@ -194,7 +194,7 @@ def _validate_session_id_or_raise(session_id: str) -> None:
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
 
 CHAT_MESSAGES_MAX_PER_PAGE = 100  # largest page a client may request (#21998)
@@ -237,7 +237,10 @@ def _validate_export_format_or_raise(export_format: str) -> None:
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid export format. Supported: json, txt, csv")
+        raise ValidationError(
+            "Invalid export format. Supported: json, txt, csv",
+            client_message="Invalid export format. Supported: json, txt, csv",
+        )
 
 
 async def _export_session_data_or_raise(chat_history_manager, session_id: str, export_format: str) -> str:
@@ -863,7 +866,7 @@ async def update_session(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
@@ -916,7 +919,7 @@ def _validate_delete_session_params(session_id: str, file_action: str, file_opti
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Validate file_action (Issue #380: use module-level constant)
     if file_action not in _VALID_FILE_ACTIONS:
@@ -927,7 +930,10 @@ def _validate_delete_session_params(session_id: str, file_action: str, file_opti
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError(f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}")
+        raise ValidationError(
+            f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}",
+            client_message=f"Invalid file_action. Must be one of: {sorted(_VALID_FILE_ACTIONS)}",
+        )
 
     # Parse file_options if provided
     parsed_file_options = {}
@@ -1586,7 +1592,7 @@ async def get_session_activities(
             ValidationError,
             get_error_code,
         ) = get_exceptions_lazy()
-        raise ValidationError("Invalid session ID format")
+        raise ValidationError("Invalid session ID format", client_message="Invalid session ID format")
 
     # Get memory graph from app state
     memory_graph: AutoBotMemoryGraph | None = getattr(request.app.state, "memory_graph", None)

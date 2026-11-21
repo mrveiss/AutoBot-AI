@@ -68,6 +68,9 @@ class LLMConnectionError(LLMError):
 class LLMTimeoutError(LLMError):
     """Raised when LLM request times out."""
 
+    # Was 504 in the removed ERROR_CODES; no category maps to 504, EXTERNAL_SERVICE (502) is the closest.
+    error_category = ErrorCategory.EXTERNAL_SERVICE
+
 
 class LLMResponseError(LLMError):
     """Raised when LLM returns invalid or unexpected response."""
@@ -101,6 +104,9 @@ class WorkflowError(AutoBotError):
 
 class WorkflowExecutionError(WorkflowError):
     """Raised when workflow execution fails."""
+
+    # Was 422 in the removed ERROR_CODES; no category maps to 422, VALIDATION (400) is the closest.
+    error_category = ErrorCategory.VALIDATION
 
 
 class WorkflowValidationError(WorkflowError):
@@ -208,7 +214,11 @@ class ResourceError(AutoBotError):
 
 
 class ResourceNotFoundError(ResourceError):
-    """Raised when a requested resource is not found."""
+    """Raised when a requested resource is not found.
+
+    The message is returned to the client as ``details.reason`` (``safe_message``): put only
+    text that is safe to show, such as the caller's own identifiers.
+    """
 
     error_category = ErrorCategory.NOT_FOUND
 

@@ -35,8 +35,7 @@ async def _fetch_or_raise(chat_history_manager, session_id: str, limit: int, off
 
     Raises:
         ResourceNotFoundError: If session does not exist
-        InternalError: If session data is corrupted (ValueError)
-        InternalError: If session cannot be accessed (PermissionError)
+        InternalError: If session data is corrupted (ValueError) or cannot be accessed (PermissionError)
     """
     (
         AutoBotError,
