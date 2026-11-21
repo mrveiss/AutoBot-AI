@@ -7,7 +7,7 @@
  * on the active tab only, and Arrow / Home / End keys that wrap and skip the
  * permission-hidden desktop tab.
  */
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -19,6 +19,7 @@ vi.mock('@/utils/debugUtils', () => ({
 
 import type ChatTabsType from '../ChatTabs.vue'
 import { useUserStore } from '@/stores/useUserStore'
+import { useUiMode } from '@/composables/useUiMode'
 
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 let ChatTabs: typeof ChatTabsType
@@ -129,5 +130,45 @@ describe('ChatTabs tablist semantics (#18243)', () => {
     const w = mountTabs('admin')
     expect(w.find('[role="tabpanel"]').exists()).toBe(false)
     w.unmount()
+  })
+
+  describe('Minimal mode (#18243)', () => {
+    beforeEach(() => useUiMode().setMode('minimal'))
+    afterEach(() => useUiMode().setMode('full'))
+
+    it('drops the advanced tabs from the tablist, so arrow keys cannot land on a hidden one', async () => {
+      const w = mountTabs('admin', 'chat')
+      expect(keys(w)).toEqual(['tab-chat', 'tab-files'])
+      await pressOn(w, 'chat', 'ArrowLeft')
+      expect(w.emitted('tab-change')?.[0]).toEqual(['files'])
+      await w.setProps({ activeTab: 'files' })
+      await pressOn(w, 'files', 'ArrowRight')
+      expect(w.emitted('tab-change')?.[1]).toEqual(['chat'])
+      await w.setProps({ activeTab: 'chat' })
+      await pressOn(w, 'chat', 'End')
+      expect(w.emitted('tab-change')?.[2]).toEqual(['files'])
+      w.unmount()
+    })
+
+    it('keeps a bookmarked advanced tab that is already active', () => {
+      const w = mountTabs('admin', 'terminal')
+      expect(keys(w)).toEqual(['tab-chat', 'tab-files', 'tab-terminal'])
+      w.unmount()
+    })
+
+    it('switching to Minimal on an advanced tab moves to Chat; on Chat or Files it does not', async () => {
+      useUiMode().setMode('full')
+      const w = mountTabs('admin', 'browser')
+      useUiMode().setMode('minimal')
+      await flushPromises()
+      expect(w.emitted('tab-change')).toEqual([['chat']])
+      w.unmount()
+      useUiMode().setMode('full')
+      const onFiles = mountTabs('admin', 'files')
+      useUiMode().setMode('minimal')
+      await flushPromises()
+      expect(onFiles.emitted('tab-change')).toBeUndefined()
+      onFiles.unmount()
+    })
   })
 })

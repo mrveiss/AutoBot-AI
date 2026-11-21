@@ -15,12 +15,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseTabs } from '@autobot/ui'
 import type { TabItem as KitTabItem } from '@autobot/ui'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import { usePermissions } from '@/composables/usePermissions'
+import { useUiMode } from '@/composables/useUiMode'
 
 interface TabItem {
   key: string
@@ -77,17 +78,30 @@ const emit = defineEmits<Emits>()
  * An advanced tab is hidden in Minimal mode unless it is the active one (R4): a user on
  * Terminal who switches to Minimal must still see which tab they are on.
  */
+const { uiMode } = useUiMode()
+const minimal = computed(() => uiMode.value === 'minimal')
+
+// Switching to Minimal while an advanced tab is open moves to Chat, the one tab Minimal always has.
+watch(minimal, (isMinimal) => {
+  const open = visibleTabs.value.find((tab) => tab.key === props.activeTab)
+  if (isMinimal && open?.adv) emit('tab-change', 'chat')
+})
+
 const items = computed<KitTabItem[]>(() =>
-  visibleTabs.value.map((tab) => {
-    const active = tab.key === props.activeTab
-    return {
-      value: tab.key,
-      label: tab.label,
-      id: `tab-${tab.key}`,
-      controls: active ? `tabpanel-${tab.key}` : undefined,
-      class: tab.adv && !active ? 'adv' : undefined,
-    }
-  }),
+  visibleTabs.value
+    // Advanced tabs are display:none in Minimal, so they leave the roving-focus set too; the
+    // active one stays (a bookmarked /chat/terminal still shows where you are).
+    .filter((tab) => !(minimal.value && tab.adv && tab.key !== props.activeTab))
+    .map((tab) => {
+      const active = tab.key === props.activeTab
+      return {
+        value: tab.key,
+        label: tab.label,
+        id: `tab-${tab.key}`,
+        controls: active ? `tabpanel-${tab.key}` : undefined,
+        class: tab.adv && !active ? 'adv' : undefined,
+      }
+    }),
 )
 
 const iconByKey = computed(() => new Map(visibleTabs.value.map((tab) => [tab.key, tab.icon])))

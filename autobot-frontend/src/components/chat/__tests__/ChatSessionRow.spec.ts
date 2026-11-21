@@ -4,7 +4,7 @@
 // ChatSessionRow (#18243): the title and message count, the current-chat mark, the selection
 // checkbox, and the action menu that replaced the four hover buttons.
 import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 import ChatSessionRow from '../ChatSessionRow.vue'
@@ -58,5 +58,51 @@ describe('ChatSessionRow', () => {
     await actions.trigger('click')
     expect(w.emitted('open')).toBeUndefined()
     w.unmount()
+  })
+
+  it('does not use aria-selected, which is invalid on a button', () => {
+    expect(render({ focused: true }).get('[role="button"]').attributes('aria-selected')).toBeUndefined()
+  })
+
+  describe('keyboard route to the actions menu', () => {
+    const menu = () => document.querySelector('[role="menu"]')
+    const press = async (w: ReturnType<typeof render>, init: KeyboardEventInit) => {
+      w.get('[role="button"]').element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+      await flushPromises()
+    }
+
+    it.each([
+      ['ContextMenu', { key: 'ContextMenu' }],
+      ['Shift+F10', { key: 'F10', shiftKey: true }],
+    ])('%s on the focused row opens the menu without telling the list', async (_name, init) => {
+      const w = render({ focused: true })
+      await press(w, init)
+      expect(menu()).not.toBeNull()
+      expect(w.emitted('keydown')).toBeUndefined()
+      w.unmount()
+    })
+
+    it('F10 alone is passed on to the list, and selection mode has no menu to open', async () => {
+      const w = render()
+      await press(w, { key: 'F10' })
+      expect(w.emitted('keydown')).toHaveLength(1)
+      expect(menu()).toBeNull()
+      w.unmount()
+      const sel = render({ selectionMode: true })
+      await press(sel, { key: 'ContextMenu' })
+      expect(menu()).toBeNull()
+      sel.unmount()
+    })
+
+    it('Escape closes the menu and focus returns to the row', async () => {
+      const w = render({ focused: true })
+      await press(w, { key: 'ContextMenu' })
+      menu()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await flushPromises()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(menu()).toBeNull()
+      expect(document.activeElement).toBe(w.get('[role="button"]').element)
+      w.unmount()
+    })
   })
 })
