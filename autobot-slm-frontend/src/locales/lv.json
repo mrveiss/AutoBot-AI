@@ -496,7 +496,8 @@
     },
     "errors": {
       "withStatus": "{message} (HTTP {status})",
-      "withCause": "{message}: {cause}"
+      "withCause": "{message}: {cause}",
+      "unknown": "Nezināma kļūda"
     }
   },
   "deploymentLogViewer": {
@@ -891,7 +892,6 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
-      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
@@ -2039,7 +2039,7 @@
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
     "tabFleet": "Fleet Operations",
-    "tabInfrastructure": "Pārskats",
+    "tabInfrastructure": "Infrastructure",
     "tabMigration": "Migration",
     "tabPerNode": "Per-Node Control",
     "tabReplication": "Replication",
