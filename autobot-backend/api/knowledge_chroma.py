@@ -12,6 +12,7 @@ and performing similarity searches.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.knowledge_chroma_empty import router as _empty_router
 from api.quarantine_read_audit import audit_admin_quarantine_read, quarantined_row_ids
 from api.schemas_knowledge_chroma import (
     ChromaSearchRequest,
@@ -36,6 +37,7 @@ router = APIRouter(
     prefix="/knowledge/chroma",
     tags=["knowledge-chroma", "chroma"],
 )
+router.include_router(_empty_router)
 
 # Substrings ChromaDB uses to signal a genuinely missing collection, across
 # versions (ValueError "does not exist" in <1.0, NotFoundError "not found" in

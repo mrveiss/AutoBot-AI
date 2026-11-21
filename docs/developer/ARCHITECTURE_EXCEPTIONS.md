@@ -663,3 +663,25 @@ shrink-only and a declared entry is true only while its referencing files are ex
 
 **Review trigger:** when #16294 names a route that accepts a user API key, that route uses
 `require_key_permission` with a test, and both `declared:` baseline lines are deleted in the same PR.
+
+---
+
+## Collection Delete Lease — Residual Windows in `delete_if_empty`
+
+**File:** `autobot-backend/utils/leased_chroma.py` (`delete_if_empty`)
+**Issue:** #20992 (PR #21835)
+
+**Reason:** Chroma has no conditional delete, so "delete only if empty" is a count followed by
+`delete_collection`, guarded by a per-collection lease. Two windows stay open on purpose, and only
+empty collections are ever deleted:
+
+- Writers fail open when they cannot reach Redis, so a writer without a lease can race a delete that
+  holds the exclusive delete lease. This needs a Redis partition between the writer and the deleter.
+- A stall longer than `DELETE_LEASE_TTL_S` between the emptiness count and `delete_collection` lets
+  the lease lapse, so a write can land before the delete runs.
+
+Writers stay fail-open by design (#20992): a Redis outage must not stop ingestion. The owner
+accepted both windows on 2026-11-21.
+
+**Sync cadence:** None. Revisit only if Chroma gains a conditional delete or writers stop being
+fail-open.

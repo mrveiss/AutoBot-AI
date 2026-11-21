@@ -145,6 +145,7 @@ DECLARED_SCOPES = {
         "autobot_shared",
         "autobot-infrastructure",
     ),
+    "ollama-host-reads-ssot-host-21859": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "no-literal-secret-default": ("autobot-slm-backend", "autobot-backend", "autobot_shared"),
     "hardcoded-ui-literal-scan": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "shadowed-literal-routes": ("autobot-backend", "autobot-slm-backend"),

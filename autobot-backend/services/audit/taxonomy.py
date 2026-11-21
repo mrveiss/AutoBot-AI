@@ -149,6 +149,7 @@ class AuditAction(str, Enum):
         "node.ssh_password.delete"  # nosec B105  # pragma: allowlist secret -- #20046: an action name
     )
     CLEANUP_ENV_COPIES = "cleanup.env_copies"  # #20567: old .env.*~ copies removed after approval
+    CLEANUP_PROPOSAL_LOST_RACE = "cleanup.proposal_lost_race"  # #20992: a creation row whose insert lost to the winner
     APPROVAL_APPROVE = "approval.approve"  # #20046: a non-admin refused on an admin-only approval
     PLUGIN_ENABLE = "plugin.enable"  # #17421: an admin lets a plugin run in the backend process
     PLUGIN_DISABLE = "plugin.disable"  # #17421: an admin stops a plugin running; it stays off after restart

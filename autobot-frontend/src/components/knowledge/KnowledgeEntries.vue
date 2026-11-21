@@ -657,7 +657,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
+  if (selection.selectedCount.value && !(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: selection.selectedCount.value }) }))) return
 
   try {
     await controller.bulkDeleteDocuments([...selection.selected.value])
