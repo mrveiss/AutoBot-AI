@@ -29,6 +29,7 @@ from services.envelope_secrets_service import (
     SecretConflictError,
     SecretNotFoundError,
 )
+from services.secret_names import ReservedSecretNameError, refuse_reserved_secret_name
 
 logger = get_logger(__name__)
 
@@ -60,6 +61,8 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
         return "failed", "not_found"
     if isinstance(exc, AmbiguousSecretError):
         return "denied", "ambiguous"  # #17850: several same-name copies; none is chosen by order
+    if isinstance(exc, ReservedSecretNameError):
+        return "denied", "reserved_name"  # #17850: the connector: prefix is the connector writer's
     if isinstance(exc, SecretConflictError):
         return "denied", exc.reason  # #17850: the name is taken by an inactive or differing secret
     return "failed", type(exc).__name__
@@ -73,6 +76,7 @@ _STATUS_FOR_REASON: dict[str, int] = {
     "ambiguous": status.HTTP_409_CONFLICT,
     "inactive": status.HTTP_409_CONFLICT,
     "value_differs": status.HTTP_409_CONFLICT,
+    "reserved_name": status.HTTP_409_CONFLICT,
 }
 
 #: The fixed 409 text per conflict reason (#17850): says what to do, carries no id, name or value.
@@ -80,10 +84,27 @@ _CONFLICT_DETAIL: dict[str, str] = {
     "ambiguous": "Conflict: several secrets share this name; an administrator must resolve the duplicates",
     "inactive": "Conflict: a deactivated secret holds this name; delete it first, then create the secret again",
     "value_differs": "Conflict: a secret with this name already holds a different value; rotate it instead",
+    "reserved_name": "Conflict: the 'connector:' name prefix is reserved for connector credentials; pick another name",
 }
 
 #: What a create route turns into :func:`error_for`'s answer (#17850); one tuple, so no route words its own.
-CREATE_REFUSALS = (SecretAccessError, SecretNotFoundError, ValueError, AmbiguousSecretError, SecretConflictError)
+CREATE_REFUSALS = (
+    SecretAccessError,
+    SecretNotFoundError,
+    ValueError,
+    AmbiguousSecretError,
+    SecretConflictError,
+    ReservedSecretNameError,
+)
+
+
+def checked_secret_name(name: str) -> str:
+    """*name* unchanged, or the fixed 409 when a user-facing rename asks for a reserved one (#17850)."""
+    try:
+        refuse_reserved_secret_name(name)
+    except ReservedSecretNameError as exc:
+        raise error_for(exc) from None
+    return name
 
 
 def creation_status(secret: object) -> int:

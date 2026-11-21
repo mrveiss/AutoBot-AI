@@ -25,6 +25,7 @@ pytestmark = [pytest.mark.migration_gate, requires_postgres]
 _ROOT = base64.urlsafe_b64decode(base64.urlsafe_b64encode(bytes(range(32))))
 _OWNER = uuid.uuid4()
 _TYPE = "connector_oauth_token"
+_OTHER_TYPE = "other_type"
 
 
 @pytest.fixture()
@@ -164,7 +165,7 @@ async def test_inactive_same_name_row_is_not_rotated(session):
 
 
 async def test_other_type_same_name_row_is_not_rotated(session):
-    sid = await _seed(session, secret_type="other_type")  # pragma: allowlist secret
+    sid = await _seed(session, secret_type=_OTHER_TYPE)
     await _mirror(session)
     await session.commit()
     assert await _value(session, sid) == b"old"

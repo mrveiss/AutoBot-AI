@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 _MARKER = "imported_from_sqlite"
 
+#: The envelope-store name prefix reserved for connector credentials (#17850); the one definition. Only this
+#: module's writer creates or rotates such names -- user-facing create/rename refuse it (``services.secret_names``).
+CONNECTOR_NAME_PREFIX = "connector:"
+
+
+def connector_secret_name(connector_id: str) -> str:
+    """The envelope-store name of *connector_id*'s credential."""
+    return f"{CONNECTOR_NAME_PREFIX}{connector_id}:auth"
+
 
 async def _find_by_marker(session, sqlite_id: str, owner_uuid):
     from sqlalchemy import select
@@ -58,6 +67,19 @@ async def mirror_in_session(
     Rotates an existing copy (matched by marker + owner); creates one when absent and
     ``name``/``secret_type`` are supplied (the create paths). Owner not a uuid → no-op.
     """
+    ctx = _mirror_context(owner_id, root_key)
+    if ctx is None:
+        return  # owner isn't a uuid → cannot key an envelope row
+    owner_uuid, vault, svc = ctx
+    row = await _find_by_marker(session, sqlite_id, owner_uuid)
+    if row is None and name and secret_type:
+        await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
+    else:
+        await _rotate_or_skip(session, svc, vault, row, sqlite_id, value)
+
+
+def _mirror_context(owner_id: str, root_key: bytes):
+    """``(owner_uuid, vault, service)`` for *owner_id*, or None when it is not a uuid."""
     import uuid
 
     from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -66,25 +88,24 @@ async def mirror_in_session(
     try:
         owner_uuid = uuid.UUID(str(owner_id))
     except ValueError:
-        return  # owner isn't a uuid → cannot key an envelope row
+        return None
+    return owner_uuid, VaultRef(VaultKind.USER, str(owner_id)), EnvelopeSecretsService(root_key=root_key)
 
-    vault = VaultRef(VaultKind.USER, str(owner_id))
-    svc = EnvelopeSecretsService(root_key=root_key)
-    row = await _find_by_marker(session, sqlite_id, owner_uuid)
-    if row is None and name and secret_type:
-        await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
-    elif row is not None:
-        await svc.rotate_value(
-            session,
-            secret_id=row.id,
-            new_plaintext=value.encode("utf-8"),
-            actor_vaults={vault},
-        )
-    else:
+
+async def _rotate_or_skip(session, svc, vault, row, sqlite_id: str, value: str) -> None:
+    """Rotate the marked envelope copy *row*; with no copy and nothing to create one from, skip."""
+    if row is None:
         logger.debug(
             "No envelope copy for credential %s and no name/type to create one — skipping mirror",
             sqlite_id,
         )
+        return
+    await svc.rotate_value(
+        session,
+        secret_id=row.id,
+        new_plaintext=value.encode("utf-8"),
+        actor_vaults={vault},
+    )
 
 
 def _adoptable(existing, secret_type, sqlite_id) -> str | None:
@@ -97,6 +118,12 @@ def _adoptable(existing, secret_type, sqlite_id) -> str | None:
     if marker is not None and marker != str(sqlite_id):
         return "marked_for_another_credential"
     return None
+
+
+async def _stamp_marker(session, target, sqlite_id: str) -> None:
+    """Mark *target* as the envelope copy of credential *sqlite_id* (the key the read path resolves)."""
+    target.extra_data = {**(target.extra_data or {}), _MARKER: str(sqlite_id)}
+    await session.flush()
 
 
 async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type) -> None:
@@ -128,8 +155,7 @@ async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, nam
             plaintext=plaintext,
             created_by=owner_uuid,
         )
-    target.extra_data = {**(target.extra_data or {}), _MARKER: str(sqlite_id)}
-    await session.flush()
+    await _stamp_marker(session, target, sqlite_id)
 
 
 async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: bytes) -> None:

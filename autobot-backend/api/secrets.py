@@ -46,7 +46,7 @@ from api.schemas_system import (
     SecretUpdateRequest,
 )
 from api.secrets_audit import audit_secret_op, remember_actor
-from api.secrets_delete_outcome import record_delete_failure
+from api.secrets_delete_outcome import checked_secret_name, record_delete_failure
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
 from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
@@ -375,7 +375,7 @@ class SecretsManager:
 
         # Update fields
         if request.name is not None:
-            secret_data["name"] = request.name
+            secret_data["name"] = checked_secret_name(request.name)
         if request.description is not None:
             secret_data["description"] = request.description
         if request.tags is not None:

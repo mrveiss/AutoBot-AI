@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
 from services.envelope_secrets_service import AmbiguousSecretError, SecretAccessError, SecretConflictError
+from services.secret_names import ReservedSecretNameError
 
 logger = get_logger(__name__)
 
@@ -119,7 +120,7 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
                 secret_type=request.type.value,
                 plaintext=request.value.encode("utf-8"),
             )
-        except (AmbiguousSecretError, SecretConflictError) as exc:
+        except (AmbiguousSecretError, SecretConflictError, ReservedSecretNameError) as exc:
             raise error_for(exc) from None  # the fixed 409 (#17850); the route re-raises an HTTPException as is
         await session.commit()
         return {**_summary(secret), "already_existed": True} if secret.already_existed else _summary(secret)
