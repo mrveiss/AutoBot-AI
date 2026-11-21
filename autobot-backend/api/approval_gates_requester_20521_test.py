@@ -18,8 +18,9 @@ from api.schemas_approvals import CreateApprovalRequest
 from services import approval_execution
 from services.approval_execution import context_change_violation
 
-_ME = str(uuid.uuid4())
-_VICTIM = str(uuid.uuid4())
+# Fixed ids: they appear in parametrize ids, which must be identical on every xdist worker.
+_ME = "3f2b8c1e-6a4d-4e0b-9c57-1d2e8a7b4f60"
+_VICTIM = "9a1c7d42-0b5e-4f83-a6d2-5e8b1c3f7a90"
 
 
 def _body(**extra) -> CreateApprovalRequest:
