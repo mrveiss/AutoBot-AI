@@ -231,3 +231,12 @@ def _drop_unmatched_fragments(text: str) -> str:
     tail = TOOL_CALL_COMPLETE_RE.sub("", TOOL_CALL_OPENING_RE.sub("", text[pos:]))
     out.append(TOOL_CALL_TRUNCATED_OPENING_RE.sub("", tail))  # a tag cut off before its `>` (#21843)
     return "".join(out)
+
+
+def mark_tool_calls(text: str, mark: str) -> str:
+    """*text* with every complete tool call replaced by *mark* (#21880).
+
+    A sibling of ``clean_reply_text``, which keeps parsed calls and which other callers rely on. Only the stored
+    reply (``reply_persistence``) uses this: a stored reply never carries a call, the call is a step, not prose.
+    """
+    return TOOL_CALL_PATTERN.sub(mark, normalize_tool_call_brackets(text or ""))

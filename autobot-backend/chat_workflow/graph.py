@@ -1115,18 +1115,14 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
 
     try:
         session = await manager.get_or_create_session(session_id)
-        # Issue #4263: allow extensions to inspect/modify response before sending.
-        # Issue #13295: the (rare, default no-op) hook output feeds the combined
-        # session-level view below; it is intentionally NOT threaded into
-        # all_llm_responses, since a single edited string cannot be split back
-        # into the per-iteration entries _persist_workflow_messages now needs
-        # to interleave with tool output.
+        # #4263: extensions may edit the response. #13295: that edit feeds only the combined view below, not
+        # all_llm_responses: one edited string cannot be split back into per-iteration entries.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
         model = (state.get("llm_params") or {}).get("selected_model")  # the rolling-summary refresh folds with it
         await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
-        await manager._persist_workflow_messages(
+        proof = await manager._persist_workflow_messages(
             session_id,
             wf_messages,
             all_llm_responses,
@@ -1134,7 +1130,11 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
             turn_id=state.get("turn_id", ""),
+            history=state.get("execution_history", []),
+            user_message=state.get("user_message", ""),
         )
+        if proof is not None and (stream_cb := config["configurable"].get("stream_callback")):
+            stream_cb(proof)  # #21976: the answer's sources and proof, live as stored
 
         logger.info(
             "Persisted conversation for session=%s, messages=%d",

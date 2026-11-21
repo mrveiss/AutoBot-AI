@@ -34,7 +34,7 @@
           <div class="citation-content">
             <div class="citation-text">
               <a
-                v-if="citation.type === 'web' && citation.url && isSafeUrl(citation.url)"
+                v-if="citation.url && isSafeUrl(citation.url)"
                 :href="citation.url"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -54,6 +54,9 @@
               class="citation-excerpt"
             >
               {{ $t('chat.citations.model') }} {{ citation.model }}
+            </div>
+            <div v-if="stepDetails(citation).length" class="citation-excerpt citation-step">
+              <div v-for="detail in stepDetails(citation)" :key="detail">{{ detail }}</div>
             </div>
             <div class="citation-meta">
               <span
@@ -79,6 +82,11 @@
               </span>
             </div>
           </div>
+        </div>
+        <div v-if="unproven.length" class="citation-unproven" role="note">
+          <strong>{{ $t('chat.citations.unprovenTitle') }}</strong>
+          <span class="citation-unproven-values">{{ unproven.join(', ') }}</span>
+          <span>{{ $t('chat.citations.unprovenHint') }}</span>
         </div>
       </div>
     </Transition>
@@ -115,15 +123,20 @@ interface Citation {
   score?: number
   source?: string
   // New fields (Issue #1186)
-  type?: 'knowledge_base' | 'llm_training' | 'web'
-  reliability?: 'verified' | 'high' | 'medium' | 'low'
+  type?: string // knowledge_base, llm_training, web_search, web_page, system_state, tool_output (#21976)
+  reliability?: string
   title?: string
   model?: string
   url?: string
+  step_id?: string
+  /** A tool step's `tool`, redacted `args`, `origin` (host, exit code, page, result URLs) and times. */
+  metadata?: Record<string, unknown>
 }
 
 interface Props {
   citations: Citation[]
+  /** Quoted values found in no tool result of the turn (#21976). */
+  unproven?: string[]
   maxLength?: number
   initiallyExpanded?: boolean
 }
@@ -135,6 +148,7 @@ interface Emits {
 
 const props = withDefaults(defineProps<Props>(), {
   maxLength: 200,
+  unproven: () => [],
   initiallyExpanded: false
 })
 
@@ -174,7 +188,9 @@ const sourceIcon = (citation: Citation): IconName => {
   switch (citation.type) {
     case 'knowledge_base': return 'book'
     case 'llm_training':   return 'robot'
-    case 'web':            return 'globe'
+    case 'web':
+    case 'web_page':
+    case 'web_search':     return 'globe'
     default:               return 'file-alt'
   }
 }
@@ -195,6 +211,20 @@ const reliabilityLabel = (reliability: string | undefined): string => {
   return t(key)
 }
 
+/** The lines that say how a tool step produced its result: tool, arguments, host, exit code (#21976). */
+const stepDetails = (citation: Citation): string[] => {
+  const meta = citation.metadata
+  if (!meta?.tool) return []
+  const origin = (meta.origin ?? {}) as Record<string, unknown>
+  const args = meta.args && Object.keys(meta.args as object).length ? JSON.stringify(meta.args) : ''
+  return [
+    `${t('chat.citations.tool')} ${meta.tool}`,
+    args && `${t('chat.citations.arguments')} ${args}`,
+    origin.host && `${t('chat.citations.host')} ${origin.host}`,
+    origin.return_code != null && `${t('chat.citations.exitCode')} ${origin.return_code}`,
+  ].filter((line): line is string => typeof line === 'string' && line !== '')
+}
+
 const isSafeUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url)
@@ -207,7 +237,7 @@ const isSafeUrl = (url: string): boolean => {
 const citationTitle = (citation: Citation): string => {
   if (citation.title) return citation.title
   if (citation.type === 'llm_training') return t('chat.citations.aiTrainingData')
-  if (citation.type === 'web') return citation.url || t('chat.citations.webSource')
+  if (citation.type === 'web' || citation.type === 'web_page') return citation.url || t('chat.citations.webSource')
   return citation.source ? formatSourcePath(citation.source) : t('chat.citations.knowledgeBase')
 }
 </script>
@@ -259,6 +289,26 @@ const citationTitle = (citation: Citation): string => {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   border-radius: var(--radius-full);
+}
+
+.citation-step {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.citation-unproven {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2-5) var(--spacing-3-5);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  border-top: 1px solid var(--color-primary-bg);
+}
+
+.citation-unproven-values {
+  font-family: var(--font-mono);
+  color: var(--color-warning);
 }
 
 .citations-list {
