@@ -668,13 +668,14 @@ class SessionOwnershipValidator:
     ) -> bool:
         """Share a session until the owner unshares it (#689, #18890).
 
-        The table is the only store. False = not recorded.
+        The table is the only store. False = not recorded. The audit record is written first and is required:
+        ``ShareAuditError`` propagates and nothing is shared.
         """
+        actor = actor or {"user_id": shared_by, "username": shared_by, "ip": "unknown"}
+        session_shares.audit("share", actor, session_id, shared_with_ids)
         try:
             await session_shares.ensure_adopted(self.redis)
             await session_shares.durable_add(session_id, shared_with_ids, shared_by)
-            actor = actor or {"user_id": shared_by, "username": shared_by, "ip": "unknown"}
-            session_shares.audit("share", actor, session_id, shared_with_ids)
             logger.info("Session %s... shared by %s with %d users", session_id[:8], shared_by, len(shared_with_ids))
             return True
         except Exception as e:
@@ -685,10 +686,10 @@ class SessionOwnershipValidator:
         """Remove one participant; they lose read access at once (#18890).
 
         True when the user was a participant. A failure raises: "could not remove" must not read as removed.
+        The audit record is written first and is required: ``ShareAuditError`` propagates and nothing is removed.
         """
-        removed = await session_shares.remove_share(self.redis, session_id, user_id)
         session_shares.audit("unshare", actor, session_id, [user_id])
-        return removed
+        return await session_shares.remove_share(self.redis, session_id, user_id)
 
     async def is_shared_with_user(self, session_id: str, user_id: str) -> bool:
         """Is the session shared with the user? Decided from the table (#18890).

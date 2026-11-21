@@ -19,6 +19,7 @@ from api.schemas_chat import SessionShareData, SessionShareRequest
 from api.schemas_chat_unshare import SessionParticipantsData, SessionUnshareData
 from api.schemas_common import DataResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.redis_client import get_redis_client
 from security import session_shares
 from security.session_ownership import SessionOwnershipValidator, validate_session_ownership
@@ -92,9 +93,12 @@ async def unshare_session(
     require_owner(ownership)
 
     validator = SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
-    removed = await validator.unshare_session(
-        session_id, user_id, session_shares.audit_actor(request, ownership.get("user_data"))
-    )
+    try:
+        removed = await validator.unshare_session(
+            session_id, user_id, session_shares.audit_actor(request, ownership.get("user_data"))
+        )
+    except session_shares.ShareAuditError:
+        raise fixed_refusal(503) from None  # no audit record, no change (#18890)
 
     return create_chat_response(
         data={"session_id": session_id, "user_id": user_id, "removed": removed},
@@ -139,7 +143,11 @@ async def share_session(
 
     actor = session_shares.audit_actor(request, ownership.get("user_data"))
     validator = SessionOwnershipValidator(await get_redis_client(async_client=True, database="main"))
-    if not await validator.share_session(session_id, share_data.share_with, actor["username"], actor):
+    try:
+        shared = await validator.share_session(session_id, share_data.share_with, actor["username"], actor)
+    except session_shares.ShareAuditError:
+        raise fixed_refusal(503) from None  # no audit record, no change (#18890)
+    if not shared:
         raise HTTPException(status_code=500, detail="Session could not be shared")
 
     facts_result = None
