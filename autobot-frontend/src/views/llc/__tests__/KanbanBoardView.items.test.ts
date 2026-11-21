@@ -255,4 +255,26 @@ describe('KanbanBoardView items wiring (GH#13993)', () => {
 
     expect(vm.items.find(i => i.id === 'wi-1')?.column_id).toBe('col-ready')
   })
+
+  it.each([
+    [409, en.llc.board.moveRefusedStatus],
+    [422, en.llc.board.moveRefusedWipFull],
+    [403, en.llc.board.moveRefusedForbidden],
+  ])('shows the localised reason when the server refuses a move with %i (#20508)', async (status, reason) => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      items: WorkItemLike[]
+      onDragStart(item: WorkItemLike): void
+      onDrop(col: string): Promise<void>
+    }
+    post.mockRejectedValue(Object.assign(new Error('server wording that must not be shown'), { status }))
+    vm.onDragStart(vm.items.find(i => i.id === 'wi-1') as WorkItemLike)
+    await vm.onDrop('col-progress')
+    await flushPromises()
+
+    const alert = wrapper.find('.board-load-error[role="alert"]')
+    expect(alert.text()).toContain(en.llc.board.moveFailed)
+    expect(alert.text()).toContain(reason)
+    expect(alert.text()).not.toContain('server wording')
+  })
 })

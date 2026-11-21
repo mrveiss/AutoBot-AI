@@ -73,6 +73,7 @@ from ._common import FenceSafeAgentId
 from ._common import actor_id as verified_user_id
 from ._common import moving_as, refused_transition, write_refusal
 from ._handoff_identity import handing_off_agent, member_reviewer
+from ._named_agent import require_may_act_as
 from ._release_request import ReleaseRequest
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
@@ -532,6 +533,7 @@ async def checkout_work_item(
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().checkout(
             session,
@@ -543,11 +545,7 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        # #12740 (same defect class, found alongside): the status code was
-        # already correct, but the useful reason ("Work item X already checked
-        # out by agent Y") was still replaced with a generic string, so a caller
-        # could not tell WHO holds the checkout. Domain-level message, safe to
-        # surface.
+        # #12740: the reason ("Work item X already checked out by agent Y") is domain-level and safe to surface.
         logger.info("Rejected work-item checkout conflict: %s", safe_log_text(repr(exc)))
         raise http_refusal(409, exc, scope="work_items.checkout_work_item") from None
     except ValueError as exc:
@@ -562,12 +560,13 @@ async def release_work_item(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    """Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-    person is refused (409). Not enforced: that the caller IS that agent (open, #20521)."""
+    """Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+    equal to the stored assignee when there is one; an item held by a person is refused (409)."""
     # IDOR guard (M4/GH#9861).
     existing = await _service().get(session, work_item_id)
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
+    await require_may_act_as(session, ctx, existing, body.agent_id)
     try:
         item = await _service().release(session, work_item_id=work_item_id, agent_id=body.agent_id, run_id=body.run_id)
         await session.commit()
