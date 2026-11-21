@@ -4,33 +4,34 @@
 # Author: mrveiss
 """Which recorded steps actually ran (#21959).
 
-The continuation prompt tells the model what was executed. A step that is still waiting for a person, was
-refused, was denied or timed out did not run, so it is neither counted nor described as executed.
+The continuation prompt tells the model what was executed. Only a step known to have run counts; one that is
+still waiting for a person, was refused, was denied, timed out or has an unknown status did not run.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable
 
-#: Statuses a step record carries when the action never ran.
-NOT_RUN_STATUSES = frozenset(
-    {
-        "pending_approval",
-        "approval_required",
-        "outcome_unknown",
-        "denied",
-        "denied_by_user",
-        "refused",
-        "timeout",
-        "gated",
-        "queued",
-    }
-)
+#: Statuses that mean the action ran. Each has a producer in the chat workflow:
+#: ``success`` -- ``command_execution_record._create_execution_result`` and every tool handler;
+#: ``executed`` -- the compose handler (``tool_handler.py``, ``{"tool": "compose", "status": "executed"}``);
+#: ``completed`` -- the delegate handler (``tool_handler.py``, ``{"tool": "delegate", "status": "completed"}``).
+RAN_STATUSES = frozenset({"success", "executed", "completed"})
+
+
+def _failed_after_running(step: Dict[str, Any]) -> bool:
+    """A ``error`` record that carries a real exit code or output: the command ran and failed.
+
+    ``_create_execution_result`` maps a non-zero ``return_code`` to ``error``. A refusal (the terminal's
+    permission-denied response, a blocked session) is also ``error`` but has neither exit code nor output.
+    """
+    return step.get("return_code") is not None or bool(step.get("stdout") or step.get("output"))
 
 
 def did_execute(step: Dict[str, Any]) -> bool:
-    """Whether *step* ran: a status in :data:`NOT_RUN_STATUSES` is a step that did not."""
-    return str(step.get("status", "")).lower() not in NOT_RUN_STATUSES
+    """Whether *step* ran. Fails closed: an unknown or missing status is a step that did not run."""
+    status = str(step.get("status", "")).lower()
+    return status in RAN_STATUSES or (status == "error" and _failed_after_running(step))
 
 
 def executed_count(steps: Iterable[Dict[str, Any]]) -> int:

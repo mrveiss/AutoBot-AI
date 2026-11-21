@@ -1392,7 +1392,9 @@ class ToolHandlerMixin(InterpretationTurnMixin):
                 session_id=session_id,
             )
             logger.info(
-                "✅ Persisted approval request immediately: session=%s, terminal=%s", session_id, terminal_session_id
+                "✅ Persisted approval request immediately: session=%s, terminal=%s",
+                session_id,
+                terminal_session_id,
             )
         except Exception as persist_error:
             logger.error("Failed to persist approval request immediately: %s", persist_error, exc_info=True)

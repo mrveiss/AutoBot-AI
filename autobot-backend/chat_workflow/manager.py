@@ -1758,7 +1758,7 @@ class ChatWorkflowManager(
         cmd = result.get("command") or result.get("tool") or "unknown"
         stdout = _as_output_text(result.get("stdout"))
         stderr = _as_output_text(result.get("stderr"))
-        status = result.get("status", "unknown")
+        status = f"{result.get('status', 'unknown')}{not_run_note(result)}"  # #21959
 
         # `stdout` first so a shell result is unchanged; the others only fill a
         # gap, never override it. `error`/`reason` last: a failure that says
@@ -1777,8 +1777,7 @@ class ChatWorkflowManager(
 
         output_text = _filter_step_output(cmd, output_text, is_shell=bool(result.get("command")))
 
-        status_line = f"- Status: {status}{not_run_note(result)}"
-        return f"**Step {step_num}:** `{cmd}`\n{status_line}\n- Output:{framed_tool_output(output_text)}"
+        return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:{framed_tool_output(output_text)}"
 
     def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
         """Build an optional tool-name correction block for continuation prompts. Issue #2735.

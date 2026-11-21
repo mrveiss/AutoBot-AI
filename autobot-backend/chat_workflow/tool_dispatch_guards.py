@@ -320,12 +320,15 @@ def _carry_person_approval(tool_call: dict[str, Any], ctx: "LLMIterationContext 
     """Mark an ``execute_command`` call whose exact shown fingerprint the person approved (#21959).
 
     The fingerprint binds the yes to the call's tool and raw params, so it never covers a different command.
+    The yes is consumed by the call it marks, so a repeat of the same call is not approved by it.
     """
     from services.ai_line_enforcement import shown_call_fingerprint
 
     shown = shown_call_fingerprint(tool_call.get("name", ""), _call_params(tool_call))
-    if shown in getattr(ctx, "approved_fingerprints", frozenset()):
+    approved = getattr(ctx, "approved_fingerprints", frozenset())
+    if shown in approved:
         tool_call[COMMAND_APPROVED_KEY] = True
+        ctx.approved_fingerprints = approved - {shown}  # one yes, one run: a duplicate call is held again
 
 
 def is_held_message(message: Any) -> bool:

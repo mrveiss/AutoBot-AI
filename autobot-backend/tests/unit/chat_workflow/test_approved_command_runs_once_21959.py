@@ -15,7 +15,7 @@ from chat_workflow.approval_binding import bind_decision
 from chat_workflow.manager import ChatWorkflowManager
 from chat_workflow.tool_dispatch_guards import COMMAND_APPROVED_KEY, COMMAND_FORCE_APPROVAL_KEY
 from chat_workflow.tool_handler import ToolHandlerMixin
-from services.agent_terminal.ai_line_gate import decide_command
+from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command
 from services.ai_line_enforcement import Outcome
 from tests.unit.chat_workflow.test_ai_line_support import VERIFIED_COMPANY, arun_guard
 
@@ -116,6 +116,51 @@ async def test_a_yes_does_not_lift_a_refusal():
     assert decision == (False, "held")
 
 
+@pytest.mark.asyncio
+async def test_the_same_approved_call_dispatched_twice_is_held_the_second_time():
+    held = {**TOUCH, "needs_approval": True}
+    ctx = _resumed_ctx(held)
+    first, _ = await _run_through_tool_path(dict(TOUCH), ctx)
+    second, _ = await _run_through_tool_path(dict(TOUCH), ctx)
+    assert (first["status"], second["status"]) == ("success", "pending_approval")
+
+
+@pytest.mark.asyncio
+async def test_a_yes_satisfies_the_roles_hold_on_a_high_risk_command_but_not_the_checks_around_it():
+    """A human yes on the exact command satisfies a "needs a human yes" hold; REFUSE and permissions still block."""
+    handler = MagicMock(
+        needs_approval=MagicMock(return_value=True), check_auto_approve_rules=AsyncMock(return_value=False)
+    )
+    session = MagicMock(has_pending_approval=MagicMock(return_value=True), agent_role="chat_agent", tenant_id=None)
+    high = MagicMock(value="high")
+    with patch(_GATE, AsyncMock(return_value=_verdict(Outcome.HOLD))):
+        held = await decide_command(handler, session, "rm x", high, force_approval=False, person_approved=False)
+        allowed = await decide_command(handler, session, "rm x", high, force_approval=False, person_approved=True)
+    assert held == (False, PENDING_APPROVAL_REFUSAL)
+    assert allowed == (True, None)
+    with patch(_GATE, AsyncMock(return_value=_verdict(Outcome.REFUSE))):
+        refused = await decide_command(handler, session, "rm x", high, force_approval=False, person_approved=True)
+    assert refused == (False, "held")
+
+
+@pytest.mark.asyncio
+async def test_the_terminals_permission_check_still_blocks_an_approved_command():
+    from services.agent_terminal.service import AgentTerminalService
+
+    service = AgentTerminalService.__new__(AgentTerminalService)
+    denied = {"status": "error", "error": "role may not run this"}
+    session = MagicMock()
+    service.get_session = AsyncMock(return_value=session)
+    service._validate_session_for_execution = MagicMock(return_value=None)
+    service._drain_peer_messages = MagicMock()
+    service._assess_command = MagicMock(return_value=(None, MagicMock(value="high"), [], False, []))
+    service._check_agent_permission = MagicMock(return_value=denied)
+    service._check_auto_approval_or_queue = AsyncMock()
+    result = await service.execute_command("s", "rm x", person_approved=True)
+    assert result == denied
+    service._check_auto_approval_or_queue.assert_not_called()
+
+
 def _prompt(history):
     return ChatWorkflowManager._build_continuation_prompt(
         ChatWorkflowManager.__new__(ChatWorkflowManager), "touch x", history
@@ -132,6 +177,18 @@ def test_a_pending_step_is_reported_as_not_run_and_not_counted():
 @pytest.mark.parametrize("status", ["denied", "refused", "timeout", "outcome_unknown", "approval_required"])
 def test_a_refused_or_timed_out_step_is_not_run(status):
     assert "0 step(s) completed" in _prompt([{"command": "touch x", "status": status}])
+
+
+def test_a_permission_denied_record_and_an_unknown_status_are_not_run():
+    denied = {"status": "error", "error": "role may not run this", "command": "rm x", "risk": "high"}
+    unknown = {"command": "ls", "status": "mystery", "stdout": "a"}
+    prompt = _prompt([denied, unknown])
+    assert "0 step(s) completed" in prompt and prompt.count("NOT RUN") == 2
+
+
+def test_a_command_that_ran_and_failed_still_counts_as_run():
+    failed = {"command": "false", "status": "error", "return_code": 1, "stdout": "", "stderr": "boom"}
+    assert "1 step(s) completed" in _prompt([failed])
 
 
 def test_only_the_steps_that_ran_are_counted():

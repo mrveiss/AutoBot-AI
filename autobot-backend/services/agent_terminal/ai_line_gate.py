@@ -94,6 +94,7 @@ async def decide_command(
     verdict = await resolve_command_line(approval_handler, session, command, risk)
     if verdict.outcome is Outcome.REFUSE:
         return False, verdict.message
+    # A person's yes to this exact command skips the pending-slot check on purpose: it runs, it does not queue.
     if person_approved and not force_approval:
         return True, None
     if verdict.outcome is Outcome.RUN and not force_approval:
