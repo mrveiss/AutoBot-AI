@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from autobot_shared.security import constant_time
-from autobot_shared.security.constant_time import secure_compare
+from autobot_shared.security.constant_time import equal_bytes, secure_compare
 
 _KEY = "k" * 32  # pragma: allowlist secret
 
@@ -58,3 +58,15 @@ def test_comparison_is_delegated_to_compare_digest() -> None:
     with patch.object(constant_time.hmac, "compare_digest", return_value=True) as digest:
         assert secure_compare("a", "b") is True
     digest.assert_called_once_with(b"a", b"b")
+
+
+def test_equal_bytes_counts_two_empty_values_as_equal() -> None:
+    assert equal_bytes(b"", b"") is True
+    assert secure_compare(b"", b"") is False  # the difference from secure_compare
+
+
+def test_equal_bytes_compares_non_empty_values_and_refuses_empty_against_value() -> None:
+    assert equal_bytes(b"abc", b"abc") is True
+    assert equal_bytes(b"abc", b"abd") is False
+    assert equal_bytes(b"", b"abc") is False
+    assert equal_bytes(b"abc", b"") is False
