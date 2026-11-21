@@ -21,7 +21,10 @@ def _svc(monkeypatch, *, by_name=None):
     svc.rotate_value = AsyncMock()
     svc.create = AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4(), owner_vault=_VAULT, extra_data=None))
     svc.find_by_name = AsyncMock(return_value=by_name)
-    monkeypatch.setattr("services.envelope_secrets_service.EnvelopeSecretsService", lambda root_key=None: svc)
+    monkeypatch.setattr(
+        "services.envelope_secrets_service.EnvelopeSecretsService",
+        lambda root_key=None: svc,
+    )
     return svc
 
 
@@ -30,7 +33,7 @@ async def _run(sess):
 
 
 async def test_name_hit_without_marker_rotates_and_marks(monkeypatch):
-    row = SimpleNamespace(id=uuid.uuid4(), owner_vault=_VAULT, extra_data={"k": 1})
+    row = SimpleNamespace(id=uuid.uuid4(), is_active=True, type="t", extra_data={"k": 1})
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
     await _run(MagicMock(flush=AsyncMock()))
@@ -48,12 +51,27 @@ async def test_no_row_creates(monkeypatch):
     assert svc.create.return_value.extra_data == {cw._MARKER: "sid-1"}
 
 
-async def test_foreign_vault_row_never_rotated(monkeypatch):
-    row = SimpleNamespace(id=uuid.uuid4(), owner_vault="user:other", extra_data=None)
+async def _refused(monkeypatch, **fields):
+    row = SimpleNamespace(id=uuid.uuid4(), is_active=True, type="t", extra_data=None)
+    row.__dict__.update(fields)
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
     await _run(MagicMock(flush=AsyncMock()))
     svc.rotate_value.assert_not_awaited()
+    svc.create.assert_not_awaited()
+    assert row.extra_data == fields.get("extra_data")
+
+
+async def test_inactive_row_not_rotated(monkeypatch):
+    await _refused(monkeypatch, is_active=False)
+
+
+async def test_other_type_row_not_rotated(monkeypatch):
+    await _refused(monkeypatch, type="other_type")
+
+
+async def test_row_marked_for_another_credential_not_rotated(monkeypatch):
+    await _refused(monkeypatch, extra_data={cw._MARKER: "other-sid"})
 
 
 async def test_marker_hit_rotates(monkeypatch):

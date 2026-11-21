@@ -32,7 +32,9 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
         (
             await session.execute(
                 select(Secret).where(
-                    marker == str(sqlite_id), Secret.owner_id == owner_uuid, Secret.is_active.is_(True)
+                    marker == str(sqlite_id),
+                    Secret.owner_id == owner_uuid,
+                    Secret.is_active.is_(True),
                 )
             )
         )
@@ -42,7 +44,14 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
 
 
 async def mirror_in_session(
-    session, sqlite_id: str, owner_id: str, value: str, root_key: bytes, *, name=None, secret_type=None
+    session,
+    sqlite_id: str,
+    owner_id: str,
+    value: str,
+    root_key: bytes,
+    *,
+    name=None,
+    secret_type=None,
 ) -> None:
     """Testable core: upsert the envelope copy within *session* (caller commits).
 
@@ -65,25 +74,59 @@ async def mirror_in_session(
     if row is None and name and secret_type:
         await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
     elif row is not None:
-        await svc.rotate_value(session, secret_id=row.id, new_plaintext=value.encode("utf-8"), actor_vaults={vault})
+        await svc.rotate_value(
+            session,
+            secret_id=row.id,
+            new_plaintext=value.encode("utf-8"),
+            actor_vaults={vault},
+        )
     else:
-        logger.debug("No envelope copy for credential %s and no name/type to create one — skipping mirror", sqlite_id)
+        logger.debug(
+            "No envelope copy for credential %s and no name/type to create one — skipping mirror",
+            sqlite_id,
+        )
+
+
+def _adoptable(existing, secret_type, sqlite_id) -> str | None:
+    """None when *existing* is safe to adopt as this credential's mirror, else the failed condition."""
+    if not existing.is_active:
+        return "inactive"
+    if existing.type != secret_type:
+        return "type_differs"
+    marker = (existing.extra_data or {}).get(_MARKER)
+    if marker is not None and marker != str(sqlite_id):
+        return "marked_for_another_credential"
+    return None
 
 
 async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type) -> None:
-    """No marker row: rotate a same-name row of THIS vault and mark it; create only when none exists.
+    """No marker row: adopt a same-name row of THIS vault only when safe, else create; never overwrite blindly.
 
-    ``create`` never replaces a value (unique ``(owner_vault, name)``), so a live same-name row with no
-    marker would raise ``SecretConflictError`` and leave the new credential unmirrored. Nothing is deleted.
+    ``find_by_name`` is scoped to the vault; several rows raise ``AmbiguousSecretError`` (nothing written). A
+    same-name row is rotated and marked only when active, of this secret type, and unmarked (or marked for this
+    credential); otherwise nothing is written (a deactivated row is never revived). Names and values are not logged.
     """
     plaintext = value.encode("utf-8")
     existing = await svc.find_by_name(session, owner_vault=vault.to_str(), name=name)
-    if existing is not None and existing.owner_vault == vault.to_str():
-        await svc.rotate_value(session, secret_id=existing.id, new_plaintext=plaintext, actor_vaults={vault})
+    if existing is not None:
+        if (refusal := _adoptable(existing, secret_type, sqlite_id)) is not None:
+            logger.warning("Envelope mirror skipped: same-name row not adoptable (%s)", refusal)
+            return
+        await svc.rotate_value(
+            session,
+            secret_id=existing.id,
+            new_plaintext=plaintext,
+            actor_vaults={vault},
+        )
         target = existing
     else:
         target = await svc.create(
-            session, owner_vault=vault, name=name, secret_type=secret_type, plaintext=plaintext, created_by=owner_uuid
+            session,
+            owner_vault=vault,
+            name=name,
+            secret_type=secret_type,
+            plaintext=plaintext,
+            created_by=owner_uuid,
         )
     target.extra_data = {**(target.extra_data or {}), _MARKER: str(sqlite_id)}
     await session.flush()
@@ -123,7 +166,15 @@ async def mirror_credential_to_vault(sqlite_id: str, owner_id: str, value: str, 
         from user_management.database import get_async_session_factory
 
         async with get_async_session_factory()() as session:
-            await mirror_in_session(session, sqlite_id, owner_id, value, root_key, name=name, secret_type=secret_type)
+            await mirror_in_session(
+                session,
+                sqlite_id,
+                owner_id,
+                value,
+                root_key,
+                name=name,
+                secret_type=secret_type,
+            )
             await session.commit()
     except Exception as exc:  # dual-write must never break the canonical SQLite write
         # Neither the exception text (it can echo the value being written) nor the credential's
@@ -148,4 +199,9 @@ async def delete_credential_from_vault(sqlite_id: str, owner_id: str) -> None:
             await delete_in_session(session, sqlite_id, owner_id, root_key)
             await session.commit()
     except Exception as exc:  # never break the canonical revoke; surface loudly for reconciliation
-        logger.error("Envelope delete failed for credential %s (owner %s): %s", sqlite_id, owner_id, exc)
+        logger.error(
+            "Envelope delete failed for credential %s (owner %s): %s",
+            sqlite_id,
+            owner_id,
+            exc,
+        )
