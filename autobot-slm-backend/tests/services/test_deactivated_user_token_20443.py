@@ -47,6 +47,9 @@ class _SlmUserService(UserService):
 
     user_model = MagicMock()
 
+    async def _guard_last_admin(self, *args, **kwargs):  # about the revocation marker; the guard has its own (#21018)
+        return None
+
 
 @pytest.fixture()
 def epochs():

@@ -5,10 +5,11 @@
 # stays relative -- an absolute path here would have to be rendered from
 # the deploy-time SSOT into a file every component ships, and a real
 # distribution is a bigger move than this manifest owns.
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524, #18060)
 -e ../autobot_shared
 
 # Browser automation
-playwright>=1.64.1
+playwright
 # #15660: `roles/browser` installs this into the worker venv and no manifest
 # declared it, so `update-all-nodes.yml`'s `pip install -r` of this file built a
 # different venv from the one the role builds. Bare, which is the text the role
@@ -22,4 +23,4 @@ playwright-stealth
 # coincidence, which is the blindness #15629 removed from the parity guard.
 fastapi  # version from constraints/shared.txt (#18060); applied by the -c the browser role passes in extra_args
 starlette  # security floor from constraints/shared.txt
-uvicorn>=0.54.0
+uvicorn

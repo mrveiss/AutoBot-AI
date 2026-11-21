@@ -9,7 +9,6 @@ Week 3 Phase 2: Comprehensive endpoint categorization and selective enforcement
 """
 
 import random
-import secrets
 import time
 from collections import defaultdict
 from typing import Dict, List
@@ -18,6 +17,8 @@ import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from autobot_shared.logging_once import first_time
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from security.service_auth import validate_service_auth
@@ -26,9 +27,6 @@ logger = structlog.get_logger()
 
 # Rate limiting tracker for failed auth attempts per IP
 _failed_auth_tracker: Dict[str, List[float]] = defaultdict(list)
-
-# Guards the one-shot 'rate limiting disabled' warning (#13326).
-_rate_limit_disabled_logged = False
 
 # ============================================================================
 # ENDPOINT CATEGORIZATION
@@ -256,7 +254,7 @@ def _has_override_token(request: Request) -> bool:
     expected = config.service_auth_override_token
     if not override_token or not expected:
         return False
-    return secrets.compare_digest(override_token, expected)
+    return secure_compare(override_token, expected)
 
 
 def _get_enforcement_percentage() -> int:
@@ -299,10 +297,8 @@ def _rate_limit_settings() -> tuple[int, int]:
 
 def _warn_rate_limiting_disabled(window: int, max_failures: int) -> None:
     """Log once that failure rate limiting is off, so it is never silent."""
-    global _rate_limit_disabled_logged
-    if _rate_limit_disabled_logged:
+    if not first_time(__name__, "rate_limit_disabled"):
         return
-    _rate_limit_disabled_logged = True
     logger.warning(
         "Service-auth failure rate limiting is disabled by configuration",
         rate_limit_window=window,

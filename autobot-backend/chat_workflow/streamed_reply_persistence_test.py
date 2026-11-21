@@ -146,7 +146,9 @@ class TestStreamedReplyIsReadableAfterReload:
 
         messages, llm_response, _ = await graph_mod._run_llm_iteration(_FakeManager(), _turn_ctx(), 1, [], None)
         wf_messages = [
-            SimpleNamespace(type=m.get("type", "response"), content=m.get("content", ""), metadata=m.get("metadata"))
+            WorkflowMessage(
+                type=m.get("type", "response"), content=m.get("content", ""), metadata=m.get("metadata") or {}
+            )
             for m in messages
         ]
 
@@ -172,7 +174,7 @@ class TestStreamedReplyIsReadableAfterReload:
         place it after the prose that introduced it.
         """
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
+            WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
@@ -197,7 +199,7 @@ class TestStreamedReplyIsReadableAfterReload:
         using each message's iteration tag.
         """
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
+            WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
         all_llm_responses = ["Let me check.", "Uptime is 3 days."]
 
@@ -290,7 +292,7 @@ class TestNoDuplicateOrEmptyTurns:
         persisted AFTER the prose entry in the corrected order.
         """
         wf_messages = [
-            SimpleNamespace(type="response", content=REPLY, metadata={"message_type": "respond_tool", "iteration": 1})
+            WorkflowMessage(type="response", content=REPLY, metadata={"message_type": "respond_tool", "iteration": 1})
         ]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
@@ -307,7 +309,7 @@ class TestNoDuplicateOrEmptyTurns:
         workflow_messages entry is appended via the leftover fallback exactly
         as the pre-#13295 code did.
         """
-        wf_messages = [SimpleNamespace(type="error", content="The assistant could not respond.", metadata={})]
+        wf_messages = [WorkflowMessage(type="error", content="The assistant could not respond.", metadata={})]
 
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [])
 

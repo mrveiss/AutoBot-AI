@@ -18,7 +18,7 @@ LOW, MEDIUM, HIGH = (Severity.LOW.value, Severity.MEDIUM.value, Severity.HIGH.va
 
 
 def _p(type_, line, severity=MEDIUM):
-    return {"type": type_, "line": line, "severity": severity, "description": "d"}
+    return {"type": type_, "line": line, "severity": severity, "description": "d", "file_path": "a.py"}
 
 
 class TestDedupe:
@@ -54,6 +54,69 @@ class TestDedupe:
         a, b = _p("long_function", 1), _p("code_smell_long_method", 1, HIGH)
         dedupe_same_location_problems([a, b])
         assert a["severity"] == MEDIUM and b["type"] == "code_smell_long_method"
+
+
+class TestEveryTypeCountsOncePerLocation:
+    def test_the_same_type_twice_at_one_line_counts_once_with_the_higher_severity(self):
+        out = dedupe_same_location_problems([_p("code_smell_deep_nesting", 4), _p("code_smell_deep_nesting", 4, HIGH)])
+        assert [(p["type"], p["severity"]) for p in out] == [("code_smell_deep_nesting", HIGH)]
+
+    def test_same_type_and_line_with_different_descriptions_are_two_defects(self):
+        a = dict(_p("race_condition", 9), description="lazy init of cache")
+        b = dict(_p("race_condition", 9), description="shared counter")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_descriptions_differing_only_in_spacing_are_one_defect(self):
+        a = dict(_p("debug_code", 9), description="print  call")
+        b = dict(_p("debug_code", 9), description="print call ")
+        assert len(dedupe_same_location_problems([a, b])) == 1
+
+    def test_identifiers_differing_only_in_case_are_two_defects(self):
+        """#21782: globals ``Cache`` and ``cache`` on one line are two findings."""
+        a = dict(_p("global_variable", 9), description="global Cache")
+        b = dict(_p("global_variable", 9), description="global cache")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    @pytest.mark.parametrize("second", ["5", 5, " 5 ", 5.0])
+    def test_a_line_number_is_compared_as_a_number(self, second):
+        """#21782: ``5`` and ``"5"`` are one line, so the report does not count it twice."""
+        a, b = dict(_p("debug_code", 5), line=None, line_number=5), dict(
+            _p("debug_code", 5), line=None, line_number=second
+        )
+        assert len(dedupe_same_location_problems([a, b])) == 1
+
+    def test_findings_without_a_file_path_are_not_merged_across_files(self):
+        """#21782: two stored findings with no path are not provably one defect."""
+        a, b = _p("debug_code", 3), _p("debug_code", 3)
+        del a["file_path"], b["file_path"]
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_within_one_file_a_missing_path_still_merges(self):
+        """One file's own findings carry no path yet (``analyzers._run_analysis_phases``)."""
+        a, b = _p("debug_code", 3), _p("debug_code", 3)
+        del a["file_path"], b["file_path"]
+        assert len(dedupe_same_location_problems([a, b], within_file=True)) == 1
+
+    def test_the_same_line_of_two_files_is_two_defects(self):
+        a, b = dict(_p("debug_code", 3), file_path="a.py"), dict(_p("debug_code", 3), file_path="b.py")
+        assert len(dedupe_same_location_problems([a, b])) == 2
+
+    def test_a_multi_file_list_collapses_per_file(self):
+        mk = lambda t, f: dict(_p(t, 8), file_path=f)  # noqa: E731
+        probs = [mk("long_function", "a.py"), mk("code_smell_long_method", "a.py"), mk("long_function", "b.py")]
+        assert [p["file_path"] for p in dedupe_same_location_problems(probs)] == ["a.py", "b.py"]
+
+    def test_the_survivor_does_not_depend_on_input_order(self):
+        a = dict(_p("long_function", 5, HIGH), description="alpha", suggestion="x")
+        b = dict(_p("code_smell_long_method", 5, HIGH), description="beta", suggestion="y")
+        forward = dedupe_same_location_problems([a, b])
+        backward = dedupe_same_location_problems([b, a])
+        assert forward == backward and len(forward) == 1
+
+    def test_an_already_canonical_or_untyped_finding_is_returned_as_is(self):
+        canonical, untyped = _p("long_function", 1), {"line": 2, "severity": LOW}
+        out = dedupe_same_location_problems([canonical, untyped])
+        assert out[0] is canonical and out[1] is untyped
 
 
 class TestAnalysisPhasesApplyTheDedupe:

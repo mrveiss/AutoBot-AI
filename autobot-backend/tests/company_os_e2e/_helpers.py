@@ -121,3 +121,15 @@ def set_paused_directly(scn: Scenario, agent_id: str, paused: bool) -> None:
         client.set(key, "1") if paused else client.delete(key)
     finally:
         client.close()
+
+
+def agent_is_active(scn: Scenario, agent_id: str) -> bool:
+    """Whether the agent reads as eligible again: the listing says it can run AND the Redis pause flag is gone."""
+    listed = {a["agent_id"]: a for a in scn.api.call("GET", "/agents")}
+    admin = scn.stack.admin
+    client = redis.Redis(host=admin.redis_host, port=admin.redis_port)
+    try:
+        flagged = bool(client.exists(AGENT_PAUSED_KEY.format(agent_id=agent_id)))
+    finally:
+        client.close()
+    return bool(listed.get(agent_id, {}).get("can_run")) and not flagged

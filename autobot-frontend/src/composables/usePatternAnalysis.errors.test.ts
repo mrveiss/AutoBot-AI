@@ -28,14 +28,21 @@ vi.mock('@/utils/debugUtils', () => ({
 vi.mock('@/utils/fetchWithAuth', () => ({ fetchWithAuth: vi.fn() }))
 vi.mock('@/config/AppConfig.js', () => ({ default: { getServiceUrl: vi.fn(async () => 'http://backend.test') } }))
 
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { usePatternAnalysis } from './usePatternAnalysis'
 
-const CACHED = '/api/analytics/codebase/patterns/cached-summary'
+const mockedFetch = vi.mocked(fetchWithAuth)
+
+const SOURCE = 'src-a'
+// The selected source's id, added the way `withSourceId` does (#20513).
+const withSourceId = (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=${SOURCE}`
+const CACHED = withSourceId('/api/analytics/codebase/patterns/cached-summary')
 
 describe('usePatternAnalysis failure reporting (#17651)', () => {
   beforeEach(() => {
     apiGet.mockReset()
     apiPost.mockReset()
+    mockedFetch.mockReset()
   })
 
   it('loadCachedData reports a failed cached-summary read as an error', async () => {
@@ -43,7 +50,7 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
       if (url === CACHED) throw new Error('cached summary unavailable')
       return { status: 'success', stats: null }
     })
-    const { loadCachedData, error, hasResults } = usePatternAnalysis()
+    const { loadCachedData, error, hasResults } = usePatternAnalysis(withSourceId)
 
     expect(await loadCachedData()).toBe(false)
     expect(error.value).toContain('cached summary unavailable')
@@ -51,28 +58,91 @@ describe('usePatternAnalysis failure reporting (#17651)', () => {
   })
 
   it('loadCachedData with nothing cached is empty, not an error', async () => {
-    apiGet.mockImplementation(async (url: string) =>
-      url === CACHED ? { status: 'no_data', has_cached_data: false } : { status: 'success', stats: null },
-    )
-    const { loadCachedData, error } = usePatternAnalysis()
+    apiGet.mockImplementation(async () => ({ status: 'no_data', has_cached_data: false }))
+    mockedFetch.mockResolvedValueOnce(new Response(JSON.stringify({ total_patterns: 0 }), { status: 200 }))
+    const { loadCachedData, error } = usePatternAnalysis(withSourceId)
 
     expect(await loadCachedData()).toBe(false)
     expect(error.value).toBeNull()
   })
 
+  it('loadCachedData reports a failed storage-stats read even when the summary succeeds', async () => {
+    apiGet.mockImplementation(async () => ({ status: 'no_data', has_cached_data: false }))
+    mockedFetch.mockRejectedValueOnce(new Error('stats down'))
+    const { loadCachedData, error } = usePatternAnalysis(withSourceId)
+
+    await loadCachedData()
+    expect(error.value).toContain('stats down')
+  })
+
   it('clearStorage reports a failed clear', async () => {
-    apiPost.mockRejectedValue(new Error('clear refused'))
-    const { clearStorage, error } = usePatternAnalysis()
+    // storage/clear goes through useFetchEndpoint, so it is fetchWithAuth that fails.
+    mockedFetch.mockRejectedValue(new Error('clear refused'))
+    const { clearStorage, error } = usePatternAnalysis(withSourceId)
 
     expect(await clearStorage()).toBe(false)
     expect(error.value).toContain('clear refused')
   })
 
+  it('a storage-stats error body is surfaced, not shown as an empty store', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Collection not available' }), { status: 200 }),
+    )
+    const { getStorageStats, error, storageStats } = usePatternAnalysis(withSourceId)
+
+    await getStorageStats()
+    expect(storageStats.value).toBeNull()
+    expect(error.value).toContain('Collection not available')
+  })
+
   it('getReport reports a failed fetch', async () => {
-    apiGet.mockRejectedValue(new Error('report down'))
-    const { getReport, error } = usePatternAnalysis()
+    mockedFetch.mockRejectedValue(new Error('report down'))
+    const { getReport, error } = usePatternAnalysis(withSourceId)
 
     expect(await getReport()).toBeNull()
     expect(error.value).toContain('report down')
+  })
+
+  it('storage stats and clear are requested for the selected source through useFetchEndpoint (#20513)', async () => {
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    mockedFetch.mockResolvedValueOnce(json({ total_patterns: 3, pattern_type_distribution: {}, collection_name: 'code_patterns', source_id: 'src-a' }))
+    const { getStorageStats, clearStorage, storageStats } = usePatternAnalysis(withSourceId)
+
+    await getStorageStats()
+    expect(mockedFetch.mock.calls[0]?.[0]).toBe(
+      'http://backend.test/api/analytics/codebase/patterns/storage/stats?source_id=src-a',
+    )
+    expect(storageStats.value).toMatchObject({ total_patterns: 3 })
+
+    mockedFetch.mockResolvedValueOnce(json({ message: 'cleared' }))
+    expect(await clearStorage()).toBe(true)
+    const [clearUrl, init] = mockedFetch.mock.calls[1] as [string, RequestInit]
+    expect(clearUrl).toBe('http://backend.test/api/analytics/codebase/patterns/storage/clear?source_id=src-a')
+    expect(init.method).toBe('POST')
+    expect(storageStats.value).toBeNull()
+  })
+
+  it('the report is read for the selected source through useFetchEndpoint, with its path (#20513)', async () => {
+    mockedFetch.mockResolvedValueOnce(
+      new Response('# r', { status: 200, headers: { 'Content-Type': 'text/markdown' } }),
+    )
+    const { getReport } = usePatternAnalysis(withSourceId)
+
+    expect(await getReport('src/a b')).toBe('# r')
+    expect(mockedFetch.mock.calls[0]?.[0]).toBe(
+      'http://backend.test/api/analytics/codebase/patterns/report?source_id=src-a&format=markdown&path=src%2Fa%20b',
+    )
+  })
+
+  it('with no source selected nothing is requested (the routes answer 422 without one, #20513)', async () => {
+    const { loadCachedData, getReport, clearStorage } = usePatternAnalysis((url: string) => url)
+
+    expect(await loadCachedData()).toBe(false)
+    expect(await getReport()).toBeNull()
+    expect(await clearStorage()).toBe(false)
+    expect(apiGet).not.toHaveBeenCalled()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(mockedFetch).not.toHaveBeenCalled()
   })
 })

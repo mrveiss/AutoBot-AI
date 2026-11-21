@@ -171,7 +171,11 @@ def glob_declarations_in(source: str) -> set[str]:
 
 def _probe_path(glob: str) -> str:
     """A concrete path the *glob* would match, for the filter's own matcher."""
-    return glob.replace("**/", "").replace("**", "x").replace("*", "x")
+    # A leading `**/` matches zero directories; a mid-path one must probe a real subdirectory, or
+    # `docs/**/*.md` probes `docs/x.md` and is wrongly "covered" by a top-level `docs/*.md` (#17930).
+    head, sep, rest = glob.partition("**/")
+    probe = head + sep.replace("**/", "" if not head else "sub/") + rest
+    return probe.replace("**", "x").replace("*", "x")
 
 
 def _declared() -> tuple[dict[str, set[str]], int]:

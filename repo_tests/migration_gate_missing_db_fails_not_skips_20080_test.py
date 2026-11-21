@@ -26,7 +26,7 @@ import yaml
 from repo_tests._paths import repo_root
 
 _CONFTEST = Path("autobot-backend/tests/migrations/conftest.py")
-_WORKFLOW = Path(".github/workflows/migration-gate.yml")
+_WORKFLOW = Path(".github/workflows/_gate-migration.yml")
 _ADMIN = "AUTOBOT_MIGRATION_TEST_ADMIN_URL"
 _REQUIRE = "AUTOBOT_MIGRATION_TEST_REQUIRE_DB"
 
