@@ -486,45 +486,10 @@ class WhatsAppIntegration(BaseIntegration):
                 "Authorization": f"Bearer {self.access_token}",
                 "Content-Type": "application/json",
             }
-
-            template_payload: Dict[str, Any] = {
-                "name": template_name,
-                "language": {"code": language_code},
-            }
-            if params.get("components"):
-                template_payload["components"] = params["components"]
-
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to,
-                "type": "template",
-                "template": template_payload,
-            }
+            payload = self._build_template_payload(to, template_name, language_code, params)
 
             result = await self._make_request("POST", url, headers=headers, json_data=payload)
-
-            if result.get("status_code") == 200:
-                logger.info(
-                    "Sent WhatsApp template message '%s' to %s",
-                    template_name,
-                    _mask_phone(to),
-                )
-                return {
-                    "ok": True,
-                    "message_id": result["body"]["messages"][0]["id"],
-                    "to": _mask_phone(to),
-                    "template_name": template_name,
-                }
-
-            error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
-            logger.error(
-                "Failed to send WhatsApp template message '%s' to %s: %s",
-                template_name,
-                _mask_phone(to),
-                error_msg,
-            )
-            return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
+            return self._template_response(result, to, template_name)
 
         except Exception as exc:
             logger.error(
@@ -537,6 +502,37 @@ class WhatsAppIntegration(BaseIntegration):
                 "error": str(exc),
                 "to": _mask_phone(params.get("to")),
             }
+
+    @staticmethod
+    def _build_template_payload(to: str, name: str, language_code: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the template message payload (helper for send_template_message)."""
+        template: Dict[str, Any] = {"name": name, "language": {"code": language_code}}
+        if params.get("components"):
+            template["components"] = params["components"]
+        return {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "template",
+            "template": template,
+        }
+
+    @staticmethod
+    def _template_response(result: Dict[str, Any], to: str, template_name: str) -> Dict[str, Any]:
+        """Map the API result to the response dict (helper for send_template_message)."""
+        if result.get("status_code") == 200:
+            logger.info("Sent WhatsApp template message '%s' to %s", template_name, _mask_phone(to))
+            return {
+                "ok": True,
+                "message_id": result["body"]["messages"][0]["id"],
+                "to": _mask_phone(to),
+                "template_name": template_name,
+            }
+        error_msg = result.get("body", {}).get("error", {}).get("message", "Unknown error")
+        logger.error(
+            "Failed to send WhatsApp template message '%s' to %s: %s", template_name, _mask_phone(to), error_msg
+        )
+        return {"ok": False, "error": error_msg, "to": _mask_phone(to)}
 
     async def check_opt_in_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Check if phone number has opted in for messaging.
