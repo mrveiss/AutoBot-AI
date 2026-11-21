@@ -177,7 +177,8 @@ async def with_pending_question(request: Any, session_id: str, messages: List[Di
 async def guarded_resume(chat_id: str, request_data: dict, manager: Any, open_stream: Any) -> Any:
     """Check the resume binding and open its stream under the per-chat claim; None claim for an approval resume.
 
-    The claim is held until the returned stream ends (``release_after``) or the check / open fails.
+    The claim is held until the returned stream ends (``release_after``) or the check / open fails. The caller
+    settles access (#20195) BEFORE this, so a refused caller gets its 404, never a pause-state 409 (#21939).
     """
     task_id = await acquire_answer_lock(chat_id) if _is_stall_resume(request_data) else None
     try:
