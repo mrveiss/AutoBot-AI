@@ -381,7 +381,26 @@ async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_
     for kwargs in rows.values():
         assert kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET
         assert kwargs["company_id"] == str(company_id)
+        assert kwargs["actor_type"] == "user"
         assert kwargs["actor_id"] == str(_ACTOR)
         assert kwargs["before"]["heartbeat_enabled"] is True
         assert kwargs["after"]["heartbeat_enabled"] is False
         assert kwargs["metadata"] == {"reason": COMPANY_DELETED_REASON}
+
+
+@pytest.mark.asyncio
+async def test_a_delete_with_no_actor_records_system_rows(session_factory):  # noqa: ANN001
+    company_id = await _create(session_factory, "Acme")
+    await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
+
+    record = AsyncMock()
+    async with session_factory() as session:
+        with patch("llc.services.activity_log.LLCActivityLogService.record", new=record):
+            await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    assert record.await_count == 1
+    kwargs = record.await_args.kwargs
+    assert kwargs["entity_id"] == "worker-acme"
+    assert kwargs["actor_type"] == "system"
+    assert kwargs["actor_id"] is None
