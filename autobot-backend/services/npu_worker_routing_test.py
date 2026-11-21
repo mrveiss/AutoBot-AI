@@ -76,6 +76,21 @@ async def test_inference_moves_to_the_next_worker_when_one_fails():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("marker", [{}, {"mock": None}, {"mock": 0}, {"mock": "false"}, {"mock": True}])
+async def test_embedding_with_unverified_origin_fails_over(marker):
+    post = AsyncMock(side_effect=[{"embedding": [1.0], **marker}, {"embedding": [2.0], "mock": False}])
+    with (
+        patch.object(npu_worker_routing, "npu_worker_urls", AsyncMock(return_value=["http://a:1", "http://b:1"])),
+        patch.object(npu_worker_routing, "_post_inference", post),
+    ):
+        result = await npu_worker_routing.post_inference_with_failover(
+            CONFIGURED, {"task_type": "embedding_generation"}, 1
+        )
+    assert result["embedding"] == [2.0]
+    assert post.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_inference_raises_when_every_worker_fails():
     post = AsyncMock(side_effect=RuntimeError("dead"))
     with (

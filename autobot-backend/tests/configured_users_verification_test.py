@@ -12,6 +12,7 @@ import pytest
 
 from autobot_shared.auth import configured_users as cu
 from autobot_shared.auth.jwt_core import hash_password
+from autobot_shared.logging_once import reset_log_once
 from security_layer import SecurityLayer
 
 STORED = hash_password("correct-value")
@@ -20,7 +21,7 @@ PLAIN = "unhashed-config-value"  # pragma: allowlist secret
 
 @pytest.fixture(autouse=True)
 def _fresh_reports():
-    cu._reported.clear()
+    reset_log_once(cu.logger)
 
 
 def _layer(allowed):

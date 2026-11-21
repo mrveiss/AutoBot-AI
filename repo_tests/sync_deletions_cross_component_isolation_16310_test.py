@@ -141,8 +141,12 @@ def _archive_relative_landing_dir(dest: str, archive_path: str) -> str:
     """Where `git archive -- <archive_path>` (no --prefix) lands once
     unarchived into a bare `dest`: entries sit under `archive_path` itself,
     so the landing directory is `dest` joined with `archive_path`, trailing
-    slashes dropped on both sides."""
-    return f"{_normalize_dir(dest)}/{archive_path.strip('/')}"
+    slashes dropped on both sides. An archive may also carry root-level FILES
+    (`autobot_shared/ .python-version`, #20942); those land beside the tree, not in
+    it, so the landing dir is the one directory (trailing-slash) token."""
+    dirs = [tok for tok in archive_path.split() if tok.endswith("/")]
+    assert len(dirs) == 1, f"archive path {archive_path!r} must name exactly one directory (plus optional files)"
+    return f"{_normalize_dir(dest)}/{dirs[0].strip('/')}"
 
 
 def _sync_module_args(task: dict) -> tuple[str, dict]:

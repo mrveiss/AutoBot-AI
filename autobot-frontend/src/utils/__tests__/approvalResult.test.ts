@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'vitest'
-import { approvalErrorMessage, APPROVAL_STATE_UNAVAILABLE } from '../approvalResult'
+import { approvalErrorMessage, APPROVAL_STATE_UNAVAILABLE, isAlreadyDecided } from '../approvalResult'
 
 const t = (key: string) => `t:${key}`
 
@@ -25,5 +25,14 @@ describe('approvalErrorMessage (#21174)', () => {
   it('treats an HTTP-200 comment answer with status error as a refusal (ChatInterface.onCommandCommented)', () => {
     const body = { status: 'error', error: APPROVAL_STATE_UNAVAILABLE }
     expect(approvalErrorMessage(body, t)).not.toBeNull()
+  })
+})
+
+describe('isAlreadyDecided (#19951)', () => {
+  it('is true only for a 409', () => {
+    expect(isAlreadyDecided({ status: 409 })).toBe(true)
+    expect(isAlreadyDecided({ status: 500 })).toBe(false)
+    expect(isAlreadyDecided(new Error('x'))).toBe(false)
+    expect(isAlreadyDecided(null)).toBe(false)
   })
 })

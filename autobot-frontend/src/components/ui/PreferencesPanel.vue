@@ -382,7 +382,7 @@ function handleReset() {
 
 .option-btn.active {
   background: var(--color-primary);
-  color: var(--text-inverse);
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
   font-weight: 600;
 }

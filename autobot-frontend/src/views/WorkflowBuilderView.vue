@@ -434,6 +434,7 @@
         <!-- Visual Builder Section -->
         <section v-if="activeSection === 'canvas'" class="section-canvas">
           <WorkflowCanvas
+            :key="canvasGeneration"
             :nodes="workflowNodes"
             :selected-node-id="selectedNodeId"
             @node-added="handleNodeAdded"
@@ -602,6 +603,7 @@
           <GUIAutomationControls
             :opportunities="guiAutomationOpportunities"
             :loading="guiAutomationLoading"
+            :load-failed="guiAutomationLoadFailed"
             @refresh="loadGuiAutomationOpportunities"
           />
         </section>
@@ -694,6 +696,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
+import { useWorkflowCompanySwitch, companyContextAgrees, gateOnCompany } from '@/composables/workflow/useWorkflowCompanySwitch';
 import { useI18n } from 'vue-i18n';
 import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
@@ -722,8 +725,8 @@ import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
 import MediaGallery from '@/components/vision/MediaGallery.vue';
-import { getVisionHealth, getAutomationOpportunities } from '@/composables/useVisionApi';
-import type { AutomationOpportunity } from '@/types/visionMultimodal';
+import { getVisionHealth } from '@/composables/useVisionApi';
+import { useGuiAutomationOpportunities } from '@/composables/workflow/useGuiAutomationOpportunities';
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
@@ -782,6 +785,7 @@ const {
   activeWorkflows,
   completedWorkflows,
   currentWorkflow,
+  workflowPlan,
   pendingApproval,
   orchestrationStatus,
   executionStrategies,
@@ -792,33 +796,13 @@ const {
   selectedNodeId,
   templates,
   hasActiveWorkflows,
-  loadOrchestrationStatus,
-  loadExecutionStrategies,
-  loadAgentCapabilities,
-  loadAgentPerformance,
-  loadExampleWorkflows,
-  loadActiveWorkflows,
-  applyWorkflowProgress,
-  loadCompletedWorkflows,
-  createWorkflowFromTemplate,
-  createWorkflowFromNaturalLanguage,
-  executeApiTemplate,
-  startWorkflow,
-  pauseWorkflow,
-  resumeWorkflow,
-  cancelWorkflow,
+  loadOrchestrationStatus, loadExecutionStrategies, loadAgentCapabilities, loadAgentPerformance, loadExampleWorkflows,
+  loadActiveWorkflows, invalidateCompanyScope, applyWorkflowProgress, loadCompletedWorkflows,
+  createWorkflowFromTemplate, createWorkflowFromNaturalLanguage, executeApiTemplate, startWorkflow,
+  pauseWorkflow, resumeWorkflow, cancelWorkflow,
   stepsAwaitingApproval,
-  approveStep,
-  skipStep,
-  approvePlan,
-  rejectPlan,
-  addNode,
-  removeNode,
-  updateNodePosition,
-  connectNodes,
-  disconnectNodes,
-  clearCanvas,
-  exportCanvasToSteps,
+  approveStep, skipStep, approvePlan, rejectPlan,
+  addNode, removeNode, updateNodePosition, connectNodes, disconnectNodes, clearCanvas, exportCanvasToSteps,
   getWorkflowStatus,
   connectWebSocket,
   disconnectWebSocket,
@@ -826,7 +810,9 @@ const {
 const { selectWorkflow, handleViewWorkflow, handleStartWorkflow } = useRunnerSelection({
   t, showToast, navigateToRunner: () => navigateTo('runner'),
   activeWorkflows, currentWorkflow, executingWorkflow, startWorkflow, getWorkflowStatus,
+  companyAgrees: () => companyAgrees(),
 });
+const companyAgrees = (): boolean => companyContextAgrees(String(route.params.companyId ?? '')) || (showToast(t('workflow.builder.companySwitching'), 'warning'), false); // #21520: Save/Start wait for the route to follow the sidebar
 
 // Issue #1367: Fetch full template detail when summary lacks steps
 const { fetchTemplateDetail } = useWorkflowTemplates();
@@ -836,16 +822,19 @@ const activeSection = computed<SectionType>(
   () => (route.params.section as SectionType) || 'overview'
 );
 const naturalLanguageInput = ref('');
-const requireApprovalBeforeRun = ref(true);
+const requireApprovalBeforeRun = ref(true); // user preference, company-independent: kept across a company switch
 const selectedStrategy = ref<string>('');
-const sessionId = ref(`session_${Date.now()}`);
+const canvasGeneration = ref(0);
+const sessionId = ref(`session_${Date.now()}`); // company-scoped: rotated + socket re-keyed on a company switch (#21520)
 
 // GUI Automation state (#1242)
-const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
-const guiAutomationLoading = ref(false);
+const {
+  opportunities: guiAutomationOpportunities, loading: guiAutomationLoading, loadFailed: guiAutomationLoadFailed,
+  load: loadGuiAutomationOpportunities, reset: resetGuiAutomationOpportunities,
+} = useGuiAutomationOpportunities();
 
 // Media Gallery state
-const galleryItems = ref([]);
+const galleryItems = ref([]); // never populated from a company-scoped source, so nothing to reset on a company switch
 
 // Vision service health (#2373)
 const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
@@ -867,18 +856,6 @@ async function checkVisionHealth(): Promise<void> {
     visionHealthStatus.value = res.status === 'healthy' ? 'healthy' : 'degraded';
   } catch {
     visionHealthStatus.value = 'offline';
-  }
-}
-
-async function loadGuiAutomationOpportunities(): Promise<void> {
-  guiAutomationLoading.value = true;
-  try {
-    const res = await getAutomationOpportunities();
-    guiAutomationOpportunities.value = (res.opportunities || []) as AutomationOpportunity[];
-  } catch (e) {
-    logger.warn('Failed to load automation opportunities:', e);
-  } finally {
-    guiAutomationLoading.value = false;
   }
 }
 
@@ -991,8 +968,9 @@ async function handleRefreshAgents(): Promise<void> {
   await Promise.all([loadAgentPerformance(), loadAgentCapabilities()]);
 }
 
-async function refreshAll(): Promise<void> {
-  await Promise.all([
+/** Resolves false when a company-scoped list failed to load (the loaders log HTTP failures, they do not throw). */
+async function refreshAll(): Promise<boolean> {
+  const [, , active, completed] = await Promise.all([
     loadOrchestrationStatus(),
     loadExecutionStrategies(),
     loadActiveWorkflows(),
@@ -1000,6 +978,7 @@ async function refreshAll(): Promise<void> {
     loadExampleWorkflows(),
     checkVisionHealth(),
   ]);
+  return active && completed;
 }
 
 async function runExampleWorkflow(example: { goal: string; strategy: string }): Promise<void> {
@@ -1010,12 +989,16 @@ async function runExampleWorkflow(example: { goal: string; strategy: string }): 
 
 async function createFromNaturalLanguage(): Promise<void> {
   if (!naturalLanguageInput.value.trim()) return;
+  if (!companyAgrees()) return;
 
+  const requestSession = sessionId.value; // rotated on a company switch, so a changed value marks a stale reply
   const workflowId = await createWorkflowFromNaturalLanguage(
     naturalLanguageInput.value,
     sessionId.value,
     requireApprovalBeforeRun.value
   );
+  // The company changed while the reply was in flight: its plan belongs to the previous company.
+  if (sessionId.value !== requestSession) { pendingApproval.value = null; workflowPlan.value = null; return; }
 
   if (workflowId) {
     showToast(t('workflow.builder.created'), 'success');
@@ -1032,6 +1015,7 @@ const { deciding, handleApprovePlan, handleRejectPlan } = usePlanDecision({
   approvePlan,
   rejectPlan,
   notify: (key, kind) => showToast(t(key), kind),
+  companyAgrees: () => companyAgrees(),
   onApproved: () => {
     naturalLanguageInput.value = '';
     navigateTo('runner');
@@ -1068,16 +1052,12 @@ function handleNodesDisconnected(sourceId: string, targetId: string): void {
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
+  if (!companyAgrees()) return;
   // #2182: Warn when unsupported node types will be dropped on save
-  const unsupportedNodes = workflowNodes.value.filter(
-    (n) => n.type !== 'step',
-  );
+  const unsupportedNodes = workflowNodes.value.filter((n) => n.type !== 'step');
   if (unsupportedNodes.length > 0) {
     const types = [...new Set(unsupportedNodes.map((n) => n.type))];
-    showToast(
-      t('workflow.builder.unsupportedNodes', { types: types.join(', ') }),
-      'warning',
-    );
+    showToast(t('workflow.builder.unsupportedNodes', { types: types.join(', ') }), 'warning');
   }
   const steps = exportCanvasToSteps();
   if (steps.length === 0) {
@@ -1127,6 +1107,7 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
+  if (!companyAgrees()) return;
   const result = await executeApiTemplate(template.id);
   if (result?.success) {
     showToast(t('workflow.builder.templateStarted', { name: template.name }), 'success');
@@ -1137,30 +1118,20 @@ async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSu
   }
 }
 
-async function handlePauseWorkflow(workflowId: string): Promise<void> {
-  const success = await pauseWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.paused'), 'info');
-  }
-}
-
-async function handleResumeWorkflow(workflowId: string): Promise<void> {
-  const success = await resumeWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.resumed'), 'success');
-  }
-}
-
-async function handleCancelWorkflow(workflowId: string): Promise<void> {
-  const success = await cancelWorkflow(workflowId);
-  if (success) {
-    showToast(t('workflow.builder.cancelled'), 'info');
-  }
-}
+// #21520: run controls act on a workflow loaded for the company on screen, so they wait for the route to follow a switch.
+const handlePauseWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await pauseWorkflow(id)) showToast(t('workflow.builder.paused'), 'info');
+});
+const handleResumeWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await resumeWorkflow(id)) showToast(t('workflow.builder.resumed'), 'success');
+});
+const handleCancelWorkflow = gateOnCompany(() => companyAgrees(), async (id: string): Promise<void> => {
+  if (await cancelWorkflow(id)) showToast(t('workflow.builder.cancelled'), 'info');
+});
 
 const { answerWithToast } = useStepAnswerToast();
-const handleApproveStep = (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve');
-const handleSkipStep = (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip');
+const handleApproveStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(approveStep(workflowId, stepId), 'approve'));
+const handleSkipStep = gateOnCompany(() => companyAgrees(), (workflowId: string, stepId: string) => answerWithToast(skipStep(workflowId, stepId), 'skip'));
 
 /**
  * Open a workflow named in the URL (#13963).
@@ -1180,6 +1151,7 @@ async function openWorkflowFromQuery(): Promise<void> {
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {
+  if (!companyAgrees()) return;
   const existing =
     activeWorkflows.value.find((wf) => wf.workflow_id === workflowId) ??
     (await getWorkflowStatus(workflowId));
@@ -1231,6 +1203,20 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnectWebSocket();
+});
+
+useWorkflowCompanySwitch({ // keeps this instance on a company switch (#21520): drop the draft, reload
+  companyId: () => String(route.params.companyId ?? ''), reload: refreshAll,
+  onSwitch: () => {
+    resetGuiAutomationOpportunities();
+    invalidateCompanyScope(); // in-flight list reads and create/plan replies belong to the previous company
+    canvasGeneration.value++; // remounts WorkflowCanvas so its undo/redo history cannot restore the old draft
+    sessionId.value = `session_${Date.now()}`;
+    connectWebSocket(sessionId.value); // closes the previous company's socket first
+  },
+  draft: { naturalLanguageInput, selectedStrategy, workflowPlan, pendingApproval, currentWorkflow, workflowNodes, selectedNodeId },
+  onDraftDiscarded: () => showToast(t('workflow.builder.draftDiscardedOnCompanySwitch'), 'info'),
+  onReloadFailed: () => showToast(t('workflow.builder.reloadAfterCompanySwitchFailed'), 'error'),
 });
 
 // Watch for active workflow changes

@@ -20,6 +20,7 @@ from typing import Any
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url, ollama_tags_url
 from autobot_shared.slug import sanitize_token
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
@@ -1310,9 +1311,9 @@ class EnvironmentAnalyzer:
     ) -> list[HardcodedValue]:
         """Use LLM to filter false positives. Issue #633."""
 
-        ollama_host = config.ollama_host
+        ollama_host = config.vm.ollama
         ollama_port = config.port.ollama
-        ollama_url = f"http://{ollama_host}:{ollama_port}/api/generate"
+        ollama_url = ollama_generate_url(f"http://{ollama_host}:{ollama_port}")
 
         candidates = self._select_llm_candidates(hardcoded_values, priority_filter)
         if not candidates:
@@ -1358,7 +1359,7 @@ class EnvironmentAnalyzer:
         try:
             async with get_http_client().tracked_request(
                 "GET",
-                f"http://{host}:{port}/api/tags",
+                ollama_tags_url(f"http://{host}:{port}"),
                 timeout=aiohttp.ClientTimeout(total=5),
                 suppress_error_log=True,
             ) as resp:

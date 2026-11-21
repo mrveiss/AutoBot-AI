@@ -356,7 +356,7 @@ $ <same grep>
 
 **Rule of thumb:** Match the pattern body (e.g. `key === 'Tab'` and `shiftKey &&` for focus-trap code), cast wider than the issue's enumeration, and run **twice** — once loose, once tight — to catch the delta.
 
-Full Phase 0d specification and concrete examples: the `batch-implement` skill, Phase 0d.
+Full Phase 0d specification and concrete examples: `/autobot-dev-skills:lifecycle batch-implement`, Phase 0d.
 
 > Violation: Filing a follow-up issue #5410 for 2 dialogs that the original #5371 grep should have surfaced, because #5371 grepped for `handleKeydown` (symbol) instead of `key === 'Tab'` (behavior).
 

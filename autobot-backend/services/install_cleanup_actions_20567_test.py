@@ -23,7 +23,8 @@ _SECRET = "SECRET-VALUE-MUST-NOT-APPEAR"  # pragma: allowlist secret
 
 def _session(admins: int = 2) -> FakeAsyncSession:
     """A session whose active platform admins are the requester, plus a second admin when ``admins`` is 2."""
-    return FakeAsyncSession(default_result=[_ADMIN, _OTHER][:admins])
+    rows = [SimpleNamespace(id=i, is_platform_admin=True, is_active=True, deleted_at=None) for i in (_ADMIN, _OTHER)]
+    return FakeAsyncSession(default_result=rows[:admins])
 
 
 def _approval(action: str, decider=_OTHER, context: dict | None = None) -> SimpleNamespace:

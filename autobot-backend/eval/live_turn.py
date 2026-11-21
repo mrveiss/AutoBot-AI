@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS
 from eval.live_classify import LiveRunRecord
 from eval.runner import RecordingUnusable
@@ -38,13 +39,10 @@ KB_POPULATED, KB_EMPTY, KB_UNREACHABLE = "populated", "empty", "unreachable"
 _OWN_SESSION = re.compile(r"^eval-[\w-]+-[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}$")
 
 
-#: Anything outside the characters ``_OWN_SESSION`` allows in the trajectory part (``fix.timeout`` -> ``fix_timeout``).
-_SAFE_ID_CHARS = re.compile(r"[^\w-]")
-
-
 def new_session_id(golden: GoldenTrajectory) -> str:
     """A unique throwaway session id of the one shape ``_delete_history`` will agree to delete."""
-    return f"eval-{_SAFE_ID_CHARS.sub('_', golden.trajectory_id)}-{uuid.uuid4().hex}"
+    safe_id = sanitize_token(golden.trajectory_id, allowed=r"\w-", replacement="_", collapse=False)
+    return f"eval-{safe_id}-{uuid.uuid4().hex}"
 
 
 class GraphDidNotRun(RecordingUnusable):
@@ -75,11 +73,14 @@ def _as_dict(message: Any) -> Dict[str, Any]:
 
 
 def _final_text(state: Dict[str, Any], messages: List[Dict[str, Any]]) -> str:
+    """What the user was left with: the graph's own fallback reply when it replaced an unusable one (#21843)."""
+    replies = [m for m in messages if m.get("type") == "response"]
+    if replies and (replies[-1].get("metadata") or {}).get("parse_fallback"):
+        return replies[-1].get("content", "")
     for text in reversed(state.get("all_llm_responses") or []):
         if text and text.strip():
             return text
-    replies = [m.get("content", "") for m in messages if m.get("type") == "response"]
-    return replies[-1] if replies else ""
+    return replies[-1].get("content", "") if replies else ""
 
 
 def _status(state: Dict[str, Any]) -> str:

@@ -40,6 +40,7 @@ export type ChatMessageDisplayType =
   | 'response'
   | 'message'
   | 'command_approval_request'
+  | 'human_question'
   | 'overseer_plan'
   | 'overseer_step'
   | 'terminal_output'
