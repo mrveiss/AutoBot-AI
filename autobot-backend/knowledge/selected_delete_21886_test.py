@@ -146,12 +146,12 @@ async def test_a_count_above_the_approved_one_deletes_nothing(kb):
 
 
 @pytest.mark.asyncio
-async def test_a_partial_delete_failure_is_reported_and_leaves_the_failed_fact_linked(kb):
+async def test_a_partial_delete_failure_is_reported_and_leaves_the_failed_fact_to_retry(kb):
     kb.failing.add("f2")
     result = await kb.delete_selected_facts(["f1", "f2"], confirm=True)
     assert result["success"] is False and result["deleted_count"] == 1
     assert "only 1 of 2" in result["message"]
-    assert kb.deleted == ["f1"] and kb.redis().sets["fact:collections:f2"] == {"c1", "c2"}
+    assert kb.deleted == ["f1"] and "fact:f2" in kb.redis().hashes and "f2" in kb.rows  # f2 is still there to retry
 
 
 @pytest.mark.asyncio
@@ -159,3 +159,39 @@ async def test_each_deleted_fact_bumps_the_retrieval_epoch_through_the_wrapped_d
     await kb.delete_selected_facts(["f1", "f2"], confirm=True)
     assert [call.args for call in kb.bump.await_args_list] == [(DELETE_FACT_REASON,)] * 2
     assert kb.bm25_refreshes == 1
+
+
+@pytest.mark.asyncio
+async def test_a_cleanup_failure_leaves_the_fact_in_place_and_a_retry_repairs_memberships_and_counts(kb, monkeypatch):
+    real = kb._update_collection_fact_count
+    calls = {"n": 0}
+
+    async def fail_once(cid):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectionError("redis went away")
+        return await real(cid)
+
+    monkeypatch.setattr(kb, "_update_collection_fact_count", fail_once)
+    first = await kb.delete_selected_facts(["f2"], confirm=True)
+    assert first["success"] is False and kb.deleted == [] and "f2" in kb.rows  # the row is still there
+    retry = await kb.delete_selected_facts(["f2"], confirm=True)
+    redis = kb.redis()
+    assert retry["success"] and kb.deleted == ["f2"]
+    assert redis.sets["collection:facts:c1"] == {"f3"} and redis.sets["collection:facts:c2"] == set()
+    assert redis.hashes["collection:c1"]["fact_count"] == 1 and redis.hashes["collection:c2"]["fact_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_the_bm25_refresh_runs_after_a_later_fact_raises(kb, monkeypatch):
+    real = kb._unlink_from_collections
+
+    async def raise_for_f2(fid):
+        if fid == "f2":
+            raise ConnectionError("redis went away")
+        await real(fid)
+
+    monkeypatch.setattr(kb, "_unlink_from_collections", raise_for_f2)
+    result = await kb.delete_selected_facts(["f1", "f2"], confirm=True)
+    assert result["success"] is False and kb.deleted == ["f1"] and kb.bm25_refreshes == 1
+    assert (await kb.delete_selected_facts(["f1"], confirm=False))["facts_to_delete"] == 0

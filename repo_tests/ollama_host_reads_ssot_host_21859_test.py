@@ -9,8 +9,9 @@
 the former. Build a URL with ``config.ollama_url`` or ``config.vm.ollama``.
 
 Detected: ``<name>.ollama_host`` where ``<name>`` is bound by ``from autobot_shared.ssot_config import config``
-(under any alias). NOT detected: a read through ``getattr``, or through ``ssot_config.config.ollama_host`` held
-in a variable.
+(under any alias), as a read (a write or ``del`` is not one). A function or lambda that binds the same name locally
+(a parameter, an assignment, an import) shadows the SSOT object inside it. NOT detected: a read through ``getattr``,
+or through ``ssot_config.config.ollama_host`` held in a variable.
 
 Excluded on purpose, as a different concept: ``SlmLLMConfig.ollama_host`` in ``autobot-slm-backend/api/llm_config.py``
 is the SLM's own LLM-settings field, the host Ollama LISTENS on (default: all interfaces), stored as a setting. It is
@@ -76,17 +77,46 @@ def _config_aliases(tree: ast.AST) -> set[str]:
     }
 
 
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+
+def _own_bindings(scope: ast.AST) -> frozenset[str]:
+    """Names a function or lambda binds itself: parameters, stores, imports, nested defs; nested scopes are skipped."""
+    args = scope.args
+    bound = {a.arg for a in [*args.posonlyargs, *args.args, *args.kwonlyargs, args.vararg, args.kwarg] if a}
+    stack = list(ast.iter_child_nodes(scope))
+    while stack:
+        node = stack.pop()
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bound.add(node.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bound.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bound.add(node.name)
+        if not isinstance(node, (*_SCOPES, ast.ClassDef)):
+            stack.extend(ast.iter_child_nodes(node))
+    return frozenset(bound)
+
+
 def ollama_host_reads(tree: ast.AST) -> list[int]:
-    """Lines that read ``.ollama_host`` off the SSOT config object."""
-    names = _config_aliases(tree)
-    return [
-        node.lineno
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute)
-        and node.attr == FIELD
-        and isinstance(node.value, ast.Name)
-        and node.value.id in names
-    ]
+    """Lines that READ ``.ollama_host`` off the SSOT config object, where it is not shadowed by a local binding."""
+    names, found, stack = _config_aliases(tree), [], [(tree, frozenset())]
+    while stack:
+        node, shadowed = stack.pop()
+        if isinstance(node, _SCOPES):
+            shadowed = shadowed | _own_bindings(node)
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr == FIELD
+            and isinstance(node.ctx, ast.Load)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in names - shadowed
+        ):
+            found.append(node.lineno)
+        stack.extend((child, shadowed) for child in ast.iter_child_nodes(node))
+    return sorted(found)
 
 
 @pytest.mark.parametrize(
@@ -106,11 +136,27 @@ def test_the_detector_sees_a_read_of_the_ssot_field(source):
         "from autobot_shared.ssot_config import config\nh = config.vm.ollama",
         "def f(config):\n    return config.ollama_host",
         "from autobot_shared.ssot_config import config as _s\ndef f(config):\n    return config.ollama_host",
+        # the SSOT import is named `config`, and a parameter, a local or a lambda argument shadows it
+        "from autobot_shared.ssot_config import config\ndef f(config):\n    return config.ollama_host",
+        "from autobot_shared.ssot_config import config\ndef f():\n    config = make()\n    return config.ollama_host",
+        "from autobot_shared.ssot_config import config\nh = lambda config: config.ollama_host",
+        # a write or a deletion is not a read
+        "from autobot_shared.ssot_config import config\nconfig.ollama_host = 'localhost'",
+        "from autobot_shared.ssot_config import config\ndel config.ollama_host",
         # the SLM listen-host shape (different concept, see the module docstring): the SSOT object is `_ssot_config`
         "from autobot_shared.ssot_config import config as _ssot_config\nasync def f(db):\n"
         "    config = await _load(db)\n    return config.ollama_host",
     ],
 )
+def test_the_detector_still_sees_an_unshadowed_read_beside_a_shadowing_function():
+    source = (
+        "from autobot_shared.ssot_config import config\n"
+        "def shadowed(config):\n    return config.ollama_host\n"
+        "def real():\n    return config.ollama_host\n"
+    )
+    assert ollama_host_reads(parse_cache.parse(source)) == [5]
+
+
 def test_the_detector_ignores_the_ssot_host_and_a_foreign_config_object(source):
     assert not ollama_host_reads(parse_cache.parse(source))
 

@@ -247,6 +247,7 @@ export class KnowledgeController {
       fail: message => this.appStore.setGlobalError(message),
       dropRows: ids => this.knowledgeStore.bulkDeleteDocuments(ids),
       resync: async () => { await this.loadAllDocuments(); await this.refreshStats() },
+      stillListed: ids => this.knowledgeStore.documents.some(doc => ids.includes(doc.id)),
     })
   }
 

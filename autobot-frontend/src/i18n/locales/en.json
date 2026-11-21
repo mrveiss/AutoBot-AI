@@ -3340,6 +3340,8 @@
       "deleteTitle": "Deletion proposed",
       "deleteProposed": "Deletion proposed for approval. Nothing is deleted until an administrator approves it in the Approvals inbox.",
       "deleteNothingSelected": "Nothing is selected, so no deletion was proposed.",
+      "deleteTooMany": "Too many entries are selected. Select at most {max} and try again.",
+      "deleteUnknownError": "Unknown error",
       "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "verified": "Verified",
       "pendingReview": "Pending review",
