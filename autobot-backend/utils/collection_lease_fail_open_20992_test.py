@@ -7,6 +7,7 @@
 import asyncio
 import logging
 import threading
+import time
 
 import pytest
 
@@ -215,3 +216,44 @@ def test_a_renew_that_raises_does_not_kill_the_renewer(redis, monkeypatch):
     with cl.write_lease(_NAME):
         threading.Event().wait(0.4)
     assert len(calls) >= 2
+
+
+def test_stop_while_a_retry_is_pending_drops_the_lease_and_ends_the_renews(redis, monkeypatch):
+    monkeypatch.setattr(cl, "RENEW_DIVISOR", 1200)  # ttl 60s -> due every 0.05s
+    monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.01)
+    calls, first = [], threading.Event()
+
+    def blip(self):
+        calls.append(1)
+        first.set()
+        return None  # registry unreachable: the lease is re-scheduled for a retry
+
+    monkeypatch.setattr(cl.Lease, "renew_due", blip)
+    with cl.write_lease(_NAME) as lease:
+        assert first.wait(10), "the renewer never ran the scheduled renew"
+        lease.stop()
+        assert lease not in cl._RENEWER._due
+        seen = len(calls)
+        threading.Event().wait(0.5)  # 50x the retry interval and 10x the renew interval
+        assert len(calls) <= seen + 1 and lease not in cl._RENEWER._due
+        # at most one renew was already in flight when stop() ran; none is scheduled after it
+        settled = len(calls)
+        threading.Event().wait(0.3)
+        assert len(calls) == settled
+
+
+def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
+    monkeypatch.setattr(cl, "RENEW_DIVISOR", 60)  # ttl 60s -> the normal interval (1s) is above the retry
+    monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.2)
+    calls = []
+    monkeypatch.setattr(cl.Lease, "renew_due", lambda self: calls.append(time.monotonic()))  # returns None
+    renewer, lease = cl._Renewer(), cl.Lease(_NAME, cl.ClaimMode.SHARED, 60)
+    try:
+        renewer.add(lease, delay_s=0)
+        threading.Event().wait(0.5)
+    finally:
+        lease._stopped = True
+        renewer.remove(lease)
+    # retries at ~0, 0.2, 0.4: a renewer that ignored the interval would have called thousands of times
+    assert 2 <= len(calls) <= 4
+    assert all(b - a >= 0.15 for a, b in zip(calls, calls[1:]))
