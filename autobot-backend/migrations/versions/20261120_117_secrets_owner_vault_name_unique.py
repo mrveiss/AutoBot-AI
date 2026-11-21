@@ -25,7 +25,7 @@ from alembic import op
 from migrations.guards import has_table
 
 revision: str = "20261120_117"
-down_revision: Union[str, None] = "20261118_115"
+down_revision: Union[str, None] = "20261120_116"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

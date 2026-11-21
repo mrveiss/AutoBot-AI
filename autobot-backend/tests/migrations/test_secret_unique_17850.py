@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.migration_gate, requires_postgres]
 _ROOT = bytes(range(32))
 _VAULT = VaultRef(VaultKind.SYSTEM)
 _USER = uuid.UUID("00000000-0000-0000-0000-000000000000")
-_BEFORE = "20261118_115"
+_BEFORE = "20261120_116"
 _CONSTRAINT = "uq_secrets_owner_vault_name"
 
 
