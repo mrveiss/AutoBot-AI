@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
-from llc.deps import assert_company_access, get_session
+from llc.deps import assert_company_access, session_dep
 from llc.services.authz import NotAuthorisedError, require_company_admin
 from llc.services.project_backfill import preview_project_backfill
 from services.project_backfill_action import register_project_backfill_action
@@ -43,7 +43,7 @@ async def _admin_preview(session: AsyncSession, company_id: uuid.UUID, user: dic
 @router.get("")
 async def read_preview(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -54,7 +54,7 @@ async def read_preview(
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def request_backfill(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

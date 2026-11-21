@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from user_management.database import get_async_session
+from llc.deps import session_dep
 from user_management.services import TenantContext
 
 from ..deps import require_board_role
@@ -165,7 +165,7 @@ async def _dispatch_replay_run(
 async def trigger_replay(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -237,7 +237,7 @@ async def get_replay_log(
     agent_id: str,
     run_id: str,
     redact_pii: bool = Query(False, description="Redact credentials/PII from the returned payload"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -275,7 +275,7 @@ async def diff_runs(
     agent_id: str,
     run_id: str,
     other_run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -301,7 +301,7 @@ async def diff_runs(
 async def export_fixture(
     agent_id: str,
     run_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

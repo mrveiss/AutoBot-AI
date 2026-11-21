@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, service_dep, session_dep
 from user_management.services import TenantContext
 
 from ..models.enums import MembershipRole, WorkItemType
@@ -110,7 +110,7 @@ class ReviewGatePolicyRead(BaseModel):
 )
 async def list_review_gate_policies(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     svc: ReviewGatePolicyService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -128,7 +128,7 @@ async def list_review_gate_policies(
 async def create_review_gate_policy(
     company_id: uuid.UUID,
     body: ReviewGatePolicyCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     svc: ReviewGatePolicyService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -157,7 +157,7 @@ async def update_review_gate_policy(
     company_id: uuid.UUID,
     policy_id: uuid.UUID,
     body: ReviewGatePolicyUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     svc: ReviewGatePolicyService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -184,7 +184,7 @@ async def update_review_gate_policy(
 async def delete_review_gate_policy(
     company_id: uuid.UUID,
     policy_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     svc: ReviewGatePolicyService = Depends(_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),

@@ -41,9 +41,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access
+from llc.deps import assert_company_access, session_dep
 from models.workflow import Workflow
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..models.company_os_enums import WorkflowKind
@@ -127,7 +126,7 @@ class WorkflowResponse(BaseModel):
 @router.get("/{company_id}", response_model=List[WorkflowResponse])
 async def list_workflows(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[WorkflowResponse]:
@@ -140,7 +139,7 @@ async def list_workflows(
 async def create_workflow(
     company_id: uuid.UUID,
     body: WorkflowCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
@@ -169,7 +168,7 @@ async def create_workflow(
 async def get_workflow(
     company_id: uuid.UUID,
     workflow_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
@@ -185,7 +184,7 @@ async def update_workflow_status(
     company_id: uuid.UUID,
     workflow_id: str,
     body: WorkflowStatusUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WorkflowResponse:
@@ -203,7 +202,7 @@ async def update_workflow_status(
 async def delete_workflow(
     company_id: uuid.UUID,
     workflow_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

@@ -23,8 +23,8 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
+from llc.deps import session_dep
 from models.agent_org import AgentOrgNode
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 from ..org_role_authority import describe_role_bound
@@ -44,7 +44,7 @@ class AgentHeartbeatTriggerResponse(BaseModel):
 @router.get("", response_model=List[Dict[str, Any]])
 async def list_agents(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -109,7 +109,7 @@ def _owned_by_caller(agent_company: object, org_id: object) -> bool:
 )
 async def trigger_heartbeat(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHeartbeatTriggerResponse:

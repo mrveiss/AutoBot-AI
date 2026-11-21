@@ -39,7 +39,7 @@ from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
 from autobot_shared.user_management.base_service import TenantContext
-from llc.deps import assert_company_access, get_session
+from llc.deps import assert_company_access, session_dep
 from llc.models.enums import RoleHolderType
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.company_ceo import CompanyCEOService
@@ -128,7 +128,7 @@ async def _require_owner_or_admin(session: AsyncSession, ctx: TenantContext, com
 @router.get("/{company_id}/ceo", response_model=CEODesignationRead)
 async def get_company_ceo(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CEODesignationRead:
@@ -153,7 +153,7 @@ async def get_company_ceo(
 async def set_company_ceo(
     company_id: uuid.UUID,
     body: CEODesignationWrite,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CEODesignationRead:
@@ -203,7 +203,7 @@ async def set_company_ceo(
 @router.delete("/{company_id}/ceo", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_company_ceo(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

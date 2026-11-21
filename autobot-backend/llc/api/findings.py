@@ -22,8 +22,8 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
 from llc.api._common import actor_id
-from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
+from llc.deps import session_dep
 from llc.models.finding_proposal import LLCFindingProposal
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
@@ -126,7 +126,7 @@ async def get_policy(
 @router.post("/projects/{project_id}/findings/scan")
 async def scan_findings(
     project_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -153,7 +153,7 @@ async def scan_findings(
 async def list_proposals(
     project_id: uuid.UUID,
     status: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[LLCFindingProposal]:
@@ -169,7 +169,7 @@ async def list_proposals(
 @router.post("/findings/proposals/{proposal_id}/promote")
 async def promote_proposal(
     proposal_id: uuid.UUID,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:
@@ -195,7 +195,7 @@ async def promote_proposal(
 async def dismiss_proposal(
     proposal_id: uuid.UUID,
     body: DismissRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> dict:

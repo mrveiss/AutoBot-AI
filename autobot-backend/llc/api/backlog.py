@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, service_dep, session_dep
 from user_management.services import TenantContext
 
 from ..models.enums import WorkItemStatus, WorkItemType
@@ -95,7 +95,7 @@ async def get_backlog(
     ),
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogResponse:
@@ -122,7 +122,7 @@ async def get_backlog(
 @router.post("/bulk-assign-sprint", response_model=BulkAssignSprintResponse)
 async def bulk_assign_sprint(
     body: BulkAssignSprintRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> BulkAssignSprintResponse:

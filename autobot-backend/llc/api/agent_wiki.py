@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from user_management.database import get_async_session
+from llc.deps import session_dep
 from user_management.services import TenantContext
 
 from ..services.accessors import get_agent_wiki_service
@@ -78,7 +78,7 @@ class WikiEntryRead(BaseModel):
 async def list_wiki_entries(
     agent_id: str,
     namespace: Optional[str] = None,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[WikiEntryRead]:
@@ -90,7 +90,7 @@ async def list_wiki_entries(
 async def create_wiki_entry(
     agent_id: str,
     body: WikiEntryCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
@@ -117,7 +117,7 @@ async def create_wiki_entry(
 async def get_wiki_entry(
     agent_id: str,
     entry_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
@@ -132,7 +132,7 @@ async def update_wiki_entry(
     agent_id: str,
     entry_id: uuid.UUID,
     body: WikiEntryUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> WikiEntryRead:
@@ -155,7 +155,7 @@ async def update_wiki_entry(
 async def delete_wiki_entry(
     agent_id: str,
     entry_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

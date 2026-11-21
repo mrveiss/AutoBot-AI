@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session
+from llc.deps import session_dep
 from llc.services.company_os.plan_candidates import rank_candidates
 from llc.services.company_os.plan_edit import PlanEditService
 from llc.services.company_os.plan_types import CompanyWorkflowPlan, Edge, EdgeCase, Lane, ReturnKind, Step
@@ -47,7 +47,7 @@ _edit = PlanEditService()
 async def add_lane(
     plan_key: str,
     body: Lane,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -59,7 +59,7 @@ async def patch_lane(
     plan_key: str,
     lane_key: str,
     body: LanePatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -73,7 +73,7 @@ async def patch_lane(
 async def delete_lane(
     plan_key: str,
     lane_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -84,7 +84,7 @@ async def delete_lane(
 async def add_step(
     plan_key: str,
     body: Step,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -96,7 +96,7 @@ async def patch_step(
     plan_key: str,
     step_key: str,
     body: StepPatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -110,7 +110,7 @@ async def patch_step(
 async def delete_step(
     plan_key: str,
     step_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -122,7 +122,7 @@ async def delete_step(
 async def add_edge(
     plan_key: str,
     body: Edge,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -135,7 +135,7 @@ async def patch_edge(
     from_step: str,
     to_step: str,
     body: EdgePatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -149,7 +149,7 @@ async def delete_edge(
     plan_key: str,
     from_step: str,
     to_step: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -164,7 +164,7 @@ async def add_edge_case(
     plan_key: str,
     step_key: str,
     body: EdgeCaseBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -179,7 +179,7 @@ async def patch_edge_case(
     plan_key: str,
     edge_case_key: str,
     body: EdgeCasePatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -192,7 +192,7 @@ async def patch_edge_case(
 async def delete_edge_case(
     plan_key: str,
     edge_case_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -205,7 +205,7 @@ async def delete_edge_case(
 async def get_one_number_candidates(
     plan_key: str,
     return_kind: ReturnKind,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CandidatesResponse:

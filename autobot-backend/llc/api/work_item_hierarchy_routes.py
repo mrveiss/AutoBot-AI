@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
-from llc.deps import assert_company_access, get_session
+from llc.deps import assert_company_access, session_dep
 from user_management.services import TenantContext
 
 from ..services.authz import NotAuthorisedError, require_company_admin_unless_platform
@@ -87,7 +87,7 @@ async def get_hierarchy_rules(
 @router.get("/hierarchy-violations", response_model=HierarchyViolationsResponse)
 async def get_hierarchy_violations(
     company_id: str = Query(...),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> HierarchyViolationsResponse:

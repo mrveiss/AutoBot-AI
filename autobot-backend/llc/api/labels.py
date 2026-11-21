@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access, get_session, service_dep
+from llc.deps import assert_company_access, service_dep, session_dep
 from user_management.services import TenantContext
 
 from ..models.label import LLCLabel
@@ -111,7 +111,7 @@ class LabelAssign(BaseModel):
 async def create_label(
     company_id: str,
     body: LabelCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -134,7 +134,7 @@ async def create_label(
 @router.get("")
 async def list_labels(
     company_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
@@ -147,7 +147,7 @@ async def update_label(
     company_id: str,
     label_id: str,
     body: LabelUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -173,7 +173,7 @@ async def update_label(
 async def delete_label(
     company_id: str,
     label_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -196,7 +196,7 @@ async def assign_labels(
     company_id: str,
     work_item_id: str,
     body: LabelAssign,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -225,7 +225,7 @@ async def remove_label(
     company_id: str,
     work_item_id: str,
     label_id: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

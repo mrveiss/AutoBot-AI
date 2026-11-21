@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.http_refusal import http_refusal
-from user_management.database import get_async_session
+from llc.deps import session_dep
 from user_management.services import TenantContext
 
 from ..kb.context_builder import HeartbeatContextBuilder
@@ -44,7 +44,7 @@ def _get_context_services() -> Dict[str, Any]:
 async def get_context(
     item_id: str,
     mode: str = "fat",
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:

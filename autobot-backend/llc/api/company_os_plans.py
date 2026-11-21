@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.human_decider import require_interactive_human
 from autobot_shared.feature_flags import is_feature_enabled
-from llc.deps import get_session
+from llc.deps import session_dep
 from llc.services.authz import NotAuthorisedError
 from llc.services.company_os.errors import CompanyOsError, ConversionBlocked
 from llc.services.company_os.plan_convert import PlanConversionService
@@ -106,7 +106,7 @@ async def _read(call: Awaitable[T]) -> T:
 @router.get("", response_model=List[PlanSummary])
 async def list_plans(
     status_filter: Optional[WorkflowPlanStatus] = None,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[PlanSummary]:
@@ -117,7 +117,7 @@ async def list_plans(
 @router.post("", response_model=CompanyWorkflowPlan, status_code=status.HTTP_201_CREATED)
 async def create_plan(
     body: PlanCreate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -131,7 +131,7 @@ async def create_plan(
 @router.get("/{plan_key}", response_model=CompanyWorkflowPlan)
 async def get_plan(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -142,7 +142,7 @@ async def get_plan(
 async def update_plan(
     plan_key: str,
     body: PlanUpdate,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -155,7 +155,7 @@ async def update_plan(
 @router.delete("/{plan_key}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_plan(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -166,7 +166,7 @@ async def delete_plan(
 async def get_revision(
     plan_key: str,
     revision: int,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -176,7 +176,7 @@ async def get_revision(
 @router.get("/{plan_key}/gate", response_model=GateResponse)
 async def get_gate(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GateResponse:
@@ -189,7 +189,7 @@ async def get_gate(
 async def put_map(
     plan_key: str,
     body: MapBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> MapResponse:
@@ -205,7 +205,7 @@ async def put_map(
 async def validate_map(
     plan_key: str,
     body: MapBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GraphValidation:
@@ -219,7 +219,7 @@ async def patch_handoff(
     plan_key: str,
     handoff_key: str,
     body: HandoffPatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -232,7 +232,7 @@ async def put_metric(
     plan_key: str,
     step_key: str,
     body: MetricBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -252,7 +252,7 @@ async def put_metric(
 async def delete_metric(
     plan_key: str,
     step_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -263,7 +263,7 @@ async def delete_metric(
 async def put_one_number(
     plan_key: str,
     body: OneNumberBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -276,7 +276,7 @@ async def put_breakdown(
     plan_key: str,
     step_key: str,
     body: BreakdownBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -293,7 +293,7 @@ async def patch_sub_step(
     plan_key: str,
     sub_step_key: str,
     body: SubStepPatch,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -305,7 +305,7 @@ async def patch_sub_step(
 @router.post("/{plan_key}/by-hand-acknowledgement", response_model=CompanyWorkflowPlan)
 async def acknowledge_by_hand(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -317,7 +317,7 @@ async def acknowledge_by_hand(
 async def put_approval_policies(
     plan_key: str,
     body: ApprovalPoliciesBody,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -328,7 +328,7 @@ async def put_approval_policies(
 @router.post("/{plan_key}/convert/preview", response_model=PlanConversion)
 async def preview_conversion(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> PlanConversion:
@@ -339,7 +339,7 @@ async def preview_conversion(
 @router.post("/{plan_key}/approve", response_model=CompanyWorkflowPlan)
 async def approve_conversion(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -351,7 +351,7 @@ async def approve_conversion(
 @router.post("/{plan_key}/convert", response_model=CompanyWorkflowPlan)
 async def convert_plan(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
@@ -367,7 +367,7 @@ async def convert_plan(
 @router.post("/{plan_key}/convert/retry-ai-line-proposals", response_model=CompanyWorkflowPlan)
 async def retry_ai_line_proposals(
     plan_key: str,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:

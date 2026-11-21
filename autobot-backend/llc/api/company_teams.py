@@ -39,10 +39,9 @@ from api.schemas_agent import (
 )
 from api.user_management.dependencies import get_current_user, require_org_context
 from api.user_management.teams import _membership_to_response, _team_to_response
-from llc.deps import assert_company_access
+from llc.deps import assert_company_access, session_dep
 from llc.models.membership import LLCCompanyMembership
 from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
-from user_management.database import get_async_session
 from user_management.services import TeamService, TenantContext
 from user_management.services.team_service import DuplicateTeamError, MembershipError, TeamNotFoundError
 
@@ -87,7 +86,7 @@ async def _require_company_user(session: AsyncSession, company_id: uuid.UUID, us
 async def create_company_team(
     company_id: uuid.UUID,
     body: TeamCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> TeamCreatedResponse:
@@ -109,7 +108,7 @@ async def create_company_team(
 async def delete_company_team(
     company_id: uuid.UUID,
     team_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> TeamDeletedResponse:
@@ -134,7 +133,7 @@ async def add_company_team_member(
     team_id: uuid.UUID,
     user_id: uuid.UUID,
     role: str = Query("member", description="Member role (owner, admin, member)"),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> MemberAddedResponse:
@@ -161,7 +160,7 @@ async def remove_company_team_member(
     company_id: uuid.UUID,
     team_id: uuid.UUID,
     user_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> MemberRemovedResponse:

@@ -18,10 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.http_refusal import http_refusal
-from llc.deps import assert_company_access
+from llc.deps import assert_company_access, session_dep
 from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
-from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 router = APIRouter(prefix="/import", tags=["llc-import"])
@@ -78,7 +77,7 @@ class ImportExecuteResponse(BaseModel):
 )
 async def preview_import(
     body: ImportPreviewRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportPreviewResponse:
@@ -103,7 +102,7 @@ async def preview_import(
 )
 async def execute_import(
     body: ImportExecuteRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportExecuteResponse:

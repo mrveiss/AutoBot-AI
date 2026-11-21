@@ -18,13 +18,13 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.webhook_signature import verify_webhook_signature
-from llc.deps import get_session
+from llc.deps import session_dep
 
 from ..models.enums import WorkItemStatus
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
@@ -199,7 +199,7 @@ def _require_valid_signature(body: bytes, signature: Optional[str]) -> None:
 @router.post("/github")
 async def handle_github_webhook(
     request: Request,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     x_github_event: Optional[str] = Header(None),
     x_hub_signature_256: Optional[str] = Header(None),
 ) -> Dict[str, Any]:

@@ -43,8 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.http_refusal import http_refusal
 from autobot_shared.singleton_factory import lazy_singleton
-from llc.deps import assert_company_access
-from user_management.database import get_async_session
+from llc.deps import assert_company_access, session_dep
 from user_management.services import TenantContext
 
 from ..services.authz import NotAuthorisedError
@@ -131,7 +130,7 @@ class ContactMergeRequest(BaseModel):
 
 @router.get("/directory", response_model=List[ContactResponse])
 async def list_directory(
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     _ctx: TenantContext = Depends(require_org_context),
 ) -> List[ContactResponse]:
@@ -147,7 +146,7 @@ async def list_directory(
 
 @router.get("/directory/duplicates", response_model=List[List[uuid.UUID]])
 async def list_duplicate_candidates(
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     _ctx: TenantContext = Depends(require_org_context),
 ) -> List[List[uuid.UUID]]:
@@ -163,7 +162,7 @@ async def list_duplicate_candidates(
 async def merge_contacts(
     company_id: uuid.UUID,
     body: ContactMergeRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ContactResponse:
@@ -227,7 +226,7 @@ async def _delete_via_directory(
 async def delete_from_directory(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
@@ -256,7 +255,7 @@ class DepartmentContacts(BaseModel):
 @router.get("/{company_id}/involved", response_model=DepartmentContacts)
 async def list_involved_contacts(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> DepartmentContacts:
@@ -278,7 +277,7 @@ async def list_involved_contacts(
 @router.get("/{company_id}", response_model=List[ContactResponse])
 async def list_contacts(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ContactResponse]:
@@ -291,7 +290,7 @@ async def list_contacts(
 async def create_contact(
     company_id: uuid.UUID,
     body: ContactCreate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ContactResponse:
@@ -314,7 +313,7 @@ async def create_contact(
 async def get_contact(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ContactResponse:
@@ -330,7 +329,7 @@ async def update_contact(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
     body: ContactUpdate,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ContactResponse:
@@ -347,7 +346,7 @@ async def update_contact(
 async def delete_contact(
     company_id: uuid.UUID,
     contact_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:

@@ -45,7 +45,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.api.company_member_schemas import CompanyMembersResponse
-from llc.deps import assert_company_access, get_session, log_unexpected, logged_server_error, service_dep
+from llc.deps import assert_company_access, log_unexpected, logged_server_error, service_dep, session_dep
 from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import CompanyAncestor, CompanyCreate, CompanyRead, CompanyTreeNode, CompanyUpdate
 from llc.models.enums import (
@@ -74,7 +74,6 @@ from llc.services.membership_service import MembershipService
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
 from llc.services.org_chart_rows import assigned_counts_by_agent, latest_runs_by_agent
 from llc.services.portability import PortabilityService
-from user_management.database import get_async_session
 from user_management.models.organization import Organization
 from user_management.services import TenantContext
 
@@ -121,7 +120,7 @@ def _to_read(org: Organization) -> CompanyRead:
     return CompanyRead.model_validate(org)
 
 
-def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyService:
+def _get_service(session: AsyncSession = session_dep) -> CompanyService:
     return CompanyService(session=session)
 
 
@@ -494,7 +493,7 @@ class KbAncestryCollection(BaseModel):
 @router.get("/{company_id}/kb/ancestry-collections", response_model=List[KbAncestryCollection])
 async def get_kb_ancestry_collections(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[KbAncestryCollection]:
@@ -535,7 +534,7 @@ async def get_kb_ancestry_collections(
 @router.get("/{company_id}/members", response_model=CompanyMembersResponse)
 async def list_members(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     svc: MembershipService = Depends(_get_membership_service),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
@@ -578,7 +577,7 @@ class PMConfigRead(BaseModel):
 async def set_pm_config(
     company_id: uuid.UUID,
     body: PMConfigSetRequest,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> PMConfigRead:
@@ -606,7 +605,7 @@ async def set_pm_config(
 @router.post("/{company_id}/pm-config/test")
 async def test_pm_config(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
@@ -727,7 +726,7 @@ class BacklogReorderResponse(BaseModel):
 async def reorder_backlog(
     company_id: uuid.UUID,
     body: BacklogReorderRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogReorderResponse:
@@ -1012,7 +1011,7 @@ def _compose_agent_node(
 @router.get("/{company_id}/org-chart", response_model=OrgChartResponse)
 async def get_org_chart(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> OrgChartResponse:
@@ -1202,7 +1201,7 @@ def _executor_class_case(work_item_model):
 @router.get("/{company_id}/work-items/executor-rollup", response_model=ExecutorRollupResponse)
 async def get_work_item_executor_rollup(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ExecutorRollupResponse:
@@ -1309,7 +1308,7 @@ class ProcessNodesResponse(BaseModel):
 @router.get("/{company_id}/process-nodes", response_model=ProcessNodesResponse)
 async def get_process_nodes(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ProcessNodesResponse:
@@ -1377,7 +1376,7 @@ class ToolNodesResponse(BaseModel):
 @router.get("/{company_id}/tool-nodes", response_model=ToolNodesResponse)
 async def get_tool_nodes(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ToolNodesResponse:
@@ -1418,7 +1417,7 @@ async def get_tool_nodes(
 @router.get("/{company_id}/teams", response_model=CompanyTeamsResponse)
 async def get_company_teams(
     company_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyTeamsResponse:
@@ -1543,7 +1542,7 @@ async def search_agents(
 
 
 # Export endpoints (GH#8245)
-def _get_portability_service(session: AsyncSession = Depends(get_async_session)) -> PortabilityService:
+def _get_portability_service(session: AsyncSession = session_dep) -> PortabilityService:
     return PortabilityService(session=session)
 
 

@@ -20,8 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import assert_company_access
-from user_management.database import get_async_session
+from llc.deps import assert_company_access, session_dep
 from user_management.services import TenantContext
 
 from ..models.activity import ActorType
@@ -69,7 +68,7 @@ async def get_activity_log(
     to_date: datetime | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    session: AsyncSession = Depends(get_async_session),
+    session: AsyncSession = session_dep,
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ActivityLogResponse:
