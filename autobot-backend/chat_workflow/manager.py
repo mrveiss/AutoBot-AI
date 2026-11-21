@@ -20,6 +20,7 @@ from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import note_chat_turn_model
 from autobot_shared.env_utils import env_int
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
@@ -28,7 +29,12 @@ from browser_tool_prompt import render_tool_name_reminder_lines
 from chat_workflow import limits
 from chat_workflow.persisted_metadata import persisted_metadata
 from chat_workflow.reflection_gate import NO_ANSWER_FALLBACK
-from chat_workflow.reply_persistence import is_redundant_prose, later_respond_entries, model_or_unknown, stamp_model
+from chat_workflow.reply_persistence import (
+    build_final_response_entry,
+    iteration_reply_entries,
+    later_respond_entries,
+    stamp_model,
+)
 from chat_workflow.stream_identity import stream_identity_marker, streamed_prose_identity, streamed_prose_model
 from chat_workflow.tool_call_args import clean_reply_text, parse_failure_step, record_parse_failure
 from chat_workflow.tool_call_grammar import (
@@ -1918,6 +1924,7 @@ before summarizing.
         actually consumes (see _attach_vision_payload) — vision-capable models get it,
         non-vision models keep the existing text-only "prompt" field, unaffected.
         """
+        note_chat_turn_model(selected_model)  # #21878: this model is resident now; side calls match its context
         payload = {
             "model": selected_model,
             "prompt": current_prompt,
@@ -2941,24 +2948,7 @@ before summarizing.
         *batch* (the rule in ``reply_persistence``, #21880). Only assistant entries count, so
         a ``terminal_output`` echoing the reply cannot suppress the assistant turn.
         """
-        content = clean_reply_text(llm_response or "")
-        if not content or is_redundant_prose(content, batch):
-            return None
-        return chat_mgr._build_message_dict(
-            "assistant",
-            content,
-            "response",
-            {
-                "message_type": "llm_response",
-                "streamed": True,
-                "model": model_or_unknown(model),
-                "iteration": iteration,
-            },
-            None,
-            sources=[],
-            message_id=streamed[0],
-            created_at=streamed[1],
-        )
+        return build_final_response_entry(chat_mgr, llm_response, batch, iteration, streamed, model)
 
     def _attach_model_and_citations(
         self,
@@ -3032,6 +3022,7 @@ before summarizing.
         iteration: int,
         batch: List[Dict[str, Any]],
         selected_model: str = "",
+        turn_id: str = "",
     ) -> tuple[List[Dict[str, Any]], set, Dict[str, Any] | None]:
         """Build one iteration's prose + tool-message entries, in that order.
 
@@ -3052,15 +3043,12 @@ before summarizing.
         tool_entries = self._build_workflow_message_batch(chat_mgr, iter_messages)
         model = streamed_prose_model(iter_messages) or selected_model  # #21881: this iteration's own model
 
-        final_entry = self._build_final_response_entry(
-            chat_mgr,
-            response_text,
-            batch + tool_entries + later_respond_entries(workflow_messages, iteration),
-            iteration=iteration,
-            streamed=streamed_prose_identity(iter_messages),  # #21846
-            model=model,
+        streamed = streamed_prose_identity(iter_messages)  # #21846; the time is when the prose was said (#21904)
+        judged = batch + tool_entries + later_respond_entries(workflow_messages, iteration)
+        build = functools.partial(self._build_final_response_entry, chat_mgr)
+        entries, final_entry = iteration_reply_entries(
+            chat_mgr, build, response_text, iteration, model, streamed, judged, turn_id
         )
-        entries = [final_entry] if final_entry else []
         entries.extend(tool_entries)
         for entry in tool_entries:
             stamp_model(entry, model)
@@ -3074,6 +3062,7 @@ before summarizing.
         selected_model: str,
         rag_citations: List[Dict[str, Any]] | None,
         used_knowledge: bool,
+        turn_id: str = "",
     ) -> List[Dict[str, Any]]:
         """Build the full persisted batch for one turn, in true chronological order.
 
@@ -3119,6 +3108,7 @@ before summarizing.
                 iteration,
                 batch,
                 selected_model,
+                turn_id,
             )
             if final_entry is not None:
                 last_prose_entry = final_entry
@@ -3149,6 +3139,7 @@ before summarizing.
         selected_model: str = "",
         rag_citations: List[Dict[str, Any]] | None = None,
         used_knowledge: bool = False,
+        turn_id: str = "",
     ) -> None:
         """Persist WorkflowMessages to chat history in a single batch.
 
@@ -3175,7 +3166,7 @@ before summarizing.
         try:
             chat_mgr = ChatHistoryManager()
             batch = self._build_persist_batch(
-                chat_mgr, workflow_messages, all_llm_responses, selected_model, rag_citations, used_knowledge
+                chat_mgr, workflow_messages, all_llm_responses, selected_model, rag_citations, used_knowledge, turn_id
             )
 
             if batch:

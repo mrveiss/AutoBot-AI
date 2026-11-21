@@ -23,12 +23,17 @@ streamed chunk of its own iteration, else the turn's selected model, else ``unkn
 from __future__ import annotations
 
 import unicodedata
-from typing import Any, Dict, Iterable, List
+import uuid
+from typing import Any, Callable, Dict, Iterable, List
 
 from autobot_shared.text_tokens import word_token_list
+from chat_workflow.thought_markers import split_reasoning_blocks
+from chat_workflow.tool_call_args import clean_reply_text
 
 UNKNOWN_MODEL = "unknown"
 RESPOND_TOOL_TYPE = "respond_tool"
+#: Set on a stored reply that is whole, never an accumulated streaming state; a load must not merge it (#21904).
+COMPLETED_KEY = "completed"
 
 
 def normalize_reply(text: str | None) -> str:
@@ -57,8 +62,12 @@ def later_respond_entries(workflow_messages: Iterable[Any], iteration: int) -> L
     return found
 
 
+_REASONING_TYPES = frozenset({"thought", "planning"})
+
+
 def _assistant_entries(batch: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [e for e in batch if e.get("sender") == "assistant"]
+    """The assistant entries an answer is judged against: replies, never reasoning (a thought "42" is no answer)."""
+    return [e for e in batch if e.get("sender") == "assistant" and e.get("messageType") not in _REASONING_TYPES]
 
 
 def _is_respond_entry(entry: Dict[str, Any]) -> bool:
@@ -94,3 +103,88 @@ def stamp_model(entry: Dict[str, Any], model: Any) -> None:
         return
     if not isinstance(metadata.get("model"), str) or not metadata["model"].strip():
         entry["metadata"] = {**metadata, "model": model_or_unknown(model)}
+
+
+def stable_entry_id(turn_id: str, iteration: int | None, kind: str, text: str, occurrence: int = 0) -> str:
+    """The id of a prose entry that was not streamed under one (#21904).
+
+    Scoped to the *turn* (iteration numbers restart every turn) and the entry's *occurrence* among identical ones in
+    its iteration. The same turn persisted twice (a graph resume) gives the same ids, which the append merge drops;
+    the same words in another turn give other ids. With no *turn_id* there is nothing to scope to: a fresh id.
+    """
+    if not turn_id:
+        return str(uuid.uuid4())
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"autobot-reply:{turn_id}:{iteration}:{kind}:{occurrence}:{text}"))
+
+
+def iteration_reply_entries(
+    chat_mgr: Any,
+    build_final: Callable[..., Dict[str, Any] | None],
+    text: str,
+    iteration: int,
+    model: Any,
+    streamed: tuple,
+    judged_against: List[Dict[str, Any]],
+    turn_id: str = "",
+) -> tuple[List[Dict[str, Any]], Dict[str, Any] | None]:
+    """(an iteration's thought/planning entries then its answer entry, the answer entry or None) (#21904).
+
+    Each thought/planning block is stored typed as it is live; the answer is *text* without them, built by
+    *build_final* and judged for redundancy against *judged_against*.
+    """
+    blocks, answer = split_reasoning_blocks(clean_reply_text(text or ""))
+    seen: Dict[tuple, int] = {}
+    entries = []
+    for kind, body in blocks:
+        occurrence = seen[(kind, body)] = seen.get((kind, body), -1) + 1
+        meta = {"message_type": kind, "iteration": iteration, "model": model_or_unknown(model), COMPLETED_KEY: True}
+        entries.append(
+            chat_mgr._build_message_dict(
+                "assistant",
+                body,
+                kind,
+                meta,
+                None,
+                sources=[],
+                message_id=stable_entry_id(turn_id, iteration, kind, body, occurrence),
+                created_at=streamed[1],
+            )
+        )
+    if streamed[0] is None:
+        streamed = (stable_entry_id(turn_id, iteration, "response", answer), streamed[1])
+    final = build_final(answer, judged_against, iteration=iteration, streamed=streamed, model=model)
+    return entries + ([final] if final else []), final
+
+
+def build_final_response_entry(
+    chat_mgr: Any,
+    llm_response: str,
+    batch: List[Dict[str, Any]],
+    iteration: int | None = None,
+    streamed: tuple = (None, None),
+    model: str | None = None,
+) -> Dict[str, Any] | None:
+    """The chat-history entry for one iteration's completed prose (#13214), or None.
+
+    None for an empty reply, or prose that repeats an assistant entry already in *batch* (#21880). The entry keeps
+    the streamed id and time (#21846), carries *model* (#21881) and ``completed`` (#21904).
+    """
+    content = clean_reply_text(llm_response or "")
+    if not content or is_redundant_prose(content, batch):
+        return None
+    return chat_mgr._build_message_dict(
+        "assistant",
+        content,
+        "response",
+        {
+            "message_type": "llm_response",
+            "streamed": True,
+            "model": model_or_unknown(model),
+            "iteration": iteration,
+            COMPLETED_KEY: True,  # a whole reply, never merged as a streaming state on load
+        },
+        None,
+        sources=[],
+        message_id=streamed[0],
+        created_at=streamed[1],
+    )
