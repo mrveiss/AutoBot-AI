@@ -194,3 +194,17 @@ register_env_var(
         range=(0, 600),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INTERPRETATION_TIMEOUT_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Own time budget of one post-command LLM interpretation (chat_workflow/interpretation_guard.py, "
+            "#21938), so an auxiliary call cannot use up the chat turn's budget. On expiry the interpretation is "
+            "dropped and the command's result stands."
+        ),
+        component="chat",
+    )
+)

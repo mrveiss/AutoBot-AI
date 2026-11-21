@@ -301,6 +301,7 @@
       "executionCompleted": "Execution completed",
       "feedbackSent": "Feedback sent",
       "alreadyDecided": "This command was already decided",
+      "approvalAlreadyHandled": "This approval has already been handled",
       "feedbackFailed": "Failed to send feedback",
       "toolApprovalTitle": "Agent Tool Approval Required",
       "toolApprovalTool": "Tool",
@@ -3338,7 +3339,9 @@
       "confirmDeleteSelected": "Propose deleting {count} selected entries for approval?",
       "deleteTitle": "Deletion proposed",
       "deleteProposed": "Deletion proposed for approval. Nothing is deleted until an administrator approves it in the Approvals inbox.",
-      "deleteNotProposed": "No deletion was proposed and nothing was deleted. Deleting needs an administrator's approval.",
+      "deleteNothingSelected": "Nothing is selected, so no deletion was proposed.",
+      "deleteTooMany": "Too many entries are selected. Select at most {max} and try again.",
+      "deleteUnknownError": "Unknown error",
       "deleteProposeFailed": "The deletion could not be proposed: {message}",
       "verified": "Verified",
       "pendingReview": "Pending review",
@@ -6861,16 +6864,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "collaboratorTooltip": "Collaborator",
-      "noParticipants": "No participants",
-      "offline": "Offline",
-      "participants": "Participants",
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Collaboration",
       "invite": "Invite",
@@ -8979,6 +8972,9 @@
       "loadingProjects": "Loading projects…",
       "loadingSprints": "Loading sprints…",
       "noSprints": "No open sprints in this project.",
+      "sprintsLoadFailed": "Couldn't load this project's sprints.",
+      "assignError": "Couldn't assign the items to the sprint. Please try again.",
+      "assignErrorDetail": "Couldn't assign the items to the sprint: {detail}",
       "assigning": "Assigning...",
       "assign": "Assign",
       "createError": "Couldn't create the work item. Please try again.",
@@ -10267,6 +10263,12 @@
         "description": "The organizations.subscription_tier column no longer used by AutoBot. Approving it deletes every stored value for good.",
         "present": "The column is still in this database.",
         "absent": "The column is not in this database."
+      },
+      "secretDuplicates": {
+        "title": "Duplicated stored credentials",
+        "description": "Several stored credentials share one name and vault. Each copy is checked against what it connects to; the proposal asks an administrator to remove the copies that do not work, or to choose when that cannot be told. Names and values are never shown.",
+        "copies": "{count} copies in total.",
+        "open": "Review them on the Secrets page"
       }
     },
     "conversations": {

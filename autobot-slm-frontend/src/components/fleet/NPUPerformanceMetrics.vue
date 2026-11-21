@@ -88,11 +88,10 @@ function isExpanded(nodeId: string): boolean {
 
 const { t } = useI18n()
 
-/** One tick; the store reports a failed read as null, so the tick throws for the poller to count. */
+/** One tick; the store rethrows a failed read, so the poller counts it. */
 async function loadMetrics(): Promise<void> {
   try {
-    const metrics = await fleetStore.fetchNpuFleetMetrics()
-    if (metrics === null) throw new Error(fleetStore.error ?? 'NPU fleet metrics unavailable')
+    await fleetStore.fetchNpuFleetMetrics()
   } finally {
     isLoading.value = false
   }
