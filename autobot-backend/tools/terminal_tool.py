@@ -19,6 +19,7 @@ import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.step_outcome import exit_code_field
 from services.agent_terminal.errors import (
     POST_EXECUTION_FAILED_CODE,
     POST_EXECUTION_FAILED_STATUS,
@@ -237,7 +238,7 @@ class TerminalTool:
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),
-            "return_code": result.get("return_code", 1),
+            **exit_code_field(result),  # a refused command has none; never invent one (#21959)
         }
 
     @staticmethod

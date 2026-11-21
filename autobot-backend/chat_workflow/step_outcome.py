@@ -28,6 +28,16 @@ def _failed_after_running(step: Dict[str, Any]) -> bool:
     return step.get("return_code") is not None or bool(step.get("stdout") or step.get("output"))
 
 
+def exit_code_field(result: Dict[str, Any]) -> Dict[str, Any]:
+    """``{"return_code": n}`` when *result* carries a real exit code; ``{}`` for a command that never ran.
+
+    A refusal has no exit code, and inventing one would count it as a run that failed. The key is omitted,
+    never set to ``None`` (#14148), so a refused step stays NOT RUN.
+    """
+    code = result.get("return_code")
+    return {} if code is None else {"return_code": code}
+
+
 def did_execute(step: Dict[str, Any]) -> bool:
     """Whether *step* ran. Fails closed: an unknown or missing status is a step that did not run."""
     status = str(step.get("status", "")).lower()

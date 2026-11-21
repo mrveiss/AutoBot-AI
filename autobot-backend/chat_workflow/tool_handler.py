@@ -57,6 +57,7 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
 from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.step_outcome import exit_code_field
 from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_call_loop import stamp_call_fingerprint
@@ -862,7 +863,7 @@ def _record_failed_step(
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": stderr,
-            "return_code": result.get("return_code", 1),
+            **exit_code_field(result),  # a refused command has none (#21959)
             "status": "error",
             "error": error,
         }

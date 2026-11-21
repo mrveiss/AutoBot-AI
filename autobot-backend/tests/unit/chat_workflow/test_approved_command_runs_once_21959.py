@@ -196,3 +196,22 @@ def test_only_the_steps_that_ran_are_counted():
     pending = {"command": "touch x", "status": "pending_approval"}
     prompt = _prompt([ran, pending])
     assert "1 step(s) completed" in prompt and prompt.count("NOT RUN") == 1
+
+
+def test_a_refused_command_gets_no_exit_code_and_stays_not_run_21959():
+    from chat_workflow.step_outcome import did_execute
+    from tools.terminal_tool import TerminalTool
+
+    refusal = {"status": "error", "error": "Permission denied for role", "command": "touch y", "risk": "high"}
+    formatted = TerminalTool._format_command_failure(refusal, "touch y")
+    assert "return_code" not in formatted  # never an invented exit code, never None (#14148)
+    assert not did_execute(formatted)
+
+
+def test_a_command_that_ran_and_failed_keeps_its_exit_code_and_counts_21959():
+    from chat_workflow.step_outcome import did_execute
+    from tools.terminal_tool import TerminalTool
+
+    ran = {"status": "error", "stdout": "", "stderr": "", "return_code": 2}
+    formatted = TerminalTool._format_command_failure(ran, "false")
+    assert formatted["return_code"] == 2 and did_execute(formatted)
