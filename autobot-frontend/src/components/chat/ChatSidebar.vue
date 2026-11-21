@@ -1,153 +1,109 @@
 <template>
   <div
     class="flex h-full shrink-0 flex-col overflow-hidden border-e border-[var(--aui-color-border)] bg-[var(--aui-color-surface)] transition-all duration-300"
-    :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
+    :class="{ 'w-12': store.sidebarCollapsed, 'w-[16.25rem]': !store.sidebarCollapsed }"
   >
     <!-- Toggle Button row: desktop collapse toggle + mobile close button (#1804) -->
-    <div class="flex items-center border-b border-autobot-border shrink-0">
+    <div class="flex shrink-0 items-center border-b border-[var(--aui-color-border)]">
       <BaseButton
         variant="ghost"
-        class="flex-1 p-3 text-autobot-text-secondary hidden lg:flex"
+        class="hidden flex-1 p-3 lg:flex"
         @click="controller.toggleSidebar()"
         :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
       >
         <Icon :name="store.sidebarCollapsed ? 'chevron-right' : 'chevron-left'" />
       </BaseButton>
-      <!--
-        Mobile header: close button only.
-
-        #5456: previously also rendered a `<span>{{ chatHistory }}</span>`
-        title which duplicated the `<h3>` below on L36 — in the DOM at
-        all viewports (CSS media queries don't hide the subtree from
-        jsdom / a11y readers in every case). The `<h3>` serves as the
-        single accessible section heading; the mobile header keeps just
-        the close button, which already has an `aria-label`.
-      -->
-      <div class="lg:hidden flex items-center justify-end w-full px-3 py-2">
-        <BaseButton
-          variant="ghost"
-          class="p-2 text-autobot-text-secondary"
-          @click="emit('close-mobile')"
-          :aria-label="$t('common.close')"
-        >
+      <!-- Mobile header: close button only. The section headings below are the accessible headings (#5456). -->
+      <div class="flex w-full items-center justify-end px-3 py-2 lg:hidden">
+        <BaseButton variant="ghost" class="p-2" @click="emit('close-mobile')" :aria-label="$t('common.close')">
           <Icon name="times" />
         </BaseButton>
       </div>
     </div>
 
-    <!-- Sidebar Content -->
     <!-- v-show, not v-if: a reload started in System Control must survive collapsing and expanding the sidebar. -->
     <div v-show="!store.sidebarCollapsed" class="flex min-h-0 flex-1 flex-col overflow-hidden">
-
-      <!-- Folders Section (GH#8987) -->
-      <section v-if="folderStore.folders.length > 0" class="border-b border-autobot-border p-3 pb-2 shrink-0 max-h-56 overflow-y-auto" style="scrollbar-width: thin;">
-        <div class="flex items-center justify-between mb-1">
-          <BaseButton variant="ghost" size="xs" :aria-expanded="showFolders" @click="showFolders = !showFolders">
-            <template #icon-left><Icon :name="showFolders ? 'chevron-down' : 'chevron-right'" class="text-xs" /></template>
-            {{ $t('chat.folders.folders') }}
-            <span v-if="folderStore.folders.length" class="text-autobot-text-muted font-normal">({{ folderStore.folders.length }})</span>
-          </BaseButton>
-        </div>
-        <ChatFolderTree
-          v-if="showFolders"
-          :sessions="filteredSessions"
-          :current-session-id="store.currentSessionId"
-          @session-click="(id) => controller.switchToSession(id)"
-        />
-
-        <!-- GH#8987: Archived folders (hidden by default, chats remain searchable) -->
-        <div v-if="folderStore.archivedFolders.length > 0" class="mt-2 pt-2 border-t border-autobot-border">
-          <BaseButton variant="ghost" size="xs" :aria-expanded="showArchived" @click="showArchived = !showArchived">
-            <template #icon-left><Icon :name="showArchived ? 'chevron-down' : 'chevron-right'" class="text-xs" /></template>
-            {{ $t('chat.folders.archived') }}
-            <span class="font-normal">({{ folderStore.archivedFolders.length }})</span>
-          </BaseButton>
-          <FolderNode
-            v-for="folder in folderStore.archivedFolders"
-            v-show="showArchived"
-            :key="folder.id"
-            :folder="folder"
-            :depth="0"
-            :sessions="filteredSessions"
-            :current-session-id="store.currentSessionId"
-            @session-click="(id) => controller.switchToSession(id)"
-          />
-        </div>
-      </section>
-
-      <!-- Chat History: toolbar (new chat, select, search) over the scrollable list -->
-      <section class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pt-4">
-        <h3 class="m-0 text-base font-semibold text-[var(--aui-color-text)]">{{ $t('chat.sidebar.chatHistory') }}</h3>
+      <!-- Mockup order: toolbar (New chat, Select, More, Search), Folders, Chat History, rows -->
+      <div class="px-3 pt-4">
         <ChatSidebarToolbar
           v-model:search="searchQuery"
           :selection-mode="selectionMode"
           :selected-count="sessionSelection.selectedCount.value"
+          :has-current-session="!!store.currentSessionId"
           @new-chat="controller.createNewSession()"
           @toggle-selection="selectionMode ? cancelSelection() : enableSelectionMode()"
+          @delete-selected="deleteSelectedSessions()"
+          @reset-chat="controller.resetCurrentChat()"
+          @delete-chat="deleteCurrentSession()"
+          @refresh="controller.loadChatSessions()"
         />
-        <ChatSessionList
-          class="min-h-0 flex-1 overflow-y-auto"
-          :sessions="filteredSessions"
-          :total-count="store.sessions.length"
-          :current-session-id="store.currentSessionId"
-          :selection-mode="selectionMode"
-          :is-selected="sessionSelection.isSelected"
-          :title-of="(s) => s.title || getSessionPreview(s)"
-          :folders="folderStore.folders"
-          @open="openSession"
-          @toggle-select="sessionSelection.toggle"
-          @share="openShareDialog"
-          @rename="editSessionName"
-          @delete="deleteSession"
-          @assign-folder="(id, folderId) => folderStore.assignSessionToFolder(id, folderId)"
-        />
+      </div>
 
-        <!-- Chat actions stay at the bottom of the history area -->
-        <div v-if="!selectionMode" class="flex shrink-0 flex-wrap gap-2 border-t border-[var(--aui-color-border)] py-2">
-          <BaseButton
-            variant="secondary"
-            size="xs"
-            :disabled="!store.currentSessionId"
-            :aria-label="$t('chat.sidebar.resetChat')"
-            @click="controller.resetCurrentChat()"
-          >
-            <template #icon-left><Icon name="redo" /></template>
-            {{ $t('common.reset') }}
-          </BaseButton>
-          <BaseButton
-            variant="error"
-            size="xs"
-            :disabled="!store.currentSessionId"
-            :aria-label="$t('chat.sidebar.deleteChat')"
-            @click="deleteCurrentSession()"
-          >
-            <template #icon-left><Icon name="trash" /></template>
-            {{ $t('common.delete') }}
-          </BaseButton>
-          <BaseButton
-            variant="outline"
-            size="xs"
-            :aria-label="$t('chat.sidebar.refreshList')"
-            @click="controller.loadChatSessions()"
-          >
-            <template #icon-left><Icon name="sync" /></template>
-            {{ $t('common.refresh') }}
-          </BaseButton>
-        </div>
-        <div v-else class="flex shrink-0 flex-wrap gap-2 border-t border-[var(--aui-color-border)] py-2">
-          <BaseButton
-            variant="error"
-            size="xs"
-            block
-            :disabled="sessionSelection.selectedCount.value === 0"
-            :aria-label="$t('chat.sidebar.deleteSelected')"
-            @click="deleteSelectedSessions()"
-          >
-            <template #icon-left><Icon name="trash" /></template>
-            {{ $t('chat.sidebar.deleteNSelected', { count: sessionSelection.selectedCount.value }) }}
-          </BaseButton>
-        </div>
-      </section>
+      <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-width:thin]">
+        <!-- Folders Section (GH#8987) -->
+        <section v-if="folderStore.folders.length > 0">
+          <div class="mx-2.5 mb-1.5 mt-4 flex items-center justify-between">
+            <h3 class="m-0 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-[var(--aui-color-text-muted)]">
+              {{ $t('chat.folders.folders') }}
+            </h3>
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              :aria-expanded="showFolders"
+              :aria-label="$t('chat.folders.folders')"
+              @click="showFolders = !showFolders"
+            >
+              <Icon :name="showFolders ? 'chevron-down' : 'chevron-right'" class="text-xs" />
+            </BaseButton>
+          </div>
+          <ChatFolderTree
+            v-if="showFolders"
+            :sessions="filteredSessions"
+            :current-session-id="store.currentSessionId"
+            @session-click="(id) => controller.switchToSession(id)"
+          />
+
+          <!-- GH#8987: Archived folders (hidden by default, chats remain searchable) -->
+          <div v-if="folderStore.archivedFolders.length > 0" class="mt-2 border-t border-[var(--aui-color-border)] pt-2">
+            <BaseButton variant="ghost" size="xs" :aria-expanded="showArchived" @click="showArchived = !showArchived">
+              <template #icon-left><Icon :name="showArchived ? 'chevron-down' : 'chevron-right'" class="text-xs" /></template>
+              {{ $t('chat.folders.archived') }}
+              <span class="font-normal">({{ folderStore.archivedFolders.length }})</span>
+            </BaseButton>
+            <FolderNode
+              v-for="folder in folderStore.archivedFolders"
+              v-show="showArchived"
+              :key="folder.id"
+              :folder="folder"
+              :depth="0"
+              :sessions="filteredSessions"
+              :current-session-id="store.currentSessionId"
+              @session-click="(id) => controller.switchToSession(id)"
+            />
+          </div>
+        </section>
+
+        <section>
+          <h3 class="mx-2.5 mb-1.5 mt-4 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-[var(--aui-color-text-muted)]">
+            {{ $t('chat.sidebar.chatHistory') }}
+          </h3>
+          <ChatSessionList
+            :sessions="filteredSessions"
+            :total-count="store.sessions.length"
+            :current-session-id="store.currentSessionId"
+            :selection-mode="selectionMode"
+            :is-selected="sessionSelection.isSelected"
+            :title-of="(s) => s.title || getSessionPreview(s)"
+            :folders="folderStore.folders"
+            @open="openSession"
+            @toggle-select="sessionSelection.toggle"
+            @share="openShareDialog"
+            @rename="editSessionName"
+            @delete="deleteSession"
+            @assign-folder="(id, folderId) => folderStore.assignSessionToFolder(id, folderId)"
+          />
+        </section>
+      </div>
 
       <!-- Advanced: Reload System (leaves Chat for the SLM in step 5f) -->
       <ChatSidebarSystemControl />
@@ -162,6 +118,7 @@
     :file-stats="deleteFileStats"
     :kb-facts="deleteKBFacts"
     :kb-facts-loading="kbFactsLoading"
+    :preview-failed="deletePreviewFailed"
     @confirm="handleDeleteConfirm"
     @cancel="handleDeleteCancel"
   />
@@ -240,7 +197,7 @@ const {
   selectionMode, sessionSelection, enableSelectionMode, cancelSelection, deleteSelectedSessions,
   showEditModal, editingName, editSessionName, saveSessionName, cancelEdit,
   showShareDialog, shareTargetSessionId, openShareDialog, handleShareComplete,
-  showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading,
+  showDeleteDialog, deleteTargetSessionId, deleteFileStats, deleteKBFacts, kbFactsLoading, deletePreviewFailed,
   deleteSession, deleteCurrentSession, handleDeleteConfirm, handleDeleteCancel,
 } = useChatSidebarSessions()
 

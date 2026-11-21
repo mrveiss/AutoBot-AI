@@ -21,7 +21,7 @@ lowered here when its file shrinks.
 from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 760,
+    "autobot-frontend/src/components/__tests__/ChatInterface.test.ts": 756,
     "autobot-frontend/src/components/__tests__/TerminalWindow.test.ts": 627,
     "autobot-frontend/src/components/agents/HeartbeatPanel.vue": 721,
     "autobot-frontend/src/components/analytics/AdvancedAnalytics.vue": 896,

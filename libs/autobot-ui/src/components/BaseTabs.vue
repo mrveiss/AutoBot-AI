@@ -20,6 +20,8 @@
     listOnly: renders the tablist only. The caller owns the tabpanel (it is routed content, not
              a slot), so the kit emits no `tabpanel` of its own.
     emits  : update:modelValue
+    style  : a screen with its own tab metrics sets `--aui-tabs-trigger-height` and
+             `--aui-tabs-font-size` on the tabs; unset, the kit sizes apply
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -171,20 +173,18 @@ function onSelect(value: string | number): void {
   --aui-tabs-pad-y: var(--aui-space-2);
   --aui-tabs-pad-x: var(--aui-space-4);
   padding: var(--aui-tabs-pad-y) var(--aui-tabs-pad-x);
+  min-block-size: var(--aui-tabs-trigger-height, auto);
   border: 0;
   background: transparent;
   color: var(--aui-color-text-muted);
   font: inherit;
-  font-size: var(--aui-text-sm);
+  font-size: var(--aui-tabs-font-size, var(--aui-text-sm));
   font-weight: var(--aui-font-weight-medium);
   cursor: pointer;
   transition: color var(--aui-transition-fast), background-color var(--aui-transition-fast);
 }
 
 .aui-tabs--sm .aui-tabs__trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--aui-space-2);
   --aui-tabs-pad-y: var(--aui-space-1);
   --aui-tabs-pad-x: var(--aui-space-3);
   font-size: var(--aui-text-xs);

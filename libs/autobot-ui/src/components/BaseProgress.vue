@@ -9,6 +9,7 @@
   The value is clamped to 0-100. `variant` follows BaseBadge's semantic vocabulary.
 
     props : value (0-100), label (accessible name), variant, size (sm | md)
+    style : `--aui-progress-block-size` on the bar or an ancestor overrides the bar thickness
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -56,10 +57,10 @@ const clamped = computed(() => (Number.isFinite(props.value) ? Math.min(100, Mat
 }
 
 .aui-progress--sm {
-  block-size: 0.25rem;
+  block-size: var(--aui-progress-block-size, 0.25rem);
 }
 .aui-progress--md {
-  block-size: 0.5rem;
+  block-size: var(--aui-progress-block-size, 0.5rem);
 }
 
 .aui-progress--neutral {

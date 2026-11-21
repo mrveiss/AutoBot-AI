@@ -4,6 +4,8 @@
 
   ChatHeaderActions -- the panel and voice toggles of the chat header (#18243), extracted from
   ChatInterface. Pure presentation: the state lives in ChatInterface, this emits the intents.
+  Order follows the mockup (Voice, Files, Compare), with the extras beside their nearest neighbour:
+  voice output with Voice, the collaboration panel with Files. Export, Settings and Clear follow in ChatHeader.
   Voice chat and Compare are advanced (`.adv`); the voice-output toggle, the file panel and the
   collaboration panel stay visible in Minimal mode.
 -->
@@ -37,14 +39,6 @@
     @click="emit('toggle-panel', 'files')"
     @el="emit('button-el', 'files', $event)"
   />
-  <!-- Issue #4414: multi-model comparison toggle -->
-  <ChatHeaderIconButton
-    adv
-    :label="$t('chat.compare.toggleTitle')"
-    icon="columns"
-    :pressed="showComparePanel"
-    @click="emit('toggle-compare')"
-  />
   <!-- #16443: collaboration panel toggle, collaborative sessions only -->
   <ChatHeaderIconButton
     v-if="isCollaborative"
@@ -55,6 +49,14 @@
     controls="chat-panel-collaboration"
     @click="emit('toggle-panel', 'collaboration')"
     @el="emit('button-el', 'collaboration', $event)"
+  />
+  <!-- Issue #4414: multi-model comparison toggle -->
+  <ChatHeaderIconButton
+    adv
+    :label="$t('chat.compare.toggleTitle')"
+    icon="columns"
+    :pressed="showComparePanel"
+    @click="emit('toggle-compare')"
   />
 </template>
 

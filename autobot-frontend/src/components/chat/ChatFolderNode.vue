@@ -7,25 +7,25 @@
   <div class="folder-node" :style="{ paddingLeft: `${depth * 12}px` }">
     <!-- Folder row -->
     <div
-      class="flex items-center gap-1 px-1 py-1 rounded cursor-pointer hover:bg-autobot-bg-secondary group relative text-sm"
-      :class="{ 'bg-autobot-bg-secondary': isExpanded }"
+      class="flex items-center gap-1 px-1 py-1 rounded cursor-pointer hover:bg-[var(--surface2)] group relative text-sm"
+      :class="{ 'bg-[var(--surface2)]': isExpanded }"
       @click="isExpanded = !isExpanded"
     >
       <!-- Expand chevron -->
       <Icon
         :name="isExpanded ? 'chevron-down' : 'chevron-right'"
-        class="text-xs text-autobot-text-muted shrink-0 w-3"
+        class="text-xs text-[var(--aui-color-text-muted)] shrink-0 w-3"
       />
 
       <!-- Folder icon -->
       <Icon
         :name="isExpanded ? 'folder-open' : 'folder'"
         class="text-xs shrink-0"
-        :class="folder.pinned ? 'text-electric-500' : 'text-autobot-text-muted'"
+        :class="folder.pinned ? 'text-[var(--aui-color-primary)]' : 'text-[var(--aui-color-text-muted)]'"
       />
 
       <!-- Folder name or inline edit -->
-      <span v-if="!editing" class="flex-1 truncate text-autobot-text-primary text-xs leading-tight">
+      <span v-if="!editing" class="flex-1 truncate text-[var(--aui-color-text)] text-xs leading-tight">
         {{ folder.name }}
       </span>
       <input
@@ -33,7 +33,7 @@
         ref="editInput"
         v-model="editName"
         type="text"
-        class="flex-1 text-xs px-1 border border-electric-500 rounded bg-autobot-bg-card focus:outline-none"
+        class="flex-1 text-xs px-1 border border-[var(--aui-color-primary)] rounded bg-[var(--aui-color-surface)] focus:outline-none"
         @keyup.enter="saveRename"
         @keyup.escape="cancelRename"
         @blur="cancelRename"
@@ -43,7 +43,7 @@
       <!-- Session count badge -->
       <span
         v-if="!editing && totalSessionCount > 0"
-        class="text-xs text-autobot-text-muted shrink-0"
+        class="text-xs text-[var(--aui-color-text-muted)] shrink-0"
       >
         {{ totalSessionCount }}
       </span>
@@ -120,7 +120,7 @@
           ref="childInput"
           v-model="childFolderName"
           type="text"
-          class="flex-1 text-xs px-2 py-0.5 border border-autobot-border rounded bg-autobot-bg-card focus:outline-none focus:ring-1 focus:ring-electric-500"
+          class="flex-1 text-xs px-2 py-0.5 border border-[var(--aui-color-border)] rounded bg-[var(--aui-color-surface)] focus:outline-none focus:ring-1 focus:ring-[var(--aui-color-focus-ring)]"
           :placeholder="$t('chat.folders.folderName')"
           @keyup.enter="createChildFolder"
           @keyup.escape="cancelChildCreate"
@@ -144,8 +144,8 @@
       <div
         v-for="session in folderSessions"
         :key="session.id"
-        class="flex items-center gap-1 ps-5 py-1 rounded cursor-pointer hover:bg-autobot-bg-secondary text-xs"
-        :class="session.id === currentSessionId ? 'bg-electric-100 text-electric-800' : 'text-autobot-text-secondary'"
+        class="flex items-center gap-1 ps-5 py-1 rounded cursor-pointer hover:bg-[var(--surface2)] text-xs"
+        :class="session.id === currentSessionId ? 'bg-[var(--surface2)] font-semibold text-[var(--aui-color-text)]' : 'text-[var(--text2)]'"
         @click="$emit('session-click', session.id)"
       >
         <Icon name="comment-dots" class="text-xs shrink-0 opacity-60" />

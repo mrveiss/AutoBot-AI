@@ -41,6 +41,13 @@ const session = (id: string, title: string) => ({ id, title, updatedAt: new Date
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const render = () => mount(ChatSidebar, { attachTo: document.body, global: { plugins: [i18n] } })
 const byLabel = (w: ReturnType<typeof render>, label: string) => w.findAll('button').find((b) => b.attributes('aria-label') === label)!
+const menuItem = async (w: ReturnType<typeof render>, name: string): Promise<HTMLElement> => {
+  if (!document.querySelector('[role="menu"]')) {
+    byLabel(w, 'More actions').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await flushPromises()
+  }
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((i) => i.textContent?.trim() === name)!
+}
 const rowTitles = (w: ReturnType<typeof render>) => w.findAll('.chat-session-row__title').map((r) => r.text())
 
 beforeEach(() => {
@@ -88,7 +95,7 @@ describe('ChatSidebar', () => {
   it('Delete Chat opens the delete dialog for the open chat', async () => {
     h.rs.currentSessionId = 'a'
     const w = render()
-    await byLabel(w, 'Delete Chat').trigger('click')
+    await menuItem(w, 'Delete Chat').then((i) => i.click())
     await flushPromises()
     expect(w.find('[data-testid="delete-dialog"]').exists()).toBe(true)
     expect(w.get('[data-testid="delete-dialog"]').attributes('data-session')).toBe('a')
@@ -98,8 +105,8 @@ describe('ChatSidebar', () => {
   it('keeps Reset Chat and Refresh List, disabling Reset without an open chat', async () => {
     h.rs.currentSessionId = null
     const w = render()
-    expect(byLabel(w, 'Reset Chat').attributes('disabled')).toBeDefined()
-    await byLabel(w, 'Refresh List').trigger('click')
+    expect((await menuItem(w, 'Reset Chat')).hasAttribute('data-disabled')).toBe(true)
+    await menuItem(w, 'Refresh List').then((i) => i.click())
     expect(h.controller.loadChatSessions).toHaveBeenCalled()
     h.rs.currentSessionId = 'a'
     w.unmount()

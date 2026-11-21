@@ -43,4 +43,8 @@ describe('BaseProgress', () => {
   it('styles through kit tokens only', () => {
     expect(progressSource).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|box-shadow/)
   })
+
+  it('lets a screen set the bar thickness through --aui-progress-block-size', () => {
+    expect(progressSource).toMatch(/block-size: var\(--aui-progress-block-size, 0\.5rem\)/)
+  })
 })

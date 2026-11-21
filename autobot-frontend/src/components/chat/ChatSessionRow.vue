@@ -10,10 +10,12 @@
 <template>
   <div
     ref="rowEl"
-    class="chat-session-row group flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm text-[var(--aui-color-text)] hover:bg-[var(--surface2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aui-color-focus-ring)]"
+    class="chat-session-row group flex min-h-6 cursor-pointer items-center gap-2.5 rounded-md border-s-[3px] px-2.5 py-[7px] text-[0.84375rem] hover:bg-[var(--surface2)] hover:text-[var(--aui-color-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--aui-color-focus-ring)]"
     :class="[
-      current ? 'border-[var(--aui-color-border)] bg-[var(--surface2)] font-medium' : 'border-transparent',
-      selected && 'border-[var(--aui-color-primary)]',
+      current
+        ? 'border-[var(--aui-color-primary)] bg-[var(--surface2)] font-semibold text-[var(--aui-color-text)]'
+        : 'border-transparent text-[var(--text2)]',
+      selected && 'bg-[var(--surface2)]',
     ]"
     :tabindex="focused ? 0 : -1"
     :aria-current="current ? 'page' : undefined"
@@ -30,8 +32,8 @@
       @click.stop="emit('toggle-select')"
     />
     <span
-      class="size-2 shrink-0 rounded-full"
-      :class="current ? 'bg-[var(--aui-color-primary)]' : 'bg-[var(--aui-color-border-strong)]'"
+      class="box-border size-2 shrink-0 rounded-full border border-[var(--stroke)]"
+      :class="current ? 'bg-[var(--accent)]' : 'bg-[var(--dot-idle)]'"
       aria-hidden="true"
     />
     <span class="chat-session-row__title min-w-0 grow truncate">{{ title }}</span>

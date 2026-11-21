@@ -16,7 +16,7 @@
         :class="[
           'sidebar-loading-view h-full shrink-0',
           'hidden lg:block',
-          store.sidebarCollapsed ? 'w-12' : 'w-80',
+          store.sidebarCollapsed ? 'w-12' : 'w-[16.25rem]',
         ]"
       >
         <ChatSidebar />
@@ -33,7 +33,7 @@
       >
         <div
           v-if="showMobileSidebar"
-          class="lg:hidden fixed top-0 left-0 h-full w-80 max-w-[85vw] z-40 shadow-2xl overflow-hidden"
+          class="lg:hidden fixed top-0 left-0 h-full w-[16.25rem] max-w-[85vw] z-40 shadow-2xl overflow-hidden"
         >
           <ChatSidebar @close-mobile="showMobileSidebar = false" />
         </div>
@@ -50,6 +50,7 @@
           :connection-status="connectionStatus"
           :is-connected="isConnected"
           :context-window-props="contextWindowProps"
+          :overseer-enabled="overseerEnabled" :started-at="store.currentSession?.createdAt ?? store.currentSession?.messages[0]?.timestamp"
           @export-session="exportSession"
           @clear-session="clearSession"
           @toggle-mobile-sidebar="showMobileSidebar = !showMobileSidebar"
@@ -1368,10 +1369,9 @@ watch(
 /* CRITICAL FIX: Enhanced sidebar dimensions constraint */
 .sidebar-loading-view {
   /* Force sidebar width and height - prevent UnifiedLoadingView override */
-  width: 320px !important; /* Force w-80 equivalent (320px) */
+  /* Width comes from the w-12 / w-[16.25rem] classes on the element (mockup: ~260px); only the height is forced. */
   height: 100% !important; /* Force full height */
   flex-shrink: 0 !important;
-  max-width: 320px !important;
   min-width: 320px !important;
 }
 

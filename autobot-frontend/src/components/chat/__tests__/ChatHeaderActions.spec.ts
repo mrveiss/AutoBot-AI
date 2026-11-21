@@ -84,4 +84,11 @@ describe('ChatHeaderActions', () => {
     expect(btn(w, 'Toggle file panel').attributes('aria-describedby')).toBe(open?.id)
     w.unmount()
   })
+
+  it('orders voice output, Voice, Files, collaboration, Compare (mockup order plus the extras beside their neighbour)', () => {
+    const w = render()
+    const labels = w.findAll('button').map((b) => b.attributes('aria-label'))
+    expect(labels).toEqual(['Voice output off', 'Voice chat', 'Toggle file panel', 'Collaboration', en.chat.compare.toggleTitle])
+    w.unmount()
+  })
 })

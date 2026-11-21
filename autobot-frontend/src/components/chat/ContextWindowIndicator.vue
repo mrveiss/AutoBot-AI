@@ -2,15 +2,14 @@
   <div v-if="hasData"><!-- A plain outer element: the header's responsive classes (hidden sm:flex) must not land on BaseTooltip, whose own display wins. -->
     <BaseTooltip :text="tooltip" placement="bottom">
       <template #default="{ describedby }">
-        <div class="ctx-indicator flex min-w-0 select-none items-center gap-2" tabindex="0" :aria-describedby="describedby">
-          <!-- Token count text -->
-          <span class="shrink-0 whitespace-nowrap font-mono text-xs" :class="textClass">
+        <!-- Text stacked above the bar, a column at least 120px wide (mockup) -->
+        <div class="ctx-indicator flex min-w-[7.5rem] select-none flex-col gap-1" tabindex="0" :aria-describedby="describedby">
+          <span class="whitespace-nowrap font-mono text-xs" :class="textClass">
             {{ isSummarizing ? t('chat.contextWindow.summarizing') : `${formattedUsed} / ${formattedMax}` }}
           </span>
-          <!-- The compact width lives on a wrapper: BaseProgress fills its container (inline-size: 100%). -->
-          <div class="w-12 shrink-0" :class="{ 'animate-pulse': isSummarizing }">
+          <!-- BaseProgress fills its container; the wrapper sets the 6px thickness token. -->
+          <div class="w-full [--aui-progress-block-size:0.375rem]" :class="{ 'animate-pulse': isSummarizing }">
             <BaseProgress
-              size="sm"
               :variant="variant"
               :value="usagePercent"
               :label="t('chat.contextWindow.ariaLabel', { used: formattedUsed, max: formattedMax })"

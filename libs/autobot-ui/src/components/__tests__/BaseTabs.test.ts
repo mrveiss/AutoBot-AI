@@ -246,3 +246,12 @@ describe('BaseTabs panels follow a custom trigger id (#18243)', () => {
     expect(tabs()[0].getAttribute('aria-controls')).toBe(panel?.id)
   })
 })
+
+import tabsSource from '../BaseTabs.vue?raw'
+
+describe('BaseTabs metric tokens (#18243)', () => {
+  it('reads the trigger height and font size from overridable tokens, with the kit sizes as defaults', () => {
+    expect(tabsSource).toMatch(/min-block-size: var\(--aui-tabs-trigger-height, auto\)/)
+    expect(tabsSource).toMatch(/font-size: var\(--aui-tabs-font-size, var\(--aui-text-sm\)\)/)
+  })
+})

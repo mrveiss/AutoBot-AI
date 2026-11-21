@@ -12,7 +12,7 @@ import { useUiMode } from '@/composables/useUiMode'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const base = {
-  currentSessionId: 's1', currentSessionTitle: 'Fleet check', sessionInfo: 'Overseer on', connectionStatus: 'Connected', isConnected: true,
+  currentSessionId: 's1', currentSessionTitle: 'Fleet check', sessionInfo: 'Session s1 - 3 messages', connectionStatus: 'Connected', isConnected: true,
 }
 const render = (props: Record<string, unknown> = {}) =>
   mount(ChatHeader, { props: { ...base, ...props }, attachTo: document.body, global: { plugins: [i18n] } })
@@ -23,7 +23,7 @@ describe('ChatHeader', () => {
   it('shows the title and sub-line', () => {
     const w = render()
     expect(w.text()).toContain('Fleet check')
-    expect(w.text()).toContain('Overseer on')
+    expect(w.text()).toContain('Session s1')
     w.unmount()
   })
 
@@ -45,6 +45,32 @@ describe('ChatHeader', () => {
       expect(b.attributes('aria-pressed')).toBeUndefined()
       expect(b.attributes('aria-expanded')).toBeUndefined()
     }
+    w.unmount()
+  })
+
+  it('puts the sub-line above the title with real Overseer state and the start time', () => {
+    const w = render({ overseerEnabled: true, startedAt: new Date(2026, 10, 21, 10, 42) })
+    const html = w.html()
+    expect(html.indexOf('Overseer on')).toBeLessThan(html.indexOf('Fleet check'))
+    expect(w.text()).toContain('started')
+    expect(w.text()).toContain('10:42')
+    expect(w.text()).not.toContain('Knowledge')
+    w.unmount()
+  })
+
+  it('shows Overseer off, and falls back to the session info without a start time', () => {
+    const w = render({ overseerEnabled: false })
+    expect(w.text()).toContain('Overseer off')
+    expect(w.text()).toContain('Session s1 - 3 messages')
+    w.unmount()
+  })
+
+  it('orders the buttons Export, Settings, Clear after the slotted ones', () => {
+    const w = render()
+    const labels = w.findAll('button').map((b) => b.attributes('aria-label')).filter(Boolean)
+    const at = (l: string) => labels.indexOf(l)
+    expect(at(en.chat.exportChat)).toBeLessThan(at(en.chat.openSettings))
+    expect(at(en.chat.openSettings)).toBeLessThan(at(en.chat.clearChat))
     w.unmount()
   })
 
@@ -82,6 +108,7 @@ describe('ChatHeader', () => {
   ])('shows %j as a %s badge', (props, variant) => {
     const w = render(props)
     expect(w.get('.aui-badge').classes()).toContain(`aui-badge--${variant}`)
+    expect(w.get('.aui-badge').find('svg').exists()).toBe(false)
     w.unmount()
   })
 

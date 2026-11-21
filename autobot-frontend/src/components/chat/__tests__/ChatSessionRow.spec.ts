@@ -74,6 +74,17 @@ describe('ChatSessionRow', () => {
     w.unmount()
   })
 
+  it('marks the open chat with a 3px primary left border, surface fill and bold text, and no full border', () => {
+    const w = render({ current: true })
+    const row = w.get('[role="button"]')
+    expect(row.classes()).toEqual(
+      expect.arrayContaining(['border-s-[3px]', 'border-[var(--aui-color-primary)]', 'bg-[var(--surface2)]', 'font-semibold']),
+    )
+    expect(row.classes()).not.toContain('border')
+    expect(w.get('[aria-hidden="true"]').classes()).toContain('bg-[var(--accent)]')
+    expect(render().get('[aria-hidden="true"]').classes()).toContain('bg-[var(--dot-idle)]')
+  })
+
   it('does not use aria-selected, which is invalid on a button', () => {
     expect(render({ focused: true }).get('[role="button"]').attributes('aria-selected')).toBeUndefined()
   })

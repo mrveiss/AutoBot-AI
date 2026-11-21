@@ -283,9 +283,7 @@ describe('ChatInterface', () => {
         expect(screen.getByText('chat.sidebar.chatHistory')).toBeInTheDocument()
       })
       expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument()
-      expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
-      expect(screen.getByLabelText('chat.sidebar.deleteChat')).toBeInTheDocument()
-      expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
+      expect(screen.getByLabelText('chat.sidebar.moreActions')).toBeInTheDocument()
     })
 
     it('renders with collapsed sidebar when toggle is clicked', async () => {
@@ -333,7 +331,7 @@ describe('ChatInterface', () => {
       renderComponent(ChatInterface, { pinia: true, router: true })
 
       // Sidebar should still render with refresh button available
-      expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
+      expect(screen.getByLabelText('chat.sidebar.moreActions')).toBeInTheDocument()
     })
 
     // #16274: the init raced a 10s timer that onUnmounted never cancelled, so
@@ -500,32 +498,32 @@ describe('ChatInterface', () => {
         expect(mockInitializeChatInterface).toHaveBeenCalled()
       })
 
-      // Delete button in the sidebar toolbar is disabled without an active session
-      const deleteButton = screen.getByLabelText('chat.sidebar.deleteChat')
-      expect(deleteButton).toBeInTheDocument()
+      // Delete chat lives in the sidebar's More menu and is disabled without an active session
+      await user.click(screen.getByLabelText('chat.sidebar.moreActions'))
+      expect(await screen.findByRole('menuitem', { name: 'chat.sidebar.deleteChat' })).toHaveAttribute('data-disabled')
     })
 
     it('resets current chat session button is disabled without active session', async () => {
       renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
-        expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
+        expect(screen.getByLabelText('chat.sidebar.moreActions')).toBeInTheDocument()
       })
 
-      // Reset button is disabled when no session is active (store.currentSessionId is empty)
-      const resetButton = screen.getByLabelText('chat.sidebar.resetChat') as HTMLButtonElement
-      expect(resetButton).toBeDisabled()
+      // Reset is disabled when no session is active (store.currentSessionId is empty)
+      await user.click(screen.getByLabelText('chat.sidebar.moreActions'))
+      expect(await screen.findByRole('menuitem', { name: 'chat.sidebar.resetChat' })).toHaveAttribute('data-disabled')
     })
 
     it('refreshes chat list', async () => {
       renderComponent(ChatInterface, { pinia: true, router: true })
 
       await waitFor(() => {
-        expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
+        expect(screen.getByLabelText('chat.sidebar.moreActions')).toBeInTheDocument()
       })
 
-      const refreshButton = screen.getByLabelText('chat.sidebar.refreshList')
-      await user.click(refreshButton)
+      await user.click(screen.getByLabelText('chat.sidebar.moreActions'))
+      await user.click(await screen.findByRole('menuitem', { name: 'chat.sidebar.refreshList' }))
 
       // Clicking refresh triggers controller.loadChatSessions()
       await waitFor(() => {
@@ -714,9 +712,7 @@ describe('ChatInterface', () => {
         expect(screen.getByRole('button', { name: 'chat.newChat' })).toBeInTheDocument()
       })
 
-      expect(screen.getByLabelText('chat.sidebar.resetChat')).toBeInTheDocument()
-      expect(screen.getByLabelText('chat.sidebar.deleteChat')).toBeInTheDocument()
-      expect(screen.getByLabelText('chat.sidebar.refreshList')).toBeInTheDocument()
+      expect(screen.getByLabelText('chat.sidebar.moreActions')).toBeInTheDocument()
       expect(screen.getByLabelText('chat.sidebar.collapseSidebar')).toBeInTheDocument()
     })
 

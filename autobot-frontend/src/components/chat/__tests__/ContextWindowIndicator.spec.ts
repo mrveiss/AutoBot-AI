@@ -40,7 +40,11 @@ describe('ContextWindowIndicator', () => {
     const w = mount(ContextWindowIndicator, { props: base, attrs: { class: 'hidden sm:flex' }, global: { plugins: [i18n] } })
     expect(w.element.tagName).toBe('DIV')
     expect(w.classes()).toEqual(expect.arrayContaining(['hidden', 'sm:flex']))
-    expect(w.get('[role="progressbar"]').element.parentElement?.classList.contains('w-12')).toBe(true)
+    // stacked: text above a 6px bar, a column at least 120px wide
+    const column = w.get('.ctx-indicator')
+    expect(column.classes()).toEqual(expect.arrayContaining(['flex-col', 'min-w-[7.5rem]']))
+    expect(w.get('[role="progressbar"]').element.parentElement?.className).toContain('--aui-progress-block-size:0.375rem')
+    expect(column.element.firstElementChild?.tagName).toBe('SPAN')
   })
 
   it('renders nothing without data', () => {

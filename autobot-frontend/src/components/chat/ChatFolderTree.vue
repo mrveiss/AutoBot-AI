@@ -29,7 +29,7 @@
         ref="rootInput"
         v-model="rootFolderName"
         type="text"
-        class="flex-1 text-xs px-2 py-1 border border-autobot-border rounded bg-autobot-bg-card focus:outline-none focus:ring-1 focus:ring-electric-500"
+        class="flex-1 text-xs px-2 py-1 border border-[var(--aui-color-border)] rounded bg-[var(--aui-color-surface)] focus:outline-none focus:ring-1 focus:ring-[var(--aui-color-focus-ring)]"
         :placeholder="$t('chat.folders.folderName')"
         @keyup.enter="createRootFolder"
         @keyup.escape="cancelRootCreate"

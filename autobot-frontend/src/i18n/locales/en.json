@@ -276,7 +276,8 @@
       "moveToFolder": "Move to {name}",
       "untitledChat": "Chat {id}...",
       "previewFailed": "Could not load the file and knowledge previews for this chat. You can still delete it.",
-      "preserveFailed": "Some knowledge facts could not be preserved; they were deleted with the chat."
+      "preserveFailed": "Some knowledge facts could not be preserved; they were deleted with the chat.",
+      "moreActions": "More actions"
     },
     "folders": {
       "folders": "Folders",
@@ -867,7 +868,12 @@
     "header": {
       "voiceControls": "Voice controls",
       "essentialsNote": "Showing essentials",
-      "showAllFeatures": "Show all features"
+      "showAllFeatures": "Show all features",
+      "overseerOn": "Overseer on",
+      "overseerOff": "Overseer off",
+      "overseerTip": "Overseer plans multi-step tasks and asks before risky commands",
+      "startedAt": "started {time}",
+      "connectedTip": "Connected to the backend — replies stream live"
     }
   },
   "settings": {

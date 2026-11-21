@@ -7,7 +7,7 @@ const meta = {
   title: 'Components/Chat/ChatSidebarToolbar',
   component: ChatSidebarToolbar,
   tags: ['autodocs'],
-  args: { search: '', selectionMode: false, selectedCount: 0 },
+  args: { search: '', selectionMode: false, selectedCount: 0, hasCurrentSession: true },
 } satisfies Meta<typeof ChatSidebarToolbar>
 
 export default meta

@@ -1,5 +1,5 @@
 <template>
-  <PageHeader class="shrink-0">
+  <PageHeader class="shrink-0" size="xl">
     <!-- Left: Mobile sidebar toggle + session avatar -->
     <template #leading>
       <!-- Mobile hamburger to open chat sidebar (#1804) -->
@@ -10,12 +10,21 @@
         @click="$emit('toggle-mobile-sidebar')"
       />
 
-      <div class="flex size-8 shrink-0 items-center justify-center rounded-md bg-[var(--aui-color-primary)] text-[var(--aui-color-primary-contrast)]" aria-hidden="true">
-        <Icon name="robot" />
+      <div class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-[var(--tile-b)] bg-[var(--tile)] text-[var(--stroke)]" aria-hidden="true">
+        <Icon name="robot" size="lg" />
       </div>
     </template>
     <template #title>{{ currentSessionTitle }}</template>
-    <template #subtitle><span class="hidden sm:inline">{{ sessionInfo }}</span></template>
+    <!-- Above the title, as in the mockup. Knowledge on/off has no shared source (it is a local ref in ChatInput), so it is not shown. -->
+    <template #eyebrow>
+      <BaseTooltip :text="$t('chat.header.overseerTip')" placement="bottom">
+        <template #default="{ describedby }">
+          <span tabindex="0" :aria-describedby="describedby">{{ overseerEnabled ? $t('chat.header.overseerOn') : $t('chat.header.overseerOff') }}</span>
+        </template>
+      </BaseTooltip>
+      <template v-if="startedAt"> · <i18n-t keypath="chat.header.startedAt" tag="span"><template #time><span class="font-mono">{{ startedTime }}</span></template></i18n-t></template>
+      <template v-else> · {{ sessionInfo }}</template>
+    </template>
 
     <!-- Right: Actions + connection status -->
     <template #actions>
@@ -49,15 +58,15 @@
       <template v-if="currentSessionId">
         <ChatHeaderIconButton
           adv
-          :label="$t('chat.openSettings')"
-          icon="cog"
-          @click="$emit('open-settings')"
-        />
-        <ChatHeaderIconButton
-          adv
           :label="$t('chat.exportChat')"
           icon="download"
           @click="$emit('export-session')"
+        />
+        <ChatHeaderIconButton
+          adv
+          :label="$t('chat.openSettings')"
+          icon="cog"
+          @click="$emit('open-settings')"
         />
         <ChatHeaderIconButton
           :label="$t('chat.clearChat')"
@@ -66,17 +75,18 @@
         />
       </template>
 
-      <!-- Connection Status — icon only on mobile, full label on sm+ -->
-      <BaseTooltip :text="connectionStatus" placement="bottom">
+      <!-- Connection status: a plain pill; the tooltip says what Connected means -->
+      <BaseTooltip :text="connectionTip" placement="left">
         <template #default="{ describedby }">
           <BaseBadge
             :variant="connectionVariant"
+            size="sm"
+            rounded
             :aria-describedby="describedby"
             role="status"
             tabindex="0"
           >
-            <template #icon><Icon :name="connectionStatusIcon" /></template>
-            <span class="hidden sm:inline">{{ connectionStatus }}</span>
+            {{ connectionStatus }}
           </BaseBadge>
         </template>
       </BaseTooltip>
@@ -91,6 +101,8 @@ import type { SemanticVariant } from '@autobot/ui'
 import ContextWindowIndicator from './ContextWindowIndicator.vue'
 import ChatHeaderIconButton from './ChatHeaderIconButton.vue'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatLocalTime } from '@/utils/formatHelpers'
 import { useUiMode, useUiModeAnnouncer } from '@/composables/useUiMode'
 
 interface ContextWindowProps {
@@ -110,6 +122,10 @@ interface Props {
   connectionStatus: string
   isConnected: boolean
   contextWindowProps?: ContextWindowProps
+  /** Whether Overseer mode is on for this chat (the ChatInterface ref ChatInput also reads). */
+  overseerEnabled?: boolean
+  /** When the chat started (the session's creation time, else its first message), if known. */
+  startedAt?: Date | string | null
 }
 
 interface Emits {
@@ -122,6 +138,7 @@ interface Emits {
 const props = defineProps<Props>()
 defineEmits<Emits>()
 
+const { t } = useI18n()
 const { setMode } = useUiMode()
 const announceMode = useUiModeAnnouncer()
 
@@ -135,9 +152,9 @@ const connectionVariant = computed<SemanticVariant>(() => {
   return props.connectionStatus === 'Connecting' ? 'warning' : 'success'
 })
 
-const connectionStatusIcon = computed(() => {
-  if (!props.isConnected) return 'exclamation-circle'
-  if (props.connectionStatus === 'Connecting') return 'spinner'
-  return 'check-circle'
-})
+const startedTime = computed(() => (props.startedAt ? formatLocalTime(props.startedAt) : ''))
+
+const connectionTip = computed(() =>
+  props.isConnected && props.connectionStatus !== 'Connecting' ? t('chat.header.connectedTip') : props.connectionStatus,
+)
 </script>
