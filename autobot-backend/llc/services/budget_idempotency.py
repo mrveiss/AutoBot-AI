@@ -62,8 +62,11 @@ _SCOPE = "budget.ingest_cost_event"
 _OK, _EXHAUSTED = 200, 402
 
 #: How often a caller with no HTTP client to retry for it (the native adapter) re-tries an in-flight ingest, and
-#: the base delay between tries (doubles each attempt). Env-backed per the repository's constant rule.
+#: the base delay between tries (doubles each attempt, capped by the max). Env-backed per the repo's constant rule.
 INGEST_RETRY_ATTEMPTS = env_int_clamped("AUTOBOT_BUDGET_INGEST_RETRY_ATTEMPTS", 5, min_v=1, max_v=20)
+INGEST_RETRY_MAX_DELAY_SECONDS = env_float_clamped(
+    "AUTOBOT_BUDGET_INGEST_RETRY_MAX_DELAY_SECONDS", 10.0, min_v=0.0, max_v=300.0
+)
 INGEST_RETRY_DELAY_SECONDS = env_float_clamped("AUTOBOT_BUDGET_INGEST_RETRY_DELAY_SECONDS", 0.5, min_v=0.0, max_v=30.0)
 
 
@@ -159,7 +162,7 @@ async def retry_while_in_flight(ingest: Callable[[], Awaitable[Any]], run_id: st
             return
         except IngestInFlight:
             if attempt + 1 < INGEST_RETRY_ATTEMPTS:
-                await asyncio.sleep(INGEST_RETRY_DELAY_SECONDS * (2**attempt))
+                await asyncio.sleep(min(INGEST_RETRY_DELAY_SECONDS * (2**attempt), INGEST_RETRY_MAX_DELAY_SECONDS))
     logger.error(
         "cost ingest for run %s still in flight after %d attempts; charge not confirmed", run_id, INGEST_RETRY_ATTEMPTS
     )

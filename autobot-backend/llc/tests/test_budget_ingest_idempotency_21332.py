@@ -227,6 +227,27 @@ async def test_a_retry_after_a_commit_whose_result_was_never_stored_does_not_cha
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [ConnectionError("lost after commit"), asyncio.CancelledError()])
+async def test_a_retry_after_an_ambiguous_commit_does_not_charge_twice(factory, redis, failure) -> None:  # noqa: ANN001
+    """Window (b): ``commit`` reaches the database and THEN raises (or is cancelled), so the claim is released."""
+    async with factory() as session:
+        real_commit = session.commit
+
+        async def commit_then_fail() -> None:
+            await real_commit()
+            raise failure
+
+        session.commit = commit_then_fail  # type: ignore[method-assign]
+        with pytest.raises(type(failure)):
+            await BudgetService().ingest_cost_event(
+                session, "agent-a", COMPANY, EVENT, 0, "llama3", idempotency_key="run-1"
+            )
+    assert await _spent(factory, "agent-a") == EVENT  # the charge really committed
+    await _ingest(factory, "agent-a", "run-1")  # the retry
+    assert await _spent(factory, "agent-a") == EVENT
+
+
+@pytest.mark.asyncio
 async def test_a_claim_that_expired_mid_charge_cannot_double_charge(factory, redis) -> None:  # noqa: ANN001
     """A second caller claims the same key while the first is mid-charge; the database still admits one charge."""
     real = BudgetService._charge_cost_event
@@ -248,6 +269,22 @@ async def test_in_flight_ingest_is_retried_until_the_claimant_completes() -> Non
     with patch.object(budget_idempotency, "INGEST_RETRY_DELAY_SECONDS", 0):
         await retry_while_in_flight(calls, "run-1")
     assert calls.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_each_retry_sleep_is_capped() -> None:
+    sleeps: list[float] = []
+
+    async def record(delay: float) -> None:
+        sleeps.append(delay)
+
+    with (
+        patch.object(budget_idempotency.asyncio, "sleep", record),
+        patch.object(budget_idempotency, "INGEST_RETRY_DELAY_SECONDS", 4.0),
+        patch.object(budget_idempotency, "INGEST_RETRY_MAX_DELAY_SECONDS", 5.0),
+    ):
+        await retry_while_in_flight(AsyncMock(side_effect=IngestInFlight("x")), "run-1")
+    assert sleeps and max(sleeps) == 5.0
 
 
 @pytest.mark.asyncio

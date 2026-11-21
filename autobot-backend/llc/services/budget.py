@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 #: The constraint a cost event breaks when its work item no longer exists (``CompanyOsCostEvent.work_item_id``).
 WORK_ITEM_FK = "fk_company_os_cost_events_work_item"
 
+#: Postgres sqlstate of a unique-constraint violation.
+UNIQUE_VIOLATION_SQLSTATE = "23505"
+
 _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
 
@@ -120,9 +123,16 @@ async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item
 
 
 def _is_key_violation(exc: IntegrityError) -> bool:
-    """The unique (company, agent, key) row was already written (Postgres names the index, SQLite the column)."""
-    text_ = str(exc.orig)
-    return COST_EVENT_IDEMPOTENCY_INDEX in text_ or "idempotency_key" in text_
+    """The unique (company, agent, key) row was already written.
+
+    Postgres reports sqlstate 23505 and names the index; only a driver that gives no sqlstate (SQLite) is matched
+    by the message, where the column name stands in for the index name.
+    """
+    sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(getattr(exc.orig, "__cause__", None), "sqlstate", None)
+    message = str(exc.orig)
+    if sqlstate:
+        return sqlstate == UNIQUE_VIOLATION_SQLSTATE and COST_EVENT_IDEMPOTENCY_INDEX in message
+    return COST_EVENT_IDEMPOTENCY_INDEX in message or "idempotency_key" in message
 
 
 async def _first_cost(session: AsyncSession, agent_id: str, company_id: str, key: str) -> Decimal:

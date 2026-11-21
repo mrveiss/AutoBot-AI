@@ -39,11 +39,11 @@ def upgrade() -> None:
     if not has_table(TABLE):
         return  # create_all builds the table with the column and index
     if not has_column(TABLE, "idempotency_key"):
-        op.add_column(TABLE, sa.Column("idempotency_key", sa.String(255), nullable=True))
+        op.add_column("company_os_cost_events", sa.Column("idempotency_key", sa.String(255), nullable=True))
     if not has_index(TABLE, INDEX):
         op.create_index(
-            INDEX,
-            TABLE,
+            "uq_company_os_cost_events_idempotency",
+            "company_os_cost_events",
             ["company_id", "agent_id", "idempotency_key"],
             unique=True,
             postgresql_where=sa.text("idempotency_key IS NOT NULL"),
@@ -52,4 +52,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if has_index(TABLE, INDEX):
-        op.drop_index(INDEX, table_name=TABLE)
+        op.drop_index("uq_company_os_cost_events_idempotency", table_name="company_os_cost_events")

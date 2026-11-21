@@ -381,3 +381,16 @@ env_registry.register_env_var(
         component="backend",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_BUDGET_INGEST_RETRY_MAX_DELAY_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Cap, in seconds, on any single sleep between retries of an in-flight cost ingest, so the doubling "
+            "backoff stays bounded (llc/services/budget_idempotency.py, #21332)."
+        ),
+        component="backend",
+    )
+)
