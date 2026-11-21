@@ -137,6 +137,14 @@ async def _unavailable_unless_not_system(vault_id: uuid.UUID) -> None:
         return
 
 
+def _require_value_only(request: SecretUpdateRequest) -> None:
+    """Refuse (ValueError -> 400) a rotate with no `value`, or with metadata that would be silently dropped."""
+    if not request.value:
+        raise ValueError("value is required to update a system-vault secret")
+    if request.model_fields_set & _METADATA_FIELDS:
+        raise ValueError("a system-vault secret has no editable metadata; send only the value")
+
+
 async def rotate_system_vault_secret(
     secret_id: str, request: SecretUpdateRequest, owner_id: str, headers: Mapping[str, str] | None = None
 ) -> Dict | None:
@@ -160,10 +168,7 @@ async def rotate_system_vault_secret(
             return None
         _refuse_internal_key(headers, "rotate")
         user_id, permissions = await _principal(owner_id)
-        if not value:
-            raise ValueError("value is required to update a system-vault secret")
-        if request.model_fields_set & _METADATA_FIELDS:
-            raise ValueError("a system-vault secret has no editable metadata; send only the value")
+        _require_value_only(request)
         secret = await coordinator.rotate(
             session, user_id=user_id, permissions=permissions, secret_id=vault_id, new_plaintext=value.encode("utf-8")
         )
