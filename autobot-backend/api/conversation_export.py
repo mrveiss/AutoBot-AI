@@ -25,7 +25,8 @@ from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from exceptions import get_exceptions_lazy
-from security.session_company import enforce_session_company, resolve_company_scope
+from security.session_company import creation_company_metadata, resolve_company_scope
+from security.session_ownership import validate_session_ownership
 from services.audit.audit import AuditAction, audit_record
 from services.conversation_export import (
     export_all_conversations_json,
@@ -133,9 +134,12 @@ async def export_conversation(
     request: Request,
     format: str = Query(default="json", description="Export format: json or markdown"),
     current_user: dict = Depends(get_current_user),
+    ownership: dict = Depends(validate_session_ownership),  # SECURITY: read access, owner or participant (#22002)
 ):
     """
     Export a single conversation in JSON or Markdown format (#1808).
+
+    Follows read access (#22002): the shared ownership dependency, which also refuses another company's chat (#21997).
 
     - **json**: Enriched AutoBot JSON envelope with metadata and messages.
     - **markdown**: Human-readable Markdown with message headers.
@@ -143,7 +147,6 @@ async def export_conversation(
     _validate_session_id_or_raise(session_id)
     _validate_format_or_raise(format)
 
-    await enforce_session_company(session_id, request)  # #21997: another company's chat is refused
     chat_history_manager = get_chat_history_manager(request)
     content = await _run_export(chat_history_manager, session_id, format)
 
@@ -248,6 +251,7 @@ async def import_conversation_endpoint(
         # callers that read "no owner" as "legacy, allow" make it readable by
         # anyone. It also gates `replace` against overwriting another user.
         user_data=current_user,
+        company_metadata=await creation_company_metadata(request, None, current_user),  # #21997: a new chat is stamped
     )
 
     logger.info(

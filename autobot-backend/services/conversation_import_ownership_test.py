@@ -383,3 +383,41 @@ async def test_an_owned_session_with_no_messages_still_exists_and_is_not_taken_o
 
     _assert_saved_under_a_fresh_id(manager, result)
     manager.set_session_owner.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_new_import_carries_the_active_company(monkeypatch) -> None:
+    """#21997: an imported chat is a new chat, so it is stamped with the active company like any other."""
+    manager = _manager()
+
+    result = await import_conversation(
+        manager, dict(_DOCUMENT), user_data=_ALICE, company_metadata={"company_id": "co-1"}
+    )
+
+    assert result["success"] is True
+    metadata = manager.save_session.call_args.kwargs["metadata"]
+    assert metadata["company_id"] == "co-1" and metadata["owner"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_an_import_with_no_active_company_stays_unassigned() -> None:
+    manager = _manager()
+
+    await import_conversation(manager, dict(_DOCUMENT), user_data=_ALICE)
+
+    assert "company_id" not in manager.save_session.call_args.kwargs["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_replacing_ones_own_chat_does_not_re_tag_it() -> None:
+    manager = _manager(exists=True, owner="alice")
+
+    await import_conversation(
+        manager,
+        dict(_DOCUMENT),
+        on_conflict="replace",
+        user_data=_ALICE,
+        company_metadata={"company_id": "co-1"},
+    )
+
+    assert "company_id" not in manager.save_session.call_args.kwargs["metadata"]

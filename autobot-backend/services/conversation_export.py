@@ -236,6 +236,7 @@ async def import_conversation(
     document: Dict[str, Any],
     on_conflict: str = "skip",
     user_data: Dict[str, Any] | None = None,
+    company_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Import a conversation from an AutoBot JSON export document.
@@ -247,6 +248,7 @@ async def import_conversation(
             Without it an import created an ownerless session, and callers that
             read "no owner" as "legacy, allow access" made it readable by
             anyone.
+        company_metadata: the active company's ``{"company_id": ...}``, stamped on a new chat (#21997).
         on_conflict: One of "skip", "replace", or "rename".
             - "skip"    — return without saving when session_id already exists.
             - "replace" — overwrite the existing session.
@@ -260,7 +262,7 @@ async def import_conversation(
         return {"success": False, "session_id": None, "conflict": False, "message": err}
     # The existence and ownership checks and the save are one step under the session's lease (#20908).
     async with session_lease(document["session_id"], "import"):
-        return await _import_under_lease(chat_history_manager, document, on_conflict, user_data)
+        return await _import_under_lease(chat_history_manager, document, on_conflict, user_data, company_metadata)
 
 
 def _conflict_result(session_id: str, message: str) -> Dict[str, Any]:
@@ -314,6 +316,7 @@ async def _import_under_lease(
     document: Dict[str, Any],
     on_conflict: str,
     user_data: Dict[str, Any] | None,
+    company_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Resolve the conflict policy against the stored session, then save; the caller holds the lease.
 
@@ -346,7 +349,13 @@ async def _import_under_lease(
         on_conflict,
         user_data,
         index,
+        company_metadata,
     )
+
+
+def _import_metadata(user_data, company_metadata, replaces: bool) -> Dict[str, Any] | None:
+    """The owner record, plus the active company on a NEW chat; replacing one's own chat does not re-tag it (#21997)."""
+    return {**build_owner_metadata(user_data), **({} if replaces else company_metadata or {})} or None
 
 
 async def _save_import(
@@ -357,6 +366,7 @@ async def _save_import(
     on_conflict: str,
     user_data: Dict[str, Any] | None,
     index: bool = False,
+    company_metadata: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Save the imported messages under *session_id*, stamped with the importer as owner (#14026).
 
@@ -367,7 +377,7 @@ async def _save_import(
         session_id=session_id,
         messages=messages,
         name=document.get("name", ""),
-        metadata=build_owner_metadata(user_data) or None,
+        metadata=_import_metadata(user_data, company_metadata, exists and on_conflict == "replace"),
         replace=exists and on_conflict == "replace",  # the explicit replace; a snapshot never drops messages (#20862)
     )
     logger.info("Imported conversation %s (%d messages)", session_id, len(messages))

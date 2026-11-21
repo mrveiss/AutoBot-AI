@@ -283,7 +283,7 @@ class TestAnotherCompanysChatIsRefused:
         from api import conversation_export
 
         source = pathlib.Path(conversation_export.__file__).read_text(encoding="utf-8")
-        assert "enforce_session_company(session_id, request)" in source
+        assert "validate_session_ownership" in source  # read access, which enforces the company (#22002)
 
 
 def _ownership():
