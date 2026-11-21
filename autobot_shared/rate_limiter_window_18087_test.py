@@ -279,17 +279,18 @@ class TestSweepIntervalEnv:
 
     @pytest.mark.parametrize("raw", ["inf", "nan", "-1", "0", "-inf"])
     def test_non_positive_or_non_finite_falls_back(self, raw, monkeypatch):
-        import importlib
+        import importlib.util
 
-        import autobot_shared.rate_limiter_window as mod
+        import autobot_shared.rate_limiter_window as shared
 
         monkeypatch.setenv("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", raw)
-        try:
-            reloaded = importlib.reload(mod)
-            assert reloaded.LOCAL_WINDOW_SWEEP_INTERVAL == 1.0
-        finally:
-            monkeypatch.delenv("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL")
-            importlib.reload(mod)
+        # A throwaway copy, never put in sys.modules: reloading the shared module would
+        # rebind WindowFailurePolicy and break `is` checks in already-imported callers.
+        spec = importlib.util.spec_from_file_location("_sweep_interval_probe_21907", shared.__file__)
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        assert probe.LOCAL_WINDOW_SWEEP_INTERVAL == 1.0
+        assert probe.WindowFailurePolicy is not shared.WindowFailurePolicy  # copy is isolated
 
     def test_reset_clears_the_sweep_throttle(self):
         counter = LocalWindowCounter(max_keys=1, sweep_interval=10.0)
