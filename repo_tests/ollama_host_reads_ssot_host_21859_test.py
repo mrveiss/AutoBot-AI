@@ -39,9 +39,9 @@ ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 SSOT_MODULE = "autobot_shared.ssot_config"
 FIELD = "ollama_host"
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
-#: Measured 3752 production modules under ROOTS (2026-11-21), no growth allowance, so the pin is exact. A new guard
-#: pins `floor=` until it lands on the base (#19676).
-_FILES_FLOOR = 3752
+#: Measured: 3754 of 7131 tracked ``.py`` under ROOTS are scanned (0.53); 0.45 leaves room for a shift into tests. A
+#: relative floor, because an exact pin goes stale on every merge of main (#19676).
+MIN_FRACTION = 0.45
 
 
 def _is_scanned(rel: str) -> bool:
@@ -56,13 +56,19 @@ def _source_population(root: Path) -> list[str]:
         return []
 
 
+def _all_python(root: Path) -> int:
+    try:
+        return sum(1 for rel in tracked_paths(root, *ROOTS) if rel.endswith(".py"))
+    except EmptyEnumeration:
+        return 0
+
+
 REACH = declare(
     "ollama-host-reads-ssot-host-21859",
     discover=_source_population,
-    roots=ROOTS,
-    floor=_FILES_FLOOR,
-    skips=0,
-    what="production Python modules scanned for a read of config.ollama_host",
+    reference=_all_python,
+    min_fraction=MIN_FRACTION,
+    what="production python",
 )
 
 
