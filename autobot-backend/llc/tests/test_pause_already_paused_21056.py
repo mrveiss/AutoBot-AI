@@ -171,13 +171,14 @@ async def test_pause_sprint_keeps_an_operator_pause(redis):
 async def test_terminated_agent_is_refused_and_nothing_is_written(redis):
     session, log = _AgentSession("terminated"), _log()
     session.agent.update(pause_reason="fired for cause", pre_pause_status=None)
+    before = dict(session.agent)
     svc = ControlsService(activity_log=log)
 
     with pytest.raises(AgentNotPausableError) as refused:
         await svc.pause_agent(session, "co", "ag", "user-1", reason="hold")
 
     assert refused.value.status == "terminated"
-    assert session.agent == {"status": "terminated", "pre_pause_status": None, "pause_reason": "fired for cause"}
+    assert session.agent == before
     log.record.assert_not_awaited()
     redis.set.assert_not_awaited()
 
