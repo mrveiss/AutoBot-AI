@@ -10,6 +10,7 @@ company soft-delete, so the same operation leaves the same row on every route.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,13 +23,17 @@ async def record_heartbeat_set(
     activity_log: LLCActivityLogService,
     session: AsyncSession,
     company_id: str,
-    agent_id: str,
+    node_id: uuid.UUID,
     actor_user_id: Optional[str],
     before: dict[str, Any],
     after: dict[str, Any],
     metadata: Optional[dict[str, Any]] = None,
 ) -> None:
-    """Append ``CONTROL_AGENT_HEARTBEAT_SET`` in the caller's transaction."""
+    """Append ``CONTROL_AGENT_HEARTBEAT_SET`` in the caller's transaction.
+
+    The activity log keys ``entity_id`` as a UUID, so this takes the agent node's primary
+    key, never its ``agent_id`` slug.
+    """
     await activity_log.record(
         session=session,
         company_id=company_id,
@@ -36,7 +41,7 @@ async def record_heartbeat_set(
         actor_id=actor_user_id,
         event_type=ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET,
         entity_type="agent",
-        entity_id=agent_id,
+        entity_id=str(node_id),
         before=before,
         after=after,
         metadata=metadata,

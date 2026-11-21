@@ -221,25 +221,28 @@ class CompanyCEOService(LLCServiceBase):
         one retire path; no row is deleted and the setting stays switchable.
         """
         enabled = await session.execute(
-            sa.select(AgentOrgNode.agent_id, AgentOrgNode.heartbeat_cron).where(
+            sa.select(AgentOrgNode.id, AgentOrgNode.heartbeat_cron).where(
                 AgentOrgNode.company_id == company_id, AgentOrgNode.heartbeat_enabled.is_(True)
             )
         )
-        for agent_id, cron in enabled.all():
-            await self._switch_off(session, company_id, agent_id, cron, actor_user_id)
+        for node_id, cron in enabled.all():
+            await self._switch_off(session, company_id, node_id, cron, actor_user_id)
         await self._retire(session, company_id)
 
     async def _switch_off(
-        self, session: AsyncSession, company_id: uuid.UUID, agent_id: str, cron: Optional[str], actor: Optional[str]
+        self,
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        node_id: uuid.UUID,
+        cron: Optional[str],
+        actor: Optional[str],
     ) -> None:
-        await session.execute(
-            sa.update(AgentOrgNode).where(AgentOrgNode.agent_id == agent_id).values(heartbeat_enabled=False)
-        )
+        await session.execute(sa.update(AgentOrgNode).where(AgentOrgNode.id == node_id).values(heartbeat_enabled=False))
         await record_heartbeat_set(
             LLCActivityLogService(),
             session,
             str(company_id),
-            agent_id,
+            node_id,
             actor,
             before={"heartbeat_enabled": True, "heartbeat_cron": cron},
             after={"heartbeat_enabled": False, "heartbeat_cron": cron},

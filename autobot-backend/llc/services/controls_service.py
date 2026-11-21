@@ -28,6 +28,7 @@ from ..exceptions import PublicMessageMixin
 from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
 from .company import CompanyNotFoundError
+from .company_row_lock import lock_organization
 from .heartbeat_activity import record_heartbeat_set
 
 logger = logging.getLogger(__name__)
@@ -329,6 +330,8 @@ class ControlsService:
         the scheduler requires ``heartbeat_cron IS NOT NULL`` as well, so the flag
         alone would read as on and never fire. A cron already set is kept.
         """
+        if enabled:
+            await self._require_live_company(session, company_id)
         row = await self._get_heartbeat_row(session, company_id, agent_id)
         if row is None:
             raise AgentNotFoundError(agent_id)
@@ -345,7 +348,7 @@ class ControlsService:
             self._activity_log,
             session,
             company_id,
-            agent_id,
+            row["id"],
             actor_user_id,
             before={"heartbeat_enabled": row["heartbeat_enabled"], "heartbeat_cron": row["heartbeat_cron"]},
             after={"heartbeat_enabled": enabled, "heartbeat_cron": cron},
@@ -490,14 +493,28 @@ class ControlsService:
         row = result.fetchone()
         return {"status": row[0], "pre_pause_status": row[1], "pause_reason": row[2]} if row else None
 
+    async def _require_live_company(self, session: AsyncSession, company_id: str) -> None:
+        """Lock the organization row and refuse a soft-deleted one (#15907).
+
+        The company delete takes the same lock before it switches heartbeats off, so an
+        enable either commits first (and the delete then switches it off) or sees the delete.
+        """
+        org = await lock_organization(session, uuid.UUID(company_id))
+        if org is None or org.deleted_at is not None:
+            raise CompanyNotFoundError(company_id)
+
     async def _get_heartbeat_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
         result = await session.execute(
-            select(AgentOrgNode.status, AgentOrgNode.heartbeat_enabled, AgentOrgNode.heartbeat_cron).where(
-                *_agent_in_company(company_id, agent_id)
-            )
+            select(
+                AgentOrgNode.status, AgentOrgNode.heartbeat_enabled, AgentOrgNode.heartbeat_cron, AgentOrgNode.id
+            ).where(*_agent_in_company(company_id, agent_id))
         )
         row = result.first()
-        return {"status": row[0], "heartbeat_enabled": bool(row[1]), "heartbeat_cron": row[2]} if row else None
+        return (
+            {"status": row[0], "heartbeat_enabled": bool(row[1]), "heartbeat_cron": row[2], "id": row[3]}
+            if row
+            else None
+        )
 
     async def _get_company_row(self, session: AsyncSession, company_id: str) -> Optional[dict]:
         result = await session.execute(

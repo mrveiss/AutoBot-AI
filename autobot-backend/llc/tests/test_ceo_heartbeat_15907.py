@@ -28,6 +28,7 @@ import sqlalchemy as sa
 
 from llc.models.company import CompanyCreate, CompanyUpdate
 from llc.models.enums import ActivityEventType, LLCAgentStatus, MembershipRole
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.company import CompanyService
 from llc.services.company_ceo import COMPANY_DELETED_REASON, DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
 from llc.services.controls_service import AgentNotFoundError, AgentNotSchedulableError, ControlsService
@@ -351,6 +352,18 @@ async def _hire_with_heartbeat(session_factory, company_id: uuid.UUID, slug: str
         await session.commit()
 
 
+async def _all_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNode]:  # noqa: ANN001
+    async with session_factory() as session:
+        stmt = sa.select(AgentOrgNode).where(AgentOrgNode.company_id == company_id)
+        return list((await session.execute(stmt)).scalars().all())
+
+
+def _build_real_entry(kwargs: dict) -> None:
+    """Run the real ``LLCActivityLogService`` row build (it parses ``entity_id`` as a UUID)."""
+    keys = ("company_id", "actor_type", "actor_id", "event_type", "entity_type", "entity_id", "before", "after")
+    LLCActivityLogService()._build_entry(*(kwargs[k] for k in keys), kwargs["metadata"])
+
+
 @pytest.mark.asyncio
 async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_factory):  # noqa: ANN001
     """The scheduler never reads ``deleted_at``; the delete itself must switch the schedules off."""
@@ -375,13 +388,16 @@ async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_
     [node] = await _ceo_nodes(session_factory, company_id)  # retired, never deleted
     assert node.status == DORMANT_CEO_STATUS
     # One toggle-shaped activity row per switched-off agent of the deleted company, none for the other.
+    nodes = {n.agent_id: n.id for n in await _all_nodes(session_factory, company_id)}
     rows = {c.kwargs["entity_id"]: c.kwargs for c in record.await_args_list}
-    assert set(rows) == {ceo.agent_id, "worker-acme"}
+    # entity_id is the node's UUID (the log parses it as one), never the agent_id slug.
+    assert set(rows) == {str(nodes[ceo.agent_id]), str(nodes["worker-acme"])}
     assert record.await_count == 2
     for kwargs in rows.values():
         assert kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET
         assert kwargs["company_id"] == str(company_id)
         assert kwargs["actor_type"] == "user"
+        _build_real_entry(kwargs)  # the real log accepts what the delete passes
         assert kwargs["actor_id"] == str(_ACTOR)
         assert kwargs["before"]["heartbeat_enabled"] is True
         assert kwargs["after"]["heartbeat_enabled"] is False
@@ -404,3 +420,39 @@ async def test_a_delete_with_no_actor_records_system_rows(session_factory):  # n
     assert kwargs["entity_id"] == "worker-acme"
     assert kwargs["actor_type"] == "system"
     assert kwargs["actor_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_enabling_a_heartbeat_on_a_soft_deleted_company_is_refused(session_factory):  # noqa: ANN001
+    from llc.services.company import CompanyNotFoundError
+
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    async with session_factory() as session:
+        await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    with pytest.raises(CompanyNotFoundError):
+        await _toggle(session_factory, company_id, ceo.agent_id, True)
+    assert ceo.agent_id not in await _scheduler_enabled_slugs(session_factory)
+
+
+@pytest.mark.asyncio
+async def test_the_enable_path_locks_the_organization_row(session_factory):  # noqa: ANN001
+    from llc.services import controls_service
+
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    with patch.object(controls_service, "lock_organization", wraps=controls_service.lock_organization) as lock:
+        await _toggle(session_factory, company_id, ceo.agent_id, True)
+    lock.assert_awaited_once()
+    assert lock.await_args.args[1] == company_id
+
+
+@pytest.mark.asyncio
+async def test_the_lock_helper_selects_for_update():
+    from llc.services.company_row_lock import lock_organization
+
+    session = AsyncMock()
+    await lock_organization(session, uuid.uuid4())
+    assert session.execute.await_args.args[0]._for_update_arg is not None

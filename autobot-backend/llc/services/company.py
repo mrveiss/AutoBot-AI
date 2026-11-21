@@ -29,6 +29,7 @@ from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
 from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
 from .company_os.errors import CompanyOsError
+from .company_row_lock import lock_organization
 
 logger = get_logger(__name__)
 
@@ -346,6 +347,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         not make unilaterally.
         """
         org = await self._get_or_404(company_id)
+        await lock_organization(self.session, company_id)  # serialises with a heartbeat enable (#15907)
         children = await self.list_children(company_id)
         if children:
             raise CompanyHasChildrenError(
