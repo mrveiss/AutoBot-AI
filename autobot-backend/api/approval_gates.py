@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.approval_gates_approver import require_action_approver_role
+from api.approval_gates_requester import stamped_requester, with_requested_label
 from api.schemas_approvals import (
     ApprovalAddCommentRequest,
     ApprovalCommentResponse,
@@ -153,9 +154,7 @@ def _reject_unregistered_action(context: dict | None) -> None:
             status_code=status.HTTP_403_FORBIDDEN, detail="this action can be proposed only by the server"
         )
     if not isinstance(action, str) or not is_registered_action(action):
-        # Deliberately does not echo the value back or list what IS
-        # registered: the caller supplied it, and the set of live actions is
-        # not theirs to enumerate.
+        # Does not echo the value or list what IS registered: the set of live actions is not theirs to enumerate.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="context.action names no registered post-approval handler",
@@ -232,10 +231,10 @@ async def create_approval(
         title=body.title,
         approval_type=body.approval_type.value,
         description=body.description,
-        requested_by_agent=body.requested_by_agent,
+        requested_by_agent=stamped_requester(current_user),  # never the body: it decides who may resubmit (#20521)
         workflow_id=body.workflow_id,
         workflow_step=body.workflow_step,
-        context=body.context,
+        context=with_requested_label(body.context, body.requested_by_agent),
         task_ids=body.task_ids,
     )
     return _to_response(approval)

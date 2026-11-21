@@ -186,7 +186,7 @@ DECLARED_SCOPES = {
         "libs",
         "docs",
     ),
-    "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "single-attribute-writer-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "libs/autobot-ui/src"),
     "single-constant-time-compare": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "torch-pair-literals": (
         ".github",
