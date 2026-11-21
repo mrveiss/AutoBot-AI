@@ -660,7 +660,7 @@ const deleteSelected = async () => {
   const ids = [...selection.selected.value]
   if (ids.length && !(await confirm({ title: t('common.confirm'), message: t('knowledge.entries.confirmDeleteSelected', { count: ids.length }) }))) return
   try {
-    await controller.bulkDeleteDocuments(ids, [route.query.collection].flat()[0] ?? undefined) // the collection being viewed (#21886)
+    await controller.bulkDeleteDocuments(ids)
     selection.clear()
   } catch (error) {
     logger.error('Failed to delete entries:', error)

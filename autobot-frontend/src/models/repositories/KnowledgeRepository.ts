@@ -8,7 +8,7 @@
  *
  * @author mrveiss
  */
-import { DEFAULT_COLLECTION_ID, type CollectionDeleteProposal } from './collectionDeleteProposal'
+import type { SelectedFactsDeleteProposal } from './collectionDeleteProposal'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -30,6 +30,7 @@ import type {
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
@@ -498,13 +499,9 @@ export class KnowledgeRepository extends ApiRepository {
     return response.data
   }
 
-  /** Propose deleting exactly the selected documents of one collection (#21886, #21383); nothing is deleted until approved. */
-  async bulkDeleteDocuments(documentIds: string[], collectionId: string = DEFAULT_COLLECTION_ID): Promise<CollectionDeleteProposal> {
-    const response = await this.post<CollectionDeleteProposal>(
-      `${getApiBase()}/knowledge_base/collections/${encodeURIComponent(collectionId)}/delete-selected`,
-      { fact_ids: documentIds }
-    )
-    return response.data
+  /** Propose deleting exactly the selected documents, from every collection they are in (#21886, #21383); nothing is deleted until approved. */
+  async bulkDeleteDocuments(documentIds: string[]): Promise<SelectedFactsDeleteProposal> {
+    return apiClient.call('post', '/api/knowledge_base/facts/delete-selected', { body: { fact_ids: documentIds } })
   }
 
   /**

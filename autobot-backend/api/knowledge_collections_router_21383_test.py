@@ -29,13 +29,13 @@ _APPROVAL_ID = uuid.UUID("00000000-0000-4000-8000-000000021383")
 _ROUTES = {
     "delete": ("DELETE", "/api/knowledge_base/collections/c1?delete_facts=true", "kb_collection_delete"),
     "bulk": ("POST", "/api/knowledge_base/collections/c1/bulk-delete?confirm=true", "kb_collection_bulk_delete"),
-    "selected": ("POST", "/api/knowledge_base/collections/c1/delete-selected", "kb_collection_documents_delete"),
+    "selected": ("POST", "/api/knowledge_base/facts/delete-selected", "kb_documents_delete"),
 }
 
 
 def _call(client, method: str, path: str, **kwargs):
     """The request; the selected-facts route (#21886) takes the selection as its body."""
-    body = {"fact_ids": ["f1", "f2"]} if path.endswith("/delete-selected") else None
+    body = {"fact_ids": ["f1", "loose"]} if path.endswith("/facts/delete-selected") else None
     return client.request(method, path, json=body, **kwargs)
 
 
@@ -48,10 +48,15 @@ class _KB:
     async def get_collection(self, collection_id):
         return {"success": True, "collection": {"name": "Notes", "created_at": "t1"}}
 
-    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None, fact_ids=None):
+    async def bulk_delete_collection_facts(self, collection_id, confirm=False, approved=None):
         if confirm:
             self.mutations.append(("bulk", collection_id))
         return {"success": True, "facts_to_delete": 3, "deleted_count": 3 if confirm else 0}
+
+    async def delete_selected_facts(self, fact_ids, confirm=False, approved=None):
+        if confirm:
+            self.mutations.append(("selected", tuple(fact_ids)))
+        return {"success": True, "facts_to_delete": len(fact_ids), "deleted_count": len(fact_ids) if confirm else 0}
 
     async def delete_collection(self, collection_id, delete_facts=False, approved=None):
         self.mutations.append(("delete", collection_id))

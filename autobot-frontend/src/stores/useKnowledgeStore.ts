@@ -672,6 +672,26 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   }
 
   // Batch operations
+  function bulkDeleteDocuments(documentIds: string[]) {
+    const categories = new Set<string>()
+
+    documentIds.forEach(id => {
+      const docIndex = documents.value.findIndex(doc => doc.id === id)
+      if (docIndex !== -1) {
+        categories.add(documents.value[docIndex].category)
+        documents.value.splice(docIndex, 1)
+      }
+    })
+
+    // Update category counts
+    categories.forEach(category => updateCategoryCount(category))
+
+    // Clear selection if any deleted document was selected
+    if (selectedDocument.value && documentIds.includes(selectedDocument.value.id)) {
+      selectedDocument.value = null
+    }
+  }
+
   function bulkUpdateDocuments(documentIds: string[], updates: Partial<KnowledgeDocument>) {
     documentIds.forEach(id => updateDocument(id, updates))
   }
@@ -783,6 +803,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     setSearchSuggestions,
     setLoading,
     setSearching,
+    bulkDeleteDocuments,
     bulkUpdateDocuments
   }
 })

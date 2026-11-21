@@ -18,7 +18,7 @@ Endpoints:
 - GET /collections/{collection_id}/facts - List facts in collection
 - POST /collections/{collection_id}/export - Export collection
 - POST /collections/{collection_id}/bulk-delete - PROPOSE deleting a collection's facts (#21383)
-- POST /collections/{collection_id}/delete-selected - PROPOSE deleting the selected facts (#21886)
+- POST /facts/delete-selected - PROPOSE deleting the selected facts, from every collection they are in (#21886)
 - GET /facts/{fact_id}/collections - Get collections for a fact
 
 Related Issues: #77 (Organization), #412 (Collections)
@@ -51,10 +51,11 @@ from knowledge_factory import get_or_create_knowledge_base
 from services.kb_collection_delete_action import COLLECTION_ID_RE
 from services.kb_collection_delete_request import (
     KnowledgeCollectionDeleteProposal,
+    KnowledgeSelectedFactsDeleteProposal,
     preview_collection_bulk_delete,
     request_collection_bulk_delete,
     request_collection_delete,
-    request_collection_documents_delete,
+    request_selected_facts_delete,
 )
 
 logger = get_logger(__name__)
@@ -597,19 +598,17 @@ async def bulk_delete_collection_facts(
     return await request_collection_bulk_delete(kb, current_user, session, collection_id)
 
 
-@router.post("/collections/{collection_id}/delete-selected", response_model=KnowledgeCollectionDeleteProposal)
+@router.post("/facts/delete-selected", response_model=KnowledgeSelectedFactsDeleteProposal)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="delete_selected_collection_facts",
+    operation="delete_selected_facts",
     error_code_prefix="KNOWLEDGE_COLLECTIONS",
 )
-async def delete_selected_collection_facts(
+async def delete_selected_facts(
     body: CollectionFactsRequest,
-    collection_id: str = Path(..., description="Collection UUID"),
     req: Request = None,
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Propose deleting exactly the selected facts of this collection. It deletes nothing (#21886, #17038)."""
-    kb, cid = await _require_kb(req), _validated_collection_id(collection_id)
-    return await request_collection_documents_delete(kb, current_user, session, cid, body.fact_ids)
+    """Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886)."""
+    return await request_selected_facts_delete(await _require_kb(req), current_user, session, body.fact_ids)

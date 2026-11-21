@@ -1,19 +1,14 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Answer of the collection delete routes (#21383): a proposal for approval, never a deletion.
- * `approval_id` is present only when a proposal was filed; a call without `confirm` is a read-only preview.
+ * Answer of the selected-facts delete route (#21886, #21383): a proposal for approval, never a deletion.
+ * `approval_id` is the reference the Approvals inbox shows; `facts_selected` counts the selected facts that exist.
  */
-/** The collection the knowledge entries belong to when none is named (the one the repository always assumed). */
-export const DEFAULT_COLLECTION_ID = 'default'
-
-export interface CollectionDeleteProposal {
+export interface SelectedFactsDeleteProposal {
   status: string
-  collection_id: string
-  facts_in_collection: number
-  approval_id?: string | null
+  facts_selected: number
+  approval_id: string
   approval_status?: string | null
-  action?: string | null
-  confirm_required?: boolean
-  message?: string
+  action: string
+  message: string
 }
