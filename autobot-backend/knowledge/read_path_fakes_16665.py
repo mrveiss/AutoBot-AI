@@ -9,6 +9,7 @@ canonical visibility decision rather than a stand-in for it.
 """
 
 import json
+from fnmatch import fnmatchcase
 
 from autobot_shared.ssot_config import config
 from knowledge.categories import CategoriesMixin
@@ -101,8 +102,32 @@ class QuarantineGatedKB(FakeKB):
 OPEN_META = {"owner_id": "admin", "visibility": "system"}
 
 
+class _Pipeline:
+    """Queues commands and applies them on ``execute``; a ``MULTI`` is recorded as one transaction."""
+
+    def __init__(self, redis: "SetRedis", transaction: bool):
+        self._redis, self._transaction, self._ops = redis, transaction, []
+
+    def __getattr__(self, name):
+        return lambda *args, **kwargs: self._ops.append((name, args, kwargs))
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def execute(self):
+        if self._transaction:
+            if self._redis.fail_next_transaction:
+                self._redis.fail_next_transaction = False
+                raise ConnectionError("connection lost before EXEC")
+            self._redis.transactions.append([(name, args[0]) for name, args, _ in self._ops])
+        return [await getattr(self._redis, name)(*args, **kwargs) for name, args, kwargs in self._ops]
+
+
 class SetRedis:
-    """An in-memory Redis with the hash and set commands the category code uses (#16665, #21957).
+    """An in-memory Redis with the hash, set and string commands the category code uses (#16665, #21957).
 
     Hashes hold bytes keys and values, as ``hgetall`` returns them; sets hold the strings written.
     """
@@ -110,11 +135,33 @@ class SetRedis:
     def __init__(self):
         self.hashes: dict = {}
         self.sets: dict = {}
-        self.reads: list = []  # every hash read, so a test can show a count made none
+        self.strings: dict = {}
+        self.reads: list = []  # every hash read command, so a test can show a count made none
+        self.transactions: list = []  # each MULTI as [(command, key), ...]
+        self.fail_next_transaction = False
+        self.after_metadata_read = None  # one-shot async hook: runs right after the next ``metadata`` hget
 
     @staticmethod
     def _b(value) -> bytes:
         return value if isinstance(value, bytes) else str(value).encode("utf-8")
+
+    def pipeline(self, transaction: bool = True):
+        return _Pipeline(self, transaction)
+
+    async def get(self, key):
+        return self.strings.get(key)
+
+    async def set(self, key, value):
+        self.strings[key] = self._b(value)
+
+    async def delete(self, *keys):
+        for key in keys:
+            self.sets.pop(key, None)
+            self.hashes.pop(key, None)
+
+    async def scan_iter(self, match="*", count=None):
+        for key in [k for k in list(self.sets) if fnmatchcase(k, match)]:
+            yield key.encode("utf-8")
 
     async def sadd(self, key, *values):
         self.sets.setdefault(key, set()).update(values)
@@ -135,12 +182,32 @@ class SetRedis:
             row[self._b(name)] = self._b(val)
 
     async def hget(self, key, field):
-        self.reads.append(key)
-        return self.hashes.get(key, {}).get(self._b(field))
+        self.reads.append(("hget", key))
+        value = self.hashes.get(key, {}).get(self._b(field))
+        if field == "metadata" and self.after_metadata_read:
+            hook, self.after_metadata_read = self.after_metadata_read, None
+            await hook()
+        return value
 
     async def hgetall(self, key):
-        self.reads.append(key)
+        self.reads.append(("hgetall", key))
         return dict(self.hashes.get(key, {}))
+
+    async def hmget(self, key, fields, *more):
+        self.reads.append(("hmget", key))
+        return [self.hashes.get(key, {}).get(self._b(f)) for f in [*fields, *more]]
+
+    async def hscan(self, key, cursor=0, match=None, count=None):
+        self.reads.append(("hscan", key))
+        return 0, dict(self.hashes.get(key, {}))
+
+    async def hkeys(self, key):
+        self.reads.append(("hkeys", key))
+        return list(self.hashes.get(key, {}))
+
+    async def hvals(self, key):
+        self.reads.append(("hvals", key))
+        return list(self.hashes.get(key, {}).values())
 
     async def hincrby(self, key, field, amount):
         return amount
