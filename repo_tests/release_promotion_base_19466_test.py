@@ -127,13 +127,14 @@ def test_the_trailer_gate_scans_from_the_release_base_and_counts_against_it() ->
     steps = _steps("no-commit-trailers.yml", "check-trailers")
     idx = _uses_index(steps)
     action_id = steps[idx]["id"]
-    scan = next(s for s in steps[idx:] if s.get("name") == "Scan PR commits for banned trailers")
+    # #22001: the range step (scripts/ci/trailer_gate_range.sh) owns the override.
+    scan = next(s for s in steps[idx:] if s.get("name") == "Resolve the commit range")
     assert f"steps.{action_id}.outputs.base-sha" in scan["env"]["RELEASE_BASE_SHA"]
     assert f"steps.{action_id}.outputs.new-commits" in scan["env"]["RELEASE_NEW_COMMITS"]
-    run = scan["run"]
-    assert 'BASE_SHA="${RELEASE_BASE_SHA}"' in run and 'EXPECTED_COMMITS="${RELEASE_NEW_COMMITS}"' in run
-    # The override must precede the scan it narrows, or the count guard checks the old range.
-    assert run.index('BASE_SHA="${RELEASE_BASE_SHA}"') < run.index('rev-list --count "${BASE_SHA}..${HEAD_SHA}"')
+    script = (repo_root() / "scripts" / "ci" / "trailer_gate_range.sh").read_text(encoding="utf-8")
+    assert 'BASE_SHA="${RELEASE_BASE_SHA}"' in script and 'EXPECTED_COMMITS="${RELEASE_NEW_COMMITS}"' in script
+    # The override must precede the count it narrows, or the guard checks the old range.
+    assert script.index('BASE_SHA="${RELEASE_BASE_SHA}"') < script.index("_check_count\n  echo")
 
 
 def test_the_ratchet_base_prefers_the_release_base() -> None:
