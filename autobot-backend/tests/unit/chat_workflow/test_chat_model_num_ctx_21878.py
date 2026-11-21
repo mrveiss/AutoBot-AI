@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -22,11 +23,16 @@ OTHER = "tiny-model:1b"
 
 
 @pytest.fixture
-def llm_shared_real(monkeypatch):
-    """The real ``llm_shared`` package: the backend conftest registers a MagicMock stub for it."""
-    for name in [n for n in sys.modules if n == "llm_shared" or n.startswith("llm_shared.")]:
-        monkeypatch.delitem(sys.modules, name)
-    return importlib.import_module("llm_shared")
+def llm_shared_real():
+    """The real ``llm_shared`` package: the backend conftest registers a MagicMock stub for it.
+
+    ``patch.dict`` restores ``sys.modules`` whole on exit, removing every module imported inside as well, so no
+    half-real module graph is left for later tests.
+    """
+    with patch.dict(sys.modules):
+        for name in [n for n in sys.modules if n == "llm_shared" or n.startswith("llm_shared.")]:
+            del sys.modules[name]
+        yield importlib.import_module("llm_shared")
 
 
 @pytest.fixture(autouse=True)
