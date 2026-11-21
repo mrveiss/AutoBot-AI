@@ -158,13 +158,13 @@ class ConnectionTester:
         if not model:
             model = config_manager.get_nested(
                 "backend.ollama_model",
-                _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
+                _ssot_config.llm.default_model or ModelConstants.DEFAULT_OLLAMA_MODEL,
             )
         # Final fallbacks
         if not endpoint:
             endpoint = ollama_generate_url(get_ollama_url())
         if not model:
-            model = _ssot_config.misc.default_llm_model or ModelConstants.DEFAULT_OLLAMA_MODEL
+            model = _ssot_config.llm.default_model or ModelConstants.DEFAULT_OLLAMA_MODEL
         return endpoint, model
 
     @staticmethod
