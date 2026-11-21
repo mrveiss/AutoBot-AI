@@ -139,7 +139,7 @@ _CANONICAL_SHARED = "autobot-backend/api/codebase_analytics/endpoints/shared.py"
 def _canonical_resolver_source() -> str:
     """The real ``resolve_source_root`` body, read from the canonical module (behaviour, not a name)."""
     text = (repo_root() / _CANONICAL_SHARED).read_text(encoding="utf-8")
-    node = next(n for n in ast.parse(text).body if getattr(n, "name", "") == "resolve_source_root")
+    node = next(n for n in parse_cache.parse(text).body if getattr(n, "name", "") == "resolve_source_root")
     return "from pathlib import Path\n\n\n" + ast.get_source_segment(text, node) + "\n"
 
 
