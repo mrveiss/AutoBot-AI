@@ -215,6 +215,11 @@ def extract_artifacts(script) -> dict[str, Artifacts]:
     return result
 
 
+async def _fetch_pairs(conn, sql: str) -> set[tuple[str, str]]:
+    """Run a two-column query and return its rows as a set of pairs."""
+    return {(first, second) for first, second in await conn.execute(text(sql))}
+
+
 async def inspect_database(url: str) -> DbFacts:
     """Collect tables, columns, column types and stamp rows in one pass."""
     facts = DbFacts()
@@ -231,17 +236,14 @@ async def inspect_database(url: str) -> DbFacts:
                 facts.tables.add(table)
                 facts.columns.add((table, column))
                 facts.column_types[(table, column)] = data_type
-            indexed = await conn.execute(
-                text("SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'public'")
+            facts.indexes = await _fetch_pairs(
+                conn, "SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'public'"
             )
-            facts.indexes = {(table, index) for table, index in indexed}
-            named = await conn.execute(
-                text(
-                    "SELECT table_name, constraint_name FROM information_schema.table_constraints "
-                    "WHERE table_schema = 'public'"
-                )
+            facts.constraints = await _fetch_pairs(
+                conn,
+                "SELECT table_name, constraint_name FROM information_schema.table_constraints "
+                "WHERE table_schema = 'public'",
             )
-            facts.constraints = {(table, name) for table, name in named}
             if "alembic_version" in facts.tables:
                 stamped = await conn.execute(text("SELECT version_num FROM alembic_version"))
                 facts.version_rows = [r[0] for r in stamped]
