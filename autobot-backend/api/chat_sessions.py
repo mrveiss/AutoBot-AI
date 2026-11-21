@@ -196,28 +196,21 @@ def _validate_session_id_or_raise(session_id: str) -> None:
         raise ValidationError("Invalid session ID format")
 
 
+MAX_PER_PAGE = 100  # largest page a client may request (#21998)
+
+
 def _validate_pagination_params(page: int, per_page: int) -> None:
     """
     Validate pagination parameters and raise ValidationError if invalid.
 
-    Issue #620.
-
-    Args:
-        page: Page number (must be >= 1)
-        per_page: Items per page (must be 1-100)
+    Issue #620. The boundary answers the error with a 4xx naming the range (#21998).
 
     Raises:
-        ValidationError: If parameters are invalid
+        ValidationError: page must be >= 1 and per_page within MAX_PER_PAGE
     """
-    if page < 1 or per_page < 1 or per_page > 100:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Invalid pagination parameters")
+    if page < 1 or not 1 <= per_page <= MAX_PER_PAGE:
+        _, _, _, ValidationError, _ = get_exceptions_lazy()
+        raise ValidationError(f"Invalid pagination parameters: page must be >= 1 and per_page 1-{MAX_PER_PAGE}")
 
 
 def _validate_export_format_or_raise(export_format: str) -> None:

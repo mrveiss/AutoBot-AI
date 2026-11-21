@@ -11,6 +11,7 @@ and debugging across the AutoBot platform.
 
 from typing import Any, Callable, Dict, Tuple
 
+from autobot_shared.error_boundaries.types import ErrorCategory
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -101,6 +102,10 @@ class WorkflowValidationError(WorkflowError):
 
 class ValidationError(AutoBotError):
     """Raised when input validation fails."""
+
+    # #21998: the error boundary answers this with the VALIDATION 4xx, whatever the
+    # route's fallback category is, and returns ``message`` as the reason.
+    error_category = ErrorCategory.VALIDATION
 
     def __init__(self, message: str, field: str | None = None, value: Any | None = None):
         """Initialize ValidationError with message and optional field/value info."""
