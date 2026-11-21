@@ -8514,6 +8514,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/collections/{collection_id}/delete-selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Selected Collection Facts
+         * @description Propose deleting exactly the selected facts of this collection. It deletes nothing (#21886, #17038).
+         */
+        post: operations["delete_selected_collection_facts_api_knowledge_base_collections__collection_id__delete_selected_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/suggestions/tags": {
         parameters: {
             query?: never;
@@ -120596,6 +120616,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_selected_collection_facts_api_knowledge_base_collections__collection_id__delete_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Collection UUID */
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionFactsRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
