@@ -24,8 +24,9 @@ from typing import Any, Dict, List
 from autobot_shared.env_utils import env_flag
 from autobot_shared.logging_manager import get_logger
 from llm_shared.json_utils import extract_json_object as _extract_json_object  # Issue #11520
+from llm_shared.quality_judgment import QualityAssessment, finite_score, judge_validated
 from llm_shared.types import LLMType
-from llm_shared.validated_llm import Completer, complete_validated, validate_against
+from llm_shared.validated_llm import Completer, validate_against
 
 logger = get_logger(__name__)
 
@@ -150,6 +151,15 @@ class JudgmentResult:
     processing_time_ms: float
     llm_model_used: str
 
+    def assessment(self, threshold: float | None = None) -> QualityAssessment:
+        """Project onto the shared quality view (#16133); no threshold unless a gate supplies one."""
+        return QualityAssessment(
+            score=self.overall_score,
+            critique=self.reasoning,
+            hint="; ".join(self.improvement_suggestions),
+            threshold=threshold,
+        )
+
 
 def _response_text(llm_response: Any) -> str:
     """Return the text of an LLMResponse, a plain str, or a legacy dict reply."""
@@ -197,18 +207,14 @@ class BaseLLMJudge:
             # and the decision seam. A reply that does not satisfy
             # JUDGMENT_SCHEMA is corrected against the schema and only then
             # allowed to fail -- it is never indexed and never guessed at.
-            payload = await complete_validated(
+            payload = await judge_validated(
                 self._get_system_prompt(),
                 judgment_prompt,
                 JUDGMENT_SCHEMA,
                 completer=self._judgment_completer(JUDGMENT_SCHEMA),
                 label=f"judges.{self.judge_type}",
             )
-            judgment_result = self._judgment_from_payload(
-                payload if isinstance(payload, dict) else payload.model_dump(),
-                subject,
-                context,
-            )
+            judgment_result = self._judgment_from_payload(payload, subject, context)
             return await self._finalize_judgment_result(judgment_result, start_time)
 
         except Exception as e:
@@ -333,7 +339,7 @@ Be precise, objective, and helpful in your judgments."""
         criterion_scores = [
             CriterionScore(
                 dimension=JudgmentDimension(item["dimension"]),
-                score=float(item["score"]),
+                score=finite_score(item["score"]),
                 confidence=JudgmentConfidence(item["confidence"]),
                 reasoning=item["reasoning"],
                 evidence=item.get("evidence", []),
@@ -344,7 +350,7 @@ Be precise, objective, and helpful in your judgments."""
             subject_id=str(hash(str(subject))),
             judge_type=self.judge_type,
             timestamp=datetime.now(tz=timezone.utc),
-            overall_score=float(payload["overall_score"]),
+            overall_score=finite_score(payload["overall_score"]),
             recommendation=payload["recommendation"],
             confidence=JudgmentConfidence(payload["confidence"]),
             criterion_scores=criterion_scores,

@@ -74,11 +74,11 @@
         name: backend
         tasks_from: unit_only
 
-    - name: "backend | Reload systemd and restart backend (frees port 8443)"
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
-        daemon_reload: true
+    - name: backend | Reload systemd and restart backend (frees port 8443)
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend
+        restart_unit_daemon_reload: true
 
     - name: "backend | Wait for uvicorn on :{{ backend_port }}"
       ansible.builtin.wait_for:
@@ -141,6 +141,6 @@
         daemon_reload: true
 
     - name: restart backend
-      ansible.builtin.systemd:
-        name: autobot-backend
-        state: restarted
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend

@@ -201,5 +201,6 @@ async def test_sprint_close_is_attributed_to_the_caller_not_the_body() -> None:
     assert close.call_args.kwargs["decided_by"] == caller
 
 
-def test_sprint_close_still_accepts_a_body_without_decided_by() -> None:
-    assert sprints.SprintCloseRequest(approval_id=uuid.uuid4()).decided_by is None
+def test_sprint_close_ignores_a_decided_by_in_the_body() -> None:
+    body = sprints.SprintCloseRequest(approval_id=uuid.uuid4(), decided_by=str(uuid.uuid4()))
+    assert "decided_by" not in type(body).model_fields

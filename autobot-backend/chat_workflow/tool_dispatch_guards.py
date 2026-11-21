@@ -20,10 +20,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection
 
 from async_chat_workflow import WorkflowMessage
-from autobot_shared.ai_lines import CONVERSATION_TOOLS, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY, resolve_scope
+from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
+    VERIFIED_COMPANY_KEY,
+    VERIFIED_USER_KEY,
+    declared_categories_of,
+    resolve_scope,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import SENSITIVE_TOOLS, match_tool_name, tool_effect
+from chat_workflow import limits
 from llc.agent_tools import LLC_TOOL_NAMES
+from services.verifier_audit import audit_verifier_degraded
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -197,6 +205,8 @@ async def enforce_pre_action_verifier(
     task_id = getattr(ctx, "session_id", None) if ctx is not None else None
 
     result = await PreActionVerifier().verify(tool_name, args, reason, task_id=task_id)
+    verified_user = (getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY)
+    await audit_verifier_degraded(result, task_id, user_id=verified_user)  # #21844: no reading is an audit event
     if result.verdict != VerifierVerdict.BLOCK:
         return None
 
@@ -333,7 +343,7 @@ async def enforce_ai_line(
         user_id=context.get(VERIFIED_USER_KEY),  # the personal scope of a user with no company
         requested_by=str(getattr(ctx, "session_id", None) or "chat"),
         surface="chat_tool",
-        declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        declared_categories=declared_categories_of(ctx),
         role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
         hold_in_approvals=not is_command,
@@ -399,7 +409,10 @@ def unknown_tool_error(
     consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
     error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
     logger.warning(
-        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)", tool_name, consecutive
+        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d of limit %d)",
+        tool_name,
+        consecutive,
+        limits.INVALID_CALL_LIMIT,
     )
     execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
     return WorkflowMessage(

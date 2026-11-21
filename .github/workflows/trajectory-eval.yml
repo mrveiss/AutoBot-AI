@@ -17,6 +17,10 @@
 # log. The step stays green because the gap belongs to this repository's eval
 # setup rather than to the pull request being tested.
 #
+# The live mode (`python -m eval.run --live`, #20843) is NOT run here: it needs the stack and a local model, so
+# it is run on the host and its report attached to the PR it supports (docs/developer/EVAL_HARNESS.md). CI keeps
+# only the fake-model tests of that path.
+#
 # Promotion to a gate needs three things, not one: recorded runs so the
 # comparison has two sides (#16157), trigger paths that include the behaviour
 # being asserted rather than only this harness (#16158), and a corpus
@@ -50,7 +54,18 @@ permissions:
 
 jobs:
   trajectory-eval:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     # NON-BLOCKING: report drift without gating the merge (GH#10546).
     continue-on-error: true
