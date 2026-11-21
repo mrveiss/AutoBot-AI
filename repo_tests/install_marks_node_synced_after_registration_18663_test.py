@@ -127,6 +127,7 @@ def _run_helper(tmp_path, stub_body: str) -> subprocess.CompletedProcess:
             str(repo_root() / _SCRIPT),
             str(code_source),
             "00-SLM-Manager",
+            "https://127.0.0.1",
             str(tmp_path / "vars.json"),
             str(tmp_path / "log"),
         ],
@@ -150,6 +151,7 @@ def test_helper_invokes_the_tagged_playbook_for_the_registered_node(tmp_path) ->
     assert "playbooks/provision-fleet-roles.yml" in argv
     assert "--tags mark-synced" in argv
     assert "slm_node_id=00-SLM-Manager" in argv
+    assert "slm_api_url=https://127.0.0.1" in argv
     assert "--limit localhost" in argv
 
 
@@ -158,3 +160,12 @@ def test_helper_fails_and_prints_a_vars_file_free_rerun_when_the_post_did_not_ru
     assert result.returncode == 1
     assert "sudo ansible-playbook" in result.stderr
     assert "@" not in result.stderr.split("rerun:", 1)[1]
+
+
+def test_mark_synced_pins_the_system_python_for_localhost() -> None:
+    """The delegated uri tasks must not run on a discovered deadsnakes python (no cffi)."""
+    script = (repo_root() / _SCRIPT).read_text(encoding="utf-8")
+    assert '-e "ansible_python_interpreter=${CONTROLLER_PYTHON}"' in script
+    assert 'CONTROLLER_PYTHON="/usr/bin/python3"' in script
+    install = (repo_root() / "install.sh").read_text(encoding="utf-8")
+    assert "ansible_python_interpreter: /usr/bin/python3" in install, "install inventory no longer pins it"

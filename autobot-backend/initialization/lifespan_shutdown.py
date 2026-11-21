@@ -476,7 +476,13 @@ async def shutdown_extensions(app: FastAPI, report: "_ShutdownReport") -> None:
 
 
 async def flush_llm_observers(report: "_ShutdownReport") -> None:
-    """Flush the LangFuse / LangSmith observer buffers."""
+    """Flush the LangFuse / LangSmith observer buffers and the in-flight verifier spend recordings (#21844)."""
+    try:
+        from autobot_shared.verifier_model import drain_spend_tasks
+
+        await drain_spend_tasks()
+    except Exception as spend_err:
+        report.failed("verifier spend drain", spend_err)
     # GH#9012: Flush LangFuse / LangSmith observer buffers before exit
     try:
         from llm_shared.observability.registry import _registry

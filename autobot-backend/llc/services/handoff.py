@@ -8,24 +8,28 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Coroutine, Dict, List, Optional, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.time_utils import utc_timestamp
 
+from ..exceptions import PublicMessageMixin
 from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.activity import ActorType
-from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
+from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
+from .accessors import get_review_gate_service, get_work_item_service
 from .actor import audit
 from .base import LLCServiceBase
-from .commit_publish import publish_after_commit
+from .commit_publish import publish_after_commit, run_after_commit
+from .company_os.errors import CompanyOsNotFound
 from .wake_events import wake_for_item_changes
+from .work_item_own_task import InvalidTransition, checkout_fence_key, release_agent_fence
 
 try:
     from user_management.database import get_async_session_factory
@@ -34,17 +38,26 @@ except ImportError:  # pragma: no cover — not available in unit-test environme
 
 logger = logging.getLogger(__name__)
 
-_CHECKOUT_REDIS_PREFIX = "llc:checkout:"
 _NOTIFICATION_CHANNEL_PREFIX = "llc:notifications:"
 _LLC_H2A_BRIEF_CACHE_TTL = env_int("AUTOBOT_LLC_H2A_BRIEF_CACHE_TTL", 86400)
 
 
-class HandoffNotAuthorized(Exception):
-    """Raised when the human does not hold the item."""
+class HandoffNotAuthorized(PublicMessageMixin, Exception):
+    """Raised when the human does not hold the item.
+
+    Public: the holder named in the message is a member of the caller's own company.
+    """
 
 
-class HandoffNotAllowed(Exception):
+class HandoffNotAllowed(PublicMessageMixin, Exception):
     """Raised when the agent does not hold the checkout lock."""
+
+
+class ReviewerLacksRole(HandoffNotAllowed):
+    """Raised when the reviewer does not hold the ``reviewer_role`` the item type's review-gate policy names (#21588).
+
+    Public: the message names only the role the policy requires and the reviewer the caller supplied.
+    """
 
 
 @dataclass
@@ -119,23 +132,26 @@ class HandoffService(LLCServiceBase):
         item.version += 1
         await wake_for_item_changes(session, item)  # #19582: the handoff assigns it to the agent
         await session.flush()
-        # The audit row goes first: if it fails the caller rolls the database back, and the checkout
-        # key must still be there and nobody told. Redis and the notification cannot be rolled back.
+        # The audit row goes first: if it fails the caller rolls the database back. The fence drop, the
+        # notification and the brief task cannot be rolled back, so each waits for the caller's commit (#21589).
         await self._record_h2a_activity(session, company_id, user_id, work_item_id, target_agent_id)
-        await self._release_redis_key(work_item_id, user_id)
-        await self._publish_h2a_notification(session, company_id, target_agent_id, work_item_id)
-        task = asyncio.create_task(
-            self._generate_and_update_h2a_brief_async(
-                work_item_id=work_item_id,
-                target_agent_id=target_agent_id,
-                company_id=company_id,
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_title=item.title,
-                human_notes=human_notes,
-            )
+        await run_after_commit(
+            session, lambda: self._release_redis_key(work_item_id, user_id), f"release checkout fence of {work_item_id}"
         )
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        await self._publish_h2a_notification(session, company_id, target_agent_id, work_item_id)
+        brief = dict(
+            work_item_id=work_item_id,
+            target_agent_id=target_agent_id,
+            company_id=company_id,
+            project_id=str(item.project_id) if item.project_id else None,
+            work_item_title=item.title,
+            human_notes=human_notes,
+        )
+        await run_after_commit(
+            session,
+            lambda: self._spawn(self._generate_and_update_h2a_brief_async(**brief)),
+            f"generate handoff brief of {work_item_id}",
+        )
         return HandoffResult(
             work_item_id=work_item_id, target_agent_id=target_agent_id, kb_doc_ids=kb_doc_ids, review_brief=review_brief
         )
@@ -149,49 +165,77 @@ class HandoffService(LLCServiceBase):
         company_id: str,
         agent_notes: Optional[str] = None,
     ) -> LLCWorkItem:
+        item = await self._get_agent_held(session, work_item_id, agent_id)
+        await self._assert_reviewer_holds_role(session, item, company_id, reviewer_user_id)
+        brief = self._generate_brief(item, agent_notes)
+        run_id = self._stamp_in_review(item, reviewer_user_id, brief)
+        await session.flush()
+        # Audit first: a failed audit rolls the database back. The fence drop, the notification and the
+        # brief task cannot be taken back, so each waits for the caller's commit (#21589).
+        await self._record_a2h_activity(session, company_id, agent_id, reviewer_user_id, work_item_id, brief)
+        await run_after_commit(  # the same agent's next checkout carries another generation and keeps its fence
+            session,
+            lambda: release_agent_fence(work_item_id, agent_id, run_id),
+            f"release checkout fence of {work_item_id}",
+        )
+        await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
+        await self._queue_a2h_brief(session, item, work_item_id, agent_id, company_id, agent_notes)
+        return item
+
+    async def _get_agent_held(self, session: AsyncSession, work_item_id: str, agent_id: str) -> LLCWorkItem:
+        """Lock the item's row; refuse unless *agent_id* holds it."""
         result = await session.execute(
             select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)).with_for_update()
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         if item.assignee_agent_id is None or str(item.assignee_agent_id) != agent_id:
             raise HandoffNotAllowed(f"Agent {agent_id} does not hold checkout for work item {work_item_id}")
+        return item
 
-        brief = self._generate_brief(item, agent_notes)
+    @staticmethod
+    def _stamp_in_review(item: LLCWorkItem, reviewer_user_id: str, brief: Dict[str, Any]) -> Optional[str]:
+        """Hand the locked row to its reviewer and clear the checkout; returns the checkout generation it cleared.
+
+        The run id is read here, under the row lock and before it is cleared, so the fence drop names THIS checkout.
+        """
         item.status = WorkItemStatus.IN_REVIEW
         item.reviewer_user_id = uuid.UUID(reviewer_user_id)
         item.review_brief = brief
         item.assignee_type = AssigneeType.USER.value
         item.assignee_agent_id = None
         item.assignee_user_id = uuid.UUID(reviewer_user_id)
+        run_id = item.checkout_run_id
         item.checkout_run_id = None
         item.checkout_locked_at = None
         item.version += 1
-        await session.flush()
-        # Audit before the key delete and the notification: a failed audit rolls the database back,
-        # and neither of those can be taken back.
-        await self._record_a2h_activity(session, company_id, agent_id, reviewer_user_id, work_item_id, brief)
-        redis = await get_async_redis_client()
-        if redis is not None:
-            await redis.delete(f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}")
-        await self._publish_a2h_notification(session, company_id, work_item_id, reviewer_user_id, brief)
+        return run_id
 
-        task = asyncio.create_task(
-            self._generate_and_update_brief_async(
-                work_item_id=work_item_id,
-                agent_id=agent_id,
-                company_id=company_id,
-                project_id=str(item.project_id) if item.project_id else None,
-                work_item_title=item.title,
-                work_item_description=item.description or "",
-                agent_notes=agent_notes,
-            )
+    async def _queue_a2h_brief(
+        self,
+        session: AsyncSession,
+        item: LLCWorkItem,
+        work_item_id: str,
+        agent_id: str,
+        company_id: str,
+        agent_notes: Optional[str],
+    ) -> None:
+        """Generate the KB-powered review brief once the handoff commits (#21589)."""
+        generation = dict(
+            work_item_id=work_item_id,
+            agent_id=agent_id,
+            company_id=company_id,
+            project_id=str(item.project_id) if item.project_id else None,
+            work_item_title=item.title,
+            work_item_description=item.description or "",
+            agent_notes=agent_notes,
         )
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
-
-        return item
+        await run_after_commit(
+            session,
+            lambda: self._spawn(self._generate_and_update_brief_async(**generation)),
+            f"generate handoff brief of {work_item_id}",
+        )
 
     async def approve(
         self, session: AsyncSession, work_item_id: str, reviewer_user_id: str, company_id: str
@@ -201,27 +245,15 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
-        now = datetime.now(timezone.utc)
-        item.status = WorkItemStatus.DONE
-        item.completed_at = now
-        item.assignee_user_id = None
-        item.assignee_agent_id = None
-        item.assignee_type = None
-        item.checkout_run_id = None
-        item.checkout_locked_at = None
-        item.version += 1
-        await session.flush()
-
-        # Release per-task workspace on handoff approval (MVA-1152)
-        try:
-            from services.task_workspace import release_for_task
-
-            await release_for_task(work_item_id, session)
-        except Exception:
-            logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
-
+        self._assert_in_review(item)
+        await self._assert_reviewer_holds_role(session, item, company_id, reviewer_user_id)  # demoted since the handoff
+        # The one done path (#21590): the allowed-transition rule, the completion audit row, the artifact ingest,
+        # the fence and the workspace release. A reviewer is a person, so the review gate never holds the finish.
+        await get_work_item_service().transition_status(
+            session, work_item_id, WorkItemStatus.DONE, company_id=company_id, acting_user=uuid.UUID(reviewer_user_id)
+        )
         await audit(
             self.activity_log,
             session,
@@ -231,7 +263,7 @@ class HandoffService(LLCServiceBase):
             event_type=ActivityEventType.WORK_ITEM_REVIEW_APPROVED,
             entity_type="work_item",
             entity_id=work_item_id,
-            after={"status": WorkItemStatus.DONE.value, "completed_at": now.isoformat()},
+            after={"status": WorkItemStatus.DONE.value, "completed_at": item.completed_at.isoformat()},
         )
         return item
 
@@ -249,7 +281,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         self._assert_reviewer(item, reviewer_user_id)
         item.status = WorkItemStatus.IN_PROGRESS
         item.reviewer_user_id = None
@@ -289,7 +321,7 @@ class HandoffService(LLCServiceBase):
         result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         return item.review_brief
 
     async def _get_and_validate_human(self, session: AsyncSession, work_item_id: str, user_id: str) -> LLCWorkItem:
@@ -298,7 +330,7 @@ class HandoffService(LLCServiceBase):
         )
         item = result.scalar_one_or_none()
         if item is None:
-            raise ValueError(f"Work item {work_item_id} not found")
+            raise CompanyOsNotFound(f"Work item {work_item_id} not found")
         holder_user_id = str(item.assignee_user_id) if item.assignee_user_id else None
         if item.assignee_type != AssigneeType.USER.value or holder_user_id != user_id:
             raise HandoffNotAuthorized(
@@ -328,14 +360,21 @@ class HandoffService(LLCServiceBase):
                 doc_ids.append(doc_id)
         return doc_ids
 
+    def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
+        """Run *coro* as a background task the service drains on shutdown."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
     async def _release_redis_key(self, work_item_id: str, user_id: str) -> None:
         redis = await get_async_redis_client()
         if redis is None:
             return
-        key = f"{_CHECKOUT_REDIS_PREFIX}{work_item_id}"
-        existing = await redis.get(key)
-        if existing in (f"user:{user_id}", user_id):
-            await redis.delete(key)
+        key = checkout_fence_key(work_item_id)
+        # Two atomic compare-and-deletes, never a client-side GET then DEL: a fence re-taken in that gap would
+        # be deleted. ``user:<id>`` is what claim_human writes, so it goes first; the bare ``<id>`` is the legacy form.
+        if not await delete_if_value(redis, key, f"user:{user_id}"):
+            await delete_if_value(redis, key, user_id)
 
     async def _publish_h2a_notification(
         self, session: AsyncSession, company_id: str, target_agent_id: str, work_item_id: str
@@ -527,6 +566,25 @@ class HandoffService(LLCServiceBase):
             "generated_at": utc_timestamp(),
             "generator": "stub-phase4",
         }
+
+    async def _assert_reviewer_holds_role(
+        self, session: AsyncSession, item: LLCWorkItem, company_id: str, reviewer_user_id: str
+    ) -> None:
+        """Refuse a reviewer who lacks the role the item type's review-gate policy names (#21588)."""
+        role = await get_review_gate_service().missing_reviewer_role(
+            session, company_id, WorkItemType(item.type), reviewer_user_id
+        )
+        if role is not None:
+            raise ReviewerLacksRole(f"Reviewer {reviewer_user_id} does not hold the {role!r} role this review requires")
+
+    @staticmethod
+    def _assert_in_review(item: LLCWorkItem) -> None:
+        """Only an item waiting on its reviewer can be approved, whoever the reviewer is (#21632)."""
+        if item.status != WorkItemStatus.IN_REVIEW:
+            raise InvalidTransition(
+                f"Work item {item.id} is {WorkItemStatus(item.status).value}, not in_review: "
+                "only an item in review can be approved"
+            )
 
     def _assert_reviewer(self, item: LLCWorkItem, reviewer_user_id: str) -> None:
         if item.reviewer_user_id is None or str(item.reviewer_user_id) != reviewer_user_id:

@@ -21,6 +21,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from services.config_revision_service import ConfigRevisionService
+from services.config_rollback import UnsupportedRollbackTarget
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -126,13 +127,21 @@ async def rollback_to_revision(
 ):
     """Roll back entity config to a prior revision (#1404).
 
-    Creates a new revision capturing the rollback so the action is
-    itself part of the audit trail.
+    Applies the snapshot to the live config, then records a revision so the
+    action is part of the audit trail (#18478). Unknown entities return 400.
     """
     svc = ConfigRevisionService(session)
     username = current_user.get("username", "unknown")
+    target = await svc.get_revision(revision_id)
+    if target is not None and (target.entity_type, target.entity_id) != (entity_type, entity_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Revision {revision_id} does not belong to {entity_type}/{entity_id}",
+        )
     try:
         new_revision = await svc.rollback_to_revision(revision_id, username)
+    except UnsupportedRollbackTarget as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

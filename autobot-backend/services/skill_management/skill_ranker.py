@@ -26,6 +26,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_embeddings_url
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 
@@ -122,7 +123,7 @@ class SkillRanker:
             return None
 
         try:
-            url = f"{self.slm_host}/api/embeddings"
+            url = ollama_embeddings_url(self.slm_host)
             payload = {"input": text}
             async with get_http_client().tracked_request(
                 "POST", url, json=payload, timeout=aiohttp.ClientTimeout(total=10), guard_egress=EGRESS_POLICY

@@ -13,6 +13,7 @@ import copy as _copy
 from pathlib import Path
 
 import yaml
+from repo_tests._ansible_restart_unit import restarts_unit
 from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
@@ -107,10 +108,9 @@ def archive_carries_floor(plays: list[dict]) -> bool:
 
 
 def _restart_index(tasks: list[dict], name: str | None = "autobot-slm-backend") -> int:
-    """Index of the first systemd restart (of ``name``, or of any unit when None)."""
+    """Index of the first restart (of ``name``, or of any unit when None), either shape."""
     for i, t in enumerate(tasks):
-        sd = t.get("systemd") or t.get("ansible.builtin.systemd")
-        if isinstance(sd, dict) and sd.get("state") == "restarted" and name in (None, sd.get("name")):
+        if restarts_unit(t, name):
             return i
     raise AssertionError("no restart task found")
 

@@ -31,7 +31,7 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _NAME = "is_credential_field"
 
 #: Every tree that holds tracked Python. Written out, not globbed, so a tree dropped from the
-#: sweep is a visible edit to this constant AND to `reach_scope_claim_17844_test`.
+#: sweep is a visible edit to this constant AND to `_reach_declared_scopes`.
 SCAN_ROOTS = (
     "autobot-backend",
     "autobot-slm-backend",
