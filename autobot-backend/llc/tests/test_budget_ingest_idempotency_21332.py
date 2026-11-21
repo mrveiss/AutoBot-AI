@@ -190,18 +190,31 @@ async def test_a_concurrent_duplicate_is_refused_while_the_first_is_in_flight(fa
 
 
 @pytest.mark.asyncio
-async def test_redis_down_charges_without_dedupe(factory) -> None:  # noqa: ANN001
+async def test_redis_down_still_charges_once_by_the_database_row(factory) -> None:  # noqa: ANN001
     with patch(_STORE, AsyncMock(side_effect=ConnectionError("down"))):
-        await _ingest(factory, "agent-a", "run-1")
-        await _ingest(factory, "agent-a", "run-1")
-    assert await _spent(factory, "agent-a") == 2 * EVENT  # never silently skipped
+        first = await _ingest(factory, "agent-a", "run-1")
+        second = await _ingest(factory, "agent-a", "run-1")
+    assert first == second
+    assert await _spent(factory, "agent-a") == EVENT  # charged, never skipped, and never twice (#21972)
+
+
+@pytest.mark.asyncio
+async def test_a_replay_returns_the_stored_cost_even_when_pricing_now_fails(factory) -> None:  # noqa: ANN001
+    from llc.exceptions import UnpricedModel
+
+    with patch(_STORE, AsyncMock(return_value=None)):  # no Redis record: the database row must answer
+        first = await _ingest(factory, "agent-a", "run-1")
+        cold = UnpricedModel(model="m", agent_id="agent-a")
+        with patch("llc.services.budget._cost_of", side_effect=cold):
+            assert await _ingest(factory, "agent-a", "run-1") == first  # answered before pricing
+    assert await _spent(factory, "agent-a") == EVENT
 
 
 @pytest.mark.asyncio
 async def test_no_redis_client_warns_and_charges_once(factory, caplog) -> None:  # noqa: ANN001
     with patch(_STORE, AsyncMock(return_value=None)), caplog.at_level("WARNING"):
         await _ingest(factory, "agent-a", "run-1")
-    assert "charging without dedupe" in caplog.text
+    assert "the database row dedupes" in caplog.text
     assert await _spent(factory, "agent-a") == EVENT
 
 

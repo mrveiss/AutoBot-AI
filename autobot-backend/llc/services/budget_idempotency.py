@@ -78,7 +78,7 @@ async def _redis_or_none() -> Optional[Any]:
     try:
         return await get_async_redis_client()
     except Exception:
-        logger.warning("idempotency store unavailable: charging without dedupe", exc_info=True)
+        logger.warning("idempotency store unavailable: the database row dedupes", exc_info=True)
         return None
 
 
@@ -107,7 +107,7 @@ async def _claim(redis: Any, key: str) -> Optional[KeyClaim]:
     try:
         return await claim(redis, key)
     except Exception:
-        logger.warning("idempotency claim failed: charging without dedupe", exc_info=True)
+        logger.warning("idempotency claim failed: the database row dedupes", exc_info=True)
         return None
 
 
@@ -121,7 +121,7 @@ async def charge_once(
     """Run *charge* unless this (agent, key) already ran it; then return the first result."""
     redis = await _redis_or_none()
     if redis is None:
-        logger.warning("idempotency store unavailable: charging without dedupe")
+        logger.warning("idempotency store unavailable: the database row dedupes")
         return await charge()
     key = storage_key(f"{company_id}:{agent_id}", "POST", _SCOPE, idempotency_key)
     outcome = await _claim(redis, key)

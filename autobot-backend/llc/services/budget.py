@@ -135,8 +135,8 @@ def _is_key_violation(exc: IntegrityError) -> bool:
     return COST_EVENT_IDEMPOTENCY_INDEX in message or "idempotency_key" in message
 
 
-async def _first_cost(session: AsyncSession, agent_id: str, company_id: str, key: str) -> Decimal:
-    """The cost the winning transaction stored for (company, agent, key) -- what a repeat is told."""
+async def _stored_cost(session: AsyncSession, agent_id: str, company_id: str, key: str) -> Optional[Decimal]:
+    """The cost already recorded for (company, agent, key) -- what a repeat is told -- or None."""
     row = await session.execute(
         select(CompanyOsCostEvent.cost).where(
             CompanyOsCostEvent.company_id == uuid.UUID(str(company_id)),
@@ -144,7 +144,8 @@ async def _first_cost(session: AsyncSession, agent_id: str, company_id: str, key
             CompanyOsCostEvent.idempotency_key == key,
         )
     )
-    return Decimal(str(row.scalar_one()))
+    cost = row.scalar_one_or_none()
+    return None if cost is None else Decimal(str(cost))
 
 
 def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
@@ -271,13 +272,23 @@ class BudgetService(LLCServiceBase):
         )
 
     async def _charge_once_in_db(self, *args: Any) -> Decimal:
-        """Charge, or -- when the unique (company, agent, key) row already exists -- return the first cost (#21972)."""
+        """Charge, or -- when the unique (company, agent, key) row already exists -- return the first cost (#21972).
+
+        A replay is answered from the stored row BEFORE pricing or work-item checks run, so a repeat of a charge
+        that already happened never fails on a cold price cache; the unique row still decides a concurrent first.
+        """
         *charge_args, key = args
+        session, agent_id, company_id = charge_args[:3]
+        stored = await _stored_cost(session, agent_id, company_id, key)
+        if stored is not None:
+            return stored
         try:
             return await self._charge_cost_event(*charge_args, idempotency_key=key)
         except CostEventAlreadyRecorded:
-            session, agent_id, company_id = charge_args[:3]
-            return await _first_cost(session, agent_id, company_id, key)
+            winner = await _stored_cost(session, agent_id, company_id, key)  # the conflict means it committed
+            if winner is None:
+                raise
+            return winner
 
     async def _charge_cost_event(
         self,
