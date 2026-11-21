@@ -70,6 +70,14 @@ def _kill_group(proc: subprocess.Popen) -> None:
         pass
 
 
+def _sample_cpu(proc: subprocess.Popen) -> float:
+    try:
+        return cpu_seconds(proc.pid)
+    except RuntimeError:
+        _kill_group(proc)  # no /proc: never leave the child running unobserved
+        raise
+
+
 def _verdict(used: float, idle_for: float) -> str | None:
     if used > CPU_BUDGET_SECONDS:
         return f"used {used:.0f}s CPU, over the {CPU_BUDGET_SECONDS:.0f}s budget"
@@ -95,18 +103,19 @@ def run_guarded(
         start_new_session=True,
     )
     started = last_progress = time.monotonic()
-    last_cpu = 0.0
+    last_cpu = peak_cpu = 0.0
     while True:
         try:
             out, err = proc.communicate(timeout=_POLL_SECONDS)
             return subprocess.CompletedProcess(argv, proc.returncode, out, err)
         except subprocess.TimeoutExpired:
             pass
-        used = cpu_seconds(proc.pid)
+        used = _sample_cpu(proc)
         now = time.monotonic()
-        if used > last_cpu:
+        if used != last_cpu:  # the total can drop (setsid escape, reaped orphan): still a change
             last_cpu, last_progress = used, now
-        reason = _verdict(last_cpu, now - last_progress)
+        peak_cpu = max(peak_cpu, used)
+        reason = _verdict(peak_cpu, now - last_progress)
         if reason:
             _kill_group(proc)
             out, err = proc.communicate()
