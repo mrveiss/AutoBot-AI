@@ -38,10 +38,8 @@ import type {
 } from '@/types/slm'
 import { useSlmApi } from '@/composables/useSlmApi'
 import i18n from '@/i18n'
+import { errorText } from '@/utils/errorText'
 import { PartialListError } from '@/utils/fetchAllPages'
-
-/** A caught value's message; the original error text, never a hard-coded English fallback. */
-const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 import { incompleteOf, reconcileUpdateSummary, toNodeMap } from './fleetHelpers'
 import type { NodeListIncomplete } from './fleetHelpers'
 
