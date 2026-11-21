@@ -124,6 +124,14 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/extraction_registry_17995_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "pipeline-scripts",
+        "scripts",
+        "tools/lint",
+    ),
     "repo_tests/file_type_sets_one_home_19339_test.py": ("autobot-backend",),
     "repo_tests/frontend_backend_origin_one_home_19821_test.py": ("autobot-frontend/src",),
     "repo_tests/frontend_hand_built_relative_time_19606_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
@@ -364,7 +372,6 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "autobot_shared",
     ),
-    "repo_tests/one_session_scope_15068_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/one_shared_authority_callers_17855_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
