@@ -6,6 +6,7 @@
 
 import asyncio
 import logging
+import itertools
 import threading
 import time
 
@@ -14,6 +15,7 @@ import pytest
 from autobot_shared.coordination import collection_lease as cl
 from autobot_shared.coordination import work_claims_sync
 from autobot_shared.coordination.work_claims import ClaimUnavailable
+from autobot_shared.eventually import DEFAULT_DEADLINE_S, eventually
 from utils.leased_chroma import delete_if_empty, lease_client
 
 try:
@@ -22,6 +24,12 @@ except ImportError:  # pragma: no cover
     fakeredis = None
 
 _NAME = "autobot_docs"
+_POLL_DEADLINE_S = DEFAULT_DEADLINE_S  # a deadlock guard far above the ~0.05s renew cadence, not a budget
+
+
+def _until(condition):
+    """Block (sync tests) until *condition()* is truthy, via the shared ``eventually`` poll."""
+    asyncio.run(eventually(condition, deadline=_POLL_DEADLINE_S))
 
 
 class _Raw:
@@ -131,7 +139,7 @@ def test_the_renewer_keeps_a_long_write_alive(redis, monkeypatch):
     real = cl.Lease.renew
     monkeypatch.setattr(cl.Lease, "renew", lambda self: renewals.append(1) or real(self))
     with cl.write_lease(_NAME):
-        threading.Event().wait(0.4)
+        _until(lambda: len(renewals) >= 2)
     assert len(renewals) >= 2
 
 
@@ -173,7 +181,7 @@ def _verdicts(monkeypatch, verdicts):
 def test_a_renew_that_hit_a_redis_blip_is_retried_not_dropped(redis, monkeypatch):
     calls = _verdicts(monkeypatch, [None])
     with cl.write_lease(_NAME) as lease:
-        threading.Event().wait(0.4)
+        _until(lambda: len(calls) >= 3)
         assert len(calls) >= 3 and not lease.lost and not lease._lapsed
     assert not lease.lost and not lease._lapsed
 
@@ -181,7 +189,7 @@ def test_a_renew_that_hit_a_redis_blip_is_retried_not_dropped(redis, monkeypatch
 def test_a_renew_that_found_the_claim_gone_sets_lost_and_drops_the_lease(redis, monkeypatch):
     calls = _verdicts(monkeypatch, [False])
     with cl.write_lease(_NAME) as lease:
-        threading.Event().wait(0.3)
+        _until(lambda: lease.lost)
         assert lease.lost and lease._lapsed and lease not in cl._RENEWER._due
         assert len(calls) == 1
 
@@ -214,7 +222,7 @@ def test_a_renew_that_raises_does_not_kill_the_renewer(redis, monkeypatch):
 
     monkeypatch.setattr(cl.Lease, "renew_due", boom)
     with cl.write_lease(_NAME):
-        threading.Event().wait(0.4)
+        _until(lambda: len(calls) >= 2)
     assert len(calls) >= 2
 
 
@@ -248,6 +256,9 @@ def test_stop_while_a_retry_is_pending_drops_the_lease_and_ends_the_renews(redis
         assert len(calls) == 1
 
 
+_NORMAL_INTERVAL_S = 1.0  # ttl 60s / RENEW_DIVISOR 60
+
+
 def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
     monkeypatch.setattr(cl, "RENEW_DIVISOR", 60)  # ttl 60s -> the normal interval (1s) is above the retry
     monkeypatch.setattr(cl, "LEASE_RENEW_RETRY_S", 0.2)
@@ -256,11 +267,11 @@ def test_the_retry_interval_is_honoured_after_a_redis_blip(monkeypatch):
     renewer, lease = cl._Renewer(), cl.Lease(_NAME, cl.ClaimMode.SHARED, 60)
     try:
         renewer.add(lease, delay_s=0)
-        threading.Event().wait(0.5)
+        _until(lambda: len(calls) >= 2)
     finally:
         lease._stopped = True
         renewer.remove(lease)
-    # retries at ~0, 0.2, 0.4: a renewer that ignored the interval would exceed the upper bound and break the
-    # gap assertion; the lower bound is 1 so CPU starvation under -n auto cannot flake it
-    assert 1 <= len(calls) <= 4
-    assert all(b - a >= 0.15 for a, b in zip(calls, calls[1:]))
+    # retries at ~0.2 apart: a renewer on the normal interval (1s) would show a gap above the bound; the lower
+    # bound is loose so CPU starvation under -n auto cannot flake it
+    assert len(calls) >= 2
+    assert all(0.15 <= b - a < _NORMAL_INTERVAL_S for a, b in itertools.pairwise(calls))

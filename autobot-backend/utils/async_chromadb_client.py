@@ -473,10 +473,17 @@ class AsyncChromaClient:
         Runs under the collection's exclusive write lease (``utils.leased_chroma``), so no write can land between
         the count and the delete. Raises ``CollectionLeaseUnavailable`` when a writer holds it: did not run.
         """
-        try:
-            return await asyncio.to_thread(delete_if_empty, self._client, name)
-        finally:
-            self._collection_cache.pop(name, None)
+        worker = asyncio.ensure_future(asyncio.to_thread(delete_if_empty, self._client, name))
+        # Evict when the worker really finishes (loop thread, success or failure), not when the caller
+        # stops waiting: a cancelled caller must not leave a handle for a collection the worker deletes.
+        worker.add_done_callback(lambda done: self._evict_after_delete(name, done))
+        return await asyncio.shield(worker)
+
+    def _evict_after_delete(self, name: str, worker: "asyncio.Future[int]") -> None:
+        """Drop the cached handle for *name*; mark the worker's outcome retrieved so none is logged unseen."""
+        self._collection_cache.pop(name, None)
+        if not worker.cancelled():
+            worker.exception()
 
     async def heartbeat(self) -> int:
         """Check if the client is alive (async)."""

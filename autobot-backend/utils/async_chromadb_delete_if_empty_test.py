@@ -212,6 +212,28 @@ async def test_a_cancelled_delete_finishes_or_does_nothing_and_releases_the_leas
 
 
 @pytest.mark.asyncio
+async def test_a_cancelled_delete_evicts_the_cached_handle_when_the_worker_finishes(redis):
+    sync = _Sync()
+    inside, go = threading.Event(), threading.Event()
+
+    def _slow_count():
+        inside.set()
+        go.wait(5)
+
+    sync.collections[_NAME].on_count = _slow_count
+    client = AsyncChromaClient(sync)
+    task = asyncio.ensure_future(client.delete_collection_if_empty(_NAME))
+    await asyncio.get_running_loop().run_in_executor(None, inside.wait, 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    client._collection_cache[_NAME] = object()  # another caller re-caches the handle mid-delete
+    go.set()
+    await eventually(lambda: _NAME not in client._collection_cache)
+    await eventually(lambda: sync.deleted == [_NAME])  # the worker deleted it; the stale handle is gone
+
+
+@pytest.mark.asyncio
 async def test_the_service_reports_a_busy_collection_as_did_not_run(redis, monkeypatch):
     sync = _Sync()
 
