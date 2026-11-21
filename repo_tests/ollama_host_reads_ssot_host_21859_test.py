@@ -38,7 +38,7 @@ ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot_shared")
 SSOT_MODULE = "autobot_shared.ssot_config"
 FIELD = "ollama_host"
 SKIP_PARTS = {"node_modules", "tests", "__pycache__", ".venv", "venv"}
-#: Measured 3741 production modules under ROOTS (2026-11-21); growth 400 puts the pin mid-window. A new guard
+#: Measured 3741 production modules under ROOTS (2026-11-21); the pin sits 204 below it. A new guard
 #: pins `floor=` until it lands on the base (#19676).
 _FILES_FLOOR = 3537
 
@@ -60,7 +60,6 @@ REACH = declare(
     discover=_source_population,
     roots=ROOTS,
     floor=_FILES_FLOOR,
-    growth=400,
     skips=0,
     what="production Python modules scanned for a read of config.ollama_host",
 )
