@@ -132,11 +132,6 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source under the LLM package plus three named builders; the test-file share of that tree drifts.",
     ),
-    "post-commit-seed-scan": (
-        ABSOLUTE,
-        "SUBSET_DRIFTS",
-        "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
-    ),
     "slm-backend-embedded-playbook-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

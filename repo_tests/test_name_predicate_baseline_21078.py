@@ -139,7 +139,6 @@ BASELINE: dict[str, int] = {
     "repo_tests/one_semantic_chunker_14485_test.py": 1,
     "repo_tests/one_serving_predicate_18820_test.py": 2,
     "repo_tests/one_session_ownership_validator_14016_test.py": 1,
-    "repo_tests/one_session_scope_15068_test.py": 1,
     "repo_tests/one_shared_authority_callers_17855_test.py": 1,
     "repo_tests/one_ssh_restart_executor_18186_test.py": 1,
     "repo_tests/one_sync_command_runner_18180_test.py": 1,
