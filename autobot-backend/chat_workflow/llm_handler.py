@@ -14,12 +14,12 @@ import json
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.chat_model_context import interpretation_llm_options
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ollama_urls import ollama_generate_url
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_history.rolling_summary import prompt_summary
-from constants.model_constants import ModelConfig
 from dependencies import provide_config_manager
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
@@ -925,13 +925,9 @@ Return code: {return_code}
 Briefly explain what this output shows. Keep it concise (2-3 sentences max).
 Do NOT conclude the task or provide a final summary - just explain this specific result."""
 
-    def _get_interpretation_llm_options(self) -> Dict[str, Any]:
-        """Get LLM options for command interpretation."""
-        return {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
-        }
+    def _get_interpretation_llm_options(self, model: str | None = None) -> Dict[str, Any]:
+        """Get LLM options for command interpretation (#21878: the chat model keeps the chat's context)."""
+        return interpretation_llm_options(model)
 
     async def _interpret_non_streaming(
         self,
@@ -1062,7 +1058,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
             WorkflowMessage chunks
         """
         interpretation_prompt = self._build_interpretation_prompt(command, stdout, stderr, return_code)
-        llm_options = self._get_interpretation_llm_options()
+        llm_options = self._get_interpretation_llm_options(selected_model)
 
         if not streaming:
             async for msg in self._interpret_non_streaming(
