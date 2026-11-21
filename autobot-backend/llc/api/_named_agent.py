@@ -15,15 +15,14 @@ import uuid
 from typing import Any, Optional, Union
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import safe_log_text
-from models.agent_org import AgentOrgNode
 from user_management.services import TenantContext
 
 from ..models.work_item import LLCWorkItem
+from ..scheduler.dispatch_gate import as_uuid, resolve_agent
 from ..services.authz import NotAuthorisedError, is_company_member, require_company_admin_unless_platform
 
 logger = get_logger(__name__)
@@ -47,18 +46,15 @@ async def require_may_act_as(session: AsyncSession, ctx: TenantContext, item: LL
 async def agent_in_company(
     session: AsyncSession, company_id: Any, agent_id: Union[str, uuid.UUID], *, slug_ok: bool = False
 ) -> bool:
-    """Whether *agent_id* is an agent node of the company; a malformed or unknown id reads as not.
+    """Whether *agent_id* names exactly one agent of the company, by the canonical ``resolve_agent``.
 
-    *slug_ok* also accepts the node's company-scoped slug, for a free-text column that may hold either keyspace.
+    By default only a node id (a UUID) counts, because the columns these targets are written to hold UUIDs and a slug
+    would pass the check and then fail on the write; a malformed id or a slug reads as not (422, never a 500).
+    *slug_ok* also accepts the company-scoped slug, for a free-text column that may hold either keyspace.
     """
-    try:
-        match = AgentOrgNode.id == uuid.UUID(str(agent_id))
-    except ValueError:
-        if not slug_ok:
-            return False
-        match = AgentOrgNode.agent_id == str(agent_id)
-    in_company = AgentOrgNode.company_id == uuid.UUID(str(company_id))
-    return (await session.execute(select(AgentOrgNode.id).where(match, in_company))).scalars().first() is not None
+    if not slug_ok and as_uuid(agent_id) is None:
+        return False
+    return await resolve_agent(session, company_id, agent_id) is not None
 
 
 async def require_member_targets(

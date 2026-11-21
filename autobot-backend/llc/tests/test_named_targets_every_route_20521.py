@@ -39,7 +39,7 @@ def _result(row=None, agent_found: bool = False) -> MagicMock:
     found = object() if agent_found else None
     return MagicMock(
         scalar_one_or_none=MagicMock(return_value=row),
-        scalars=MagicMock(return_value=MagicMock(first=MagicMock(return_value=found))),
+        all=MagicMock(return_value=[found] if found else []),
     )
 
 
@@ -158,3 +158,12 @@ async def test_a_coworker_outside_the_company_is_refused_before_the_service() ->
         await _refused(work_items_api.set_coworker("w", body, _session(_result()), user, _ctx()))
 
     svc.enable_coworking.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_slug_is_refused_unless_the_column_takes_one_and_an_ambiguous_reference_names_nobody() -> None:
+    session = _session(_result(agent_found=True))
+    assert await _named_agent.agent_in_company(session, _ORG, "agent-slug") is False  # strict: UUID columns
+    session.execute.assert_not_awaited()  # refused before any query, so never a 500 on the write
+    two_rows = MagicMock(all=MagicMock(return_value=[("a", "x"), ("b", "x")]))
+    assert await _named_agent.agent_in_company(_session(two_rows), _ORG, str(uuid.uuid4())) is False
