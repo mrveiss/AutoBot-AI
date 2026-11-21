@@ -13,8 +13,8 @@ Policies, each decided on purpose:
 
 * **Concurrent duplicate while the first is in flight**: :class:`IngestInFlight` (the route answers 409).
   Waiting would hold a worker on an unbounded request; charging would be the double charge this prevents.
-* **Redis unavailable or erroring**: fail OPEN -- charge without dedupe and log a warning. A budget must
-  never be silently skipped; the cost of an outage is the duplicate protection, not the charge.
+* **Redis unavailable or erroring**: charge on the database row alone and log a warning. The unique
+  (company, agent, key) cost-event row still dedupes (#21972); a budget is never silently skipped.
 * **A hard stop (``BudgetExhausted``)** is a completed result: the spend was committed first (#20202), so
   the repeat re-raises the same refusal instead of charging again.
 * **Any other failure** releases the claim: nothing was committed, and the retry must be able to run.
