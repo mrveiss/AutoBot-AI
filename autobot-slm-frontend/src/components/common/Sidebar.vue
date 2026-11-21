@@ -13,7 +13,7 @@
  */
 
 import { BrandMark, usePollingJob } from '@autobot/ui'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -22,6 +22,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useCodeSync } from '@/composables/useCodeSync'
 import { useSystemUpdates } from '@/composables/useSystemUpdates'
 import { useSlmTheme } from '@/composables/useSlmTheme'
+import { useKeyboardNav } from '@/composables/useAccessibility'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,38 +121,15 @@ function navigate(path: string): void {
   router.push(path)
 }
 
-/**
- * Handle keyboard navigation within sidebar nav items.
- *
- * Helper for Sidebar keyboard navigation (Issue #754).
- */
-function handleNavKeydown(event: KeyboardEvent, index: number): void {
-  const items = visibleNavItems.value
-  let targetIndex = -1
+const navButtons = ref<HTMLElement[]>([])
 
-  switch (event.key) {
-    case 'ArrowDown':
-      targetIndex = index < items.length - 1 ? index + 1 : 0
-      break
-    case 'ArrowUp':
-      targetIndex = index > 0 ? index - 1 : items.length - 1
-      break
-    case 'Home':
-      targetIndex = 0
-      break
-    case 'End':
-      targetIndex = items.length - 1
-      break
-    default:
-      return
-  }
-
-  event.preventDefault()
-  const navEl = document.querySelector(`[data-nav-index="${targetIndex}"]`)
-  if (navEl instanceof HTMLElement) {
-    navEl.focus()
-  }
+function setNavButton(el: unknown, index: number): void {
+  if (el instanceof HTMLElement) navButtons.value[index] = el
+  else delete navButtons.value[index]
 }
+
+// Arrow / Home / End navigation of the menu comes from the shared a11y composable (#754).
+const navKeys = useKeyboardNav(navButtons, { orientation: 'vertical', wrap: true })
 
 /**
  * Handle user logout.
@@ -238,8 +216,9 @@ onMounted(() => {
         <li v-for="(item, index) in visibleNavItems" :key="item.path" role="none">
           <button
             @click="navigate(item.path)"
-            @keydown="handleNavKeydown($event, index)"
-            :data-nav-index="index"
+            :ref="(el) => setNavButton(el, index)"
+            @keydown="navKeys.handleKeyDown"
+            @focus="navKeys.activeIndex.value = index"
             :aria-current="isItemActive(item.path) ? 'page' : undefined"
             role="menuitem"
             :tabindex="isItemActive(item.path) ? 0 : -1"
