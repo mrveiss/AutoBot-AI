@@ -49,6 +49,7 @@ import ast
 import importlib.util
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -56,6 +57,7 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, growth_over_base, raised_entries
 
 from tools.lint import _parse_cache as parse_cache
+from tools.lint._file_size_guard import FileSizeGuard
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -101,6 +103,43 @@ def hook():
     return _load()
 
 
+def _engine(hook, **config):
+    """A ``FileSizeGuard`` built over its OWN namespace -- the engine's injection seam (#17377).
+
+    The engine reads every configuration value and every script-level binding through the namespace
+    it is constructed with, so a test supplies ``repo_root``, ``KNOWN_LARGE``, the tracked-file
+    enumerator or ``audit_ceilings`` as *config* here instead of patching attributes on the loaded
+    script. Nothing is shared with ``hook``, so an engine that stopped honouring its namespace
+    (resolving a name through itself or the real script) makes the test read the real tree and fail.
+    """
+    ns = {
+        name: getattr(hook, name)
+        for name in (
+            "MAX_LINES", "SELF_REL", "EXCLUDED_PREFIXES", "MIN_TRACKED_PY_FILES", "KNOWN_LARGE_FILE",
+            "logger", "repo_root", "count_lines", "git_tracked", "normalise", "unmeasured",
+            "tracked_python_files",
+        )
+    }  # fmt: skip
+    ns["KNOWN_LARGE"] = dict(hook.KNOWN_LARGE)
+    ns.update(config)
+    guard = FileSizeGuard(
+        ns, floor_name="MIN_TRACKED_PY_FILES", tracked_name="tracked_python_files", summary="%d files, %d grandfathered"
+    )
+    bindings = {
+        "_grandfathered_verdict": guard.grandfathered_verdict,
+        "verdict": guard.verdict,
+        "_vanished_entry_problem": guard.vanished_entry_problem,
+        "_report_unmeasured": guard.report_unmeasured,
+        "_scan_tracked_files": guard.scan_tracked_files,
+        "audit_ceilings": guard.audit_ceilings,
+        "_reach_breach_problem": guard.reach_breach_problem,
+        "run_audit": guard.run_audit,
+    }
+    for name, bound in bindings.items():
+        ns.setdefault(name, bound)
+    return SimpleNamespace(**{**ns, "guard": guard})
+
+
 @pytest.fixture(scope="module")
 def tracked_py_files() -> list[str]:
     """Every tracked ``*.py`` path, enumerated by git rather than by the hook."""
@@ -138,7 +177,7 @@ def test_recorded_ceilings_match_the_files_today(hook):
 # --------------------------------------------------------------------------
 
 
-def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch):
+def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path):
     """The exact defect #14547 is for: a file over MAX_LINES with no entry.
 
     ``audit_ceilings`` used to iterate ``KNOWN_LARGE.items()``, so a file like
@@ -146,32 +185,28 @@ def test_audit_discovers_an_unlisted_oversized_file(hook, tmp_path, monkeypatch)
     — was invisible to every audit run forever. Walking the tracked-file list
     instead of the dict is what makes this fail.
     """
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
     unlisted = "autobot-slm-backend/services/never_added.py"
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [unlisted])
+    engine = _engine(hook, repo_root=lambda: tmp_path, KNOWN_LARGE={}, tracked_python_files=lambda root: [unlisted])
     target = tmp_path / unlisted
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * (hook.MAX_LINES + 50), encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_ceilings()
     assert reached == 1
     assert len(problems) == 1
     assert unlisted in problems[0]
-    assert hook.run_audit() == 1
+    assert engine.run_audit() == 1
 
 
-def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path, monkeypatch):
+def test_audit_is_clean_for_an_unlisted_compliant_file(hook, tmp_path):
     """A file the walk reaches but that was never over the limit stays silent."""
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "KNOWN_LARGE", {})
     compliant = "autobot-slm-backend/services/small.py"
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [compliant])
+    engine = _engine(hook, repo_root=lambda: tmp_path, KNOWN_LARGE={}, tracked_python_files=lambda root: [compliant])
     target = tmp_path / compliant
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("x\n" * 10, encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
+    reached, problems = engine.audit_ceilings()
     assert reached == 1
     assert problems == []
 
@@ -323,41 +358,40 @@ def test_a_vanished_file_tells_the_developer_to_drop_the_entry(hook, tmp_path):
     assert f"Remove it from {hook.SELF_REL}" in hook._vanished_entry_problem(rel, tmp_path)
 
 
-def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path, monkeypatch):
+def test_the_audit_surfaces_a_ceiling_violation(hook, tmp_path):
     """Reaching a file is not the same as reporting on it.
 
     Today's tree is at its ceilings, so a clean audit run cannot distinguish
     "no violations" from "violations discarded". This stages a real breach.
     """
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: list(hook.KNOWN_LARGE))
-    for rel, ceiling in hook.KNOWN_LARGE.items():
+    known = dict(hook.KNOWN_LARGE)
+    engine = _engine(hook, repo_root=lambda: tmp_path, KNOWN_LARGE=known, tracked_python_files=lambda root: list(known))
+    for rel, ceiling in known.items():
         target = tmp_path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("x\n" * (ceiling + 5), encoding="utf-8")
 
-    reached, problems = hook.audit_ceilings()
-    assert reached == len(hook.KNOWN_LARGE)
-    assert len(problems) == len(hook.KNOWN_LARGE)
+    reached, problems = engine.audit_ceilings()
+    assert reached == len(known)
+    assert len(problems) == len(known)
     assert all("over its recorded ceiling" in problem for problem in problems)
-    assert hook.run_audit() == 1
+    assert engine.run_audit() == 1
 
 
-def test_run_audit_fails_when_the_scan_reached_nothing(hook, monkeypatch):
+def test_run_audit_fails_when_the_scan_reached_nothing(hook):
     """A scan of nothing must never read as a clean scan."""
-    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, []))
-    assert hook.run_audit() == 1
+    assert _engine(hook, audit_ceilings=lambda: (0, [])).run_audit() == 1
 
 
-def test_the_audit_reports_a_vanished_entry(hook, tmp_path, monkeypatch):
+def test_the_audit_reports_a_vanished_entry(hook, tmp_path):
     """A renamed or deleted file must be a hard error, not a silent no-op."""
-    monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
-    monkeypatch.setattr(hook, "tracked_python_files", lambda root: [])
-    reached, problems = hook.audit_ceilings()
+    known = dict(hook.KNOWN_LARGE)
+    engine = _engine(hook, repo_root=lambda: tmp_path, KNOWN_LARGE=known, tracked_python_files=lambda root: [])
+    reached, problems = engine.audit_ceilings()
     assert reached == 0
-    assert len(problems) == len(hook.KNOWN_LARGE)
+    assert len(problems) == len(known)
     assert all("moved or was deleted" in problem for problem in problems)
-    assert hook.run_audit() == 1
+    assert engine.run_audit() == 1
 
 
 # --------------------------------------------------------------------------
@@ -419,10 +453,10 @@ def test_findings_are_emitted_above_the_lastresort_threshold(hook, tmp_path, cap
     assert levels and min(levels) >= logging.WARNING
 
 
-def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog, monkeypatch):
-    monkeypatch.setattr(hook, "audit_ceilings", lambda: (0, ["ceiling drifted"]))
+def test_audit_problems_are_reported_to_the_developer(hook, tmp_path, caplog):
+    engine = _engine(hook, audit_ceilings=lambda: (0, ["ceiling drifted"]))
     with caplog.at_level(logging.DEBUG, logger=hook.logger.name):
-        assert hook.run_audit() == 1
+        assert engine.run_audit() == 1
     emitted = "\n".join(record.getMessage() for record in caplog.records)
     assert "ceiling drifted" in emitted
     assert min(record.levelno for record in caplog.records) >= logging.WARNING
