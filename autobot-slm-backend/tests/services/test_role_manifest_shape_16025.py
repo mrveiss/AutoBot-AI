@@ -12,6 +12,8 @@ exists only for ``role_registry.py``'s own ``models.database``/``sqlalchemy``
 imports, which this module does not have).
 """
 
+import pytest
+
 from models.manifest import (
     ManifestDeploy,
     ManifestHealth,
@@ -28,7 +30,9 @@ def _manifest(role: str, services=(), health_endpoint: str | None = None, ports=
     return RoleManifest(
         role=role,
         description="test fixture",
-        deploy=ManifestDeploy(source=f"{role}/", destination=f"/opt/autobot/{role}/"),
+        deploy=ManifestDeploy(
+            source=f"{role}/", destination=f"/opt/autobot/{role}/", sync_target=f"/opt/autobot/{role}"
+        ),
         services=list(services),
         ports=list(ports),
         health=ManifestHealth(endpoint=health_endpoint) if health_endpoint else None,
@@ -150,7 +154,7 @@ def test_ports_are_exposed_as_plain_dicts():
 
 
 def test_no_manifest_wraps_the_existing_string_into_a_sequence():
-    role_data = {"name": "vnc", "systemd_service": "tigervncserver"}
+    role_data = {"name": "vnc", "systemd_service": "tigervncserver", "source_paths": [], "target_path": "/x"}
     result = rms.apply_manifest_shape(role_data, {})
     assert result["systemd_service"] == ["tigervncserver"]
     assert "canonical_name" not in result
@@ -329,7 +333,7 @@ def test_every_real_manifest_declares_its_sync_fields_explicitly():
 
 def test_a_no_sync_manifest_ships_nothing():
     manifest = _manifest("autobot-x")
-    manifest.deploy.sync = False
+    manifest.deploy.sync, manifest.deploy.sync_target = False, ""
     assert rms.sync_from_manifest("x", manifest, True, _PLACEHOLDERS) == ([], "")
 
 
@@ -339,3 +343,80 @@ def test_a_service_sync_target_overrides_the_deploy_one_for_its_own_role_only():
     )
     assert rms.sync_from_manifest("postgres", manifest, False, _PLACEHOLDERS)[1] == "/data"
     assert rms.sync_from_manifest("redis", manifest, False, _PLACEHOLDERS)[1] == ""
+
+
+# ---------------------------------------------------------------------------
+# #16025 failure paths: a manifest-backed role that cannot resolve fails loudly, never with a silent drop
+# ---------------------------------------------------------------------------
+
+
+def test_a_manifest_backed_role_with_no_loaded_manifest_raises_naming_role_and_manifest():
+    """The infra dir resolved to nothing: `load_all()` is {} and the role has no static copy of its own."""
+    with pytest.raises(rms.RoleManifestMissingError) as caught:
+        rms.apply_manifest_shape({"name": "backend", "systemd_service": "autobot-backend"}, {}, _PLACEHOLDERS)
+    message = str(caught.value)
+    assert "'backend'" in message and "autobot-backend" in message and "source_paths" in message
+
+
+def test_one_unparsable_manifest_fails_its_role_not_the_others(tmp_path):
+    """A manifest that fails to parse is absent from `load_all()`; only the roles it backs raise."""
+    (tmp_path / "autobot-backend").mkdir()
+    (tmp_path / "autobot-backend" / "manifest.yml").write_text("role: [unclosed\n", encoding="utf-8")
+    good = tmp_path / "autobot-frontend"
+    good.mkdir()
+    (good / "manifest.yml").write_text(
+        "role: autobot-frontend\ndescription: x\ndeploy:\n  source: autobot-frontend/\n  destination: /x/\n"
+        '  sync_target: "{base_dir}"\n',
+        encoding="utf-8",
+    )
+    manifests = ManifestLoader(infra_base=tmp_path).load_all()
+    assert "autobot-backend" not in manifests
+    assert rms.apply_manifest_shape({"name": "frontend"}, manifests, _PLACEHOLDERS)["target_path"] == "/opt/autobot"
+    with pytest.raises(rms.RoleManifestMissingError, match="autobot-backend"):
+        rms.apply_manifest_shape({"name": "backend"}, manifests, _PLACEHOLDERS)
+
+
+def test_a_role_that_declares_its_own_shape_needs_no_manifest():
+    """tts-worker, vnc and docker have no manifest; their static values stand."""
+    role = {"name": "tts-worker", "source_paths": ["autobot-tts-worker/"], "target_path": "/x"}
+    assert rms.apply_manifest_shape(dict(role), {}, _PLACEHOLDERS) == role
+
+
+def test_a_syncing_manifest_without_a_sync_target_is_refused():
+    with pytest.raises(ValueError, match="sync_target is empty"):
+        ManifestDeploy(source="a/", destination="/a/")
+    assert ManifestDeploy(source="a/", destination="/a/", sync=False).sync_target == ""
+
+
+def test_an_unknown_placeholder_names_the_manifest_role_and_token():
+    manifest = _manifest("autobot-x")
+    manifest.deploy.sync_target = "{nope}/x"
+    with pytest.raises(ValueError, match=r"autobot-x.*'x'.*'nope'"):
+        rms.sync_from_manifest("x", manifest, True, _PLACEHOLDERS)
+
+
+def test_a_failed_load_is_not_cached_and_the_cache_keys_on_the_placeholders(monkeypatch):
+    from services import manifest_loader
+
+    rms._default_roles_cache.clear()
+    static = [{"name": "backend", "systemd_service": "autobot-backend"}]
+
+    class _Loader:
+        def __init__(self, manifests):
+            self.manifests = manifests
+
+        def load_all(self):
+            return self.manifests
+
+    monkeypatch.setattr(manifest_loader, "get_manifest_loader", lambda: _Loader({}))
+    with pytest.raises(rms.RoleManifestMissingError):
+        rms.default_roles_for(static, _PLACEHOLDERS)
+    assert not rms._default_roles_cache, "a failed build must leave nothing behind"
+
+    good = {"autobot-backend": _manifest("autobot-backend", services=[_svc("autobot-backend")])}
+    good["autobot-backend"].deploy.sync_target = "{base_dir}"
+    monkeypatch.setattr(manifest_loader, "get_manifest_loader", lambda: _Loader(good))
+    first = rms.default_roles_for(static, _PLACEHOLDERS)[0]["target_path"]
+    other = rms.default_roles_for(static, {"base_dir": "/srv/ab", "agent_dir": "/srv/ag"})[0]["target_path"]
+    assert (first, other) == ("/opt/autobot", "/srv/ab")
+    rms._default_roles_cache.clear()

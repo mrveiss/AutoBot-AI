@@ -117,7 +117,8 @@ def sync_from_manifest(
 
     A manifest with ``deploy.sync: false`` ships nothing. The target is the deploy-level ``sync_target`` unless a
     service tagging role_name carries its own; ``{base_dir}`` / ``{agent_dir}`` come from ``placeholders`` so the
-    registry's AUTOBOT_BASE_DIR / SLM_AGENT_DIR override still decides them.
+    registry's AUTOBOT_BASE_DIR / SLM_AGENT_DIR override still decides them. An unknown ``{token}`` raises a
+    ``ValueError`` naming the manifest, role and token.
     """
     deploy = manifest.deploy
     target = deploy.sync_target
@@ -127,7 +128,14 @@ def sync_from_manifest(
         ]
         if own:
             target = own[0]
-    return ([deploy.source] if deploy.sync else []), target.format_map(placeholders)
+    try:
+        resolved = target.format_map(placeholders)
+    except KeyError as exc:
+        raise ValueError(
+            f"manifest {manifest.role!r}, role {role_name!r}: sync_target {target!r} uses the unknown placeholder "
+            f"{exc.args[0]!r}; known placeholders: {sorted(placeholders)}"
+        ) from exc
+    return ([deploy.source] if deploy.sync else []), resolved
 
 
 def health_from_manifest(manifest: RoleManifest) -> Tuple[int | None, str | None]:
@@ -166,7 +174,11 @@ def _as_unit_list(value) -> List[str] | None:
     return [value]
 
 
-_default_roles_cache: List[Dict] | None = None
+_default_roles_cache: Dict[Tuple, List[Dict]] = {}
+
+
+class RoleManifestMissingError(RuntimeError):
+    """A role that declares no ``source_paths`` / ``target_path`` of its own resolved to no loaded manifest (#16025)."""
 
 
 def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] | None = None) -> List[Dict]:
@@ -174,16 +186,20 @@ def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] 
 
     A shallow ``dict(role)`` copy per entry -- ``apply_manifest_shape`` mutates
     what it is given, and the caller's static list must stay untouched.
-    Cached process-wide: manifest loading is file I/O, and there is one
-    static role list in practice, built once at ``role_registry`` import time.
+    Cached process-wide per placeholder set: manifest loading is file I/O. A build that raises
+    (a manifest-backed role with no loaded manifest) caches nothing, and nothing is cached from an
+    empty manifest set, so a failed early load is retried rather than served forever.
     """
-    global _default_roles_cache
-    if _default_roles_cache is None:
-        from services.manifest_loader import get_manifest_loader
+    key = tuple(sorted((placeholders or {}).items()))
+    if key in _default_roles_cache:
+        return _default_roles_cache[key]
+    from services.manifest_loader import get_manifest_loader
 
-        manifests = get_manifest_loader().load_all()
-        _default_roles_cache = [apply_manifest_shape(dict(role), manifests, placeholders) for role in static_roles]
-    return _default_roles_cache
+    manifests = get_manifest_loader().load_all()
+    roles = [apply_manifest_shape(dict(role), manifests, placeholders) for role in static_roles]
+    if manifests:
+        _default_roles_cache[key] = roles
+    return roles
 
 
 def apply_manifest_shape(
@@ -194,11 +210,21 @@ def apply_manifest_shape(
     Mutates and returns the same (already-copied) dict the caller passes in;
     every registry-only field (post_sync_cmd, ansible_playbook, ...) is left
     untouched. A role no manifest resolves to keeps its own static
-    ``source_paths`` / ``target_path``.
+    ``source_paths`` / ``target_path``; a role that declares neither and resolves to no manifest raises
+    ``RoleManifestMissingError`` (the manifest is its only declaration, so nothing may stand in for it).
+    ``placeholders`` defaults to none: a manifest ``sync_target`` that uses one then raises, naming it.
     """
     name = role_data["name"]
     manifest, owns_whole = find_role_manifest(name, manifests)
     if manifest is None:
+        missing = [f for f in ("source_paths", "target_path") if f not in role_data]
+        if missing:
+            raise RoleManifestMissingError(
+                f"role {name!r} declares no {missing} of its own and no loaded manifest resolves to it "
+                f"(expected a manifest with role {canonical_manifest_role(name)!r}, or a service tagging "
+                f"{name!r} in slm_roles; loaded: {sorted(manifests)}); a manifest that failed to parse or an "
+                f"unresolved infrastructure directory leaves it out -- see the manifest loader's log"
+            )
         wrapped = _as_unit_list(role_data.get("systemd_service"))
         if wrapped is not None:
             role_data["systemd_service"] = wrapped

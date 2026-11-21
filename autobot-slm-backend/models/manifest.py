@@ -12,7 +12,7 @@ Every autobot-infrastructure/autobot-<role>/manifest.yml must conform to this sc
 from enum import Enum
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.ssot_constants import ProtocolDefaults
@@ -97,6 +97,15 @@ class ManifestDeploy(BaseModel):
             "No SLM consumer reads this yet: the SLM and Ansible paths ship the whole `source` directory."
         ),
     )
+
+    @model_validator(mode="after")
+    def syncing_manifest_names_a_sync_target(self) -> "ManifestDeploy":
+        """``sync: true`` needs a ``sync_target``: an empty one is an rsync into the filesystem root (#16025)."""
+        if self.sync and not self.sync_target:
+            raise ValueError(
+                "deploy.sync is true but deploy.sync_target is empty; name the directory or set sync: false"
+            )
+        return self
 
 
 class ManifestService(BaseModel):
