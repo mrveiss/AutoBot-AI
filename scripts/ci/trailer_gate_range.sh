@@ -18,6 +18,10 @@
 # 100 commits below the base tip, so those old commits are not reachable from the base and
 # count as the PR's own (#22001: 11 scanned, GitHub 7). Too FEW commits is a truncated
 # scan and fails (#16207); too MANY is deepened until the base side is complete.
+#
+# The equality check in _check_count (scanned == GitHub's count), not the deepening, is the
+# truncation guard: deepening only ever adds history, and whatever it leaves is judged by
+# that check, which fails a short scan as "too shallow" and a long one as "base mismatch".
 set -euo pipefail
 
 _fail_endpoint() {
@@ -34,9 +38,12 @@ _deepen_while_over() {
   local depth="${TRAILER_GATE_DEEPEN_START:-400}"
   while [ "$(_count)" -gt "${EXPECTED_COMMITS}" ] \
     && [ "$(git rev-parse --is-shallow-repository)" = "true" ]; do
-    git fetch --no-tags --depth="${depth}" origin "${HEAD_SHA}" "${BASE_SHA}"
-    depth=$((depth * 2))
-    [ "${depth}" -lt 100000 ] || git fetch --no-tags --unshallow origin
+    if [ "${depth}" -lt 100000 ]; then
+      git fetch --no-tags --depth="${depth}" origin "${HEAD_SHA}" "${BASE_SHA}"
+      depth=$((depth * 2))
+    else
+      git fetch --no-tags --unshallow origin
+    fi
   done
 }
 
@@ -70,7 +77,12 @@ _choose_base() {
     fi
   elif [ -n "${BASE_REF:-}" ]; then
     # GitHub counts the PR's commits against the CURRENT base tip, not the event's.
-    git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}"
+    # Only a shallow clone is fetched shallowly: --depth on a complete clone would cut it.
+    local depth_arg=()
+    if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+      depth_arg=(--depth=1)
+    fi
+    git fetch --no-tags "${depth_arg[@]}" origin "refs/heads/${BASE_REF}"
     BASE_SHA="$(git rev-parse FETCH_HEAD)"
   fi
 }

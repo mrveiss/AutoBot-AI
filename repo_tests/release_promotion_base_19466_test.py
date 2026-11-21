@@ -135,6 +135,9 @@ def test_the_trailer_gate_scans_from_the_release_base_and_counts_against_it() ->
     assert 'BASE_SHA="${RELEASE_BASE_SHA}"' in script and 'EXPECTED_COMMITS="${RELEASE_NEW_COMMITS}"' in script
     # The override must precede the count it narrows, or the guard checks the old range.
     assert script.index('BASE_SHA="${RELEASE_BASE_SHA}"') < script.index("_check_count\n  echo")
+    # ...and main() must actually call the chooser before the count, not merely define it first.
+    main_body = script[script.index("main() {") :]
+    assert main_body.index("_choose_base") < main_body.index("_check_count")
 
 
 def test_the_ratchet_base_prefers_the_release_base() -> None:

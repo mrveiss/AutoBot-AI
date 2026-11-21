@@ -18,7 +18,6 @@ from __future__ import annotations
 import subprocess  # nosec B404  # fixed argv, no shell
 from pathlib import Path
 
-import pytest
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import git, isolated_git_env, make_repo
@@ -179,6 +178,94 @@ def test_release_promotion_base_is_used_as_given(tmp_path: Path) -> None:
     assert _base_output(tmp_path) == _git(origin, "rev-parse", "main")
 
 
-@pytest.mark.parametrize("name", ["no_commit_trailers_fetch_depth_test", "no_commit_trailers_anchor_test"])
-def test_neighbouring_suites_exist(name: str) -> None:
-    assert (repo_root() / "repo_tests" / f"{name}.py").exists()
+def _git_logging_path(tmp_path: Path) -> tuple[str, Path]:
+    """A PATH whose `git` records every invocation's argv, then runs the real git."""
+    import shutil
+
+    log = tmp_path / "git_calls.log"
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    wrapper = shim / "git"
+    wrapper.write_text(f'#!/bin/sh\necho "$*" >> "{log}"\nexec "{shutil.which("git")}" "$@"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+    return f"{shim}:{isolated_git_env()['PATH']}", log
+
+
+def _fetch_calls(log: Path) -> list[str]:
+    return [ln for ln in log.read_text(encoding="utf-8").splitlines() if ln.startswith("fetch")]
+
+
+def test_complete_clone_stays_complete_when_taking_the_base_tip(tmp_path: Path) -> None:
+    """fetch-depth 0 (PR over 90 commits) must not be made shallow by the base-tip fetch."""
+    origin = _origin(tmp_path)
+    head, base, _ = _pr_with_merged_main(origin, main_after=0)
+    clone = _clone(tmp_path, origin, head, "1000", base)
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+    path, log = _git_logging_path(tmp_path)
+    done = _run(clone, tmp_path, HEAD_SHA=head, BASE_SHA=base, BASE_REF="main", EXPECTED_COMMITS="4", PATH=path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+    assert _git(clone, "rev-list", "--count", f"{_base_output(tmp_path)}..{head}") == "4"
+    assert all("--depth" not in c and "--unshallow" not in c for c in _fetch_calls(log)), _fetch_calls(log)
+
+
+def test_deepening_doubles_more_than_once(tmp_path: Path) -> None:
+    origin = _origin(tmp_path)
+    head, base, _ = _pr_with_merged_main(origin, main_after=0)
+    clone = _clone(tmp_path, origin, head, _SHALLOW_DEPTH)
+    path, log = _git_logging_path(tmp_path)
+    done = _run(
+        clone,
+        tmp_path,
+        HEAD_SHA=head,
+        BASE_SHA=base,
+        BASE_REF="main",
+        EXPECTED_COMMITS="4",
+        TRAILER_GATE_DEEPEN_START="5",
+        PATH=path,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    depths = [c.split("--depth=")[1].split()[0] for c in _fetch_calls(log) if "--depth=" in c]
+    # depths[0] is the base-tip fetch (--depth=1); the rest are the deepening, doubling from 5.
+    assert depths[1:] == ["5", "10", "20"], depths
+    assert _git(clone, "rev-list", "--count", f"{_base_output(tmp_path)}..{head}") == "4"
+
+
+def test_deepening_falls_back_to_unshallow_once_depth_is_exhausted(tmp_path: Path) -> None:
+    origin = _origin(tmp_path)
+    head, base, _ = _pr_with_merged_main(origin, main_after=0)
+    clone = _clone(tmp_path, origin, head, _SHALLOW_DEPTH)
+    path, log = _git_logging_path(tmp_path)
+    done = _run(
+        clone,
+        tmp_path,
+        HEAD_SHA=head,
+        BASE_SHA=base,
+        BASE_REF="main",
+        EXPECTED_COMMITS="4",
+        TRAILER_GATE_DEEPEN_START="100000",
+        PATH=path,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert any("--unshallow" in c for c in _fetch_calls(log)), _fetch_calls(log)
+    assert _git(clone, "rev-parse", "--is-shallow-repository") == "false"
+
+
+def test_unshallow_is_not_run_once_the_depth_fetch_completed_the_history(tmp_path: Path) -> None:
+    """A depth fetch that already completes the clone must not be followed by --unshallow (fatal)."""
+    origin = _origin(tmp_path)
+    head, base, _ = _pr_with_merged_main(origin, main_after=0)
+    clone = _clone(tmp_path, origin, head, _SHALLOW_DEPTH)
+    path, log = _git_logging_path(tmp_path)
+    done = _run(
+        clone,
+        tmp_path,
+        HEAD_SHA=head,
+        BASE_SHA=base,
+        BASE_REF="main",
+        EXPECTED_COMMITS="4",
+        TRAILER_GATE_DEEPEN_START="60000",
+        PATH=path,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not any("--unshallow" in c for c in _fetch_calls(log)), _fetch_calls(log)
