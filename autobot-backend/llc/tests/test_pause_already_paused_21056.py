@@ -34,7 +34,7 @@ class _AgentSession(FakeAsyncSession):
 
     def __init__(self, status="available"):
         super().__init__()
-        self.agent = {"status": status, "pre_pause_status": None, "pause_reason": None}
+        self.agent = {"status": status, "pre_pause_status": None, "pause_reason": None, "id": uuid.uuid4()}
         self.updates = []
         self.selects = 0
 
@@ -44,7 +44,7 @@ class _AgentSession(FakeAsyncSession):
         if sql.startswith("SELECT status, pre_pause_status, pause_reason"):
             self.selects += 1
             a = self.agent
-            row = None if a["status"] is None else (a["status"], a["pre_pause_status"], a["pause_reason"])
+            row = None if a["status"] is None else (a["status"], a["pre_pause_status"], a["pause_reason"], a["id"])
             return SimpleNamespace(fetchone=lambda: row)
         if sql.startswith("UPDATE agent_org_nodes"):
             self.updates.append(params)
@@ -61,7 +61,7 @@ class _AgentSession(FakeAsyncSession):
             return None
         before = self.agent["status"]
         self.agent.update(status=p["paused"], pause_reason=p["reason"], pre_pause_status=before)
-        return (before,)
+        return (before, self.agent["id"])
 
 
 def _log():

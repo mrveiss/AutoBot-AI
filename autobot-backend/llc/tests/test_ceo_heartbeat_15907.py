@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 from typing import AsyncIterator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -361,7 +361,7 @@ async def _all_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNod
 def _build_real_entry(kwargs: dict) -> None:
     """Run the real ``LLCActivityLogService`` row build (it parses ``entity_id`` as a UUID)."""
     keys = ("company_id", "actor_type", "actor_id", "event_type", "entity_type", "entity_id", "before", "after")
-    LLCActivityLogService()._build_entry(*(kwargs[k] for k in keys), kwargs["metadata"])
+    LLCActivityLogService()._build_entry(*(kwargs.get(k) for k in keys), kwargs.get("metadata"))
 
 
 @pytest.mark.asyncio
@@ -439,20 +439,72 @@ async def test_enabling_a_heartbeat_on_a_soft_deleted_company_is_refused(session
 
 @pytest.mark.asyncio
 async def test_the_enable_path_locks_the_organization_row(session_factory):  # noqa: ANN001
-    from llc.services import controls_service
-
+    """The enable takes the canonical ``_get_or_404(for_update=True)`` lock, the one the delete takes."""
     company_id = await _create(session_factory, "Acme")
     [ceo] = await _ceo_nodes(session_factory, company_id)
-    with patch.object(controls_service, "lock_organization", wraps=controls_service.lock_organization) as lock:
+    original = CompanyService._get_or_404
+    with patch.object(CompanyService, "_get_or_404", autospec=True, side_effect=original) as load:
         await _toggle(session_factory, company_id, ceo.agent_id, True)
-    lock.assert_awaited_once()
-    assert lock.await_args.args[1] == company_id
+    load.assert_awaited_once()
+    assert load.await_args.args[1] == company_id
+    assert load.await_args.kwargs == {"for_update": True}
 
 
 @pytest.mark.asyncio
-async def test_the_lock_helper_selects_for_update():
-    from llc.services.company_row_lock import lock_organization
+async def test_the_route_answers_404_for_a_soft_deleted_company(session_factory, client):  # noqa: ANN001
+    from llc.api import controls
 
+    company_id = await _create(session_factory, "Acme")
+    slug = default_ceo_slug(company_id)
+    async with session_factory() as session:
+        await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    url = f"/api/llc/companies/{company_id}/controls/agents/{slug}/heartbeat"
+    with (
+        patch.object(controls, "require_board_role", new=AsyncMock(return_value=str(uuid.uuid4()))),
+        patch.object(controls, "schedule_heartbeat", new=AsyncMock(return_value=True)) as schedule,
+    ):
+        resp = await client.put(url, json={"heartbeat_enabled": True})
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"] == f"Company {company_id} not found"
+    schedule.assert_not_awaited()
+
+
+def _slug_session(row: tuple) -> AsyncMock:
+    """A session whose every SELECT/UPDATE ... RETURNING answers *row*."""
     session = AsyncMock()
-    await lock_organization(session, uuid.uuid4())
-    assert session.execute.await_args.args[0]._for_update_arg is not None
+    result = MagicMock()
+    result.fetchone.return_value = row
+    session.execute.return_value = result
+    return session
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("control", ["pause_agent", "pause_repeat", "resume_agent", "terminate_agent"])
+async def test_agent_control_rows_are_keyed_by_the_node_uuid_not_the_slug(control):
+    """A slug like ``ceo-<uuid>`` is no UUID; the log parses ``entity_id`` as one (#15907)."""
+    node_id, company = uuid.uuid4(), str(uuid.uuid4())
+    slug = f"ceo-{uuid.uuid4()}"
+    log = AsyncMock()
+    svc = ControlsService(activity_log=log)
+    rows = {
+        "pause_agent": ("available", node_id),  # UPDATE ... RETURNING pre_pause_status, id
+        "pause_repeat": None,  # the conditional pause matched nothing -> re-read below
+        "resume_agent": ("paused", "available", None, node_id),
+        "terminate_agent": ("available", None, None, node_id),
+    }
+    session = _slug_session(rows[control])
+    if control == "pause_repeat":
+        first, again = MagicMock(), MagicMock()
+        first.fetchone.return_value = None
+        again.fetchone.return_value = ("paused", "available", "hold", node_id)
+        session.execute.side_effect = [first, again]
+    call = {"pause_repeat": "pause_agent"}.get(control, control)
+    with patch("llc.services.controls_service.get_async_redis_client", AsyncMock(return_value=AsyncMock())):
+        await getattr(svc, call)(session, company, slug, str(_ACTOR))
+
+    kwargs = log.record.await_args.kwargs
+    assert kwargs["entity_id"] == str(node_id)
+    _build_real_entry(kwargs)  # the real log accepts it

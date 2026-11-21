@@ -29,7 +29,6 @@ from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
 from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
 from .company_os.errors import CompanyOsError
-from .company_row_lock import lock_organization
 
 logger = get_logger(__name__)
 
@@ -346,8 +345,7 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         which is a product decision (tracked as #13998) this method should
         not make unilaterally.
         """
-        org = await self._get_or_404(company_id)
-        await lock_organization(self.session, company_id)  # serialises with a heartbeat enable (#15907)
+        org = await self._get_or_404(company_id, for_update=True)  # serialises with a heartbeat enable (#15907)
         children = await self.list_children(company_id)
         if children:
             raise CompanyHasChildrenError(
@@ -516,6 +514,10 @@ class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
         if org is None:
             raise CompanyNotFoundError(f"Company {company_id} not found")
         return org
+
+    async def get_live_for_update(self, company_id: uuid.UUID) -> Organization:
+        """Lock and return a live company, or raise :class:`CompanyNotFoundError` (#15907)."""
+        return await self._get_or_404(company_id, for_update=True)
 
     async def _assert_prefix_unique(self, prefix: Optional[str]) -> None:
         if prefix is None:
