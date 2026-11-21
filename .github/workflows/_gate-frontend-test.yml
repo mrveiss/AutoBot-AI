@@ -151,14 +151,14 @@ jobs:
 
       # #14786: the shared kit (libs/autobot-ui) has its own package.json, own
       # devDependencies and own vitest.config.ts, separate from autobot-frontend's
-      # -- `npm ci` above never installs or runs them. No package-lock.json is
-      # committed for this package (it is consumed by both apps via a `file:`
-      # dependency, never installed as its own top-level project until now), so
-      # `npm install` here, not `npm ci`. No coverage step yet -- that is a later
-      # AC on #14786, not this batch.
+      # -- `npm ci` above never installs or runs them. Its package-lock.json is
+      # committed so `npm ci` installs the exact tree: an unlocked `npm install`
+      # resolved fresh on every run and failed (ETARGET) while a registry release
+      # was still propagating. No coverage step yet -- that is a later AC on
+      # #14786, not this batch.
       - name: Install shared UI kit dependencies
         working-directory: libs/autobot-ui
-        run: npm install
+        run: npm ci
 
       - name: Run shared UI kit tests
         working-directory: libs/autobot-ui

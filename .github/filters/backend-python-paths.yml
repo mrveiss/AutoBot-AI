@@ -73,6 +73,7 @@ deps:
   - 'pyproject.toml'
   - 'autobot_shared/pyproject.toml'
   - 'autobot-frontend/package*.json'
+  - 'libs/autobot-ui/package*.json'  # #18890: the shared UI kit is audited by the same gate
 
 # ci.yml AI security review gate, output `reviewable`.
 reviewable:
