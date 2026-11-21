@@ -34,6 +34,9 @@ class _Redis:
         self.hashes = hashes
 
     async def smembers(self, key):
+        # A leaf category: child-category sets are empty, or the descendant walk recurses on fact ids.
+        if key.startswith("category:children:"):
+            return set()
         return {fid.encode() for fid in self.hashes}
 
     async def hgetall(self, key):
