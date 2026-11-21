@@ -498,7 +498,7 @@ class FunctionCallVisitor(ast.NodeVisitor):
 # =============================================================================
 
 
-async def _get_cached_call_graph(project_root: str) -> dict | None:
+async def get_cached_call_graph(project_root: str) -> dict | None:
     """
     Get cached call graph from Redis.
 
@@ -702,7 +702,7 @@ async def get_call_graph(
     project_root = await resolve_scan_root(source_id)
 
     if not refresh:
-        cached_data = await _get_cached_call_graph(str(project_root))
+        cached_data = await get_cached_call_graph(str(project_root))
         if cached_data:
             return JSONResponse({**cached_data, "from_cache": True, "source_id": source_id})
 
