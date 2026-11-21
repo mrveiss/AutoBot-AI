@@ -343,13 +343,22 @@ async def test_the_route_refuses_a_non_board_member(session_factory, client):  #
 # ---------------------------------------------------------------------------
 
 
-async def _hire_with_heartbeat(session_factory, company_id: uuid.UUID, slug: str) -> None:  # noqa: ANN001
-    """A non-CEO agent of the company whose heartbeat the owner switched on."""
+async def _hire_with_heartbeat(session_factory, company_id: uuid.UUID, slug: str) -> uuid.UUID:  # noqa: ANN001
+    """A non-CEO agent of the company whose heartbeat the owner switched on; returns its node id."""
+    node_id = uuid.uuid4()
     async with session_factory() as session:
         session.add(
-            AgentOrgNode(agent_id=slug, name=slug, company_id=company_id, heartbeat_enabled=True, heartbeat_cron=_CRON)
+            AgentOrgNode(
+                id=node_id,
+                agent_id=slug,
+                name=slug,
+                company_id=company_id,
+                heartbeat_enabled=True,
+                heartbeat_cron=_CRON,
+            )
         )
         await session.commit()
+    return node_id
 
 
 async def _all_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNode]:  # noqa: ANN001
@@ -407,7 +416,7 @@ async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_
 @pytest.mark.asyncio
 async def test_a_delete_with_no_actor_records_system_rows(session_factory):  # noqa: ANN001
     company_id = await _create(session_factory, "Acme")
-    await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
+    node_id = await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
 
     record = AsyncMock()
     async with session_factory() as session:
@@ -417,7 +426,7 @@ async def test_a_delete_with_no_actor_records_system_rows(session_factory):  # n
 
     assert record.await_count == 1
     kwargs = record.await_args.kwargs
-    assert kwargs["entity_id"] == "worker-acme"
+    assert kwargs["entity_id"] == str(node_id)  # the node UUID, never the slug
     assert kwargs["actor_type"] == "system"
     assert kwargs["actor_id"] is None
 
