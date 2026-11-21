@@ -5,8 +5,8 @@
 """Write-lease failure modes (#20992): writers fail open, the delete fails closed, a lapsed lease blocks the write."""
 
 import asyncio
-import logging
 import itertools
+import logging
 import threading
 import time
 

@@ -88,6 +88,9 @@ def delete_if_empty(client: Any, name: str) -> int:
     Blocking: call it from a worker thread. The thread runs to completion even if the awaiting task is
     cancelled, so the lease is always released and the outcome is delete-or-nothing. The lease is re-checked
     between the count and the delete: one that lapsed in between means "did not run".
+
+    Residual windows (fail-open writers, a stall past the lease TTL) are accepted: see ARCHITECTURE_EXCEPTIONS.md,
+    "Collection Delete Lease".
     """
     with delete_lease(name) as lease:
         count = client.get_collection(name=name).count()
