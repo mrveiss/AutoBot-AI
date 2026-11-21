@@ -45,7 +45,7 @@ from collections import deque
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from autobot_shared.env_utils import env_float, env_int
+from autobot_shared.env_utils import env_float_clamped, env_int
 from autobot_shared.logging_manager import get_logger
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ LOCAL_WINDOW_MAX_KEYS = env_int("AUTOBOT_RATE_LIMIT_LOCAL_MAX_KEYS", 10_000)
 
 #: Minimum seconds between full-table eviction sweeps while the table is full; a new
 #: key arriving in between is refused without scanning (#21907).
-LOCAL_WINDOW_SWEEP_INTERVAL = env_float("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", 1.0)
+LOCAL_WINDOW_SWEEP_INTERVAL = env_float_clamped("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", 1.0, positive_finite=True)
 
 
 class WindowFailurePolicy(str, Enum):
@@ -79,6 +79,8 @@ class LocalWindowCounter:
     new key is refused rather than evicting a live quota's history. The sweep that
     looks for expired keys runs at most once per ``sweep_interval`` seconds, so a
     flood of new keys on a full live table is refused without scanning (#21907).
+    Consequence: after a sweep that found nothing stale, a key that expires before
+    the next sweep frees its slot only at that next sweep, up to one interval later.
     """
 
     def __init__(
@@ -152,6 +154,7 @@ class LocalWindowCounter:
         with self._lock:
             self._hits.clear()
             self._windows.clear()
+            self._last_sweep = float("-inf")
 
 
 class WindowQuota:

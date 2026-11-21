@@ -274,6 +274,31 @@ class TestSweepThrottle:
         assert "new" not in counter._hits
 
 
+class TestSweepIntervalEnv:
+    """#21907: a bad sweep-interval env value falls back instead of disabling the sweep."""
+
+    @pytest.mark.parametrize("raw", ["inf", "nan", "-1", "0", "-inf"])
+    def test_non_positive_or_non_finite_falls_back(self, raw, monkeypatch):
+        import importlib
+
+        import autobot_shared.rate_limiter_window as mod
+
+        monkeypatch.setenv("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL", raw)
+        try:
+            reloaded = importlib.reload(mod)
+            assert reloaded.LOCAL_WINDOW_SWEEP_INTERVAL == 1.0
+        finally:
+            monkeypatch.delenv("AUTOBOT_RATE_LIMIT_LOCAL_SWEEP_INTERVAL")
+            importlib.reload(mod)
+
+    def test_reset_clears_the_sweep_throttle(self):
+        counter = LocalWindowCounter(max_keys=1, sweep_interval=10.0)
+        counter.try_acquire("a", 1, 60)
+        counter.try_acquire("b", 1, 60)  # full: sweeps once, refuses
+        counter.reset()
+        assert counter._last_sweep == float("-inf")
+
+
 class TestLocalWindowCounterRecord:
     def test_record_counts_without_checking(self):
         counter = LocalWindowCounter()
