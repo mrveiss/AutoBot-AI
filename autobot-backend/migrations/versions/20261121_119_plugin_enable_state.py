@@ -5,7 +5,7 @@
 """The operator's decision to let a plugin run in the backend process (#17421).
 
 Revision ID: 20261121_119
-Revises: 20261120_117
+Revises: 20261121_118
 Create Date: 2026-11-21 00:00:00.000000
 
 ``NO DATA LOSS``: a new, empty table. Rows are written by the application, not here: bundled core plugins
@@ -24,7 +24,7 @@ from alembic import op
 from migrations.guards import has_table
 
 revision: str = "20261121_119"
-down_revision: Union[str, None] = "20261120_117"
+down_revision: Union[str, None] = "20261121_118"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
