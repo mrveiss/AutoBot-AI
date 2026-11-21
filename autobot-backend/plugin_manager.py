@@ -28,10 +28,11 @@ from autobot_shared.plugin_sdk import (
     TrustTier,
 )
 from autobot_shared.plugin_sdk.base import PluginLoadError
+from autobot_shared.plugin_sdk.lifecycle import enable_attributed
 from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import decode_redis_value
-from plugin_enable_state import decide_plugin_enabled, require_enabled
+from plugin_enable_state import decide_plugin_enabled, plugin_decision_message, require_enabled
 from plugin_install import install_from_git, install_from_zip
 from plugin_paths import plugin_search_dirs, trusted_plugin_roots
 from services.provider_key_vault import plugin_credential_resolvers
@@ -269,7 +270,7 @@ async def load_plugin(
             detail=f"Failed to load plugin: {plugin_name}",
         )
 
-    await plugin.enable()  # only an ENABLED plugin's hooks and tools run (#19302)
+    await enable_attributed(plugin)  # only an ENABLED plugin's hooks and tools run (#19302)
     if manifest.trust_tier == TrustTier.OFFICIAL:
         CapabilityChecker().grant_capabilities(manifest.name, manifest.capabilities)
 
@@ -361,11 +362,8 @@ async def enable_plugin(
     Returns:
         Success message
     """
-    await decide_plugin_enabled(plugin_name, True, user, get_plugin_loader())
-    return {
-        "status": "success",
-        "message": f"Plugin {plugin_name} enabled successfully",
-    }
+    loaded = await decide_plugin_enabled(plugin_name, True, user, get_plugin_loader())
+    return {"status": "success", "message": plugin_decision_message(plugin_name, True, loaded)}
 
 
 @router.post("/plugins/{plugin_name}/disable")
@@ -384,11 +382,8 @@ async def disable_plugin(
     Returns:
         Success message
     """
-    await decide_plugin_enabled(plugin_name, False, user, get_plugin_loader())
-    return {
-        "status": "success",
-        "message": f"Plugin {plugin_name} disabled successfully",
-    }
+    loaded = await decide_plugin_enabled(plugin_name, False, user, get_plugin_loader())
+    return {"status": "success", "message": plugin_decision_message(plugin_name, False, loaded)}
 
 
 @router.get("/plugins/audit")

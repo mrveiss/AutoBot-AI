@@ -15,7 +15,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from autobot_shared.tool_sdk.registry import get_tool_registry, registering_for_plugin
+from autobot_shared.plugin_attribution import registering_for_plugin
+from autobot_shared.tool_sdk.registry import get_tool_registry
 
 from .base import BasePlugin, PluginStatus
 from .capabilities import CapabilityChecker
@@ -38,6 +39,12 @@ async def initialize_attributed(plugin: BasePlugin) -> None:
     """Run ``plugin.initialize()`` with its tool registrations attributed to the plugin (#19302)."""
     with registering_for_plugin(plugin.manifest.name):
         await plugin.initialize()
+
+
+async def enable_attributed(plugin: BasePlugin) -> None:
+    """Run ``plugin.enable()`` with the tools it registers attributed to the plugin (#19302)."""
+    with registering_for_plugin(plugin.manifest.name):
+        await plugin.enable()
 
 
 def _own_modules(entry_point: str) -> list[str]:
@@ -81,5 +88,5 @@ async def reload_with_fresh_code(loader: "PluginLoader", plugin: BasePlugin) -> 
     if grants:
         CapabilityChecker().grant_capabilities(manifest.name, grants)
     if was_enabled:
-        await reloaded.enable()
+        await enable_attributed(reloaded)
     return True

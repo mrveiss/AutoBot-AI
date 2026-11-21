@@ -5,26 +5,26 @@
 """The operator's durable decision to let a plugin run in this process (#17421).
 
 ``plugin_enable_state`` is the system of record. Startup imports only the plugins it lists as
-enabled (:class:`DatabaseEnableGate`); the load route refuses the rest; enable and disable are
-admin routes that write a durable audit entry first.
+enabled (``plugin_enable_gate.DatabaseEnableGate``); the load route refuses the rest; enable and
+disable are admin routes that write a durable audit entry first.
 
-Upgrade: the first start after this table exists records every plugin discovered at that moment as
-enabled ("grandfathered", one durable audit entry each), so nothing a user relies on stops. A plugin
-discovered afterwards stays off until an admin enables it.
+Two reserved rows are not plugins: ``__baseline__`` (the one-time grandfathering ran) and
+``__last_start__`` (its ``updated_at`` is when a backend last finished admitting plugins).
 """
 
-from typing import Any, Callable, List
+from datetime import datetime, timezone
+from typing import Any, Awaitable, Callable, List
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.plugin_sdk import PluginLoader, PluginManager, PluginManifest, PluginRegistry
+from autobot_shared.plugin_sdk import PluginLoader, PluginRegistry
+from autobot_shared.plugin_sdk.lifecycle import enable_attributed
 from autobot_shared.store_authority import system_of_record
-from plugin_paths import plugin_search_dirs, trusted_plugin_roots
 from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
-from services.provider_key_vault import plugin_credential_resolvers
 from user_management.database import get_async_session_factory
 from user_management.models.plugin_enable_state import PluginEnableState
 
@@ -34,9 +34,15 @@ SYSTEM_OF_RECORD = system_of_record("plugin_enable_state")
 
 #: Row recording that the one-time grandfathering ran. Not a plugin name, so never enabled or listed.
 BASELINE_ROW = "__baseline__"
+#: Row whose ``updated_at`` is the previous backend start; the reference the grandfather scope compares to.
+LAST_START_ROW = "__last_start__"
+RESERVED_ROWS = frozenset({BASELINE_ROW, LAST_START_ROW})
 SOURCE_GRANDFATHERED = "grandfathered"
 SOURCE_ADMIN = "admin"
+SOURCE_SYSTEM = "system"
 SYSTEM_ACTOR = "system"
+
+Row = tuple[str, bool, str, str]
 
 
 class PluginEnableStore:
@@ -52,7 +58,7 @@ class PluginEnableStore:
         async with self._session() as session:
             rows = await session.execute(
                 select(PluginEnableState.plugin_name).where(
-                    PluginEnableState.enabled.is_(True), PluginEnableState.plugin_name != BASELINE_ROW
+                    PluginEnableState.enabled.is_(True), PluginEnableState.plugin_name.not_in(RESERVED_ROWS)
                 )
             )
             return set(rows.scalars())
@@ -64,7 +70,28 @@ class PluginEnableStore:
         async with self._session() as session:
             return await session.get(PluginEnableState, BASELINE_ROW) is not None
 
-    async def put(self, rows: List[tuple[str, bool, str, str]]) -> None:
+    async def last_start(self) -> datetime | None:
+        """When a backend last finished admitting plugins, or None when none ever recorded it."""
+        async with self._session() as session:
+            row = await session.get(PluginEnableState, LAST_START_ROW)
+        if row is None:
+            return None
+        return row.updated_at if row.updated_at.tzinfo else row.updated_at.replace(tzinfo=timezone.utc)
+
+    async def touch_start(self) -> None:
+        """Record now as this backend's start (an explicit ``updated_at``, so an unchanged row still moves)."""
+        row = PluginEnableState(
+            plugin_name=LAST_START_ROW,
+            enabled=False,
+            source=SOURCE_SYSTEM,
+            decided_by=SYSTEM_ACTOR,
+            updated_at=datetime.now(timezone.utc),
+        )
+        async with self._session() as session:
+            await session.merge(row)
+            await session.commit()
+
+    async def put(self, rows: List[Row]) -> None:
         """Upsert ``(plugin_name, enabled, source, decided_by)`` rows in one transaction."""
         async with self._session() as session:
             for name, enabled, source, actor in rows:
@@ -73,8 +100,32 @@ class PluginEnableStore:
                 )
             await session.commit()
 
+    async def write_baseline(self, rows: List[Row], before_commit: Callable[[], Awaitable[None]]) -> bool:
+        """Claim the baseline, run *before_commit* (the audit), then write *rows*, all in one transaction.
 
-async def _audit(action: AuditAction, plugin_name: str, actor: str, **details: Any) -> None:
+        The baseline row is the claim: a concurrent first boot blocks on its primary key until the winner
+        commits, then fails with ``IntegrityError`` and gets False, so the audit runs and the rows are
+        written exactly once. A failing *before_commit* rolls everything back, leaving no baseline.
+        """
+        async with self._session() as session:
+            session.add(
+                PluginEnableState(
+                    plugin_name=BASELINE_ROW, enabled=False, source=SOURCE_GRANDFATHERED, decided_by=SYSTEM_ACTOR
+                )
+            )
+            try:
+                await session.flush()
+            except IntegrityError:
+                await session.rollback()
+                return False
+            await before_commit()
+            for name, enabled, source, actor in rows:
+                session.add(PluginEnableState(plugin_name=name, enabled=enabled, source=source, decided_by=actor))
+            await session.commit()
+            return True
+
+
+async def audit_decision(action: AuditAction, plugin_name: str, actor: str, **details: Any) -> None:
     """Write the durable audit entry; the decision is not made without one."""
     written = await audit_log(
         action,
@@ -85,28 +136,6 @@ async def _audit(action: AuditAction, plugin_name: str, actor: str, **details: A
     )
     if not written:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "audit trail unavailable; plugin state not changed")
-
-
-async def grandfather(store: PluginEnableStore, names: List[str]) -> None:
-    """Record *names* as enabled, each with a durable audit entry, then mark the baseline done."""
-    for name in names:
-        await _audit(AuditAction.PLUGIN_GRANDFATHER, name, SYSTEM_ACTOR, reason="running before the enable gate")
-    rows = [(name, True, SOURCE_GRANDFATHERED, SYSTEM_ACTOR) for name in names]
-    await store.put(rows + [(BASELINE_ROW, False, SOURCE_GRANDFATHERED, SYSTEM_ACTOR)])
-    logger.info("Plugin enable gate: grandfathered %d running plugin(s): %s", len(names), sorted(names))
-
-
-class DatabaseEnableGate:
-    """``autobot_shared.plugin_sdk.enable_gate.EnableGate`` backed by ``plugin_enable_state``."""
-
-    def __init__(self, store: PluginEnableStore | None = None) -> None:
-        self._store = store or PluginEnableStore()
-
-    async def admit(self, manifests: List[PluginManifest]) -> List[PluginManifest]:
-        if not await self._store.has_baseline():
-            await grandfather(self._store, [m.name for m in manifests])
-        enabled = await self._store.enabled_names()
-        return [m for m in manifests if m.name in enabled]
 
 
 async def require_enabled(plugin_name: str, store: PluginEnableStore | None = None) -> None:
@@ -123,22 +152,28 @@ async def decide_plugin_enabled(
     user: dict,
     loader: PluginLoader,
     store: PluginEnableStore | None = None,
-) -> None:
-    """Audit, persist and apply an admin's enable or disable of *plugin_name* (#17421)."""
+) -> bool:
+    """Audit, persist and apply an admin's enable or disable of *plugin_name* (#17421).
+
+    Returns whether the plugin is loaded in this process. The status flip applies to this worker only;
+    the decision itself is durable and every worker honours it at its next start.
+    """
     plugin = PluginRegistry().get_plugin(plugin_name)
     known = plugin is not None or any(m.name == plugin_name for m in loader.discover_plugins())
-    if plugin_name == BASELINE_ROW or not known:
+    if plugin_name in RESERVED_ROWS or not known:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Plugin not found: {plugin_name}")
     actor = user.get("username") or "unknown"
     action = AuditAction.PLUGIN_ENABLE if enabled else AuditAction.PLUGIN_DISABLE
-    await _audit(action, plugin_name, actor, loaded=plugin is not None)
+    await audit_decision(action, plugin_name, actor, loaded=plugin is not None)
     await (store or PluginEnableStore()).put([(plugin_name, enabled, SOURCE_ADMIN, actor)])
     if plugin is not None:
-        await (plugin.enable() if enabled else plugin.disable())
+        await (enable_attributed(plugin) if enabled else plugin.disable())
+    return plugin is not None
 
 
-def build_plugin_manager() -> PluginManager:
-    """The startup host: origin-bound credential resolvers (#18094) and the enable gate (#17421)."""
-    return PluginManager(
-        plugin_search_dirs(), plugin_credential_resolvers(), trusted_plugin_roots(), DatabaseEnableGate()
-    )
+def plugin_decision_message(plugin_name: str, enabled: bool, loaded: bool) -> str:
+    """What an admin is told: the decision is durable, the live effect is per worker (#17421)."""
+    verb = "enabled" if enabled else "disabled"
+    if enabled and not loaded:
+        return f"Plugin {plugin_name} enabled; load it or restart to activate"
+    return f"Plugin {plugin_name} {verb}; takes effect on restart for other workers"

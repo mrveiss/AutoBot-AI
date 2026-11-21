@@ -1919,7 +1919,7 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from plugin_enable_state import build_plugin_manager
+        from plugin_enable_gate import build_plugin_manager, start_plugin_manager
 
         # #18094 origin-bound resolvers and #17421 the enable gate are wired in by the builder.
         plugin_manager = build_plugin_manager()
@@ -1929,7 +1929,7 @@ async def _init_plugin_manager(app: FastAPI) -> None:
         # state that key exists to report was unobservable in production. A
         # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
-        await plugin_manager.startup()
+        await start_plugin_manager(plugin_manager)  # #17421: a gate failure retries in the background
         # #13677: the load tally, not just per-plugin statuses. A status map
         # nobody totals is why 0-of-7 read the same as "no plugins installed".
         logger.info(

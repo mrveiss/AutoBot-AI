@@ -10,7 +10,8 @@ enabled and imports only those. The durable record lives with the host (the
 backend keeps it in the database); the SDK only states the contract.
 """
 
-from typing import List, Protocol
+from pathlib import Path
+from typing import List, Mapping, Protocol
 
 from .base import PluginManifest
 
@@ -18,5 +19,8 @@ from .base import PluginManifest
 class EnableGate(Protocol):
     """Names the discovered plugins that may be imported."""
 
-    async def admit(self, manifests: List[PluginManifest]) -> List[PluginManifest]:
-        """Return the subset of *manifests* an operator has enabled."""
+    async def admit(self, manifests: List[PluginManifest], locations: Mapping[str, Path]) -> List[PluginManifest]:
+        """Return the subset of *manifests* an operator has enabled.
+
+        *locations* maps a plugin name to its directory on disk, for a gate that needs to look at the files.
+        """

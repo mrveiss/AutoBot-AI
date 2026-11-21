@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List
 from .base import PluginManifest, PluginRegistry, PluginStatus
 from .enable_gate import EnableGate
 from .hooks import HookRegistry
+from .lifecycle import enable_attributed
 from .loader import PluginLoader
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class PluginManager:
             "loaded": 0,
             "failed": [],
             "conflicts": [],
+            "gated": [],
             "started": False,
             # #13677 review: `started` alone made a CRASHED discovery
             # indistinguishable from an empty tree — both reported
@@ -135,7 +137,7 @@ class PluginManager:
             try:
                 plugin = await self._loader.load_plugin(manifest)
                 if plugin:
-                    await plugin.enable()
+                    await enable_attributed(plugin)
                     loaded.append(manifest.name)
                     logger.info(
                         "PluginManager: loaded and enabled '%s' v%s",
@@ -174,7 +176,7 @@ class PluginManager:
         """The discovered plugins an operator has enabled; the rest are never imported (#17421)."""
         if self._enable_gate is None:
             return discovered
-        admitted = await self._enable_gate.admit(discovered)
+        admitted = await self._enable_gate.admit(discovered, dict(self._loader._manifest_dirs))
         kept = {m.name for m in admitted}
         self._gated = sorted(m.name for m in discovered if m.name not in kept)
         if self._gated:
@@ -214,6 +216,7 @@ class PluginManager:
             "loaded": 0,
             "failed": [],
             "conflicts": [],
+            "gated": [],
             "started": False,
             "completed": False,
         }
@@ -254,6 +257,8 @@ class PluginManager:
             # Direct attribute access, not getattr-with-default: a duck-typed
             # loader missing it would have rendered as a clean "no conflicts".
             "conflicts": sorted(set(self._loader.name_conflicts)),
+            # #17421: discovered but not imported because no operator enabled them -- neither loaded nor failed.
+            "gated": list(self._gated),
             "started": True,
             "completed": True,
         }
@@ -262,7 +267,7 @@ class PluginManager:
             logger.info("PluginManager: no plugins discovered — nothing to load")
             return
 
-        if not loaded:
+        if not loaded and len(self._gated) < len(manifests):
             logger.critical(
                 "PluginManager: loaded 0 of %d plugin(s) — the plugin subsystem is " "delivering nothing. Failed: %s",
                 len(manifests),

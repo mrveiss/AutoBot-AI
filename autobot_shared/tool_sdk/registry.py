@@ -10,11 +10,10 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 """
 
 import logging
-from contextlib import contextmanager
-from contextvars import ContextVar
-from typing import Dict, Iterator, List, Type
+from typing import Dict, List, Type
 
 from autobot_shared.coordination.run_progress import record_progress
+from autobot_shared.plugin_attribution import resolve_owner
 
 from .base import (
     BaseTool,
@@ -26,19 +25,6 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
-
-# The plugin whose code is registering tools right now; set by the plugin host (#19302).
-_registering_plugin: ContextVar[str | None] = ContextVar("tool_registering_plugin", default=None)
-
-
-@contextmanager
-def registering_for_plugin(plugin_name: str) -> Iterator[None]:
-    """Attribute every tool registered inside the block to *plugin_name* (#19302)."""
-    token = _registering_plugin.set(plugin_name)
-    try:
-        yield
-    finally:
-        _registering_plugin.reset(token)
 
 
 class PermissionDeniedError(Exception):
@@ -102,7 +88,7 @@ class ToolSDKRegistry:
             raise ValueError(f"Tool already registered: '{name}'")
 
         self._tools[name] = tool_class
-        owner = _registering_plugin.get()
+        owner = resolve_owner(None)
         if owner:
             self._owners[name] = owner
         logger.info(
@@ -139,11 +125,9 @@ class ToolSDKRegistry:
         owner = self._owners.get(name)
         if owner is None:
             return True
-        from autobot_shared.plugin_sdk.hooks import (  # noqa: PLC0415  (plugin_sdk imports this package's peers)
-            HookRegistry,
-        )
+        from autobot_shared.plugin_sdk.hooks import is_plugin_active  # noqa: PLC0415  (plugin_sdk imports this package)
 
-        return not HookRegistry._plugin_is_inactive(owner)
+        return is_plugin_active(owner)
 
     # ------------------------------------------------------------------
     # Lookup

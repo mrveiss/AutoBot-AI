@@ -10,7 +10,9 @@ Create Date: 2026-11-21 00:00:00.000000
 
 ``NO DATA LOSS``: a new, empty table. Existing installs are grandfathered at the first start after
 this revision, by the application, not here: only the host knows which plugins it was running.
-Downgrade drops only that table.
+Downgrade drops only that table, and with it the enable decisions and the ``__baseline__`` row: a later
+re-upgrade grandfathers again at its first start (the plugins whose files predate the then-recorded
+previous start, which is gone too, so every discovered plugin), and admin disables are forgotten.
 """
 
 from typing import Sequence, Union

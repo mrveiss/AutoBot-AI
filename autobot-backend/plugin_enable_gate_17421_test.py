@@ -8,9 +8,12 @@ Real loader, real ``PluginManager``, real ``plugin_enable_state`` table (SQLite)
 audit sink, which models the contract of ``audit_log``: awaited, returns whether the row was committed.
 """
 
+import asyncio
 import json
+import os
 import sys
 import textwrap
+import time
 
 import pytest
 import pytest_asyncio
@@ -19,6 +22,7 @@ from fastapi.routing import APIRoute
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+import plugin_enable_gate as peg
 import plugin_enable_state as pes
 import plugin_manager as plugin_routes
 from auth_middleware import check_admin_permission
@@ -48,8 +52,10 @@ class RecordingAudit:
     def __init__(self) -> None:
         self.entries: list[dict] = []
         self.committed = True
+        self.delay = 0.0
 
     async def __call__(self, operation, result="success", **kwargs) -> bool:
+        await asyncio.sleep(self.delay)
         if self.committed:
             self.entries.append({"operation": operation, **kwargs})
         return self.committed
@@ -98,7 +104,7 @@ def _add_plugin(root, names, name):
 
 
 def _manager(root, store):
-    return PluginManager([root], enable_gate=pes.DatabaseEnableGate(store))
+    return PluginManager([root], enable_gate=peg.DatabaseEnableGate(store))
 
 
 @pytest.mark.asyncio
@@ -131,6 +137,7 @@ async def test_new_plugin_is_not_imported_until_an_admin_enables_it(store, audit
     assert "gate_old_a" in PluginRegistry().get_all_plugins()
     assert "gate_new_c" not in sys.modules, "discovery must not import the module"
     assert second.get_gated_plugins() == ["gate_new_c"]
+    assert second.get_load_report()["gated"] == ["gate_new_c"]
     assert audit.entries == [], "grandfathering runs once"
 
     admin = {"username": "root"}
@@ -194,3 +201,86 @@ async def test_unknown_plugin_cannot_be_enabled(store, audit):
 def test_routes_are_admin_gated(suffix):
     route = next(r for r in plugin_routes.router.routes if isinstance(r, APIRoute) and r.path.endswith(f"/{suffix}"))
     assert check_admin_permission in {d.call for d in route.dependant.dependencies}
+
+
+def _age(root, name, delta_s):
+    """Move a plugin directory's files by *delta_s* seconds from now (negative = older)."""
+    when = time.time() + delta_s
+    for path in (root / name).rglob("*"):
+        os.utime(path, (when, when))
+
+
+@pytest.mark.asyncio
+async def test_a_plugin_dropped_in_after_the_last_start_waits_for_an_admin(store, audit, plugin_root):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    _add_plugin(root, names, "gate_dropped_b")
+    _age(root, "gate_old_a", -3600)
+    _age(root, "gate_dropped_b", 3600)
+    await store.touch_start()
+    manager = _manager(root, store)
+    await manager.startup()
+    assert await store.enabled_names() == {"gate_old_a"}
+    assert manager.get_gated_plugins() == ["gate_dropped_b"]
+    assert [e["resource"] for e in audit.entries] == ["plugin:gate_old_a"]
+    await manager.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_empty_discovery_writes_no_baseline(store, audit, tmp_path):
+    for missing in (tmp_path / "unmounted", tmp_path):
+        manager = PluginManager([missing], enable_gate=peg.DatabaseEnableGate(store))
+        await manager.startup()
+        assert not await store.has_baseline()
+        assert audit.entries == []
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_first_boots_grandfather_once(plugin_root, audit, tmp_path):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'gate.db'}")  # canonical: ignore py-adhoc-db-engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[PluginEnableState.__table__])
+    factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+    audit.delay = 0.05
+    manifests = PluginLoader([root]).discover_plugins()
+    locations = {"gate_old_a": root / "gate_old_a"}
+    gates = [peg.DatabaseEnableGate(pes.PluginEnableStore(factory)) for _ in range(2)]
+    admitted = await asyncio.gather(*(g.admit(manifests, locations) for g in gates))
+    assert [[m.name for m in a] for a in admitted] == [["gate_old_a"], ["gate_old_a"]]
+    assert [e["resource"] for e in audit.entries] == ["plugin:gate_old_a"], "the loser must not audit again"
+    await engine.dispose()
+
+
+class _FlakyStore:
+    """The database is down for the first *failures* reads, then answers; everything else is the real store."""
+
+    def __init__(self, inner: pes.PluginEnableStore, failures: int) -> None:
+        self._inner, self.failures = inner, failures
+
+    async def has_baseline(self) -> bool:
+        if self.failures:
+            self.failures -= 1
+            raise ConnectionError("database unavailable")
+        return await self._inner.has_baseline()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+@pytest.mark.asyncio
+async def test_gate_failure_loads_nothing_then_retries_without_a_restart(store, audit, plugin_root, monkeypatch):
+    root, names = plugin_root
+    _add_plugin(root, names, "gate_old_a")
+    monkeypatch.setattr(peg, "RETRY_INITIAL_S", 0.01)
+    manager = PluginManager([root], enable_gate=peg.DatabaseEnableGate(_FlakyStore(store, failures=2)))
+    await peg.start_plugin_manager(manager)
+    assert "gate_old_a" not in PluginRegistry().get_all_plugins(), "fail closed"
+    for _ in range(300):
+        if "gate_old_a" in PluginRegistry().get_all_plugins():
+            break
+        await asyncio.sleep(0.02)
+    assert "gate_old_a" in PluginRegistry().get_all_plugins(), "loaded once the database answered"
+    assert manager.get_load_report()["completed"]
+    await manager.shutdown()
