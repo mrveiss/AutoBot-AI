@@ -119,7 +119,7 @@ async def create_folder(
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
     from exceptions import get_exceptions_lazy
 
-    _, _, _, ValidationError, _ = get_exceptions_lazy()
+    _, _, ResourceNotFoundError, ValidationError, _ = get_exceptions_lazy()
 
     username = current_user.get("username", "")
     redis = await get_redis_mgr(async_client=True, database="main")
@@ -131,7 +131,7 @@ async def create_folder(
     if body.parent_id:
         parent = next((f for f in folders if f["id"] == body.parent_id), None)
         if not parent:
-            raise ValidationError("Parent folder not found")
+            raise ResourceNotFoundError("Parent folder not found")
         depth = _folder_depth(folders, body.parent_id)
         if depth >= _MAX_NESTING:
             raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")
@@ -192,7 +192,7 @@ async def update_folder(
                 raise ValidationError("A folder cannot be its own parent")
             parent = next((f for f in folders if f["id"] == body.parent_id), None)
             if not parent:
-                raise ValidationError("Parent folder not found")
+                raise ResourceNotFoundError("Parent folder not found")
             depth = _folder_depth(folders, body.parent_id)
             if depth >= _MAX_NESTING:
                 raise ValidationError(f"Maximum folder nesting depth ({_MAX_NESTING}) reached")

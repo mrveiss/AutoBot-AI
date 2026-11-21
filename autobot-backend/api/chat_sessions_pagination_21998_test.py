@@ -35,8 +35,9 @@ def test_out_of_range_is_4xx_with_the_range_stated(client, query):
 
     assert response.status_code == 400
     reason = response.json()["detail"]["error"]["details"]["reason"]
+    assert reason == f"page must be >= 1 and per_page 1-{chat_sessions.CHAT_MESSAGES_MAX_PER_PAGE}"
     assert "page must be >= 1" in reason
-    assert f"1-{chat_sessions.MAX_PER_PAGE}" in reason
+    assert f"1-{chat_sessions.CHAT_MESSAGES_MAX_PER_PAGE}" in reason
 
 
 def test_out_of_range_is_not_logged_as_a_server_fault(client, caplog):

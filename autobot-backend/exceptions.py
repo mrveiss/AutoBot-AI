@@ -11,14 +11,21 @@ and debugging across the AutoBot platform.
 
 from typing import Any, Callable, Dict, Tuple
 
-from autobot_shared.error_boundaries.types import ErrorCategory
+from autobot_shared.error_boundaries.types import APIErrorResponse, ErrorCategory
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
 
 class AutoBotError(Exception):
-    """Base exception class for all AutoBot-specific errors."""
+    """Base exception class for all AutoBot-specific errors.
+
+    ``error_category`` is the ONE place an exception names its HTTP status (#21998): the
+    error boundary and ``get_error_code`` both derive it from there. ``None`` leaves the
+    route's own fallback category in charge.
+    """
+
+    error_category: ErrorCategory | None = None
 
     def __init__(self, message: str, details: Dict[str, Any] | None = None):
         """Initialize AutoBotError with message and optional details dictionary."""
@@ -99,26 +106,35 @@ class WorkflowExecutionError(WorkflowError):
 class WorkflowValidationError(WorkflowError):
     """Raised when workflow validation fails."""
 
+    error_category = ErrorCategory.VALIDATION
+
 
 class ValidationError(AutoBotError):
     """Raised when input validation fails."""
 
-    # #21998: the error boundary answers this with the VALIDATION 4xx, whatever the
-    # route's fallback category is, and returns ``message`` as the reason.
     error_category = ErrorCategory.VALIDATION
 
-    def __init__(self, message: str, field: str | None = None, value: Any | None = None):
-        """Initialize ValidationError with message and optional field/value info."""
+    def __init__(
+        self,
+        message: str,
+        field: str | None = None,
+        value: Any | None = None,
+        client_message: str | None = None,
+    ):
+        """Initialize ValidationError; ``client_message`` is the only text a client is shown."""
         super().__init__(message)
         self.field = field
         self.value = value
+        self.client_message = client_message
         if field:
             self.details["field"] = field
         # Don't include actual value in details for security
 
     @property
     def safe_message(self) -> str:
-        """Return a user-safe validation error message."""
+        """Return a user-safe validation error message (explicit ``client_message`` first)."""
+        if self.client_message:
+            return self.client_message
         if self.field:
             return f"Invalid value for field '{self.field}'"
         return "Validation failed"
@@ -174,9 +190,13 @@ class SecurityError(AutoBotError):
 class AuthenticationError(SecurityError):
     """Raised when authentication fails."""
 
+    error_category = ErrorCategory.AUTHENTICATION
+
 
 class AuthorizationError(SecurityError):
     """Raised when authorization fails."""
+
+    error_category = ErrorCategory.AUTHORIZATION
 
 
 class EncryptionError(SecurityError):
@@ -189,6 +209,8 @@ class ResourceError(AutoBotError):
 
 class ResourceNotFoundError(ResourceError):
     """Raised when a requested resource is not found."""
+
+    error_category = ErrorCategory.NOT_FOUND
 
     def __init__(
         self,
@@ -208,6 +230,8 @@ class ResourceNotFoundError(ResourceError):
 
 class ResourceLimitError(ResourceError):
     """Raised when resource limits are exceeded."""
+
+    error_category = ErrorCategory.RATE_LIMIT
 
     def __init__(self, message: str, limit: int | None = None, current: int | None = None):
         """Initialize ResourceLimitError with message and limit/current values."""
@@ -237,6 +261,8 @@ class WebSocketError(AutoBotError):
 
 class InternalError(AutoBotError):
     """Raised for unexpected internal errors."""
+
+    error_category = ErrorCategory.SERVER_ERROR
 
     @property
     def safe_message(self) -> str:
@@ -349,26 +375,10 @@ class FileOperationError(AutoBotError):
             self.details["operation"] = operation
 
 
-# Error code mapping for API responses
-ERROR_CODES = {
-    ValidationError: 400,
-    AuthenticationError: 401,
-    AuthorizationError: 403,
-    ResourceNotFoundError: 404,
-    ResourceLimitError: 429,
-    WorkflowValidationError: 422,
-    WorkflowExecutionError: 422,
-    LLMTimeoutError: 504,
-    InternalError: 500,
-}
-
-
 def get_error_code(error: AutoBotError) -> int:
-    """Get the appropriate HTTP status code for an error."""
-    for error_class, code in ERROR_CODES.items():
-        if isinstance(error, error_class):
-            return code
-    return 500  # Default to internal server error
+    """HTTP status for an error: its ``error_category`` mapped by the boundary's table (#21998)."""
+    category = error.error_category
+    return 500 if category is None else APIErrorResponse.get_status_code_for_category(category)
 
 
 def get_exceptions_lazy() -> Tuple[type, type, type, type, Callable[[str], str]]:

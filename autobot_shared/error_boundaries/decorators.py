@@ -231,17 +231,25 @@ def error_boundary(
     return decorator
 
 
-# #21998: categories a caller caused. An exception that declares one of these via
-# ``error_category`` (e.g. ``ValidationError``) is answered with that category's 4xx
-# instead of the route's declared fallback, and its author-written message is returned.
-_CLIENT_FAULT_CATEGORIES = frozenset({ErrorCategory.VALIDATION, ErrorCategory.USER_INPUT})
+# #21998: categories a caller caused, logged at WARNING rather than ERROR.
+_CLIENT_FAULT_CATEGORIES = frozenset(
+    {
+        ErrorCategory.VALIDATION,
+        ErrorCategory.USER_INPUT,
+        ErrorCategory.AUTHENTICATION,
+        ErrorCategory.AUTHORIZATION,
+        ErrorCategory.NOT_FOUND,
+        ErrorCategory.RATE_LIMIT,
+    }
+)
 
 
-def _error_details(e: Exception, func_operation: str, client_fault: bool) -> Dict[str, Any]:
-    """Response details; a client fault also says what was wrong (#21998)."""
+def _error_details(e: Exception, func_operation: str) -> Dict[str, Any]:
+    """Response details. An exception that declares ``error_category`` also supplies its
+    ``safe_message`` (its client-safe contract); ``str(e)`` is never returned (#13740)."""
     details: Dict[str, Any] = {"operation": func_operation}
-    if client_fault and hasattr(e, "error_category"):
-        details["reason"] = str(e)
+    if getattr(e, "error_category", None) is not None:
+        details["reason"] = getattr(e, "safe_message", None)
     return details
 
 
@@ -263,7 +271,8 @@ def _create_api_error_response(
     Returns:
         APIErrorResponse object
     """
-    category = getattr(e, "error_category", category)
+    declared = getattr(e, "error_category", None)
+    category = declared or category
     client_fault = category in _CLIENT_FAULT_CATEGORIES
     trace_id = f"{func_operation}_{int(time.time() * 1000)}"
     error_code = f"{error_code_prefix}_{abs(hash(type(e).__name__)) % 10000:04d}"
@@ -290,7 +299,7 @@ def _create_api_error_response(
         message=APIErrorResponse.get_client_message_for_category(category),
         code=error_code,
         status_code=status_code,
-        details=_error_details(e, func_operation, client_fault),
+        details=_error_details(e, func_operation),
         trace_id=trace_id,
     )
 

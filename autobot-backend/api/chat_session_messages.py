@@ -35,7 +35,7 @@ async def _fetch_or_raise(chat_history_manager, session_id: str, limit: int, off
 
     Raises:
         ResourceNotFoundError: If session does not exist
-        ValidationError: If session data is corrupted (ValueError)
+        InternalError: If session data is corrupted (ValueError)
         InternalError: If session cannot be accessed (PermissionError)
     """
     (
@@ -56,7 +56,7 @@ async def _fetch_or_raise(chat_history_manager, session_id: str, limit: int, off
         raise InternalError("Unable to access chat session")
     except ValueError as exc:
         logger.error("Corrupted session data for session %s: %s", session_id, exc)
-        raise ValidationError("Chat session data is corrupted")
+        raise InternalError("Chat session data is corrupted")
 
     if messages is None:
         raise ResourceNotFoundError(f"Session {session_id} not found")

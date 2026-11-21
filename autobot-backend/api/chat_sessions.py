@@ -55,6 +55,7 @@ from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import AuthenticationError, AuthorizationError
 from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
 from security.session_ownership import build_owner_metadata, validate_session_ownership
@@ -196,7 +197,7 @@ def _validate_session_id_or_raise(session_id: str) -> None:
         raise ValidationError("Invalid session ID format")
 
 
-MAX_PER_PAGE = 100  # largest page a client may request (#21998)
+CHAT_MESSAGES_MAX_PER_PAGE = 100  # largest page a client may request (#21998)
 
 
 def _validate_pagination_params(page: int, per_page: int) -> None:
@@ -206,11 +207,14 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
     Issue #620. The boundary answers the error with a 4xx naming the range (#21998).
 
     Raises:
-        ValidationError: page must be >= 1 and per_page within MAX_PER_PAGE
+        ValidationError: page must be >= 1 and per_page within CHAT_MESSAGES_MAX_PER_PAGE
     """
-    if page < 1 or not 1 <= per_page <= MAX_PER_PAGE:
+    if page < 1 or not 1 <= per_page <= CHAT_MESSAGES_MAX_PER_PAGE:
         _, _, _, ValidationError, _ = get_exceptions_lazy()
-        raise ValidationError(f"Invalid pagination parameters: page must be >= 1 and per_page 1-{MAX_PER_PAGE}")
+        raise ValidationError(
+            "Invalid pagination parameters",
+            client_message=f"page must be >= 1 and per_page 1-{CHAT_MESSAGES_MAX_PER_PAGE}",
+        )
 
 
 def _validate_export_format_or_raise(export_format: str) -> None:
@@ -479,14 +483,7 @@ async def _list_scoped_sessions(
     """
     user_data = get_auth_middleware().get_user_from_request(request)
     if not user_data:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Authentication required for scoped listing")
+        raise AuthenticationError("Authentication required for scoped listing")
 
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
@@ -522,14 +519,7 @@ async def _list_org_sessions(
             data={"sessions": [], "count": 0, "scope": "org"}, message="User has no organization", request_id=request_id
         )
     if not (is_admin_role(user_role) or user_role == "org_admin"):
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Admin role required for org-scoped listing")
+        raise AuthorizationError("Admin role required for org-scoped listing")
 
     session_ids = set(await validator.get_org_sessions(org_id))
     all_sessions = await chat_history_manager.list_sessions_fast()
@@ -1676,14 +1666,7 @@ async def clear_session_checkpoints(
     """
     user_role = current_user.get("role", "")
     if not (is_admin_role(user_role) or user_role == "org_admin"):
-        (
-            _AutoBotError,
-            _InternalError,
-            _ResourceNotFoundError,
-            ValidationError,
-            _get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("Admin role required to clear session checkpoints")
+        raise AuthorizationError("Admin role required to clear session checkpoints")
     try:
         from chat_workflow.graph import delete_thread_checkpoints
 
