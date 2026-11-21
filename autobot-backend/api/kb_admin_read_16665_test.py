@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_mcp
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, FakeKB, text_of
+from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB, text_of
 from knowledge.schemas.mcp import KnowledgeSearchRequest
 from knowledge.search_filters import filter_for_caller, filter_for_user_id
 
@@ -166,4 +166,6 @@ async def test_prompt_feeding_mcp_tool_gives_an_admin_no_cross_user_fact(tool, a
     ):
         as_admin = text_of(await read(ADMIN))
 
+    assert SHARED in as_admin, "the system fact still reads, so an error or empty result cannot pass"
     assert PRIVATE_A not in as_admin and PRIVATE_B not in as_admin
+    audit.assert_not_awaited()
