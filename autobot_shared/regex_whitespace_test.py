@@ -7,7 +7,18 @@
 import re
 import sys
 
-from autobot_shared.regex_whitespace import HSPACE, NOT_WS, WS
+from autobot_shared.regex_whitespace import HSPACE, NOT_WS, WS, WS_CHARS
+
+
+def test_class_body_composes_into_exact_and_negated_classes():
+    positive, negated = re.compile(f"[{WS_CHARS}]"), re.compile(f"[^{WS_CHARS}x]")
+    shorthand = re.compile(r"\s")
+    for cp in range(sys.maxunicode + 1):
+        ch = chr(cp)
+        assert bool(positive.fullmatch(ch)) == bool(shorthand.fullmatch(ch)), hex(cp)
+        if shorthand.fullmatch(ch):
+            assert not negated.fullmatch(ch), hex(cp)
+    assert not negated.fullmatch("x") and negated.fullmatch("y")
 
 
 def test_classes_equal_the_shorthands_for_every_code_point():

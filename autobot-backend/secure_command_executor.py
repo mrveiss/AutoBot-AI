@@ -48,11 +48,11 @@ logger = get_logger(__name__)
 # base-command lookup hit `ls` without parsing the prefix. Real attacker techniques: PATH shadowing of standard
 # binaries, LD_PRELOAD / LD_LIBRARY_PATH / DYLD_INSERT_LIBRARIES linker hijack, IFS / BASH_ENV / ENV shell-parsing
 # changes, PYTHONPATH / PERL5LIB / RUBYLIB / NODE_PATH interpreter-startup injection.
-# #21987: linear form of ``^\s*(?:NAME=(?:'[^']*'|"[^"]*"|\S*)\s+)+`` (CodeQL py/redos). A quoted value without
-# whitespace is already a whole ``\S*`` run, so the quoted arms keep only values holding whitespace; same matches.
+# #21987: linear form of ``^\s*(?:NAME=(?:'[^']*'|"[^"]*"|\S*)\s+)+`` (py/redos): quoted arms keep only values holding
+# whitespace, and the bare arm is skipped where a quoted arm plus ``\s`` would match; every match is identical.
+_SQ, _DQ = f"'[^'{WS_CHARS}]*{WS}[^']*'", f'"[^"{WS_CHARS}]*{WS}[^"]*"'
 _ENV_VAR_PREFIX_RE = re.compile(
-    rf"^{WS}*(?:[A-Za-z_][A-Za-z0-9_]*="
-    rf"(?:'[^'{WS_CHARS}]*{WS}[^']*'|\"[^\"{WS_CHARS}]*{WS}[^\"]*\"|{NOT_WS}*){WS}+)+"
+    rf"^{WS}*(?:[A-Za-z_][A-Za-z0-9_]*=(?:{_SQ}|{_DQ}|(?!{_SQ}{WS})(?!{_DQ}{WS}){NOT_WS}*){WS}+)+"
 )
 _DANGEROUS_ENV_VARS = frozenset(
     {
