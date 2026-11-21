@@ -56,6 +56,7 @@ from services.envelope_secrets_service import (
     SecretNotFoundError,
 )
 from services.secret_dependency_service import SecretDependencyService
+from services.secret_names import refuse_reserved_secret_name
 from services.secrets_access_audit import SecretAccessReport, describe_secret_access
 from services.secrets_access_log import record_secret_access
 from services.secrets_authz import PrincipalFacts, authorize
@@ -99,6 +100,7 @@ class SecretsCoordinator:
         extra_data: dict | None = None,
         expires_at: datetime | None = None,
     ) -> Secret:
+        refuse_reserved_secret_name(name)  # #17850: the connector writer's namespace; it bypasses this method
         facts = await self._facts(session, user_id, permissions)
         if not authorize(facts, "write", owner_vault):
             raise SecretAccessError(f"not authorized to write to {owner_vault.to_str()}")
@@ -508,6 +510,7 @@ class SecretsCoordinator:
         service_id: str,
     ) -> Secret:
         """Create a system-vault secret on behalf of a service identity."""
+        refuse_reserved_secret_name(name)
         self._assert_system_vault(owner_vault)
         secret = await self._service.create(
             session,
