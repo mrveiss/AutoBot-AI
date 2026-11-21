@@ -82,3 +82,32 @@ async def test_marker_hit_rotates(monkeypatch):
     svc.rotate_value.assert_awaited_once()
     svc.find_by_name.assert_not_awaited()
     svc.create.assert_not_awaited()
+
+
+async def test_delete_failure_log_carries_no_identifier_value_or_message(monkeypatch, caplog):
+    """The reconciliation ERROR names the exception class only (CodeQL py/clear-text-logging-sensitive-data)."""
+    import logging
+
+    leaky_text = "canary-0xDEADBEEF"
+    monkeypatch.setattr(cw, "_root_key_or_none", lambda: _ROOT)
+    monkeypatch.setattr(
+        "user_management.database.get_async_session_factory",
+        lambda: (_ for _ in ()).throw(RuntimeError(leaky_text)),
+    )
+    with caplog.at_level(logging.DEBUG, logger=cw.logger.name):
+        await cw.delete_credential_from_vault("sid-private-1", str(_OWNER))
+    records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(records) == 1
+    text = records[0].getMessage()
+    assert "RuntimeError" in text
+    for leaked in (leaky_text, "sid-private-1", str(_OWNER)):
+        assert leaked not in text
+
+
+async def test_rotate_skip_log_carries_no_identifier(caplog):
+    import logging
+
+    with caplog.at_level(logging.DEBUG, logger=cw.logger.name):
+        await cw._rotate_or_skip(MagicMock(), MagicMock(), MagicMock(), None, "sid-private-2", "v")
+    assert caplog.records
+    assert all("sid-private-2" not in r.getMessage() for r in caplog.records)

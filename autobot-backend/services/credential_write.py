@@ -95,10 +95,7 @@ def _mirror_context(owner_id: str, root_key: bytes):
 async def _rotate_or_skip(session, svc, vault, row, sqlite_id: str, value: str) -> None:
     """Rotate the marked envelope copy *row*; with no copy and nothing to create one from, skip."""
     if row is None:
-        logger.debug(
-            "No envelope copy for credential %s and no name/type to create one — skipping mirror",
-            sqlite_id,
-        )
+        logger.debug("No envelope copy for the credential and no name/type to create one — skipping mirror")
         return
     await svc.rotate_value(
         session,
@@ -225,9 +222,6 @@ async def delete_credential_from_vault(sqlite_id: str, owner_id: str) -> None:
             await delete_in_session(session, sqlite_id, owner_id, root_key)
             await session.commit()
     except Exception as exc:  # never break the canonical revoke; surface loudly for reconciliation
-        logger.error(
-            "Envelope delete failed for credential %s (owner %s): %s",
-            sqlite_id,
-            owner_id,
-            exc,
-        )
+        # Class only, no identifiers or exception text (same convention as the mirror failure above). The stale
+        # copy stays findable for reconciliation by its ``imported_from_sqlite`` marker with no SQLite row.
+        logger.error("Envelope delete failed for one credential (stale envelope copy remains): %s", type(exc).__name__)
