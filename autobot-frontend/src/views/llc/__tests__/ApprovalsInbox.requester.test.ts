@@ -35,9 +35,14 @@ const row = (id: string, payload: Record<string, unknown>) => ({
 
 async function mountInbox(rows: unknown[]) {
   setActivePinia(createPinia())
-  get.mockImplementation((url: string) => Promise.resolve(url.includes('/api/llc/approvals') ? rows : []))
+  // Other mounted parts (the waiting-for-you panel's store) read through the same client; only the inbox's own
+  // request answers rows, and every other read answers empty whatever its argument.
+  get.mockImplementation((url: unknown) =>
+    Promise.resolve(typeof url === 'string' && url.includes('/api/llc/approvals') ? rows : []),
+  )
   const wrapper = mount(ApprovalsInbox, { global: { plugins: [i18n], stubs: { StuckFileCleanupPanel: true } } })
   await flushPromises()
+  expect(get).toHaveBeenCalledWith(expect.stringContaining('/api/llc/approvals?company_id=c1'))
   return wrapper
 }
 
