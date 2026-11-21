@@ -74,6 +74,8 @@ COLLECTION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 #: The production module that PROPOSES these actions (#17315).
 PROPOSED_BY = "services.kb_collection_delete_action"
 _WHAT = "the knowledge collection deletion"
+#: How many selected fact ids the approver's description names; the plan carries all of them.
+PREVIEW_FACT_IDS = 5
 
 
 @dataclass(frozen=True)
@@ -201,7 +203,9 @@ async def selected_facts_count(kb, fact_ids: list[str]) -> int:
 def _description(op: CollectionOp, plan: dict) -> str:
     """What the approver reads: the operation, then the collection (or the number of selected facts)."""
     if op is DOCUMENTS_DELETE:
-        return f"{op.description} Selected facts that exist now: {plan['facts']}."
+        ids = plan["selector"]["fact_ids"]
+        shown = ", ".join(ids[:PREVIEW_FACT_IDS]) + (", ..." if len(ids) > PREVIEW_FACT_IDS else "")
+        return f"{op.description} Selected facts that exist now: {plan['facts']} (ids: {shown})."
     return f"{op.description} Collection: {plan.get('name') or plan['selector']['collection_id']!r}."
 
 

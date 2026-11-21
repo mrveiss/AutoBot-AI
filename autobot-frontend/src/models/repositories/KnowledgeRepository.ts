@@ -8,7 +8,7 @@
  *
  * @author mrveiss
  */
-import type { SelectedFactsDeleteProposal } from './collectionDeleteProposal'
+import type { components } from '@/types/generated/api'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -499,8 +499,11 @@ export class KnowledgeRepository extends ApiRepository {
     return response.data
   }
 
-  /** Propose deleting exactly the selected documents, from every collection they are in (#21886, #21383); nothing is deleted until approved. */
-  async bulkDeleteDocuments(documentIds: string[]): Promise<SelectedFactsDeleteProposal> {
+  /**
+   * Propose deleting exactly the selected documents, from every collection they are in (#21886, #21383);
+   * nothing is deleted until approved.
+   */
+  async bulkDeleteDocuments(documentIds: string[]): Promise<components['schemas']['KnowledgeSelectedFactsDeleteProposal']> {
     return apiClient.call('post', '/api/knowledge_base/facts/delete-selected', { body: { fact_ids: documentIds } })
   }
 

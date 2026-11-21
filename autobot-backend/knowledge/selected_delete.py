@@ -29,8 +29,12 @@ class SelectedFactsDeleteMixin:
     """The selected-facts delete of the knowledge base (membership-agnostic)."""
 
     async def _existing_selected(self, fact_ids: List[str]) -> List[str]:
-        """The selected ids that exist now, de-duplicated and sorted."""
-        return [fid for fid in sorted(set(fact_ids)) if await self.redis().exists(f"fact:{fid}")]
+        """The selected ids that exist now, de-duplicated and sorted.
+
+        Existence is settled the way ``delete_fact`` settles it: the Redis hash is only a projection, so a fact
+        whose hash is missing but whose durable row exists still counts (and is deleted).
+        """
+        return [fid for fid in sorted(set(fact_ids)) if await self._read_fact_for_write(fid) is not None]
 
     async def _delete_selected_one(self, fid: str) -> bool:
         """One fact deleted completely and unlinked from every collection it was in; False when it was not deleted."""

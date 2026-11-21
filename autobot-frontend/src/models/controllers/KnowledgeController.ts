@@ -21,7 +21,7 @@ import type { KnowledgeDocument, SearchResult, SearchFilters } from '@/stores/us
 import { generateCategoryId, generateDocumentId } from '@/utils/ChatIdGenerator'
 import { createLogger } from '@/utils/debugUtils'
 import i18n from '@/i18n'
-import { watchApprovedDelete } from './approvedDeleteWatch'
+import { proposeSelectedDelete } from './selectedDelete'
 
 // Create scoped logger for KnowledgeController
 const logger = createLogger('KnowledgeController')
@@ -215,6 +215,7 @@ export class KnowledgeController {
       if (updates.category) {
         await this.refreshStats()
       }
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       this.appStore.setGlobalError(`Failed to update document: ${errorMessage}`)
@@ -224,6 +225,7 @@ export class KnowledgeController {
 
   async deleteDocument(documentId: string): Promise<void> {
     try {
+
       await knowledgeRepository.deleteDocument(documentId)
       this.knowledgeStore.deleteDocument(documentId)
 
@@ -237,18 +239,15 @@ export class KnowledgeController {
     }
   }
 
-  /** #21886, #21383: propose deleting exactly the selected documents; the rows stay until a human approves, then the store drops them. */
+  /** #21886, #21383: propose deleting exactly the selected documents; the rows stay until a human approves. */
   async bulkDeleteDocuments(documentIds: string[]): Promise<void> {
-    try {
-      const reply = documentIds.length ? await knowledgeRepository.bulkDeleteDocuments(documentIds) : null
-      if (reply) watchApprovedDelete(reply.approval_id, () => { this.knowledgeStore.bulkDeleteDocuments(documentIds); void this.refreshStats() })
-      const key = !reply ? 'knowledge.entries.deleteNothingSelected' : reply.approval_id ? 'knowledge.entries.deleteProposed' : 'knowledge.entries.deleteNotProposed'
-      this.appStore.addSystemNotification({ title: i18n.global.t('knowledge.entries.deleteTitle'), message: i18n.global.t(key), severity: 'info' })
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      this.appStore.setGlobalError(i18n.global.t('knowledge.entries.deleteProposeFailed', { message: errorMessage }))
-      throw error
-    }
+    await proposeSelectedDelete(documentIds, {
+      notify: message => this.appStore.addSystemNotification({
+        title: i18n.global.t('knowledge.entries.deleteTitle'), message, severity: 'info' }),
+      fail: message => this.appStore.setGlobalError(message),
+      dropRows: ids => this.knowledgeStore.bulkDeleteDocuments(ids),
+      resync: async () => { await this.loadAllDocuments(); await this.refreshStats() },
+    })
   }
 
   // Issue #747: Bulk update operations

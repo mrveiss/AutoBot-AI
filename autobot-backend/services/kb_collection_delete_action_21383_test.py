@@ -295,7 +295,8 @@ async def test_facts_in_no_collection_produce_a_proposal_scoped_to_exactly_those
     plan = world.created["context"]["plan"]
     assert plan["selector"] == {"operation": "delete_selected_facts", "fact_ids": ["g1", "loose"]}
     assert "collection_id" not in plan["selector"] and plan["facts"] == 2
-    assert "from every collection it belongs to" in world.created["description"]
+    desc = world.created["description"]
+    assert "from every collection it belongs to" in desc and "g1, loose" in desc
     assert world.kb.mutations == [] and world.kb.facts == {"f1", "f2", "f3", "g1", "loose"}
 
 
