@@ -26,6 +26,9 @@ ATTEMPTED = "attempted"
 SUCCESS = "success"
 FAILED = "failed"
 
+#: Stable log marker: a bare ``attempted`` row whose change happened can be found by searching for it.
+OUTCOME_MISSING_MARKER = "AUDIT_OUTCOME_MISSING"
+
 
 async def record_audit_attempt(event: AuditEvent) -> None:
     """Durably record the intent; raise 503 when the write fails so nothing is changed."""
@@ -44,5 +47,12 @@ async def record_audit_outcome(event: AuditEvent, outcome: str, failure: str | N
         metadata["failure"] = failure
     written = await record_committed(replace(event, id=str(uuid.uuid4()), outcome=outcome, metadata=metadata))
     if not written:
-        logger.error("audit: no %s outcome recorded for %s (attempt %s)", outcome, event.action, event.id)
+        logger.error(
+            "%s attempt_id=%s control=%s agent=%s outcome=%s: the attempt row has no outcome row",
+            OUTCOME_MISSING_MARKER,
+            event.id,
+            event.action,
+            event.resource_id,
+            outcome,
+        )
     return written

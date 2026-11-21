@@ -27,6 +27,7 @@ from llc.tests import test_llc_org_chart as _org_chart
 from models.agent_org import AgentOrgNode
 from models.heartbeat import HeartbeatStatus
 from services.audit import outcome
+from user_management.models.organization import Organization
 
 # The org-chart suite's in-memory schema fixtures, registered here by name.
 engine = _org_chart.engine
@@ -35,6 +36,7 @@ session_factory = _org_chart.session_factory
 _STAMP = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 _COMPANY_A = uuid.uuid4()
 _COMPANY_B = uuid.uuid4()
+_COMPANY_DELETED = uuid.uuid4()
 
 
 def _state(agent_id: str, status: HeartbeatStatus = HeartbeatStatus.ACTIVE, paused_by: str | None = None):
@@ -64,13 +66,21 @@ async def _seed(session_factory):  # noqa: ANN001
     admin_a, member_a = uuid.uuid4(), uuid.uuid4()
     async with session_factory() as session:
         session.add_all(
+            Organization(id=cid, name=f"Co {i}", slug=f"co-{i}", deleted_at=deleted)
+            for i, (cid, deleted) in enumerate(((_COMPANY_A, None), (_COMPANY_B, None), (_COMPANY_DELETED, _STAMP)))
+        )
+        session.add_all(
             [
+                AgentOrgNode(id=uuid.uuid4(), agent_id="agent-gone", name="g", company_id=_COMPANY_DELETED),
                 AgentOrgNode(id=uuid.uuid4(), agent_id="agent-a", name="a", company_id=_COMPANY_A),
                 AgentOrgNode(id=uuid.uuid4(), agent_id="agent-b", name="b", company_id=_COMPANY_B),
                 AgentOrgNode(id=uuid.uuid4(), agent_id="platform-agent", name="p", company_id=None),
             ]
         )
         for user, role in ((admin_a, MembershipRole.ADMIN), (member_a, MembershipRole.MEMBER)):
+            session.add(
+                LLCCompanyMembership(id=uuid.uuid4(), company_id=_COMPANY_DELETED, user_id=user, role=role.value)
+            )
             session.add(LLCCompanyMembership(id=uuid.uuid4(), company_id=_COMPANY_A, user_id=user, role=role.value))
         await session.commit()
     return admin_a, member_a
@@ -223,3 +233,26 @@ async def test_may_see_user_rule(session_factory):  # noqa: ANN001
         assert await may_see_user(session, scope, None) is False
         assert await may_see_user(session, AgentScope(None, False), str(member_a)) is False
         assert await may_see_user(session, AgentScope(None, True), str(uuid.uuid4())) is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["config", "pause"])
+async def test_members_of_a_soft_deleted_company_get_404(harness, session_factory, action):  # noqa: ANN001
+    admin_a, member_a = await _seed(session_factory)  # both also hold a membership of the deleted company
+    for user in (admin_a, member_a):
+        _as(harness, user)
+        if action == "config":
+            response = harness.client.get("/api/heartbeat/agent-gone/config")
+        else:
+            response = harness.client.post("/api/heartbeat/agent-gone/pause", json={"reason": "r"})
+        assert response.status_code == 404
+    harness.get_state.assert_not_awaited()
+    assert harness.audits == []
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_keeps_access_to_a_soft_deleted_companys_agent(harness, session_factory):  # noqa: ANN001
+    await _seed(session_factory)
+    _as(harness, None, role="admin")
+    assert harness.client.get("/api/heartbeat/agent-gone/config").status_code == 200
+    assert harness.client.post("/api/heartbeat/agent-gone/pause", json={"reason": "r"}).status_code == 200

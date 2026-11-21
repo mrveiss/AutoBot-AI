@@ -10,7 +10,7 @@ logical slug the heartbeat keyspace uses (``models/agent_org.py``, dual-keyspace
 
 * Reads need membership of that company; writes need owner/admin of it (``require_company_admin_unless_platform``).
 * A platform admin passes everywhere, as on the company routes.
-* A platform agent (no node, or a node with no company) is platform-admin-only: nobody else owns it.
+* A platform agent (no node, no company, or a deleted or missing company) is platform-admin-only: nobody else owns it.
 * An agent the caller may not see answers 404, like ``assert_company_access``, so existence is not disclosed.
   A member without the admin role answers 403: they can already see the agent.
 """
@@ -27,6 +27,7 @@ from auth_middleware import get_current_user
 from autobot_shared.principal import resolve_principal_id
 from llc.services.authz import NotAuthorisedError, is_company_member, require_company_admin_unless_platform
 from models.agent_org import AgentOrgNode
+from services.agent_org_service import live_company_agents_clause
 
 AGENT_NOT_FOUND = "Agent not found"
 
@@ -40,7 +41,12 @@ class AgentScope:
 
 
 async def _owning_company(session: AsyncSession, agent_id: str) -> uuid.UUID | None:
-    row = (await session.execute(select(AgentOrgNode.company_id).where(AgentOrgNode.agent_id == agent_id))).first()
+    """The agent's live owning company; ``None`` when it has none, or its company is deleted or missing (#21942).
+
+    A soft-deleted company's agent resolves like a platform agent: members get 404, a platform admin keeps access.
+    """
+    stmt = select(AgentOrgNode.company_id).where(AgentOrgNode.agent_id == agent_id, live_company_agents_clause())
+    row = (await session.execute(stmt)).first()
     return None if row is None else row[0]
 
 

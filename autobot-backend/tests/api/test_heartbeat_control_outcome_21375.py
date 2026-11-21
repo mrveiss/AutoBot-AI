@@ -12,11 +12,12 @@ from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 
 from api import heartbeat
-from api.heartbeat_controls import RECONCILE_FAILED, SCHEDULER_FAILED_DETAIL
+from api.heartbeat_controls import RECONCILE_FAILED, SCHEDULER_FAILED_DETAIL, SUPERSEDED
 from api.heartbeat_scope import AgentScope
 from api.schemas_heartbeat import AgentPauseRequest, AgentResumeRequest, AgentTerminateRequest
 from models.heartbeat import HeartbeatStatus
 from services.audit import outcome
+from services.audit.outcome import OUTCOME_MISSING_MARKER
 from services.heartbeat_scheduler import _get_or_create_state
 
 CALLER = {"id": "principal-7", "username": "alice", "role": "admin"}
@@ -112,6 +113,41 @@ async def test_a_failed_restore_is_recorded_as_a_reconcile_failure(harness):
     assert exc.value.status_code == 503
     assert harness.rows[-1].meta["failure"] == RECONCILE_FAILED
     harness.session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_scheduler_call_does_not_overwrite_a_newer_control(harness):
+    harness.scheduler.disable_agent.side_effect = RuntimeError("loop gone")
+    state = _state("pause")
+
+    calls = []
+
+    async def _newer_control_committed(obj, **kwargs):
+        calls.append(kwargs)
+        if kwargs:  # the restore's re-lock sees what a concurrent control committed meanwhile
+            obj.status, obj.paused_by = HeartbeatStatus.TERMINATED.value, "principal-9"
+
+    harness.session.refresh.side_effect = _newer_control_committed
+    with pytest.raises(HTTPException) as exc:
+        await harness.call("pause", state)
+    assert exc.value.status_code == 503
+    assert (state.status, state.paused_by) == (HeartbeatStatus.TERMINATED.value, "principal-9")
+    assert harness.rows[-1].meta["failure"] == SUPERSEDED
+    assert calls[-1] == {"with_for_update": True}  # the restore re-takes the row lock
+    harness.session.rollback.assert_awaited_once()  # the lock is released without writing
+
+
+@pytest.mark.asyncio
+async def test_a_missing_outcome_row_is_logged_with_a_findable_marker(harness, monkeypatch, caplog):
+    async def _only_the_attempt(event):
+        harness.rows.append(event)
+        return event.outcome == "attempted"
+
+    monkeypatch.setattr(outcome, "record_committed", _only_the_attempt)
+    await harness.call("pause", _state("pause"))
+    (line,) = [r.getMessage() for r in caplog.records if OUTCOME_MISSING_MARKER in r.getMessage()]
+    attempt = harness.rows[0]
+    assert f"attempt_id={attempt.id}" in line and "agent=a1" in line and "control=agent.pause" in line
 
 
 @pytest.mark.asyncio

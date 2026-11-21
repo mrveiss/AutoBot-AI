@@ -8,7 +8,8 @@ The caller holds the state row's lock (``_get_or_create_state(..., for_update=Tr
 answered "already in that state", so exactly one of two simultaneous requests reaches here per transition.
 The order is: ``attempted`` row (a failed write stops everything), state commit, scheduler call, outcome row.
 A failed state commit leaves a ``failed`` row. A failed scheduler call restores the row, so the loop and the
-row agree, leaves a ``failed`` row, and is surfaced to the caller as a 503. The trail never claims a change
+row agree (the state commit released the lock, so the restore re-takes it and leaves a row a newer control has
+changed alone), leaves a ``failed`` row, and is surfaced to the caller as a 503. The trail never claims a change
 that did not happen.
 """
 
@@ -29,6 +30,9 @@ logger = get_logger(__name__)
 
 SCHEDULER_FAILED_DETAIL = "Scheduler update failed; the change was rolled back"
 RECONCILE_FAILED = "reconcile_failed"
+SUPERSEDED = "superseded"
+#: The columns that identify a transition: if both still hold, nobody has changed the row since.
+_IDENTITY_COLUMNS = ("status", "paused_by")
 
 
 @dataclass(frozen=True)
@@ -69,17 +73,27 @@ async def _commit_changes(session: AsyncSession, state: AgentRuntimeState, chang
     await session.refresh(state)
 
 
-async def _restore(session: AsyncSession, state: AgentRuntimeState, prior: dict[str, Any]) -> bool:
-    """Write the prior values back so the row matches the loop that did not change; False when that fails."""
+async def _restore(
+    session: AsyncSession, state: AgentRuntimeState, prior: dict[str, Any], applied: dict[str, Any]
+) -> str | None:
+    """Write the prior values back under the row lock, only if the row still holds this control's change.
+
+    A concurrent control may have committed since: its newer state is left alone (``superseded``). ``None``
+    means restored; otherwise the reason the row was not restored.
+    """
     try:
+        await session.refresh(state, with_for_update=True)  # re-lock, and re-read what is committed now
+        if any(getattr(state, column) != applied[column] for column in _IDENTITY_COLUMNS):
+            await session.rollback()
+            return SUPERSEDED
         await _commit_changes(session, state, prior)
     except Exception as exc:  # noqa: BLE001 -- reported through the outcome row; the caller still gets the 503
         logger.error(
             "heartbeat: could not restore %s after a scheduler failure: %s", state.agent_id, type(exc).__name__
         )
         await session.rollback()
-        return False
-    return True
+        return RECONCILE_FAILED
+    return None
 
 
 async def apply_control(
@@ -101,7 +115,7 @@ async def apply_control(
     try:
         await run_scheduler()
     except Exception as exc:
-        restored = await _restore(session, state, prior)
-        await record_audit_outcome(event, FAILED, type(exc).__name__ if restored else RECONCILE_FAILED)
+        not_restored = await _restore(session, state, prior, control.changes)
+        await record_audit_outcome(event, FAILED, not_restored or type(exc).__name__)
         raise HTTPException(status_code=503, detail=SCHEDULER_FAILED_DETAIL) from exc
     await record_audit_outcome(event, SUCCESS)
