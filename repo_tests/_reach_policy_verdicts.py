@@ -187,6 +187,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test knowledge_*.py route modules are a subset of tracked api files; the test-file share drifts.",
     ),
+    "extraction-registry-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test source is a subset of tracked .py under six roots, tests included; the test-file share drifts.",
+    ),
     "one-rate-limiter-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
