@@ -24,13 +24,13 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api._service_principal_refusal import validated_service
 from api.envelope_secrets_delete import delete_as_service, delete_as_user
-from api.secrets_delete_outcome import fixed_secret_error_for, invalid_request_error
+from api.secrets_delete_outcome import CREATE_REFUSALS, creation_status, fixed_secret_error_for, invalid_request_error
 from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.secrets_vault import VaultKind, VaultRef
@@ -239,6 +239,7 @@ class SecretDependenciesOut(BaseModel):
 @router.post("", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def create_secret(
     body: CreateSecretBody,
+    response: Response,
     who: tuple[uuid.UUID, set[str]] = Depends(principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
@@ -255,8 +256,9 @@ async def create_secret(
             plaintext=body.value.encode("utf-8"),
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+    except CREATE_REFUSALS as exc:
         raise _mapped(exc)
+    response.status_code = creation_status(secret)
     return SecretMetadata.of(secret)
 
 
@@ -271,17 +273,14 @@ async def list_secrets(
     return [SecretMetadata.of(s) for s in secrets]
 
 
-# ---------------------------------------------------------------------------
-# Service-auth System vault access (#10436) — registered BEFORE /{secret_id}
-# so that literal "/system" and "/system/{id}" paths take priority over the
-# parameterised UUID routes. Service principals carry valid X-Service-* HMAC
-# headers and may ONLY access secrets whose owner_vault is "system".
-# ---------------------------------------------------------------------------
+# Service-auth System vault access (#10436), registered BEFORE /{secret_id} so "/system" wins over the UUID
+# routes. Service principals carry valid X-Service-* HMAC headers and may ONLY access owner_vault "system".
 
 
 @router.post("/system", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
 async def service_create_system_secret(
     body: CreateSecretBody,
+    response: Response,
     service_id: str = Depends(service_principal),
     session: AsyncSession = Depends(get_session),
     coordinator: SecretsCoordinator = Depends(get_coordinator),
@@ -289,7 +288,6 @@ async def service_create_system_secret(
     """Create a secret in the system vault via service identity (HMAC-authenticated)."""
     vault = _vault(body.owner_vault)
     _require_system_vault(vault, service_id)
-    logger.info("service CRUD: create system secret", extra={"service_id": service_id, "name": body.name})
     try:
         secret = await coordinator.service_create(
             session,
@@ -300,8 +298,9 @@ async def service_create_system_secret(
             service_id=service_id,
         )
         await session.commit()
-    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+    except CREATE_REFUSALS as exc:
         raise _mapped(exc)
+    response.status_code = creation_status(secret)
     return SecretMetadata.of(secret)
 
 

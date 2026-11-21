@@ -177,6 +177,12 @@ for _name, _type, _default, _description in (
     ),
     ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
     (
+        "AUTOBOT_MACHINE_SLOT_UPTIME",
+        str,
+        "/proc/uptime",
+        "File the pre-push queue reads its clock from; an unreadable path forces the SECONDS fallback (#21905).",
+    ),
+    (
         "AUTOBOT_MACHINE_SLOT_DIR",
         str,
         "",

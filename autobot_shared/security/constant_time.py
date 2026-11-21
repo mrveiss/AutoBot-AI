@@ -32,3 +32,15 @@ def secure_compare(provided: str | bytes | None, expected: str | bytes | None) -
     if left is None or right is None:
         return False
     return hmac.compare_digest(left, right)
+
+
+def equal_bytes(left: bytes, right: bytes) -> bool:
+    """Constant-time equality of two stored byte values; unlike :func:`secure_compare`, two empties ARE equal.
+
+    :func:`secure_compare` fails closed for authentication, so two empty values never match. Comparing a stored
+    value with an offered one (e.g. an identical retry of an empty secret) needs ``b"" == b""``. Empty versus
+    non-empty is still unequal. Delegates to :func:`secure_compare`, so it never raises.
+    """
+    if not left and not right:
+        return True
+    return secure_compare(left, right)
