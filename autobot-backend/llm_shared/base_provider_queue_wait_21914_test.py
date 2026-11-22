@@ -21,9 +21,10 @@ from typing import AsyncIterator, List
 
 import pytest
 
-from . import base_provider
+from . import base_provider, rate_limit_backoff
 from .base_provider import BaseProvider
 from .models import LLMRequest, LLMResponse
+from .rate_limit_backoff import RateLimitError
 
 HOLD_S = 5.0
 PROVIDER_S = 0.25
@@ -165,3 +166,43 @@ async def test_cancellation_while_queued_notifies_error_once(observed):
     assert isinstance(errors[0], asyncio.CancelledError)
     assert seen == []
     provider._concurrency_semaphore.release()
+
+
+class _RateLimitedOnceProvider(_TimedProvider):
+    """Answers a provider rate limit once, then succeeds (#21929)."""
+
+    def __init__(self, clock: _FakeClock) -> None:
+        super().__init__(clock)
+        self.calls = 0
+
+    async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(content="", provider=self.provider_name, error="429 Too Many Requests")
+        return await super()._chat_completion_impl(request)
+
+
+class _RetryOnRateLimit:
+    """The backoff handler's contract: a RateLimitError is retried as a NEW attempt."""
+
+    async def execute_with_retry(self, fn, provider=None):
+        try:
+            return await fn()
+        except RateLimitError:
+            return await fn()
+
+
+async def test_a_rate_limited_attempt_ends_in_one_error_and_the_retry_in_one_completion(observed, monkeypatch):
+    clock, seen, errors = observed
+    started: list = []
+    monkeypatch.setattr(base_provider, "get_backoff_handler", lambda: _RetryOnRateLimit())
+    monkeypatch.setattr(BaseProvider, "_notify_request_started", staticmethod(lambda r, k: started.append(k)))
+    monkeypatch.setattr(rate_limit_backoff, "_persist_headroom_from_429", lambda *a: None)
+    provider = _RateLimitedOnceProvider(clock)
+
+    response = await provider.chat_completion(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+
+    assert response.content == "ok"
+    assert len(errors) == 1 and isinstance(errors[0], RateLimitError)  # the 429 stays visible as an error
+    assert len(seen) == 1 and seen[0][0] is response  # only the successful attempt completes
+    assert len(started) == len(errors) + len(seen) == 2  # one terminal event per started attempt
