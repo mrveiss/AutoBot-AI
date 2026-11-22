@@ -21,6 +21,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "frontend"
 TEMPLATE = ROLE / "templates" / "nginx-frontend.conf.j2"
@@ -73,7 +75,8 @@ def test_slm_locations_carry_the_slm_body_cap(loc: str) -> None:
 
 def _active_caps(text: str) -> list[str]:
     """Values of the uncommented `client_max_body_size` directives."""
-    return re.findall(r"^\s*client_max_body_size\s+(.+?);", text, re.M)
+    code = code_text(text, name="vhost.conf", strip_trailing=True)  # the shared comment stripper (#17941)
+    return re.findall(r"^\s*client_max_body_size\s+(.+?);", code, re.M)
 
 
 def _literal_caps(text: str) -> list[str]:

@@ -23,6 +23,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint._comment_syntax import code_lines
+
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "slm_manager"
 VHOST = ROLE / "templates" / "autobot-slm.conf.j2"
@@ -51,10 +53,23 @@ REACH = declare(
 def test_no_literal_tls_port_in_slm_manager_tasks_or_vhost() -> None:
     """#19832: 443 appears nowhere in the role's tasks or the SLM vhost; slm_nginx_tls_port is the name."""
     for path in REACH.examined(repo_root()):
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if line.lstrip().startswith("#"):
-                continue
-            assert not re.search(r"(?<![\w.])443(?![\w.])", line), f"{path.name}:{number}: {line.strip()}"
+        for line in code_lines(path, strip_trailing=True):  # the shared comment stripper (#17941)
+            assert not _LITERAL_443.search(line.text), f"{path.name}:{line.lineno}: {line.text.strip()}"
+
+
+_LITERAL_443 = re.compile(r"(?<![\w.])443(?![\w.])")
+
+
+def test_the_literal_port_detector_has_a_contrast_pair() -> None:
+    def hits(text: str) -> list[str]:
+        return [
+            line.text for line in code_lines(text, name="x.yml", strip_trailing=True) if _LITERAL_443.search(line.text)
+        ]
+
+    assert hits("port: 443\n") == ["port: 443"]
+    assert hits("port: '{{ slm_nginx_tls_port }}'\n") == []
+    assert hits("# the default is 443\nport: 1\n") == []
+    assert hits("port: 1  # was 443\n") == []
 
 
 def test_the_ufw_https_rule_and_summary_read_the_tls_port() -> None:
