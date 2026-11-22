@@ -13,9 +13,8 @@ import json
 import os
 import time
 from collections import defaultdict, deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime
-from functools import wraps
 from typing import Any, Dict, List
 
 import aiohttp
@@ -25,137 +24,20 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.gpu_telemetry import METRICS_QUERY_FIELDS, nvidia_metric_fields, query_nvidia_gpus
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_1_HOUR
 from autobot_shared.status_enums import Severity
 
 # Import existing monitoring infrastructure
 from constants.api_constants import PATH_API_HEALTH
+from utils.performance_monitoring.decorator import monitor_performance  # noqa: F401 - re-export
+from utils.performance_monitoring.metrics import (
+    GPUMetrics,
+    MultiModalMetrics,
+    NPUMetrics,
+    ServicePerformanceMetrics,
+    SystemPerformanceMetrics,
+)
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class GPUMetrics:
-    """Comprehensive GPU performance metrics"""
-
-    timestamp: float
-    name: str
-    utilization_percent: float
-    memory_used_mb: int
-    memory_total_mb: int
-    memory_free_mb: int
-    memory_utilization_percent: float
-    temperature_celsius: int
-    power_draw_watts: float
-    gpu_clock_mhz: int
-    memory_clock_mhz: int
-    fan_speed_percent: int | None = None
-    encoder_utilization: int | None = None
-    decoder_utilization: int | None = None
-    performance_state: str | None = None  # P0-P12
-    thermal_throttling: bool = False
-    power_throttling: bool = False
-
-
-@dataclass
-class NPUMetrics:
-    """Intel NPU acceleration metrics"""
-
-    timestamp: float
-    hardware_detected: bool
-    driver_available: bool
-    openvino_support: bool
-    utilization_percent: float
-    inference_count: int
-    average_inference_time_ms: float
-    model_cache_hits: int
-    model_cache_misses: int
-    thermal_state: str  # "normal", "throttling", "critical"
-    power_efficiency_rating: float  # 0-100
-    acceleration_ratio: float  # NPU vs CPU speedup
-    wsl_limitation: bool = False
-
-
-@dataclass
-class MultiModalMetrics:
-    """Multi-modal AI processing performance metrics"""
-
-    timestamp: float
-    text_processing_time_ms: float
-    image_processing_time_ms: float
-    audio_processing_time_ms: float
-    combined_processing_time_ms: float
-    pipeline_efficiency: float  # 0-100
-    memory_peak_usage_mb: float
-    gpu_acceleration_used: bool
-    npu_acceleration_used: bool
-    batch_size: int
-    throughput_items_per_second: float
-    error_rate_percent: float
-
-
-@dataclass
-class SystemPerformanceMetrics:
-    """Comprehensive system performance snapshot"""
-
-    timestamp: float
-
-    # CPU Performance (Intel Ultra 9 185H - 22 cores)
-    cpu_usage_percent: float
-    cpu_cores_physical: int
-    cpu_cores_logical: int
-    cpu_frequency_mhz: float
-    cpu_load_1m: float
-    cpu_load_5m: float
-    cpu_load_15m: float
-
-    # Memory Performance
-    memory_total_gb: float
-    memory_used_gb: float
-    memory_available_gb: float
-    memory_usage_percent: float
-    swap_usage_percent: float
-
-    # Storage I/O Performance
-    disk_read_mb_s: float
-    disk_write_mb_s: float
-    disk_usage_percent: float
-    disk_queue_depth: float
-
-    # Network Performance
-    network_upload_mb_s: float
-    network_download_mb_s: float
-    network_latency_ms: float
-    network_packet_loss_percent: float
-
-    # Optional / defaulted fields must follow all required fields (dataclass ordering)
-    cpu_temperature_celsius: float | None = None
-    per_core_usage: List[float] = field(default_factory=list)
-    memory_bandwidth_gb_s: float | None = None
-    nvme_temperature_celsius: float | None = None
-
-    # AutoBot Process Performance
-    autobot_processes: List[Dict[str, Any]] = field(default_factory=list)
-    autobot_memory_usage_mb: float = 0
-    autobot_cpu_usage_percent: float = 0
-
-
-@dataclass
-class ServicePerformanceMetrics:
-    """Distributed service performance metrics"""
-
-    timestamp: float
-    service_name: str
-    host: str
-    port: int
-    status: str  # "healthy", "degraded", "critical", "offline"
-    response_time_ms: float
-    throughput_requests_per_second: float
-    error_rate_percent: float
-    uptime_hours: float
-    memory_usage_mb: float
-    cpu_usage_percent: float
-    health_score: float  # 0-100
 
 
 class HardwarePerformanceMonitor:
@@ -1361,99 +1243,6 @@ async def collect_phase9_metrics() -> Dict[str, Any]:
 def add_phase9_alert_callback(callback):
     """Add callback for Phase 9 performance alerts"""
     hardware_monitor.add_alert_callback(callback)
-
-
-def _log_performance_metric(
-    category: str,
-    func_name: str,
-    execution_time: float,
-    success: bool,
-    error: Exception | None = None,
-) -> None:
-    """
-    Log performance metric for a function execution.
-
-    Issue #620.
-    """
-    if success:
-        logger.info(f"PERFORMANCE [{category}]: {func_name} executed in {execution_time:.3f}s")
-    else:
-        logger.error(f"PERFORMANCE [{category}]: {func_name} failed after {execution_time:.3f}s: {error}")
-
-
-def _store_performance_in_redis(
-    category: str,
-    func_name: str,
-    execution_time: float,
-    args_count: int,
-    kwargs_count: int,
-) -> None:
-    """
-    Store function performance metrics in Redis.
-
-    Issue #620.
-    """
-    if not hardware_monitor.redis_client:
-        return
-
-    try:
-        key = f"function_performance:{category}:{func_name}"
-        hardware_monitor.redis_client.zadd(
-            key,
-            {
-                json.dumps(
-                    {
-                        "execution_time_ms": execution_time * 1000,
-                        "timestamp": time.time(),
-                        "args_count": args_count,
-                        "kwargs_count": kwargs_count,
-                    }
-                ): time.time()
-            },
-        )
-        hardware_monitor.redis_client.expire(key, TTL_1_HOUR)  # 1 hour retention
-    except Exception:
-        logger.debug("Suppressed exception in try block", exc_info=True)
-
-
-# Performance monitoring decorator for functions
-def monitor_performance(category: str = "general"):
-    """Decorator to monitor function performance. Issue #620."""
-
-    def decorator(func):
-        @wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = await func(*args, **kwargs)
-                execution_time = time.time() - start_time
-                _log_performance_metric(category, func.__name__, execution_time, True)
-                _store_performance_in_redis(category, func.__name__, execution_time, len(args), len(kwargs))
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                _log_performance_metric(category, func.__name__, execution_time, False, e)
-                raise
-
-        @wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = func(*args, **kwargs)
-                execution_time = time.time() - start_time
-                _log_performance_metric(category, func.__name__, execution_time, True)
-                return result
-            except Exception as e:
-                execution_time = time.time() - start_time
-                _log_performance_metric(category, func.__name__, execution_time, False, e)
-                raise
-
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return sync_wrapper
-
-    return decorator
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ import threading
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
+from chat_workflow.step_outcome import exit_code_field
 from services.agent_terminal.errors import (
     POST_EXECUTION_FAILED_CODE,
     POST_EXECUTION_FAILED_STATUS,
@@ -237,7 +238,7 @@ class TerminalTool:
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": result.get("stderr", ""),
-            "return_code": result.get("return_code", 1),
+            **exit_code_field(result),  # a refused command has none; never invent one (#21959)
         }
 
     @staticmethod
@@ -267,7 +268,12 @@ class TerminalTool:
         }
 
     async def execute_command(
-        self, conversation_id: str, command: str, description: str | None = None
+        self,
+        conversation_id: str,
+        command: str,
+        description: str | None = None,
+        force_approval: bool = False,
+        person_approved: bool = False,
     ) -> Dict[str, Any]:
         """Execute a command in the agent's terminal session with auto-session recovery.
 
@@ -288,7 +294,7 @@ class TerminalTool:
             logger.error("No terminal session for conversation %s", conversation_id, exc_info=True)
             return self._session_setup_failed(command, exc)
 
-        return await self._run_and_format(session_id, command, description)
+        return await self._run_and_format(session_id, command, description, force_approval, person_approved)
 
     @staticmethod
     def _session_setup_failed(command: str, exc: BaseException) -> Dict[str, Any]:
@@ -305,7 +311,14 @@ class TerminalTool:
             "command": command,
         }
 
-    async def _run_and_format(self, session_id: str, command: str, description: str | None) -> Dict[str, Any]:
+    async def _run_and_format(
+        self,
+        session_id: str,
+        command: str,
+        description: str | None,
+        force_approval: bool = False,
+        person_approved: bool = False,
+    ) -> Dict[str, Any]:
         """Execute, then format, distinguishing a failed command from failed bookkeeping.
 
         ``post_execution_guard`` opens only once the service has returned, so
@@ -316,10 +329,14 @@ class TerminalTool:
         """
         try:
             result = await self.agent_terminal_service.execute_command(
-                session_id=session_id, command=command, description=description
+                session_id=session_id,
+                command=command,
+                description=description,
+                force_approval=force_approval,
+                person_approved=person_approved,
             )
             with post_execution_guard(result):
-                return self._format_execution_result(result, command, description)
+                return self._bound_to(session_id, self._format_execution_result(result, command, description))
         except PostExecutionError as exc:
             logger.error("Command ran; formatting its result failed: %s", exc, exc_info=True)
             return post_execution_failed_response(command, exc)
@@ -328,6 +345,13 @@ class TerminalTool:
         except Exception:
             logger.error("Terminal command execution error", exc_info=True)
             return execution_failed_response(command)
+
+    @staticmethod
+    def _bound_to(session_id: str, formatted: Dict[str, Any]) -> Dict[str, Any]:
+        """A held command names the session it was queued in, so its card cannot follow the mapping (#19950)."""
+        if formatted.get("status") == "pending_approval":
+            return {**formatted, "session_id": session_id}
+        return formatted
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
         """
@@ -376,7 +400,7 @@ class TerminalTool:
     async def get_user_command_history(self, conversation_id: str) -> Dict[str, Any]:
         """Get command history from user's interactive terminal session (Issue #281 refactor)."""
         try:
-            sessions, error = await terminal_backend_client.list_terminal_sessions()
+            sessions, error = await terminal_backend_client.fetch_terminal_sessions()
             if error:
                 return error
 

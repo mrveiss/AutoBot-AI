@@ -48,7 +48,7 @@ def test_build_social_chain():
 
 @pytest.mark.asyncio
 async def test_social_fetch_carries_social_source_type(monkeypatch, stub_browser_manager):
-    """BrowserBackend(SOCIAL).fetch() maps the stub result and carries source_type=SOCIAL."""
+    """BrowserContentBackend(SOCIAL).fetch() maps the stub result and carries source_type=SOCIAL."""
     stub_manager = _StubManager(
         {
             "success": True,

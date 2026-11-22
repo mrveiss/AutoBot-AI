@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from autobot_shared.ssot_claude_models import CLAUDE_HAIKU, CLAUDE_SONNET
 from llc.services.model_tiers import ModelTierService
 
 
@@ -59,8 +60,8 @@ class TestDetectProvider:
 
 class TestResolveAssistantModel:
     def test_anthropic_resolves_haiku(self, svc):
-        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "claude-sonnet-4-6"})
-        assert result == "claude-haiku-4-5-20251001"
+        result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": CLAUDE_SONNET})
+        assert result == CLAUDE_HAIKU
 
     def test_openai_resolves_mini(self, svc):
         result = svc.resolve_assistant_model(senior_agent_adapter_config={"model": "gpt-4o"})
@@ -74,7 +75,7 @@ class TestResolveAssistantModel:
         """adapterConfig.model_tier.assistant takes highest precedence."""
         result = svc.resolve_assistant_model(
             senior_agent_adapter_config={
-                "model": "claude-sonnet-4-6",
+                "model": CLAUDE_SONNET,
                 "model_tier": {"assistant": "my-custom-cheap-model"},
             }
         )
@@ -115,7 +116,7 @@ class TestGetTierMap:
     def test_returns_platform_defaults(self, svc):
         tier_map = svc.get_tier_map()
         assert "anthropic" in tier_map
-        assert tier_map["anthropic"]["assistant"] == "claude-haiku-4-5-20251001"
+        assert tier_map["anthropic"]["assistant"] == CLAUDE_HAIKU
         assert "openai" in tier_map
         assert "google" in tier_map
 
@@ -126,4 +127,4 @@ class TestGetTierMap:
         assert tier_map["openai"]["assistant"] == "gpt-3.5-turbo"
         assert tier_map["openai"]["senior"] == "gpt-4-turbo"
         # Other providers should remain unchanged
-        assert tier_map["anthropic"]["assistant"] == "claude-haiku-4-5-20251001"
+        assert tier_map["anthropic"]["assistant"] == CLAUDE_HAIKU

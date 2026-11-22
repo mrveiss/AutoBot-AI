@@ -13,9 +13,9 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from autobot_shared.graph_retrieval import GRAPH_RAG_TIMEOUT_SECONDS, GRAPH_WEIGHT_DEFAULT
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
+from constants.rag_graph_constants import RAG_GRAPH_TIMEOUT_SECONDS, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_GRAPH_WEIGHT
 from knowledge.search_components.reranking import RerankWeights
 from type_defs.common import Metadata
 
@@ -45,17 +45,10 @@ class RAGConfig:
 
     # Reranking
     enable_reranking: bool = True
-    reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
     mmr_lambda: float = model_config.RAG_MMR_LAMBDA
-
-    # Issue #18141: share of a candidate's blended score that comes from the graph signal.
-    # The ONE graph weight: graph-RAG and the mesh retriever both read it from here.
-    graph_weight: float = GRAPH_WEIGHT_DEFAULT
-    # Issue #18141: graph-RAG's own search budget (named override of timeout_seconds).
-    graph_rag_timeout_seconds: float = GRAPH_RAG_TIMEOUT_SECONDS
 
     # Issue #10600: route the hybrid keyword half through BM25 Okapi instead of
     # the substring TF scan.  Default False preserves legacy behaviour.
@@ -64,6 +57,14 @@ class RAGConfig:
     # Issue #10600: relevance floor for the optimizer hybrid path.
     # 0.0 = no floor (default, no behaviour change).
     min_score: float = model_config.RAG_MIN_SCORE
+
+    # Issue #18141: weight of the graph signal in the one pre-rerank blend
+    # (knowledge.rag.graph_weight); read by graph-RAG and the Neural Mesh retriever.
+    graph_weight: float = RAG_GRAPH_WEIGHT
+    # Issue #18141: graph expansion depth when a caller passes none (graph_aware_search, KAG).
+    graph_traversal_depth: int = RAG_GRAPH_TRAVERSAL_DEPTH
+    # Issue #18141: graph-RAG search deadline; the one named override of timeout_seconds.
+    graph_timeout_seconds: float = RAG_GRAPH_TIMEOUT_SECONDS
 
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
@@ -190,8 +191,11 @@ class RAGConfig:
         if not 0.0 <= self.graph_weight <= 1.0:
             raise ValueError(f"graph_weight must be in [0, 1], got {self.graph_weight}")
 
-        if self.graph_rag_timeout_seconds <= 0:
-            raise ValueError(f"graph_rag_timeout_seconds must be > 0, got {self.graph_rag_timeout_seconds}")
+        if self.graph_timeout_seconds <= 0:
+            raise ValueError(f"graph_timeout_seconds must be > 0, got {self.graph_timeout_seconds}")
+
+        if self.graph_traversal_depth < 1:
+            raise ValueError(f"graph_traversal_depth must be >= 1, got {self.graph_traversal_depth}")
 
         # Issue #10600: relevance floor must be non-negative.
         if self.min_score < 0.0:
@@ -241,7 +245,6 @@ class RAGConfig:
             "default_context_length": self.default_context_length,
             "max_context_length": self.max_context_length,
             "enable_reranking": self.enable_reranking,
-            "reranking_model": self.reranking_model,
             # Issue #2004: serialise as a plain dict for YAML round-trips.
             # Issue #2111: staleness weight added.
             "rerank_weights": {
@@ -254,11 +257,12 @@ class RAGConfig:
             },
             # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
             "mmr_lambda": self.mmr_lambda,
-            "graph_weight": self.graph_weight,  # Issue #18141
-            "graph_rag_timeout_seconds": self.graph_rag_timeout_seconds,
             # Issue #10600: BM25 hybrid + relevance floor flags.
             "bm25_hybrid_enabled": self.bm25_hybrid_enabled,
             "min_score": self.min_score,
+            "graph_weight": self.graph_weight,
+            "graph_traversal_depth": self.graph_traversal_depth,
+            "graph_timeout_seconds": self.graph_timeout_seconds,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
@@ -412,30 +416,3 @@ def reset_rag_config() -> None:
     global _rag_config_instance
     with _rag_config_lock:
         _rag_config_instance = None
-
-
-def resolve_graph_weight(rag_service: Any, explicit: float | None = None) -> float:
-    """The graph weight a graph-blending path should use (#18141).
-
-    An explicit caller override wins; otherwise the weight is the ``RAGConfig`` the given RAG
-    service runs on, or the shared config when that service carries none (tests, graph-only use).
-    """
-    if explicit is not None:
-        return explicit
-    return _graph_config(rag_service).graph_weight
-
-
-def _graph_config(rag_service: Any) -> RAGConfig:
-    config = getattr(rag_service, "config", None)
-    return config if isinstance(config, RAGConfig) else get_rag_config()
-
-
-def resolve_graph_timeout(rag_service: Any, explicit: float | None = None) -> float:
-    """The search budget graph-RAG uses: the caller's ``timeout`` or ``graph_rag_timeout_seconds``.
-
-    Graph-RAG keeps its tighter budget (10 s by default) instead of inheriting the 120 s general
-    RAG timeout; it is one setting on the shared config, not a second ``RAGConfig`` (#18141).
-    """
-    if explicit is not None:
-        return explicit
-    return _graph_config(rag_service).graph_rag_timeout_seconds

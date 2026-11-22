@@ -114,7 +114,7 @@ class TaskExecutionTracker:
             "inputs": inputs,
         }
 
-    async def _finalize_task(self, task_id: str, task_context: "TaskExecutionContext") -> None:
+    async def _finalize_task(self, task_id: str, task_context: "TrackedTaskContext") -> None:
         """Complete task and execute callbacks.
 
         Args:
@@ -252,7 +252,7 @@ class TaskExecutionTracker:
             metadata,
         )
         self._register_active_task(task_id, task_name, agent_type, inputs)
-        task_context = TaskExecutionContext(self, task_id)
+        task_context = TrackedTaskContext(self, task_id)
 
         try:
             yield task_context
@@ -531,7 +531,7 @@ class TaskExecutionTracker:
             logger.warning("Task %s not found in mapping for failure", task_id)
 
 
-class TaskExecutionContext:
+class TrackedTaskContext:
     """Context object provided during task execution for additional operations"""
 
     def __init__(self, tracker: TaskExecutionTracker, task_id: str):

@@ -28,17 +28,31 @@ from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.threshold_constants import CategoryDefaults
 from constants.ttl_constants import TTL_5_MINUTES
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.query_term_replace import replace_whole_word
 from knowledge.search_components.bm25 import BM25Scorer
-from knowledge.search_components.ranked_diversity import diversify_ranked_results
 from knowledge.search_components.reranking import (
     RerankWeights,
-    compute_blended_score,
+    apply_mmr_reorder_by_content,
+    fetch_staleness_scores,
+    final_rerank_score,
+    ranking_score,
     set_reranking_active,
+    shared_rerank_weights,
 )
+from knowledge.search_filters import SYSTEM_SCOPE, KbPrincipal
+from rag_optimizer_context import OptimizedContextMixin
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
+
+# Query expansion (#21525): query type -> keyword -> synonyms; whole words, any case.
+_EXPANSION_SYNONYMS: Dict[str, Dict[str, Tuple[str, ...]]] = {
+    "technical": {"install": ("setup", "deploy"), "configure": ("setup", "config")},
+    "troubleshooting": {"error": ("issue", "problem")},
+}
+MAX_EXPANDED_QUERIES = 5  # the original plus up to four variants
 
 # MAP-Elites minimum category coverage required to activate grid-based selection.
 # Issue #10600: moved below imports to clear pre-existing E402 lint.
@@ -105,7 +119,7 @@ class _MapElitesCell:
     score: float
 
 
-class AdvancedRAGOptimizer:
+class AdvancedRAGOptimizer(OptimizedContextMixin):
     """
     Advanced RAG optimizer implementing state-of-the-art retrieval strategies.
 
@@ -130,9 +144,8 @@ class AdvancedRAGOptimizer:
         """Initialize RAG optimizer with search configuration. Issue #620.
 
         Args:
-            rerank_weights: Blend weights forwarded to the cross-encoder scoring
-                step. Defaults to RerankWeights() (legacy 0.8/0.2 split).
-                Issue #2034: enables RAGConfig.rerank_weights to flow through.
+            rerank_weights: Blend weights forwarded to the cross-encoder scoring step.
+                None uses the shared RAGConfig.rerank_weights (#2034, #18141).
             bm25_hybrid_enabled: Issue #10600 — route the hybrid keyword half
                 through BM25 Okapi instead of the substring TF scan.  None falls
                 back to model_config.RAG_BM25_HYBRID_ENABLED (default False).
@@ -144,7 +157,7 @@ class AdvancedRAGOptimizer:
         """
         self.kb = None
         self.semantic_chunker = None
-        self._rerank_weights: RerankWeights = rerank_weights or RerankWeights()
+        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else shared_rerank_weights()
         # Issue #10600: config-gated retrieval-quality knobs (defaults = no-op).
         self._bm25_hybrid_enabled: bool = (
             model_config.RAG_BM25_HYBRID_ENABLED if bm25_hybrid_enabled is None else bm25_hybrid_enabled
@@ -180,10 +193,10 @@ class AdvancedRAGOptimizer:
 
     def _init_search_config(self) -> None:
         """Initialize search configuration parameters. Issue #620."""
-        self.hybrid_weight_semantic = 0.7  # Weight for semantic similarity
-        self.hybrid_weight_keyword = 0.3  # Weight for keyword matching
-        self.max_results_per_stage = 20  # Results to consider in each stage
-        self.diversity_threshold = 0.85  # Similarity threshold for diversification
+        self.hybrid_weight_semantic = model_config.RAG_HYBRID_WEIGHT_SEMANTIC
+        self.hybrid_weight_keyword = model_config.RAG_HYBRID_WEIGHT_KEYWORD
+        self.max_results_per_stage = model_config.RAG_MAX_RESULTS_PER_STAGE
+        self.diversity_threshold = model_config.RAG_DIVERSITY_THRESHOLD
 
     def _init_query_patterns(self) -> None:
         """Initialize query analysis keyword patterns. Issue #620."""
@@ -271,7 +284,7 @@ class AdvancedRAGOptimizer:
         """
         if min_score <= 0.0:
             return results
-        return [r for r in results if (r.rerank_score if r.rerank_score is not None else r.hybrid_score) >= min_score]
+        return [r for r in results if ranking_score(r) >= min_score]
 
     def _get_cached_result(self, key: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Return cached result if present and within TTL, else None. Issue #1548."""
@@ -358,32 +371,20 @@ class AdvancedRAGOptimizer:
         return context
 
     def _expand_query(self, query: str, query_type: str) -> List[str]:
-        """Generate expanded queries for improved recall."""
+        """Generate expanded queries for improved recall (#21525: whole-word, any case)."""
         expanded = [query]  # Always include original
 
-        # Add synonyms and related terms based on query type
-        if query_type == "technical":
-            # Add common technical synonyms
-            if "install" in query.lower():
-                expanded.append(query.replace("install", "setup"))
-                expanded.append(query.replace("install", "deploy"))
-            if "configure" in query.lower():
-                expanded.append(query.replace("configure", "setup"))
-                expanded.append(query.replace("configure", "config"))
+        for keyword, synonyms in _EXPANSION_SYNONYMS.get(query_type, {}).items():
+            expanded.extend(replace_whole_word(query, keyword, syn) for syn in synonyms)
 
-        elif query_type == "troubleshooting":
-            # Add problem-solving variations
-            if "error" in query.lower():
-                expanded.append(query.replace("error", "issue"))
-                expanded.append(query.replace("error", "problem"))
+        if query_type == "troubleshooting":
             expanded.append(f"how to fix {query}")
             expanded.append(f"troubleshoot {query}")
 
-        # Add general variations
-        expanded.append(f"autobot {query}")  # Context-specific
+        expanded.append(f"autobot {query}")  # Context-specific general variation
 
-        # Remove duplicates and limit
-        unique_expanded = list(dict.fromkeys(expanded))[:5]
+        # Remove duplicates (a keyword-less query's rewrites equal the original) and limit
+        unique_expanded = list(dict.fromkeys(expanded))[:MAX_EXPANDED_QUERIES]
 
         logger.debug("Query expansion: %s variants generated", len(unique_expanded))
         return unique_expanded
@@ -685,25 +686,22 @@ class AdvancedRAGOptimizer:
         self._cross_encoder = get_cross_encoder()
 
     async def _apply_cross_encoder_scores(self, query: str, results: List[RankedResult]) -> None:
-        """Apply cross-encoder scores to results (Issue #398: extracted).
+        """Apply cross-encoder scores to results (#398) with ``RAGConfig.rerank_weights`` (#2034).
 
-        Issue #1526: Normalize cross-encoder logits with sigmoid before
-        combining with hybrid_score so the final rerank_score stays in 0-1.
-        Issue #2034: Use compute_blended_score() with self._rerank_weights so
-        RAGConfig.rerank_weights is honoured instead of always using 0.8/0.2.
+        Issue #18141: final_rerank_score, the mesh reranker's own blend (sigmoid, staleness, provenance).
         """
-        import math
-
         pairs = [(query, result.content) for result in results]
         cross_encoder_scores = await asyncio.to_thread(self._cross_encoder.predict, pairs)
+        chunk_ids = [resolve_chunk_id(r) for r in results]
+        staleness = await fetch_staleness_scores(chunk_ids, self._rerank_weights) or {}
 
-        for result, ce_score in zip(results, cross_encoder_scores):
-            # Sigmoid normalization: raw logits → 0-1 probability
-            normalized_ce = 1.0 / (1.0 + math.exp(-float(ce_score)))
-            result.rerank_score = compute_blended_score(
-                reranker_score=normalized_ce,
-                vector_score=result.hybrid_score,
-                weights=self._rerank_weights,
+        for result, chunk_id, ce_score in zip(results, chunk_ids, cross_encoder_scores):
+            result.rerank_score = final_rerank_score(
+                ce_score,
+                result.hybrid_score,
+                self._rerank_weights,
+                staleness_score=staleness.get(chunk_id, 0.0),
+                source_provenance=(result.metadata or {}).get("source_provenance"),
             )
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
@@ -730,7 +728,13 @@ class AdvancedRAGOptimizer:
         # Issue #10600: MMR diversity pass on reranked results using content
         # redundancy (RankedResult carries no embedding).  No-op when
         # mmr_lambda is 0.0, so the legacy pure-relevance ordering is preserved.
-        results = diversify_ranked_results(results, self._mmr_lambda)
+        if self._mmr_lambda > 0.0:
+            results = apply_mmr_reorder_by_content(
+                results,
+                self._mmr_lambda,
+                content_getter=lambda r: r.content,
+                score_getter=lambda r: r.rerank_score or 0.0,
+            )
         for i, result in enumerate(results):
             result.relevance_rank = i + 1
         logger.debug("Reranking completed: top score = %.3f", results[0].rerank_score)
@@ -969,97 +973,6 @@ class AdvancedRAGOptimizer:
         log_fn("  - GPU acceleration: %s", metrics.gpu_acceleration_used)
         log_fn("  - Hybrid search: %s", metrics.hybrid_search_enabled)
 
-    def _build_context_parts(
-        self,
-        results: List[RankedResult],
-        max_context_length: int,
-        query_context: QueryContext,
-    ) -> List[str]:
-        """Build context parts from search results with length optimization.
-
-        Args:
-            results: Search results to build context from.
-            max_context_length: Maximum total context length.
-            query_context: Query context for complexity-based decisions.
-
-        Returns:
-            List of formatted context entries.
-
-        Issue #620.
-        """
-        context_parts = []
-        current_length = 0
-
-        for i, result in enumerate(results):
-            source_info = f"Source: {result.source_path}"
-            if result.chunk_index > 0:
-                source_info += f" (section {result.chunk_index + 1})"
-
-            context_entry = f"{source_info}\nContent: {result.content}\n"
-            entry_length = len(context_entry)
-
-            if current_length + entry_length > max_context_length and context_parts:
-                break
-
-            context_parts.append(context_entry)
-            current_length += entry_length
-
-            if i >= 2 and query_context.complexity_score < 0.6:
-                break
-
-        return context_parts
-
-    def _build_context_header(self, query: str, context_parts: List[str], query_context: QueryContext) -> str:
-        """Build the header for optimized context output.
-
-        Args:
-            query: Original query string.
-            context_parts: List of context entries.
-            query_context: Query context with type information.
-
-        Returns:
-            Formatted header string.
-
-        Issue #620.
-        """
-        header = f"Relevant Information for: {query}\n"
-        header += f"Sources: {len(context_parts)} documents\n"
-        header += f"Query type: {query_context.query_type}\n\n"
-        return header
-
-    async def get_optimized_context(self, query: str, max_context_length: int = 2000) -> Tuple[str, RAGMetrics]:
-        """Get optimized context for RAG-based response generation."""
-        try:
-            results, metrics = await self.advanced_search(query, max_results=8)
-
-            if not results:
-                return "No relevant information found.", metrics
-
-            query_context = self._analyze_query_context(query)
-            context_parts = self._build_context_parts(results, max_context_length, query_context)
-            header = self._build_context_header(query, context_parts, query_context)
-            final_context = header + "\n---\n".join(context_parts)
-
-            # #10552, #16771: the one shared RAG inspection point
-            from security.content_firewall import inspect_rag_context
-
-            fw_verdict = await inspect_rag_context(final_context, context_label=query[:80])
-            if fw_verdict.blocked:
-                return "[RAG context blocked by content firewall]", metrics
-            final_context = fw_verdict.content
-
-            logger.info(
-                "Optimized context generated: %s characters from %s sources",
-                len(final_context),
-                len(context_parts),
-            )
-
-            return final_context, metrics
-
-        except Exception as e:
-            logger.error("Context optimization failed: %s", e)
-            return "Error retrieving context", RAGMetrics()
-
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the RAG optimizer."""
         return {
@@ -1132,17 +1045,17 @@ async def get_rag_optimizer() -> AdvancedRAGOptimizer:
 
 
 # Convenience functions for integration
-async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[RankedResult]:
-    """Perform advanced knowledge search with all optimizations."""
+async def advanced_knowledge_search(query: str, max_results: int = 5, *, principal: KbPrincipal) -> List[RankedResult]:
+    """Perform advanced knowledge search with all optimizations; only what *principal* may read (#18944)."""
     optimizer = await get_rag_optimizer()
-    results, _ = await optimizer.advanced_search(query, max_results)
+    results, _ = await optimizer.search_visible(query, max_results, principal)
     return results
 
 
-async def get_optimized_knowledge_context(query: str, max_length: int = 2000) -> str:
-    """Get optimized knowledge context for response generation."""
+async def get_optimized_knowledge_context(query: str, max_length: int = 2000, *, principal: KbPrincipal) -> str:
+    """Get optimized knowledge context for response generation (#18944: scoped to *principal*)."""
     optimizer = await get_rag_optimizer()
-    context, _ = await optimizer.get_optimized_context(query, max_length)
+    context, _ = await optimizer.get_optimized_context(query, max_length, principal=principal)
     return context
 
 
@@ -1159,11 +1072,11 @@ if __name__ == "__main__":
     async def main():
         """Run CLI query against optimized RAG search."""
         if args.context:
-            context = await get_optimized_knowledge_context(args.query)
+            context = await get_optimized_knowledge_context(args.query, principal=SYSTEM_SCOPE)
             logger.info("=== Optimized Context ===")
             logger.info(context)
         else:
-            results = await advanced_knowledge_search(args.query, args.max_results)
+            results = await advanced_knowledge_search(args.query, args.max_results, principal=SYSTEM_SCOPE)
             logger.info("=== Search Results for: %s ===", args.query)
             for i, result in enumerate(results, 1):
                 logger.info("Result %s:", i)

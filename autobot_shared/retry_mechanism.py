@@ -104,6 +104,10 @@ class RetryPolicy:
         NotImplementedError,
     )
 
+    # Called as ``on_retry(exception, failed_attempt)`` (1-based) just before each
+    # backoff sleep -- only when another attempt will follow (#17855).
+    on_retry: Optional[Callable[[Exception, int], None]] = None
+
 
 class RetryExhaustedError(Exception):
     """Raised when all retry attempts have been exhausted"""
@@ -174,37 +178,36 @@ class RetryMechanism:
         with self._stats_lock:
             self.stats["total_attempts"] += 1
 
+    def _op_stats(self, operation_name: str) -> Dict[str, int]:
+        """Per-operation counters, created on first use. Caller holds ``_stats_lock``."""
+        return self.stats["operations_by_type"].setdefault(
+            operation_name, {"total": 0, "succeeded": 0, "retries_needed": 0}
+        )
+
     def _update_stats_success(self, operation_name: str, attempt: int):
         """Thread-safe update of success stats."""
         with self._stats_lock:
+            entry = self._op_stats(operation_name)
+            entry["total"] += 1
+            entry["succeeded"] += 1
             if attempt > 1:
                 self.stats["successful_retries"] += 1
-
-            if operation_name not in self.stats["operations_by_type"]:
-                self.stats["operations_by_type"][operation_name] = {
-                    "total": 0,
-                    "succeeded": 0,
-                    "retries_needed": 0,
-                }
-
-            self.stats["operations_by_type"][operation_name]["total"] += 1
-            self.stats["operations_by_type"][operation_name]["succeeded"] += 1
-            if attempt > 1:
-                self.stats["operations_by_type"][operation_name]["retries_needed"] += 1
+                entry["retries_needed"] += 1
 
     def _update_stats_failure(self, operation_name: str):
         """Thread-safe update of failure stats."""
         with self._stats_lock:
             self.stats["failed_operations"] += 1
+            self._op_stats(operation_name)["total"] += 1
 
-            if operation_name not in self.stats["operations_by_type"]:
-                self.stats["operations_by_type"][operation_name] = {
-                    "total": 0,
-                    "succeeded": 0,
-                    "retries_needed": 0,
-                }
-
-            self.stats["operations_by_type"][operation_name]["total"] += 1
+    def _notify_retry(self, operation_name: str, exception: Exception, attempt: int) -> None:
+        """Run the policy's ``on_retry`` hook; a failing hook must not change the retry outcome."""
+        if self.config.on_retry is None:
+            return
+        try:
+            self.config.on_retry(exception, attempt)
+        except Exception:  # noqa: BLE001 -- observer only
+            logger.warning("on_retry hook for %s raised; continuing", operation_name, exc_info=True)
 
     async def _execute_function_async(self, func: Callable, *args, **kwargs) -> Any:
         """Execute a function, handling both sync and async callables. Issue #620."""
@@ -257,6 +260,7 @@ class RetryMechanism:
                 if attempt == self.config.max_attempts:
                     break
 
+                self._notify_retry(operation_name, e, attempt)
                 delay = self.calculate_delay(attempt)
                 logger.debug("Retrying %s in %.2f seconds...", operation_name, delay)
                 await asyncio.sleep(delay)
@@ -317,6 +321,7 @@ class RetryMechanism:
                     raise e
 
                 if attempt < self.config.max_attempts:
+                    self._notify_retry(operation_name, e, attempt)
                     self._handle_sync_retry_delay(operation_name, attempt)
 
         self._update_stats_failure(operation_name)
@@ -503,8 +508,7 @@ async def retry_database_operation(func: Callable, *args, **kwargs) -> Any:
         ),
     )
 
-    retry_mechanism = RetryMechanism(config)
-    return await retry_mechanism.execute_async(func, *args, **kwargs)
+    return await RetryMechanism(config).execute_async(func, *args, **kwargs)
 
 
 async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
@@ -526,8 +530,7 @@ async def retry_network_operation(func: Callable, *args, **kwargs) -> Any:
         ),
     )
 
-    retry_mechanism = RetryMechanism(config)
-    return await retry_mechanism.execute_async(func, *args, **kwargs)
+    return await RetryMechanism(config).execute_async(func, *args, **kwargs)
 
 
 async def retry_file_operation(func: Callable, *args, **kwargs) -> Any:
@@ -549,8 +552,7 @@ async def retry_file_operation(func: Callable, *args, **kwargs) -> Any:
         ),
     )
 
-    retry_mechanism = RetryMechanism(config)
-    return await retry_mechanism.execute_async(func, *args, **kwargs)
+    return await RetryMechanism(config).execute_async(func, *args, **kwargs)
 
 
 if __name__ == "__main__":

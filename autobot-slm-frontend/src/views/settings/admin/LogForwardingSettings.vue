@@ -11,11 +11,16 @@
  */
 
 import { ref, reactive, onMounted } from 'vue'
-import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
-import config from '@/config/ssot-config'
-import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, BaseModal, BaseSwitch, createLogger } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+import { useAutobotApi } from '@/composables/useAutobotApi'
+import type { LogForwardingDestination } from '@/composables/autobotAdminModels'
+import {
+  defaultForm, formFromDestination, destinationTypes, getUrlPlaceholder, buildCreateBody, buildUpdateBody,
+} from './logForwardingForm'
 
 const logger = createLogger('LogForwardingSettings')
+const { t } = useI18n()
 
 const api = useAutobotApi()
 
@@ -27,7 +32,7 @@ const toggling = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 
-// Service status
+// Service status (GET /status carries no auto_start; see autoStart below)
 const status = reactive({
   running: false,
   total_destinations: 0,
@@ -35,10 +40,13 @@ const status = reactive({
   healthy_destinations: 0,
   total_sent: 0,
   total_failed: 0,
-  auto_start: false,
 })
+const autoStart = ref(false)
+// A failed read is not "off": the toggle stays disabled until a read succeeds (#18797 review).
+const autoStartLoaded = ref(false)
+const autoStartSaving = ref(false)
 
-// Destinations
+// Destinations, keyed by name
 const destinations = ref<LogForwardingDestination[]>([])
 
 // Modal state
@@ -46,36 +54,8 @@ const showModal = ref(false)
 const editingDestination = ref<LogForwardingDestination | null>(null)
 const deleteTarget = ref<string | null>(null)
 
-// Form data
-const formData = reactive({
-  name: '',
-  type: 'syslog' as 'syslog' | 'http' | 'file' | 'elasticsearch',
-  enabled: true,
-  config: {
-    url: '',
-    host: '',
-    port: 514,
-    protocol: 'udp',
-    file_path: '',
-    api_key: '',
-    username: '',
-    password: '',
-    index: 'autobot-logs',
-    min_level: 'Information',
-    batch_size: 10,
-    batch_timeout: 5,
-  },
-})
+const formData = reactive(defaultForm())
 
-const destinationTypes = [
-  { value: 'syslog', label: 'Syslog' },
-  { value: 'http', label: 'HTTP/Webhook' },
-  { value: 'file', label: 'File' },
-  { value: 'elasticsearch', label: 'Elasticsearch' },
-]
-
-// Methods
-// API returns data directly, not wrapped in response (Issue #729)
 // A failed status fetch must not read as "stopped": the defaults in `status`
 // would then offer Start for a service that may be running (#17971 review).
 const statusLoaded = ref(false)
@@ -94,6 +74,17 @@ async function fetchStatus(): Promise<void> {
   }
 }
 
+async function fetchAutoStart(): Promise<void> {
+  try {
+    const data = await api.getLogForwardingAutoStart()
+    autoStart.value = !!data?.auto_start
+    autoStartLoaded.value = true
+  } catch (e) {
+    autoStartLoaded.value = false
+    logger.debug('Log forwarding auto-start unavailable:', e)
+  }
+}
+
 async function fetchDestinations(): Promise<void> {
   loading.value = true
   error.value = null
@@ -101,7 +92,7 @@ async function fetchDestinations(): Promise<void> {
   try {
     destinations.value = await api.getLogForwardingDestinations()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load destinations'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.loadFailed')
   } finally {
     loading.value = false
   }
@@ -120,20 +111,26 @@ async function toggleService(): Promise<void> {
     }
     await fetchStatus()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to toggle service'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.toggleFailed')
   } finally {
     toggling.value = false
   }
 }
 
+// BaseSwitch shows `autoStart`, the server-confirmed value, so a pending or failed save never
+// leaves it flipped; a change while one is pending is ignored (#18797).
 async function toggleAutoStart(): Promise<void> {
+  if (!autoStartLoaded.value || autoStartSaving.value) return
+  autoStartSaving.value = true
   try {
-    await api.setLogForwardingAutoStart(!status.auto_start)
-    status.auto_start = !status.auto_start
-    success.value = `Auto-start ${status.auto_start ? 'enabled' : 'disabled'}`
+    const result = await api.setLogForwardingAutoStart(!autoStart.value)
+    autoStart.value = result.auto_start
+    success.value = t(autoStart.value ? 'settings.admin.logForwardingSettings.autoStartEnabled' : 'settings.admin.logForwardingSettings.autoStartDisabled')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to update auto-start'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.autoStartFailed')
+  } finally {
+    autoStartSaving.value = false
   }
 }
 
@@ -143,34 +140,18 @@ function openAddModal(): void {
   showModal.value = true
 }
 
-function openEditModal(dest: LogForwardingDestination): void {
-  editingDestination.value = dest
-  formData.name = dest.name
-  formData.type = dest.type
-  formData.enabled = dest.enabled
-  Object.assign(formData.config, dest.config)
+async function openEditModal(dest: LogForwardingDestination): Promise<void> {
+  try {
+    editingDestination.value = await api.getLogForwardingDestination(dest.name) // fresh, not the list row (#18734)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.loadFailed')
+    return
+  }
+  Object.assign(formData, formFromDestination(editingDestination.value))
   showModal.value = true
 }
 
-function resetForm(): void {
-  formData.name = ''
-  formData.type = 'syslog'
-  formData.enabled = true
-  formData.config = {
-    url: '',
-    host: '',
-    port: 514,
-    protocol: 'udp',
-    file_path: '',
-    api_key: '',
-    username: '',
-    password: '',
-    index: 'autobot-logs',
-    min_level: 'Information',
-    batch_size: 10,
-    batch_timeout: 5,
-  }
-}
+const resetForm = (): void => { Object.assign(formData, defaultForm()) }
 
 function closeModal(): void {
   showModal.value = false
@@ -181,45 +162,38 @@ function closeModal(): void {
 async function saveDestination(): Promise<void> {
   saving.value = true
   error.value = null
-
   try {
-    const data: LogForwardingDestination = {
-      id: editingDestination.value?.id || '',
-      name: formData.name,
-      type: formData.type,
-      enabled: formData.enabled,
-      config: { ...formData.config },
-    }
-
     if (editingDestination.value) {
-      await api.updateLogForwardingDestination(editingDestination.value.id, data)
+      await api.updateLogForwardingDestination(editingDestination.value.name, buildUpdateBody(formData))
     } else {
-      await api.createLogForwardingDestination(data)
+      await api.createLogForwardingDestination(buildCreateBody(formData))
     }
-
-    success.value = `Destination ${editingDestination.value ? 'updated' : 'created'} successfully`
+    success.value = t(editingDestination.value ? 'settings.admin.logForwardingSettings.destinationUpdated' : 'settings.admin.logForwardingSettings.destinationCreated')
     closeModal()
-    await fetchDestinations()
-    await fetchStatus()
+    await Promise.all([fetchDestinations(), fetchStatus()])
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save destination'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.saveFailed')
   } finally {
     saving.value = false
   }
 }
 
-async function testDestination(id: string): Promise<void> {
+async function testDestination(name: string): Promise<void> {
   testing.value = true
   error.value = null
 
   try {
-    await api.testLogForwardingDestination(id)
-    success.value = 'Connection test successful'
-    await fetchDestinations()
+    const result = await api.testLogForwardingDestination(name)
+    await fetchDestinations() // first: it clears `error`, which would hide an unhealthy result (#18797)
+    if (result.healthy) {
+      success.value = t('settings.admin.logForwardingSettings.testSucceeded')
+    } else {
+      error.value = result.message
+    }
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Connection test failed'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.testFailed')
   } finally {
     testing.value = false
   }
@@ -231,12 +205,11 @@ async function testAllDestinations(): Promise<void> {
 
   try {
     const response = await api.testAllLogForwardingDestinations()
-    const successful = response.results.filter(r => r.success).length
-    success.value = `${successful}/${response.results.length} destinations healthy`
-    await fetchDestinations()
+    await fetchDestinations() // a partial failure is an error, never the green banner (#18797)
+    ;(response.healthy === response.total ? success : error).value = t('settings.admin.logForwardingSettings.testAllSummary', { healthy: response.healthy, total: response.total })
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to test destinations'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.testAllFailed')
   } finally {
     testing.value = false
   }
@@ -254,74 +227,46 @@ async function deleteDestination(): Promise<void> {
 
   try {
     await api.deleteLogForwardingDestination(deleteTarget.value)
-    success.value = 'Destination deleted successfully'
+    success.value = t('settings.admin.logForwardingSettings.destinationDeleted')
     deleteTarget.value = null
     await fetchDestinations()
     await fetchStatus()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete destination'
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.deleteFailed')
   } finally {
     saving.value = false
   }
 }
 
-function getUrlPlaceholder(): string {
-  switch (formData.type) {
-    case 'syslog':
-      return '192.168.1.100:514'
-    case 'http':
-      return 'https://webhook.example.com/logs'
-    case 'elasticsearch':
-      return `http://elasticsearch:${config.port.elasticsearch}`
-    default:
-      return ''
-  }
-}
-
 // Initialize
-onMounted(async () => {
-  await Promise.all([fetchStatus(), fetchDestinations()])
-})
+// Mount and Refresh read all three, so Refresh retries a failed auto-start read (#18797).
+const refreshAll = () => Promise.all([fetchStatus(), fetchAutoStart(), fetchDestinations()])
+onMounted(refreshAll)
 </script>
 
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ error }}
-      <button @click="error = null" class="ml-auto text-red-500 hover:text-red-700" :aria-label="$t('settings.admin.logForwardingSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.logForwardingSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Service Status -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
           <div
             :class="[
               'w-4 h-4 rounded-full',
-              !statusLoaded ? 'bg-gray-400' : status.running ? 'bg-green-500 animate-pulse' : 'bg-red-500',
+              !statusLoaded ? 'bg-autobot-dot-idle' : status.running ? 'bg-autobot-dot-ok animate-pulse' : 'bg-autobot-dot-bad',
             ]"
           ></div>
           <div>
-            <h2 class="text-lg font-semibold text-gray-900">
+            <h2 class="text-lg font-semibold text-autobot-text-primary">
               {{ $t('settings.admin.logForwardingSettings.logForwardingService') }}
             </h2>
-            <p class="text-sm text-gray-500">
+            <p class="text-sm text-autobot-text-tertiary">
               {{ !statusLoaded ? $t('settings.admin.logForwardingSettings.statusUnknown') : status.running ? $t('settings.admin.logForwardingSettings.serviceRunning') : $t('settings.admin.logForwardingSettings.serviceStopped') }}
             </p>
           </div>
@@ -334,8 +279,8 @@ onMounted(async () => {
             :class="[
               'px-4 py-2 rounded-lg flex items-center gap-2 font-medium',
               status.running
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-green-500 text-white hover:bg-green-600',
+                ? 'bg-autobot-error-solid text-(--text-on-error) hover:bg-(--color-error-solid-hover)'
+                : 'bg-autobot-success text-(--text-on-success) hover:bg-autobot-success-hover',
               'disabled:opacity-50',
             ]"
           >
@@ -354,7 +299,7 @@ onMounted(async () => {
           <button
             @click="testAllDestinations"
             :disabled="testing"
-            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
+            class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary disabled:opacity-50 flex items-center gap-2"
           >
             <svg v-if="testing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -367,8 +312,8 @@ onMounted(async () => {
           </button>
 
           <button
-            @click="fetchStatus(); fetchDestinations()"
-            class="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            @click="refreshAll" data-test="refresh"
+            class="p-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -379,46 +324,44 @@ onMounted(async () => {
 
       <!-- Stats Grid -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="p-4 bg-gray-50 rounded-lg text-center">
-          <p class="text-2xl font-bold text-gray-900">{{ status.total_destinations }}</p>
-          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.total') }}</p>
+        <div class="p-4 bg-autobot-bg-secondary rounded-lg text-center">
+          <p class="text-2xl font-bold text-autobot-text-primary">{{ status.total_destinations }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.total') }}</p>
         </div>
-        <div class="p-4 bg-green-50 rounded-lg text-center">
-          <p class="text-2xl font-bold text-green-600">{{ status.healthy_destinations }}</p>
-          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.healthy') }}</p>
+        <div class="p-4 bg-autobot-success-bg rounded-lg text-center">
+          <p class="text-2xl font-bold text-autobot-success">{{ status.healthy_destinations }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.healthy') }}</p>
         </div>
-        <div class="p-4 bg-blue-50 rounded-lg text-center">
-          <p class="text-2xl font-bold text-blue-600">{{ status.total_sent }}</p>
-          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.sent') }}</p>
+        <div class="p-4 bg-autobot-info-bg rounded-lg text-center">
+          <p class="text-2xl font-bold text-autobot-text-link">{{ status.total_sent }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.sent') }}</p>
         </div>
-        <div class="p-4 bg-red-50 rounded-lg text-center">
-          <p class="text-2xl font-bold text-red-600">{{ status.total_failed }}</p>
-          <p class="text-sm text-gray-500">{{ $t('settings.admin.logForwardingSettings.failed') }}</p>
+        <div class="p-4 bg-autobot-error-bg rounded-lg text-center">
+          <p class="text-2xl font-bold text-autobot-error">{{ status.total_failed }}</p>
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.failed') }}</p>
         </div>
       </div>
 
       <!-- Auto-start toggle -->
-      <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="status.auto_start"
-            @change="toggleAutoStart"
-            class="sr-only peer"
-          />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-        </label>
-        <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.autoStartOnBackend') }}</span>
+      <div class="flex items-center gap-3 pt-4 border-t border-autobot-border">
+        <BaseSwitch
+          :model-value="autoStart"
+          :label="$t('settings.admin.logForwardingSettings.autoStartOnBackend')"
+          :disabled="!autoStartLoaded || autoStartSaving"
+          data-test="auto-start"
+          @change="toggleAutoStart"
+        />
+        <span class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.logForwardingSettings.autoStartOnBackend') }}</span>
       </div>
     </div>
 
     <!-- Destinations -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
-      <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <h3 class="font-semibold text-gray-900">{{ $t('settings.admin.logForwardingSettings.destinations') }}</h3>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden">
+      <div class="p-4 bg-autobot-bg-secondary border-b border-autobot-border flex items-center justify-between">
+        <h3 class="font-semibold text-autobot-text-primary">{{ $t('settings.admin.logForwardingSettings.destinations') }}</h3>
         <button
           @click="openAddModal"
-          class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover flex items-center gap-2"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -437,10 +380,10 @@ onMounted(async () => {
 
       <!-- Empty State -->
       <div v-else-if="destinations.length === 0" class="p-8 text-center">
-        <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-12 h-12 text-autobot-text-tertiary mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
         </svg>
-        <p class="text-gray-500 mb-4">{{ $t('settings.admin.logForwardingSettings.noLogForwardingDestinations') }}</p>
+        <p class="text-autobot-text-tertiary mb-4">{{ $t('settings.admin.logForwardingSettings.noLogForwardingDestinations') }}</p>
         <button
           @click="openAddModal"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -450,12 +393,12 @@ onMounted(async () => {
       </div>
 
       <!-- Destinations List -->
-      <div v-else class="divide-y divide-gray-100">
+      <div v-else class="divide-y divide-autobot-border-subtle">
         <div
           v-for="dest in destinations"
-          :key="dest.id"
+          :key="dest.name"
           :class="[
-            'p-4 hover:bg-gray-50 transition-colors',
+            'p-4 hover:bg-autobot-bg-hover transition-colors',
             !dest.enabled && 'opacity-60',
           ]"
         >
@@ -464,26 +407,26 @@ onMounted(async () => {
               <span
                 :class="[
                   'px-2 py-1 rounded-sm text-xs font-semibold uppercase',
-                  dest.type === 'syslog' ? 'bg-teal-100 text-teal-700' : '',
-                  dest.type === 'http' ? 'bg-pink-100 text-pink-700' : '',
-                  dest.type === 'file' ? 'bg-gray-100 text-gray-700' : '',
-                  dest.type === 'elasticsearch' ? 'bg-amber-100 text-amber-700' : '',
+                  dest.type === 'syslog' ? 'bg-autobot-illus-1-tint text-autobot-text-primary' : '',
+                  dest.type === 'webhook' ? 'bg-autobot-illus-3-tint text-autobot-text-primary' : '',
+                  dest.type === 'file' ? 'bg-autobot-bg-tertiary text-autobot-text-secondary' : '',
+                  dest.type === 'elasticsearch' ? 'bg-autobot-illus-2-tint text-autobot-text-primary' : '',
                 ]"
               >
                 {{ dest.type }}
               </span>
               <div>
-                <h4 class="font-medium text-gray-900">{{ dest.name }}</h4>
-                <p class="text-sm text-gray-500">
-                  {{ dest.config.url || dest.config.host || dest.config.file_path || $t('settings.admin.logForwardingSettings.noEndpointConfigured') }}
+                <h4 class="font-medium text-autobot-text-primary">{{ dest.name }}</h4>
+                <p class="text-sm text-autobot-text-tertiary">
+                  {{ dest.url || dest.file_path || $t('settings.admin.logForwardingSettings.noEndpointConfigured') }}
                 </p>
               </div>
             </div>
 
             <div class="flex items-center gap-2">
               <button
-                @click="testDestination(dest.id)"
-                class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-sm"
+                @click="testDestination(dest.name)"
+                class="p-2 text-autobot-text-tertiary hover:text-autobot-text-link hover:bg-autobot-info-bg rounded-sm"
                 :title="$t('settings.admin.logForwardingSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -492,7 +435,7 @@ onMounted(async () => {
               </button>
               <button
                 @click="openEditModal(dest)"
-                class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-sm"
+                class="p-2 text-autobot-text-tertiary hover:text-primary-500 hover:bg-primary-50 rounded-sm"
                 :title="$t('settings.admin.logForwardingSettings.edit')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -500,8 +443,8 @@ onMounted(async () => {
                 </svg>
               </button>
               <button
-                @click="confirmDelete(dest.id)"
-                class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-sm"
+                @click="confirmDelete(dest.name)"
+                class="p-2 text-autobot-text-tertiary hover:text-autobot-error hover:bg-autobot-error-bg rounded-sm"
                 :title="$t('settings.admin.logForwardingSettings.delete')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,222 +458,192 @@ onMounted(async () => {
     </div>
 
     <!-- Add/Edit Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="closeModal"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
-        <div class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-gray-900">
-            {{ editingDestination ? $t('settings.admin.logForwardingSettings.editDestination') : $t('settings.admin.logForwardingSettings.addDestination') }}
-          </h3>
-          <button @click="closeModal" class="text-gray-400 hover:text-gray-600" :aria-label="$t('settings.admin.logForwardingSettings.close')">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <BaseModal
+      v-model="showModal"
+      :title="editingDestination ? $t('settings.admin.logForwardingSettings.editDestination') : $t('settings.admin.logForwardingSettings.addDestination')"
+      width="32rem"
+      :close-label="$t('settings.admin.logForwardingSettings.close')"
+      @close="closeModal"
+    >
+      <div class="space-y-4">
+      <!-- Name -->
+      <div>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.name') }}</label>
+        <input
+          v-model="formData.name"
+          type="text"
+          :disabled="!!editingDestination"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-autobot-bg-tertiary"
+          :placeholder="$t('settings.admin.logForwardingSettings.eGProductionSyslog')"
+        />
+      </div>
+
+      <!-- Type -->
+      <div>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.type') }}</label>
+        <select
+          v-model="formData.type"
+          :disabled="!!editingDestination"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+        >
+          <option v-for="dest in destinationTypes" :key="dest.value" :value="dest.value">
+            {{ dest.labelKey ? t(dest.labelKey) : dest.label }}
+          </option>
+        </select>
+      </div>
+
+      <!-- URL (every type except file; syslog takes host:port) -->
+      <div v-if="formData.type !== 'file'">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.uRL') }}</label>
+        <input
+          v-model="formData.url"
+          type="text"
+          data-test="field-url"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          :placeholder="getUrlPlaceholder(formData.type, t)"
+        />
+      </div>
+
+      <div v-if="formData.type === 'syslog'">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.protocol') }}</label>
+        <select
+          v-model="formData.syslog_protocol"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="udp">{{ $t('settings.admin.logForwardingSettings.uDPUnreliableFast') }}</option>
+          <option value="tcp">{{ $t('settings.admin.logForwardingSettings.tCPReliable') }}</option>
+          <option value="tcp_tls">{{ $t('settings.admin.logForwardingSettings.tCPTLSEncrypted') }}</option>
+        </select>
+      </div>
+
+      <div v-if="formData.type === 'webhook' || formData.type === 'seq'">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.aPIKeyOptional') }}</label>
+        <input
+          v-model="formData.api_key"
+          type="password"
+          autocomplete="new-password"
+          data-test="field-api-key"
+          :disabled="formData.clear_api_key"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+        />
+        <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
+        <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
+          <input v-model="formData.clear_api_key" type="checkbox" data-test="remove-api-key" />
+          {{ $t('settings.admin.logForwardingSettings.removeStoredValue') }}
+        </label>
+      </div>
+
+      <div v-if="formData.type === 'file'">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.filePath') }}</label>
+        <input
+          v-model="formData.file_path"
+          type="text"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          :placeholder="$t('settings.admin.logForwardingSettings.varLogAutobotForwardedLog')"
+        />
+      </div>
+
+      <div v-if="formData.type === 'elasticsearch'">
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.indexName') }}</label>
+        <input
+          v-model="formData.index"
+          type="text"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          :placeholder="$t('settings.admin.logForwardingSettings.autobotLogs')"
+        />
+      </div>
+
+      <div v-if="formData.type === 'elasticsearch' || formData.type === 'loki'" class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.username') }}</label>
+          <input
+            v-model="formData.username"
+            type="text"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          />
         </div>
-
-        <div class="p-6 space-y-4">
-          <!-- Name -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.name') }}</label>
-            <input
-              v-model="formData.name"
-              type="text"
-              :disabled="!!editingDestination"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
-              :placeholder="$t('settings.admin.logForwardingSettings.eGProductionSyslog')"
-            />
-          </div>
-
-          <!-- Type -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.type') }}</label>
-            <select
-              v-model="formData.type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option v-for="t in destinationTypes" :key="t.value" :value="t.value">
-                {{ t.label }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Syslog Config -->
-          <template v-if="formData.type === 'syslog'">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.host') }}</label>
-                <input
-                  v-model="formData.config.host"
-                  type="text"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="192.168.1.100"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.port') }}</label>
-                <input
-                  v-model.number="formData.config.port"
-                  type="number"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                  placeholder="514"
-                />
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.protocol') }}</label>
-              <select
-                v-model="formData.config.protocol"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="udp">{{ $t('settings.admin.logForwardingSettings.uDPUnreliableFast') }}</option>
-                <option value="tcp">{{ $t('settings.admin.logForwardingSettings.tCPReliable') }}</option>
-                <option value="tcp_tls">{{ $t('settings.admin.logForwardingSettings.tCPTLSEncrypted') }}</option>
-              </select>
-            </div>
-          </template>
-
-          <!-- HTTP/Webhook Config -->
-          <template v-if="formData.type === 'http'">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.uRL') }}</label>
-              <input
-                v-model="formData.config.url"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                :placeholder="getUrlPlaceholder()"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.aPIKeyOptional') }}</label>
-              <input
-                v-model="formData.config.api_key"
-                type="password"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-          </template>
-
-          <!-- File Config -->
-          <template v-if="formData.type === 'file'">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.filePath') }}</label>
-              <input
-                v-model="formData.config.file_path"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                :placeholder="$t('settings.admin.logForwardingSettings.varLogAutobotForwardedLog')"
-              />
-            </div>
-          </template>
-
-          <!-- Elasticsearch Config -->
-          <template v-if="formData.type === 'elasticsearch'">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.uRL') }}</label>
-              <input
-                v-model="formData.config.url"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                :placeholder="`http://elasticsearch:${config.port.elasticsearch}`"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.indexName') }}</label>
-              <input
-                v-model="formData.config.index"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                :placeholder="$t('settings.admin.logForwardingSettings.autobotLogs')"
-              />
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.username') }}</label>
-                <input
-                  v-model="formData.config.username"
-                  type="text"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.password') }}</label>
-                <input
-                  v-model="formData.config.password"
-                  type="password"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-            </div>
-          </template>
-
-          <!-- Common Options -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.logForwardingSettings.minimumLogLevel') }}</label>
-            <select
-              v-model="formData.config.min_level"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="Debug">{{ $t('settings.admin.logForwardingSettings.debug') }}</option>
-              <option value="Information">{{ $t('settings.admin.logForwardingSettings.information') }}</option>
-              <option value="Warning">{{ $t('settings.admin.logForwardingSettings.warning') }}</option>
-              <option value="Error">{{ $t('settings.admin.logForwardingSettings.error') }}</option>
-              <option value="Fatal">{{ $t('settings.admin.logForwardingSettings.fatal') }}</option>
-            </select>
-          </div>
-
-          <!-- Enabled Toggle -->
-          <div class="flex items-center gap-3 pt-2">
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="formData.enabled" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
-            <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.enabled') }}</span>
-          </div>
-        </div>
-
-        <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 flex justify-end gap-3">
-          <button
-            @click="closeModal"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
-          <button
-            @click="saveDestination"
-            :disabled="saving"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {{ editingDestination ? $t('settings.admin.logForwardingSettings.update') : $t('settings.admin.logForwardingSettings.create') }}
-          </button>
+        <div>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.password') }}</label>
+          <input
+            v-model="formData.password"
+            type="password"
+            autocomplete="new-password"
+            data-test="field-password"
+            :disabled="formData.clear_password"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+          />
+          <p v-if="editingDestination" class="mt-1 text-xs text-autobot-text-tertiary">{{ $t('settings.admin.logForwardingSettings.leaveBlankToKeep') }}</p>
+          <label v-if="editingDestination" class="mt-1 flex items-center gap-2 text-xs text-autobot-text-secondary">
+          <input v-model="formData.clear_password" type="checkbox" data-test="remove-password" />
+          {{ $t('settings.admin.logForwardingSettings.removeStoredValue') }}
+        </label>
         </div>
       </div>
-    </div>
+
+      <!-- Common Options -->
+      <div>
+        <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.logForwardingSettings.minimumLogLevel') }}</label>
+        <select
+          v-model="formData.min_level"
+          class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="Debug">{{ $t('settings.admin.logForwardingSettings.debug') }}</option>
+          <option value="Information">{{ $t('settings.admin.logForwardingSettings.information') }}</option>
+          <option value="Warning">{{ $t('settings.admin.logForwardingSettings.warning') }}</option>
+          <option value="Error">{{ $t('settings.admin.logForwardingSettings.error') }}</option>
+          <option value="Fatal">{{ $t('settings.admin.logForwardingSettings.fatal') }}</option>
+        </select>
+      </div>
+
+      <!-- Enabled Toggle -->
+      <div class="flex items-center gap-3 pt-2">
+        <BaseSwitch v-model="formData.enabled" :label="$t('settings.admin.logForwardingSettings.enabled')" />
+        <span class="text-sm text-autobot-text-secondary">{{ $t('settings.admin.logForwardingSettings.enabled') }}</span>
+      </div>
+      </div>
+      <template #actions>
+        <button
+          @click="closeModal"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
+        >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
+        <button
+          @click="saveDestination"
+          :disabled="saving"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ editingDestination ? $t('settings.admin.logForwardingSettings.update') : $t('settings.admin.logForwardingSettings.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete Confirmation -->
-    <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="deleteTarget = null"></div>
-      <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('settings.admin.logForwardingSettings.deleteDestination') }}</h3>
-        <p class="text-gray-600 mb-6">{{ $t('settings.admin.logForwardingSettings.areYouSureYouWantTo') }}</p>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="deleteTarget = null"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-          >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
-          <button
-            @click="deleteDestination"
-            :disabled="saving"
-            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>{{ $t('settings.admin.logForwardingSettings.delete') }}</button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :model-value="!!deleteTarget"
+      :title="$t('settings.admin.logForwardingSettings.deleteDestination')"
+      size="sm"
+      :close-label="$t('settings.admin.logForwardingSettings.close')"
+      @close="deleteTarget = null"
+    >
+      <p class="text-autobot-text-secondary mb-6">{{ $t('settings.admin.logForwardingSettings.areYouSureYouWantTo') }}</p>
+      <template #actions>
+        <button
+          @click="deleteTarget = null"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active"
+        >{{ $t('settings.admin.logForwardingSettings.cancel') }}</button>
+        <button
+          @click="deleteDestination"
+          :disabled="saving"
+          class="px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover) disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>{{ $t('settings.admin.logForwardingSettings.delete') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>

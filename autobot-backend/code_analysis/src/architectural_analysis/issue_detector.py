@@ -13,7 +13,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
-from .dependency_analyzer import DependencyAnalyzer
+from .dependency_analyzer import ComponentDependencyAnalyzer
 from .types import ArchitecturalComponent, ArchitecturalIssue, ArchitecturalMetrics
 
 logger = get_logger(__name__)
@@ -35,14 +35,14 @@ class IssueDetector:
     HIGH_COUPLING_THRESHOLD = 10
     LOW_COHESION_THRESHOLD = 0.3
 
-    def __init__(self, dependency_analyzer: DependencyAnalyzer = None):
+    def __init__(self, dependency_analyzer: ComponentDependencyAnalyzer = None):
         """
         Initialize the issue detector.
 
         Args:
             dependency_analyzer: Dependency analyzer instance for circular detection
         """
-        self._deps = dependency_analyzer or DependencyAnalyzer()
+        self._deps = dependency_analyzer or ComponentDependencyAnalyzer()
 
     async def identify_issues(
         self,

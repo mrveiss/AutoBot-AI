@@ -55,7 +55,7 @@ async def test_trafilatura_probe_false_when_absent(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_trafilatura_fetch_maps_extracted_text(monkeypatch):
-    """fetch() maps trafilatura-extracted text into a successful ContentResult."""
+    """fetch() maps trafilatura-extracted text into a successful ContentReachResult."""
     from content_reach.sources import web_page as wp_mod
 
     mock_response = MagicMock()
@@ -189,7 +189,7 @@ async def test_trafilatura_fetch_httpx_error_raises_backend_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_jina_reader_fetch_maps_text():
-    """fetch() maps a 200 response body to a successful ContentResult."""
+    """fetch() maps a 200 response body to a successful ContentReachResult."""
     from content_reach.sources.web_page import JinaReaderBackend
 
     mock_response = MagicMock()

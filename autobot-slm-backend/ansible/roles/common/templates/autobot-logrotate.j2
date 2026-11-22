@@ -1,11 +1,11 @@
 # AutoBot log rotation — covers ALL service logs under /var/log/autobot AND
-# the application/runtime logs under /opt/autobot/logs.
+# the application/runtime logs under {{ autobot.base_dir }}/logs.
 # Managed by Ansible (common role). Do not edit on the host; changes are
 # overwritten on the next deploy. See issues #12294 and #12464.
 #
 # Every AutoBot systemd unit writes stdout/stderr with `StandardOutput=append:`
 # / `StandardError=append:`, so the writing process holds the log file
-# descriptor open. Long-running services under /opt/autobot/logs (backend,
+# descriptor open. Long-running services under {{ autobot.base_dir }}/logs (backend,
 # slm-backend, nginx) likewise keep their log fds open for the process
 # lifetime. `copytruncate` is REQUIRED in both cases — it truncates the
 # existing file in place instead of renaming it, so the open fd keeps writing
@@ -42,7 +42,7 @@
     copytruncate
 }
 
-# /opt/autobot/logs is where the native (non-container) deployment writes its
+# {{ autobot.base_dir }}/logs is where the native (non-container) deployment writes its
 # runtime logs: backend-error.log, slm-backend-error.log and nginx-access.log
 # / nginx-error.log (see roles/backend_services, backend.env.j2 and the
 # frontend nginx site config `access_log`/`error_log` directives). #12464:
@@ -55,7 +55,7 @@
 # strategy across every file in the directory (backend + slm + nginx) and needs
 # no per-service reload wiring. The brief copy/truncate race can drop a few log
 # lines during rotation, which is an acceptable trade for an error/access log.
-/opt/autobot/logs/*.log {
+{{ autobot.base_dir }}/logs/*.log {
     daily
     maxsize 100M
     rotate 7

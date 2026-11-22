@@ -32,6 +32,7 @@ import pathlib
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._comment_syntax import code_text
 
 #: `repo_root()`, never `__file__.parents[N]` -- #15925 pins one spelling.
@@ -121,7 +122,7 @@ def _code_lines(text: str) -> str:
 
 def _parse(path: pathlib.Path) -> ast.AST | None:
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return parse_cache.parse(path.read_text(encoding="utf-8"))
     except (OSError, SyntaxError, UnicodeDecodeError):
         return None
 
@@ -175,7 +176,7 @@ def test_every_script_importing_services_reaches_the_repo_root() -> None:
 
 
 def _one(src: str) -> ast.AST:
-    return ast.parse(src)
+    return parse_cache.parse(src)
 
 
 def test_the_import_detector_sees_services_in_any_clause() -> None:

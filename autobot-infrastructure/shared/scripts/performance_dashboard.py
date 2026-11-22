@@ -11,14 +11,24 @@ Issue #515: CSS extracted to templates/dashboards/styles/performance_dashboard.c
 """
 
 import logging
-
-logger = logging.getLogger(__name__)
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
 
-from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
-from utils.template_loader import load_css, template_exists
+# A backend tool (#18288): its HTML helpers are backend modules, and create_monitoring_dashboard()
+# drives monitoring_system, which imports the backend's `config` and `constants`.
+# It puts the backend and the repository root (for `autobot_shared`) on its own path, so it runs
+# from any directory with no PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css  # noqa: E402
+from utils.template_loader import load_css, template_exists  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 def _get_additional_dashboard_css() -> str:

@@ -23,6 +23,8 @@ from typing import Dict
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_scan import scan_keys
+from knowledge.connectors.sync_lease import ConnectorSyncBusy, ConnectorSyncUnavailable, connector_sync_lease
 
 logger = get_logger(__name__)
 
@@ -208,7 +210,8 @@ class ConnectorScheduler:
             return
         try:
             persisted: Dict[str, int] = {}
-            async for key in redis.scan_iter(match=_SCHEDULE_PREFIX + "*"):
+            # One bounded walk per tick (COUNT from AUTOBOT_REDIS_SCAN_COUNT), not 10-key pages (#18999).
+            for key in await scan_keys(redis, _SCHEDULE_PREFIX + "*"):
                 raw = await redis.get(key)
                 if raw is None:
                     continue
@@ -302,7 +305,8 @@ class ConnectorScheduler:
         logger.info("Scheduler triggering sync for connector %s", connector_id)
         started_at = time.monotonic()
         try:
-            result = await connector.sync(incremental=True)
+            async with connector_sync_lease(connector_id):
+                result = await connector.sync(incremental=True)
             logger.info(
                 "Scheduled sync complete: connector=%s status=%s added=%d updated=%d deleted=%d errors=%d",
                 connector_id,
@@ -312,6 +316,10 @@ class ConnectorScheduler:
                 result.deleted,
                 len(result.errors),
             )
+        except ConnectorSyncBusy:
+            logger.info("Scheduled sync skipped: connector %s already has a sync running", connector_id)
+        except ConnectorSyncUnavailable:
+            logger.warning("Scheduled sync skipped: Redis is unavailable for connector %s", connector_id)
         except Exception as exc:
             elapsed = time.monotonic() - started_at
             logger.error("Scheduled sync failed: connector=%s elapsed=%.1fs error=%s", connector_id, elapsed, exc)

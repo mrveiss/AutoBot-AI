@@ -69,9 +69,9 @@
 Open `planning/WEEK_1_QUICK_START.md` and copy the 3 Task() commands.
 
 Send all 3 in a SINGLE message to launch agents in parallel:
-- `database-engineer` - Schema initialization (Tasks 1.1, 1.2, 1.3)
-- `senior-backend-engineer` - Startup integration (Task 1.4)
-- `testing-engineer` - Comprehensive tests (Tasks 1.5, 1.6)
+- `autobot-dev-skills:senior-developer` (database-engineer lens) - Schema initialization (Tasks 1.1, 1.2, 1.3)
+- `autobot-dev-skills:senior-developer` (senior-backend-engineer lens) - Startup integration (Task 1.4)
+- `autobot-dev-skills:senior-developer` (testing-engineer lens) - Comprehensive tests (Tasks 1.5, 1.6)
 
 **Step 2: Monitor Progress (3-4 days)**
 
@@ -81,7 +81,7 @@ Send all 3 in a SINGLE message to launch agents in parallel:
 
 **Step 3: Code Review (Day 3)**
 
-- Launch `code-reviewer` agent
+- Launch `autobot-dev-skills:reviewer` agent (code-reviewer lens)
 - Verify all implementations
 - Run test suite
 
