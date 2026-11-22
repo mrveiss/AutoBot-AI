@@ -7369,7 +7369,8 @@
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
       "toggleViewAriaLabel": "Toggle view mode",
-      "uploadFailedHint": "Verifique os limites de tamanho de arquivo e os requisitos de formato"
+      "uploadFailedHint": "Verifique os limites de tamanho de arquivo e os requisitos de formato",
+      "uploadAlreadyExists": "A file with this name already exists"
     },
     "header": {
       "title": "File Browser",
