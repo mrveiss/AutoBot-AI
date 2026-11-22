@@ -92,6 +92,13 @@ export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
 export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
 export type { AnnouncePriority } from './src/composables/useAnnounce'
 
+// Theme names, storage and `data-theme` application shared by both apps (#18239).
+export {
+  EFFECTIVE_THEMES, THEMES, THEME_STORAGE_KEY, colorSchemeFor, resolveTheme,
+  applyThemeToDocument, readStoredTheme, writeStoredTheme,
+} from './src/composables/themeScheme'
+export type { EffectiveTheme, Theme } from './src/composables/themeScheme'
+
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'

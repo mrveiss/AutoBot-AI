@@ -8,7 +8,7 @@
  *
  * @author mrveiss
  */
-import type { CollectionDeleteProposal } from './collectionDeleteProposal'
+import type { components } from '@/types/generated/api'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -30,6 +30,7 @@ import type {
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
@@ -499,14 +500,11 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Ask for a bulk delete (#21383): the backend only files a proposal for approval, it deletes nothing.
-   * Issue #552: collection-based, POST /api/knowledge_base/collections/{collection_id}/bulk-delete
+   * Propose deleting exactly the selected documents, from every collection they are in (#21886, #21383);
+   * nothing is deleted until approved.
    */
-  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<CollectionDeleteProposal> {
-    const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
-      fact_ids: documentIds
-    })
-    return response.data as unknown as CollectionDeleteProposal // the route answers a proposal now (#21383); this URL line is ratcheted as-is
+  async bulkDeleteDocuments(documentIds: string[]): Promise<components['schemas']['KnowledgeSelectedFactsDeleteProposal']> {
+    return apiClient.call('post', '/api/knowledge_base/facts/delete-selected', { body: { fact_ids: documentIds } })
   }
 
   /**

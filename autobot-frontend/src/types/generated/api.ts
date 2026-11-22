@@ -7066,6 +7066,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/chroma/empty-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Empty Collections
+         * @description Collections holding zero vectors, plus those that could not be counted (read-only).
+         */
+        get: operations["list_empty_collections_api_knowledge_chroma_empty_collections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/chroma/empty-collections/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Empty Collection Cleanup
+         * @description Propose deleting one zero-count collection -- a request, not a deletion.
+         *
+         *     A collection that is not currently reported empty is refused, so a reviewer is never asked to decide
+         *     on something that could not execute. The handler re-checks the count when the proposal is approved.
+         */
+        post: operations["propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/chroma/collections": {
         parameters: {
             query?: never;
@@ -8538,6 +8581,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/facts/delete-selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Selected Facts
+         * @description Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886).
+         */
+        post: operations["delete_selected_facts_api_knowledge_base_facts_delete_selected_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/suggestions/tags": {
         parameters: {
             query?: never;
@@ -9019,6 +9082,49 @@ export interface paths {
          *     Returns detailed diff information about content and metadata changes.
          */
         post: operations["compare_versions_api_knowledge_base_facts__fact_id__versions_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Stored Connector Credentials
+         * @description Count connector records holding a value for a sensitive field of their auth schema (no values returned).
+         */
+        get: operations["scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Connector Credential Cleanup
+         * @description Propose removing the clear-text copies from one connector record -- a request, not a rewrite.
+         *
+         *     Only a record that holds a copy AND has a secrets-store copy can be proposed: removing the only copy
+         *     would lose the credential. The handler re-checks both when the proposal is approved.
+         */
+        post: operations["propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -53092,8 +53198,8 @@ export interface paths {
         put?: never;
         /**
          * Release Work Item
-         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-         *     person is refused (409). Not enforced: that the caller IS that agent (open, #20521).
+         * @description Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+         *     equal to the stored assignee when there is one; an item held by a person is refused (409).
          */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
@@ -68086,6 +68192,68 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ConnectorCredentialCleanupRequest
+         * @description Propose removing the clear-text copies from one connector record.
+         */
+        ConnectorCredentialCleanupRequest: {
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialCleanupResponse
+         * @description The PENDING approval created; nothing has been rewritten.
+         */
+        ConnectorCredentialCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialFindingResponse
+         * @description One record holding sensitive values. ``fields`` are names, never values.
+         */
+        ConnectorCredentialFindingResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** Connector Type */
+            connector_type: string;
+            /** Fields */
+            fields: string[];
+            /** Has Secrets Store Copy */
+            has_secrets_store_copy: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialScanResponse
+         * @description Counts of affected records. ``unscannable_ids`` could not be checked: never read them as clean.
+         */
+        ConnectorCredentialScanResponse: {
+            /** Scanned */
+            scanned: number;
+            /** Affected */
+            affected: number;
+            /** With Store Copy Count */
+            with_store_copy_count: number;
+            /** Without Store Copy Count */
+            without_store_copy_count: number;
+            /** Findings */
+            findings: components["schemas"]["ConnectorCredentialFindingResponse"][];
+            /** Unscannable Ids */
+            unscannable_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ConnectorDetailResponse
          * @description GET /knowledge_base/connectors/{connector_id}.
          */
@@ -76346,6 +76514,46 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * EmptyCollectionCleanupRequest
+         * @description Propose deleting one zero-count collection.
+         */
+        EmptyCollectionCleanupRequest: {
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionCleanupResponse
+         * @description The PENDING approval created; nothing has been deleted.
+         */
+        EmptyCollectionCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionsResponse
+         * @description Zero-count collections. ``unreadable`` could not be counted: never read them as empty (#19725).
+         */
+        EmptyCollectionsResponse: {
+            /** Total */
+            total: number;
+            /** Empty */
+            empty: string[];
+            /** Unreadable */
+            unreadable: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * EndOutcome
          * @enum {string}
          */
@@ -83746,6 +83954,26 @@ export interface components {
             reformulated_queries?: string[];
             /** Message */
             message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeSelectedFactsDeleteProposal
+         * @description Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886).
+         */
+        KnowledgeSelectedFactsDeleteProposal: {
+            /** Status */
+            status: string;
+            /** Facts Selected */
+            facts_selected: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action: string;
+            /** Message */
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -119086,6 +119314,59 @@ export interface operations {
             };
         };
     };
+    list_empty_collections_api_knowledge_chroma_empty_collections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionsResponse"];
+                };
+            };
+        };
+    };
+    propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyCollectionCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionCleanupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_collections_api_knowledge_chroma_collections_get: {
         parameters: {
             query?: never;
@@ -120862,6 +121143,39 @@ export interface operations {
             };
         };
     };
+    delete_selected_facts_api_knowledge_base_facts_delete_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionFactsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSelectedFactsDeleteProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     suggest_tags_api_knowledge_base_suggestions_tags_post: {
         parameters: {
             query?: never;
@@ -121411,6 +121725,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeFactVersionCompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialScanResponse"];
+                };
+            };
+        };
+    };
+    propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorCredentialCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialCleanupResponse"];
                 };
             };
             /** @description Validation Error */
