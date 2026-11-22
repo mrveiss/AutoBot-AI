@@ -5,9 +5,11 @@
 """The ``connector:`` secret-name prefix is reserved for the connector credential writer (#17850)."""
 
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import HTTPException
 
 from api import envelope_secrets
@@ -202,9 +204,10 @@ def test_create_and_update_requests_share_one_reserved_name_rule():
 
 async def test_create_route_answers_a_reserved_name_with_the_fixed_409_and_audits_denied(monkeypatch):
     from api import secrets as secrets_api
-    from api.schemas_system import ChatSecretScope, SecretCreateRequest
 
-    request = SecretCreateRequest(name=_NAME, type="api_key", scope=ChatSecretScope.GENERAL, value="v")
+    # A plain namespace, not a SecretCreateRequest: the route only reads name before it refuses, and a
+    # secret-shaped constructor passed to ``create_secret`` made code scanning link it to the SLM route of that name.
+    request = SimpleNamespace(name=_NAME, connector_id=None, visibility=None)
     writer, audit = MagicMock(), AsyncMock()
     monkeypatch.setattr(secrets_api, "check_rate_limit", AsyncMock())
     monkeypatch.setattr(secrets_api, "get_auth_middleware", lambda: MagicMock(get_user_from_request=lambda _r: {}))
@@ -225,9 +228,11 @@ async def test_slash_secrets_add_refuses_a_reserved_name_and_writes_nothing(monk
     from slash_command_handler import SecretsAddSubcommand
 
     manager = SecretsManager.__new__(SecretsManager)
+    manager.cipher = Fernet(Fernet.generate_key())  # encryption succeeds, so the name check is the only failure
     saved = MagicMock()
     monkeypatch.setattr(manager, "_load_secrets", lambda: {}, raising=False)
     monkeypatch.setattr(manager, "_save_secrets", saved, raising=False)
     result = await SecretsAddSubcommand(manager, f"{name} api_key sk-test-value", None).execute()
     assert result.success is False
+    assert "prefix is reserved" in result.content
     saved.assert_not_called()

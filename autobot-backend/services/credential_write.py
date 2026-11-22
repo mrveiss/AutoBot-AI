@@ -142,11 +142,10 @@ async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, nam
     else:
         target = existing
     # An existing row, or one a concurrent create returned, is adopted only when safe; a fresh row always is.
-    if (target is existing or getattr(target, "already_existed", False)) and not await _may_adopt(
-        session, svc, target, secret_type, sqlite_id
-    ):
+    reused = target is existing or getattr(target, "already_existed", False)
+    if reused and not await _may_adopt(session, svc, target, secret_type, sqlite_id):
         return
-    if target is existing:
+    if reused:  # rotated under the row lock taken in _may_adopt, so the stamped row holds the requested value
         await svc.rotate_value(session, secret_id=target.id, new_plaintext=plaintext, actor_vaults={vault})
     await _stamp_marker(session, target, sqlite_id)
 

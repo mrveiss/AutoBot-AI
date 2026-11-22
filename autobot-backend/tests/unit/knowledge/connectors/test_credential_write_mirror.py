@@ -218,3 +218,19 @@ async def test_adoption_locks_the_row_before_the_grant_check_and_stamp(monkeypat
     sess = MagicMock(flush=AsyncMock(), refresh=AsyncMock())
     await _run(sess)
     sess.refresh.assert_awaited_once_with(row, with_for_update=True)
+
+
+async def test_create_returning_a_reused_row_rotates_it_under_the_lock_before_stamping(monkeypatch):
+    svc = _svc(monkeypatch)
+    row = SimpleNamespace(
+        id=uuid.uuid4(), owner_vault=_VAULT, type="t", is_live=True, already_existed=True, extra_data=None
+    )
+    svc.create = AsyncMock(return_value=row)
+    order = []
+    sess = MagicMock(flush=AsyncMock(), refresh=AsyncMock(side_effect=lambda *a, **k: order.append("lock")))
+    svc.rotate_value.side_effect = lambda *a, **k: order.append("rotate")
+    monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
+    await _run(sess)
+    assert order == ["lock", "rotate"]
+    assert svc.rotate_value.await_args.kwargs["secret_id"] == row.id
+    assert row.extra_data == {cw._MARKER: "sid-1"}
