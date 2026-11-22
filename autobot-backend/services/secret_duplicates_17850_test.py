@@ -12,6 +12,7 @@ import pytest
 
 from autobot_shared.secrets_vault import VaultRef
 from models.approval import ApprovalType
+from models.secret import Secret
 from services import secret_duplicate_cleanup_action as action
 from services import secret_duplicate_proposals as proposals
 from services import secret_duplicates as dup
@@ -311,7 +312,7 @@ async def test_an_unreadable_existing_copy_is_not_treated_as_the_same_value():
 async def test_the_provider_key_lookup_never_returns_a_deactivated_row(monkeypatch, active, expected):
     from services import provider_key_vault
 
-    row = SimpleNamespace(id=_A, is_active=active)
+    row = Secret(id=_A, is_active=active)
     monkeypatch.setattr(EnvelopeSecretsService, "find_by_name", staticmethod(AsyncMock(return_value=row)))
     assert await provider_key_vault._find_system_secret_id(MagicMock(), _NAME) == expected
 
@@ -321,7 +322,7 @@ async def test_the_provider_key_lookup_judges_ambiguity_before_activity():
     """One active + one deactivated copy is still an unresolved group: refuse, never pick the active one."""
     from services import provider_key_vault
 
-    rows = [SimpleNamespace(id=_A, is_active=True), SimpleNamespace(id=_B, is_active=False)]
+    rows = [Secret(id=_A, is_active=True), Secret(id=_B, is_active=False)]
     scalars = MagicMock(__iter__=lambda self: iter(rows))
     session = MagicMock(execute=AsyncMock(return_value=MagicMock(scalars=lambda: scalars)))
     with pytest.raises(AmbiguousSecretError):
