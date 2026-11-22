@@ -18,8 +18,8 @@ from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_suggestions
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, FakeKB, QuarantineGatedKB, all_facts, quarantined_fact
 from knowledge.suggestions import SuggestionsMixin
+from testkit.read_path_fakes_16665 import PRIVATE_A, RESEARCH, FakeKB, QuarantineGatedKB, all_facts, quarantined_fact
 
 ALICE, BOB, NOBODY = {"user_id": "alice"}, {"user_id": "bob"}, {"role": "user"}
 ADMIN = {"user_id": "root", "role": "admin"}

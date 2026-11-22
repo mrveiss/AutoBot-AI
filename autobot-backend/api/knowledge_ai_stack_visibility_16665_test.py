@@ -22,7 +22,7 @@ import pytest
 
 from api.schemas_knowledge import AIStackRAGQueryRequest
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import RESEARCH, QuarantineGatedKB, quarantined_fact
+from testkit.read_path_fakes_16665 import RESEARCH, QuarantineGatedKB, quarantined_fact
 
 
 def _make_kb(search_results: list) -> MagicMock:
