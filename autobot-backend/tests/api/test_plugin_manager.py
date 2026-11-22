@@ -265,8 +265,10 @@ async def test_load_plugin_endpoint_unloads_a_plugin_whose_activation_fails():
         patch("plugin_manager.get_plugin_loader", return_value=loader),
         patch("plugin_manager.require_enabled", new=AsyncMock()),
         patch("plugin_manager.CapabilityChecker"),
-        pytest.raises(RuntimeError, match="enable failed"),
+        pytest.raises(HTTPException) as failed,
     ):
         await load_plugin(plugin_name="test-plugin", config=None, admin_check=True)
 
+    assert failed.value.status_code == 500  # the error boundary turns the activation failure into a 500
+    assert "PLUGIN_LOAD" in str(failed.value.detail)
     loader.unload_plugin.assert_awaited_once_with("test-plugin")
