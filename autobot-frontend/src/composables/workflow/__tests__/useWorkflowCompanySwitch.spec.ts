@@ -8,7 +8,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
-import { discardWorkflowDraft, useWorkflowCompanySwitch } from '../useWorkflowCompanySwitch'
+import { discardWorkflowDraft, gateOnCompany, useWorkflowCompanySwitch } from '../useWorkflowCompanySwitch'
 
 function draft() {
   return {
@@ -37,6 +37,18 @@ async function flush() {
   await Promise.resolve()
   await Promise.resolve()
 }
+
+describe('gateOnCompany (#21520)', () => {
+  it('runs the action while the company agrees and skips it (resolving undefined) while it does not', async () => {
+    const act = vi.fn(async (id: string) => `ran ${id}`)
+    let agrees = true
+    const gated = gateOnCompany(() => agrees, act)
+    await expect(gated('a')).resolves.toBe('ran a')
+    agrees = false
+    await expect(gated('b')).resolves.toBeUndefined()
+    expect(act).toHaveBeenCalledTimes(1)
+  })
+})
 
 describe('discardWorkflowDraft', () => {
   it('reports no draft for an untouched builder', () => {

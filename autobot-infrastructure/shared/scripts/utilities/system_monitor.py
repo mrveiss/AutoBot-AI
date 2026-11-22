@@ -20,6 +20,7 @@ import psutil
 import requests
 
 from autobot_shared.network_constants import NetworkConstants, ServiceURLs
+from autobot_shared.ollama_urls import ollama_generate_url, ollama_tags_url
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ class AutoBotMonitor:
     def get_ollama_models(self) -> Dict[str, Any]:
         """Get available Ollama models with accessibility testing (Issue #315 - refactored)."""
         try:
-            response = requests.get(f"{ServiceURLs.OLLAMA_LOCAL}/api/tags", timeout=10)
+            response = requests.get(ollama_tags_url(ServiceURLs.OLLAMA_LOCAL), timeout=10)
             if response.status_code != 200:
                 return {"available": False, "error": f"HTTP {response.status_code}"}
 
@@ -248,7 +249,7 @@ class AutoBotMonitor:
         """Test if model is accessible (Issue #315 - extracted)."""
         try:
             test_response = requests.post(
-                f"{ServiceURLs.OLLAMA_LOCAL}/api/generate",
+                ollama_generate_url(ServiceURLs.OLLAMA_LOCAL),
                 json={
                     "model": model_name,
                     "prompt": "test",

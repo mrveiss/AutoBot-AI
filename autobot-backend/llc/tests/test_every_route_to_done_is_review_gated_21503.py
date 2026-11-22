@@ -150,7 +150,7 @@ async def _seed(  # noqa: ANN202
                     company_id=_COMPANY,
                     item_type=WorkItemType.BUG,
                     requires_human_review=True,
-                    reviewer_role="admin",
+                    reviewer_role=None,  # the role is enforced now (#21588); these tests are not about it
                     requires_cross_vendor_review=False,
                 )
             )

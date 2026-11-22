@@ -34,7 +34,7 @@ class _AgentSession(FakeAsyncSession):
 
     def __init__(self, status="available"):
         super().__init__()
-        self.agent = {"status": status, "pre_pause_status": None, "pause_reason": None}
+        self.agent = {"status": status, "pre_pause_status": None, "pause_reason": None, "id": uuid.uuid4()}
         self.updates = []
         self.selects = 0
 
@@ -44,7 +44,7 @@ class _AgentSession(FakeAsyncSession):
         if sql.startswith("SELECT status, pre_pause_status, pause_reason"):
             self.selects += 1
             a = self.agent
-            row = None if a["status"] is None else (a["status"], a["pre_pause_status"], a["pause_reason"])
+            row = None if a["status"] is None else (a["status"], a["pre_pause_status"], a["pause_reason"], a["id"])
             return SimpleNamespace(fetchone=lambda: row)
         if sql.startswith("UPDATE agent_org_nodes"):
             self.updates.append(params)
@@ -61,7 +61,7 @@ class _AgentSession(FakeAsyncSession):
             return None
         before = self.agent["status"]
         self.agent.update(status=p["paused"], pause_reason=p["reason"], pre_pause_status=before)
-        return (before,)
+        return (before, self.agent["id"])
 
 
 def _log():
@@ -171,13 +171,14 @@ async def test_pause_sprint_keeps_an_operator_pause(redis):
 async def test_terminated_agent_is_refused_and_nothing_is_written(redis):
     session, log = _AgentSession("terminated"), _log()
     session.agent.update(pause_reason="fired for cause", pre_pause_status=None)
+    before = dict(session.agent)
     svc = ControlsService(activity_log=log)
 
     with pytest.raises(AgentNotPausableError) as refused:
         await svc.pause_agent(session, "co", "ag", "user-1", reason="hold")
 
     assert refused.value.status == "terminated"
-    assert session.agent == {"status": "terminated", "pre_pause_status": None, "pause_reason": "fired for cause"}
+    assert session.agent == before
     log.record.assert_not_awaited()
     redis.set.assert_not_awaited()
 

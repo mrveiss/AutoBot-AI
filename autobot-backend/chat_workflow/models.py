@@ -386,6 +386,7 @@ class LLMIterationContext:
     message: str | None = None
     agent_context: AgentContext | None = None  # Issue #657: Agent hierarchy
     consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
+    parse_failures: int = 0  # #21843: unparsed-TOOL_CALL re-asks this turn, bounded by limits.INVALID_CALL_LIMIT
     context: Dict[str, Any] = field(default_factory=dict)  # Issue #4264: Request-level context for hooks
     # GH#11160: work item this run executes + its declared approval-gated action
     # categories, resolved upstream (where a DB session exists) so the tool seam

@@ -56,15 +56,12 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_text, base_tree_texts, literal_in
 
 from autobot_shared.testfile_names import is_test_filename
+from tools.lint._comment_syntax import code_text, strip_html_comments
 
 _REPO_ROOT = repo_root()
 
 _MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
-# #19834: the SLM types moved to this package, which both apps import. It stays on the SLM
-# side of this ratchet: a hand-typed `*Response` there is the same sprawl, not a new home
-# the count cannot see.
-_SLM_CONTRACT_REL = "libs/slm-contract"
 
 # --- The ratchet ---------------------------------------------------------
 #
@@ -266,15 +263,28 @@ def _hand_built_url_count(root: Path) -> int:
     return sum(_hand_built_urls(root, root).values())
 
 
-def _hand_typed_response_count(root: Path, repo: Path = _REPO_ROOT) -> int:
-    """Count hand-typed `*Response` interfaces; the SLM app's count includes the contract package of the tree measured."""
-    roots = (root, repo / _SLM_CONTRACT_REL) if root == repo / "autobot-slm-frontend" / "src" else (root,)
-    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(p))) for r in roots for p in _source_files(r))
+def _hand_typed_response_count(root: Path) -> int:
+    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
 
 
 def _inline_generic_count(root: Path) -> int:
-    """Unverified response-shape assertions at the call site."""
-    return sum(len(_INLINE_GENERIC_RE.findall(_read(path))) for path in _source_files(root))
+    """Unverified response-shape assertions at the call site, counted in code only (#15771).
+
+    The pattern also matches the prose that explains a removal, so a correct change that
+    documents itself left the count unchanged and failed the build. The shared stripper
+    (#17941) reads each file with its own comment syntax and drops trailing `// ...` comments
+    too; it tracks quotes, so a generic inside a string literal is still counted. A `.vue` file's HTML
+    comments (outside `<script>`) are dropped first, since the code-comment stripper does not know them.
+    """
+    return sum(
+        len(_INLINE_GENERIC_RE.findall(code_text(_vue_markup_uncommented(path), name=path.name, strip_trailing=True)))
+        for path in _source_files(root)
+    )
+
+
+def _vue_markup_uncommented(path: Path) -> str:
+    text = _read(path)
+    return strip_html_comments(text) if path.suffix == ".vue" else text
 
 
 def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | None = None) -> dict[str, int]:
@@ -284,7 +294,7 @@ def _measure(app: str, repo: Path = _REPO_ROOT, exceptions: Collection[str] | No
         "clients": len(_client_class_names(root)),
         "raw_fetch": len(_unlisted_raw_fetch_files(root, repo, exceptions)),
         "axios": len(_axios_importers(root, repo)),
-        "responses": _hand_typed_response_count(root, repo),
+        "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
         "fetch_with_auth_importers": len(_fetch_with_auth_importers(root, repo)),
         "hand_built_urls": _hand_built_url_count(root),
@@ -305,12 +315,9 @@ def _new_members(app: str, head: Path, base: Path) -> dict[str, list[tuple[str, 
 
 
 def _export_base(dest: Path, apps: tuple[str, ...] = _APPS, sha: str | None = None) -> Path:
-    """Write each app's ``src`` tree (and the SLM contract package) as the merge base had it under *dest*; BaseUnavailable propagates."""
-    prefixes = [f"{app}/src" for app in apps]
-    if "autobot-slm-frontend" in apps:
-        prefixes.append(_SLM_CONTRACT_REL)  # absent at a base before the move: an empty listing
-    for prefix in prefixes:
-        for rel, text in base_tree_texts(_REPO_ROOT, prefix, sha).items():
+    """Write each app's ``src`` tree as the merge base had it under *dest*; BaseUnavailable propagates."""
+    for app in apps:
+        for rel, text in base_tree_texts(_REPO_ROOT, f"{app}/src", sha).items():
             target = dest / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8")
@@ -392,26 +399,6 @@ def _tree(root: Path, responses: int, raw_fetch_files: tuple[str, ...] = ()) -> 
     for name in raw_fetch_files:
         (src / name).write_text("await fetch('/api/x')\n", encoding="utf-8")
     return root
-
-
-def _slm_tree(root: Path, app_responses: int, contract_responses: int) -> Path:
-    src = root / "autobot-slm-frontend" / "src"
-    src.mkdir(parents=True)
-    (src / "a.ts").write_text("interface XResponse {}\n" * app_responses, encoding="utf-8")
-    contract = root / _SLM_CONTRACT_REL / "src"
-    contract.mkdir(parents=True)
-    (contract / "c.ts").write_text("export interface YResponse {}\n" * contract_responses, encoding="utf-8")
-    return root
-
-
-def test_the_slm_contract_package_is_counted_in_the_tree_measured_not_the_checkout(tmp_path: Path) -> None:
-    """Contrast pair: an unchanged post-move tree passes; one new shared response interface is growth."""
-    base = _slm_tree(tmp_path / "base", 1, 1)
-    unchanged = _slm_tree(tmp_path / "unchanged", 1, 1)
-    grown = _slm_tree(tmp_path / "grown", 1, 2)
-    assert _measure("autobot-slm-frontend", base)["responses"] == 2
-    assert _regressions("autobot-slm-frontend", unchanged, base, frozenset()) == {}
-    assert _regressions("autobot-slm-frontend", grown, base, frozenset()) == {"responses": (2, 3)}
 
 
 def test_the_ratchet_decision_catches_growth_and_passes_a_shrink(tmp_path: Path) -> None:

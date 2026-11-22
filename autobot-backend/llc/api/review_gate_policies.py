@@ -23,7 +23,7 @@ from api.user_management.dependencies import get_current_user, require_org_conte
 from llc.deps import assert_company_access, get_session, service_dep
 from user_management.services import TenantContext
 
-from ..models.enums import WorkItemType
+from ..models.enums import MembershipRole, WorkItemType
 from ..services.review_gate import (
     ReviewGatePolicyConflictError,
     ReviewGatePolicyNotFoundError,
@@ -73,7 +73,8 @@ async def _get_authorized_policy(
 class ReviewGatePolicyCreate(BaseModel):
     item_type: WorkItemType
     requires_human_review: bool = False
-    reviewer_role: Optional[str] = None
+    # A MembershipRole value, so a typo is a 422 and not a policy no reviewer can satisfy (#21588).
+    reviewer_role: Optional[MembershipRole] = None
     # #12618: cross-vendor second-opinion verifier tier; off by default. Also
     # requires the global AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED switch.
     requires_cross_vendor_review: bool = False
@@ -81,7 +82,7 @@ class ReviewGatePolicyCreate(BaseModel):
 
 class ReviewGatePolicyUpdate(BaseModel):
     requires_human_review: Optional[bool] = None
-    reviewer_role: Optional[str] = None
+    reviewer_role: Optional[MembershipRole] = None
     requires_cross_vendor_review: Optional[bool] = None
 
 
@@ -139,7 +140,7 @@ async def create_review_gate_policy(
             str(company_id),
             body.item_type,
             requires_human_review=body.requires_human_review,
-            reviewer_role=body.reviewer_role,
+            reviewer_role=body.reviewer_role.value if body.reviewer_role else None,
             requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()
@@ -167,7 +168,7 @@ async def update_review_gate_policy(
             session,
             str(policy_id),
             requires_human_review=body.requires_human_review,
-            reviewer_role=body.reviewer_role,
+            reviewer_role=body.reviewer_role.value if body.reviewer_role else None,
             requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()

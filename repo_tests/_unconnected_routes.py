@@ -72,11 +72,6 @@ from tools.lint._comment_syntax import code_lines
 
 ROUTE_ROOTS = ("autobot-backend", "autobot-slm-backend")
 FRONTENDS = ("autobot-frontend/src", "autobot-slm-frontend/src")
-#: Production trees that name ``/api/...`` paths without calling them. ``libs/slm-contract`` is the SLM
-#: backend's OpenAPI schema as types (no runtime code): its generated ``paths`` table lists every route the SLM
-#: serves, and read as a caller it marked unconnected SLM routes connected, and same-shaped main-backend routes
-#: (``/api/redis-service/status``) with them (#19834).
-NON_CALLER_TREES = ("libs/slm-contract/",)
 _CALLER_SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".ts", ".js", ".vue", ".service", ".conf")
 
 #: Prefixes whose callers live outside this repository or outside a browser, beyond the
@@ -216,7 +211,7 @@ def other_callers(tree: Tree, audit: Audit) -> dict[str, set[str]]:
     not its own caller. Comments are not stripped: a comment naming a path counts as a caller.
     """
     mod, calls = audit.mod, {}
-    skip = (*(f"{f}/" for f in FRONTENDS), *NON_CALLER_TREES, "docs/")
+    skip = (*(f"{f}/" for f in FRONTENDS), "docs/")
     for rel in tree.select(*_CALLER_SUFFIXES):
         text = tree.text(rel)
         if rel.startswith(skip) or "/api/" not in text:

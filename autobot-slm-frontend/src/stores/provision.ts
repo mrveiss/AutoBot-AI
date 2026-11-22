@@ -23,7 +23,6 @@
  */
 
 import { defineStore } from 'pinia'
-import type { ProvisionLogEntry, ProvisionStatus } from '@autobot/slm-contract'
 import { ref, computed } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
@@ -32,8 +31,12 @@ import { createLogger } from '@autobot/ui'
 
 const logger = createLogger('ProvisionStore')
 
-// #19834: declared once in the shared contract package, which the main app's store imports too.
-export type { ProvisionLogEntry, ProvisionStatus }
+export type ProvisionStatus = 'idle' | 'running' | 'completed' | 'failed'
+
+export interface ProvisionLogEntry {
+  type: 'info' | 'task' | 'success' | 'error' | 'warning' | 'phase'
+  message: string
+}
 
 const POLL_INTERVAL_MS = 3000
 const HEARTBEAT_STALE_MS = 30000  // Clear stuck "Still running..." after 30s without WS update

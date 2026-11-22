@@ -79,7 +79,6 @@ _KNOWN_UNCOVERED: dict[tuple[str, str], tuple[str, str]] = {
     ("npm", "autobot-plugins/vnc"): ("#16512", "4 devDependencies and 1 peerDependency, no lockfile"),
     ("npm", "libs/autobot-sdk-ts"): ("#16512", "5 devDependencies and a tracked lockfile"),
     ("npm", "libs/autobot-ui"): ("#16512", "8 devDependencies and 2 peerDependencies, no lockfile"),
-    ("npm", "libs/slm-contract"): (NO_DEPENDENCIES, "types-only package, no dependencies of any kind"),
     ("docker", "autobot-infrastructure/autobot-backend/docker"): ("#19570", "sandbox.Dockerfile: FROM alpine:3.18"),
     ("docker", "autobot-infrastructure/autobot-frontend/docker"): (
         "#19570",

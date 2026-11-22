@@ -296,14 +296,3 @@ def test_the_real_nested_mount_of_a_registry_router_is_seen_20910() -> None:
     """knowledge_debug.py is mounted by the registry AND `include_router`ed under /debug by knowledge.py."""
     prefixes = _state(repo_root())[1].registry_prefixes("autobot-backend")["autobot-backend/api/knowledge_debug.py"]
     assert {"/knowledge_base", "/knowledge_base/debug"} <= set(prefixes), prefixes
-
-
-_SCHEMA_PATHS = 'export interface paths {\n  "/api/planted/orphan": { get: never };\n}\n'
-
-
-@pytest.mark.parametrize("schema_rel", ["libs/slm-contract/src/generated/api.ts"])
-def test_the_slm_contract_schema_is_not_a_caller_19834(tmp_path: Path, schema_rel: str) -> None:
-    """The contract's generated ``paths`` table names routes without calling them; a real call site still connects."""
-    key = "route:autobot-backend/api/planted_route.py:GET /orphan"
-    assert key in _fired(tmp_path / "schema", {**_ROUTE, **_WIRED, schema_rel: _SCHEMA_PATHS})
-    assert key not in _fired(tmp_path / "caller", {**_ROUTE, **_WIRED, "scripts/probe.py": _SCHEMA_PATHS})

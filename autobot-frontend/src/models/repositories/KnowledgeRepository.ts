@@ -8,6 +8,7 @@
  *
  * @author mrveiss
  */
+import type { components } from '@/types/generated/api'
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
@@ -29,6 +30,7 @@ import type {
   DetailedKnowledgeStats as ApiDetailedKnowledgeStats
 } from '@/types/api-contract'
 import { getApiBase } from '@/config/ssot-config'
+import apiClient from '@/utils/ApiClient'
 import { factByKeyUrl, factToDocument, type FactByKeyBody } from './knowledgeFactMapping'
 
 // Re-export types for convenience
@@ -498,16 +500,11 @@ export class KnowledgeRepository extends ApiRepository {
   }
 
   /**
-   * Bulk delete multiple documents
-   * Issue #552: Note - Backend uses collection-based bulk delete at
-   * POST /api/knowledge_base/collections/{collection_id}/bulk-delete
-   * This endpoint may need adjustment based on collection context
+   * Propose deleting exactly the selected documents, from every collection they are in (#21886, #21383);
+   * nothing is deleted until approved.
    */
-  async bulkDeleteDocuments(documentIds: string[], collectionId: string = 'default'): Promise<{ success: boolean; deleted_count: number }> {
-    const response = await this.post<{ success: boolean; deleted_count: number }>(`${getApiBase()}/knowledge_base/collections/${collectionId}/bulk-delete`, {
-      fact_ids: documentIds
-    })
-    return response.data
+  async bulkDeleteDocuments(documentIds: string[]): Promise<components['schemas']['KnowledgeSelectedFactsDeleteProposal']> {
+    return apiClient.call('post', '/api/knowledge_base/facts/delete-selected', { body: { fact_ids: documentIds } })
   }
 
   /**
