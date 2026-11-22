@@ -77,7 +77,7 @@ async def test_cached_bug_prediction_starts_no_scan():
         patch.object(mod, "store_latest_task_id", AsyncMock()) as store,
         patch.object(mod.run_bug_prediction_analysis, "delay", MagicMock()) as delay,
     ):
-        body = await mod.get_cached_bug_prediction()
+        body = await mod.get_cached_bug_prediction(source_id=SOURCE)
 
     assert read.await_count == 1
     assert body["from_cache"] is True and body["completed_at"]
@@ -92,10 +92,11 @@ async def test_the_explicit_bug_prediction_start_route_does_reach_the_scan_entry
 
     task = MagicMock(id="task-2")
     with (
+        patch.object(mod, "scan_root", AsyncMock()),
         patch.object(mod, "store_latest_task_id", AsyncMock()),
         patch.object(mod.run_bug_prediction_analysis, "delay", MagicMock(return_value=task)) as delay,
     ):
-        body = await mod.start_bug_analysis(admin_check=True, path=".", include_pattern="*.py", limit=10)
+        body = await mod.start_bug_analysis(admin_check=True, source_id=SOURCE, include_pattern="*.py", limit=10)
 
-    delay.assert_called_once_with(".", "*.py", 10)
+    delay.assert_called_once_with(SOURCE, "*.py", 10)
     assert body == {"task_id": "task-2", "status": "pending"}

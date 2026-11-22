@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from api.analytics_bug_prediction import _REDIS_PREFIX as _BUG
 from api.codebase_analytics.endpoints.dependencies import _REDIS_PREFIX as _DEP
 from api.codebase_analytics.endpoints.duplicates import _REDIS_PREFIX as _DUP
 from api.codebase_analytics.endpoints.import_tree import _REDIS_PREFIX as _IMP
@@ -31,7 +32,7 @@ class TestBuildModules:
             "dependencies:s1",
             "duplicates:s1",
             "import_tree:s1",
-            "bug_prediction",
+            "bug_prediction:s1",
             "security_score",
             "anti_pattern",
         ]
@@ -48,18 +49,18 @@ class TestBuildModules:
         by_name = {m[0]: m for m in modules}
         prefixes = {
             by_name[name][3]
-            for name in ("dependencies:s1", "duplicates:s1", "import_tree:s1", "bug_prediction", "security_score")
+            for name in ("dependencies:s1", "duplicates:s1", "import_tree:s1", "bug_prediction:s1", "security_score")
         }
         assert None not in prefixes
         assert len(prefixes) == 5  # all distinct -- no cross-module cache collisions
 
     def test_path_taking_tasks_receive_project_root(self):
-        """bug_prediction, security_score, and anti_pattern take an explicit
-        path argument (their Celery tasks have no source/cwd-relative
-        default); dependencies/duplicates/import_tree self-resolve internally."""
+        """security_score and anti_pattern take an explicit path argument (their Celery tasks have no
+        source/cwd-relative default); the source-scoped tasks are handed the source id."""
         modules = _build_modules("/fake/project/root", ("s1",))
         by_name = {m[0]: m for m in modules}
-        assert by_name["bug_prediction"][2][0] == "/fake/project/root"
+        assert by_name["bug_prediction:s1"][2] == ("s1", "*.py", 10000)
+        assert by_name["bug_prediction:s1"][3] == source_scoped_prefix(_BUG, "s1")
         assert by_name["security_score"][2] == ("/fake/project/root",)
         assert by_name["anti_pattern"][2] == ("/fake/project/root",)
         # The source-scoped tasks are handed the source, never run unscoped (#20513).
@@ -71,7 +72,7 @@ class TestBuildModules:
 
     def test_without_sources_only_the_root_scoped_modules_are_built(self):
         names = [m[0] for m in _build_modules("/fake/project/root")]
-        assert names == ["bug_prediction", "security_score", "anti_pattern"]
+        assert names == ["security_score", "anti_pattern"]
 
 
 class TestDispatch:

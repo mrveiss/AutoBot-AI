@@ -59,12 +59,18 @@ export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
 
   // --- Loaders ---
 
-  const loadBugPrediction = () => bugPredictionTask.start()
+  // #18030: the backend scans only the selected source; no source selected, no request.
+  const hasSource = () => Object.keys(deps.sourceIdQuery.value).length > 0
+  const loadBugPrediction = async () => {
+    if (!hasSource()) return false
+    return bugPredictionTask.start(undefined, deps.sourceIdQuery.value)
+  }
 
   const loadCachedBugPrediction = async () => {
+    if (!hasSource()) return
     try {
       const data = await apiClient.get<Record<string, unknown>>(
-        '/api/analytics/bug-prediction/cached',
+        deps.withSourceId('/api/analytics/bug-prediction/cached'),
       )
       if (data.status === 'success' && data.files) {
         bugPredictionTask.result.value = data
