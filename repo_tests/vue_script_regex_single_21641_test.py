@@ -21,14 +21,26 @@ SELF = "repo_tests/vue_script_regex_single_21641_test.py"
 NEEDLES = ("_VUE_SCRIPT_RE =", "_VUE_SCRIPT_RE:", "<script[^>]*>([")
 
 
+def defines_the_pattern(text: str) -> bool:
+    """Whether *text* holds a local definition of the extractor (an import of ``VUE_SCRIPT_RE`` is not one)."""
+    return any(n in text for n in NEEDLES)
+
+
 def test_the_pattern_is_defined_in_one_module_only():
     root = repo_root()
     paths = [p for p in tracked_paths(root, "autobot-backend", "autobot_shared") if p.endswith(".py")]
     assert paths, "no tracked python found; the scan would pass vacuously"
-    found = [
-        p for p in paths if p not in (OWNER, SELF) and any(n in (root / p).read_text(encoding="utf-8") for n in NEEDLES)
-    ]
+    found = [p for p in paths if p not in (OWNER, SELF) and defines_the_pattern((root / p).read_text(encoding="utf-8"))]
     assert found == []
+
+
+def test_a_local_definition_trips_the_detector():
+    assert defines_the_pattern('_VUE_SCRIPT_RE = re.compile(r"<script[^>]*>([\\s\\S]*?)</script>")')
+    assert defines_the_pattern('m = re.search(r"<script[^>]*>([\\s\\S]*?)</script>", code)')
+
+
+def test_an_import_of_the_shared_pattern_does_not_trip_it():
+    assert not defines_the_pattern("from autobot_shared.vue_sfc import VUE_SCRIPT_RE\nVUE_SCRIPT_RE.search(code)")
 
 
 @pytest.mark.parametrize(

@@ -30,14 +30,16 @@ def served(monkeypatch):
     """``(client, routes)``: the marketplace router mounted behind the production auth module."""
     real = load_real_auth_middleware()
     monkeypatch.setitem(sys.modules, "auth_middleware", real)
+    api_pkg = importlib.import_module("api")
+    # Both the module cache and the package attribute are put back at teardown.
     monkeypatch.delitem(sys.modules, "api.marketplace", raising=False)
+    monkeypatch.setattr(api_pkg, "marketplace", getattr(api_pkg, "marketplace", None), raising=False)
     module = importlib.import_module("api.marketplace")
     monkeypatch.setattr(real, "resolve_human_user", AsyncMock(return_value=None))
     app = FastAPI()
     app.include_router(module.router, prefix="/api/marketplace")
     routes = [r for r in module.router.routes if isinstance(r, APIRoute)]
     yield TestClient(app, raise_server_exceptions=False), routes
-    sys.modules.pop("api.marketplace", None)
 
 
 def test_the_inventory_is_not_empty(served):
