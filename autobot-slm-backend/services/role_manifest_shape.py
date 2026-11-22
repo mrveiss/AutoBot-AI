@@ -18,8 +18,11 @@ Phase 1 (#16025) derived the identifier, units, health and ports. Phase 2 derive
 ``sync_target``), for every role a manifest resolves to. ``sync_target`` is what the code-sync rsyncs INTO, which
 is not the manifest's ``destination`` (the install directory); the two disagree for several roles, and that
 discrepancy is tracked separately rather than settled here -- the fields hold exactly what the registry did.
-NOT derived, and still declared only in ``role_registry.py``: ``display_name``, ``sync_type``, ``auto_restart``,
-``post_sync_cmd``, ``required``, ``degraded_without``, ``ansible_playbook``.
+Since #16025 AC1 the registry no longer restates the derived units, health port or health path: a manifest-backed role
+carries none of them in ``role_registry.py`` (only a role no manifest resolves to, or slm-frontend's ``nginx``
+fallback, keeps a literal unit). NOT derived, and still declared only in ``role_registry.py``:
+``display_name``, ``sync_type``, ``auto_restart``, ``post_sync_cmd``, ``required``, ``degraded_without``,
+``ansible_playbook``.
 """
 
 from __future__ import annotations
@@ -47,16 +50,36 @@ REGISTRY_ONLY_FIELDS: frozenset = frozenset(
     }
 )
 
-# #16025: derived health would regress this one role. slm-backend sits behind
-# nginx on the SLM manager, so its manifest health.endpoint (no explicit port
-# in the URL -- an implicit 443) describes the EXTERNAL, proxied check. The
-# registry's health_check_port (8000) is the backend process's OWN bind port,
-# used to verify the process directly during a deploy -- a different check,
-# not a stale duplicate of the same one (verified: autobot-slm-backend's own
-# manifest declares its systemd unit with no `system_service`, i.e. the unit
+# #16025: slm-backend sits behind nginx on the SLM manager, so its manifest
+# health.endpoint (no explicit port in the URL -- an implicit 443) describes the
+# EXTERNAL, proxied check. The port below is the backend process's OWN bind
+# port, used to verify the process directly during a deploy -- a different
+# check, not a stale duplicate of the same one (verified: autobot-slm-backend's
+# own manifest declares its systemd unit with no `system_service`, i.e. the unit
 # IS the process on 8000; slm-frontend has no such distinct internal port --
-# nginx IS its primary service -- so it is not excluded).
-HEALTH_DERIVATION_EXCLUDED = frozenset({"slm-backend"})
+# nginx IS its primary service -- so it is not listed). This is the one health
+# fact the manifests cannot express, so it is declared here, once, explicitly.
+HEALTH_OWN_BIND: Mapping[str, Tuple[int, str]] = {"slm-backend": (8000, "/api/health")}
+HEALTH_DERIVATION_EXCLUDED = frozenset(HEALTH_OWN_BIND)
+
+# #16025: roles whose health check IS their manifest's ``health.endpoint`` (the port and path come only from the
+# manifest -- the registry declares neither). A role absent from here and from HEALTH_OWN_BIND has no health check:
+# a manifest shared by several roles (autobot-database, the celery roles of autobot-backend) describes ONE endpoint
+# that is not each role's own, so deriving it for every role would give celery the backend's port.
+HEALTH_DERIVED_ROLES = frozenset(
+    {
+        "slm-frontend",
+        "slm-monitoring",
+        "backend",
+        "frontend",
+        "ai-stack",
+        "chromadb",
+        "npu-worker",
+        "browser-service",
+        "autobot-llm-cpu",
+        "autobot-llm-gpu",
+    }
+)
 
 
 def canonical_manifest_role(role_name: str) -> str:
@@ -202,6 +225,17 @@ def default_roles_for(static_roles: List[Dict], placeholders: Mapping[str, str] 
     return roles
 
 
+def _apply_health(role_data: Dict, name: str, manifest: RoleManifest) -> None:
+    """Set health_check_port/path: the explicit own-bind port, else the manifest's endpoint for a derived role."""
+    if name in HEALTH_OWN_BIND:
+        role_data["health_check_port"], role_data["health_check_path"] = HEALTH_OWN_BIND[name]
+    elif name in HEALTH_DERIVED_ROLES:
+        port, path = health_from_manifest(manifest)
+        if port is not None:
+            role_data["health_check_port"] = port
+            role_data["health_check_path"] = path
+
+
 def apply_manifest_shape(
     role_data: Dict, manifests: Dict[str, RoleManifest], placeholders: Mapping[str, str] | None = None
 ) -> Dict:
@@ -244,10 +278,6 @@ def apply_manifest_shape(
         if wrapped is not None:
             role_data["systemd_service"] = wrapped
 
-    if role_data.get("health_check_port") is not None and name not in HEALTH_DERIVATION_EXCLUDED:
-        port, path = health_from_manifest(manifest)
-        if port is not None:
-            role_data["health_check_port"] = port
-            role_data["health_check_path"] = path
+    _apply_health(role_data, name, manifest)
 
     return role_data

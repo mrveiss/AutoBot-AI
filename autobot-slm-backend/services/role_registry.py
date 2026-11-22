@@ -16,7 +16,6 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from models.database import Role, SyncType
@@ -55,10 +54,7 @@ _SLM_ROLES = [
         "name": "slm-backend",
         "display_name": "SLM Backend",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "autobot-slm-backend",
         "auto_restart": True,
-        "health_check_port": 8000,
-        "health_check_path": "/api/health",
         # #16889: the filtered install; why is in _filtered_pip_install's docstring.
         # #14275: venv/bin, not bare (see the backend role below).
         "post_sync_cmd": _filtered_pip_install(
@@ -79,7 +75,6 @@ _SLM_ROLES = [
         "sync_type": SyncType.COMPONENT.value,
         "systemd_service": "nginx",
         "auto_restart": False,
-        "health_check_port": 443,
         "post_sync_cmd": (
             f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build:slm"
         ),  # #10435: VITE_API_URL=/slm
@@ -92,7 +87,6 @@ _SLM_ROLES = [
         "name": "slm-database",
         "display_name": "SLM Database",
         "sync_type": None,
-        "systemd_service": "postgresql",
         "auto_restart": False,
         "required": True,
         "degraded_without": [],
@@ -102,10 +96,7 @@ _SLM_ROLES = [
         "name": "slm-monitoring",
         "display_name": "SLM Monitoring",
         "sync_type": None,
-        "systemd_service": "prometheus",
         "auto_restart": False,
-        "health_check_port": 9090,
-        "health_check_path": "/-/healthy",
         "required": False,
         "degraded_without": ["Fleet metrics and alerting — monitoring unavailable"],
         "ansible_playbook": "deploy-monitoring.yml",
@@ -120,10 +111,7 @@ _BACKEND_ROLES = [
         "name": "backend",
         "display_name": "Backend API",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "autobot-backend",
         "auto_restart": True,
-        "health_check_port": 8443,
-        "health_check_path": "/api/health",
         # Install deps into the backend venv, then migrate. Delegates the
         # filter+rewrite to the canonical scripts/build-filtered-requirements.sh
         # (#11134), which strips only the editable autobot_shared and rewrites
@@ -162,7 +150,6 @@ _BACKEND_ROLES = [
         "name": "celery",
         "display_name": "Celery Worker",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "autobot-celery",
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
@@ -173,7 +160,6 @@ _BACKEND_ROLES = [
         "name": "scheduler",
         "display_name": "Celery Beat Scheduler",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "autobot-celery-beat",
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
@@ -190,9 +176,7 @@ _FRONTEND_ROLES = [
         "name": "frontend",
         "display_name": "Frontend UI",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "nginx",
         "auto_restart": False,
-        "health_check_port": 443,
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build"),
         "required": True,
         "degraded_without": [],
@@ -211,7 +195,6 @@ _DATABASE_ROLES = [
         "name": "redis",
         "display_name": "Redis Stack",
         "sync_type": None,
-        "systemd_service": "redis-stack-server",
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
@@ -224,7 +207,6 @@ _DATABASE_ROLES = [
         # source_paths / target_path: derived from autobot-database/manifest.yml (#16025). Its postgres
         # service's sync_target (the standard postgres data dir) is non-empty so role_detector.py does not
         # take its early exit and runs the path + systemd checks.
-        "systemd_service": "postgresql",
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
@@ -248,10 +230,7 @@ _AI_STACK_ROLES = [
         # `autobot-ai-stack/`, which holds a placeholder README and nothing else.
         # Pointed at that placeholder, a sync delivered one README and reported
         # success — the update never happened.
-        "systemd_service": "autobot-ai-stack",
         "auto_restart": True,
-        "health_check_port": 8080,
-        "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
         # `pip install -r requirements.txt`. This file's requirements carries a
@@ -270,10 +249,7 @@ _AI_STACK_ROLES = [
         "name": "chromadb",
         "display_name": "ChromaDB",
         "sync_type": None,
-        "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
-        "health_check_path": CHROMADB_HEARTBEAT_PATH,  # #19423
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -288,10 +264,7 @@ _OPTIONAL_ROLES = [
         "name": "npu-worker",
         "display_name": "NPU Worker",
         "sync_type": SyncType.PACKAGE.value,
-        "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
-        "health_check_port": config.port.npu,
-        "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
         # `pip install -r requirements.txt`. This file's requirements carries a
@@ -327,10 +300,7 @@ _OPTIONAL_ROLES = [
         "name": "browser-service",
         "display_name": "Browser Automation",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "autobot-playwright",
         "auto_restart": True,
-        "health_check_port": config.port.browser,  # #16025/#19324: SSOT port the browser role binds (#4662)
-        "health_check_path": "/health",
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
         "required": False,
         "degraded_without": ["Browser automation tasks — features degrade gracefully"],
@@ -340,10 +310,7 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-cpu",
         "display_name": "LLM CPU Node",
         "sync_type": None,
-        "systemd_service": "ollama",
         "auto_restart": True,
-        "health_check_port": 11434,
-        "health_check_path": "/api/version",
         "required": False,
         "degraded_without": ["Local CPU inference — system falls back to cloud providers"],
         "ansible_playbook": "playbooks/deploy_role.yml",
@@ -352,10 +319,7 @@ _OPTIONAL_ROLES = [
         "name": "autobot-llm-gpu",
         "display_name": "LLM GPU Node",
         "sync_type": None,
-        "systemd_service": "ollama",
         "auto_restart": True,
-        "health_check_port": 11434,
-        "health_check_path": "/api/version",
         "required": False,
         "degraded_without": ["Large model GPU inference — falls back to CPU models or cloud providers"],
         "ansible_playbook": "playbooks/deploy_role.yml",
@@ -416,7 +380,6 @@ _INFRA_ROLES = [
         "multi_node": True,
         "display_name": "SLM Agent",
         "sync_type": SyncType.COMPONENT.value,
-        "systemd_service": "slm-agent",
         "auto_restart": True,
         # #14278: the agent's venv, not system pip, and the SAME package set the
         # ansible role installs. This listed two of six and targeted an

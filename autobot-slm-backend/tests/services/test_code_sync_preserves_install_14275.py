@@ -235,9 +235,14 @@ def _with_manifest_shape(entry: dict) -> dict:
     if _MANIFESTS is None:
         _MANIFESTS = ManifestLoader(infra_base=_REPO_ROOT / "autobot-infrastructure").load_all()
     shaped = apply_manifest_shape(dict(entry), _MANIFESTS, {"base_dir": "<BASE>", "agent_dir": "<AGENTDIR>"})
-    # Only the two sync fields move: the rest stays as the registry source declares it (the shaping
-    # also rewrites `systemd_service` into a list, which the venv rule below reads as one unit name).
-    return {**entry, "source_paths": shaped["source_paths"], "target_path": shaped["target_path"]}
+    # The sync fields and the units move; the rest stays as the registry source declares it. The registry no
+    # longer restates a manifest-backed role's units (#16025 AC1), so the shaped list is the only place they are.
+    return {
+        **entry,
+        "source_paths": shaped["source_paths"],
+        "target_path": shaped["target_path"],
+        "systemd_service": shaped.get("systemd_service") or [],
+    }
 
 
 def test_the_registry_scan_found_roles():
@@ -348,6 +353,15 @@ def _unit_runs_from_a_venv(service: str) -> bool | None:
     return None
 
 
+def _entry_runs_from_a_venv(entry: dict) -> bool | None:
+    """`_unit_runs_from_a_venv` for the first of the role's units that has a template, None when none has."""
+    for unit in entry.get("systemd_service") or []:
+        answer = _unit_runs_from_a_venv(unit)
+        if answer is not None:
+            return answer
+    return None
+
+
 def test_a_post_sync_pip_targets_the_same_interpreter_the_service_runs():
     """A bare `pip` installs into whatever the SSH session's PATH resolves.
 
@@ -365,10 +379,7 @@ def test_a_post_sync_pip_targets_the_same_interpreter_the_service_runs():
         command = entry.get("post_sync_cmd") or ""
         if "pip install" not in command:
             continue
-        service = entry.get("systemd_service")
-        if not service:
-            continue
-        needs_venv = _unit_runs_from_a_venv(service)
+        needs_venv = _entry_runs_from_a_venv(entry)
         if needs_venv is None:
             continue
         for match in re.finditer(r"(?:^|&&\s*|;\s*)([\w./-]*pip) install", command):
@@ -384,8 +395,7 @@ def test_the_venv_rule_examined_something():
     checked = [
         entry.get("name")
         for entry in _registry_entries()
-        if "pip install" in (entry.get("post_sync_cmd") or "")
-        and _unit_runs_from_a_venv(entry.get("systemd_service") or "") is not None
+        if "pip install" in (entry.get("post_sync_cmd") or "") and _entry_runs_from_a_venv(entry) is not None
     ]
 
     assert len(checked) >= 4, f"only {checked} were actually examined"

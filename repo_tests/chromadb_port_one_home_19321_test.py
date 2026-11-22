@@ -188,12 +188,13 @@ def test_no_unrecorded_chromadb_port_definition() -> None:
 
 
 #: Python readers that restated the port before #19321; each now derives from ``port.chromadb``.
+#: ``services/role_registry.py`` is no longer one (#16025): its health port comes from the database manifest, whose
+#: port and heartbeat endpoint are pinned to the SSOT in ``PINNED`` above.
 PYTHON_READERS = (
     "autobot-backend/api/monitoring.py",
     "autobot-backend/api/service_monitor.py",
     "autobot-slm-backend/api/infrastructure.py",
     "autobot-slm-backend/api/setup_wizard.py",
-    "autobot-slm-backend/services/role_registry.py",
     "autobot-slm-backend/services/security_posture_auditor.py",
     "autobot-slm-backend/services/service_orchestrator.py",
 )
