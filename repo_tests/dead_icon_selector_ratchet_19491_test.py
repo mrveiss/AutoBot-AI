@@ -54,8 +54,6 @@ _FUNCTIONAL_PSEUDO = re.compile(r":(?:not|is|where|has)\([^)]*\)")
 PINS = {
     "components/knowledge/EntityExtractor.vue :: .error-notification i.fa-exclamation-circle": 1,
     "components/knowledge/GraphRAGQuery.vue :: .error-notification i.fa-exclamation-circle": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .active-filter-badge i.fa-filter": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .search-bar i.fa-search": 1,
     "components/knowledge/KnowledgeGraph.vue :: .error-notification i.fa-exclamation-circle": 1,
     "components/knowledge/modals/CategoryEditModal.vue :: .delete-warning i.fa-exclamation-triangle": 1,
     "components/visualizations/AgentActivityVisualization.vue :: .active-count i.pulse": 1,
