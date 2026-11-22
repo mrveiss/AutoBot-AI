@@ -6245,6 +6245,11 @@
     },
     "minimalNote": "Showing essentials · technical widgets hidden",
     "minimalNoteAction": "Show all features",
+    "advancedArea": {
+      "title": "This is an advanced area",
+      "body": "It's hidden from navigation while Minimal interface is on.",
+      "goHome": "Go to Home"
+    },
     "themePresets": {
       "title": "Theme Presets",
       "description": "Choose a pre-configured theme or customize your own color scheme",
