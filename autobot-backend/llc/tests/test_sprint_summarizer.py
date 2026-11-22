@@ -229,7 +229,7 @@ async def test_fetch_documents_reraises_non_notfound_exception(summarizer, km_mo
     """Fix 2: transient ChromaDB errors must propagate, not silently return []."""
     kb_mock = AsyncMock()
     kb_mock._async_chroma_client = AsyncMock()
-    kb_mock._async_chroma_client.get_collection = AsyncMock(side_effect=RuntimeError("connection refused"))
+    kb_mock._async_chroma_client.get_collection_or_none = AsyncMock(side_effect=RuntimeError("connection refused"))
 
     import sys
 
@@ -238,6 +238,20 @@ async def test_fetch_documents_reraises_non_notfound_exception(summarizer, km_mo
     with patch.dict(sys.modules, {"knowledge": fake_kb_module}):
         with pytest.raises(RuntimeError, match="connection refused"):
             await summarizer._fetch_documents("sprint:xxx")
+
+
+@pytest.mark.asyncio
+async def test_a_sprint_with_no_collection_reads_as_empty(summarizer, km_mock):
+    """#19725: collections appear on first write, so closing a sprint that never wrote must still work."""
+    import sys
+
+    kb_mock = AsyncMock()
+    kb_mock._async_chroma_client = AsyncMock()
+    kb_mock._async_chroma_client.get_collection_or_none = AsyncMock(return_value=None)
+    fake_kb_module = MagicMock()
+    fake_kb_module.get_knowledge_base = AsyncMock(return_value=kb_mock)
+    with patch.dict(sys.modules, {"knowledge": fake_kb_module}):
+        assert await summarizer._fetch_documents("sprint:xxx") == []
 
 
 @pytest.mark.asyncio

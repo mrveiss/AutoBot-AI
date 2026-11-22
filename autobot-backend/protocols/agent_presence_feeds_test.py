@@ -24,28 +24,13 @@ from protocols.agent_presence_feeds import (
     sync_company_os_presence,
     sync_session_presence,
 )
+from testkit.fake_async_session import FakeAsyncSession
 
 
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def all(self):
-        return self._rows
-
-
-class _FakeSession:
-    """Answers each execute() with the next result set: org rows first, then work-item titles."""
-
-    def __init__(self, rows, *more):
-        self._results = [rows, *more]
-        self.calls = 0
-        self.statements = []
-
-    async def execute(self, statement, *_args, **_kwargs):
-        self.calls += 1
-        self.statements.append(statement)
-        return _FakeResult(self._results[min(self.calls, len(self._results)) - 1])
+def _session(rows, *more) -> FakeAsyncSession:
+    """Answers each execute() with the next result set (org rows first, then work-item titles); the last repeats."""
+    answers = [rows, *more]
+    return FakeAsyncSession(results=answers, default_result=answers[-1])
 
 
 def _org_node(*, agent_id: str, company_id, org_role: str = "worker") -> AgentOrgNode:
@@ -61,7 +46,7 @@ class TestSyncCompanyOsPresence:
     async def test_an_agent_with_a_running_heartbeat_is_busy(self):
         company_id = uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value))])
+        session = _session([(node, _run(LLCRunStatus.RUNNING.value))])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
@@ -78,7 +63,7 @@ class TestSyncCompanyOsPresence:
         """#18391: the run that makes the agent busy names what it is working on."""
         company_id, item = uuid.uuid4(), uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "Draft the Q3 report")])
+        session = _session([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "Draft the Q3 report")])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
@@ -90,7 +75,7 @@ class TestSyncCompanyOsPresence:
         """A title is only ever read for the company whose presence is being synced (01's review of #18652)."""
         company_id, item = uuid.uuid4(), uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "t")])
+        session = _session([(node, _run(LLCRunStatus.RUNNING.value, item))], [(item, "t")])
 
         await sync_company_os_presence(AgentPresenceRegistry(ttl_seconds=60), session, str(company_id))
 
@@ -109,32 +94,32 @@ class TestSyncCompanyOsPresence:
     async def test_an_idle_agent_has_no_current_task_and_no_title_query_runs(self):
         company_id, item = uuid.uuid4(), uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.COMPLETED.value, item))])
+        session = _session([(node, _run(LLCRunStatus.COMPLETED.value, item))])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
 
         assert registry.list_live(str(company_id))[0].task is None
-        assert session.calls == 1
+        assert len(session.statements) == 1
 
     @pytest.mark.asyncio
     async def test_a_running_run_without_a_work_item_has_no_current_task(self):
         company_id = uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.RUNNING.value))])
+        session = _session([(node, _run(LLCRunStatus.RUNNING.value))])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
 
         entry = registry.list_live(str(company_id))[0]
         assert entry.busy is True and entry.task is None
-        assert session.calls == 1
+        assert len(session.statements) == 1
 
     @pytest.mark.asyncio
     async def test_an_agent_with_a_completed_heartbeat_is_idle(self):
         company_id = uuid.uuid4()
         node = _org_node(agent_id="assistant-abc123", company_id=company_id)
-        session = _FakeSession([(node, _run(LLCRunStatus.COMPLETED.value))])
+        session = _session([(node, _run(LLCRunStatus.COMPLETED.value))])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
@@ -145,7 +130,7 @@ class TestSyncCompanyOsPresence:
     async def test_an_agent_with_no_heartbeat_run_yet_is_idle_not_dropped(self):
         company_id = uuid.uuid4()
         node = _org_node(agent_id="fresh-agent", company_id=company_id)
-        session = _FakeSession([(node, None)])
+        session = _session([(node, None)])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, str(company_id))
@@ -157,7 +142,7 @@ class TestSyncCompanyOsPresence:
     @pytest.mark.asyncio
     async def test_a_node_with_no_company_id_is_unknown_tenant_not_shared(self):
         node = _org_node(agent_id="orphan-agent", company_id=None)
-        session = _FakeSession([(node, None)])
+        session = _session([(node, None)])
         registry = AgentPresenceRegistry(ttl_seconds=60)
 
         await sync_company_os_presence(registry, session, "some-company")

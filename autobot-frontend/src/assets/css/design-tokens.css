@@ -55,6 +55,7 @@
   --text-on-success: #000000;
   --text-on-warning: #000000;
   --text-on-error: #ffffff;
+  --text-on-info: #ffffff;
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -86,6 +87,10 @@
   --color-error-bg: rgba(239, 68, 68, 0.1);
   --color-error-bg-hover: rgba(239, 68, 68, 0.2);
   --color-error-border: rgba(239, 68, 68, 0.3);
+  /* #19872: --color-error is only 3.76:1 against white, so a solid error fill
+     carrying white text (--text-on-error) uses this darker shade of the same
+     hue (4.62:1). --color-error stays for text, border and icon uses. */
+  --color-error-solid: #da3535;
 
   --color-info: #3b82f6;
   --color-info-hover: #2563eb;
@@ -93,6 +98,8 @@
   --color-info-dark: #1d4ed8;
   --color-info-bg: rgba(59, 130, 246, 0.1);
   --color-info-bg-hover: rgba(59, 130, 246, 0.2);
+  /* #19872: solid-fill shade of --color-info for white text (3.68:1 -> 4.61:1). */
+  --color-info-solid: #306eeb;
 
   /* Danger Colors (for critical actions) */
   --color-danger: #dc2626;
@@ -323,17 +330,20 @@
   --font-numeric: 'IBM Plex Mono', 'JetBrains Mono', Consolas, monospace;
   --font-display: var(--font-sans);
 
-  /* Font sizes */
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --text-4xl: 2.25rem;
-  --text-5xl: 3rem;
-  --text-6xl: 3.75rem;
+  /* Font sizes: the one type scale. Each step is its base size times
+     --font-scale, which [data-font-size] sets (themes/preferences.css).
+     A theme that redefines a step must multiply by --font-scale too. */
+  --font-scale: 1;
+  --text-xs: calc(0.75rem * var(--font-scale));
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-base: calc(1rem * var(--font-scale));
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-xl: calc(1.25rem * var(--font-scale));
+  --text-2xl: calc(1.5rem * var(--font-scale));
+  --text-3xl: calc(1.875rem * var(--font-scale));
+  --text-4xl: calc(2.25rem * var(--font-scale));
+  --text-5xl: calc(3rem * var(--font-scale));
+  --text-6xl: calc(3.75rem * var(--font-scale));
 
   /* Font weights */
   --font-thin: 100;
@@ -454,6 +464,8 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+  --z-raised: 1;
+  --z-drawer-backdrop: 299;
   --z-maximum: 10000;
 
   /* ============================================
@@ -907,7 +919,7 @@
 
   /* ============================================
    * SECRETS VIEW TOKENS
-   * Issue #12005 (umbrella #11515). Scoped to llc/SecretsView.vue.
+   * Issue #12005 (umbrella #11515). Scoped to llc/CompanySecretsView.vue.
    * Hex-only (deliberately NO OKLCH override) so the view renders
    * pixel-identical to its previous hardcoded values across all browsers.
    * These are the literal fallbacks the view rendered because their intended
@@ -915,17 +927,17 @@
    * --color-success-subtle, --color-success-text, --color-danger-subtle) are
    * undefined in non-ember themes; preserved behind those intended token
    * names via nested var() so ember still wins where it defines them.
-   * --secretsview-on-accent is the white primary-button label on the accent
+   * --company-secrets-on-accent is the white primary-button label on the accent
    * fill (--text-on-primary carries an OKLCH override that would drift).
    * ============================================ */
-  --secretsview-accent: #c4651a;             /* primary-button accent fill (non-ember) */
-  --secretsview-on-accent: #fff;             /* primary-button label on accent */
-  --secretsview-bg-code: #f3f4f6;            /* secret-name code chip fill */
-  --secretsview-success-bg: #dcfce7;         /* active status-badge fill */
-  --secretsview-success-text: #15803d;       /* active status-badge text */
-  --secretsview-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
-  --secretsview-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
-  --secretsview-danger-border: #fecaca;      /* danger button border */
+  --company-secrets-accent: #c4651a;             /* primary-button accent fill (non-ember) */
+  --company-secrets-on-accent: #fff;             /* primary-button label on accent */
+  --company-secrets-bg-code: #f3f4f6;            /* secret-name code chip fill */
+  --company-secrets-success-bg: #dcfce7;         /* active status-badge fill */
+  --company-secrets-success-text: #15803d;       /* active status-badge text */
+  --company-secrets-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
+  --company-secrets-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
+  --company-secrets-danger-border: #fecaca;      /* danger button border */
 
   /* ============================================
    * BACKLOG VIEW TOKENS
@@ -1283,13 +1295,6 @@
   --transition-slow: 0.3s ease;
   --font-family-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-family-mono: 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
@@ -1596,6 +1601,7 @@
     --text-on-success: oklch(0% 0 0);
     --text-on-warning: oklch(0% 0 0);
     --text-on-error: oklch(100% 0 0);
+    --text-on-info: oklch(100% 0 0);
 
     /* Secondary Colors */
     --color-secondary: oklch(55.4% 0.041 257.4);
@@ -1629,6 +1635,8 @@
     --color-error-bg: oklch(63.7% 0.208 25.3 / 0.1);
     --color-error-bg-hover: oklch(63.7% 0.208 25.3 / 0.2);
     --color-error-border: oklch(63.7% 0.208 25.3 / 0.3);
+    /* #19872: solid-fill shade for white text; matches the sRGB block. */
+    --color-error-solid: oklch(58.6% 0.202 26.1);
 
     /* Info Colors */
     --color-info: oklch(62.3% 0.188 259.8);
@@ -1637,6 +1645,7 @@
     --color-info-dark: oklch(48.8% 0.217 264.4);
     --color-info-bg: oklch(62.3% 0.188 259.8 / 0.1);
     --color-info-bg-hover: oklch(62.3% 0.188 259.8 / 0.2);
+    --color-info-solid: oklch(57.1% 0.200 262.2);
 
     /* Danger Colors */
     --color-danger: oklch(57.7% 0.215 27.3);

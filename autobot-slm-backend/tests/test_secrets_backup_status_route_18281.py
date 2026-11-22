@@ -18,6 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 ROOT = Path(__file__).resolve().parents[1]
 KEY = "k" * 64
 
@@ -30,14 +32,6 @@ def _load(name: str, rel: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-class _DB:
-    def __init__(self, row):
-        self.row = row
-
-    async def execute(self, _q):
-        return SimpleNamespace(scalar_one_or_none=lambda: self.row)
 
 
 @pytest.fixture()
@@ -65,7 +59,7 @@ def client_for(monkeypatch):
         app.include_router(
             route.router, prefix="/api", dependencies=[Depends(auth.require_service_management_or_internal)]
         )
-        app.dependency_overrides[route.get_db] = lambda: _DB(row)
+        app.dependency_overrides[route.get_db] = lambda: FakeAsyncSession(default_result=[] if row is None else [row])
         return TestClient(app)
 
     return make

@@ -17,7 +17,7 @@
               <div class="error-info">
                 <strong>Component:</strong> {{ componentName }}<br>
                 <strong>Retry Attempts:</strong> {{ retryCount }}/{{ maxRetries }}<br>
-                <strong>Time:</strong> {{ new Date().toLocaleString() }}
+                <strong>Time:</strong> {{ formatISOString(new Date()) }}
               </div>
             </div>
           </details>
@@ -42,7 +42,7 @@
           </BaseButton>
 
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             @click="goHome"
           >
             <Icon name="home" />
@@ -62,12 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
+import { formatISOString } from '@/utils/formatHelpers'
+import { RETRY_BACKOFF, backoffDelay, BaseButton } from '@autobot/ui'
 import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { isChunkLoadError, isCssChunkLoadError } from '@/utils/chunkLoadError'
+import { isRequestTimeout } from '@/utils/errorExtract'
 import Icon from '@/components/ui/Icon.vue'
 import type rumAgent from '@/utils/RumAgent'
 
@@ -114,6 +115,7 @@ const errorMessage = computed(() => {
     return 'This page failed to load due to a network issue or application update. Please try refreshing the page.'
   }
 
+  // The browser words these two network failures; no typed error exists for them.
   if (error.message?.includes('Failed to fetch')) {
     return 'Unable to download the required files. Please check your internet connection.'
   }
@@ -122,7 +124,8 @@ const errorMessage = computed(() => {
     return 'Network connection failed while loading the component. Please check your internet connection.'
   }
 
-  if (error.message?.includes('timeout')) {
+  // Typed timeout, or Vue's own wording: defineAsyncComponent({ timeout }) rejects with 'Async component timed out after Nms.'
+  if (isRequestTimeout(error) || error.message?.includes('timed out')) {
     return 'The component took too long to load. Please try again or check your connection.'
   }
 

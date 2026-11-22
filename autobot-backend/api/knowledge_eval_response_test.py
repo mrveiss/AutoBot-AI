@@ -29,10 +29,7 @@ class TestGetFreshKbStatsResponsePayload:
         mock_kb = MagicMock()
         mock_kb.get_stats = AsyncMock(return_value={"document_count": 42})
 
-        with (
-            patch("knowledge_base.KnowledgeBase", return_value=mock_kb),
-            patch("asyncio.sleep", new=AsyncMock()),
-        ):
+        with patch("api.knowledge_eval.get_knowledge_base_async", new=AsyncMock(return_value=mock_kb)):
             response = client.get("/api/knowledge/test/fresh_stats")
 
         assert response.status_code == 200
@@ -48,10 +45,7 @@ class TestRebuildSearchIndexResponsePayload:
         mock_kb = MagicMock()
         mock_kb.rebuild_search_index = AsyncMock(return_value={"status": "success", "documents_indexed": 17})
 
-        with (
-            patch("knowledge_base.KnowledgeBase", return_value=mock_kb),
-            patch("asyncio.sleep", new=AsyncMock()),
-        ):
+        with patch("api.knowledge_eval.get_knowledge_base_async", new=AsyncMock(return_value=mock_kb)):
             response = client.post("/api/knowledge/test/rebuild_index")
 
         assert response.status_code == 200
@@ -59,3 +53,15 @@ class TestRebuildSearchIndexResponsePayload:
         assert body["result"]["documents_indexed"] == 17
         assert body["operation"] == "rebuild_search_index"
         assert body["success"] is True
+
+
+class TestCanonicalInstanceUnavailable:
+    """#18122 D2/D5: an unavailable canonical KB is reported, never replaced by a private one."""
+
+    def test_fresh_stats_reports_failure_when_accessor_returns_none(self):
+        client = _make_client()
+
+        with patch("api.knowledge_eval.get_knowledge_base_async", new=AsyncMock(return_value=None)):
+            response = client.get("/api/knowledge/test/fresh_stats")
+
+        assert response.json()["success"] is False

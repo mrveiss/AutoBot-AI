@@ -78,9 +78,10 @@ def test_a_fresh_host_reads_nothing_so_the_canonical_default_applies(tmp_path) -
 
 
 def test_the_adopt_task_only_fires_on_a_non_empty_read() -> None:
-    task = yaml.safe_load((repo_root() / _READ).read_text(encoding="utf-8"))[1]
+    tasks = yaml.safe_load((repo_root() / _READ).read_text(encoding="utf-8"))
+    task = next(t for t in tasks if "ansible.builtin.set_fact" in t)
     assert task["ansible.builtin.set_fact"] == {"backend_embedding_model": "{{ _embedding_model_probe.stdout | trim }}"}
-    assert "length > 0" in task["when"]
+    assert any("length > 0" in cond for cond in task["when"])
 
 
 # --- discovery: EVERY render of a template carrying the variable preserves it ----------------
@@ -96,8 +97,6 @@ def _ansible_yaml(root: Path) -> list[str]:
 REACH_RENDERS = declare(
     "embedding-model-render-sites",
     discover=_ansible_yaml,
-    # Mid-window (292..342), from REACH_RENDERS.window(); the arithmetic is on the PR, not here.
-    floor=317,
     what="ansible yml/yaml files, scanned for tasks rendering a template that carries AUTOBOT_EMBEDDING_MODEL",
     roots=(_ANS,),
     growth=50,

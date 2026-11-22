@@ -85,6 +85,13 @@ returns the same placeholder, so no `llm_shared` path reveals any part of a key.
 changed: tuples and sets are now walked (the old walk skipped them), and `None`/`""` under a credential name
 is returned as-is (nothing to hide) instead of `***`.
 
+**One placeholder per purpose (#19337).** `autobot_shared.secret_redaction` holds both spellings: `REDACTED_PLACEHOLDER`
+(`**********`) replaces a redacted *value* (dict fields, events, stored snapshots), and `LOG_MASK` (`***`) replaces a
+secret scrubbed out of free *text* (log lines, error messages, output). A new redactor imports one of them and never
+spells its own; `repo_tests/redaction_placeholder_one_home_19337_test.py` counts the spellings left outside the home
+under a pin of zero. A key is never partly shown, in a display mask either (#18221): `repo_tests/no_partial_key_mask_18221_test.py`. Config revisions stored before #19337 keep
+`***REDACTED***`; nothing compares it, so old rows are left as they are.
+
 **Behaviour that changed in `redact_nested` / `redact_dict` (#18205).**
 - A URL under a credential name is masked whole by `redact_dict` (`mask_credential_urls=True`, so its masked set
   never shrinks against base: `webhook_secret_url`, `token_url`, `auth_url` all `**********`). `redact_nested`'s
@@ -107,6 +114,13 @@ substring-matched and feeds `credential_redaction.SENSITIVE_KEYS`.
 because their last token is `pin` (pinned by `test_a_pin_in_any_other_sense_is_masked_too_by_the_whole_word_ruling`). The vocabulary and matcher live in
 `secret_redaction_vocabulary.py` (split from `secret_redaction.py` for the 600-line ceiling); it is the same
 canonical module, re-exported, and the census guard treats the pair as one home.
+
+**File names (#19339).** Whether a FILE name holds a secret is judged by
+`secret_redaction_vocabulary.is_credential_file_stem` (re-exported by `secret_redaction`), which reuses `PRECISE`
+on each word-aligned prefix of the stem and on the same prefix with its last separator removed
+(`pass_word` -> `password`). `autobot_shared/secret_file_names.py` keeps only the file globs and calls it; it declares
+no nouns. `AMBIGUOUS_FILE_NOUNS` (`seed_data.sql`, `salt_states.sls`) and `FILE_COMPOUND_NOUNS` (`apikeys.json`) are
+file-only tables, not field vocabulary: never consult them for a field name.
 
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as

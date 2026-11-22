@@ -33,9 +33,12 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _BACKEND = Path("autobot-backend/api/knowledge.py")
 _OFFICE = Path("autobot-backend/api/knowledge_office_upload.py")
 _CONSTANTS = Path("autobot-frontend/src/constants/knowledgeUpload.ts")
+_LIMIT_READER = Path("autobot-frontend/src/composables/knowledge/useKnowledgeUploadLimit.ts")
 _COMPONENT = Path("autobot-frontend/src/components/knowledge/KnowledgeUpload.vue")
 
 
@@ -52,7 +55,7 @@ def _python_set_literal(source: str, name: str) -> set[str]:
     cannot make a populated set read as an empty one -- an empty set here would
     make every comparison below pass vacuously.
     """
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
@@ -87,7 +90,7 @@ def _ts_int(source: str, name: str) -> int:
 
 
 def _python_int(source: str, name: str) -> int:
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     for node in tree.body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             target = node.targets[0]
@@ -122,13 +125,10 @@ class TestTheTwoListsAgree:
             f"format looks unsupported: {accepted_and_hidden}"
         )
 
-    def test_the_size_limits_agree(self):
-        server_mb = _python_int(_read(_BACKEND), "MAX_FILE_SIZE_MB")
-        client_mb = _ts_int(_read(_CONSTANTS), "KNOWLEDGE_UPLOAD_MAX_MB")
-        assert client_mb == server_mb, (
-            f"the client rejects at {client_mb}MB and the server at {server_mb}MB; "
-            "whichever is larger sends a file that cannot succeed"
-        )
+    def test_the_client_holds_no_copy_of_the_size_limit(self):
+        """#19712: one value, read from the backend, so there are not two to agree."""
+        assert "MAX_MB" not in _read(_CONSTANTS)
+        assert "knowledge_base/upload/limit" in _read(_LIMIT_READER)
 
 
 class TestTheGuardIsMeasuringSomething:

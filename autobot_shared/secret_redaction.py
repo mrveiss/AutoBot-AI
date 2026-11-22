@@ -66,6 +66,7 @@ from autobot_shared.secret_redaction_vocabulary import (
     QUANTITY_SUFFIXES,
     WHOLE_TOKEN_NOUNS,
     MatchPolicy,
+    is_credential_file_stem,
     is_endpoint_name,
     is_quantity_field,
     matches_vocabulary,
@@ -91,6 +92,7 @@ __all__ = [
     "WHOLE_TOKEN_NOUNS",
     "is_credential_entry",
     "is_credential_field",
+    "is_credential_file_stem",
     "is_quantity_field",
     "is_url_field",
     "redact_content",
@@ -297,6 +299,8 @@ class RedactedReprMixin:
 #: Stand-in used by :func:`redact_text` / :func:`redact_mapping`; distinct from :data:`REDACTED_PLACEHOLDER`
 #: because log and extra-vars consumers (and their tests) key on this exact value.
 LOG_MASK = "***"
+#: Spellings redactors emitted before #19337; read-side only (never emitted): a value equal to one is redacted.
+LEGACY_PLACEHOLDERS: FrozenSet[str] = frozenset({"***REDACTED***", "<redacted>"})
 
 #: The template export's pre-#17336 exact names: ``True`` under one stays a placeholder (#18196, #17337 AC2).
 LEGACY_EXPORT_KEY_NAMES = frozenset(
@@ -308,13 +312,15 @@ LEGACY_EXPORT_KEY_NAMES = frozenset(
 
 # ``Authorization: <anything>`` / ``Authorization=<anything>`` -- masks the whole
 # credential (``Bearer <jwt>``, ``Basic <b64>``, raw tokens).
-_AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
+_AUTH_HEADER_RE = re.compile(r"""(?i)(authorization["']?\s*[:=]\s*).+""")
 
 # ``api_key=...`` / ``token: ...`` pairs with an optional ``[a-z0-9_]*[_-]?`` prefix (``db_password=``, #12333);
 # the word sits right before ``[:=]`` so near-miss keys (``password_hash_algorithm=``) never match. Every noun is
 # in the shared vocabulary (asserted by test): this is its text SHAPE, not a copy.
 _SECRET_KV_RE = re.compile(
-    r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
+    # #19963: the optional quotes are the JSON spelling, `"password": "x"`; a quoted value is masked whole.
+    r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b"
+    r"([\"']?\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;\"']+)"
 )
 
 

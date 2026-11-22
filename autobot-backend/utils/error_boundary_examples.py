@@ -185,13 +185,15 @@ def integrate_with_knowledge_base():
     """Example showing how to add error boundaries to existing KB operations"""
 
     @error_boundary(component="knowledge_base", function="search")
-    def safe_kb_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def safe_kb_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Wrapped KB search with error boundary"""
         try:
             # Import KB here to avoid circular imports
-            from knowledge_base import KnowledgeBase
+            from knowledge_factory import get_knowledge_base_async
 
-            kb = KnowledgeBase()
+            kb = await get_knowledge_base_async()
+            if kb is None:
+                raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
             results = kb.search_chunks(query, limit=limit)
             return results
         except Exception as e:

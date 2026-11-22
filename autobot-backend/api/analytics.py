@@ -18,14 +18,12 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 # Import root cause analyzer for causal failure analysis
-from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
     Query,
     WebSocket,
-    WebSocketDisconnect,
 )
 
 from api.analytics_controller import (
@@ -54,6 +52,8 @@ from api.schemas_analytics import (
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
 from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS, log_client_disconnect
+from autobot_shared.deployment_profile import try_frontend_url
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
@@ -64,7 +64,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from services.root_cause_analyzer import RootCauseAnalyzer
 from tasks.analytics_tasks import run_dashboard_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import local_hardware_monitor
@@ -113,15 +113,11 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
     """Get code analysis tool status (Issue #398: extracted)."""
-    code_analysis_exists = await asyncio.to_thread(analytics_controller.code_analysis_path.exists)
-    code_index_exists = await asyncio.to_thread(analytics_controller.code_index_path.exists)
+    tools_available = await analytics_controller.code_tools_available()
     return {
         "last_analysis": analytics_state.get("last_analysis_time"),
         "cache_available": bool(analytics_state.get("code_analysis_cache")),
-        "tools_available": {
-            "code_analysis_suite": code_analysis_exists,
-            "code_index_mcp": code_index_exists,
-        },
+        "tools_available": tools_available,
     }
 
 
@@ -255,8 +251,7 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
         db_name, status = result
         detailed_health["analytics_health"]["redis_connectivity"][db_name] = status
 
-    # Issue #370: Check service connectivity in parallel
-    services = {"ollama": config.ollama_url, "frontend": config.frontend_url}
+    services = {n: u for n, u in {"ollama": config.ollama_url, "frontend": try_frontend_url(config)}.items() if u}
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         service_results = await asyncio.gather(
@@ -662,8 +657,8 @@ async def _realtime_loop_iteration(websocket: WebSocket) -> tuple[bool, bool]:
     try:
         should_continue = await _handle_websocket_message_or_timeout(websocket)
         return should_continue, False
-    except WebSocketDisconnect:
-        logger.info("Analytics WebSocket client disconnected")
+    except PEER_CLOSED_ERRORS as disconnect:
+        log_client_disconnect(logger, disconnect, "_realtime_loop_iteration")
         return False, True
     except Exception as e:
         logger.error("Error in analytics WebSocket: %s", e)
@@ -809,15 +804,11 @@ async def get_analytics_status(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
     # Issue #664: Parallelize independent async operations
-    code_analysis_exists, code_index_exists, redis_connectivity = await asyncio.gather(
-        asyncio.to_thread(analytics_controller.code_analysis_path.exists),
-        asyncio.to_thread(analytics_controller.code_index_path.exists),
+    code_analysis_tools, redis_connectivity = await asyncio.gather(
+        analytics_controller.code_tools_available(),
         _check_analytics_redis_connectivity(),
     )
-    status["integration_status"]["code_analysis_tools"] = {
-        "code_analysis_suite": code_analysis_exists,
-        "code_index_mcp": code_index_exists,
-    }
+    status["integration_status"]["code_analysis_tools"] = code_analysis_tools
     status["integration_status"]["redis_connectivity"] = redis_connectivity
     return status
 
@@ -1085,7 +1076,7 @@ async def _live_analytics_loop_iteration(
 
         return True, last_performance_update, last_api_update, last_health_update
 
-    except WebSocketDisconnect:
+    except PEER_CLOSED_ERRORS:
         return False, last_performance_update, last_api_update, last_health_update
     except Exception as e:
         logger.error("Error in live analytics WebSocket: %s", e)
@@ -1265,10 +1256,7 @@ async def start_dashboard_analysis(
 )
 async def get_dashboard_status(task_id: str, _user: Dict = Depends(get_current_user)):
     """Get dashboard overview task status (#1304, GH#8433)."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
 add_clear_stuck_route(

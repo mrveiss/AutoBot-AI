@@ -19,7 +19,7 @@
     # SAME meaning it has in roles/backend/defaults/main.yml (the component
     # dir), not the deploy root. backend_deployed_root holds the root under
     # its own name for every task below that genuinely wants it.
-    backend_deployed_root: /opt/autobot
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_code_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_install_dir: "{{ backend_code_dir }}"
     backend_log_dir: /var/log/autobot
@@ -184,9 +184,9 @@
 
   post_tasks:
     - name: Restart backend service
-      systemd:
-        name: autobot-backend
-        state: restarted
+      ansible.builtin.include_tasks: ../_shared/tasks/restart_unit.yml  # #20772: reset-failed, then restart
+      vars:
+        restart_unit_name: autobot-backend
 
     - name: Wait for service to start
       pause:

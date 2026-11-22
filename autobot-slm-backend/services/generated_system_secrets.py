@@ -24,17 +24,12 @@ never left absent for good. Rotation is documented in
 
 from __future__ import annotations
 
-import logging
 import secrets
 from dataclasses import dataclass
 
-# Stdlib logging, deliberately -- CLAUDE.md's pattern table exception. The SLM test
-# harness replaces `config` with a MagicMock, and `get_logger` builds a rotating
-# file handler from it (`maxBytes > 0` on a MagicMock raises), so importing this
-# module under the harness fails. Measured, not assumed: with get_logger, every
-# test in tests/test_prometheus_scrape_token_provisioned_16375.py errored at
-# import. `system_secrets_vault.py` beside it uses stdlib logging too.
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)

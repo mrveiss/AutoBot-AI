@@ -48,7 +48,7 @@ import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 REPO_ROOT = repo_root()
 FLAKE8_CONFIG = REPO_ROOT / ".flake8"
@@ -97,7 +97,7 @@ def tracked_py_files() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     paths = [line for line in completed.stdout.splitlines() if line.strip()]
     assert len(paths) >= _TRACKED_PY_FLOOR, (
@@ -290,7 +290,7 @@ def test_audit_entrypoint_fails_on_the_pre_fix_config(tmp_path):
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     reached, problems = checker.audit_excludes(tmp_path)
 
@@ -311,10 +311,10 @@ def test_code_quality_runs_the_audit():
     notice (#14353 tracks the wider gap: the pytest suite is not a required
     check).
     """
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
 
     assert "check_flake8_exclude_anchoring.py --audit-excludes" in workflow, (
-        "code-quality.yml no longer runs the exclude-anchoring audit — the guard "
+        "_gate-code-quality.yml no longer runs the exclude-anchoring audit — the guard "
         "would stop blocking merges while these tests kept passing (#14419)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"
@@ -343,6 +343,7 @@ def test_the_checker_needs_no_third_party_import():
         not in {
             "argparse",
             "configparser",
+            "functools",
             "logging",
             "pathlib",
             "re",

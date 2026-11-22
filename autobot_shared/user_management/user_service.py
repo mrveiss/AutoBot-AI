@@ -250,6 +250,8 @@ class UserService(UserLifecycleMixin, UserAccessMixin):
             await self._update_unique_field(user, user_id, "email", email, self.get_user_by_email, changes)
         if username:
             await self._update_unique_field(user, user_id, "username", username, self.get_user_by_username, changes)
+            if "username" in changes:  # tokens carry the name, so a later deactivation would miss them (#20443)
+                self._revoke_tokens_after_commit(changes["username"]["old"])
         self._update_optional_profile_fields(user, display_name, bio, avatar_url, preferences, changes)
         await self._finalize_user_update(user, user_id, changes)
         return user

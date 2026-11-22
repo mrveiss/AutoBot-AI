@@ -25,6 +25,9 @@ order):
   - `include_role: {name: python_interpreter, public: true}` (the one dynamic
     shape that also counts, because `public: true` explicitly promotes the
     role's defaults to play scope)
+  - `include_role: {name: python_interpreter, tasks_from: resolve}` (#20932):
+    resolve.yml publishes the binary with `set_fact`, a host fact visible to
+    the rest of the play, not a role default
 
 A plain dynamic `include_role` (no `public: true`) does NOT count -- that is
 exactly the browser shape that broke. The role that OWNS
@@ -60,6 +63,9 @@ _BINARY_VAR_RE = re.compile(r"\{\{\s*python_interpreter_binary\s*\}\}")
 #: collapsed sweep. 9 files measured 2026-09-14 (agent_config x4,
 #: backend_services, browser, npu-worker, python_interpreter, tts-worker).
 _MIN_BINARY_REFERENCING_FILES = 6
+
+#: tasks/resolve.yml sets python_interpreter_binary via set_fact (#20932).
+_RESOLVE_TASKS = "resolve"
 
 _IMPORT_ROLE_KEYS = ("ansible.builtin.import_role", "import_role")
 _INCLUDE_ROLE_KEYS = ("ansible.builtin.include_role", "include_role")
@@ -106,7 +112,12 @@ def _tasks_put_role_statically_in_scope(tasks: list[dict]) -> bool:
                 return True
         for key in _INCLUDE_ROLE_KEYS:
             spec = task.get(key)
-            if isinstance(spec, dict) and spec.get("name") == _ROLE_NAME and spec.get("public") is True:
+            if not isinstance(spec, dict) or spec.get("name") != _ROLE_NAME:
+                continue
+            # `tasks_from: resolve` publishes the binary with set_fact (#20932),
+            # a host fact -- not a role default -- so it is not private to the
+            # include the way the #16721 defaults were.
+            if spec.get("public") is True or spec.get("tasks_from") == _RESOLVE_TASKS:
                 return True
     return False
 

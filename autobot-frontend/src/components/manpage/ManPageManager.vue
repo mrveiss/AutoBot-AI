@@ -7,7 +7,7 @@
         <h3><Icon name="desktop" /> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshMachineProfile"
           :disabled="loading?.profile"
         >
@@ -64,7 +64,7 @@
         <h3><Icon name="chart-bar" /> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshIntegrationStatus"
           :disabled="loading?.status"
         >
@@ -180,7 +180,7 @@
           <h3><Icon name="tasks" /> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
-            variant="outline-solid"
+            variant="outline"
             @click="showProgressTracking = false"
           >
             <Icon name="times" />
@@ -316,7 +316,7 @@
 </template>
 
 <script>
-import { BaseCard } from '@autobot/ui'
+import { BaseButton, BaseCard } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -329,7 +329,6 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { formatDate } from '@/utils/formatHelpers'
 import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 export default {
@@ -734,7 +733,7 @@ export default {
   margin-bottom: var(--spacing-2);
 }
 
-.title i {
+.title .icon {
   margin-right: var(--spacing-2);
   color: var(--color-info);
 }
@@ -799,7 +798,7 @@ export default {
 }
 
 .badge-success { background: var(--color-success); color: var(--text-on-success); }
-.badge-info { background: var(--color-info); color: var(--text-on-primary); }
+.badge-info { background: var(--color-info-solid); color: var(--text-on-primary); }
 .badge-warning { background: var(--color-warning); color: var(--text-on-warning); }
 .badge-secondary { background: var(--color-secondary); color: var(--text-on-primary); }
 
@@ -824,18 +823,18 @@ export default {
   border-left: 4px solid var(--color-info);
 }
 
-.not-integrated i {
+.not-integrated .icon {
   color: var(--color-info);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .error {
   border-left: 4px solid var(--color-error);
 }
 
-.error i {
+.error .icon {
   color: var(--color-error);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .integration-stats {
@@ -875,7 +874,7 @@ export default {
   margin-bottom: var(--spacing-5);
 }
 
-.integration-date i {
+.integration-date .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -891,7 +890,7 @@ export default {
 }
 
 .command-tag {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-full);
@@ -1035,7 +1034,7 @@ export default {
   background: var(--color-error);
 }
 
-.progress-message i {
+.progress-message .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -1051,9 +1050,9 @@ export default {
   font-style: italic;
 }
 
-.loading i,
-.no-data i {
-  font-size: var(--text-xl);
+.loading .icon,
+.no-data .icon {
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 /* Responsive Design */

@@ -20,10 +20,15 @@ definition would eventually disagree with the ratchet about what to count.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 from collections import Counter
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.locale_tree import flatten as _flatten  # noqa: E402
 
 LOCALES = Path(__file__).resolve().parent.parent / "autobot-frontend" / "src" / "i18n" / "locales"
 
@@ -32,15 +37,7 @@ LOCALES = Path(__file__).resolve().parent.parent / "autobot-frontend" / "src" / 
 MIN_MEANINGFUL_LENGTH = 12
 
 
-def flatten(node: dict, prefix: str = "") -> dict[str, str]:
-    flat: dict[str, str] = {}
-    for key, value in node.items():
-        path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            flat.update(flatten(value, path))
-        elif isinstance(value, str):
-            flat[path] = value
-    return flat
+flatten = functools.partial(_flatten, only_strings=True)
 
 
 def load(code: str, locales: Path = LOCALES) -> dict[str, str]:

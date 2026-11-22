@@ -60,8 +60,6 @@ def _source_population(root):
 REACH = declare(
     "brand-mark-announcer-scan",
     discover=_source_population,
-    # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=994,
     what="frontend and kit source",
     roots=_ROOTS,
     growth=150,

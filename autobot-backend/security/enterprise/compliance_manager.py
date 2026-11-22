@@ -21,6 +21,7 @@ from uuid import uuid4
 import aiofiles
 from cryptography.fernet import Fernet
 
+from autobot_shared.audit_actions import canonical_action, spellings_of
 from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
@@ -33,7 +34,7 @@ logger = get_logger(__name__)
 # Issue #380: Module-level frozensets for compliance checks
 _CONSENT_REQUIRED_ACTIONS = frozenset({"data_export", "analytics", "marketing"})
 _COMPLIANCE_FRAMEWORKS_WITH_RETENTION = frozenset({"soc2", "gdpr", "iso27001"})
-_AUTH_ACTIONS = frozenset({"login", "authentication"})
+_AUTH_ACTIONS = frozenset({"authentication", *spellings_of("auth.login")})  # canonical + legacy rows (#18716)
 _MONITORING_ACTIONS = frozenset({"monitoring", "security_scan"})
 _ACCESS_ACTIONS = frozenset({"data_access", "data_export"})
 _MODIFICATION_ACTIONS = frozenset({"data_modification", "data_update"})
@@ -425,14 +426,14 @@ class ComplianceManager:
     def _map_to_trust_criteria(self, action: str) -> List[str]:
         """Map action to SOC2 Trust Service Criteria"""
         mapping = {
-            "login": ["CC6.1", "CC6.2"],  # Security - Logical access
+            "auth.login": ["CC6.1", "CC6.2"],  # Security - Logical access
             "data_access": ["CC6.3", "CC7.1"],  # Security - System operations
             "configuration_change": ["CC8.1"],  # Change Management
             "backup": ["A1.2"],  # Availability
             "monitoring": ["CC7.2"],  # System Monitoring
         }
 
-        return mapping.get(action, ["CC1.1"])  # Default to Control Environment
+        return mapping.get(canonical_action(action), ["CC1.1"])  # Default to Control Environment
 
     def _get_control_objective(self, event_type: str) -> str:
         """Get SOC2 control objective for event type"""
@@ -448,7 +449,6 @@ class ComplianceManager:
 
     def _determine_lawful_basis(self, audit_event: Dict) -> str:
         """Determine GDPR lawful basis for processing"""
-        # This would typically involve business logic to determine basis
         action = audit_event["action"]
 
         if action in _AUTH_ACTIONS:
@@ -479,26 +479,26 @@ class ComplianceManager:
     def _get_processing_purpose(self, action: str) -> str:
         """Get GDPR processing purpose"""
         purposes = {
-            "login": "authentication_and_access_control",
+            "auth.login": "authentication_and_access_control",
             "data_access": "service_provision",
             "monitoring": "security_and_fraud_prevention",
             "backup": "data_protection_and_recovery",
             "analytics": "service_improvement",
         }
 
-        return purposes.get(action, "operational_necessity")
+        return purposes.get(canonical_action(action), "operational_necessity")
 
     def _map_to_iso_control(self, action: str) -> str:
         """Map action to ISO27001 control"""
         controls = {
-            "login": "A.9.2.1",  # User registration and de-registration
+            "auth.login": "A.9.2.1",  # User registration and de-registration
             "data_access": "A.9.4.1",  # Information access restriction
             "configuration_change": "A.12.1.2",  # Change management
             "monitoring": "A.12.4.1",  # Event logging
             "incident": "A.16.1.1",  # Incident management
         }
 
-        return controls.get(action, "A.18.1.1")  # General compliance
+        return controls.get(canonical_action(action), "A.18.1.1")  # General compliance
 
     def _assess_risk_level(self, audit_event: Dict) -> str:
         """Assess risk level for ISO27001"""

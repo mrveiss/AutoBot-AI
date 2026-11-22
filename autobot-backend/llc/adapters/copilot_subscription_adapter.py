@@ -180,9 +180,9 @@ class CopilotSubscriptionAdapter(CopilotLocalAdapter):
                     return await SecretService().get(session, str(company_id), secret_name)
             except Exception:
                 logger.warning(
-                    "CopilotSubscriptionAdapter: could not resolve gh_token_secret %r — "
+                    "CopilotSubscriptionAdapter: could not resolve gh_token_secret for company %s — "
                     "falling back to plaintext gh_token",
-                    secret_name,
+                    company_id,
                 )
         return cfg.get("gh_token")
 

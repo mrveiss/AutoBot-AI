@@ -531,7 +531,7 @@ class TestConnectionLevelRetry:
         """test_connection: FetchResult(success=False, status_code=None) must retry."""
         call_count = 0
 
-        async def fake_fetch(url):
+        async def fake_fetch(url, **_kwargs):  # #18826: profile= is passed
             nonlocal call_count
             call_count += 1
             result = MagicMock()
@@ -558,7 +558,7 @@ class TestConnectionLevelRetry:
 
         call_count = 0
 
-        async def fake_fetch(url):
+        async def fake_fetch(url, **_kwargs):  # #18826: profile= is passed
             nonlocal call_count
             call_count += 1
             result = MagicMock()

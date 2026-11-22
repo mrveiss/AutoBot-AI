@@ -8,9 +8,7 @@
 
 import { ref, computed } from 'vue'
 import type { ConnectorConfig, ConnectorStatus } from '@/types/knowledgeBase'
-import { formatTimeAgo } from '@/utils/formatHelpers'
-import { BaseBadge } from '@autobot/ui'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseBadge, BaseButton, createRecencyFormatter } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -25,7 +23,8 @@ const emit = defineEmits<{
   viewHistory: [id: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formatTimeAgo = createRecencyFormatter({ justNow: () => t('common.justNow'), locale: () => locale.value, invalidText: '—' })
 const showDeleteConfirm = ref(false)
 const syncing = ref(false)
 

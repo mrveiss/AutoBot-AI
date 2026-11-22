@@ -103,6 +103,48 @@ def test_get_deploy_base_honours_env_var(monkeypatch, tmp_path) -> None:
     assert str(result) != "/opt/autobot"
 
 
+def test_get_deploy_base_falls_back_to_the_fleet_root_when_no_root_is_determinable(monkeypatch) -> None:
+    """#18094 review: with ssot_config unavailable AND project_root() raising, answer the fleet layout."""
+    import autobot_shared.paths as paths_mod
+    from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+
+    def _undeterminable():
+        raise paths_mod.ProjectRootUndeterminable("no root here")
+
+    monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
+    monkeypatch.setitem(sys.modules, "autobot_shared.ssot_config", None)  # import -> ImportError
+    monkeypatch.setattr(paths_mod, "project_root", _undeterminable)
+
+    assert _get_deploy_base() == Path(FLEET_INSTALL_ROOT)
+
+
+def _shared_first_rsyncs(monkeypatch, component: str) -> list:
+    """Run the autobot_shared-first helper for *component*; return the components it rsynced."""
+    import api.code_sync as cs
+
+    calls: list = []
+
+    async def _fake_rsync(source_root, comp, excludes, **kwargs):
+        calls.append(comp)
+        return True, ""
+
+    monkeypatch.setattr(cs, "get_default_source_dir", lambda comp: f"/src/{comp}")
+    monkeypatch.setattr(cs, "get_release_component_dir", lambda comp: f"/dst/{comp}")
+    monkeypatch.setattr(cs, "_rsync_component_local", _fake_rsync)
+    ok, _msg, _blocked = _run(cs._ensure_autobot_shared_synced(component, force=True))
+    assert ok
+    return calls
+
+
+def test_shared_first_runs_ahead_of_the_slm_agent(monkeypatch) -> None:
+    """#18094 review: the agent imports autobot_shared, so a code-only agent resolve must sync it first."""
+    assert _shared_first_rsyncs(monkeypatch, "autobot-slm-agent") == ["autobot_shared"]
+
+
+def test_shared_first_skips_a_component_that_does_not_import_it(monkeypatch) -> None:
+    assert _shared_first_rsyncs(monkeypatch, "autobot-frontend") == []
+
+
 # ---------------------------------------------------------------------------
 # _ensure_autobot_shared_symlink — filesystem-level behaviour
 # All tests patch _get_deploy_base to prove the symlink base is config-driven.

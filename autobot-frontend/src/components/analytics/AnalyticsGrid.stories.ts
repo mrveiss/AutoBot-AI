@@ -36,7 +36,7 @@ export const Default: Story = {
     },
     codeQuality: {
       overall_score: 79,
-      test_coverage: 58,
+      testability: 58,
       code_duplicates: 22,
       technical_debt: 12,
     },

@@ -240,8 +240,8 @@ class TestPerSourceStatsLookup:
         assert stats["total_files"] == 42
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_global_stats_when_per_source_missing(self):
-        """If codebase_stats_{id} is absent, fall back to the global codebase_stats key."""
+    async def test_a_source_without_stats_never_reads_the_global_document(self):
+        """If codebase_stats_{id} is absent, the global document is another tree's: no stats (#20513)."""
         from api import analytics_quality as aq
 
         collection, calls = self._fake_collection(
@@ -260,8 +260,8 @@ class TestPerSourceStatsLookup:
 
         id_queries = [c.get("ids") for c in calls if "ids" in c]
         assert ["codebase_stats_missing-id"] in id_queries
-        assert ["codebase_stats"] in id_queries
-        assert stats["total_files"] == 7
+        assert ["codebase_stats"] not in id_queries
+        assert "total_files" not in stats
 
     @pytest.mark.asyncio
     async def test_global_path_when_no_source_id(self):

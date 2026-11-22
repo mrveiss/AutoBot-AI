@@ -19,27 +19,12 @@ from types import SimpleNamespace
 import pytest
 
 from initialization import background_workers as bw
+from testkit.real_llm_service import load_real_llm_service
 
 _BACKEND = pathlib.Path(__file__).resolve().parents[1]  # autobot-backend/
 
 
-def _load_real_llm_service():
-    """Real ``services.llm_service`` under a private name (conftest stubs the public one)."""
-    if "llm_shared.rate_limit_backoff" not in sys.modules:
-        spec = _ilu.spec_from_file_location(
-            "llm_shared.rate_limit_backoff", str(_BACKEND / "llm_shared/rate_limit_backoff.py")
-        )
-        mod = _ilu.module_from_spec(spec)
-        sys.modules["llm_shared.rate_limit_backoff"] = mod
-        spec.loader.exec_module(mod)
-    spec = _ilu.spec_from_file_location("_real_llm_service_18689", str(_BACKEND / "services/llm_service.py"))
-    mod = _ilu.module_from_spec(spec)
-    sys.modules["_real_llm_service_18689"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-llm_mod = _load_real_llm_service()
+llm_mod = load_real_llm_service()
 
 
 class _NoProviderRegistry:
@@ -246,4 +231,4 @@ def test_chat_streaming_groups_use_the_deduplication_timestamp_parser():
     defs = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
     imports = {(n.module, a.name) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) for a in n.names}
     assert "_parse_message_timestamp" not in defs
-    assert ("chat_history.deduplication", "_parse_timestamp") in imports
+    assert ("chat_history.deduplication", "parse_message_timestamp") in imports

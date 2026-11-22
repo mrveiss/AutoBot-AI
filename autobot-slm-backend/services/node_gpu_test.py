@@ -22,6 +22,7 @@ from models.gpu_schemas import GPUReportState
 from services import node_gpu
 from services.node_gpu import fleet_gpu_statuses, node_gpu_status, publish_node_gpu, retract_node_gpu
 from status_enums import NodeStatus
+from testkit.fake_async_session import FakeAsyncSession
 
 MEASURED = {
     "device_type": "nvidia-gpu",
@@ -205,15 +206,7 @@ class TestMapperHooks:
         assert "GPU series not published for node=id-worker-1" in caplog.text
 
 
-class _Db:
-    def __init__(self, nodes):
-        self._nodes = nodes
-
-    async def execute(self, _statement):
-        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: self._nodes))
-
-
 def test_the_fleet_listing_reads_every_node():
-    statuses = asyncio.run(fleet_gpu_statuses(_Db([_node("a", gpu=[]), _node("b")])))
+    statuses = asyncio.run(fleet_gpu_statuses(FakeAsyncSession(default_result=[_node("a", gpu=[]), _node("b")])))
 
     assert [(s.hostname, s.state) for s in statuses] == [("a", GPUReportState.NONE), ("b", GPUReportState.NOT_REPORTED)]

@@ -41,7 +41,14 @@ def _run_generator(tmp: Path) -> tuple[str, dict[str, str]]:
         pytest.skip("bash and openssl are needed to run generate-secrets.sh")
     script = tmp / "generate-secrets.sh"
     shutil.copy(_GENERATOR, script)
-    env = {**os.environ, "AUTOBOT_DOCKER_MGMT_PREFIX": "10.77.3"}
+    shutil.copy(_GENERATOR.parent / "write-redis-acl.sh", tmp)
+    # #17793: generate-secrets refuses a DB password when docker cannot say no Postgres volume
+    # exists; a stub docker that lists no volumes stands for a fresh host.
+    bin_dir = tmp / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "docker").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (bin_dir / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "AUTOBOT_DOCKER_MGMT_PREFIX": "10.77.3"}
     out = subprocess.run([bash, str(script)], capture_output=True, text=True, timeout=60, env=env)
     assert out.returncode == 0, out.stderr
     lines = (tmp / ".env.secrets").read_text(encoding="utf-8").splitlines()
@@ -63,7 +70,8 @@ def test_generate_secrets_writes_an_admin_password_the_user_policy_accepts() -> 
 
 def test_the_admin_password_reaches_the_backend_container() -> None:
     env = _backend_env()
-    assert re.fullmatch(r"\$\{AUTOBOT_ADMIN_PASSWORD(:-)?\}", env.get("AUTOBOT_ADMIN_PASSWORD", "")), env.get(
+    # #17793: required, not empty-when-unset -- compose refuses to start without it.
+    assert re.fullmatch(r"\$\{AUTOBOT_ADMIN_PASSWORD:\?[^}]+\}", env.get("AUTOBOT_ADMIN_PASSWORD", "")), env.get(
         "AUTOBOT_ADMIN_PASSWORD"
     )
 
@@ -111,19 +119,36 @@ def test_runnable_pulls_contrast() -> None:
     assert runnable_pulls("prose: ollama pull a:1\n") == set()
 
 
+#: The doc's derived pull (#19332); `agent_model_tiers_19332_test` guards that it covers every tier.
+_DERIVED_PULL_SED = "sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u"
+
+
 def test_install_md_pulls_the_models_docker_env_names() -> None:
     names = dict(
         line.split("=", 1)
         for line in (_ROOT / "docker" / ".env.docker").read_text(encoding="utf-8").splitlines()
         if line.startswith(("AUTOBOT_DEFAULT_LLM_MODEL=", "AUTOBOT_EMBEDDING_MODEL="))
     )
-    pulled = runnable_pulls((_ROOT / "INSTALL.md").read_text(encoding="utf-8"))
+    install = (_ROOT / "INSTALL.md").read_text(encoding="utf-8")
+    pulled = runnable_pulls(install)
+    if _DERIVED_PULL_SED in install:
+        # The pull reads the env file itself (#19332): it names every model that file's sed matches.
+        pulled |= set(
+            re.findall(
+                r"^AUTOBOT_[A-Z_]*_MODEL=(.*)$", (_ROOT / "docker" / ".env.docker").read_text(encoding="utf-8"), re.M
+            )
+        )
     assert len(names) == 2 and set(names.values()) <= pulled, (names, pulled)
 
 
 #: A default or example naming the retired mode (#10636): `AUTOBOT_USER_MODE=single_user`,
-#: `${AUTOBOT_USER_MODE:-single_user}`, or a shell branch on it.
-_RETIRED_MODE = re.compile(r"AUTOBOT_USER_MODE(?:=|:-)\s*[\"']?single_user|USER_MODE[\"']?\s*!?=+\s*[\"']?single_user")
+#: `${AUTOBOT_USER_MODE:-single_user}`, a shell branch on it, or a YAML mapping or list entry
+#: (`AUTOBOT_USER_MODE: single_user`, `- AUTOBOT_USER_MODE: 'single_user'`, a quoted key; #21797).
+_RETIRED_MODE = re.compile(
+    r"AUTOBOT_USER_MODE[\"']?\s*(?:=|:-|-|:)\s*[\"']?single_user|USER_MODE[\"']?\s*!?=+\s*[\"']?single_user"
+    # a default taken through another variable: `AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}` (#21797)
+    r"|AUTOBOT_USER_MODE[\"']?\s*[=:]\s*[\"']?\$\{\w+:?-[\"']?single_user"
+)
 
 
 def retired_mode_sites(files: dict[str, str]) -> list[str]:
@@ -146,8 +171,6 @@ def _mode_carriers(root: Path) -> list[str]:
 REACH = declare(
     "user-mode-default-carriers-18729",
     discover=_mode_carriers,
-    # Mid-window from REACH.window(): population 15, window (11, 15) -> 13.
-    floor=13,
     growth=4,
     what="compose files, Docker entrypoints and env templates",
     roots=(".env", "autobot-frontend/", "autobot-slm-backend/", "docker-compose", "docker/"),
@@ -173,8 +196,31 @@ def test_the_retired_mode_check_sees_every_shape() -> None:
         "f": 'AUTOBOT_USER_MODE="single_user"',
         "g": "USER_MODE=\"${AUTOBOT_USER_MODE:-'single_user'}\"",
         "h": "if [ \"$USER_MODE\" != 'single_user' ]; then",
+        "i": "      AUTOBOT_USER_MODE: single_user",
+        "j": "      - AUTOBOT_USER_MODE: 'single_user'",
+        "k": '      "AUTOBOT_USER_MODE": "single_user"',
+        "l": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE:-team}",
+        "m": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-single_user}",
+        "n": "      AUTOBOT_USER_MODE: ${AUTOBOT_USER_MODE-team}",
+        "o": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-single_user}",
+        "p": "      - AUTOBOT_USER_MODE=${DEPLOYMENT_MODE-'single_user'}",
+        "q": "      AUTOBOT_USER_MODE: ${DEPLOYMENT_MODE:-team}",
     }
-    assert retired_mode_sites(shapes) == ["a:1", "b:1", "c:1", "e:1", "f:1", "g:1", "h:1"]
+    assert retired_mode_sites(shapes) == [
+        "a:1",
+        "b:1",
+        "c:1",
+        "e:1",
+        "f:1",
+        "g:1",
+        "h:1",
+        "i:1",
+        "j:1",
+        "k:1",
+        "m:1",
+        "o:1",
+        "p:1",
+    ]
 
 
 # --- the entrypoint's migration retry is safe only if non-transactional migrations resume ---
@@ -192,7 +238,6 @@ def _migrations(root: Path) -> list[str]:
 MIGRATIONS_REACH = declare(
     "backend-migrations-resume-safe-18729",
     discover=_migrations,
-    floor=97,  # mid-window: population 107, window (87, 107)
     growth=20,
     what="backend alembic migrations",
     roots=(_MIGRATIONS,),

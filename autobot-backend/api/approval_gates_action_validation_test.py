@@ -24,27 +24,9 @@ from auth_middleware import get_current_user
 from models.approval import Approval
 from services import approval_execution
 from services.approval_gate_service import ApprovalGateService
+from testkit.fake_async_session import FakeAsyncSession
 
 _USER = {"username": "u1", "role": "user", "user_id": "u1"}
-
-
-class _FakeSession:
-    def __init__(self):
-        self.added = []
-
-    def add(self, obj):
-        if getattr(obj, "id", None) is None:
-            obj.id = uuid.uuid4()
-        self.added.append(obj)
-
-    async def flush(self):
-        return None
-
-    async def commit(self):
-        return None
-
-    async def refresh(self, obj, *, attribute_names=None):
-        return None
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +58,7 @@ def _body(**context):
 
 
 def test_an_unregistered_action_is_refused_at_creation(monkeypatch):
-    session = _FakeSession()
+    session = FakeAsyncSession(assign_ids=uuid.uuid4)
     response = _client(session).post("/approval-gates", json=_body(action="no_such_action"))
 
     assert response.status_code == 400
@@ -88,7 +70,7 @@ def test_an_unregistered_action_is_refused_at_creation(monkeypatch):
 
 def test_the_rejection_does_not_echo_the_caller_s_value_or_list_the_registry():
     approval_execution.register_post_approval_action("secret_action", lambda a, s: None, proposed_by="x")
-    response = _client(_FakeSession()).post("/approval-gates", json=_body(action="probe_me"))
+    response = _client(FakeAsyncSession(assign_ids=uuid.uuid4)).post("/approval-gates", json=_body(action="probe_me"))
 
     assert response.status_code == 400
     assert "probe_me" not in response.text
@@ -99,7 +81,7 @@ def test_a_registered_action_is_admitted():
     approval_execution.register_post_approval_action(
         "orphan_storage_delete", lambda a, s: None, proposed_by="api.admin_orphan_storage"
     )
-    session = _FakeSession()
+    session = FakeAsyncSession(assign_ids=uuid.uuid4)
     response = _client(session).post(
         "/approval-gates", json=_body(action="orphan_storage_delete", provider="p", candidate_id="c")
     )
@@ -111,14 +93,14 @@ def test_a_registered_action_is_admitted():
 
 def test_an_approval_with_no_action_key_is_still_ordinary_and_allowed():
     """compose_tool_handler creates exactly this; the dispatcher returns early."""
-    session = _FakeSession()
+    session = FakeAsyncSession(assign_ids=uuid.uuid4)
     response = _client(session).post("/approval-gates", json=_body(program="x", budgets={}))
 
     assert response.status_code == 201, response.text
 
 
 def test_a_non_string_action_is_refused_rather_than_dispatched_on():
-    session = _FakeSession()
+    session = FakeAsyncSession(assign_ids=uuid.uuid4)
     response = _client(session).post("/approval-gates", json=_body(action={"nested": "dict"}))
 
     assert response.status_code == 400

@@ -4,7 +4,7 @@
       <h3><Icon name="desktop" /> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline-solid"
+        variant="outline"
         @click="$emit('refresh')"
         :disabled="loading"
       >
@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseCard } from '@autobot/ui'
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -72,7 +72,6 @@ import { BaseCard } from '@autobot/ui'
 
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 
 interface MachineProfile {
   machine_id?: string

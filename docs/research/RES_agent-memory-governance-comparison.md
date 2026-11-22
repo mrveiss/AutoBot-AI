@@ -66,3 +66,18 @@ Closing #18077/#18078/#18079/#18162 plus #18820–#18825 gives all seven, on Aut
 audit seams. Two steps would put AutoBot ahead of the whole set:
 1. **Paraphrase-resistant tombstones.** Every reference system misses restated values. Check the tombstone against the embedding neighbourhood as well as the canonical digest, with a measured false-positive rate. File this once #18078 lands, as an evidence-gated follow-up.
 2. **A truncation-proof audit head.** Publish the chain head to the existing approval / paper-trail store, so tail truncation becomes detectable. No reference system does this; Ref E documents it as a known hole.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18077 — bug(kb): the pending-review queue is always empty — connectors write a mode name as the verification status
+- #18078 — feat(kb): rejecting a fact with delete leaves no tombstone, so re-ingest brings it back
+- #18079 — feat(memory): temporal validity and fact versioning are built but never fed or called
+- #18162 — feat(memory): agent-initiated facts persist with no user confirmation — route them through a proposed-fact review
+- #18820 — bug(memory): rejected facts still reach chat grounding — trust state is never consulted on serving, and writer origin is never recorded
+- #18821 — feat(memory): audit memory mutations at the store seam — six writers emit nothing, and the trail is fire-and-forget with no tamper evidence
+- #18822 — security(memory): only KB facts pass the write-time screen — graph, verbatim, atomic-fact and general memory persist unscreened text
+- #18823 — test(memory): no test asserts an excluded fact is ABSENT from recall — add a paired negative-eval contract suite
+- #18824 — feat(memory): canonical fact identity — dedupe hashes raw bytes, so Unicode/case/whitespace variants of one value are distinct facts
+- #18825 — security(memory): the memory graph has no owner — every query is global and graph RAG routes ignore the caller

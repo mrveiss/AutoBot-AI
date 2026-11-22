@@ -59,7 +59,7 @@ const { execute: loadData, data } = useAsyncHandler(
 
 ## 2. With Loading State
 
-### Example: Settings Update (WebResearchSettings.vue, lines 327-340)
+### Example: Settings Update
 
 **Before** (24 lines):
 ```typescript
@@ -116,7 +116,7 @@ const { execute: updateSettings, loading: isUpdating } = useAsyncHandler(
 
 ## 3. With Rollback on Error
 
-### Example: Toggle Web Research (WebResearchSettings.vue, lines 300-324)
+### Example: Toggle Web Research
 
 **Before** (25 lines):
 ```typescript
@@ -175,7 +175,7 @@ const { execute: toggleWebResearch, loading: isUpdating } = useAsyncHandler(
 
 ## 4. With User Notifications
 
-### Example: Clear Cache Operation (WebResearchSettings.vue, lines 378-390)
+### Example: Clear Cache Operation
 
 **Before** (18 lines):
 ```typescript
@@ -291,7 +291,7 @@ const { execute: fetchData, loading: isLoading, data } = useAsyncHandler(
 
 ## 6. API Call with Response Checking
 
-### Example: Load Settings (WebResearchSettings.vue, lines 276-297)
+### Example: Load Settings
 
 **Before** (22 lines):
 ```typescript
