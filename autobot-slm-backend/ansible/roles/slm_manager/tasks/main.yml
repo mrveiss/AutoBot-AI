@@ -19,11 +19,13 @@
 # so a frontend named by DNS is resolved here and the unit carries the addresses.
 #
 # ansible.builtin.getent, not a raw command: its failure modes are distinct by construction. A
-# missing getent binary (get_bin_path required) or a resolver fault (getent rc 1 or 3) FAILS the task
-# with the module's own message, which blames the host. A name that is not in the database (getent
-# rc 2) is not a failure with fail_key: false; the module returns {<entry>: None}, which the assert
-# below names as an inventory problem. Keys of a found entry are the addresses (IPv4 and IPv6).
-# Do not add failed_when or ignore_errors here: that would blur the two again.
+# missing getent binary (get_bin_path required), bad arguments or an unsupported database (getent
+# rc 1 or 3) are host faults and FAIL the task with the module's own message. A name that is not in
+# the database (getent rc 2) is not a failure with fail_key: false; the module returns {<entry>: None},
+# which the assert below names as an inventory problem. Known limit: a resolver outage on ahosts most
+# likely exits 2 as well, so it cannot be told apart from not-found here and reads as an inventory
+# error (#22096). Keys of a found entry are the addresses (IPv4 and IPv6).
+# Do not add failed_when or ignore_errors here: that would blur host faults and not-found again.
 - name: "SLM | #19832: resolve the frontend trusted-proxy entries to IP addresses"
   ansible.builtin.getent:
     database: ahosts
