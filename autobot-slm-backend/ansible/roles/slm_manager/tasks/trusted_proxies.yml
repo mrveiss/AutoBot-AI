@@ -1,0 +1,56 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The trusted-proxy resolution for the SLM backend unit, in ONE place (#19832).
+#
+# service_units.yml imports this immediately before it renders autobot-slm-backend.service.j2, and
+# that file is the only renderer: this role's main.yml and Play 1 of update-all-nodes.yml (the
+# builtin self-update path) both reach it, so every entry point that renders the unit resolves first.
+
+# #19832: SLM_TRUSTED_PROXIES replaces the backend's built-in list, so a frontend that is missing
+# from it collapses every client into one login rate-limit bucket. The backend matches peer IPs,
+# so a frontend named by DNS is resolved here and the unit carries the addresses.
+#
+# ansible.builtin.getent, not a raw command: its failure modes are distinct by construction. A
+# missing getent binary (get_bin_path required), bad arguments or an unsupported database (getent
+# rc 1 or 3) are host faults and FAIL the task with the module's own message. A name that is not in
+# the database (getent rc 2) is not a failure with fail_key: false; the module returns {<entry>: None},
+# which the assert below names as an inventory problem. Known limit: a resolver outage on ahosts most
+# likely exits 2 as well, so it cannot be told apart from not-found here and reads as an inventory
+# error (#22096). Keys of a found entry are the addresses (IPv4 and IPv6).
+# Do not add failed_when or ignore_errors here: that would blur host faults and not-found again.
+- name: "SLM | #19832: resolve the frontend trusted-proxy entries to IP addresses"
+  ansible.builtin.getent:
+    database: ahosts
+    key: "{{ item }}"
+    fail_key: false
+  loop: "{{ slm_trusted_frontend_addrs.split(',') | select | list }}"
+  register: _slm_frontend_lookup
+  check_mode: false  # read-only
+  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  tags: ['slm', 'backend', 'systemd', 'config']
+
+- name: "SLM | #19832: assert every frontend entry resolved"
+  ansible.builtin.assert:
+    that:
+      - slm_trusted_frontend_addrs | length > 0
+      - _slm_frontend_lookup.results | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten | selectattr('value', 'none') | list | length == 0
+    fail_msg: >-
+      A frontend is deployed (frontend_slm_remote is true or the inventory has a `frontend` group)
+      but these frontend entries did not resolve to an IP address on the SLM host:
+      {{ _slm_frontend_lookup.results | default([]) | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten | selectattr('value', 'none') | map(attribute='key') | join(', ') }}.
+      Set frontend_host or give every `frontend` group host an ansible_host (an IPv4 address, an IPv6
+      address or a resolvable DNS name); otherwise the SLM sees all clients as one address.
+    quiet: true
+  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  tags: ['slm', 'backend', 'systemd', 'config']
+
+- name: "SLM | #19832: trust the resolved frontend addresses"
+  ansible.builtin.set_fact:
+    slm_trusted_frontend_resolved: >-
+      {{ _slm_frontend_lookup.results | map(attribute='ansible_facts.getent_ahosts') | map('dict2items') | flatten
+         | rejectattr('value', 'none') | map(attribute='key') | unique | join(',') }}
+  when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
+  tags: ['slm', 'backend', 'systemd', 'config']

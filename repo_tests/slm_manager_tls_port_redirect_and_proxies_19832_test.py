@@ -134,8 +134,12 @@ def test_trusted_proxies_carry_the_frontend_group_and_frontend_host() -> None:
     assert _resolve("slm_trusted_frontend_addrs", {**ctx, "groups": {}, "frontend_host": ""}) == ""
 
 
+TRUSTED_PROXIES_TASKS = ROLE / "tasks" / "trusted_proxies.yml"
+
+
 def _tasks() -> dict[str, dict]:
-    return {t["name"]: t for t in yaml.safe_load(TASKS.read_text(encoding="utf-8")) if "name" in t}
+    tasks = yaml.safe_load(TRUSTED_PROXIES_TASKS.read_text(encoding="utf-8"))
+    return {t["name"]: t for t in tasks if "name" in t}
 
 
 def _task(fragment: str) -> dict:
@@ -283,3 +287,77 @@ def test_the_unit_falls_back_to_the_addresses_before_the_play_resolves_them() ->
 def test_trusted_proxies_derive_from_the_frontend_address_list() -> None:
     raw = yaml.safe_load(GROUP_VARS.read_text(encoding="utf-8"))
     assert "groups['frontend']" in raw["slm_trusted_frontend_addrs"]
+
+
+_UNIT = "autobot-slm-backend.service.j2"
+_ANSIBLE_YML_GLOB = "autobot-slm-backend/ansible/**/*.yml"
+_RESOLVE_INCLUDES = ("ansible.builtin.import_tasks", "ansible.builtin.include_tasks")
+
+
+def _renders_unit(tasks: object) -> bool:
+    return isinstance(tasks, list) and any(
+        isinstance(t, dict)
+        and isinstance(t.get("ansible.builtin.template"), dict)
+        and t["ansible.builtin.template"].get("src") == _UNIT
+        for t in tasks
+    )
+
+
+def _renderers(root: Path) -> list[Path]:
+    """Every ansible task file with a template task whose src is the backend unit."""
+    if not (root / "autobot-slm-backend" / "ansible").is_dir():
+        return []
+    named = [p for p in sorted(root.glob(_ANSIBLE_YML_GLOB)) if _UNIT in p.read_text(encoding="utf-8")]
+    return [p for p in named if _renders_unit(yaml.safe_load(p.read_text(encoding="utf-8")))]
+
+
+UNIT_RENDERERS = declare(
+    "slm-backend-unit-renderers-19832",
+    discover=_renderers,
+    floor=1,
+    roots=("autobot-slm-backend/ansible",),
+    what="ansible files naming the SLM backend unit template",
+)
+
+
+def _resolves_before_render(tasks: list[dict]) -> bool:
+    """True when a trusted_proxies.yml include precedes the first task that renders the unit."""
+    render = next((i for i, t in enumerate(tasks) if t.get("ansible.builtin.template", {}).get("src") == _UNIT), None)
+    resolve = next(
+        (i for i, t in enumerate(tasks) if any(t.get(k) == "trusted_proxies.yml" for k in _RESOLVE_INCLUDES)),
+        None,
+    )
+    return render is not None and resolve is not None and resolve < render
+
+
+def test_every_renderer_of_the_unit_resolves_the_trusted_proxies_first() -> None:
+    """The self-update path included: update-all-nodes.yml reaches the unit through service_units.yml (#19832)."""
+    renderers = UNIT_RENDERERS.examined(repo_root())
+    for path in renderers:
+        tasks = yaml.safe_load(path.read_text(encoding="utf-8"))
+        assert isinstance(tasks, list), f"{path.name} is not a task file; render the unit only from one"
+        assert _resolves_before_render(tasks), f"{path.name} renders the unit without resolving the proxies first"
+    assert [p.name for p in renderers] == ["service_units.yml"], "a second renderer would need the same include"
+
+
+def test_both_entry_points_reach_the_unit_through_the_renderer_file() -> None:
+    """main.yml (full provision) and Play 1 of update-all-nodes.yml (self-update) both go through service_units.yml."""
+    assert "include_tasks: service_units.yml" in TASKS.read_text(encoding="utf-8")
+    playbook = (ANSIBLE / "playbooks" / "update-all-nodes.yml").read_text(encoding="utf-8")
+    assert "tasks_from: service_units.yml" in playbook
+    assert "trusted_proxies.yml" not in TASKS.read_text(encoding="utf-8"), "main.yml must not resolve a second time"
+
+
+def _unit_task() -> dict:
+    return {"ansible.builtin.template": {"src": _UNIT}}
+
+
+def _include() -> dict:
+    return {"ansible.builtin.import_tasks": "trusted_proxies.yml"}
+
+
+def test_the_renderer_check_has_a_contrast_pair() -> None:
+    assert _resolves_before_render([_include(), _unit_task()])
+    assert not _resolves_before_render([_unit_task(), _include()]), "resolving after the render is too late"
+    assert not _resolves_before_render([_unit_task()]), "no resolve at all"
+    assert not _resolves_before_render([_include()]), "no render at all is not a pass"

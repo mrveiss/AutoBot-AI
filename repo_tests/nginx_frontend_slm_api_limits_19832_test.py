@@ -94,7 +94,8 @@ def test_the_literal_cap_detector_has_a_contrast_pair() -> None:
 def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     vhost = VHOST.read_text(encoding="utf-8")
     assert not _literal_caps(vhost), "the SLM vhost carries a literal client_max_body_size"
-    assert _active_caps(vhost) and set(_active_caps(vhost)) == {"{{ slm_client_max_body_size }}"}
+    assert _active_caps(vhost), "the SLM vhost carries no active body cap"
+    assert set(_active_caps(vhost)) == {"{{ slm_client_max_body_size }}"}
     assert not re.search(r"client_max_body_size\s+10m", vhost), "the SLM cap has a second literal"
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_client_max_body_size"] == "10m"
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))
@@ -105,12 +106,39 @@ def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
 COMMON_DEFAULTS = ANSIBLE / "roles" / "common" / "defaults" / "main.yml"
 
 
+_TLS_VAR = "{{ slm_nginx_tls_port }}"
+
+
+def _tls_listens(text: str) -> list[str]:
+    """The address part of every active `listen ... ssl` directive."""
+    code = code_text(text, name="vhost.conf", strip_trailing=True)
+    return re.findall(r"^\s*listen\s+(.+?)\s+ssl\b", code, re.M)
+
+
+def _literal_tls_listens(text: str) -> list[str]:
+    """TLS listens whose port is not the shared variable (a bare number, with or without `[::]:`)."""
+    return [listen for listen in _tls_listens(text) if not listen.endswith(_TLS_VAR)]
+
+
+@pytest.mark.parametrize("listen", ["listen 443 ssl;", "listen [::]:443 ssl;", "listen 8443 ssl http2;"])
+def test_the_tls_listen_detector_trips_on_a_literal_port(listen: str) -> None:
+    assert _literal_tls_listens(f"    {listen}\n")
+
+
+@pytest.mark.parametrize(
+    "listen",
+    ["listen {{ slm_nginx_tls_port }} ssl;", "listen [::]:{{ slm_nginx_tls_port }} ssl;", "# listen 443 ssl;"],
+)
+def test_the_tls_listen_detector_passes_the_variable_and_comments(listen: str) -> None:
+    assert not _literal_tls_listens(f"    {listen}\n")
+
+
 def test_the_slm_vhost_and_firewall_read_one_tls_port_name() -> None:
     """#22055: the vhost's IPv4 and IPv6 listens and `slm_frontend` all derive from slm_nginx_tls_port."""
     vhost = VHOST.read_text(encoding="utf-8")
-    listens = re.findall(r"^\s*listen\s+(.+?)\s+ssl\b", vhost, re.M)
-    assert listens and all(port.endswith("{{ slm_nginx_tls_port }}") for port in listens), listens
-    assert not re.search(r"listen\s+(\[::\]:)?443\b", vhost), "a literal TLS port reappeared in the SLM vhost"
+    listens = _tls_listens(vhost)
+    assert len(listens) >= 2, "the IPv4 and the IPv6 TLS listen are both expected"
+    assert not _literal_tls_listens(vhost), "a literal TLS port reappeared in the SLM vhost"
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_nginx_tls_port"] == 443
     ports = yaml.safe_load(COMMON_DEFAULTS.read_text(encoding="utf-8"))["firewall_service_ports"]
     assert ports["slm_frontend"] == "{{ slm_nginx_tls_port }}"
