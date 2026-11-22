@@ -21,6 +21,7 @@ from api.schemas_system import (
     ServiceMonitorServicesResponse,
     ServiceMonitorVMsResponse,
 )
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
@@ -93,7 +94,7 @@ async def get_service_statuses() -> Dict[str, Any]:
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
     ollama_url = f"{_ssot.ollama_url}/api/version"
-    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}/api/v2/heartbeat"  # #3461, #19321
+    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #3461, #19321
 
     (
         (redis_status, redis_msg),
@@ -141,7 +142,7 @@ async def get_vm_statuses() -> Dict[str, Any]:
     """
     npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
     browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
-    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}/api/v2/heartbeat"  # #3461, #19321
+    chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #3461, #19321
 
     (
         (redis_status, redis_msg),

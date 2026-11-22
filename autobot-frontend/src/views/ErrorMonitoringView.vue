@@ -261,6 +261,7 @@ import { useI18n } from 'vue-i18n'
 import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
+import { createDateFormatter, formatLocalTime } from '@/utils/formatHelpers'
 
 const {
   statistics,
@@ -306,7 +307,7 @@ const resolvingIds = ref<Set<string>>(new Set())
 
 const lastUpdateFormatted = computed(() => {
   if (!lastUpdate.value) return ''
-  return lastUpdate.value.toLocaleTimeString()
+  return formatLocalTime(lastUpdate.value)
 })
 
 const availableCategories = computed(() => {
@@ -361,12 +362,7 @@ function componentBarWidth(count: number): number {
   return Math.round((count / maxComponentCount.value) * 100)
 }
 
-function formatTimestamp(ts: number | string | undefined): string {
-  if (ts === undefined || ts === null) return '—'
-  const d = typeof ts === 'number' ? new Date(ts * 1000) : new Date(ts as string)
-  if (isNaN(d.getTime())) return String(ts)
-  return d.toLocaleString()
-}
+const formatTimestamp = createDateFormatter({ unit: 'seconds', emptyText: '—' })
 
 async function onResolve(errorId: string): Promise<void> {
   const pending = new Set(resolvingIds.value)

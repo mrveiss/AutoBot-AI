@@ -244,8 +244,9 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-.placeholder-content i {
-  font-size: 48px;
+.placeholder-content .icon {
+  width: 48px;
+  height: 48px;
   color: var(--text-tertiary);
 }
 
@@ -297,8 +298,9 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.copy-button i {
-  font-size: var(--text-sm);
+.copy-button .icon {
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .code-container {

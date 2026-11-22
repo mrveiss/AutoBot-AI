@@ -15,28 +15,8 @@
     mode: '0750'
   become: true
 
-- name: A host serving the fleet knows its own address (#19239)
-  ansible.builtin.assert:
-    that:
-      - postgresql_fleet_address | length > 0
-    fail_msg: >-
-      {{ inventory_hostname }} serves PostgreSQL to the fleet (groups {{ group_names | intersect(postgresql_fleet_groups) }})
-      but no non-loopback address of its own was found: neither slm_host nor ansible_host is assigned here
-      and there is no default route. Listening on loopback only would cut every remote client --
-      set SLM_HOST in the SLM secrets file or ansible_host in the inventory.
-    quiet: true
-  when: postgresql_serves_fleet | bool
-
-- name: Deploy postgresql.conf
-  ansible.builtin.template:
-    src: postgresql.conf.j2
-    dest: "{{ postgresql_config_dir }}/postgresql.conf"
-    owner: postgres
-    group: postgres
-    mode: '0644'
-    backup: true
-  become: true
-  notify: Restart PostgreSQL
+- name: Render postgresql.conf (one definition, shared with the builtin updater, #19848)
+  ansible.builtin.include_tasks: config_file.yml
 
 # On a collapsed single-box deploy one Postgres instance serves several app
 # users (slm_app + autobot_app). Discover every existing login role so the

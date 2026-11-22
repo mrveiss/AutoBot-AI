@@ -1,10 +1,6 @@
 {
   "_contract": "Triage of the clusters #18559 added when FORK_ROOTS widened. Each is real (issue), variant (intentional per-deploy-target or per-platform copy) or homonym (same name, different concept). Entries leave with their cluster.",
   "clusters": {
-    "AddResult": {
-      "verdict": "homonym",
-      "why": "embedded KB document result (document_id) vs populate-script result (rel_path)"
-    },
     "AgentType": {
       "verdict": "real",
       "issue": 12771
@@ -148,10 +144,6 @@
     "TimingConstants": {
       "verdict": "real",
       "issue": 12771
-    },
-    "UploadResult": {
-      "verdict": "homonym",
-      "why": "two infra upload scripts with different result fields (rel_path vs file_path)"
     },
     "Verdict": {
       "verdict": "homonym",

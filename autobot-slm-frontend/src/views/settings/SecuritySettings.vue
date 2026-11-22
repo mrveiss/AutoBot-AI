@@ -5,7 +5,7 @@
 
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useMfaApi,
   type MFASetupResponse,
@@ -217,10 +217,6 @@ function copyToClipboard(text: string): void {
   setTimeout(() => (success.value = null), 3000)
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  return formatDateTime(dateStr)
-}
-
 onMounted(async () => {
   loading.value = true
   try {
@@ -237,8 +233,8 @@ onMounted(async () => {
 
     <BaseAlert v-if="success" variant="success" :message="success" />
 
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-xl font-semibold text-gray-900 mb-4">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-xl font-semibold text-autobot-text-primary mb-4">
         {{ $t('settings.securitySettings.twoFactorAuthentication') }}
       </h2>
 
@@ -247,20 +243,20 @@ onMounted(async () => {
           <p>{{ $t('settings.securitySettings.yourAccountIsProtectedWithValue0', { value0: mfaStatus.method }) }}</p>
           <div class="mt-2">
             <p>{{ $t('settings.securitySettings.backupCodesRemainingValue0', { value0: mfaStatus.backup_codes_remaining }) }}</p>
-            <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatDate(mfaStatus.last_verified_at) }) }}</p>
+            <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatFleetDateTime(mfaStatus.last_verified_at) }) }}</p>
           </div>
         </BaseAlert>
 
         <div class="flex gap-3">
           <button
             @click="showDisableModal = true"
-            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            class="px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover)"
           >
             {{ $t('settings.securitySettings.disableMFA') }}
           </button>
           <button
             @click="showRegenerateModal = true"
-            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            class="px-4 py-2 bg-autobot-bg-active text-autobot-text-primary rounded-lg hover:bg-autobot-bg-hover"
           >
             {{ $t('settings.securitySettings.regenerateBackupCodes') }}
           </button>
@@ -284,9 +280,9 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold text-gray-900">{{ $t('settings.securitySettings.aPIKeys') }}</h2>
+        <h2 class="text-xl font-semibold text-autobot-text-primary">{{ $t('settings.securitySettings.aPIKeys') }}</h2>
         <button
           @click="openCreateKeyModal"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -295,9 +291,9 @@ onMounted(async () => {
         </button>
       </div>
 
-      <div v-if="apiKeys.length === 0" class="text-center py-8 text-gray-500">
+      <div v-if="apiKeys.length === 0" class="text-center py-8 text-autobot-text-tertiary">
         <svg
-          class="w-12 h-12 mx-auto mb-3 text-gray-400"
+          class="w-12 h-12 mx-auto mb-3 text-autobot-text-tertiary"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -313,51 +309,51 @@ onMounted(async () => {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+        <table class="min-w-full divide-y divide-autobot-border">
+          <thead class="bg-autobot-bg-secondary">
             <tr>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.name') }}
               </th>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.keyPrefix') }}
               </th>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.scopes') }}
               </th>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.usage') }}
               </th>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.expires') }}
               </th>
               <th
-                class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider"
               >
                 {{ $t('settings.securitySettings.actions') }}
               </th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody class="bg-white divide-y divide-autobot-border">
             <tr v-for="key in apiKeys" :key="key.id">
               <td class="px-4 py-3 whitespace-nowrap">
                 <div>
-                  <div class="text-sm font-medium text-gray-900">
+                  <div class="text-sm font-medium text-autobot-text-primary">
                     {{ key.name }}
                   </div>
                   <div
                     v-if="key.description"
-                    class="text-xs text-gray-500"
+                    class="text-xs text-autobot-text-tertiary"
                   >
                     {{ key.description }}
                   </div>
@@ -365,7 +361,7 @@ onMounted(async () => {
               </td>
               <td class="px-4 py-3 whitespace-nowrap">
                 <code
-                  class="text-xs bg-gray-100 px-2 py-1 rounded-sm"
+                  class="text-xs bg-autobot-bg-tertiary px-2 py-1 rounded-sm"
                 >{{ key.key_prefix }}...</code>
               </td>
               <td class="px-4 py-3">
@@ -373,23 +369,23 @@ onMounted(async () => {
                   <span
                     v-for="scope in key.scopes"
                     :key="scope"
-                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800"
+                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-autobot-illus-1-tint text-autobot-text-primary"
                   >
                     {{ scope }}
                   </span>
                 </div>
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-autobot-text-tertiary">
                 <div>{{ $t('settings.securitySettings.value0Uses', { value0: key.usage_count }) }}</div>
-                <div class="text-xs">{{ formatDate(key.last_used_at) }}</div>
+                <div class="text-xs">{{ formatFleetDateTime(key.last_used_at) }}</div>
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDate(key.expires_at) }}
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-autobot-text-tertiary">
+                {{ formatFleetDateTime(key.expires_at) }}
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm">
                 <button
                   @click="revokeAPIKey(key.id)"
-                  class="text-red-600 hover:text-red-800"
+                  class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg"
                 >
                   {{ $t('settings.securitySettings.revoke') }}
                 </button>
@@ -408,11 +404,11 @@ onMounted(async () => {
       :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
-        <div class="text-sm text-gray-600">
+        <div class="text-sm text-autobot-text-secondary">
           <p class="mb-2">
             {{ $t('settings.securitySettings.scanTheQRCode') }}
           </p>
-          <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
+          <div class="bg-autobot-bg-secondary p-4 rounded-sm border border-autobot-border">
             <p class="font-mono text-xs break-all mb-2">
               {{ setupData?.secret }}
             </p>
@@ -426,7 +422,7 @@ onMounted(async () => {
           <p class="mt-3 text-xs">
             {{ $t('settings.securitySettings.manualEntryURIFor') }}
           </p>
-          <div class="bg-gray-50 p-2 rounded-sm border border-gray-200 mt-1">
+          <div class="bg-autobot-bg-secondary p-2 rounded-sm border border-autobot-border mt-1">
             <p class="font-mono text-xs break-all">
               {{ setupData?.otpauth_uri }}
             </p>
@@ -434,7 +430,7 @@ onMounted(async () => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.enterVerificationCode') }}
           </label>
           <input
@@ -442,7 +438,7 @@ onMounted(async () => {
             type="text"
             inputmode="numeric"
             maxlength="6"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             placeholder="000000"
           />
         </div>
@@ -458,7 +454,7 @@ onMounted(async () => {
         <button
           @click="cancelMFASetup"
           :disabled="loading"
-          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -475,7 +471,7 @@ onMounted(async () => {
       <div class="space-y-4">
         <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.saveTheseBackupCodes')" />
 
-        <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
+        <div class="bg-autobot-bg-secondary p-4 rounded-sm border border-autobot-border">
           <div class="grid grid-cols-2 gap-2">
             <code
               v-for="(code, idx) in backupCodes"
@@ -488,7 +484,7 @@ onMounted(async () => {
       <template #actions>
         <button
           @click="copyToClipboard(backupCodes.join('\n'))"
-          class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          class="flex-1 px-4 py-2 bg-autobot-bg-active text-autobot-text-primary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.copyAll') }}
         </button>
@@ -509,18 +505,18 @@ onMounted(async () => {
       :close-label="$t('ui.modal.closeDialog')"
     >
       <div class="space-y-4">
-        <p class="text-sm text-gray-600">
+        <p class="text-sm text-autobot-text-secondary">
           {{ $t('settings.securitySettings.enterYourPasswordTo') }}
         </p>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.password') }}
           </label>
           <input
             v-model="disablePassword"
             type="password"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             :placeholder="$t('settings.securitySettings.enterYourPassword')"
           />
         </div>
@@ -529,7 +525,7 @@ onMounted(async () => {
         <button
           @click="disableMFA"
           :disabled="loading || !disablePassword"
-          class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+          class="flex-1 px-4 py-2 bg-autobot-error-solid text-(--text-on-error) rounded-lg hover:bg-(--color-error-solid-hover) disabled:opacity-50"
         >
           {{ $t('settings.securitySettings.disableMFA') }}
         </button>
@@ -538,7 +534,7 @@ onMounted(async () => {
             (showDisableModal = false), (disablePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -556,13 +552,13 @@ onMounted(async () => {
         <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.thisWillInvalidateYour')" />
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.password') }}
           </label>
           <input
             v-model="regeneratePassword"
             type="password"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             :placeholder="$t('settings.securitySettings.enterYourPassword')"
           />
         </div>
@@ -581,7 +577,7 @@ onMounted(async () => {
               (regeneratePassword = '')
           "
           :disabled="loading"
-          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -596,31 +592,31 @@ onMounted(async () => {
     >
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.name') }}
           </label>
           <input
             v-model="newKeyForm.name"
             type="text"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             :placeholder="$t('settings.securitySettings.myAPIKey')"
           />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.descriptionOptional') }}
           </label>
           <input
             v-model="newKeyForm.description"
             type="text"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             :placeholder="$t('settings.securitySettings.whatThisKeyIsFor')"
           />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
             {{ $t('settings.securitySettings.scopes') }}
           </label>
           <div class="space-y-2 max-h-48 overflow-y-auto">
@@ -637,19 +633,19 @@ onMounted(async () => {
               />
               <div>
                 <div class="text-sm font-medium">{{ scope }}</div>
-                <div class="text-xs text-gray-500">{{ description }}</div>
+                <div class="text-xs text-autobot-text-tertiary">{{ description }}</div>
               </div>
             </label>
           </div>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">
             {{ $t('settings.securitySettings.expiration') }}
           </label>
           <select
             v-model="newKeyForm.expires_days"
-            class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="block w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option :value="undefined">{{ $t('settings.securitySettings.never') }}</option>
             <option :value="30">{{ $t('settings.securitySettings.30Days') }}</option>
@@ -670,7 +666,7 @@ onMounted(async () => {
         <button
           @click="showCreateKeyModal = false"
           :disabled="loading"
-          class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.cancel') }}
         </button>
@@ -687,14 +683,14 @@ onMounted(async () => {
       <div class="space-y-4">
         <BaseAlert variant="warning" size="compact" :message="$t('settings.securitySettings.thisKeyWillNot')" />
 
-        <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
+        <div class="bg-autobot-bg-secondary p-4 rounded-sm border border-autobot-border">
           <code class="text-sm font-mono break-all">{{ createdKey?.key }}</code>
         </div>
       </div>
       <template #actions>
         <button
           @click="copyToClipboard(createdKey?.key || '')"
-          class="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          class="flex-1 px-4 py-2 bg-autobot-bg-active text-autobot-text-primary rounded-lg hover:bg-autobot-bg-hover"
         >
           {{ $t('settings.securitySettings.copyKey') }}
         </button>

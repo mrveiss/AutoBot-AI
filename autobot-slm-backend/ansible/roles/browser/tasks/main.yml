@@ -65,6 +65,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker/"
     dest: "{{ autobot.base_dir }}/autobot-browser-worker/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=__pycache__"
       - "--exclude=.git"
@@ -325,6 +326,7 @@
     chmod 0600 /home/autobot/.vnc/passwd
     chown autobot:autobot /home/autobot/.vnc/passwd
   become: true
+  no_log: true  # #19846
   when:
     - install_vnc | default(false)
     - node_roles is not defined or 'vnc' in node_roles

@@ -26,10 +26,11 @@ from api.schemas_knowledge import (
     PipelineRunResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import authorize_fact_write, caller_reader
-from knowledge.summary_visibility import document_is_visible, visible_summaries
+from knowledge.summary_visibility import document_is_visible, visible_events, visible_summaries
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -172,6 +173,32 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
+#: Events fetched per requested event, so the visibility pass still fills a page; bounded by EVENT_FETCH_CAP.
+EVENT_OVERFETCH_FACTOR = env_int_clamped("AUTOBOT_KB_EVENT_OVERFETCH_FACTOR", 5, min_v=1)
+EVENT_FETCH_CAP = env_int_clamped("AUTOBOT_KB_EVENT_FETCH_CAP", 2500, min_v=1)
+
+
+async def _visible_page(events: list, reader, limit: int) -> list:
+    """The first *limit* of *events* the reader may read (#16665)."""
+    from knowledge import get_knowledge_base
+
+    return (await visible_events(events, await get_knowledge_base(), reader))[:limit]
+
+
+def _fetch_limit(limit: int) -> int:
+    return min(limit * EVENT_OVERFETCH_FACTOR, max(limit, EVENT_FETCH_CAP))
+
+
+def _event_window(start_date: str | None, end_date: str | None):
+    """The (start, end) datetimes of an event search; open-ended sides default to the beginning and to now."""
+    from datetime import datetime, timezone
+
+    from autobot_shared.time_utils import parse_utc_iso
+
+    start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
+    return start, parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
+
+
 @router.get("/events", response_model=KnowledgeGraphEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -186,29 +213,29 @@ async def search_events(
     limit: int = Query(100, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ):
-    """Search temporal events with filters."""
+    """Search temporal events with filters; only events of documents the caller may read (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
-        from datetime import datetime, timezone
-
         from autobot_shared.redis_client import get_async_redis_client
-        from autobot_shared.time_utils import parse_utc_iso
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
-        end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
+        start, end = _event_window(start_date, end_date)
         types_list = [t.strip() for t in event_types.split(",")] if event_types else None
 
         events = await temporal_svc.search_events_in_range(
             start_date=start,
             end_date=end,
             event_types=types_list,
-            limit=limit,
+            limit=_fetch_limit(limit),
         )
+        events = await _visible_page(events, reader, limit)
         return {"events": events, "total": len(events)}
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Event search failed: %s", e)
         raise HTTPException(status_code=500, detail="Event search failed")
@@ -225,7 +252,8 @@ async def get_event_timeline(
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get chronological timeline of events for an entity."""
+    """Chronological timeline of events for an entity; only events of documents the caller may read (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     if not _SAFE_NAME_RE.match(entity_name):
         raise HTTPException(status_code=400, detail="Invalid entity name")
     try:
@@ -235,13 +263,16 @@ async def get_event_timeline(
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=limit)
+        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=_fetch_limit(limit))
+        events = await _visible_page(events, reader, limit)
         return {
             "entity_name": entity_name,
             "events": events,
             "total": len(events),
         }
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Timeline fetch failed for %s: %s", entity_name, e)
         raise HTTPException(status_code=500, detail="Timeline fetch failed")
@@ -279,6 +310,8 @@ async def search_summaries(
         summaries = await visible_summaries(summaries, await get_knowledge_base(), reader)
         return {"summaries": summaries, "total": len(summaries)}
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Summary search failed: %s", e)
         raise HTTPException(status_code=500, detail="Summary search failed")
@@ -308,6 +341,8 @@ async def get_document_overview(
         overview = await summary_svc.get_document_overview(UUID(document_id))
         return overview
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Document overview failed for %s: %s", document_id, e)
         raise HTTPException(status_code=500, detail="Document overview failed")
@@ -340,6 +375,8 @@ async def drill_down_summary(
             return {"summary": None, "children": []}
         return result
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Drill down failed for %s: %s", summary_id, e)
         raise HTTPException(status_code=500, detail="Drill down failed")

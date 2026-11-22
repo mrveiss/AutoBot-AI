@@ -118,7 +118,7 @@ if not _cw_pkg.__dict__.get("__path__"):
 _simple_stub(
     "chat_workflow.llm_handler",
     _emit_before_tool_execute=AsyncMock(return_value=True),
-    _emit_after_tool_execute=AsyncMock(side_effect=lambda t, r, s, m: r),
+    _emit_after_tool_execute=AsyncMock(side_effect=lambda t, r, s, m, **_kw: r),
     _emit_tool_error=AsyncMock(return_value=None),
 )
 _simple_stub(
@@ -334,7 +334,7 @@ class TestTryMcpDispatchSchemaRetry:
             ),
             patch(
                 f"{_TH_MODULE}._emit_after_tool_execute",
-                new=AsyncMock(side_effect=lambda t, r, s, m: r),
+                new=AsyncMock(side_effect=lambda t, r, s, m, **_kw: r),
             ),
         ):
             tool_call = {"name": "search", "arguments": {"query": "hello"}}
@@ -451,7 +451,7 @@ class TestTryMcpDispatchSchemaRetry:
             ),
             patch(
                 f"{_TH_MODULE}._emit_after_tool_execute",
-                new=AsyncMock(side_effect=lambda t, r, s, m: r),
+                new=AsyncMock(side_effect=lambda t, r, s, m, **_kw: r),
             ),
         ):
             result = await _try_mcp_dispatch("no_schema_tool", {"arguments": {}}, [])

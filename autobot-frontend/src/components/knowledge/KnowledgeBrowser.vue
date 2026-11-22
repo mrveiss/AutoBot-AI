@@ -1461,15 +1461,15 @@ watch(() => props.mode, () => {
   flex-shrink: 0;
 }
 
-.refresh-status-btn i {
-  font-size: var(--text-sm);
+.refresh-status-btn .icon {
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 /* Batch Toolbar */
 .batch-toolbar {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
   padding: var(--spacing-3) var(--spacing-6);
@@ -1492,8 +1492,8 @@ watch(() => props.mode, () => {
   font-weight: 500;
 }
 
-.toolbar-info i {
-  font-size: var(--text-xl);
+.toolbar-info .icon {
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 .toolbar-actions {
@@ -1615,8 +1615,8 @@ watch(() => props.mode, () => {
   font-size: var(--text-sm);
 }
 
-.loading-more i {
-  font-size: var(--text-base);
+.loading-more .icon {
+  width: var(--text-base); height: var(--text-base);
 }
 
 /* States */
@@ -1632,10 +1632,10 @@ watch(() => props.mode, () => {
   color: var(--text-tertiary);
 }
 
-.loading-state i,
-.error-state i,
-.placeholder-state i {
-  font-size: var(--text-5xl);
+.loading-state > .icon,
+.error-state > .icon,
+.placeholder-state > .icon {
+  width: var(--text-5xl); height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -1671,8 +1671,8 @@ watch(() => props.mode, () => {
   flex: 1;
 }
 
-.file-info > i {
-  font-size: 2rem;
+.file-info > .icon {
+  width: 2rem; height: 2rem;
   color: var(--color-primary);
   margin-top: var(--spacing-1);
 }

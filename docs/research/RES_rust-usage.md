@@ -72,7 +72,7 @@ is tracked.
   `PersistentClient` per path under `_local_open_lock` and runs `prepare_local_store` before
   opening it. That closes the double-client segfault path inside the backend. The
   standalone scripts under `autobot-infrastructure/shared/scripts/` still open their own
-  client (`populate_kb_chromadb.py:162`, `utilities/migrate_*_to_chromadb.py`). That only
+  client (`utilities/migrate_*_to_chromadb.py`; `populate_kb_chromadb.py` was retired in #19339). That only
   matters if one runs while the backend is up; not verified.
 - **Rust regex anchor (#13465):** fixed once in `autobot_shared/openapi_schema.py`, guarded by
   `autobot_shared/tests/test_openapi_pattern_anchors.py`.

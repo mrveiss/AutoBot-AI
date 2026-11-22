@@ -337,6 +337,8 @@ def _feature_routers_with_failing(monkeypatch: pytest.MonkeyPatch, router_name: 
 
     monkeypatch.setattr(feature_routers.config.misc, "feature_routers_strict", strict)
     loader = _importlib.import_module("initialization.router_registry.loader")
+    # The synthetic failure is recorded in the shared registry; restore it after the test (#19660).
+    monkeypatch.setitem(loader._LOAD_RESULTS, "feature", loader.get_load_results("feature"))
     monkeypatch.setattr(loader, "importlib", type("_Fake", (), {"import_module": staticmethod(_failing_import)})())
     return feature_routers, loader
 

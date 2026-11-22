@@ -9,8 +9,8 @@ sends a bare ``fetch``/``sendBeacon`` with no credential, from every page
 including ``/login`` and ``/shared/:token``. An open write must not be a free
 amplifier, so each request is held to the #17007 treatment:
 
-* **rate-limited** per client address with the shared ``IPRateLimiter``
-  (``AUTOBOT_RUM_INGEST_RATE_LIMIT``); over it, 429 and nothing is written;
+* **rate-limited** per client address with the canonical
+  ``RateLimiter`` window (``AUTOBOT_RUM_INGEST_RATE_LIMIT``); over it, 429 and nothing is written;
 * **size-capped** while the body streams, before any JSON is parsed
   (``AUTOBOT_RUM_*_MAX_BYTES``, ``api.rum_body_cap``), 413;
 * **field-capped**: each identifying event string has a maximum length, and a
@@ -32,15 +32,19 @@ from pydantic import BaseModel
 
 from autobot_shared.env_registry import REGISTRY, env
 from autobot_shared.proxy_utils import get_client_ip
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
 _RATE_ENV = "AUTOBOT_RUM_INGEST_RATE_LIMIT"
 
-_ingest_limiter = IPRateLimiter(
-    key_prefix="ratelimit:rum_ingest",
-    limit_env=_RATE_ENV,
-    default_limit=REGISTRY[_RATE_ENV].default,
+# LOCAL keeps enforcing per worker while Redis is down: these routes are anonymous,
+# so failing open would switch the control off (what the per-IP limiter did, #18087).
+_ingest_limiter = WindowQuota.for_scope(
+    "rum_ingest",
+    policy=WindowFailurePolicy.LOCAL,
+    log_rejections=False,  # anonymous: a flood must not amplify into the log
+    max_requests=REGISTRY[_RATE_ENV].default,
     window_seconds=60,
+    limit_env=_RATE_ENV,
 )
 
 #: Longest accepted value of each top-level ``RumEvent`` string. The body cap

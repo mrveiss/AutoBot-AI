@@ -82,6 +82,7 @@
       retries: 5
       delay: 5
       until: auth_result.status == 200
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Register fleet nodes"
       ansible.builtin.uri:
@@ -122,6 +123,7 @@
       loop_control:
         label: "{{ item }} ({{ hostvars[item].ansible_host }})"
       register: register_results
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Registration summary"
       ansible.builtin.debug:

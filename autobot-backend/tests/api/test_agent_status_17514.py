@@ -28,6 +28,7 @@ from api.user_management.dependencies import get_current_user, get_db_session, g
 # Registers the SQLite shims for JSONB / UUID (see test_agent_org_tenant_scope.py).
 from llc.tests import _e2e_harness as harness  # noqa: F401
 from models.agent_org import AgentOrgNode
+from services.agent_org_service import AgentOrgService
 from user_management.models.base import Base
 from user_management.models.organization import Organization
 
@@ -75,11 +76,23 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _no_redis_feeds(monkeypatch):  # noqa: ANN001, ANN202
+    """Keep these tests off the analytics Redis (#21270): feeds are unreadable (None) unless a test says otherwise."""
+    from services import agent_org_service
+
+    async def unreadable(ids):  # noqa: ANN001, ANN202
+        return {i: None for i in ids}
+
+    monkeypatch.setattr(agent_org_service, "get_agent_feeds", unreadable)
+
+
 ADMIN = AgentVisibility(is_platform_admin=True)
 MEMBER_OF_ACME = AgentVisibility(is_platform_admin=False, company_ids=frozenset({ACME}))
 
 
-async def _status(factory, visibility: AgentVisibility = ADMIN) -> list[dict]:  # noqa: ANN001
+async def _status(factory, visibility: AgentVisibility = ADMIN, *, postgres: bool = True) -> list[dict]:  # noqa: ANN001
+    """GET /agents/status; ``postgres=False`` hands the route no session, so it takes the registry fallback."""
     app = FastAPI()
     app.include_router(router, prefix="/agents")
 
@@ -88,7 +101,7 @@ async def _status(factory, visibility: AgentVisibility = ADMIN) -> list[dict]:  
             yield session
 
     app.dependency_overrides[get_db_session] = _session
-    app.dependency_overrides[get_optional_db_session] = _session
+    app.dependency_overrides[get_optional_db_session] = _session if postgres else (lambda: None)
     app.dependency_overrides[get_agent_visibility] = lambda: visibility
     app.dependency_overrides[get_current_user] = lambda: {"user_id": str(uuid.uuid4())}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -104,6 +117,9 @@ async def test_unmeasured_activity_is_not_reported_as_zero(factory):  # noqa: AN
         assert agent["successRate"] is None
     assert by_id["ceo-acme"]["status"] is None  # not "idle": nobody measured it
     assert by_id["paused"]["status"] == "paused"  # the one state the registry does know
+    for agent in by_id.values():  # the store is unreadable here, so the feeds are not reported either
+        assert agent["recentTasks"] is None and agent["activityTimeline"] is None
+        assert agent["activityWindowStart"] is None
 
 
 @pytest.mark.asyncio
@@ -128,11 +144,109 @@ async def test_a_member_sees_neither_another_companys_agent_nor_its_name(factory
     assert str(GLOBEX) not in {a["companyId"] for a in agents}
 
 
-@pytest.mark.asyncio
-async def test_a_soft_deleted_company_is_not_named(factory):  # noqa: ANN001
+async def _soft_delete(factory, company_id) -> None:  # noqa: ANN001
     async with factory() as session:
-        (await session.get(Organization, GLOBEX)).soft_delete()
+        (await session.get(Organization, company_id)).soft_delete()
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_an_agent_of_a_soft_deleted_company_is_hidden_from_status(factory):  # noqa: ANN001
+    """#21942: hidden, not deleted -- the row stays, only the listing scopes to live companies."""
+    await _soft_delete(factory, GLOBEX)
     by_id = {a["id"]: a for a in await _status(factory)}
-    assert by_id["ceo-globex"]["companyName"] is None
-    assert by_id["ceo-acme"]["companyName"] == "Acme"  # contrast: a live company is still named
+    assert "ceo-globex" not in by_id
+    assert by_id["ceo-acme"]["companyName"] == "Acme"  # contrast: a live company's agent is present and named
+    assert "platform" in by_id  # a platform agent has no company and stays
+    async with factory() as session:
+        assert await AgentOrgService(session).get_node("ceo-globex") is not None  # the row is kept
+
+
+@pytest.mark.asyncio
+async def test_an_agent_of_a_soft_deleted_company_is_hidden_from_the_org_tree(factory):  # noqa: ANN001
+    await _soft_delete(factory, GLOBEX)
+    async with factory() as session:
+        roots = await AgentOrgService(session).get_org_tree(can_see=ADMIN.can_see)
+    assert {r["agent_id"] for r in roots} == {"ceo-acme", "paused", "platform"}
+
+
+@pytest.mark.asyncio
+async def test_a_company_with_no_organization_row_is_hidden_and_not_presence_synced(factory):  # noqa: ANN001
+    """#21942: 'deleted or missing' -- an agent whose company row does not exist is hidden too."""
+    from llc.services.agent_presence_queries import distinct_company_ids_with_agents
+
+    missing = uuid.uuid4()
+    async with factory() as session:
+        session.add(AgentOrgNode(id=uuid.uuid4(), agent_id="orphan", name="orphan", org_role="ceo", company_id=missing))
+        await session.commit()
+    await _soft_delete(factory, GLOBEX)
+    assert "orphan" not in {a["id"] for a in await _status(factory)}
+    async with factory() as session:
+        synced = set(await distinct_company_ids_with_agents(session))
+    assert str(ACME) in synced  # contrast: a live company is still swept
+    assert not {str(GLOBEX), str(missing)} & synced  # neither the deleted nor the missing company is
+
+
+@pytest.mark.asyncio
+async def test_unreadable_feeds_are_none_on_the_wire_and_measured_empty_is_a_list(factory, monkeypatch):  # noqa: ANN001
+    """#21270: the status response carries None for an unmeasured feed and [] only for a measured one."""
+    from services import agent_org_service
+
+    async def feeds(ids):  # noqa: ANN001, ANN202
+        return {
+            i: ({"recentTasks": [], "activityTimeline": [], "windowStart": 1} if i == "paused" else None) for i in ids
+        }
+
+    monkeypatch.setattr(agent_org_service, "get_agent_feeds", feeds)
+    by_id = {a["id"]: a for a in await _status(factory)}
+    assert by_id["ceo-acme"]["recentTasks"] is None and by_id["ceo-acme"]["activityTimeline"] is None
+    assert by_id["paused"]["recentTasks"] == [] and by_id["paused"]["activityTimeline"] == []
+
+
+def _patch_fallback_feeds(monkeypatch, feed_for):  # noqa: ANN001, ANN202
+    """Patch the helper where the route looks it up; returns the list of id-lists the route asked for."""
+    from api import agent_org
+
+    asked: list[list[str]] = []
+
+    async def feeds(ids):  # noqa: ANN001, ANN202
+        asked.append(list(ids))
+        return {i: feed_for(i) for i in ids}
+
+    monkeypatch.setattr(agent_org, "get_agent_feeds", feeds)
+    return asked
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_reports_an_unreadable_store_as_none(factory, monkeypatch):  # noqa: ANN001
+    asked = _patch_fallback_feeds(monkeypatch, lambda i: None)
+    agents = await _status(factory, postgres=False)
+    assert agents and asked == [[a["id"] for a in agents]]  # the route fed its own registry agents to the helper
+    for agent in agents:
+        assert agent["recentTasks"] is None and agent["activityTimeline"] is None
+        assert agent["activityWindowStart"] is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_reports_a_measured_empty_history_as_empty_lists(factory, monkeypatch):  # noqa: ANN001
+    _patch_fallback_feeds(monkeypatch, lambda i: {"recentTasks": [], "activityTimeline": [], "windowStart": 1234})
+    agents = await _status(factory, postgres=False)
+    assert agents
+    for agent in agents:
+        assert agent["recentTasks"] == [] and agent["activityTimeline"] == []
+        assert agent["activityWindowStart"] == 1234
+
+
+@pytest.mark.asyncio
+async def test_fallback_route_carries_the_helpers_items_per_agent(factory, monkeypatch):  # noqa: ANN001
+    def feed(agent_id: str) -> dict:
+        task = {"id": f"t-{agent_id}", "name": "Deploy", "status": "completed", "completedAt": 5}
+        bar = {"task": "Deploy", "type": "working", "startPercent": 1.0, "widthPercent": 2.0, "duration": 3}
+        return {"recentTasks": [task], "activityTimeline": [bar], "windowStart": 99}
+
+    _patch_fallback_feeds(monkeypatch, feed)
+    agents = await _status(factory, postgres=False)
+    assert agents
+    for agent in agents:
+        assert [t["id"] for t in agent["recentTasks"]] == [f"t-{agent['id']}"]
+        assert agent["activityTimeline"][0]["task"] == "Deploy" and agent["activityWindowStart"] == 99

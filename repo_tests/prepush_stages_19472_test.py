@@ -18,6 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from repo_tests._machine_slot_hook import fake_load
 from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import git, isolated_git_env, make_repo
@@ -41,6 +42,7 @@ _STAGE_FNS = (
 _STUBS = (
     "RED=; CLR=; EXIT_CODE=0; ALLOW_UNRUNNABLE=0; ALLOW_TIMEOUT=0; STAGE_CLEAN=1\n"
     "STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()\n"
+    "machine_slot_wait() { :; }\n"
     'ok() { echo "OK $*" >&2; }; fail() { echo "FAIL $*" >&2; }; warn() { echo "WARN $*" >&2; }\n'
 )
 
@@ -278,7 +280,15 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, str, str]:
 
 def _push(tmp_path: Path, branch: str, **env: str) -> subprocess.CompletedProcess[str]:
     repo, base, head = _gate_repo(tmp_path)
+    # #21906: the hook queues for a machine-wide slot while the real load average is at or above its ceiling, so
+    # under `-n auto` it waited out the 300 s timeout below. Own slot dir and a fixed load: no host state is read.
+    slots = tmp_path / "slots"
     full_env = {**isolated_git_env(), "PATH": _shim(tmp_path), "AUTOBOT_PREPUSH_CACHE": "0", **env}
+    full_env.pop("AUTOBOT_MACHINE_SLOT_HELD", None)
+    full_env.pop("CI", None)
+    full_env.update(
+        AUTOBOT_MACHINE_SLOT_DIR=str(slots), AUTOBOT_MACHINE_SLOT_LOADAVG=str(fake_load(tmp_path / "loadavg"))
+    )
     return subprocess.run(
         ["bash", str(_HOOK)],
         input=f"refs/heads/{branch} {head} refs/heads/{branch} {base}\n",
@@ -331,6 +341,7 @@ def _guards(
             _fn("did_not_run"),
             _fn("could_not_run"),
             _fn("fast_guard_tests"),
+            _fn("remote_guard_pytest"),
             _fn("run_fast_guards"),
             "run_fast_guards",
             'echo "exit=$EXIT_CODE clean=$STAGE_CLEAN"',
@@ -348,11 +359,19 @@ _ADDED = (
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py",
 )
 
+#: Required fast-guard membership, pinned HERE so dropping a guard from the list file fails
+#: this test instead of silently shrinking the gate (#21082).
+_REQUIRED_GUARDS = ("repo_tests/lint/canonical/rules/test_py_celery_private_event_loop.py",)
+
 
 class TestFastGate:
-    def test_the_guard_set_is_seventeen_existing_guards_including_todays(self) -> None:
+    def test_required_guards_are_in_the_fast_gate_independent_of_the_list_file(self) -> None:
+        assert set(_REQUIRED_GUARDS) <= set(_guard_list())
+        assert [g for g in _REQUIRED_GUARDS if not (repo_root() / g).is_file()] == []
+
+    def test_the_guard_set_is_distinct_existing_guards_including_todays(self) -> None:
         guards = _guard_list()
-        assert len(guards) == len(set(guards)) == 17
+        assert len(guards) == len(set(guards)) and len(guards) >= len(_ADDED)
         assert set(_ADDED) <= set(guards)
         assert [g for g in guards if not (repo_root() / g).is_file()] == []
         assert "scripts/repin_reach_floors.py --check" in _SOURCE
@@ -361,8 +380,8 @@ class TestFastGate:
     def test_every_branch_runs_only_the_fast_gate(self, tmp_path: Path) -> None:
         for branch in ("issue-x", "train-x"):
             done = _push(tmp_path / branch, branch)
-            assert "fast gate: 17 guard tests + reach-floor pins" in done.stderr, done.stderr[-3000:]
-            assert "fast guards: 17 guard file(s) pass" in done.stderr, done.stderr[-3000:]
+            assert f"fast gate: {len(_guard_list())} guard tests + reach-floor pins" in done.stderr, done.stderr[-3000:]
+            assert f"fast guards locally: {len(_guard_list())} guard file(s) pass" in done.stderr, done.stderr[-3000:]
             assert "pytest selection" not in done.stderr and "pytest selected" not in done.stderr
             assert done.returncode == 0, done.stderr[-3000:]
 
@@ -398,9 +417,9 @@ class TestFastGate:
         assert "cat <<'EOF'" not in _fn("fast_guard_tests"), "the list is baked into the hook again"
 
     def test_the_pushed_commits_list_governs_not_the_working_tree(self, tmp_path: Path) -> None:
-        # The pushed commit drops every guard but the first; the working tree still names all 17.
+        # The pushed commit drops every guard but the first; the working tree still names every listed guard.
         done = _guards(tmp_path, pushed_list="# one only\n" + _guard_list()[0] + "\n")
-        assert "exit=0" in done.stdout and "fast guards: 1 guard file(s) pass" in done.stderr, done.stderr
+        assert "exit=0" in done.stdout and "fast guards locally: 1 guard file(s) pass" in done.stderr, done.stderr
 
     def test_a_listed_guard_absent_from_the_pushed_commit_blocks(self, tmp_path: Path) -> None:
         listed = _GUARD_LIST.read_text(encoding="utf-8") + "repo_tests/gone_from_this_commit_test.py\n"
@@ -409,7 +428,9 @@ class TestFastGate:
 
     def test_a_commit_without_the_list_falls_back_to_the_working_tree(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, pushed_list="")
-        assert "exit=0" in done.stdout and "fast guards: 17 guard file(s) pass" in done.stderr, done.stderr
+        assert (
+            "exit=0" in done.stdout and f"fast guards locally: {len(_guard_list())} guard file(s) pass" in done.stderr
+        ), done.stderr
 
     def test_no_list_anywhere_blocks_rather_than_running_nothing(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, pushed_list="", tree_list=False)
@@ -436,6 +457,11 @@ class TestFastGate:
     def test_a_repin_exit_1_with_stale_lines_is_stale_not_a_crash(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, repin="print('STALE x'); raise SystemExit(1)")
         assert "reach floors are stale" in done.stderr and "crashed" not in done.stderr
+
+    def test_a_floor_stale_only_on_the_base_warns_and_does_not_block(self, tmp_path: Path) -> None:
+        done = _guards(tmp_path, repin="print('BASE-STALE x: grew on main')")
+        assert "exit=0" in done.stdout, done.stderr
+        assert "reach floors stale on main, not blocking this push: 1" in done.stderr
 
     def test_a_repin_stale_line_blocks(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, repin="print('STALE x')")

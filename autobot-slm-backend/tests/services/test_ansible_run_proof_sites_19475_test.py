@@ -209,8 +209,15 @@ def test_multi_host_mode_requires_a_host_that_ran_a_task(utils) -> None:
     assert utils.ansible_run_failure(zeros + "c : ok=1 changed=0 unreachable=0 failed=0 skipped=0\n", None, 0) is None
 
 
-def test_a_no_hosts_marker_in_an_early_play_fails_a_multi_play_run(utils) -> None:
-    """LOW (documented limit): markers are matched over the whole output, not just the last recap."""
+def test_a_per_play_skip_does_not_fail_a_run_whose_target_ran(utils) -> None:
+    """#19762: a multi-play run prints this for every play whose group the limit leaves out."""
     output = "skipping: no hosts matched\n" + _recap(_HOST)
+    assert utils.ansible_run_failure(output, None, 0) is None
+    assert utils.ansible_run_failure(output, _HOST, 0) is None
+
+
+def test_an_inventory_level_marker_in_an_early_play_still_fails_a_multi_play_run(utils) -> None:
+    """The run as a whole targeting nothing is matched over the whole output, not just the last recap."""
+    output = "[WARNING]: No inventory was parsed\n" + _recap(_HOST)
     assert utils.ansible_run_failure(output, None, 0)
     assert utils.ansible_run_failure(output, _HOST, 0)

@@ -45,13 +45,21 @@ from api.schemas_system import (
     SecretTypesData,
     SecretUpdateRequest,
 )
-from api.secrets_audit import audit_secret_op
+from api.secrets_audit import audit_secret_op, remember_actor
+from api.secrets_delete_outcome import record_delete_failure
 from api.secrets_failure_log import describe_failure
 from api.secrets_ownership import stamp_owner
+from api.secrets_system_vault import create_system_vault_secret as _create_system_vault_secret
+from api.secrets_system_vault import (
+    delete_system_vault_secret,
+    list_system_vault_secrets,
+    rotate_system_vault_secret,
+)
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_refusal import REFUSAL_TEXT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.ssot_config import config as ssot_config
@@ -376,6 +384,8 @@ class SecretsManager:
             secret_data["expires_at"] = request.expires_at.isoformat() if request.expires_at else None
         if request.metadata is not None:
             secret_data["metadata"] = request.metadata
+        if request.value is not None:  # #20557: applied through the store's own cipher, never dropped
+            secret_data["encrypted_value"] = self._encrypt_value(request.value)
 
         secret_data["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
@@ -417,7 +427,7 @@ class SecretsManager:
         for secret_id in request.secret_ids:
             secret_data = secrets.get(secret_id)
             if not secret_data:
-                failed.append({"secret_id": secret_id, "reason": "Secret not found"})
+                failed.append({"secret_id": secret_id, "reason": REFUSAL_TEXT[404]})
                 continue
 
             # Check access permissions for source
@@ -650,51 +660,6 @@ async def _create_connector_bridged_secret(request: SecretCreateRequest, owner_i
     return _connector_secret_metadata(secret_id, request)
 
 
-async def _create_system_vault_secret(request: SecretCreateRequest, owner_id: str) -> Dict:
-    """Route a SYSTEM-visibility secret to EnvelopeSecretsService (#17099).
-
-    The legacy file store this endpoint otherwise writes to never declared a
-    `visibility` field, so every choice in the UI's dropdown -- System
-    included -- was silently dropped by Pydantic and landed in the same
-    per-user file no service reads for vault-owned credentials. This is the
-    only vault services like the audit worker (#13859) actually query.
-
-    Raises ValueError (-> 400) when `value` is missing, and SecretAccessError
-    (-> the caller's own mapping) when the caller isn't an admin --
-    `authorize()` grants SYSTEM-vault writes to admins only.
-    """
-    from api.envelope_secrets import get_coordinator
-    from autobot_shared.secrets_vault import VaultKind, VaultRef
-    from llc.deps import get_session
-    from user_management.middleware.rbac_middleware import rbac_middleware
-
-    if not request.value:
-        raise ValueError("value is required for a system-visibility secret")
-
-    user_id = uuid.UUID(owner_id)
-    permissions = set(await rbac_middleware.get_user_permissions(user_id))
-    coordinator = get_coordinator()
-    async for session in get_session():
-        secret = await coordinator.create(
-            session,
-            user_id=user_id,
-            permissions=permissions,
-            owner_vault=VaultRef(VaultKind.SYSTEM),
-            name=request.name,
-            secret_type=request.type.value,
-            plaintext=request.value.encode("utf-8"),
-        )
-        await session.commit()
-        return {
-            "id": str(secret.id),
-            "name": secret.name,
-            "type": secret.type,
-            "owner_vault": secret.owner_vault,
-            "version": secret.version,
-        }
-    raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
-
-
 @router.post("/", response_model=DataResponse[SecretCreatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -744,16 +709,20 @@ async def create_secret(
             outcome="success",
         )
         return JSONResponse(
-            status_code=201,
+            status_code=200 if secret_data.get("already_existed") else 201,
             content={
                 "status": "success",
                 "message": "Secret created successfully",
                 "secret": secret_data,
             },
         )
+    except PermissionError as e:
+        # #17099: a refused SYSTEM-vault write (non-admin) is a 403, not a 500.
+        await audit_secret_op("CREATE", None, http_request, "denied", reason=type(e).__name__)
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except ValueError as e:
         await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
     except HTTPException:
         # #16428: without this, get_coordinator()'s 503 (vault not configured)
         # falls into the generic handler below and becomes a misleading 500.
@@ -782,14 +751,13 @@ async def list_secrets(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
         await audit_secret_op("LIST", None, http_request, count=len(secrets))
-        return JSONResponse(
-            status_code=200,
-            content={
-                "secrets": secrets,
-                "total_count": len(secrets),
-                "filters": {"chat_id": chat_id, "scope": scope},
-            },
-        )
+        content = {"secrets": secrets, "total_count": len(secrets), "filters": {"chat_id": chat_id, "scope": scope}}
+        # #17099: admin callers also get SYSTEM-vault metadata (never values).
+        _user = get_auth_middleware().get_user_from_request(http_request)
+        system_vault = await list_system_vault_secrets(str((_user or {}).get("user_id", "unknown")))
+        if system_vault is not None:
+            content["system_vault"] = system_vault
+        return JSONResponse(status_code=200, content=content)
     except Exception as e:
         # #19476: names the cause without a value (secrets_failure_log).
         logger.error("Failed to list secrets: %s", describe_failure(e))
@@ -918,8 +886,7 @@ async def get_secret(
         secret = await _get_secret_dual_read(secret_id, chat_id, owner_id)
         if not secret:
             await audit_secret_op("ACCESS", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
-
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
         # Issue #608: Track secret usage in memory graph when accessed within a chat
         if chat_id:
             memory_graph: AutoBotMemoryGraph | None = getattr(http_request.app.state, "memory_graph", None)
@@ -946,7 +913,7 @@ async def get_secret(
         return JSONResponse(status_code=200, content=secret)
     except PermissionError:
         await audit_secret_op("ACCESS", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except HTTPException:
         raise
     except Exception as e:
@@ -970,28 +937,31 @@ async def update_secret(
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
+    owner_id = remember_actor(http_request, get_auth_middleware().get_user_from_request(http_request))
+    rotating = bool(request.value or request.credentials)
     try:
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        if rotating:  # #20557: no credential is replaced without its record
+            await audit_secret_op("UPDATE", secret_id, http_request, "attempted", required=True, phase="before_write")
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
             # One serialization for the cache, the file and every response (#19476)
             secret_data = secret.model_dump(mode="json")
+        elif system_data := await rotate_system_vault_secret(secret_id, request, owner_id, http_request.headers):
+            # #17099/#17731: a SYSTEM secret lives in the vault; rotate it there.
+            secret_data = system_data
         elif request.credentials:
-            # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
-            # instead -- #13632's one-store decision, "PUT rotates the credential."
-            _user = get_auth_middleware().get_user_from_request(http_request)
-            owner_id = str((_user or {}).get("user_id", "unknown"))
+            # #16428: not a legacy secret; rotate it in ConnectorCredentialStore (#13632).
             try:
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
                 await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             secret_data = await _get_connector_bridged_secret(secret_id, owner_id)
         else:
             await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
-            raise HTTPException(status_code=404, detail="Secret not found")
+            raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
 
-        await audit_secret_op("UPDATE", secret_id, http_request)
+        await audit_secret_op("UPDATE", secret_id, http_request, phase="completed")  # #20557: the outcome
         return JSONResponse(
             status_code=200,
             content={
@@ -1002,12 +972,11 @@ async def update_secret(
         )
     except PermissionError:
         await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
+        raise HTTPException(status_code=403, detail=REFUSAL_TEXT[403])
     except ValueError as e:
-        # #16428: rotate()'s merged-bundle validation failure -- a bad
-        # request, not a server fault.
+        # #16428: rotate()'s merged-bundle validation failure: a bad request.
         await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
-        raise HTTPException(status_code=400, detail="Internal server error")
+        raise HTTPException(status_code=400, detail=REFUSAL_TEXT[400])
     except HTTPException:
         raise
     except Exception as e:
@@ -1026,27 +995,30 @@ async def delete_secret(
     secret_id: str,
     http_request: Request,
     chat_id: str | None = Query(None),
+    dependents_digest: str | None = Query(None),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
+    intent_recorded = False
     try:
         _user = get_auth_middleware().get_user_from_request(http_request)
-        owner_id = str((_user or {}).get("user_id", "unknown"))
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+        owner_id = remember_actor(http_request, _user)
+        # #20557: the record comes first; a failed write stops the delete
+        await audit_secret_op("DELETE", secret_id, http_request, "attempted", required=True, phase="before_write")
+        intent_recorded = True
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
+        # #17099/#17731: a SYSTEM secret lives in the vault; delete it there too (409 while dependents exist).
+        success = success or await delete_system_vault_secret(
+            secret_id, owner_id, http_request.headers, dependents_digest
+        )
         if not success:
-            # #16428: revoke() never raises on a missing secret (idempotent by
-            # design), so existence must be checked first to still 404 a
-            # secret_id that is not in either store -- #13632's one-store
-            # decision, "DELETE revokes it there."
+            # #16428: revoke() is idempotent, so check existence first to 404 an unknown id.
             bridged = await _get_connector_bridged_secret(secret_id, owner_id)
             if bridged is None:
-                await audit_secret_op("DELETE", secret_id, http_request, "failed", reason="not_found")
-                raise HTTPException(status_code=404, detail="Secret not found")
+                raise HTTPException(status_code=404, detail=REFUSAL_TEXT[404])
             await get_credential_store().revoke(secret_id, owner_id)
 
-        await audit_secret_op("DELETE", secret_id, http_request)
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_REVOKE,
@@ -1056,19 +1028,12 @@ async def delete_secret(
             session_id=None,
             outcome="success",
         )
-        return JSONResponse(
-            status_code=200,
-            content={"status": "success", "message": "Secret deleted successfully"},
+        await audit_secret_op("DELETE", secret_id, http_request, phase="completed")  # #20557: the outcome
+        return JSONResponse(status_code=200, content={"status": "success", "message": "Secret deleted successfully"})
+    except Exception as exc:  # #21204: every failure leaves an outcome after the intent (secrets_delete_outcome)
+        raise await record_delete_failure(
+            audit_secret_op, secret_id, http_request, exc, intent_recorded=intent_recorded
         )
-    except PermissionError:
-        await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="permission_denied")
-        raise HTTPException(status_code=403, detail="Internal server error")
-    except HTTPException:
-        raise
-    except Exception as e:
-        await audit_secret_op("DELETE", secret_id, http_request, "failed", reason=type(e).__name__)
-        logger.error("Failed to delete secret: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
 @router.post("/transfer", response_model=DataResponse[SecretTransferData])

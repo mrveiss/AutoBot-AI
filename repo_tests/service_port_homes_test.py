@@ -33,9 +33,11 @@ from typing import NamedTuple, Sequence
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import PortConfig
+from tools.lint import _parse_cache as parse_cache
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
 
 from tools.lint import _env_fork_scan as scan_mod  # isort: skip
@@ -87,7 +89,7 @@ PINNED: tuple[Pin, ...] = (
     Pin(
         "npu_windows",
         "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/constants/network.ts",
-        r"NPU_WORKER_WINDOWS_PORT \|\| '(\d+)'",
+        r"'NPU_WORKER_WINDOWS_PORT', '(\d+)'",
         1,
     ),
     Pin(
@@ -139,7 +141,10 @@ KNOWN: dict[int, dict[str, tuple[int, str]]] = {
 }
 
 _TEXT_SUFFIXES = (".ts", ".js", ".vue", ".sh", ".yml", ".yaml", ".j2", ".ps1", ".iss")
-_SCAN_ROOTS = (*scan_mod.SCAN_ROOTS, "autobot-frontend")
+#: Root-level files swept as well: ``.env.example`` carries port keys beyond its pins, and a retired
+#: port is forbidden everywhere, so it is read in full (#19429 review).
+_ROOT_FILES = (".env.example",)
+_SCAN_ROOTS = (*scan_mod.SCAN_ROOTS, "autobot-frontend", *_ROOT_FILES)
 _NOT_PRODUCTION = re.compile(r"(_test\.py$|(^|/)test_[^/]*\.py$|/tests?/|/__tests__/|\.spec\.|\.test\.|/generated/)")
 #: Stories are sample data, so a live number may stand in one -- but a RETIRED number may not (#19429).
 _STORY = re.compile(r"\.stories\.")
@@ -160,7 +165,7 @@ def _production(rel: str) -> bool:
 def _scanned_files(root: Path) -> list[str]:
     """Tracked production Python and text sources under the sweep roots; ``[]`` on an empty tree."""
     try:
-        paths = scan_mod.tracked_paths(root, "*.py", *(f"*{s}" for s in _TEXT_SUFFIXES))
+        paths = scan_mod.tracked_paths(root, "*.py", *(f"*{s}" for s in _TEXT_SUFFIXES), *_ROOT_FILES)
     except EmptyEnumeration:
         return []
     return sorted(rel for rel in paths if _production(rel))
@@ -169,7 +174,6 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "service-port-homes-scan",
     discover=_scanned_files,
-    floor=5381,  # mid-window: 5456 files measured at re-pin, less half of growth
     growth=150,
     what="production python and text sources swept for a second definition of a service port",
     roots=_SCAN_ROOTS,
@@ -199,9 +203,13 @@ def _docstrings(tree: ast.Module) -> set[int]:
     }
 
 
-def _python_sites(source: str, value: int) -> list[int]:
+def _python_sites(source: str, value: int, rel: str = "<source>") -> list[int]:
     """Lines of each non-docstring int or string constant stating *value*."""
-    tree, word = ast.parse(source), re.compile(_WORD.format(value))
+    try:
+        tree = parse_cache.parse(source, filename=rel)
+    except SyntaxError as exc:  # name the file: a bare SyntaxError would hide which one broke the sweep
+        raise AssertionError(f"{rel}: swept but does not parse ({exc.msg}, line {exc.lineno})") from exc
+    word = re.compile(_WORD.format(value))
     prose = _docstrings(tree)
     lines = []
     for node in ast.walk(tree):
@@ -221,7 +229,7 @@ def _text_sites(text: str, value: int) -> list[int]:
 
 def sites(rel: str, text: str, value: int) -> list[int]:
     """Where *rel* states *value* as code, whatever its language."""
-    return _python_sites(text, value) if rel.endswith(".py") else _text_sites(text, value)
+    return _python_sites(text, value, rel) if rel.endswith(".py") else _text_sites(text, value)
 
 
 def _homes(number: int) -> set[str]:
@@ -232,24 +240,6 @@ def _homes(number: int) -> set[str]:
     return {_SSOT_HOME} | {pin.rel for pin in PINNED if pin.field == field}
 
 
-def masked(text: str, pattern: str) -> str:
-    """*text* with each capture of *pattern* overwritten by ``_``: the pinned sites, and only them.
-
-    ``_`` keeps a masked Python literal parseable (it becomes a name), and every line keeps its
-    length and number, so the sites left over are reported where they stand.
-    """
-
-    def _blank(m: re.Match[str]) -> str:
-        out, last = [], m.start()
-        for group in range(1, (m.re.groups or 0) + 1):
-            if m.start(group) >= 0:
-                out += [text[last : m.start(group)], "_" * (m.end(group) - m.start(group))]
-                last = m.end(group)
-        return "".join(out) + text[last : m.end()]
-
-    return re.sub(pattern, _blank, text, flags=re.MULTILINE)
-
-
 def _unpinned(rel: str, text: str, number: int) -> str:
     """*text* with the sites *rel*'s pins hold at *number* masked; any other statement remains."""
     for pin in PINNED:
@@ -258,12 +248,12 @@ def _unpinned(rel: str, text: str, number: int) -> str:
     return text
 
 
-def forbidden_sites(number: int, sources: dict[str, str]) -> list[str]:
+def forbidden_sites(number: int, sources: dict[str, str], known_table: dict | None = None) -> list[str]:
     """Every statement of a FORBIDDEN number outside its home and pinned sites, beyond its KNOWN count.
 
     Only the SSOT home (for a live number) and the detector tables are exempt as whole files.
     """
-    retired, known, out = not _homes(number), KNOWN.get(number, {}), []
+    retired, known, out = not _homes(number), (KNOWN if known_table is None else known_table).get(number, {}), []
     exempt = _DETECTOR_TABLES | (set() if retired else {_SSOT_HOME})
     for rel, text in sorted(sources.items()):
         if rel in exempt or (bool(_STORY.search(rel)) and not retired):
@@ -315,15 +305,42 @@ def test_no_forbidden_number_outside_its_homes() -> None:
     assert found == [], f"checked {len(sources)} files:\n" + "\n".join(found)
 
 
-def test_the_known_counts_only_shrink() -> None:
-    sources = _sources()
-    stale = [
+def stale_known(sources: dict[str, str], known_table: dict = KNOWN) -> list[str]:
+    """Each KNOWN entry whose file now states its number fewer times than recorded."""
+    return [
         f"{rel}: known {count}, states {len(sites(rel, sources.get(rel, ''), number))}"
-        for number, entries in KNOWN.items()
+        for number, entries in known_table.items()
         for rel, (count, _) in entries.items()
         if len(sites(rel, sources.get(rel, ""), number)) < count
     ]
+
+
+def test_the_known_counts_only_shrink() -> None:
+    stale = stale_known(_sources())
     assert stale == [], f"{stale} -- lower the KNOWN count, or delete the entry at zero"
+
+
+def test_the_known_allowance_holds_at_its_count_and_fails_one_above() -> None:
+    known = {8082: {"x/fix.sh": (2, "names the bad value it removes")}}
+    at_count = {"x/fix.sh": "A=8082\nB=8082\n"}
+    assert forbidden_sites(8082, at_count, known) == []
+    assert len(forbidden_sites(8082, {"x/fix.sh": "A=8082\nB=8082\nC=8082\n"}, known)) == 3
+
+
+def test_a_known_count_above_the_real_sites_is_stale() -> None:
+    known = {8082: {"x/fix.sh": (3, "names the bad value it removes")}}
+    assert stale_known({"x/fix.sh": "A=8082\n"}, known) == ["x/fix.sh: known 3, states 1"]
+
+
+def test_an_unpinned_retired_port_in_env_example_is_reported() -> None:
+    assert _production(".env.example")
+    text = "AUTOBOT_VNC_PORT=6080\nSOME_OTHER_VNC=6081\n"
+    assert [f.split(":")[1] for f in forbidden_sites(6081, {".env.example": text})] == ["2"]
+
+
+def test_a_python_file_that_does_not_parse_is_named() -> None:
+    with pytest.raises(AssertionError, match=r"x/broken\.py: swept but does not parse"):
+        sites("x/broken.py", "def f(:\n", 8082)
 
 
 def test_a_pinned_copy_that_drifts_is_caught() -> None:
@@ -371,7 +388,9 @@ def test_an_unreadable_discovered_file_fails_the_sweep(tmp_path: Path) -> None:
 
 def test_a_retired_number_has_no_home() -> None:
     assert _homes(6081) == set(), "6081 is served by no host; nothing may state it"
-    found = forbidden_sites(6081, {"autobot-frontend/src/config/x.ts": "port: getEnvNumber('P', 6081),\n"})
+    found = forbidden_sites(
+        6081, {"autobot-frontend/src/config/x.ts": "port: getEnvPositiveInt(import.meta.env, 'P', 6081),\n"}
+    )
     assert found == ["autobot-frontend/src/config/x.ts:1: 6081 -- read PortConfig.vnc"]
 
 

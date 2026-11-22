@@ -45,7 +45,6 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, ClassVar, Dict, FrozenSet, List
-from urllib.parse import quote
 
 from pydantic import AliasChoices, BeforeValidator, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -53,11 +52,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
 from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.log_dir import LOGS_DIR_DEFAULT, resolve_logs_dir
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_chat_graph_settings import ChatGraphSettings
+from autobot_shared.ssot_codebase_index import CodebaseIndexSettings
+from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
-    FEATURE_ROUTERS_STRICT_DEFAULT,
     SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
     SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
     SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
@@ -68,7 +70,6 @@ from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
-#
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
 # 50-odd standalone tooling scripts that also need the project root can ask for
 # it without importing this module, which builds every pydantic settings model.
@@ -81,7 +82,7 @@ def default_audit_log_file() -> str:
     """The ONE definition of the audit-log default (#14070): was ALSO spelled out
     as ``security_layer._AUDIT_LOG_FILE_DEFAULT``, kept in step by an equality
     test -- agreement today, not derivation. A function, so it stays lazy."""
-    return str(project_root() / "logs" / "audit.log")
+    return str(resolve_logs_dir() / "audit.log")  # #20894
 
 
 # Default model constants - single source of truth for fallback values (#2553)
@@ -105,7 +106,7 @@ QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
 # Truthy env-var values — shared by every boolean flag below.
 _TRUE_VALUES = {"1", "true", "yes"}
-
+MIN_LLM_TIMEOUT_SECONDS = 1  # the int views of TimeoutConfig.llm (#17419) never round a sub-second value to 0
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
@@ -186,7 +187,8 @@ class PortConfig(RedactedSettings):
     model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore")
 
     backend: int = Field(default=8001, alias="AUTOBOT_BACKEND_PORT")
-    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")
+    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")  # Vite dev server only (#19326)
+    frontend_http: int = Field(default=80, alias="AUTOBOT_FRONTEND_HTTP_PORT")  # nginx HTTP; HTTPS is tls (#19326)
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
@@ -209,7 +211,7 @@ class PortConfig(RedactedSettings):
     chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
-class LLMConfig(RedactedSettings):
+class LLMConfig(RedactedSettings, ChatGraphSettings):
     """
     LLM model configuration with multi-provider support.
 
@@ -223,11 +225,7 @@ class LLMConfig(RedactedSettings):
     environment variables, defaulting to the main AUTOBOT_LLM_PROVIDER.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    # model_config is inherited from ChatGraphSettings (same .env / utf-8 / extra="ignore"): one ConfigDict.
 
     # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL")
@@ -242,16 +240,13 @@ class LLMConfig(RedactedSettings):
     light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
     instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
-
+    verifier_model: str = Field(default="", alias="AUTOBOT_VERIFIER_MODEL")  # #21844 empty: light-processing model
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
     research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
     planning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_PLANNING_MODEL")
-
-    # Timeout (seconds)
-    timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
 
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
@@ -293,8 +288,7 @@ class LLMConfig(RedactedSettings):
         ),
     )
     # Inline AgentResponseJudge on chat replies (#10599, §3.3).
-    # OFF by default — each judge call adds one LLM round-trip.
-    # Enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
+    # OFF by default (one LLM round-trip per judge call); enable with AUTOBOT_CHAT_INLINE_JUDGE=true.
     chat_inline_judge_enabled: bool = Field(default=False, alias="AUTOBOT_CHAT_INLINE_JUDGE")
     # Minimum judge overall_score to accept a response without one regeneration
     # attempt.  Only used when chat_inline_judge_enabled=True.
@@ -494,7 +488,7 @@ class LLMConfig(RedactedSettings):
             "endpoint": self.get_endpoint_for_agent(agent_id),
             "model": self.get_model_for_agent(agent_id),
             "api_key": self._get_api_key_for_provider(provider),
-            "timeout": self.timeout,
+            "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(config.timeout.llm)),
         }
 
     def _get_api_key_for_provider(self, provider: str) -> str:
@@ -524,6 +518,11 @@ class LLMConfig(RedactedSettings):
             "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    @property
+    def default_model_override(self) -> str:
+        """AUTOBOT_DEFAULT_LLM_MODEL only when set; "" when ``default_model`` is its default (#17419)."""
+        return self.default_model if "default_model" in self.model_fields_set else ""
 
     # Backward compatibility aliases
     def get_provider_for_model(self, model_type: str) -> str:
@@ -710,22 +709,9 @@ class RedisConfig(RedactedSettings):
     # Enable/disable Redis
     enabled: bool = Field(default=True, alias="AUTOBOT_REDIS_ENABLED")
 
-    # Database assignments — defaults match redis-databases.yaml SSOT (#2670)
-    db_main: int = Field(default=0, alias="AUTOBOT_REDIS_DB_MAIN")
-    db_knowledge: int = Field(default=1, alias="AUTOBOT_REDIS_DB_KNOWLEDGE")
-    db_prompts: int = Field(default=2, alias="AUTOBOT_REDIS_DB_PROMPTS")
-    db_agents: int = Field(default=3, alias="AUTOBOT_REDIS_DB_AGENTS")
-    db_metrics: int = Field(default=4, alias="AUTOBOT_REDIS_DB_METRICS")
-    db_cache: int = Field(default=5, alias="AUTOBOT_REDIS_DB_CACHE")
-    db_sessions: int = Field(default=6, alias="AUTOBOT_REDIS_DB_SESSIONS")
-    db_tasks: int = Field(default=7, alias="AUTOBOT_REDIS_DB_TASKS")
-    db_logs: int = Field(default=8, alias="AUTOBOT_REDIS_DB_LOGS")
-    db_temp: int = Field(default=9, alias="AUTOBOT_REDIS_DB_TEMP")
-    db_audit: int = Field(default=10, alias="AUTOBOT_REDIS_DB_AUDIT")
-    db_analytics: int = Field(default=11, alias="AUTOBOT_REDIS_DB_ANALYTICS")
-    db_celery_broker: int = Field(default=14, alias="AUTOBOT_REDIS_DB_CELERY_BROKER")
-    db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
-    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
+    # Database numbers are NOT here (#19232): redis-databases.yaml plus the
+    # AUTOBOT_REDIS_DB_<NAME> overrides form the one table, read through
+    # autobot_shared.redis_management.database_names.database_number.
 
     # LangGraph checkpoint TTL (#1481, #3231)
     checkpoint_ttl_minutes: int = Field(
@@ -1152,12 +1138,9 @@ class PermissionConfig(RedactedSettings):
         description="How long to remember approved commands (seconds)",
     )
 
-    # Redis database for permission storage
-    redis_db: int = Field(
-        default=11,
-        alias="AUTOBOT_REDIS_DB_PERMISSIONS",
-        description="Redis database for permission rules and memory",
-    )
+    # No Redis database number here (#19232): approval memory stores in the "main"
+    # database through the canonical client (services/approval_memory.py). The retired
+    # redis_db=11 field named analytics' DB, and nothing read it.
 
     # Permission rules file path (relative to project root)
     rules_file: str = Field(
@@ -1260,20 +1243,19 @@ class PathConfig(RedactedSettings):
     # resolve into the checkout rather than into the live install.
     base_dir: str = Field(default_factory=lambda: str(install_base_dir()), alias="AUTOBOT_BASE_DIR")
 
-    # Well-known sub-directories (all relative to base_dir unless absolute).
-    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    # Well-known sub-directories (relative to base_dir unless absolute); override via AUTOBOT_PLUGINS_DIR etc.
     plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
     data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
-    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    logs_dir: str = Field(default=LOGS_DIR_DEFAULT, alias="AUTOBOT_LOGS_DIR")  # #20894: unset -> resolver
     models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
     docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+    upload_dir: str = Field(default="", alias="AUTOBOT_UPLOAD_DIR")  # #19823: empty is under the transcriber's data
     # #18293: the retired, read-only transcript store -- under base_dir (NOT data_dir), as its writer put it.
     legacy_transcripts_dir: str = Field(default="data/conversation_transcripts", alias="AUTOBOT_LEGACY_TRANSCRIPTS_DIR")
     # On a real deployment, code_source lives at /opt/autobot/code_source, a
     # sibling of autobot-backend/ (NOT inside base_dir) — and the Ansible
-    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default
-    # only governs the unset case. In a checkout there is no separate
-    # code_source sibling: the checkout root *is* the git repo root, so the
+    # template always sets AUTOBOT_CODE_SOURCE explicitly, so this default only governs the unset case.
+    # In a checkout there is no separate code_source sibling: the checkout root *is* the git repo root, so the
     # default resolves lazily via project_root() (#13149, #14050) to that
     # same checkout instead of the live install.
     code_source_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_CODE_SOURCE")
@@ -1334,14 +1316,13 @@ class PathConfig(RedactedSettings):
     # autobot_ssh_key_path's owning account).
     ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
-    # Explicit override for the `claude` CLI binary used by the LLC claude_code
-    # adapter (GH#12478). Empty string means "not configured" — the adapter falls
-    # back to shutil.which("claude") then common per-user install locations before
-    # raising a clear error. Set this when the service account's PATH does not
-    # include the directory the Claude Code CLI was installed into (e.g. a
-    # per-user npm/curl install landed in ~/.local/bin, which systemd services
-    # typically don't inherit).
+    # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
+    # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
     claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
+    # Claude Code user-level config dir (agents/, skills/); empty = ~/.claude of the backend account.
+    claude_config_dir: str = Field(
+        default="", validation_alias=AliasChoices("AUTOBOT_CLAUDE_CONFIG_DIR", "CLAUDE_CONFIG_DIR")
+    )
 
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
@@ -1362,8 +1343,8 @@ class PathConfig(RedactedSettings):
 
     @property
     def logs_path(self) -> Path:
-        """Absolute path to the logs directory."""
-        return self.resolve(self.logs_dir)
+        """Absolute path to the logs directory: the one resolver, never the source tree (#20894)."""
+        return resolve_logs_dir(self.logs_dir or None)
 
     @property
     def models_path(self) -> Path:
@@ -1401,7 +1382,7 @@ class PathConfig(RedactedSettings):
         return Path(self.management_ssh_key_path)
 
 
-class MiscConfig(RedactedSettings):
+class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
@@ -1557,14 +1538,12 @@ class MiscConfig(RedactedSettings):
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
-    db_host: str = Field(default="", alias="AUTOBOT_DB_HOST")
     db_path: str = Field(default="", alias="AUTOBOT_DB_PATH")
     default_agent_model: str = Field(default="", alias="AUTOBOT_DEFAULT_AGENT_MODEL")
     default_choice: str = Field(default="", alias="AUTOBOT_DEFAULT_CHOICE")
     default_command: str = Field(default="", alias="AUTOBOT_DEFAULT_COMMAND")
     default_continue: str = Field(default="", alias="AUTOBOT_DEFAULT_CONTINUE")
     default_host: str = Field(default="", alias="AUTOBOT_DEFAULT_HOST")
-    default_llm_model: str = Field(default="", alias="AUTOBOT_DEFAULT_LLM_MODEL")
     default_port: str = Field(default="", alias="AUTOBOT_DEFAULT_PORT")
     default_scan_network: str = Field(default="", alias="AUTOBOT_DEFAULT_SCAN_NETWORK")
     default_yes_no: str = Field(default="", alias="AUTOBOT_DEFAULT_YES_NO")
@@ -1594,7 +1573,9 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(
+        default_factory=_profile.feature_routers_strict_default, alias="AUTOBOT_FEATURE_ROUTERS_STRICT"
+    )
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
@@ -1861,12 +1842,6 @@ class MiscConfig(RedactedSettings):
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
-    codebase_index_batch_size: int = Field(default=0, alias="CODEBASE_INDEX_BATCH_SIZE")
-    codebase_index_embedding_mode: str = Field(default="precompute", alias="CODEBASE_INDEX_EMBEDDING_MODE")
-    codebase_index_embed_batch_size: int = Field(default=100, alias="CODEBASE_INDEX_EMBED_BATCH_SIZE")
-    codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
-    codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
-    codebase_index_parallel_files: str = Field(default="50", alias="CODEBASE_INDEX_PARALLEL_FILES")
     # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
     codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="50", alias="CODEBASE_SCAN_PARALLEL_FILES")
@@ -2082,7 +2057,7 @@ class MiscConfig(RedactedSettings):
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
-class FeatureConfig(RedactedSettings):
+class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     """Feature flags configuration."""
 
     model_config = SettingsConfigDict(
@@ -2095,7 +2070,6 @@ class FeatureConfig(RedactedSettings):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
     # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
@@ -2150,15 +2124,6 @@ class FeatureConfig(RedactedSettings):
     # ever run, so a company enabling the policy on an install where this is off
     # still costs nothing extra.
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
-
-    # Issue #16950/#16974: enforce each Company OS agent's org-role tool bound at
-    # dispatch. Off by default -- copilot_local/copilot_subscription take no
-    # tool-permission flags today, so turning this on refuses every dispatch to
-    # those two adapters (codex_subscription is already a non-functional stub).
-    # Flips on once those adapters can actually enforce a bound, or the owner
-    # accepts the refusal; whether the underlying CLI even exposes such a flag
-    # is unknown and external to this repo.
-    org_role_bound_enabled: bool = Field(default=False, alias="AUTOBOT_FEATURE_ORG_ROLE_BOUND")
 
 
 class CostModelConfig(RedactedSettings):
@@ -2351,6 +2316,7 @@ class AutoBotConfig(RedactedSettings):
     environment: _Env = _profile.ENVIRONMENT_DEFAULT  # #19315: one normalisation, deployment_profile.env_field
     debug: bool = Field(default=_profile.DEBUG_DEFAULT, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
+    frontend_served_by: str = Field(default="", alias="AUTOBOT_FRONTEND_SERVED_BY")  # #19326: vite|nginx, no default
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)
     # Safe defaults: nothing is deleted unless an admin explicitly sets a period.
@@ -2458,8 +2424,7 @@ class AutoBotConfig(RedactedSettings):
             return PortConfig()
         return v
 
-    # Computed URL properties for backward compatibility
-    # Issue #164: Support HTTPS when TLS is enabled
+    # Computed URL properties for backward compatibility; HTTPS when TLS is enabled (Issue #164)
     @property
     def backend_url(self) -> str:
         """Get the full backend API URL (HTTP or HTTPS based on TLS config)."""
@@ -2469,28 +2434,26 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def frontend_url(self) -> str:
-        """Get the full frontend URL (HTTP or HTTPS based on TLS config)."""
-        if self.tls.frontend_tls_enabled:
-            return f"https://{self.vm.frontend}:{self.tls.frontend_tls_port}"
-        return f"http://{self.vm.frontend}:{self.port.frontend}"
+        """The frontend's served URL, by what serves it (#19326); unset or unknown ``frontend_served_by`` raises."""
+        return _profile.frontend_url(self)
 
     @property
     def redis_url(self) -> str:
-        """Get the full Redis URL (without password)."""
-        if self.tls.redis_tls_enabled:
-            return f"rediss://{self.vm.redis}:{self.tls.redis_tls_port}"
-        return f"redis://{self.vm.redis}:{self.port.redis}"
+        """The Redis URL without credentials, from the one endpoint resolver (#19232)."""
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url(with_auth=False)
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with credentials if configured (URL-encoded)."""
-        tls = self.tls.redis_tls_enabled
-        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
-        if self.redis.password:
-            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
-            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
-            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
-        return f"{scheme}://{self.vm.redis}:{port}"
+        """The Redis URL with URL-encoded credentials (#16626), from the one endpoint resolver.
+
+        #19232: the canonical client resolves through the same function, so this URL
+        names the host, port and credentials ``get_redis_client`` dials.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url()
 
     @property
     def ollama_url(self) -> str:
@@ -2597,9 +2560,8 @@ class AutoBotConfig(RedactedSettings):
         return f"http://{self.vm.slm}:{self.port.slm}"
 
     def get_redis_url_for_db(self, db_number: int) -> str:
-        """Get Redis URL for a specific database number."""
-        base = self.redis_url_with_auth
-        return f"{base}/{db_number}"
+        """The authenticated Redis URL for *db_number* (resolve a name with ``database_number``)."""
+        return f"{self.redis_url_with_auth}/{db_number}"
 
     def get_service_url(self, service_name: str) -> str | None:
         """
@@ -2612,20 +2574,20 @@ class AutoBotConfig(RedactedSettings):
             Service URL or None if not found
         """
         url_map = {
-            "backend": self.backend_url,
-            "frontend": self.frontend_url,
-            "redis": self.redis_url,
-            "ollama": self.ollama_url,
-            "websocket": self.websocket_url,
-            "aistack": self.aistack_url,
-            "ai_stack": self.aistack_url,
-            "npu": self.npu_worker_url,
-            "npu_worker": self.npu_worker_url,
-            "browser": self.browser_service_url,
-            "vnc": self.vnc_url,
-            "slm": self.slm_url,  # Issue #768
+            "backend": "backend_url",
+            "frontend": "frontend_url",
+            "redis": "redis_url",
+            "ollama": "ollama_url",
+            "websocket": "websocket_url",
+            "aistack": "aistack_url",
+            "ai_stack": "aistack_url",
+            "npu": "npu_worker_url",
+            "npu_worker": "npu_worker_url",
+            "browser": "browser_service_url",
+            "vnc": "vnc_url",
+            "slm": "slm_url",  # Issue #768
         }
-        return url_map.get(service_name.lower())
+        return getattr(self, url_map[key]) if (key := service_name.lower()) in url_map else None
 
     def get_vm_ip(self, vm_name: str) -> str | None:
         """
@@ -2783,8 +2745,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def llm_timeout(self) -> int:
-        """Backward-compat: config.llm_timeout → config.llm.timeout."""
-        return self.llm.timeout
+        """Backward-compat: config.llm_timeout → config.timeout.llm."""
+        return max(MIN_LLM_TIMEOUT_SECONDS, int(self.timeout.llm))
 
     @property
     def llm_temperature(self) -> float:
@@ -2996,7 +2958,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
         "endpoint": endpoint,
         "model": model,
         "api_key": api_key,
-        "timeout": cfg.llm.timeout,
+        "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(cfg.timeout.llm)),
     }
 
 

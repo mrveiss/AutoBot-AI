@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 
-import yaml
+from repo_tests._ansible_tasks import resolved_vars
 from repo_tests._paths import repo_root
 
 from tools.lint._scan_helpers import tracked_paths
@@ -38,7 +38,7 @@ _OPT_OUT = "<!-- doc-model-tags: not advice -->"
 
 
 def _allowed() -> set[str]:
-    models = yaml.safe_load((repo_root() / _SSOT).read_text(encoding="utf-8"))["ollama_models"]
+    models = resolved_vars(repo_root() / _SSOT)["ollama_models"]
     return set(models) | {m.removesuffix(":latest") for m in models}
 
 

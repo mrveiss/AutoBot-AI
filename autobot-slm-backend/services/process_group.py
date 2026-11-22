@@ -15,6 +15,7 @@ import signal
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.process_group import process_group_is_dead  # the one probe (#19496)
 
 logger = get_logger(__name__)
 
@@ -77,19 +78,6 @@ async def kill_process_group(process: asyncio.subprocess.Process, grace_s: float
             return
 
     logger.error("Process group %d survived SIGKILL after grace period (#14524)", pgid)
-
-
-def process_group_is_dead(pgid: int) -> bool:
-    """True if no process remains in *pgid*. Signal 0 sends nothing -- existence-only probe."""
-    try:
-        os.killpg(pgid, 0)
-    except ProcessLookupError:
-        return True
-    except PermissionError:
-        # A process with this pgid exists but signalling it is refused
-        # (e.g. uid mismatch) -- it still exists, so not dead.
-        return False
-    return False
 
 
 async def wait_for_process_group_death(pgid: int, timeout_s: float) -> bool:

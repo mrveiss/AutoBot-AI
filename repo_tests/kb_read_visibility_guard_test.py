@@ -50,6 +50,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.kb_read_visibility_allowlist import ALLOWLIST
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -204,7 +205,11 @@ MIN_READS_FOUND = 40
 #: research planner's skip-known read and the KB search task handler filter through ``filter_for_user_id``.
 #: Then 64 -> 65 (#16665, train-85f): ``knowledge/summary_visibility._source_metadata`` reads the source fact's
 #: metadata to make the visibility decision itself; classified SCOPED.
-UNFILTERED_READ_CEILING = 65
+#: Then 65 -> 64 (#16665, #19644): ``/ai-stack/knowledge/search`` scopes its local hits to the caller, so the scan
+#: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
+#: Then 64 -> 66 (#19647): the backup's vector read and the restore's existence check, both NOT_USER_FACING.
+#: Then 66 -> 67 (#20028): the sync's pre-delete check of a replaced fact, NOT_USER_FACING.
+UNFILTERED_READ_CEILING = 67
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -231,20 +236,14 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: FLOOR PINNED 2026-10-19 to 2762 against a measured population of 2887 production files by this
-#: guard's own filter (branch issue-18825-graph-owner-scope; the repo_tests run that reported
-#: "the window against a population of 2887 is [2637, 2887]"). With `growth=250` and `skips=0`
-#: that window is 2637..2887 and 2762 sits mid-window (`_reach` refuses a floor in the bottom 25).
-#: Earlier figure, no longer current: 2555 measured 2026-09-14 (2356 autobot-backend, 195
-#: autobot_shared, 4 infra MCP). The per-root split of 2887 was not recorded in that run. `growth=250`
-#: absorbs ordinary additions, since most feature work adds production modules. That
+#: Production files by this guard's own filter (the floor is computed from the base commit, #19676).
+#: `growth=250` absorbs ordinary additions, since most feature work adds production modules. That
 #: band cannot see a small root vanish, so `test_every_scan_root_is_reached` checks each root
 #: separately. `skips=0`: every discovered file is parsed, and an unparseable one fails the
 #: scan loudly.
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2866,  # mid-window: population 2991, window (2741, 2991)
     growth=250,
     skips=0,
     what="production python files",
@@ -368,7 +367,7 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
                 )
             visit(child, name)
 
-    visit(ast.parse(source), "")
+    visit(parse_cache.parse(source), "")
     return reads
 
 

@@ -253,6 +253,25 @@ def test_load_env_file_missing_file_under_the_root_returns_empty(tmp_path, monke
     assert result == {}
 
 
+def test_load_env_file_raises_when_the_env_file_is_unreadable(tmp_path, monkeypatch) -> None:
+    """An .env that exists but cannot be read is an error, not "no env" (#19232 review).
+
+    The shared reader logs and returns {} for an unreadable file; this path must not,
+    or the refresh subprocess would run without the deployment's env and secrets.
+    A directory named .env is unreadable as a file on every platform.
+    """
+    patch_real_deployed_root(monkeypatch, tmp_path)
+    unreadable = tmp_path / "autobot-backend" / ".env"
+    unreadable.mkdir(parents=True)
+
+    try:
+        cs._load_env_file(unreadable)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("an unreadable .env must raise OSError, not return {}")
+
+
 def test_load_env_file_refuses_a_sibling_directory_sharing_the_root_as_a_string_prefix(tmp_path, monkeypatch) -> None:
     """The containment check must be anchored on ``root + os.sep`` -- a naive
     ``startswith(root)`` would wrongly accept a sibling whose name merely

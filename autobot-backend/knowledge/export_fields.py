@@ -37,6 +37,7 @@ def filter_fact_fields(
         # Include embedding if present
         if "embedding" in fact:
             filtered_fact["embedding"] = fact["embedding"]
+            filtered_fact["embedding_model"] = fact.get("embedding_model")
 
         if include_metadata:
             metadata = fact.get("metadata", {}).copy()

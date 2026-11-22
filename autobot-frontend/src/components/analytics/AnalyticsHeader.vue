@@ -27,10 +27,10 @@
         </div>
 
         <!-- Manage Sources button -->
-        <button class="btn-manage" @click="$emit('open-source-manager')" :title="$t('analytics.header.manageSourcesTitle')">
+        <BaseButton variant="secondary" size="sm" @click="$emit('open-source-manager')" :title="$t('analytics.header.manageSourcesTitle')">
           <Icon name="code-branch" />
           {{ $t('analytics.header.manageSources') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Path input (shown when custom path selected or no sources) -->
@@ -58,18 +58,18 @@
         </button>
       </div>
 
-      <button @click="$emit('index-codebase')" :disabled="analyzing" class="btn-primary">
+      <BaseButton variant="info" @click="$emit('index-codebase')" :disabled="analyzing">
         <Icon :name="analyzing ? 'spinner' : 'database'" :spin="analyzing" />
         {{ analyzing ? $t('analytics.header.indexing') : $t('analytics.header.indexCodebase') }}
-      </button>
-      <button v-if="analyzing && currentJobId" @click="$emit('cancel-indexing')" class="btn-cancel">
+      </BaseButton>
+      <BaseButton variant="error" v-if="analyzing && currentJobId" @click="$emit('cancel-indexing')">
         <Icon name="stop-circle" />
         {{ $t('analytics.header.cancel') }}
-      </button>
-      <button @click="$emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
+      </BaseButton>
+      <BaseButton variant="secondary" @click="$emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)">
         <Icon :name="analyzing ? 'spinner' : 'chart-bar'" :spin="analyzing" />
         {{ analyzing ? $t('analytics.header.analyzingAll') : $t('analytics.header.analyzeAll') }}
-      </button>
+      </BaseButton>
 
       <!-- Debug Controls -->
       <div class="debug-controls">
@@ -118,7 +118,7 @@
 // ---- Types ----------------------------------------------------------------
 
 import Icon from '@/components/ui/Icon.vue'
-import { PageHeader } from '@autobot/ui'
+import { PageHeader, BaseButton } from '@autobot/ui'
 import type { CodeSource } from '@/types/analytics'
 
 // ---- Props & Emits --------------------------------------------------------
@@ -241,28 +241,6 @@ function handleSourceChange(event: Event) {
   font-size: var(--text-xs);
 }
 
-.btn-manage {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary-alpha);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  color: var(--text-on-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  white-space: nowrap;
-  transition: all var(--duration-200);
-}
-
-.btn-manage:hover {
-  background: var(--bg-hover);
-  border-color: var(--color-info);
-  color: var(--color-info);
-}
-
 /* Selected source info bar */
 .selected-source-bar {
   display: flex;
@@ -361,55 +339,6 @@ function handleSourceChange(event: Event) {
 
 .path-input::placeholder {
   color: var(--text-muted);
-}
-
-/* Action Buttons */
-.btn-primary,
-.btn-secondary,
-.btn-cancel {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-primary {
-  background: var(--color-info);
-  color: var(--bg-secondary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-info-dark);
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary-alpha);
-  color: var(--text-on-primary);
-  border: 1px solid var(--border-subtle);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-cancel {
-  background: var(--color-error);
-  color: var(--text-on-primary);
-}
-
-.btn-cancel:hover {
-  background: var(--color-error-hover);
-}
-
-.btn-primary:disabled,
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Debug Controls */

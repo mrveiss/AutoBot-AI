@@ -38,6 +38,8 @@ from typing import Any
 from _scan_helpers import tracked_paths
 from check_getenv_ssot_drift import EXEMPT_MARKER, _is_getenv_call, _literal, values_disagree
 
+from autobot_shared.testfile_names import is_test_filename  # noqa: E402
+
 from _check_harness import VacuousScan  # isort: skip -- check_getenv_ssot_drift puts tools/lint on sys.path
 
 #: Name this guard reports under, in messages and in its floor failures.
@@ -59,7 +61,7 @@ SCAN_ROOTS = (
 #: passed to the reach declaration in ``repo_tests/env_fork_guard_18094_test.py`` (whose ``verify_floor``
 #: proves it against the live population). A sweep that collected a handful has lost its roots and would
 #: report "none found" over nothing.
-FORK_READ_FLOOR = 208
+FORK_READ_FLOOR = 207
 
 #: Modules whose module-level literal constants are the SSOT a feature module must not restate.
 SSOT_CONSTANT_SOURCES = (
@@ -74,7 +76,6 @@ KNOWN_ENV_FORKS: dict[str, str] = {
     "AUTOBOT_BACKEND_HOST": "#17419",
     "AUTOBOT_BROWSER_SERVICE_HOST": "#17419",
     "AUTOBOT_REDIS_HOST": "#17419",
-    "AUTOBOT_TLS_CERT_DIR": "#17419",
 }
 
 
@@ -251,7 +252,11 @@ def scan(repo_root: Path, files: list[Path], registry: dict[str, Any]) -> ScanRe
     reads: dict[str, list[tuple[Any, str]]] = {}
     for path in files:
         rel_path = path.relative_to(repo_root).as_posix()
-        if rel_path.split("/")[0] not in SCAN_ROOTS or rel_path.endswith("_test.py") or "/tests/" in rel_path:
+        if (
+            rel_path.split("/")[0] not in SCAN_ROOTS
+            or is_test_filename(rel_path, include_js=False, include_conftest=False)
+            or "/tests/" in rel_path
+        ):
             continue
         try:
             text = path.read_text(encoding="utf-8")

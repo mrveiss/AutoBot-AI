@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.pinned_model_registry import load_verified
 from knowledge.chunk_identity import resolve_chunk_id
 
 logger = get_logger(__name__)
@@ -379,7 +380,7 @@ class ResultReranker:
     Uses the MS MARCO MiniLM model for efficient relevance scoring.
     """
 
-    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L6-v2"  # pinned in autobot_shared/pinned_model_registry.py (#19355)
 
     def __init__(self):
         """Initialize reranker."""
@@ -536,7 +537,10 @@ def get_cross_encoder():
                         "Loading shared CrossEncoder model: %s",
                         ResultReranker.MODEL_NAME,
                     )
-                    _cross_encoder_model = CrossEncoder(ResultReranker.MODEL_NAME)
+                    (_cross_encoder_model,) = load_verified(  # pinned revision, digests verified (#19355)
+                        ResultReranker.MODEL_NAME,
+                        lambda revision: CrossEncoder(ResultReranker.MODEL_NAME, revision=revision),
+                    )
                     logger.info("Shared CrossEncoder model loaded successfully")
                 except ImportError:
                     logger.warning("sentence-transformers not available, CrossEncoder disabled")

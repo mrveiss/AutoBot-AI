@@ -78,11 +78,8 @@ for vm in autobot-backend autobot-frontend nginx; do
 done
 ```
 
-Or redeploy through the builtin updater, which restarts services:
-
-```bash
-# SLM: Maintenance -> Updates -> Code Sync (never a hand-run deploy against the fleet)
-```
+This restart is required. Code Sync is not a substitute: it restarts services only when it has code
+to apply, and a certificate-only rotation may give it none.
 
 ### 5. Verify
 

@@ -143,6 +143,7 @@ class ServiceRegistry:
         if config_file:
             self._load_config_file(config_file)
         self._load_environment_config()
+        self._pin_redis_to_endpoint()
 
         self.logger.info(f"Service registry initialized in {self.deployment_mode.value} mode")
 
@@ -253,6 +254,21 @@ class ServiceRegistry:
             service.scheme = config.get(f"services.{service_key}.scheme", service.scheme)
             service.path = config.get(f"services.{service_key}.path", service.path)
             service.health_endpoint = config.get(f"services.{service_key}.health_endpoint", service.health_endpoint)
+
+    def _pin_redis_to_endpoint(self) -> None:
+        """Report Redis where the canonical client dials it (#19232).
+
+        Redis has ONE resolution path, ``endpoint.resolve_redis_endpoint``; the
+        deployment-mode patterns and config overrides above would be a second.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        redis_service = self.services.get("redis")
+        if redis_service is None:
+            return
+        resolved = resolve_redis_endpoint()
+        redis_service.host, redis_service.port = resolved.host, resolved.port
+        redis_service.scheme = "rediss" if resolved.tls else "redis"
 
     def get_service_url(self, service_name: str, path: str = "") -> str:
         """

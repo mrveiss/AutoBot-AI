@@ -24,6 +24,7 @@
     # never existed on installed nodes, so the ChromaDB backup block was a silent
     # no-op and ChromaDB collections were never captured (#10016 member 2).
     chromadb_data_dir: "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
+    node_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
     # Retention: prune this host's backup dirs older than N days at the end of a
     # run. The just-created backup (mtime=now) always survives. 0 disables.
     backup_retention_days: "{{ backup_retention_days | default(30) }}"
@@ -280,7 +281,7 @@
     # =========================================================================
     - name: Backup TLS certificates
       ansible.builtin.archive:
-        path: /etc/autobot/certs
+        path: "{{ node_cert_dir }}"
         dest: "{{ backup_path }}/tls-certs.tar.gz"
         format: gz
       ignore_errors: true

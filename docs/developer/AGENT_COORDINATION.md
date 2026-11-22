@@ -94,6 +94,20 @@ is unreachable, so those two never look the same either. Writing an entry is
 best-effort and returns `False` when it fails: the claim is already held by
 then, so a failed audit write must not fail the work it describes.
 
+**The Chroma collection write lease** (#20992) is this registry, scope `kb:chroma/<collection>`: every write
+(`add`/`upsert`/`update`/`delete`) through a client from `get_chromadb_client` / `get_async_chromadb_client` holds a
+SHARED claim for the write (`utils/leased_chroma.py`, `autobot_shared/coordination/collection_lease.py`), and the approved
+empty-collection delete holds the EXCLUSIVE one, counts, and deletes only at zero. Writers wait (bounded) for a delete;
+**writers fail open, the delete fails closed**: with Redis unreachable a writer proceeds without the lease and logs a
+warning naming the collection (never data), while the delete (a live writer, an unreachable Redis or a lapsed lease)
+means "did not run", so no delete can race a write during an outage. A lease lost while Redis is up is a real
+conflict: the writer confirms it just before the Chroma call and raises `CollectionLeaseUnavailable` instead of
+writing. Renewal is lazy (one shared thread, only for blocks outliving a third of the TTL). The writer's wait is a
+blocking poll, so call the write from `asyncio.to_thread`; on a running event loop the wait raises instead of sleeping.
+A new Chroma writer opens its client through those two functions; one that builds its own client bypasses the lease.
+
+**The trainmaster role** is a `task` claim in the ledger: the trainmaster holds `task trainmaster` as a timed claim and renews it at each train build and landing, because `ledger beat` does not extend the expiry. `ledger who task trainmaster` answers whether one is active; PR-granularity rules that depend on it ([CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#pr-granularity)) read that answer.
+
 ## Design tests
 
 Any "no" needs a written justification in the issue.

@@ -53,10 +53,21 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.llm_handler import _emit_before_tool_execute
 
 logger = get_logger(__name__)
+
+
+def caller_identity(ctx: Any, session_id: str = "") -> dict[str, str | None]:
+    """The AUTHENTICATED caller of this chat turn, as ``dispatch()`` keyword arguments (#20709).
+
+    ``user_id`` is read from the server-verified context key only -- never from tool arguments or the
+    request's own ``user_id`` claim, so the model cannot choose who an action is attributed to.
+    """
+    user_id = (getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY) or None
+    return {"session_id": session_id or None, "user_id": user_id}
 
 
 async def permission_denial(

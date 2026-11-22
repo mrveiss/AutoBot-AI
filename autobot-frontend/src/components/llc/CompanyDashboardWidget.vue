@@ -11,6 +11,9 @@
 import { BaseBadge, BaseButton, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
+import AgentRunBadge from '@/components/llc/AgentRunBadge.vue'
+import { agentLabelMap } from '@/composables/llc/agentLabels'
 import { agentStatusColor, type RunDisplayStatus } from '@/composables/llc/llcStatus'
 import type { CompanyWidgetType } from '@/composables/dashboard/companyOsDashboard'
 import type { BudgetInfo, CompanyDashboardData } from '@/views/llc/companyDashboardTypes'
@@ -35,18 +38,12 @@ function budgetBarColor(b: BudgetInfo): string {
   return 'bg-autobot-success'
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—'
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
+const DURATION_OPTIONS = { style: 'msSeconds1dp' } as const
 
-function formatTime(ts: string): string {
-  if (!ts) return '—'
-  return new Date(ts).toLocaleTimeString()
-}
+const formatTime = createDateFormatter({ kind: 'time', emptyText: '—' })
 
 const { t } = useI18n()
+const agentLabels = computed(() => agentLabelMap(props.data.agents))
 // #17562: the runs list is the kit table; time and duration are formatted before they reach it.
 const runColumns = computed<BaseTableColumn[]>(() => [
   { key: 'agent_name', label: t('llc.dashboard.colAgent') },
@@ -60,7 +57,7 @@ const runRows = computed(() =>
     agent_name: run.agent_name,
     status: run.status,
     started: formatTime(run.started_at),
-    duration: formatDuration(run.duration_ms),
+    duration: formatDuration(run.duration_ms, DURATION_OPTIONS),
   })),
 )
 </script>
@@ -117,10 +114,11 @@ const runRows = computed(() =>
         <div v-for="agent in data.agents" :key="agent.id" class="flex flex-col gap-1 rounded-lg border border-autobot-border bg-autobot-bg-card p-3">
           <div class="flex items-center gap-2">
             <span class="h-2.5 w-2.5 flex-shrink-0 rounded-full" :class="agentStatusColor(agent.status)" />
-            <span class="truncate text-sm font-medium text-autobot-text-primary">{{ agent.name }}</span>
+            <span class="truncate text-sm font-medium text-autobot-text-primary">{{ agentLabels.get(agent.id) ?? agent.name }}</span>
           </div>
           <span class="truncate text-xs text-autobot-text-muted">{{ agent.title }}</span>
           <span class="self-start rounded bg-autobot-bg-tertiary px-1.5 py-0.5 text-xs text-autobot-text-secondary">{{ agent.adapter_type }}</span>
+          <AgentRunBadge :agent="agent" class="self-start" />
         </div>
       </div>
     </template>

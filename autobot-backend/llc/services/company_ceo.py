@@ -30,7 +30,10 @@ from models.agent_org import AgentOrgNode, OrgRole
 from ..models.company_ceo import LLCCompanyCEO
 from ..models.enums import LLCAgentStatus, RoleHolderType
 from ..models.membership import LLCCompanyMembership
+from .activity_log import LLCActivityLogService
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError
+from .heartbeat_activity import record_heartbeat_set
 
 #: The holders a company may designate. Mirrors ``_PLACEABLE`` in
 #: :mod:`llc.services.reporting_line`: a contact is not a member of the
@@ -49,6 +52,9 @@ DEFAULT_CEO_ORG_ROLE = OrgRole.MANAGER.value
 #: budget watchdog already agree on. The node is kept, never deleted -- entities
 #: acquire references, and deleting one turns a wrong row into a dangling one.
 DORMANT_CEO_STATUS = LLCAgentStatus.INACTIVE.value
+
+#: Why a deleted company's heartbeats were switched off (activity-row metadata).
+COMPANY_DELETED_REASON = "company soft-deleted"
 
 #: Why a demotion left the node dormant. ``inactive`` alone does not say: the budget
 #: watchdog writes it too, for a node that must stop. A promotion reactivates only a
@@ -153,7 +159,7 @@ class CompanyCEOService(LLCServiceBase):
                 )
             )
         if result.scalars().first() is None:
-            raise ValueError(f"{holder_type} {holder_id} is not part of company {company_id}")
+            raise CompanyOsError(f"{holder_type} {holder_id} is not part of company {company_id}")
 
     async def set_ceo(
         self, session: AsyncSession, company_id: uuid.UUID, holder_type: str, holder_id: uuid.UUID
@@ -164,7 +170,7 @@ class CompanyCEOService(LLCServiceBase):
         unique constraint on ``company_id`` would reject a second row anyway.
         """
         if holder_type not in _DESIGNABLE:
-            raise ValueError(f"a {holder_type} cannot hold the CEO position")
+            raise CompanyOsError(f"a {holder_type} cannot hold the CEO position")
         await self._require_in_company(session, company_id, holder_type, holder_id)
 
         row = await self.designation(session, company_id)
@@ -203,6 +209,45 @@ class CompanyCEOService(LLCServiceBase):
             await self.provision_default(session, company_id)
             return
         await self._retire(session, company_id)
+
+    async def stop_company_heartbeats(
+        self, session: AsyncSession, company_id: uuid.UUID, actor_user_id: Optional[str] = None
+    ) -> None:
+        """Switch off every heartbeat of a company that is being soft-deleted (#15907).
+
+        The scheduler and the dispatch gate never read ``organizations.deleted_at``,
+        so a deleted company's agents would keep running. Each agent switched off gets
+        the same activity row as the single-agent toggle. The CEO then goes through the
+        one retire path; no row is deleted and the setting stays switchable.
+        """
+        enabled = await session.execute(
+            sa.select(AgentOrgNode.id, AgentOrgNode.heartbeat_cron).where(
+                AgentOrgNode.company_id == company_id, AgentOrgNode.heartbeat_enabled.is_(True)
+            )
+        )
+        for node_id, cron in enabled.all():
+            await self._switch_off(session, company_id, node_id, cron, actor_user_id)
+        await self._retire(session, company_id)
+
+    async def _switch_off(
+        self,
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        node_id: uuid.UUID,
+        cron: Optional[str],
+        actor: Optional[str],
+    ) -> None:
+        await session.execute(sa.update(AgentOrgNode).where(AgentOrgNode.id == node_id).values(heartbeat_enabled=False))
+        await record_heartbeat_set(
+            LLCActivityLogService(),
+            session,
+            str(company_id),
+            node_id,
+            actor,
+            before={"heartbeat_enabled": True, "heartbeat_cron": cron},
+            after={"heartbeat_enabled": False, "heartbeat_cron": cron},
+            metadata={"reason": COMPANY_DELETED_REASON},
+        )
 
     async def _retire(self, session: AsyncSession, company_id: uuid.UUID) -> None:
         """Drop a sub-organization's CEO designation and make its default CEO node dormant.
@@ -262,6 +307,8 @@ class CompanyCEOService(LLCServiceBase):
                 agent.pause_reason = None
             return agent
 
+        # Exempt from require_approval_for_hires (#8214) on purpose: a company needs its first agent, and no
+        # board exists to approve it until it has one. Only the default CEO is created here, once per company.
         try:
             async with session.begin_nested():
                 agent = AgentOrgNode(

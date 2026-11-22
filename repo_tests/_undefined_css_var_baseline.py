@@ -102,11 +102,10 @@ UNDEFINED_CSS_VAR_NAMES: dict[str, int] = {
     "--terminal-scrollbar-track": 1,
     "--terminal-yellow": 1,
     "--text-disabled": 5,
-    "--text-on-primary-bg": 1,
     "--text-primary-dark": 1,
     "--text-tertiary-alpha-10": 1,
     "--token-name": 1,
 }
 
 #: Frozen total, asserted separately so a per-name edit cannot drift it unseen.
-TOTAL_SITES = 128  # #18819: -5, the deleted ErrorBanner and ui/BaseAlert were the only users of five undefined vars
+TOTAL_SITES = 127  # #18819: -5, the deleted ErrorBanner and ui/BaseAlert were the only users of five undefined vars

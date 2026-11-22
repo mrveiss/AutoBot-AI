@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
+from utils.file_categorization import HTML_EXTENSIONS, SKIP_DIRS
 
 logger = get_logger(__name__)
 
@@ -159,7 +160,7 @@ class SecurityFixToolBase:
     # Subclasses supply ``xss_patterns`` and the three ``_..._block`` hooks
     # (the exact text inserted, so each tool's output is byte-for-byte kept).
 
-    _HTML_EXTENSIONS = (".html", ".htm")
+    _HTML_EXTENSIONS = tuple(sorted(HTML_EXTENSIONS))
 
     def _csp_header(self) -> str:
         """Hook: the CSP ``<meta>`` tag (without surrounding newlines)."""
@@ -284,10 +285,9 @@ class ConsoleLogToolBase:
 
     # Class-level defaults shared by both tools (#18557 slice 2); instances get
     # their own copies in ``__init__`` so per-instance mutation stays local.
-    _SKIP_DIRS = (
-        "node_modules", "dist", "build", ".git", "__pycache__", "coverage", ".next",
-        ".nuxt", "out", "tests", "test", "__tests__", "e2e", ".cache", "temp", "tmp",
-    )  # fmt: skip
+    # Canonical skip dirs plus extras: test trees and other output dirs are not
+    # console.log targets.
+    _SKIP_DIRS = SKIP_DIRS | {"out", "tests", "test", "__tests__", "e2e", "tmp"}
     _TARGET_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx", ".vue", ".mjs")
 
     def __init__(self, project_root: str, backup_dir: str = None):
@@ -306,7 +306,11 @@ class ConsoleLogToolBase:
 
     def should_process_file(self, file_path: Path) -> bool:
         """Check if file should be processed."""
-        if any(part in self.skip_dirs for part in file_path.parts):
+        try:
+            parts = file_path.relative_to(self.project_root).parts
+        except ValueError:
+            parts = file_path.parts
+        if any(part in self.skip_dirs for part in parts):
             return False
         if file_path.suffix not in self.target_extensions:
             return False

@@ -22,23 +22,17 @@
  */
 
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
+import {
+  EFFECTIVE_THEMES, THEMES, colorSchemeFor, resolveTheme, applyThemeToDocument,
+  readStoredTheme, writeStoredTheme,
+  type EffectiveTheme, type Theme,
+} from '@autobot/ui'
 import { THEME_PRESETS, type ThemePreset } from './themePresets'
 
-/** The built-in themes a `data-theme` attribute can carry (#18223). `contrast`
- * (high contrast) and `mono` (monochrome) are light-based accessibility and
- * corporate themes; css/themes/{contrast,mono}.css style them. */
-export const EFFECTIVE_THEMES = ['light', 'dark', 'contrast', 'mono'] as const
-export type EffectiveTheme = (typeof EFFECTIVE_THEMES)[number]
-
-/** Available theme options: the built-ins plus `system`, which follows the OS
- * between `light` and `dark`. */
-export const THEMES = [...EFFECTIVE_THEMES, 'system'] as const
-export type Theme = (typeof THEMES)[number]
-
-/** The `color-scheme` a theme renders with (native controls, scrollbars). */
-export function colorSchemeFor(theme: EffectiveTheme): 'dark' | 'light' {
-  return theme === 'dark' ? 'dark' : 'light'
-}
+// The theme names, the storage key and the apply step live in the shared kit so the SLM
+// frontend uses the same ones (#18239); re-exported here for the existing importers.
+export { EFFECTIVE_THEMES, THEMES, colorSchemeFor }
+export type { EffectiveTheme, Theme }
 
 /** Available accent color options */
 export type AccentColor = 'theme' | 'blue' | 'green' | 'purple' | 'orange' | 'pink' | 'teal' | 'indigo' | 'red'
@@ -52,7 +46,6 @@ export type { ThemePreset, ThemePresetConfig } from './themePresets'
 export { THEME_PRESETS } from './themePresets'
 
 /** Storage keys for persisting preferences */
-const THEME_STORAGE_KEY = 'autobot-theme'
 const ACCENT_STORAGE_KEY = 'autobot-accent-color'
 const PRESET_STORAGE_KEY = 'autobot-theme-preset'
 
@@ -75,26 +68,13 @@ const currentPreset = ref<ThemePreset | null>(null)
 /** Track if theme has been initialized */
 let isInitialized = false
 
-/**
- * Determines the effective theme based on current setting and system preference
- */
-function getEffectiveTheme(theme: Theme): EffectiveTheme {
-  if (theme === 'system') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  }
-  return theme
-}
+const getEffectiveTheme = resolveTheme
 
 /**
  * Applies the theme to the document root element
  */
 function applyTheme(theme: Theme): void {
-  const effectiveTheme = getEffectiveTheme(theme)
-  document.documentElement.setAttribute('data-theme', effectiveTheme)
-
-  // Also update color-scheme for native elements (scrollbars, form controls)
-  document.documentElement.style.colorScheme = colorSchemeFor(effectiveTheme)
-
+  applyThemeToDocument(theme)
   syncMetaThemeColor()
 }
 
@@ -123,16 +103,7 @@ function applyAccentColor(accent: AccentColor): void {
   document.documentElement.setAttribute('data-accent', accent)
 }
 
-/**
- * Saves theme preference to localStorage
- */
-function saveTheme(theme: Theme): void {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme)
-  } catch {
-    // localStorage may be unavailable in some contexts
-  }
-}
+const saveTheme = writeStoredTheme
 
 /**
  * Saves accent color preference to localStorage
@@ -156,19 +127,9 @@ function savePreset(preset: ThemePreset | null): void {
   }
 }
 
-/**
- * Loads theme preference from localStorage
- */
+/** Loads theme preference from localStorage */
 function loadTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-    if (stored && (THEMES as readonly string[]).includes(stored)) {
-      return stored
-    }
-  } catch {
-    // localStorage may be unavailable
-  }
-  return DEFAULT_THEME
+  return readStoredTheme() ?? DEFAULT_THEME
 }
 
 /**
@@ -220,13 +181,6 @@ function applyPreset(preset: ThemePreset): void {
 
   applyTheme(config.theme)
   applyAccentColor(config.accentColor)
-
-  // Apply high contrast mode if specified
-  if (config.highContrast) {
-    document.documentElement.setAttribute('data-high-contrast', 'true')
-  } else {
-    document.documentElement.removeAttribute('data-high-contrast')
-  }
 }
 
 /**
@@ -328,11 +282,10 @@ export function useTheme() {
     clearNamedPreset()
   }
 
-  /** A manual theme or accent change leaves no named preset; high contrast goes with it */
+  /** A manual theme or accent change leaves no named preset */
   function clearNamedPreset(): void {
     currentPreset.value = presetFor(NO_NAMED_PRESET, currentTheme.value, currentAccent.value)
     savePreset(null)
-    document.documentElement.removeAttribute('data-high-contrast')
   }
 
   /**
@@ -415,6 +368,7 @@ export function useTheme() {
     dark: 'Dark',
     light: 'Light',
     contrast: 'High contrast',
+    'contrast-dark': 'High contrast dark',
     mono: 'Monochrome',
     system: 'System',
   }
@@ -427,6 +381,9 @@ export function useTheme() {
     dark: 'ui.themeToggle.dark',
     light: 'ui.themeToggle.light',
     contrast: 'ui.themeToggle.highContrast',
+    // The preset's own name (already translated in every locale), so the
+    // picker needs no new key (#18253).
+    'contrast-dark': 'ui.themePresets.names.high-contrast-dark',
     mono: 'ui.themeToggle.monochrome',
     system: 'ui.themeToggle.system',
   }
@@ -563,16 +520,12 @@ export function initializeTheme(): void {
     currentAccent.value = config.accentColor
     applyTheme(config.theme)
     applyAccentColor(config.accentColor)
-    if (config.highContrast) {
-      document.documentElement.setAttribute('data-high-contrast', 'true')
-    }
   } else {
     // Fallback to individual settings
     const savedTheme = loadTheme()
     const savedAccent = loadAccentColor()
     applyTheme(savedTheme)
     applyAccentColor(savedAccent)
-    document.documentElement.removeAttribute('data-high-contrast')
     currentTheme.value = savedTheme
     currentAccent.value = savedAccent
     currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)

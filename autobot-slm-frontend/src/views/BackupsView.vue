@@ -15,14 +15,14 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { formatBytes } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
+import { errorText } from '@/utils/errorText'
 import { useI18n } from 'vue-i18n'
 import type { Backup, BackupRequest } from '@/types/slm'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, formatBytes } from '@autobot/ui'
 
 const { showToast } = useToast()
 // #13307: confirm/error strings go through i18n like the rest of the view;
@@ -113,10 +113,6 @@ async function handleDeleteBackup(backupId: string): Promise<void> {
   }
 }
 
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : 'Unknown error'
-}
-
 // =============================================================================
 // Utilities
 // =============================================================================
@@ -134,11 +130,6 @@ function getBackupStatusClass(state: string): string {
     default:
       return 'bg-gray-100 text-gray-800'
   }
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -200,7 +191,7 @@ function getNodeHostname(nodeId: string): string {
               {{ backup.service_type }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
+              {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: t('common.zeroSize') }) }}
             </td>
             <!-- #13307: backup_path was already in the API response and the
                  page never rendered it, which is the whole of "no idea where
@@ -217,7 +208,7 @@ function getNodeHostname(nodeId: string): string {
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatDate(backup.started_at) }}
+              {{ formatFleetDateTime(backup.started_at, '-') }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
               <button

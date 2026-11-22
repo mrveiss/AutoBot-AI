@@ -89,6 +89,23 @@ def wire_llm_service(app: FastAPI) -> None:
         logger.exception("LLM service NOT wired onto app.state; chat resolves it per request (#18689)")
 
 
+def wire_llm_spend_recorder() -> None:
+    """Register the canonical spend recorder for the shared-layer call sites (#19650).
+
+    ``autobot_shared`` and ``llm_shared`` cannot import ``services``, so the
+    router's Claude escalation and the pre-action verifier report spend through
+    a hook, and this is the one place that installs it. Without it they warn
+    once per site and record nothing.
+    """
+    try:
+        from autobot_shared.spend_recording import register_spend_recorder
+        from services.llm_usage_recording import record_response_usage
+
+        register_spend_recorder(record_response_usage)
+    except Exception:
+        logger.exception("LLM spend recorder NOT registered; router escalation and verifier spend go unrecorded")
+
+
 async def start_background_workers(app: FastAPI) -> None:
     """Wire the shared LLM service, then start every lifetime worker, in one call from the lifespan.
 
@@ -98,9 +115,46 @@ async def start_background_workers(app: FastAPI) -> None:
     worker at all, which is how #17548 happened.
     """
     wire_llm_service(app)
+    wire_llm_spend_recorder()
     await start_doc_sync_queue_worker(app)
     await start_vector_reconciler(app)
     await start_telegram_poller(app)
+    await start_schedule_reconciler(app)
+    from services.approval_expiry_scheduler import start_approval_expiry_scheduler
+
+    await start_approval_expiry_scheduler(app)
+    await adopt_chat_shares()
+
+
+async def adopt_chat_shares() -> None:
+    """Move pre-#18890 Redis-only chat shares into the durable table now, so none lapses before first use.
+
+    Non-fatal: the same adoption runs lazily on the first share, unshare or Redis read-miss.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+        from security.session_shares import adopt_redis_shares
+
+        await adopt_redis_shares(await get_redis_client(async_client=True, database="main"))
+    except Exception:
+        logger.exception("Chat share adoption deferred to first use; old Redis-only shares keep their TTL until then")
+
+
+async def start_schedule_reconciler(app: FastAPI) -> None:
+    """Start the heartbeat-schedule reconcile loop (#20117).
+
+    Independent of the pollers it repairs: it keeps running when ``RoutineScheduler``
+    failed to start, which is the case where due routine members otherwise sit unread.
+    """
+    try:
+        from llc.scheduler.schedule_reconcile import SCHEDULE_RECONCILE_INTERVAL_SECONDS, reconcile_loop
+
+        app.state.schedule_reconciler_task = asyncio.create_task(reconcile_loop(), name="llc-schedule-reconciler")
+        logger.info("LLC schedule reconciler: started, every %.0fs", SCHEDULE_RECONCILE_INTERVAL_SECONDS)
+    except Exception:
+        logger.exception(
+            "LLC schedule reconciler NOT started; a member lost from the schedule stays lost until restart"
+        )
 
 
 async def start_telegram_poller(app: FastAPI) -> None:
@@ -116,7 +170,9 @@ async def start_telegram_poller(app: FastAPI) -> None:
 __all__ = [
     "start_background_workers",
     "start_doc_sync_queue_worker",
+    "start_schedule_reconciler",
     "start_telegram_poller",
     "start_vector_reconciler",
     "wire_llm_service",
+    "wire_llm_spend_recorder",
 ]

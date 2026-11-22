@@ -118,12 +118,9 @@
           <div v-if="isAgentExpanded(agent.id)" class="expanded-details">
             <div class="detail-section">
               <h5>{{ t('visualizations.agentActivity.recentTasks') }}</h5>
-              <ul class="task-list">
-                <li
-                  v-for="task in agent.recentTasks"
-                  :key="task.id"
-                  :class="task.status"
-                >
+              <p v-if="!agent.recentTasks?.length">{{ recentTasksEmptyText(agent) }}</p>
+              <ul v-else class="task-list">
+                <li v-for="task in agent.recentTasks" :key="task.id" :class="task.status">
                   <span class="task-name">{{ task.name }}</span>
                   <span class="task-time">{{ formatTimeAgo(task.completedAt) }}</span>
                 </li>
@@ -160,8 +157,9 @@
             <span class="name">{{ agent.name }}</span>
           </div>
           <div class="activity-bars">
+            <span v-if="agent.activityTimeline == null">{{ t('visualizations.agentActivity.notReported') }}</span>
             <div
-              v-for="(activity, idx) in agent.activityTimeline"
+              v-for="(activity, idx) in agent.activityTimeline ?? []"
               :key="idx"
               class="activity-bar"
               :class="activity.type"
@@ -211,10 +209,10 @@ import { useRouter } from 'vue-router'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
-import { useAgentActivityData, type Agent } from '@/composables/visualizations/useAgentActivityData'
+import { useAgentActivityData, type ActivityAgent } from '@/composables/visualizations/useAgentActivityData'
 import { agentActivityFormat } from '@/composables/visualizations/agentActivityFormat'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 // Props
@@ -232,8 +230,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Emit
 const emit = defineEmits<{
-  (e: 'agent-click', agent: Agent): void
-  (e: 'pause-agent', agent: Agent): void
+  (e: 'agent-click', agent: ActivityAgent): void
+  (e: 'pause-agent', agent: ActivityAgent): void
 }>()
 
 // State
@@ -248,17 +246,13 @@ const activeAgentCount = computed(() => {
 
 // #17514: a status nobody reported is not "idle"; the header says so instead of "0 active".
 const statusReported = computed(() => agents.value.some(a => a.status != null))
-const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate } = agentActivityFormat(t)
+const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, timelineLabels, truncate } = agentActivityFormat(t, () => locale.value)
 
-const timeLabels = computed(() => {
-  const now = new Date()
-  const labels: string[] = []
-  for (let i = 5; i >= 0; i--) {
-    const hour = new Date(now.getTime() - i * 60 * 60 * 1000)
-    labels.push(hour.getHours().toString().padStart(2, '0') + ':00')
-  }
-  return labels
-})
+const timeLabels = computed(() => timelineLabels(agents.value.find(a => a.activityWindowStart != null)?.activityWindowStart))
+
+function recentTasksEmptyText(agent: ActivityAgent): string {
+  return t(agent.recentTasks == null ? 'visualizations.agentActivity.notReported' : 'visualizations.agentActivity.noRecentTasks')
+}
 
 function getEventIcon(type: string): string {
   const icons: Record<string, string> = {
@@ -277,16 +271,16 @@ function toggleExpand(agentId: string) {
   if (!wasExpanded) expandAgent(agentId)
 }
 
-function viewDetails(agent: Agent) {
+function viewDetails(agent: ActivityAgent) {
   emit('agent-click', agent)
 }
 
 // TASK 8: open the per-agent activity diary (logs) for a failed agent
-function viewLogs(agent: Agent) {
+function viewLogs(agent: ActivityAgent) {
   router.push({ path: '/agents/activity', query: { agent: agent.id } })
 }
 
-function pauseAgent(agent: Agent) {
+function pauseAgent(agent: ActivityAgent) {
   emit('pause-agent', agent)
 }
 
@@ -393,7 +387,7 @@ defineExpose({
 }
 
 .view-toggle button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 
@@ -827,7 +821,7 @@ defineExpose({
   gap: var(--spacing-2);
 }
 
-.activity-feed h4 i {
+.activity-feed h4 .icon {
   color: var(--color-warning);
 }
 

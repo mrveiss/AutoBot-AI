@@ -75,6 +75,7 @@ ACTION_ALIASES: dict[str, str] = {
     "sso_unlinked": "sso.unlink",
     "user_activated": "user.activate",
     "user_deactivated": "user.deactivate",
+    "platform_admin_changed": "user.platform_admin_change",  # #20670
     "team_created": "team.create",
     "team_updated": "team.update",
     "team_deleted": "team.delete",

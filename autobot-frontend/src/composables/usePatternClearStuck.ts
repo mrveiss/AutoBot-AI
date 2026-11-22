@@ -6,6 +6,7 @@
  * The clear-stuck route requires admin; the analysis flow calls it
  * automatically as recovery, so a non-admin 403 must not break the flow.
  */
+import { isHttpError } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -16,7 +17,7 @@ export const CLEAR_STUCK_FORBIDDEN_MESSAGE = 'Clearing stuck tasks requires admi
 
 /** True for the `HTTP 403: ...` error ApiClient throws on a refused request. */
 export function isClearStuckForbidden(e: unknown): boolean {
-  const forbidden = e instanceof Error && e.message.startsWith('HTTP 403')
+  const forbidden = isHttpError(e) && e.status === 403
   if (forbidden) logger.debug('clear-stuck refused (403, not admin); continuing without it')
   return forbidden
 }
