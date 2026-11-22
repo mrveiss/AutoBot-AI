@@ -98,3 +98,6 @@ async def get_full_tree_drift(
         checked_at=checked_at,
         errors=[f"{component.component}: {component.error}" for component in components if component.error],
     )
+
+
+from api import drift_prune  # noqa: E402,F401 -- registers POST /drift/prune[/preview] onto `router` (#22082)

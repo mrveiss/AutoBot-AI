@@ -2231,6 +2231,17 @@
     "hostStateCategory": "{category}: {count} file(s)",
     "noDrift": "No drift — nothing to remove or report",
     "noReportYet": "No report yet — click \"Check All Files\" to run a full-tree drift check",
+    "prune": {
+      "cancel": "Cancel",
+      "confirm": "Confirm removal of {count} file(s)",
+      "intro": "Git proves these files were deleted from source and they are still deployed. Only these files are removed. Host state, build bundles and modified files are never touched.",
+      "previewAction": "Preview removal",
+      "previewing": "Loading preview…",
+      "removing": "Removing…",
+      "result": "Removed {removed} file(s); {left} left in place",
+      "resultDetail": "{path}: {reason}",
+      "title": "{count} file(s) would be removed from {component}"
+    },
     "removedAtCommit": "removed from source at {commit}",
     "skipped": "Not deployed on this host",
     "title": "Full-Tree Drift Check",

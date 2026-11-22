@@ -32,10 +32,13 @@ import {
   type FullTreeComponentDrift,
   type FullTreeFileVerdict,
 } from '@/composables/useCodeSync'
+import { useDriftPrune } from '@/composables/useDriftPrune'
 
 // No script-side i18n needed here -- every string is rendered through the
 // template's global `$t` (registered app-wide, see @/i18n/index.ts).
 const codeSync = useCodeSync()
+// #22082: preview, then confirm, the removal of the removed_from_source files.
+const prune = useDriftPrune()
 
 type VerdictFilter = 'all' | 'modified' | 'removed_from_source' | 'build_bundle' | 'host_state'
 
@@ -89,6 +92,21 @@ async function handleCheck(): Promise<void> {
   isChecking.value = false
 }
 
+async function handlePrunePreview(component: string): Promise<void> {
+  await prune.preview(component)
+}
+
+async function handlePruneConfirm(component: string): Promise<void> {
+  const outcome = await prune.confirm(component)
+  // The removal changes what the drift check would report, so re-run it.
+  if (outcome) await codeSync.fetchFullTreeDrift()
+}
+
+function pruneOutcomeDetails(component: string): [string, string][] {
+  const outcome = prune.results.value[component]
+  return outcome ? [...Object.entries(outcome.refused), ...Object.entries(outcome.failed)] : []
+}
+
 function formatChecked(value: string | undefined): string {
   return value ? formatFleetDateTime(value) : '-'
 }
@@ -115,6 +133,7 @@ function formatChecked(value: string | undefined): string {
     </div>
 
     <BaseAlert v-if="codeSync.fullTreeDriftError.value" variant="error" size="compact" :message="codeSync.fullTreeDriftError.value" />
+    <BaseAlert v-if="prune.error.value" variant="error" size="compact" :message="prune.error.value" />
 
     <div v-if="report" class="px-4 py-3" data-testid="full-tree-drift-report">
       <div class="flex items-center gap-3 mb-3 text-sm text-gray-500">
@@ -154,6 +173,13 @@ function formatChecked(value: string | undefined): string {
         </div>
 
         <template v-if="!component.skipped && !component.error">
+          <div v-if="prune.results.value[component.component]" class="mt-2 text-xs text-gray-700" data-testid="drift-prune-result">
+            {{ $t('fullTreeDriftPanel.prune.result', { removed: prune.results.value[component.component].removed.length, left: pruneOutcomeDetails(component.component).length }) }}
+            <div v-for="[path, reason] in pruneOutcomeDetails(component.component)" :key="path" class="font-mono text-gray-500">
+              {{ $t('fullTreeDriftPanel.prune.resultDetail', { path, reason }) }}
+            </div>
+          </div>
+
           <div v-if="showsGroup('modified') && filesByVerdict(component, 'modified').length" class="mb-2">
             <div class="text-xs font-medium text-yellow-700 mb-1">{{ $t('fullTreeDriftPanel.filter.modified') }}</div>
             <ul class="text-xs font-mono text-gray-700 space-y-0.5">
@@ -169,6 +195,39 @@ function formatChecked(value: string | undefined): string {
                 <span class="text-gray-400">{{ $t('fullTreeDriftPanel.removedAtCommit', { commit: file.detail ?? '' }) }}</span>
               </li>
             </ul>
+            <div class="mt-2" data-testid="drift-prune">
+              <button
+                v-if="!prune.previews.value[component.component]"
+                @click="handlePrunePreview(component.component)"
+                :disabled="prune.busyComponent.value !== null"
+                class="btn btn-secondary text-sm"
+                data-testid="drift-prune-preview"
+              >
+                {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.previewing') : $t('fullTreeDriftPanel.prune.previewAction') }}
+              </button>
+              <div v-else class="rounded-md border border-red-200 bg-red-50 p-3" data-testid="drift-prune-confirm">
+                <div class="text-xs font-medium text-red-800 mb-1">
+                  {{ $t('fullTreeDriftPanel.prune.title', { count: prune.previews.value[component.component].files.length, component: component.component }) }}
+                </div>
+                <p class="text-xs text-gray-600 mb-2">{{ $t('fullTreeDriftPanel.prune.intro') }}</p>
+                <ul class="text-xs font-mono text-gray-700 space-y-0.5 mb-2" data-testid="drift-prune-files">
+                  <li v-for="file in prune.previews.value[component.component].files" :key="file.path">{{ file.path }}</li>
+                </ul>
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="handlePruneConfirm(component.component)"
+                    :disabled="prune.busyComponent.value !== null"
+                    class="btn btn-primary text-sm"
+                    data-testid="drift-prune-confirm-button"
+                  >
+                    {{ prune.busyComponent.value === component.component ? $t('fullTreeDriftPanel.prune.removing') : $t('fullTreeDriftPanel.prune.confirm', { count: prune.previews.value[component.component].files.length }) }}
+                  </button>
+                  <button @click="prune.cancel(component.component)" class="btn btn-secondary text-sm">
+                    {{ $t('fullTreeDriftPanel.prune.cancel') }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div v-if="showsGroup('build_bundle') && buildBundleCount(component) > 0" class="text-xs text-gray-500 mb-2">
