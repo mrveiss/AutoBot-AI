@@ -31,7 +31,8 @@ def connector_secret_name(connector_id: str) -> str:
     return f"{CONNECTOR_NAME_PREFIX}{connector_id}:auth"
 
 
-async def _find_by_marker(session, sqlite_id: str, owner_uuid):
+async def _find_by_marker(session, sqlite_id: str, owner_vault: str):
+    """The active envelope copy marked for *sqlite_id* in *owner_vault* (the owning vault, not the creator)."""
     from sqlalchemy import select
 
     from models.secret import Secret
@@ -42,7 +43,7 @@ async def _find_by_marker(session, sqlite_id: str, owner_uuid):
             await session.execute(
                 select(Secret).where(
                     marker == str(sqlite_id),
-                    Secret.owner_id == owner_uuid,
+                    Secret.owner_vault == owner_vault,
                     Secret.is_active.is_(True),
                 )
             )
@@ -64,14 +65,14 @@ async def mirror_in_session(
 ) -> None:
     """Testable core: upsert the envelope copy within *session* (caller commits).
 
-    Rotates an existing copy (matched by marker + owner); creates one when absent and
+    Rotates an existing copy (matched by marker + owning vault); creates one when absent and
     ``name``/``secret_type`` are supplied (the create paths). Owner not a uuid → no-op.
     """
     ctx = _mirror_context(owner_id, root_key)
     if ctx is None:
         return  # owner isn't a uuid → cannot key an envelope row
     owner_uuid, vault, svc = ctx
-    row = await _find_by_marker(session, sqlite_id, owner_uuid)
+    row = await _find_by_marker(session, sqlite_id, vault.to_str())
     if row is None and name and secret_type:
         await _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, name, secret_type)
     else:
@@ -105,7 +106,7 @@ async def _rotate_or_skip(session, svc, vault, row, sqlite_id: str, value: str) 
     )
 
 
-def _adoptable(existing, secret_type, sqlite_id) -> str | None:
+async def _adoptable(session, svc, existing, secret_type, sqlite_id) -> str | None:
     """None when *existing* is safe to adopt as this credential's mirror, else the failed condition."""
     if not existing.is_live:
         return "inactive"
@@ -114,6 +115,8 @@ def _adoptable(existing, secret_type, sqlite_id) -> str | None:
     marker = (existing.extra_data or {}).get(_MARKER)
     if marker is not None and marker != str(sqlite_id):
         return "marked_for_another_credential"
+    if await svc.grantees(session, existing.id) - {existing.owner_vault}:
+        return "granted_to_another_vault"  # a rotation re-wraps for every grantee
     return None
 
 
@@ -132,43 +135,40 @@ async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, nam
     """
     plaintext = value.encode("utf-8")
     existing = await svc.find_by_name(session, owner_vault=vault.to_str(), name=name)
-    if existing is not None:
-        if (refusal := _adoptable(existing, secret_type, sqlite_id)) is not None:
-            logger.warning("Envelope mirror skipped: same-name row not adoptable (%s)", refusal)
-            return
-        await svc.rotate_value(
-            session,
-            secret_id=existing.id,
-            new_plaintext=plaintext,
-            actor_vaults={vault},
-        )
-        target = existing
-    else:
+    if existing is None:
         target = await svc.create(
-            session,
-            owner_vault=vault,
-            name=name,
-            secret_type=secret_type,
-            plaintext=plaintext,
-            created_by=owner_uuid,
+            session, owner_vault=vault, name=name, secret_type=secret_type, plaintext=plaintext, created_by=owner_uuid
         )
+    else:
+        target = existing
+    # An existing row, or one a concurrent create returned, is adopted only when safe; a fresh row always is.
+    if (target is existing or getattr(target, "already_existed", False)) and not await _may_adopt(
+        session, svc, target, secret_type, sqlite_id
+    ):
+        return
+    if target is existing:
+        await svc.rotate_value(session, secret_id=target.id, new_plaintext=plaintext, actor_vaults={vault})
     await _stamp_marker(session, target, sqlite_id)
+
+
+async def _may_adopt(session, svc, target, secret_type, sqlite_id) -> bool:
+    """True when *target* may be adopted; otherwise the fixed refusal condition is logged (no ids, no names)."""
+    refusal = await _adoptable(session, svc, target, secret_type, sqlite_id)
+    if refusal is not None:
+        logger.warning("Envelope mirror skipped: same-name row not adoptable (%s)", refusal)
+    return refusal is None
 
 
 async def delete_in_session(session, sqlite_id: str, owner_id: str, root_key: bytes) -> None:
     """Testable core: delete the envelope copy within *session* by marker (caller commits)."""
-    import uuid
-
-    from services.envelope_secrets_service import EnvelopeSecretsService
-
-    try:
-        owner_uuid = uuid.UUID(str(owner_id))
-    except ValueError:
+    ctx = _mirror_context(owner_id, root_key)
+    if ctx is None:
         return
-    row = await _find_by_marker(session, sqlite_id, owner_uuid)
+    _owner_uuid, vault, svc = ctx
+    row = await _find_by_marker(session, sqlite_id, vault.to_str())
     if row is None:
         return
-    await EnvelopeSecretsService(root_key=root_key).delete(session, secret_id=row.id)
+    await svc.delete(session, secret_id=row.id)
 
 
 def _root_key_or_none():

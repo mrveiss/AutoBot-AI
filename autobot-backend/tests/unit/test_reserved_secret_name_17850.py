@@ -178,3 +178,14 @@ async def test_existing_connector_rows_are_not_gated(monkeypatch, method, servic
         pytest.fail(f"{method} refused an existing connector-named row")
 
     getattr(service, service_call).assert_awaited_once()
+
+
+def test_update_request_lets_a_reserved_rename_reach_the_409():
+    from api.schemas_system import SecretUpdateRequest
+
+    request = SecretUpdateRequest(name=_NAME)
+    with pytest.raises(HTTPException) as caught:
+        checked_secret_name(request.name)
+    assert caught.value.status_code == 409
+    with pytest.raises(ValueError):
+        SecretUpdateRequest(name="bad:name")

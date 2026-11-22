@@ -20,6 +20,7 @@ from api.system_health import HealthStatus
 from constants.threshold_constants import RetryConfig
 from services.audit_logger import AuditResult
 from services.feature_flags import EnforcementMode
+from services.secret_names import is_reserved_secret_name
 from type_defs.common import Metadata
 
 # ---------------------------------------------------------------------------
@@ -3397,9 +3398,9 @@ class SecretUpdateRequest(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        if v is not None:
-            return _validate_secret_name(v)
-        return v
+        if v is None or is_reserved_secret_name(v):
+            return v  # a reserved name reaches the route's checked_secret_name: the fixed 409, not this 422 (#17850)
+        return _validate_secret_name(v)
 
 
 class SecretTransferRequest(BaseModel):
