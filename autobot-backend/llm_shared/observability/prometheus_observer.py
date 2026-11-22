@@ -87,8 +87,8 @@ class PrometheusObserver:
         # BaseProvider "_chat_completion_impl must not raise" contract) is
         # deliberately not recorded as an autobot_llm_errors_total sample
         # here — on_error (raised exceptions) already covers the paths this
-        # observer receives, and some error responses also raise afterwards
-        # (raise_if_rate_limited), which would double-count against on_error.
+        # observer receives; a rate-limited response never reaches on_response at
+        # all, it ends in on_error (raise_if_rate_limited runs first, #21929).
         # Scoped out of #14211; tracked as a follow-up.
 
     @staticmethod
