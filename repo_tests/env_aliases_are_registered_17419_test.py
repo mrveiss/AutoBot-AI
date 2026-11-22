@@ -28,8 +28,8 @@ from tools.lint import _parse_cache as parse_cache
 
 SSOT_GLOB = "ssot*.py"
 REGISTRY_GLOB = "env_registry*.py"
-#: Aliases extracted when this guard landed was 447; a census that finds fewer than 430 has narrowed.
-MIN_ALIASES_EXTRACTED = 430
+#: AUTOBOT_* aliases the census extracts from ssot*.py (447, re-measured on the merged tree); pinned with no margin.
+MIN_ALIASES_EXTRACTED = 447
 #: Source files read (48 when measured); the floor is pinned to it, with no margin, by the reach-floor gate.
 MIN_FILES_READ = 48
 
@@ -64,6 +64,19 @@ def _census(paths: list[Path], extract) -> tuple[Census, dict[str, int]]:
     return total, dynamic
 
 
+def _alias_population(root: Path) -> list[str]:
+    """Every AUTOBOT_* alias the census extracts from the ssot*.py sources."""
+    return sorted(_census(_sources(root, SSOT_GLOB), aliases_in)[0].names)
+
+
+ALIAS_REACH = declare(
+    "env-alias-census",
+    discover=_alias_population,
+    floor=MIN_ALIASES_EXTRACTED,
+    what="AUTOBOT_* aliases extracted from ssot*.py",
+)
+
+
 def unregistered(aliases: set[str], registered: set[str]) -> set[str]:
     return aliases - registered
 
@@ -73,7 +86,7 @@ def test_every_alias_is_registered_or_baselined() -> None:
     REACH.verify_floor(root)
     aliases, _ = _census(_sources(root, SSOT_GLOB), aliases_in)
     registered, _ = _census(_sources(root, REGISTRY_GLOB), registered_in)
-    assert len(aliases.names) >= MIN_ALIASES_EXTRACTED, f"extracted only {len(aliases.names)} aliases"
+    ALIAS_REACH.verify_floor(root)
     gap = unregistered(aliases.names, registered.names)
     assert gap - UNREGISTERED_ALIASES == set(), "register these in an env_registry_<component>.py"
     assert UNREGISTERED_ALIASES - gap == set(), "stale baseline entries: delete them"
