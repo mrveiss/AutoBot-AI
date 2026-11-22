@@ -34,6 +34,7 @@ def _state(route: str):
         paused_by="principal-1" if paused else None,
         paused_reason="old" if paused else None,
         paused_at="then" if paused else None,
+        control_id="earlier-control",
         heartbeat_interval_seconds=60,
     )
 
@@ -99,7 +100,10 @@ async def test_a_scheduler_failure_is_surfaced_and_the_row_is_restored(harness, 
     with pytest.raises(HTTPException) as exc:
         await harness.call(route, state)
     assert (exc.value.status_code, exc.value.detail) == (503, SCHEDULER_FAILED_DETAIL)
-    assert vars(state) == before  # the row matches the loop, which did not change
+    restored = dict(vars(state))
+    # The restore is itself a control: a fresh id, so a later restore cannot mistake it for its own change.
+    assert restored.pop("control_id") not in (None, before.pop("control_id"))
+    assert restored == before  # the row matches the loop, which did not change
     assert _outcomes(harness) == ["attempted", "failed"]
     assert harness.rows[1].meta["failure"] == "RuntimeError"
 
@@ -135,6 +139,45 @@ async def test_a_failed_scheduler_call_does_not_overwrite_a_newer_control(harnes
     assert harness.rows[-1].meta["failure"] == SUPERSEDED
     assert calls[-1] == {"with_for_update": True}  # the restore re-takes the row lock
     harness.session.rollback.assert_awaited_once()  # the lock is released without writing
+
+
+@pytest.mark.asyncio
+async def test_a_newer_identical_control_is_not_overwritten(harness):
+    """Pause, resume, pause again by the same person: status and actor match, the control id does not."""
+    harness.scheduler.disable_agent.side_effect = RuntimeError("loop gone")
+    state = _state("pause")
+
+    async def _same_values_newer_control(obj, **kwargs):
+        if kwargs:  # a newer pause by principal-7 committed between this pause's commit and its restore
+            obj.control_id = "newer-control"
+
+    harness.session.refresh.side_effect = _same_values_newer_control
+    with pytest.raises(HTTPException):
+        await harness.call("pause", state)
+    assert (state.status, state.paused_by, state.control_id) == (
+        HeartbeatStatus.PAUSED.value,
+        "principal-7",
+        "newer-control",
+    )
+    assert harness.rows[-1].meta["failure"] == SUPERSEDED
+
+
+@pytest.mark.asyncio
+async def test_a_failed_re_lock_still_records_the_reconcile_failure(harness):
+    """The re-lock can fail with the row expired; the log names the agent without reading the row."""
+    harness.scheduler.disable_agent.side_effect = RuntimeError("loop gone")
+    state = _state("pause")
+
+    async def _expire_then_fail(obj, **kwargs):
+        if kwargs:
+            del obj.agent_id  # an expired row: reading it again would fail
+            raise ConnectionError("db down")
+
+    harness.session.refresh.side_effect = _expire_then_fail
+    with pytest.raises(HTTPException) as exc:
+        await harness.call("pause", state)
+    assert exc.value.status_code == 503
+    assert harness.rows[-1].meta["failure"] == RECONCILE_FAILED
 
 
 @pytest.mark.asyncio

@@ -9,10 +9,13 @@ answered "already in that state", so exactly one of two simultaneous requests re
 The order is: ``attempted`` row (a failed write stops everything), state commit, scheduler call, outcome row.
 A failed state commit leaves a ``failed`` row. A failed scheduler call restores the row, so the loop and the
 row agree (the state commit released the lock, so the restore re-takes it and leaves a row a newer control has
-changed alone), leaves a ``failed`` row, and is surfaced to the caller as a 503. The trail never claims a change
-that did not happen.
+changed alone), leaves a ``failed`` row, and is surfaced to the caller as a 503. Every control writes a fresh
+``control_id``, so a newer control is told apart from this one even when it wrote the same status and actor.
+The restore is best-effort: a newer control (``superseded``) or a database error (``reconcile_failed``) leaves
+the row as it is, and the ``failed`` row names which. The trail never claims a change that did not happen.
 """
 
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -31,8 +34,9 @@ logger = get_logger(__name__)
 SCHEDULER_FAILED_DETAIL = "Scheduler update failed; the change was rolled back"
 RECONCILE_FAILED = "reconcile_failed"
 SUPERSEDED = "superseded"
-#: The columns that identify a transition: if both still hold, nobody has changed the row since.
-_IDENTITY_COLUMNS = ("status", "paused_by")
+#: The columns that identify a transition: if all still hold, nobody has changed the row since. ``control_id``
+#: is fresh per control; status and actor also catch a writer outside this module (#21376).
+_IDENTITY_COLUMNS = ("control_id", "status", "paused_by")
 
 
 @dataclass(frozen=True)
@@ -58,12 +62,14 @@ class Control:
 
 def halt_changes(status: HeartbeatStatus, actor: str, reason: str | None) -> dict[str, Any]:
     """The columns a pause or terminate writes: the new status and who stopped the agent, when and why."""
-    return {"status": status.value, "paused_reason": reason, "paused_at": now_utc(), "paused_by": actor}
+    halt = {"status": status.value, "paused_reason": reason, "paused_at": now_utc(), "paused_by": actor}
+    return {**halt, "control_id": uuid.uuid4()}
 
 
 def resume_changes() -> dict[str, Any]:
     """The columns a resume writes: ACTIVE, with the pause record cleared."""
-    return {"status": HeartbeatStatus.ACTIVE.value, "paused_reason": None, "paused_at": None, "paused_by": None}
+    cleared = {"paused_reason": None, "paused_at": None, "paused_by": None, "control_id": uuid.uuid4()}
+    return {"status": HeartbeatStatus.ACTIVE.value, **cleared}
 
 
 async def _commit_changes(session: AsyncSession, state: AgentRuntimeState, changes: dict[str, Any]) -> None:
@@ -74,7 +80,7 @@ async def _commit_changes(session: AsyncSession, state: AgentRuntimeState, chang
 
 
 async def _restore(
-    session: AsyncSession, state: AgentRuntimeState, prior: dict[str, Any], applied: dict[str, Any]
+    session: AsyncSession, state: AgentRuntimeState, control: Control, prior: dict[str, Any]
 ) -> str | None:
     """Write the prior values back under the row lock, only if the row still holds this control's change.
 
@@ -83,13 +89,13 @@ async def _restore(
     """
     try:
         await session.refresh(state, with_for_update=True)  # re-lock, and re-read what is committed now
-        if any(getattr(state, column) != applied[column] for column in _IDENTITY_COLUMNS):
+        if any(getattr(state, column) != control.changes[column] for column in _IDENTITY_COLUMNS):
             await session.rollback()
             return SUPERSEDED
-        await _commit_changes(session, state, prior)
+        await _commit_changes(session, state, {**prior, "control_id": uuid.uuid4()})  # the restore is a control too
     except Exception as exc:  # noqa: BLE001 -- reported through the outcome row; the caller still gets the 503
         logger.error(
-            "heartbeat: could not restore %s after a scheduler failure: %s", state.agent_id, type(exc).__name__
+            "heartbeat: could not restore %s after a scheduler failure: %s", control.agent_id, type(exc).__name__
         )
         await session.rollback()
         return RECONCILE_FAILED
@@ -115,7 +121,7 @@ async def apply_control(
     try:
         await run_scheduler()
     except Exception as exc:
-        not_restored = await _restore(session, state, prior, control.changes)
+        not_restored = await _restore(session, state, control, prior)
         await record_audit_outcome(event, FAILED, not_restored or type(exc).__name__)
         raise HTTPException(status_code=503, detail=SCHEDULER_FAILED_DETAIL) from exc
     await record_audit_outcome(event, SUCCESS)

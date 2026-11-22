@@ -101,8 +101,8 @@ def test_pause_ignores_forged_body_actor(harness) -> None:
     assert response.status_code == 200
     # Fails if the route used the body: the state write would carry "system:forged".
     assert harness.state.paused_by == "principal-7"
-    # Fails if the audit named the body's value.
-    assert harness.audits == ["principal-7"]
+    # Fails if either audit row (attempted, then success) named the body's value.
+    assert harness.audits == ["principal-7", "principal-7"]
     body = HeartbeatConfigResponse.model_validate(response.json())
     assert (body.agent_id, body.status, body.paused_reason) == ("a1", HeartbeatStatus.PAUSED.value, "r")
     assert body.paused_by == "principal-7"

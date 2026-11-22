@@ -86,6 +86,8 @@ class AgentRuntimeState(Base):
     paused_reason = Column(Text, nullable=True)
     paused_at = Column(DateTime, nullable=True)
     paused_by = Column(String(255), nullable=True)
+    # A fresh id per committed pause/resume/terminate: a failed control restores only its own change (#21376)
+    control_id = Column(Uuid(as_uuid=True), nullable=True)
     # Error state metadata (MVA-1411)
     error_detail = Column(Text, nullable=True)
     error_at = Column(DateTime, nullable=True)
