@@ -10,6 +10,7 @@
 # they were added once, each linked to a grouped wiring issue under #20512 (frozen in the gate test).
 # A second, #21428: following a router included through a package router unmasked twelve routes, added once and frozen.
 # A third, #21651 (2026-11-15/16): judging SLM routes at their real mount unmasked seven routes, added once and frozen.
+# A fourth, #21927 (owner ruling 2026-11-21, recorded on #10603): the collection-wide bulk-delete route, added once and frozen.
 #
 # What it cannot see: a function nobody calls inside a module somebody imports; a module imported
 # only by another unused module; callers that build a path or key at runtime; plugins and
@@ -41,7 +42,6 @@ module:autobot-backend/knowledge/backends/_chromadb_support.py	#10603
 module:autobot-backend/knowledge/memory_graph/hybrid_scorer.py	#10603
 module:autobot-backend/knowledge/memory_graph/query_processor.py	#10603
 module:autobot-backend/knowledge/pipeline/cognifiers/entity_resolver.py	#10603
-module:autobot-backend/knowledge/read_path_fakes_16665.py	#10603
 module:autobot-backend/knowledge/search_components/context_tracker.py	#10603
 module:autobot-backend/llc/adapters/http_adapter.py	#10603
 module:autobot-backend/llc/adapters/process_adapter.py	#10603
@@ -154,7 +154,6 @@ route:autobot-backend/api/admin_ownerless_chat_sessions.py:POST /ownerless-chat-
 route:autobot-backend/api/knowledge_chunked_upload.py:DELETE /expired/{upload_id}	#20905
 declared:get_api_key_user=autobot_shared/user_management/models/api_key.py	#10603
 declared:require_key_permission=autobot-slm-backend/services/api_key_routes.py	#10603
-declared:RoleCredentialService=autobot-backend/llc/api/roles.py,autobot-backend/llc/models/role_credential.py,autobot-backend/migrations/versions/20260820_080_llc_role_tools_and_credentials.py	#10603
 route:autobot-backend/api/a2a.py:DELETE /tasks/{task_id}	#10603
 route:autobot-backend/api/a2a.py:GET /agent-card/signed	#10603
 route:autobot-backend/api/a2a.py:GET /tasks/{task_id}	#10603
@@ -1503,3 +1502,6 @@ frontend:autobot-slm-frontend/src/components/DeploymentWizard.vue	#21629
 frontend:autobot-slm-frontend/src/components/fleet/FleetToolsTab.vue	#21629
 frontend:autobot-slm-frontend/src/composables/useFleetHealth.ts	#21629
 frontend:autobot-slm-frontend/src/composables/useNodeHealth.ts	#21629
+# The one-time addition of #21927 (frozen in unconnected_code_remeasure_21927.txt; owner ruling 2026-11-21 on #10603): the approval-gated
+# collection-wide delete from #21885 has no frontend caller because no collections UI exists yet. It is wired in when that UI is built (#10603).
+route:autobot-backend/api/knowledge_collections.py:POST /collections/{collection_id}/bulk-delete	#10603

@@ -23,7 +23,13 @@ from fastapi import HTTPException, Request, status
 from autobot_shared.http_refusal import fixed_refusal
 from autobot_shared.logging_manager import get_logger
 from services.audit_logger import AuditResult
-from services.envelope_secrets_service import SecretNotFoundError
+from services.envelope_secrets_service import (
+    AmbiguousSecretError,
+    SecretAccessError,
+    SecretConflictError,
+    SecretNotFoundError,
+)
+from services.secret_names import ReservedSecretNameError, refuse_reserved_secret_name
 
 logger = get_logger(__name__)
 
@@ -53,6 +59,12 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
         return "denied", "permission_denied"
     if isinstance(exc, SecretNotFoundError):
         return "failed", "not_found"
+    if isinstance(exc, AmbiguousSecretError):
+        return "denied", "ambiguous"  # #17850: several same-name copies; none is chosen by order
+    if isinstance(exc, ReservedSecretNameError):
+        return "denied", "reserved_name"  # #17850: the connector: prefix is the connector writer's
+    if isinstance(exc, SecretConflictError):
+        return "denied", exc.reason  # #17850: the name is taken by an inactive or differing secret
     return "failed", type(exc).__name__
 
 
@@ -61,7 +73,43 @@ def outcome_for(exc: BaseException) -> tuple[AuditResult, str]:
 _STATUS_FOR_REASON: dict[str, int] = {
     "not_found": status.HTTP_404_NOT_FOUND,
     "permission_denied": status.HTTP_403_FORBIDDEN,
+    "ambiguous": status.HTTP_409_CONFLICT,
+    "inactive": status.HTTP_409_CONFLICT,
+    "value_differs": status.HTTP_409_CONFLICT,
+    "reserved_name": status.HTTP_409_CONFLICT,
 }
+
+#: The fixed 409 text per conflict reason (#17850): says what to do, carries no id, name or value.
+_CONFLICT_DETAIL: dict[str, str] = {
+    "ambiguous": "Conflict: several secrets share this name; an administrator must resolve the duplicates",
+    "inactive": "Conflict: a deactivated secret holds this name; delete it first, then create the secret again",
+    "value_differs": "Conflict: a secret with this name already holds a different value; rotate it instead",
+    "reserved_name": "Conflict: the 'connector:' name prefix is reserved for connector credentials; pick another name",
+}
+
+#: What a create route turns into :func:`error_for`'s answer (#17850); one tuple, so no route words its own.
+CREATE_REFUSALS = (
+    SecretAccessError,
+    SecretNotFoundError,
+    ValueError,
+    AmbiguousSecretError,
+    SecretConflictError,
+    ReservedSecretNameError,
+)
+
+
+def checked_secret_name(name: str) -> str:
+    """*name* unchanged, or the fixed 409 when a user-facing rename asks for a reserved one (#17850)."""
+    try:
+        refuse_reserved_secret_name(name)
+    except ReservedSecretNameError as exc:
+        raise error_for(exc) from None
+    return name
+
+
+def creation_status(secret: object) -> int:
+    """201 for a new secret, 200 when the same value already existed under that name (#17850)."""
+    return status.HTTP_200_OK if getattr(secret, "already_existed", False) else status.HTTP_201_CREATED
 
 
 def invalid_request_error(exc: BaseException) -> HTTPException:
@@ -78,7 +126,10 @@ def error_for(exc: BaseException) -> HTTPException | None:
     """
     if isinstance(exc, HTTPException):
         return None
-    code = _STATUS_FOR_REASON.get(outcome_for(exc)[1])
+    reason = outcome_for(exc)[1]
+    code = _STATUS_FOR_REASON.get(reason)
+    if code == status.HTTP_409_CONFLICT:
+        return HTTPException(status_code=code, detail=_CONFLICT_DETAIL[reason])
     return None if code is None else fixed_refusal(code)
 
 

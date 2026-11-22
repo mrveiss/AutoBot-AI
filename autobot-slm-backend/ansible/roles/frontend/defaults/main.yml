@@ -67,8 +67,6 @@ frontend_slm_backend_protocol: "{{ 'https' if (frontend_slm_backend_remote | boo
 # Upstream path prefix of /slm/api/: stripped to /api/ for uvicorn, kept for the SLM's nginx.
 frontend_slm_upstream_prefix: "{{ '/slm/api/' if (frontend_slm_backend_remote | bool) else '/api/' }}"
 frontend_slm_ca_cert: "{{ frontend_tls_cert_dir }}/ca-cert.pem"
-# Request-body cap on /slm/api/: the SLM vhost's own cap (agent event sync, #1090), one value.
-frontend_slm_client_max_body_size: "{{ slm_client_max_body_size }}"
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3

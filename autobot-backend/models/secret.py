@@ -12,7 +12,7 @@ Part of Issue #870 - User-Centric Session Tracking (#608 Phase 1-2).
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
@@ -27,6 +27,10 @@ from user_management.models.base import Base
 # (user/session/shared/group/organization/workflow) are unchanged — the
 # canonical enum carries the same .value strings.
 SecretScope = ScopeLevel
+
+
+#: Name of the (owner_vault, name) uniqueness constraint (#17850); the migration creates it under this name.
+SECRET_OWNER_VAULT_NAME_UNIQUE = "uq_secrets_owner_vault_name"  # nosec B105  # pragma: allowlist secret
 
 
 class Secret(Base):
@@ -50,6 +54,13 @@ class Secret(Base):
     """
 
     __tablename__ = "secrets"
+    # One envelope secret per (owner_vault, name) (#17850). Legacy rows (owner_vault NULL) are exempt: SQL treats
+    # NULLs as distinct. The migration refuses while same-name rows exist; duplicates are resolved by
+    # verification through the approval queue (services/secret_duplicate_proposals.py), never by picking one.
+    #: Not a column: set on the row ``EnvelopeSecretsService.create`` returns when it already existed (#17850).
+    already_existed = False
+
+    __table_args__ = (UniqueConstraint("owner_vault", "name", name=SECRET_OWNER_VAULT_NAME_UNIQUE),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -195,6 +206,14 @@ class Secret(Base):
         # A driver without time-zone support (SQLite) hands back a naive value; it was stored as UTC.
         expires = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
         return now_utc() > expires
+
+    @property
+    def is_live(self) -> bool:
+        """True while the row is not deactivated -- the one rule for "this secret row is active" (#17850).
+
+        Deliberately excludes expiry (``is_expired``): callers that also need it test it separately.
+        """
+        return bool(self.is_active)
 
     def _grant_lookup(self, user_id: uuid.UUID, session_id: str | None) -> bool:
         """Secrets grant facts for ``is_visible`` (#11290).

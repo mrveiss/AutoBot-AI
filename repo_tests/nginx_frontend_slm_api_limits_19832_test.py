@@ -50,7 +50,7 @@ def _render(cap: str) -> str:
         frontend_slm_backend_remote=False,
         frontend_slm_upstream_prefix="/api/",
         frontend_slm_ca_cert="/ca.pem",
-        frontend_slm_client_max_body_size=cap,
+        slm_client_max_body_size=cap,
     )
 
 
@@ -76,4 +76,19 @@ def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     assert not re.search(r"client_max_body_size\s+10m", vhost), "the SLM cap has a second literal"
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_client_max_body_size"] == "10m"
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))
-    assert defaults["frontend_slm_client_max_body_size"] == "{{ slm_client_max_body_size }}"
+    assert "frontend_slm_client_max_body_size" not in defaults, "the SLM cap has one home, no alias"
+    assert "slm_client_max_body_size" not in defaults
+
+
+COMMON_DEFAULTS = ANSIBLE / "roles" / "common" / "defaults" / "main.yml"
+
+
+def test_the_slm_vhost_and_firewall_read_one_tls_port_name() -> None:
+    """#22055: the vhost's IPv4 and IPv6 listens and `slm_frontend` all derive from slm_nginx_tls_port."""
+    vhost = VHOST.read_text(encoding="utf-8")
+    listens = re.findall(r"^\s*listen\s+(.+?)\s+ssl\b", vhost, re.M)
+    assert listens and all(port.endswith("{{ slm_nginx_tls_port }}") for port in listens), listens
+    assert not re.search(r"listen\s+(\[::\]:)?443\b", vhost), "a literal TLS port reappeared in the SLM vhost"
+    assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_nginx_tls_port"] == 443
+    ports = yaml.safe_load(COMMON_DEFAULTS.read_text(encoding="utf-8"))["firewall_service_ports"]
+    assert ports["slm_frontend"] == "{{ slm_nginx_tls_port }}"

@@ -216,7 +216,7 @@ server {
         # #10565: transcriber/knowledge media uploads (audio/video) exceed
         # nginx's 1m default and were rejected with 413. The app enforces its
         # own per-file limit; allow large bodies here for the user backend.
-        {{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}
+        {{ lookup('file', proxy_upload_cap_file) }}
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
@@ -235,7 +235,7 @@ server {
     # Same shape as the slm_manager vhost's /slm/api/ws/ (autobot-slm.conf.j2).
     location /slm/api/ws/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }}ws/;
-        client_max_body_size {{ frontend_slm_client_max_body_size }};
+        client_max_body_size {{ slm_client_max_body_size }};
 {% if frontend_slm_backend_remote | bool %}
         # Separate SLM node: verify its nginx against the fleet CA, never skip verification.
         proxy_ssl_server_name on;
@@ -270,7 +270,7 @@ server {
     # ($connection_upgrade is "close" for plain HTTP, so REST is unaffected).
     location /slm/api/ {
         proxy_pass {{ frontend_slm_backend_protocol }}://autobot_slm_backend{{ frontend_slm_upstream_prefix }};
-        client_max_body_size {{ frontend_slm_client_max_body_size }};
+        client_max_body_size {{ slm_client_max_body_size }};
 {% if frontend_slm_backend_remote | bool %}
         # Separate SLM node: verify its nginx against the fleet CA, never skip verification.
         proxy_ssl_server_name on;

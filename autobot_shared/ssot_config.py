@@ -66,6 +66,7 @@ from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansib
     SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
     SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
 )
+from autobot_shared.ssot_ssh import SSHIdentitySettings
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 _Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
@@ -106,7 +107,7 @@ QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
 # Truthy env-var values — shared by every boolean flag below.
 _TRUE_VALUES = {"1", "true", "yes"}
-
+MIN_LLM_TIMEOUT_SECONDS = 1  # the int views of TimeoutConfig.llm (#17419) never round a sub-second value to 0
 # Best-of-N plan selection (#10583)
 # AUTOBOT_PLAN_BEST_OF_N_ENABLED=true  → opt-in path (default: off)
 # AUTOBOT_PLAN_BEST_OF_N_COUNT=3       → number of candidate plans (default: 3, max: 5)
@@ -240,16 +241,13 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
     light_processing_model: str = Field(default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL")
     instruction_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL")
     system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
-
+    verifier_model: str = Field(default="", alias="AUTOBOT_VERIFIER_MODEL")  # #21844 empty: light-processing model
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL")
     agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
     research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
     analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
     planning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_PLANNING_MODEL")
-
-    # Timeout (seconds)
-    timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
 
     # Default provider for all models (can be overridden per-model)
     provider: str = Field(default="ollama", alias="AUTOBOT_LLM_PROVIDER")
@@ -491,7 +489,7 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "endpoint": self.get_endpoint_for_agent(agent_id),
             "model": self.get_model_for_agent(agent_id),
             "api_key": self._get_api_key_for_provider(provider),
-            "timeout": self.timeout,
+            "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(config.timeout.llm)),
         }
 
     def _get_api_key_for_provider(self, provider: str) -> str:
@@ -521,6 +519,11 @@ class LLMConfig(RedactedSettings, ChatGraphSettings):
             "lmstudio": self.lmstudio_host,
         }
         return endpoints.get(provider.lower(), self.ollama_endpoint)
+
+    @property
+    def default_model_override(self) -> str:
+        """AUTOBOT_DEFAULT_LLM_MODEL only when set; "" when ``default_model`` is its default (#17419)."""
+        return self.default_model if "default_model" in self.model_fields_set else ""
 
     # Backward compatibility aliases
     def get_provider_for_model(self, model_type: str) -> str:
@@ -1217,7 +1220,7 @@ class DatabasePoolConfig(RedactedSettings):
     )
 
 
-class PathConfig(RedactedSettings):
+class PathConfig(RedactedSettings, SSHIdentitySettings):
     """File-system path configuration.
 
     Provides a single source of truth for well-known AutoBot directories so
@@ -1288,31 +1291,6 @@ class PathConfig(RedactedSettings):
         default="/etc/autobot/ssh/autobot_key",
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
-
-    # Management-plane SSH key (#14173) — DISTINCT from ssh_key_path above, not
-    # an alias of it. autobot-infrastructure/shared/scripts/utilities/setup-ssh-keys.sh
-    # generates and deploys THIS key under the operator's own $HOME the first
-    # time a human runs the vm-management/utilities scripts from their own
-    # workstation; ssh_key_path is the service account's key, deployed by
-    # Ansible to /etc/autobot/ssh for automated fleet orchestration (SLM
-    # backend, code-sync agents). The two are provably different files with
-    # different owners and different consumers — #14173's audit found ~24
-    # scripts reading AUTOBOT_SSH_KEY with a $HOME-relative fallback and
-    # confirmed collapsing it onto ssh_key_path's /etc default would silently
-    # break the human-operator flow, so this stays a second field rather than
-    # a rename or an alias.
-    management_ssh_key_path: str = Field(
-        default_factory=lambda: str(Path.home() / ".ssh" / "autobot_key"),
-        alias="AUTOBOT_SSH_KEY",
-    )
-
-    # SSH user for inter-node connections from management scripts (#14173).
-    # Not a path, but belongs beside the two SSH key fields above — same
-    # feature (fleet SSH identity). Matches the 'autobot' operational account
-    # (autobot-slm-backend/ansible/ansible.cfg remote_user,
-    # inventory/*.yml ansible_user, inventory/group_vars/all.yml
-    # autobot_ssh_key_path's owning account).
-    ssh_user: str = Field(default="autobot", alias="AUTOBOT_SSH_USER")
 
     # Override for the `claude` CLI binary (LLC claude_code adapter, GH#12478); empty =
     # PATH, then per-user install locations (set it when ~/.local/bin is off the service PATH).
@@ -1542,7 +1520,6 @@ class MiscConfig(RedactedSettings, CodebaseIndexSettings):
     default_command: str = Field(default="", alias="AUTOBOT_DEFAULT_COMMAND")
     default_continue: str = Field(default="", alias="AUTOBOT_DEFAULT_CONTINUE")
     default_host: str = Field(default="", alias="AUTOBOT_DEFAULT_HOST")
-    default_llm_model: str = Field(default="", alias="AUTOBOT_DEFAULT_LLM_MODEL")
     default_port: str = Field(default="", alias="AUTOBOT_DEFAULT_PORT")
     default_scan_network: str = Field(default="", alias="AUTOBOT_DEFAULT_SCAN_NETWORK")
     default_yes_no: str = Field(default="", alias="AUTOBOT_DEFAULT_YES_NO")
@@ -2069,7 +2046,6 @@ class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     semantic_chunking: bool = Field(default=True, alias="AUTOBOT_SEMANTIC_CHUNKING")
     debug_mode: bool = Field(default=False, alias="AUTOBOT_DEBUG_MODE")
     hot_reload: bool = Field(default=True, alias="AUTOBOT_HOT_RELOAD")
-    permission_system_v2: bool = Field(default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2")
 
     # #13625: permit connector egress to RFC-1918/ULA addresses, for deployments
     # whose Confluence/GitLab/Nextcloud instance is genuinely self-hosted on a
@@ -2745,8 +2721,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def llm_timeout(self) -> int:
-        """Backward-compat: config.llm_timeout → config.llm.timeout."""
-        return self.llm.timeout
+        """Backward-compat: config.llm_timeout → config.timeout.llm."""
+        return max(MIN_LLM_TIMEOUT_SECONDS, int(self.timeout.llm))
 
     @property
     def llm_temperature(self) -> float:
@@ -2958,7 +2934,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
         "endpoint": endpoint,
         "model": model,
         "api_key": api_key,
-        "timeout": cfg.llm.timeout,
+        "timeout": max(MIN_LLM_TIMEOUT_SECONDS, int(cfg.timeout.llm)),
     }
 
 

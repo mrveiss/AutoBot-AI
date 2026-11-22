@@ -76,11 +76,36 @@ export interface AuditQueryParams {
 export type AuditDashboardResponse<E = AuditEntry> = AuditQueryResponse<E, AuditQueryParams>
 
 /**
+ * What `GET /audit/statistics` carries in `statistics` today: the process counters and the 24-hour
+ * record count of `AuditLogger.get_statistics` (backend `services/audit_logger.py`). The generated
+ * schema types the object as `{ [key: string]: unknown }`, so this is the hand-written contract.
+ * `entries_last_24h` is absent when the store is unreachable (`redis_available` false). The
+ * per-result counts and rate are NOT sent; they are optional here so a server that starts sending
+ * them is used as sent ({@link resolveAuditStatistics}, #21513).
+ */
+export interface AuditServerStatistics {
+  total_logged?: number
+  total_failed?: number
+  redis_available?: boolean
+  entries_last_24h?: number
+  total_entries?: number
+  success_count?: number
+  denied_count?: number
+  failed_count?: number
+  error_count?: number
+  success_rate?: number
+  operations_by_type?: Record<string, number>
+  entries_by_hour?: Record<string, number>
+  top_users?: Array<{ user_id: string; count: number }>
+  top_operations?: Array<{ operation: string; count: number }>
+}
+
+/**
  * Audit statistics response from backend
  */
 export interface AuditStatisticsResponse {
   success: boolean
-  statistics: AuditStatistics
+  statistics: AuditServerStatistics
   vm_info: {
     vm_source: string
     vm_name: string
@@ -88,7 +113,8 @@ export interface AuditStatisticsResponse {
 }
 
 /**
- * Audit statistics data structure
+ * The figures the statistics panel shows: {@link AuditServerStatistics} resolved by
+ * {@link resolveAuditStatistics}, so every count is present (served, else derived from the rows).
  */
 export interface AuditStatistics {
   total_entries: number
@@ -233,7 +259,7 @@ function served(value: unknown): number | undefined {
  * statistics object nor a row to derive from.
  */
 export function resolveAuditStatistics(
-  server: Partial<AuditStatistics> | null,
+  server: AuditServerStatistics | null,
   entries: ReadonlyArray<{ result: string }>
 ): AuditStatistics | null {
   if (!server && entries.length === 0) return null

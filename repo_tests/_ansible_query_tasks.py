@@ -16,15 +16,17 @@ from typing import Any, Iterator
 
 import yaml
 
+from autobot_shared.regex_whitespace import NOT_WS, WS, WS_CHARS
+
 _EXEC_MODULES = ("command", "shell", "ansible.builtin.command", "ansible.builtin.shell")
 #: The query commands. Anchored at the start of the command: a mutating command that
 #: merely mentions one (`apt-get install ... && dpkg-query`) is not a query task.
 _QUERY = re.compile(
     r"^(?:dpkg-query\b"
     r"|apt-cache\s+policy\b"
-    r"|systemctl\s+(?:--\S+\s+)*is-(?:active|enabled)\b"
+    rf"|systemctl{WS}+(?:--{NOT_WS}+{WS}+)*is-(?:active|enabled)\b"
     r"|rpm\s+-q"
-    r"|(?:\{\{[^}]*\}\}|[^\s{])+\s+--version\b)"
+    rf"|(?:\{{\{{[^}}]*\}}\}}|[^{WS_CHARS}{{])+{WS}+--version\b)"
 )
 #: The binary token is a template (`{{ x }}`, no nested braces) or non-space, non-brace characters:
 #: the two alternatives cannot match the same character, so the repeat cannot backtrack exponentially.

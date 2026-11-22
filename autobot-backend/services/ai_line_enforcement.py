@@ -307,13 +307,23 @@ async def _file_hold(
         )
 
 
-async def _report(verdict: LineVerdict, requested_by: str, surface: str, floor_waived: bool = False) -> None:
-    """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action."""
+async def _report(
+    verdict: LineVerdict, requested_by: str, surface: str, floor_waived: bool = False, user_id: Any = None
+) -> None:
+    """Line 1 'then report', and the trail for refusals and holds. Best effort; never blocks the action.
+
+    The actor is the verified user when known, else the internal ``ai-line:<session>`` scope (one per session, so
+    threat detection's per-user volume rule never pools unrelated sessions into a single bucket); the requester (a chat
+    session id) is the audit event's ``session_id`` and never stands in for a user (#18844).
+    """
     try:
         await audit_log(
             f"ai_line.{verdict.outcome.value}",
             result="success",
-            user_id=requested_by,
+            user_id=(
+                str(user_id) if user_id else f"{REQUESTER_PREFIX}:{requested_by}"
+            ),  # one bucket per session (#18844)
+            session_id=requested_by,
             resource=verdict.resolution.key,
             details={
                 "surface": surface,
@@ -365,7 +375,7 @@ async def enforce_line(
         verdict = await _hold(
             resolution, params or {}, resolve_scope(company_id, user_id), requested_by, surface, hold_in_approvals
         )
-    await _report(verdict, requested_by, surface, floor_waived)
+    await _report(verdict, requested_by, surface, floor_waived, user_id)
     return verdict
 
 

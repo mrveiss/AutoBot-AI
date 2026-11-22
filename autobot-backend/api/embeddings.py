@@ -27,8 +27,10 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_embeddings_url
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import config_manager
+from services.config_manager_writer import set_nested_and_save
 from services.config_service import ConfigService
 from services.embedding_options import embedding_model_options
 
@@ -62,7 +64,7 @@ async def get_embedding_settings(
                 "provider": "ollama",
                 "providers": {
                     "ollama": {
-                        "endpoint": f"{config.ollama_url}/api/embeddings",
+                        "endpoint": ollama_embeddings_url(config.ollama_url),
                         "selected_model": DEFAULT_EMBEDDING_MODEL,
                         "models": [DEFAULT_EMBEDDING_MODEL],
                     }
@@ -174,11 +176,11 @@ async def refresh_embedding_models(
             ]
 
             # Update the configuration with available models
-            config_manager.set_nested(
+            set_nested_and_save(
+                config_manager,
                 f"backend.llm.unified.embedding.providers.{provider_name}.models",
                 embedding_models,
             )
-            config_manager.save_settings()
             ConfigService.clear_cache()
 
             logger.info("Refreshed embedding models for %s", provider_name)

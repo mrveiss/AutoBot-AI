@@ -177,6 +177,12 @@ for _name, _type, _default, _description in (
     ),
     ("AUTOBOT_MACHINE_SLOT_POLL", float, 5.0, "Seconds between attempts while queued for a machine slot."),
     (
+        "AUTOBOT_MACHINE_SLOT_UPTIME",
+        str,
+        "/proc/uptime",
+        "File the pre-push queue reads its clock from; an unreadable path forces the SECONDS fallback (#21905).",
+    ),
+    (
         "AUTOBOT_MACHINE_SLOT_DIR",
         str,
         "",
@@ -187,6 +193,107 @@ for _name, _type, _default, _description in (
 ):
     register_env_var(
         EnvVarSpec(name=_name, type=_type, default=_default, description=_description, component="testing")
+    )
+
+# Remote test node (#20935): where the pre-push fast guards and a train's suite run when a node is configured.
+# Values are per-machine settings and never committed; tools/remote_test_node/run.py reads them.
+_NODE = "tools/remote_test_node/run.py"
+for _name, _type, _default, _desc, _range in (
+    (
+        "AUTOBOT_TEST_NODE_HOST",
+        str,
+        "",
+        f"Address of the remote test node ({_NODE}); empty means not configured, so runs stay local.",
+        None,
+    ),
+    ("AUTOBOT_TEST_NODE_USER", str, "", "SSH user on the remote test node.", None),
+    (
+        "AUTOBOT_TEST_NODE_SSH_KEY",
+        str,
+        "",
+        "Path to the SSH private key for the test node; the key itself stays in the secrets manager or key file.",
+        None,
+    ),
+    ("AUTOBOT_TEST_NODE_PORT", str, "22", "SSH port of the remote test node.", None),
+    (
+        "AUTOBOT_TEST_NODE_ENABLED",
+        str,
+        "1",
+        "0 turns the remote test node off even when it is configured; runs stay local.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_SLOTS",
+        int,
+        3,
+        "Jobs the remote test node runs at once (a counting lock on the node). Default 3, measured on a "
+        "12-core, 14 GB node: 3 jobs of the fast-guard suite at 2 workers each took 2.3x one job's wall time "
+        "(209 s against 89 s) at peak load 8.6 "
+        "and a 6.0 GB memory low-water; 4 jobs at 4 workers each left 0.85 GB free. Re-measure on different hardware.",
+        (1, 12),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_WORKERS",
+        int,
+        2,
+        "pytest-xdist workers per remote job (-n). Default 2, measured: one job took "
+        "104 s at 1 worker, 89 s at 2, 114 s at 4 and 136 s at 8, so more workers add load without finishing sooner.",
+        (1, 12),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_TIMEOUT",
+        int,
+        600,
+        "Seconds a remote job may run before the node stops it and removes its checkout.",
+        (30, 3600),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_CONNECT_TIMEOUT",
+        int,
+        10,
+        "Seconds to wait for the node's SSH connection before falling back to local.",
+        (1, 120),
+    ),
+    (
+        "AUTOBOT_TEST_NODE_BASE",
+        str,
+        ".autobot-test-node",
+        "Directory on the node (relative to its home) holding the mirror, venv, slots and runs.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_SSH_BIN",
+        str,
+        "ssh",
+        "The ssh executable used to reach the node (tests substitute a stand-in).",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_KNOWN_HOSTS",
+        str,
+        "",
+        "Path to a known_hosts file that pins the test node's host key. Set: the connection is made with "
+        "StrictHostKeyChecking=yes against that file only. Empty: the key is trusted on first use "
+        "(StrictHostKeyChecking=accept-new) and later changes are refused.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_UV_VERSION",
+        str,
+        "0.9.0",
+        "Version of uv that --provision installs from PyPI on the node when the base has no Python at the floor.",
+        None,
+    ),
+    (
+        "AUTOBOT_TEST_NODE_PIP_VERSION",
+        str,
+        "25.3",
+        "Version of pip that --provision upgrades the node's venv to before installing the test requirements.",
+        None,
+    ),
+):
+    register_env_var(
+        EnvVarSpec(name=_name, type=_type, default=_default, description=_desc, component="testing", range=_range)
     )
 
 register_env_var(
@@ -256,5 +363,53 @@ register_env_var(
         ),
         component="eval",
         range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TEST_DRAIN_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Seconds repo_tests._hang_guard waits for a killed test subprocess's output to drain "
+            "before closing its pipes and reaping it anyway. Bounds the case where a descendant "
+            "that left the process group keeps the pipe open (#21862)."
+        ),
+        component="testing",
+        range=(1.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TEST_STALL_SECONDS",
+        type=float,
+        default=120.0,
+        description=(
+            "Seconds a CPU-bound test subprocess may go without consuming ANY CPU time before "
+            "repo_tests._hang_guard declares it hung and kills it. Progress, not wall-clock: a "
+            "process that is merely slow because the host is loaded keeps accruing CPU time and is "
+            "never killed, which a fixed `subprocess.run(timeout=N)` cannot tell apart from a hang "
+            "(#21862, #21910)."
+        ),
+        component="testing",
+        range=(5.0, 3600.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TEST_CPU_BUDGET_SECONDS",
+        type=float,
+        default=900.0,
+        description=(
+            "Ceiling on the CPU seconds (user+system, children included) a CPU-bound test "
+            "subprocess may consume under repo_tests._hang_guard before it is killed as a runaway. "
+            "CPU time does not stretch with host load, so unlike a wall-clock timeout this budget "
+            "is the same on an idle box and at load 30 (#21862, #21910)."
+        ),
+        component="testing",
+        range=(10.0, 7200.0),
     )
 )

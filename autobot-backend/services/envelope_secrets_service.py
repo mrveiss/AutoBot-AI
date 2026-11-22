@@ -29,10 +29,13 @@ from collections.abc import Iterable
 from datetime import datetime
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.secrets_envelope import (
+    DecryptionError,
     SealedSecret,
+    UnsupportedFormatError,
     WrappedDek,
     derive_vault_key,
     load_root_key,
@@ -43,12 +46,38 @@ from autobot_shared.secrets_envelope import (
     wrap_dek,
 )
 from autobot_shared.secrets_vault import VaultRef
+from autobot_shared.security.constant_time import equal_bytes
+from knowledge.serving import is_servable
 from models.secret import Secret
 from models.secret_grant import SecretGrant
 
 
 class SecretNotFoundError(Exception):
     """The secret does not exist (or is not envelope-backed)."""
+
+
+class AmbiguousSecretError(Exception):
+    """Several rows share one ``(owner_vault, name)``; none is chosen by order (#17850).
+
+    Carries ids only -- never the name or any value. The duplicates are resolved by verification and a
+    human's approval (``services/secret_duplicate_proposals.py``), not by picking one here.
+    """
+
+    def __init__(self, owner_vault: str, secret_ids: list[uuid.UUID]) -> None:
+        self.secret_ids = sorted(secret_ids, key=str)
+        super().__init__(f"{len(self.secret_ids)} secrets share one name in vault {owner_vault}")
+
+
+class SecretConflictError(Exception):
+    """The ``(owner_vault, name)`` is taken by a secret this create may not reuse (#17850).
+
+    ``reason`` is ``inactive`` (a deactivated row still holds the unique slot: delete it, then create again) or
+    ``value_differs`` (the name exists with another value: rotate it). Carries the id only -- never a name or value.
+    """
+
+    def __init__(self, reason: str, secret_id: uuid.UUID) -> None:
+        self.reason, self.secret_id = reason, secret_id
+        super().__init__(f"secret {secret_id} already holds this name ({reason})")
 
 
 class SecretAccessError(PermissionError):
@@ -80,22 +109,76 @@ class EnvelopeSecretsService:
         extra_data: dict | None = None,
         expires_at: datetime | None = None,
     ) -> Secret:
-        """Seal *plaintext* for *owner_vault*; persist secret + owner grant (+ non-secret metadata, expiry)."""
-        secret_id = uuid.uuid4()
-        sealed, dek = seal(plaintext, secret_id=str(secret_id))
+        """Seal *plaintext* for *owner_vault*; persist secret + owner grant. Idempotent per (owner_vault, name).
+
+        An existing secret holding the SAME value is returned (``already_existed`` set) and nothing is written. One
+        holding a different value, or a deactivated one, raises :class:`SecretConflictError`: a create never
+        replaces a value (use :meth:`rotate_value`). A lost create race re-reads the winner; pre-constraint
+        duplicates raise :class:`AmbiguousSecretError`, never a pick.
+        """
         vault = owner_vault.to_str()
+        if (existing := await self.find_by_name(session, owner_vault=vault, name=name)) is not None:
+            return await self._settle_existing(session, existing, owner_vault, plaintext)
+        secret, grant = self._seal_new(owner_vault, name, secret_type, plaintext, created_by, extra_data, expires_at)
+        try:
+            return await self._insert(session, secret, grant)
+        except IntegrityError:  # lost the race at the unique constraint: the winner's row is the answer
+            winner = await self.find_by_name(session, owner_vault=vault, name=name)
+            if winner is None:
+                raise
+            return await self._settle_existing(session, winner, owner_vault, plaintext)
+
+    def _seal_new(
+        self, owner_vault: VaultRef, name, secret_type, plaintext, created_by, extra_data, expires_at
+    ) -> tuple[Secret, SecretGrant]:
+        """The new ``Secret`` row (value sealed once under a fresh DEK) and its owner grant, not yet persisted."""
+        secret_id, vault = uuid.uuid4(), owner_vault.to_str()
+        sealed, dek = seal(plaintext, secret_id=str(secret_id))
         wrapped = wrap_dek(dek, self._kek(vault), vault, secret_id=str(secret_id))
         secret = Secret(
             id=secret_id, owner_id=created_by, name=name, type=secret_type, scope=owner_vault.kind.value,
             owner_vault=vault, sealed_value=sealed.to_dict(), version=1,
             extra_data=dict(extra_data or {}), expires_at=expires_at
         )  # fmt: skip
-        session.add(secret)
-        session.add(
-            SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
-        )
-        await session.flush()
+        grant = SecretGrant(secret_id=secret_id, grantee=vault, wrapped_dek=wrapped.to_dict(), created_by=created_by)
+        return secret, grant
+
+    @staticmethod
+    async def _insert(session: AsyncSession, secret: Secret, grant: SecretGrant) -> Secret:
+        """Insert in a savepoint, so a constraint loss leaves the caller's transaction usable."""
+        async with session.begin_nested():
+            session.add(secret)
+            session.add(grant)
+            await session.flush()
         return secret
+
+    async def _settle_existing(
+        self, session: AsyncSession, existing: Secret, owner_vault: VaultRef, plaintext: bytes
+    ) -> Secret:
+        """Reuse *existing* only when it is active and already holds *plaintext*; the value is never logged."""
+        if not is_servable(existing) or existing.is_expired:  # #18820 serving predicate, plus expires_at
+            raise SecretConflictError("inactive", existing.id)
+        try:
+            held = await self.read(session, secret_id=existing.id, accessible_vaults=[owner_vault])
+        except (SecretAccessError, SecretNotFoundError, DecryptionError, UnsupportedFormatError, KeyError, ValueError):
+            raise SecretConflictError("value_differs", existing.id) from None  # unreadable is not "the same"
+        if not equal_bytes(held, plaintext):
+            raise SecretConflictError("value_differs", existing.id)
+        existing.already_existed = True
+        return existing
+
+    @staticmethod
+    async def find_by_name(session: AsyncSession, *, owner_vault: str, name: str) -> Secret | None:
+        """The one secret named *name* in *owner_vault*, ``None`` if absent; several: :class:`AmbiguousSecretError`.
+
+        Every row counts, active or not: ambiguity is judged over the whole group, and a deactivated row still
+        holds the unique slot. A reader that must not use a deactivated row checks ``is_active`` on the result.
+        """
+        rows = await session.execute(select(Secret).where(Secret.owner_vault == owner_vault, Secret.name == name))
+        found = list(rows.scalars())
+        if len(found) > 1:
+            raise AmbiguousSecretError(owner_vault, [s.id for s in found])
+        return found[0] if found else None
 
     async def _load(self, session: AsyncSession, secret_id: uuid.UUID) -> Secret:
         secret = await session.get(Secret, secret_id)
@@ -106,6 +189,10 @@ class EnvelopeSecretsService:
     async def _grants(self, session: AsyncSession, secret_id: uuid.UUID) -> list[SecretGrant]:
         rows = await session.execute(select(SecretGrant).where(SecretGrant.secret_id == secret_id))
         return list(rows.scalars())
+
+    async def grantees(self, session: AsyncSession, secret_id: uuid.UUID) -> set[str]:
+        """The vault strings holding a grant on *secret_id*."""
+        return {g.grantee for g in await self._grants(session, secret_id)}
 
     def _recover_dek(self, secret: Secret, grant: SecretGrant) -> bytes:
         return unwrap_dek(WrappedDek.from_dict(grant.wrapped_dek), self._kek(grant.grantee), secret_id=str(secret.id))

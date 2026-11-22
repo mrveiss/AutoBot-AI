@@ -54,7 +54,7 @@ def _render(host: str, port: str) -> str:
         frontend_slm_backend_remote=False,
         frontend_slm_upstream_prefix="/api/",
         frontend_slm_ca_cert="/ca.pem",
-        frontend_slm_client_max_body_size="10m",
+        slm_client_max_body_size="10m",
     )
 
 

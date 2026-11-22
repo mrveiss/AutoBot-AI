@@ -607,3 +607,15 @@ slm_trusted_proxies: >-
   {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default(''), frontend_host | default('')]
       + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
      | reject('equalto', '') | unique | join(',') }}
+
+# ==========================================
+# PROXY UPLOAD CAP: the one path to the shared nginx snippet (#19868, #22045)
+# ==========================================
+# The frontend and SLM nginx templates `lookup('file', proxy_upload_cap_file)`. They used
+# `role_path` for it, which is undefined when a play renders the template outside a role
+# (provision-fleet-roles.yml Phase 4c re-render), so that render failed. In a role the
+# file sits two levels up from the role; in a play of playbooks/ it sits one level up from
+# the playbook folder. Override the variable to point at a different checkout.
+proxy_upload_cap_file: >-
+  {{ (role_path ~ '/../../_shared/files') if role_path is defined
+  else (playbook_dir ~ '/../_shared/files') }}/upload-cap.conf

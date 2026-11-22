@@ -23,12 +23,14 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from api.schemas_system import SecretCreateRequest, SecretUpdateRequest
+from api.secrets_delete_outcome import error_for
 from api.secrets_guarded_delete import guarded_delete
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from models.secret import Secret
-from services.envelope_secrets_service import SecretAccessError
+from services.envelope_secrets_service import AmbiguousSecretError, SecretAccessError, SecretConflictError
+from services.secret_names import ReservedSecretNameError
 
 logger = get_logger(__name__)
 
@@ -108,17 +110,20 @@ async def create_system_vault_secret(request: SecretCreateRequest, owner_id: str
     user_id, permissions = await _principal(owner_id)
     coordinator = get_coordinator()
     async for session in get_session():
-        secret = await coordinator.create(
-            session,
-            user_id=user_id,
-            permissions=permissions,
-            owner_vault=_SYSTEM_VAULT,
-            name=request.name,
-            secret_type=request.type.value,
-            plaintext=request.value.encode("utf-8"),
-        )
+        try:
+            secret = await coordinator.create(
+                session,
+                user_id=user_id,
+                permissions=permissions,
+                owner_vault=_SYSTEM_VAULT,
+                name=request.name,
+                secret_type=request.type.value,
+                plaintext=request.value.encode("utf-8"),
+            )
+        except (AmbiguousSecretError, SecretConflictError, ReservedSecretNameError) as exc:
+            raise error_for(exc) from None  # the fixed 409 (#17850); the route re-raises an HTTPException as is
         await session.commit()
-        return _summary(secret)
+        return {**_summary(secret), "already_existed": True} if secret.already_existed else _summary(secret)
     raise RuntimeError("get_session() yielded no session")  # pragma: no cover -- defensive, generator always yields
 
 
@@ -130,6 +135,14 @@ async def _unavailable_unless_not_system(vault_id: uuid.UUID) -> None:
         if await _is_system_secret(session, vault_id):
             raise HTTPException(status_code=503, detail="envelope secrets store not configured")
         return
+
+
+def _require_value_only(request: SecretUpdateRequest) -> None:
+    """Refuse (ValueError -> 400) a rotate with no `value`, or with metadata that would be silently dropped."""
+    if not request.value:
+        raise ValueError("value is required to update a system-vault secret")
+    if request.model_fields_set & _METADATA_FIELDS:
+        raise ValueError("a system-vault secret has no editable metadata; send only the value")
 
 
 async def rotate_system_vault_secret(
@@ -155,10 +168,7 @@ async def rotate_system_vault_secret(
             return None
         _refuse_internal_key(headers, "rotate")
         user_id, permissions = await _principal(owner_id)
-        if not value:
-            raise ValueError("value is required to update a system-vault secret")
-        if request.model_fields_set & _METADATA_FIELDS:
-            raise ValueError("a system-vault secret has no editable metadata; send only the value")
+        _require_value_only(request)
         secret = await coordinator.rotate(
             session, user_id=user_id, permissions=permissions, secret_id=vault_id, new_plaintext=value.encode("utf-8")
         )

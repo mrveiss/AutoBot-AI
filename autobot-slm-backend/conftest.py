@@ -442,6 +442,11 @@ _REAL_SERVICE_MODULES = (
     # _collect_outdated_node_ids (tests/api/test_collect_outdated_node_ids.py, the Co-located Smoke job)
     # would assert against a stub.
     "collection_errors",
+    # #17421: api/code_sync.py binds `record_backend_start` from it at import and awaits it on every
+    # restart chain; the AST-derived stub would hand back a MagicMock that cannot be awaited. It imports
+    # secrets_store_snapshot (BACKEND_DATA_DIR), so that loads first.
+    "secrets_store_snapshot",
+    "sync_restart",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

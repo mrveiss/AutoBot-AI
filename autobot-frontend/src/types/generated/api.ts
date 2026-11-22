@@ -1217,26 +1217,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/chat/sessions/{session_id}/share": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Share Session
-         * @description Share a conversation with other users, optionally including KB facts (#689).
-         */
-        post: operations["share_session_api_chat_sessions__session_id__share_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/chat/sessions/{session_id}/share/preview": {
         parameters: {
             query?: never;
@@ -1276,6 +1256,50 @@ export interface paths {
          *     which removes the Redis-backed LangGraph checkpoint data.
          */
         delete: operations["clear_session_checkpoints_api_sessions__session_id__checkpoints_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Session Participants
+         * @description Who the owner has shared this conversation with, from the system of record (#18890).
+         */
+        get: operations["list_session_participants_api_chat_sessions__session_id__share_get"];
+        put?: never;
+        /**
+         * Share Session
+         * @description Owner shares a conversation with other users, optionally including KB facts (#689, #18890).
+         */
+        post: operations["share_session_api_chat_sessions__session_id__share_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chat/sessions/{session_id}/share/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unshare Session
+         * @description Owner removes a participant from a shared conversation; their access ends at once (#18890).
+         */
+        delete: operations["unshare_session_api_chat_sessions__session_id__share__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7042,6 +7066,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge/chroma/empty-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Empty Collections
+         * @description Collections holding zero vectors, plus those that could not be counted (read-only).
+         */
+        get: operations["list_empty_collections_api_knowledge_chroma_empty_collections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge/chroma/empty-collections/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Empty Collection Cleanup
+         * @description Propose deleting one zero-count collection -- a request, not a deletion.
+         *
+         *     A collection that is not currently reported empty is refused, so a reviewer is never asked to decide
+         *     on something that could not execute. The handler re-checks the count when the proposal is approved.
+         */
+        post: operations["propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge/chroma/collections": {
         parameters: {
             query?: never;
@@ -8349,18 +8416,15 @@ export interface paths {
         post?: never;
         /**
          * Delete Collection
-         * @description Delete a collection.
+         * @description Propose deleting a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collections/Folders for grouping documents.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID to delete
-         *     - delete_facts: If True, also delete all facts in collection
+         *     Files (or reuses) a pending destructive-action approval for every caller, human or agent; the delete runs
+         *     only after a human approves it in the Approvals inbox, with a durable audit entry.
          *
          *     Returns:
-         *     - status: success or error
-         *     - facts_in_collection: Number of facts in collection
-         *     - facts_deleted: Number of facts deleted (if delete_facts=True)
+         *     - status: pending_approval
+         *     - approval_id: the pending approval's reference
+         *     - facts_in_collection: facts in the collection now (what the approver sees)
          */
         delete: operations["delete_collection_api_knowledge_base_collections__collection_id__delete"];
         options?: never;
@@ -8505,19 +8569,32 @@ export interface paths {
         put?: never;
         /**
          * Bulk Delete Collection Facts
-         * @description Delete all facts in a collection.
+         * @description Propose deleting all facts in a collection. It deletes nothing (#21383, #17038).
          *
-         *     Issue #412: Collection-level bulk operations.
-         *
-         *     Parameters:
-         *     - collection_id: Collection UUID
-         *     - confirm: Must be True to actually delete
-         *
-         *     Returns:
-         *     - status: success or error
-         *     - deleted_count: Number of facts deleted
+         *     Without ``confirm`` it is a read-only preview. With ``confirm`` it files (or reuses) a pending
+         *     destructive-action approval for every caller, human or agent; the delete runs only after a human approves it.
          */
         post: operations["bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/facts/delete-selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Selected Facts
+         * @description Propose deleting exactly the selected facts, from every collection they are in. Deletes nothing (#21886).
+         */
+        post: operations["delete_selected_facts_api_knowledge_base_facts_delete_selected_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9005,6 +9082,49 @@ export interface paths {
          *     Returns detailed diff information about content and metadata changes.
          */
         post: operations["compare_versions_api_knowledge_base_facts__fact_id__versions_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Stored Connector Credentials
+         * @description Count connector records holding a value for a sensitive field of their auth schema (no values returned).
+         */
+        get: operations["scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/connector_credentials/cleanup-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Connector Credential Cleanup
+         * @description Propose removing the clear-text copies from one connector record -- a request, not a rewrite.
+         *
+         *     Only a record that holds a copy AND has a secrets-store copy can be proposed: removing the only copy
+         *     would lose the credential. The handler re-checks both when the proposal is approved.
+         */
+        post: operations["propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19131,7 +19251,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Plugin
-         * @description Enable a plugin.
+         * @description Enable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -19157,7 +19277,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Plugin
-         * @description Disable a plugin.
+         * @description Disable a plugin: audited, persisted across restarts, and applied to the loaded plugin (#17421).
          *
          *     Args:
          *         plugin_name: Plugin name
@@ -19677,6 +19797,46 @@ export interface paths {
          * @description Propose keeping only the newest ``.env.*~`` copy -- a request, not an execution.
          */
         post: operations["propose_env_copies_cleanup_api_admin_env_copies_cleanup_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/secret-duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Secret Duplicates Status
+         * @description Read only: counts, vault references and approval ids. No secret id, name or value (#17865).
+         */
+        get: operations["secret_duplicates_status_api_admin_secret_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/secret-duplicates/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Secret Duplicate Resolution
+         * @description Verify every duplicated group and PROPOSE its resolution -- a request, not an execution.
+         */
+        post: operations["propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -53038,8 +53198,8 @@ export interface paths {
         put?: never;
         /**
          * Release Work Item
-         * @description Enforced: ``agent_id`` is an agent UUID, equal to the stored assignee when there is one; an item held by a
-         *     person is refused (409). Not enforced: that the caller IS that agent (open, #20521).
+         * @description Enforced: ``agent_id`` is an agent UUID of this company named by its owner or admin (403 otherwise, #20521),
+         *     equal to the stored assignee when there is one; an item held by a person is refused (409).
          */
         post: operations["release_work_item_api_llc_work_items__work_item_id__release_post"];
         delete?: never;
@@ -68032,6 +68192,68 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ConnectorCredentialCleanupRequest
+         * @description Propose removing the clear-text copies from one connector record.
+         */
+        ConnectorCredentialCleanupRequest: {
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialCleanupResponse
+         * @description The PENDING approval created; nothing has been rewritten.
+         */
+        ConnectorCredentialCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Connector Id */
+            connector_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialFindingResponse
+         * @description One record holding sensitive values. ``fields`` are names, never values.
+         */
+        ConnectorCredentialFindingResponse: {
+            /** Connector Id */
+            connector_id: string;
+            /** Connector Type */
+            connector_type: string;
+            /** Fields */
+            fields: string[];
+            /** Has Secrets Store Copy */
+            has_secrets_store_copy: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ConnectorCredentialScanResponse
+         * @description Counts of affected records. ``unscannable_ids`` could not be checked: never read them as clean.
+         */
+        ConnectorCredentialScanResponse: {
+            /** Scanned */
+            scanned: number;
+            /** Affected */
+            affected: number;
+            /** With Store Copy Count */
+            with_store_copy_count: number;
+            /** Without Store Copy Count */
+            without_store_copy_count: number;
+            /** Findings */
+            findings: components["schemas"]["ConnectorCredentialFindingResponse"][];
+            /** Unscannable Ids */
+            unscannable_ids: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * ConnectorDetailResponse
          * @description GET /knowledge_base/connectors/{connector_id}.
          */
@@ -73316,6 +73538,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[SessionParticipantsData] */
+        DataResponse_SessionParticipantsData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionParticipantsData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[SessionShareData] */
         DataResponse_SessionShareData_: {
             /**
@@ -73354,6 +73591,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionTraceData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionUnshareData] */
+        DataResponse_SessionUnshareData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionUnshareData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -75664,6 +75916,68 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * DuplicateGroupStatus
+         * @description One duplicated ``(owner_vault, name)``: the vault, how many copies, and its open proposal if any.
+         *
+         *     No secret id and no name leaves here (#17865): a person acts on a group from its approval, in the Approvals
+         *     inbox, not from this view.
+         */
+        DuplicateGroupStatus: {
+            /** Owner Vault */
+            owner_vault: string;
+            /** Copy Count */
+            copy_count: number;
+            /** Approval Id */
+            approval_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateProposal
+         * @description What one group produced: the approval raised, or why none was (a proposal already stands).
+         */
+        DuplicateProposal: {
+            /** Approval Id */
+            approval_id: string | null;
+            /** Reason */
+            reason: string;
+            /** Copies */
+            copies: number;
+            /** Skipped */
+            skipped: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateRequestResponse
+         * @description The proposals one request raised.
+         */
+        DuplicateRequestResponse: {
+            /** Proposals */
+            proposals: components["schemas"]["DuplicateProposal"][];
+            /**
+             * Remaining
+             * @default 0
+             */
+            remaining: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DuplicateStatus
+         * @description Every duplicated group, in counts. ``group_count == 0`` means the unique-constraint migration can apply.
+         */
+        DuplicateStatus: {
+            /** Group Count */
+            group_count: number;
+            /** Copy Count */
+            copy_count: number;
+            /** Groups */
+            groups: components["schemas"]["DuplicateGroupStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** Edge */
         Edge: {
             /** From Step */
@@ -76196,6 +76510,46 @@ export interface components {
             tasks_paused: string[];
             /** Durable */
             durable: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionCleanupRequest
+         * @description Propose deleting one zero-count collection.
+         */
+        EmptyCollectionCleanupRequest: {
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionCleanupResponse
+         * @description The PENDING approval created; nothing has been deleted.
+         */
+        EmptyCollectionCleanupResponse: {
+            /** Approval Id */
+            approval_id: string;
+            /** Status */
+            status: string;
+            /** Action */
+            action: string;
+            /** Collection */
+            collection: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmptyCollectionsResponse
+         * @description Zero-count collections. ``unreadable`` could not be counted: never read them as empty (#19725).
+         */
+        EmptyCollectionsResponse: {
+            /** Total */
+            total: number;
+            /** Empty */
+            empty: string[];
+            /** Unreadable */
+            unreadable: string[];
         } & {
             [key: string]: unknown;
         };
@@ -82397,26 +82751,6 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionBulkDeleteResponse
-         * @description Response for POST /collections/{collection_id}/bulk-delete.
-         */
-        KnowledgeCollectionBulkDeleteResponse: {
-            /** Status */
-            status: string;
-            /** Collection Id */
-            collection_id?: string | null;
-            /** Facts To Delete */
-            facts_to_delete?: number | null;
-            /** Deleted Count */
-            deleted_count: number;
-            /** Confirm Required */
-            confirm_required: boolean;
-            /** Message */
-            message?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
          * KnowledgeCollectionCreateResponse
          * @description Response for POST /collections.
          */
@@ -82433,20 +82767,29 @@ export interface components {
             [key: string]: unknown;
         };
         /**
-         * KnowledgeCollectionDeleteResponse
-         * @description Response for DELETE /collections/{collection_id}.
+         * KnowledgeCollectionDeleteProposal
+         * @description Answer of the two collection delete routes: a proposal (or, without confirm, a read-only preview).
          */
-        KnowledgeCollectionDeleteResponse: {
+        KnowledgeCollectionDeleteProposal: {
             /** Status */
             status: string;
             /** Collection Id */
-            collection_id?: string | null;
+            collection_id: string;
             /** Facts In Collection */
             facts_in_collection: number;
-            /** Facts Deleted */
-            facts_deleted: number;
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action?: string | null;
+            /**
+             * Confirm Required
+             * @default false
+             */
+            confirm_required: boolean;
             /** Message */
-            message?: string | null;
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -83611,6 +83954,26 @@ export interface components {
             reformulated_queries?: string[];
             /** Message */
             message?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * KnowledgeSelectedFactsDeleteProposal
+         * @description Answer of the selected-facts delete route: a proposal for approval, never a deletion (#21886).
+         */
+        KnowledgeSelectedFactsDeleteProposal: {
+            /** Status */
+            status: string;
+            /** Facts Selected */
+            facts_selected: number;
+            /** Approval Id */
+            approval_id: string;
+            /** Approval Status */
+            approval_status?: string | null;
+            /** Action */
+            action: string;
+            /** Message */
+            message: string;
         } & {
             [key: string]: unknown;
         };
@@ -96130,8 +96493,7 @@ export interface components {
              * @default false
              */
             requires_human_review: boolean;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /**
              * Requires Cross Vendor Review
              * @default false
@@ -96176,8 +96538,7 @@ export interface components {
         ReviewGatePolicyUpdate: {
             /** Requires Human Review */
             requires_human_review?: boolean | null;
-            /** Reviewer Role */
-            reviewer_role?: string | null;
+            reviewer_role?: components["schemas"]["MembershipRole"] | null;
             /** Requires Cross Vendor Review */
             requires_cross_vendor_review?: boolean | null;
         } & {
@@ -99727,6 +100088,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SessionParticipantsData
+         * @description data payload for GET /chat/sessions/{session_id}/share (#18890).
+         */
+        SessionParticipantsData: {
+            /** Session Id */
+            session_id: string;
+            /** Participants */
+            participants: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SessionParticipantsResponse
          * @description Session participants list.
          */
@@ -99855,6 +100228,20 @@ export interface components {
             session_id: string;
             /** Turns */
             turns: components["schemas"]["TraceTurn"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionUnshareData
+         * @description data payload for DELETE /chat/sessions/{session_id}/share/{user_id} (#18890).
+         */
+        SessionUnshareData: {
+            /** Session Id */
+            session_id: string;
+            /** User Id */
+            user_id: string;
+            /** Removed */
+            removed: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -111040,41 +111427,6 @@ export interface operations {
             };
         };
     };
-    share_session_api_chat_sessions__session_id__share_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionShareRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_share_preview_api_chat_sessions__session_id__share_preview_get: {
         parameters: {
             query?: never;
@@ -111124,6 +111476,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_SessionCheckpointClearData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_participants_api_chat_sessions__session_id__share_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionParticipantsData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_session_api_chat_sessions__session_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionShareData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshare_session_api_chat_sessions__session_id__share__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionUnshareData_"];
                 };
             };
             /** @description Validation Error */
@@ -118864,6 +119314,59 @@ export interface operations {
             };
         };
     };
+    list_empty_collections_api_knowledge_chroma_empty_collections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionsResponse"];
+                };
+            };
+        };
+    };
+    propose_empty_collection_cleanup_api_knowledge_chroma_empty_collections_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyCollectionCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmptyCollectionCleanupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_collections_api_knowledge_chroma_collections_get: {
         parameters: {
             query?: never;
@@ -120411,7 +120914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
                 };
             };
             /** @description Validation Error */
@@ -120608,7 +121111,7 @@ export interface operations {
     bulk_delete_collection_facts_api_knowledge_base_collections__collection_id__bulk_delete_post: {
         parameters: {
             query?: {
-                /** @description Must be True to delete */
+                /** @description Must be True to propose the deletion */
                 confirm?: boolean;
             };
             header?: never;
@@ -120626,7 +121129,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KnowledgeCollectionBulkDeleteResponse"];
+                    "application/json": components["schemas"]["KnowledgeCollectionDeleteProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_selected_facts_api_knowledge_base_facts_delete_selected_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionFactsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSelectedFactsDeleteProposal"];
                 };
             };
             /** @description Validation Error */
@@ -121189,6 +121725,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeFactVersionCompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_stored_connector_credentials_api_knowledge_base_connector_credentials_scan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialScanResponse"];
+                };
+            };
+        };
+    };
+    propose_connector_credential_cleanup_api_knowledge_base_connector_credentials_cleanup_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorCredentialCleanupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorCredentialCleanupResponse"];
                 };
             };
             /** @description Validation Error */
@@ -135300,6 +135889,58 @@ export interface operations {
             };
         };
     };
+    secret_duplicates_status_api_admin_secret_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateStatus"];
+                };
+            };
+        };
+    };
+    propose_secret_duplicate_resolution_api_admin_secret_duplicates_requests_post: {
+        parameters: {
+            query?: {
+                /** @description Raise a group again after a rejected or revision-requested proposal */
+                re_raise?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateRequestResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ownerless_chat_sessions_api_admin_ownerless_chat_sessions_get: {
         parameters: {
             query?: never;
@@ -146482,6 +147123,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentTerminalApproveResponse"];
                 };
+            };
+            /** @description The approval was already decided; nothing ran again (#19951) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -177131,7 +177779,9 @@ export interface operations {
     ingest_cost_api_llc_budget__agent_id__ingest_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 agent_id: string;
             };

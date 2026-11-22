@@ -163,7 +163,7 @@ class BaseProvider(ABC):
         handler = get_backoff_handler()
 
         async def _attempt() -> LLMResponse:
-            start = time.monotonic()
+            entered = time.monotonic()
             try:
                 # #11498: if the completion breaker is OPEN and still cooling, fail
                 # fast BEFORE taking a shared cross-worker rate-limit token so a down
@@ -171,28 +171,12 @@ class BaseProvider(ABC):
                 # ready-to-probe is NOT rejecting, so it falls through and
                 # _guarded_completion transitions the breaker to HALF_OPEN to recover.
                 if self._completion_circuit_breaker().is_rejecting:
-                    return self._breaker_error_response(request, f"{provider_key} circuit breaker open", start)
+                    return self._breaker_error_response(request, f"{provider_key} circuit breaker open", entered)
                 # Issue #14211: only reached once the breaker guarantees a matching
                 # notify_response/notify_error below, so the recorder's in-flight
                 # gauge stays balanced.
                 self._notify_request_started(request, provider_key)
-                # GH#16527: bound in-flight concurrent requests to this provider
-                # instance before the rate-limit token, so a burst queues here first.
-                async with self._concurrency_semaphore:
-                    # Issue #8170: acquire a rate-limit token shared across all uvicorn
-                    # workers via Redis.  Falls back to allow-all when Redis unavailable.
-                    async with get_llm_rate_limiter().acquire(provider_key):
-                        try:
-                            response = await self._guarded_completion(request)
-                            latency_ms = (time.monotonic() - start) * 1000
-                            response.metadata.setdefault("request_type", self._request_type_label(request))
-                            self._notify_response(response, latency_ms)
-                            # GH#8502: raise so the backoff handler can retry.
-                            raise_if_rate_limited(response)
-                            return response
-                        except Exception as exc:
-                            self._notify_error(exc, request)
-                            raise
+                return await self._complete_in_slot(request, provider_key, entered)
             finally:
                 record_progress()  # every exit of every attempt is progress (#15950 AC4)
 
@@ -201,6 +185,37 @@ class BaseProvider(ABC):
         except Exception:
             # Backoff exhausted — return the last error response if we have one,
             # otherwise let the exception propagate to the registry for fallback.
+            raise
+
+    async def _complete_in_slot(self, request: LLMRequest, provider_key: str, entered: float) -> LLMResponse:
+        """Wait for the concurrency slot and rate-limit token, then run the call (#21914).
+
+        ``queue_wait_ms`` (attempt entry until slot and token are both held) and
+        provider ``latency_ms`` are measured separately: the latency clock starts
+        only once both are held, so a long queue never reads as a slow provider.
+        The wait travels on the same observation as ``response.metadata["queue_wait_ms"]``.
+
+        #14211: the request-started notify already fired, so every exit yields exactly one terminal
+        event: notify_response on success, notify_error on a failure, a rate limit (#21929) or a
+        cancellation while still queued.
+        """
+        try:
+            # GH#16527: bound in-flight requests per provider before the rate-limit token.
+            async with self._concurrency_semaphore:
+                # Issue #8170: cross-worker Redis token; allow-all when Redis is unavailable.
+                async with get_llm_rate_limiter().acquire(provider_key):
+                    start = time.monotonic()
+                    response = await self._guarded_completion(request)
+                    latency_ms = (time.monotonic() - start) * 1000
+                    response.metadata.setdefault("request_type", self._request_type_label(request))
+                    response.metadata["queue_wait_ms"] = (start - entered) * 1000
+                    # GH#8502: raise so the backoff handler can retry. Checked before notify_response so a
+                    # rate-limited attempt ends in ONE terminal event, the notify_error below (#21929).
+                    raise_if_rate_limited(response)
+                    self._notify_response(response, latency_ms)
+                    return response
+        except (Exception, asyncio.CancelledError) as exc:
+            self._notify_error(exc, request)
             raise
 
     def applied_structured_output_mode(self, request: LLMRequest) -> StructuredOutputMode:
