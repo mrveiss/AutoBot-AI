@@ -24,6 +24,7 @@ from models.schemas_health import HealthResponse
 from services.auth import get_current_user
 from services.database import get_db
 from services.frontend_bundle_health import frontend_bundle_status
+from services.role_manifest_errors import manifest_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -103,7 +104,8 @@ async def health_check(
     # does not degrade the response — only a bundle that should be servable and
     # is not.
     frontend_ok = frontend_status.startswith(("healthy", "not_applicable"))
-    healthy = db_status == "healthy" and redis_status == "healthy" and frontend_ok
+    role_errors = manifest_errors()  # #22067
+    healthy = db_status == "healthy" and redis_status == "healthy" and frontend_ok and not role_errors
     return HealthResponse(
         status="healthy" if healthy else "degraded",
         version=VERSION,
@@ -111,6 +113,8 @@ async def health_check(
         database=db_status,
         redis=redis_status,
         frontend=frontend_status,
+        manifests="unhealthy" if role_errors else "healthy",
+        manifest_errors=role_errors,
         nodes_online=nodes_online,
         nodes_total=nodes_total,
     )

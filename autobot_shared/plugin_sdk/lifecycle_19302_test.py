@@ -71,6 +71,7 @@ async def _fire() -> list:
 async def test_disabled_plugin_hook_is_not_called(loader_and_manifest):
     loader, manifest, _ = loader_and_manifest
     plugin = await loader.load_plugin(manifest)
+    assert await _fire() == [], "a loaded plugin that was never enabled does not fire (#19302 AC1)"
     await plugin.enable()
     assert await _fire() == ["v1"]
     await plugin.disable()

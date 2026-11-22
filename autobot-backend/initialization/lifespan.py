@@ -1919,19 +1919,17 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from autobot_shared.plugin_sdk import PluginManager
-        from plugin_paths import plugin_search_dirs, trusted_plugin_roots
-        from services.provider_key_vault import plugin_credential_resolvers
+        from plugin_enable_gate import build_plugin_manager, start_plugin_manager
 
-        # #18094: the instance that actually runs the plugins gets the origin-bound resolvers too.
-        plugin_manager = PluginManager(plugin_search_dirs(), plugin_credential_resolvers(), trusted_plugin_roots())
+        # #18094 origin-bound resolvers and #17421 the enable gate are wired in by the builder.
+        plugin_manager = build_plugin_manager()
         # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
         # one thing — a crashed discovery from an empty tree — and on a crash the
         # manager was discarded before it ever reached app.state, so the only
         # state that key exists to report was unobservable in production. A
         # signal nobody can read is the defect this whole issue is about.
         app.state.plugin_manager = plugin_manager
-        await plugin_manager.startup()
+        await start_plugin_manager(plugin_manager)  # #17421: a gate failure retries in the background
         # #13677: the load tally, not just per-plugin statuses. A status map
         # nobody totals is why 0-of-7 read the same as "no plugins installed".
         logger.info(
