@@ -71,7 +71,7 @@ def analytics(monkeypatch, tmp_path):
         return redis
 
     monkeypatch.setattr(cb, "list_sources", listing)
-    monkeypatch.setattr(cb, "indexed_root_dir", index_root)
+    monkeypatch.setattr(cb, "provenance_root_dir", index_root)
     monkeypatch.setattr(cb, "cached_task_result", cached_deps)
     monkeypatch.setattr(store, "get_async_redis_client", get_redis)
     state["redis"], state["tmp"] = redis, tmp_path

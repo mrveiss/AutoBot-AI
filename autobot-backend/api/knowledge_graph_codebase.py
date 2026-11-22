@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Tuple
 from fastapi import HTTPException
 
 from api.codebase_analytics.call_graph_summary import load_call_graph_summary
-from api.codebase_analytics.code_graph_queries import indexed_root_dir
+from api.codebase_analytics.code_graph_queries import provenance_root_dir
 from api.codebase_analytics.endpoints.dependencies import DEPENDENCIES_TASK_PREFIX
 from api.codebase_analytics.endpoints.shared import caller_owner_id
 from api.codebase_analytics.source_models import CodeSource, SourceStatus
@@ -47,7 +47,7 @@ def order_codebases(sources: List[CodeSource], index_root: str | None) -> List[C
 
 async def _index_root() -> str | None:
     try:
-        return await indexed_root_dir()
+        return await provenance_root_dir()
     except Exception as e:  # no readable provenance: every codebase is then "other", in the stable order
         logger.warning("Code graph index root unavailable, no codebase is ordered first: %s", e)
         return None

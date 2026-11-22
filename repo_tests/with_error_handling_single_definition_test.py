@@ -154,7 +154,9 @@ _TREES_THAT_MUST_BE_SCANNED = ("autobot_shared", "autobot-slm-backend", "scripts
 #: ~50x headroom, while losing any one of the four trees above (217, 175, 55,
 #: 22 files) or any comparable subtree fails. RATCHET: raise it when the
 #: population genuinely grows; lower it only with a stated reason.
-_SOURCE_FLOOR = 3050
+#: Re-pinned 2026-11-22 (#20945): the tree measured 4,576 sources, so the floor
+#: moved 3050 -> 4427, the same 149 margin below the measured population.
+_SOURCE_FLOOR = 4427
 
 #: How far the population may outgrow the floor before the floor is stale. The
 #: floor started at 100 against 2,308 files -- 23x slack -- which is how it

@@ -62,7 +62,7 @@ async def load_provenance(collection: Any) -> "GraphProvenance | None":
     return await load_graph_provenance(collection)
 
 
-async def indexed_root_dir() -> str | None:
+async def provenance_root_dir() -> str | None:
     """The full path of the tree the persistent code graph was built from (its provenance root), or None.
 
     ``provenance_fields`` exposes only the directory's name; matching a registered source to the index
