@@ -51,7 +51,8 @@ export interface TLSEndpoint {
   days_until_expiry: number | null
 }
 
-export interface TLSCredentialCreate {
+/** The body the upload form sends: the four fields of the node-manager's `TLSCredentialCreate` it fills in. */
+export interface TLSCredentialUpload {
   name?: string
   ca_cert: string
   server_cert: string
@@ -66,7 +67,7 @@ export interface TLSCredentialUpdate {
   is_active?: boolean
 }
 
-export interface SLMNode {
+export interface TlsCredentialNode {
   id: number
   node_id: string
   hostname: string
@@ -81,7 +82,7 @@ export interface SLMNode {
 
 const credentials = ref<TLSCredential[]>([])
 const endpoints = ref<TLSEndpoint[]>([])
-const nodes = ref<SLMNode[]>([])
+const nodes = ref<TlsCredentialNode[]>([])
 const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const authToken = ref<string | null>(null)
@@ -90,6 +91,8 @@ const authToken = ref<string | null>(null)
 // The base URL (getSLMUrl) and token injection are owned by the canonical bridge;
 // endpoint paths keep the getApiBase() prefix exactly as before.
 const slm = new SlmClient(() => authToken.value)
+// Login is credential-based: a token-less client, so a stale in-memory token is never sent with it.
+const slmLogin = new SlmClient()
 
 // =============================================================================
 // Computed
@@ -117,14 +120,10 @@ const expiringSoonCount = computed(() => expiringCredentials.value.length)
 async function authenticate(username: string, password: string): Promise<boolean> {
   try {
     // Canonical SLM login (Issue #1922): JSON body to /api/auth/login.
-    // Credential-based, so skip bearer injection.
-    const response = await slm.rawRequest('/api/auth/login', {
+    // Credential-based, so it goes through the token-less client.
+    const response = await slmLogin.rawRequest('/api/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username, password }),
-      skipAuth: true,
+      body: { username, password },
     })
 
     if (!response.ok) {
@@ -171,11 +170,11 @@ function isAuthenticated(): boolean {
 /**
  * Fetch all nodes from SLM.
  */
-async function fetchNodes(): Promise<SLMNode[]> {
+async function fetchNodes(): Promise<TlsCredentialNode[]> {
   error.value = null
   return wrap(async () => {
     try {
-      const data = await slm.get<{ nodes?: SLMNode[] }>(`${getApiBase()}/nodes`)
+      const data = await slm.get<{ nodes?: TlsCredentialNode[] }>(`${getApiBase()}/nodes`)
       nodes.value = data.nodes || []
       return nodes.value
     } catch (err: unknown) {
@@ -219,7 +218,7 @@ async function fetchNodeCredentials(nodeId: string): Promise<TLSCredential[]> {
  */
 async function createCredential(
   nodeId: string,
-  data: TLSCredentialCreate
+  data: TLSCredentialUpload
 ): Promise<TLSCredential | null> {
   error.value = null
   return wrap(async () => {

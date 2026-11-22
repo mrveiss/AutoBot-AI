@@ -25,6 +25,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -211,7 +212,7 @@ class ModelOptimizer:
         """Refresh the list of available models from Ollama."""
         try:
             http_client = get_http_client()
-            async with await http_client.get(f"{self._ollama_base_url}/api/tags") as response:
+            async with await http_client.get(ollama_tags_url(self._ollama_base_url)) as response:
                 if response.status == 200:
                     data = await response.json()
                     models = []

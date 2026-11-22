@@ -65,6 +65,7 @@ import time
 import uuid
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.rate_limiter_window import LocalWindowCounter, WindowFailurePolicy
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_2_HOURS
 
@@ -144,6 +145,9 @@ class RateLimiter:
     log_label:
         When set, ``acquire_window`` logs a warning (label, limit, window --
         never the key) on each rejection; the default keeps it silent.
+    window_failure_policy:
+        What ``acquire_window`` does when Redis cannot answer: ``FAIL_OPEN`` (default,
+        allow), ``LOCAL`` (enforce per process) or ``FAIL_CLOSED`` (deny) (#18087).
     """
 
     def __init__(
@@ -154,8 +158,11 @@ class RateLimiter:
         requests_per_hour: int | None = None,
         redis_database: str = "main",
         log_label: str | None = None,
+        window_failure_policy: WindowFailurePolicy = WindowFailurePolicy.FAIL_OPEN,
     ) -> None:
         self._prefix = scope_prefix
+        self._window_policy = window_failure_policy
+        self._local_windows = LocalWindowCounter()
         self._log_label = log_label
         # Logs name the limiter only (prefix + optional label), never a key (#18087).
         self._log_scope = f"{scope_prefix}/{log_label}" if log_label else scope_prefix
@@ -171,19 +178,24 @@ class RateLimiter:
         self._token_buckets: dict[str, dict[str, float]] = {}
         self._token_locks: dict[str, asyncio.Lock] = {}
         self._last_fail_open_warn: float | None = None
+        #: Requests this limiter allowed because Redis was unavailable or errored.
+        #: Unlike the throttled warning, every occurrence is counted, so a caller that
+        #: must react to fail-open (a login path) can compare before/after (#20600).
+        self.fail_open_count: int = 0
 
     def _warn_fail_open(self, reason: str) -> None:
-        """Warn that a request was allowed because Redis is unavailable (#18617).
+        """Throttled warning (scope only, never a key) that Redis was down and a request was allowed (#18617)."""
+        self.fail_open_count += 1
+        if self._warn_due():
+            logger.warning("rate_limiter: %s for limiter '%s'; allowing request (fail-open)", reason, self._log_scope)
 
-        Names the limiter scope only, never a key or key-derived value, and is
-        rate-limited per instance to one line per ``FAIL_OPEN_WARN_INTERVAL_SECONDS``.
-        """
-        mono = time.monotonic()
-        last = self._last_fail_open_warn
-        if last is not None and mono - last < FAIL_OPEN_WARN_INTERVAL_SECONDS:
-            return
-        self._last_fail_open_warn = mono
-        logger.warning("rate_limiter: %s for limiter '%s'; allowing request (fail-open)", reason, self._log_scope)
+    def _warn_due(self) -> bool:
+        """True at most once per ``FAIL_OPEN_WARN_INTERVAL_SECONDS`` per instance (outage warnings)."""
+        mono, last = time.monotonic(), self._last_fail_open_warn
+        due = last is None or mono - last >= FAIL_OPEN_WARN_INTERVAL_SECONDS
+        if due:
+            self._last_fail_open_warn = mono
+        return due
 
     # ------------------------------------------------------------------
     # Public API
@@ -440,8 +452,7 @@ class RateLimiter:
         try:
             redis = await get_async_redis_client(database=self._db)
             if redis is None:
-                self._warn_fail_open("Redis unavailable")
-                return True, 0.0
+                return self._window_unavailable(key, max_requests, window_seconds, "Redis unavailable")
 
             lua_script = """
             local win_key = KEYS[1]
@@ -473,8 +484,40 @@ class RateLimiter:
             result = await redis.eval(lua_script, 2, win_key, win_key + ":seq", now, window_seconds, max_requests)
             return bool(result[0]), max(0.0, float(result[1]))
         except Exception as exc:
-            self._warn_fail_open(f"window acquire error ({type(exc).__name__})")
+            return self._window_unavailable(
+                key, max_requests, window_seconds, f"window acquire error ({type(exc).__name__})"
+            )
+
+    def _window_unavailable(self, key: str, max_requests: int, window_seconds: int, reason: str) -> tuple[bool, float]:
+        """Apply ``window_failure_policy`` when Redis could not answer (#18087)."""
+        if self._window_policy is WindowFailurePolicy.FAIL_OPEN:
+            self._warn_fail_open(reason)
             return True, 0.0
+        if self._warn_due():
+            logger.warning("rate_limiter: %s for '%s'; policy=%s", reason, self._log_scope, self._window_policy.value)
+        if self._window_policy is WindowFailurePolicy.FAIL_CLOSED:
+            return False, float(window_seconds)
+        return self._local_windows.try_acquire(f"{self._prefix}:{key}", max_requests, window_seconds)
+
+    async def get_window_usage(self, key: str, window_seconds: int) -> tuple[int, float]:
+        """Return ``(hits_in_window, seconds_until_the_oldest_hit_expires)`` for status endpoints."""
+        local = f"{self._prefix}:{key}"
+        try:
+            redis = await get_async_redis_client(database=self._db)
+            if redis is None:
+                return self._local_windows.usage(local, window_seconds)
+            now = time.time()
+            win_key = self._redis_key(key, "window")
+            live = await redis.zrangebyscore(win_key, now - window_seconds, "+inf", start=0, num=1, withscores=True)
+            count = int(await redis.zcount(win_key, now - window_seconds, "+inf"))
+            return count, (max(0.0, window_seconds - (now - float(live[0][1]))) if live else 0.0)
+        except Exception as exc:
+            logger.warning("rate_limiter: window usage error (%s) for '%s'", type(exc).__name__, self._log_scope)
+            return self._local_windows.usage(local, window_seconds)
+
+    def reset_local_windows(self) -> None:
+        """Drop the per-process ``LOCAL``-policy fallback state (tests)."""
+        self._local_windows.reset()
 
     async def get_remaining_in_window(self, key: str, max_requests: int, window_seconds: int) -> int:
         """Return how many more requests are allowed in the custom window.
@@ -486,15 +529,25 @@ class RateLimiter:
         try:
             redis = await get_async_redis_client(database=self._db)
             if redis is None:
-                self._warn_fail_open("Redis unavailable")
-                return max_requests
+                return self._remaining_unavailable(key, max_requests, window_seconds, "Redis unavailable")
 
             win_key = self._redis_key(key, "window")
             count = await redis.zcount(win_key, now - window_seconds, "+inf")
             return max(0, max_requests - int(count))
         except Exception as exc:
-            self._warn_fail_open(f"get_remaining error ({type(exc).__name__})")
+            return self._remaining_unavailable(
+                key, max_requests, window_seconds, f"get_remaining error ({type(exc).__name__})"
+            )
+
+    def _remaining_unavailable(self, key: str, max_requests: int, window_seconds: int, reason: str) -> int:
+        """Remaining quota when Redis could not answer, per ``window_failure_policy``."""
+        if self._window_policy is WindowFailurePolicy.FAIL_OPEN:
+            self._warn_fail_open(reason)
             return max_requests
+        if self._window_policy is WindowFailurePolicy.FAIL_CLOSED:
+            return 0
+        used, _ = self._local_windows.usage(f"{self._prefix}:{key}", window_seconds)
+        return max(0, max_requests - used)
 
     # ------------------------------------------------------------------
     # Token-bucket mode (Issue #12646 fold-in)

@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import client_getdel, client_setex, get_redis_client
+from autobot_shared.security.constant_time import secure_compare
 from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
 from knowledge.connectors.credential_store import get_credential_store
@@ -153,7 +154,7 @@ async def oauth_callback(
     # CSRF binding: the browser completing the flow must be the one that started
     # it (carries the state cookie). Reject before consuming the state token.
     cookie_state = request.cookies.get(_OAUTH_STATE_COOKIE)
-    if not cookie_state or cookie_state != state:
+    if not cookie_state or not secure_compare(cookie_state, state):
         return _clear_cookie(_result_page(error="state_binding_mismatch"))
 
     redis = get_redis_client(database="knowledge")

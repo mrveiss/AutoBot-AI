@@ -136,7 +136,7 @@ EXCEPTIONS = _REPO_ROOT / "repo_tests" / "symbol_fork_exceptions.json"
 _ISSUE_LINK = re.compile(r"^(https://github\.com/[\w.-]+/[\w.-]+/issues/\d+|#\d+)$")
 
 
-def tracked_python_files() -> list[Path]:
+def fork_scan_files() -> list[Path]:
     """`git ls-files` rather than a walk: untracked scratch files are not the tree."""
     shared = _shared()
     return shared.fork_tracked_python_files(_REPO_ROOT, shared.FORK_ROOTS)
@@ -284,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audit-baseline", action="store_true", help="list baseline entries that no longer exist")
     args = parser.parse_args(argv)
 
-    paths = tracked_python_files()
+    paths = fork_scan_files()
     clusters, parsed = find_clusters(paths)
     clusters, exception_problems = apply_exceptions(clusters, load_exceptions())
     # Floor on files successfully PARSED, not on files git listed and not on

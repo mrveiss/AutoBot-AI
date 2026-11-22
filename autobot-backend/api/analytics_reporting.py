@@ -19,13 +19,13 @@ import aiohttp
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.codebase_analytics.source_scope import SourceIdQuery
 from api.schemas_analytics import (
     AnalyticsReportingReportResponse,
     AnalyticsReportingSummaryResponse,
     AnalyticsReportingTrendsResponse,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery
 from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client

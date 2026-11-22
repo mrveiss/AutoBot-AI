@@ -18,6 +18,7 @@ interface EndpointStats {
 }
 // Import the module to ensure Window.rum declaration is loaded
 import './RumAgent'
+import { formatLocalTime } from './formatHelpers'
 
 // Add global RUM console commands
 declare global {
@@ -78,14 +79,14 @@ window.rumStats = () => {
   }
 
   const metrics = window.rum.getMetrics()
-  const slowCalls = metrics.apiCalls.filter((call: ApiCall) => call.isSlow).length
-  const timeouts = metrics.apiCalls.filter((call: ApiCall) => call.isTimeout).length
+  // Session totals, not the retained window of metrics.apiCalls (#21583).
+  const { total, slow, timeouts } = window.rum.getApiCallTotals()
   const errors = metrics.errors.length
 
   console.log(`
 📊 RUM Quick Stats:
    Session: ${Math.round(metrics.sessionDuration / 1000)}s
-   API Calls: ${metrics.apiCalls.length} (${slowCalls} slow, ${timeouts} timeouts)
+   API Calls: ${total} (${slow} slow, ${timeouts} timeouts)
    Errors: ${errors}
    WebSocket Events: ${metrics.webSocketEvents.length}
    User Interactions: ${metrics.userInteractions.length}
@@ -103,7 +104,7 @@ window.rumIssues = () => {
   }
 
   issues.forEach((issue: CriticalIssue, index: number) => {
-    console.group(`${index + 1}. ${issue.type} (${new Date(issue.timestamp).toLocaleTimeString()})`)
+    console.group(`${index + 1}. ${issue.type} (${formatLocalTime(issue.timestamp)})`)
     console.groupEnd()
   })
 }
@@ -117,7 +118,7 @@ window.rumApiStats = () => {
   const metrics = window.rum.getMetrics()
   const apiCalls = metrics.apiCalls
 
-  // Group by endpoint
+  // Group by endpoint over the RECENT calls RumAgent keeps (a window, not the session; rumStats() has the totals).
   const endpointStats: Record<string, EndpointStats> = {}
   apiCalls.forEach((call: ApiCall) => {
     const endpoint = call.url
@@ -144,7 +145,7 @@ window.rumApiStats = () => {
     const hasIssues = stats.timeouts > 0 || stats.errors > 0 || stats.slowCalls > 0
 
     console.log(`${hasIssues ? '⚠️' : '✅'} ${endpoint}:`, {
-      calls: stats.count,
+      recentCalls: stats.count,
       avgDuration: `${avgDuration}ms`,
       timeouts: stats.timeouts,
       errors: stats.errors,
@@ -167,9 +168,10 @@ window.rumDebug = () => {
     startTime: number,
     endTime: number,
     status: string | number,
-    error?: Error | null
+    error?: Error | null,
+    timedOut = false
   ) {
-    return originalTrackApiCall(method, url, startTime, endTime, status, error)
+    return originalTrackApiCall(method, url, startTime, endTime, status, error, timedOut)
   }
 
   const originalTrackError = window.rum.trackError.bind(window.rum)

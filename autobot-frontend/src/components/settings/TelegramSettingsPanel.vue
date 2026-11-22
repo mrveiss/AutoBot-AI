@@ -103,15 +103,13 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
 
       <!-- Actions -->
       <div class="panel-actions">
-        <button
-          type="button"
-          class="save-btn"
+        <BaseButton
           :disabled="!botToken || saving"
           @click="save"
         >
           <Icon :name="saving ? 'spinner' : 'save'" :class="{ 'fa-spin': saving }" />
           {{ t(saving ? 'settings.telegramPanel.saving' : 'settings.telegramPanel.save') }}
-        </button>
+        </BaseButton>
       </div>
 
     </div>
@@ -121,6 +119,7 @@ TelegramSettingsPanel.vue - Telegram Bot Configuration (MVA-2074)
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -221,7 +220,7 @@ onMounted(loadConfig)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
@@ -247,7 +246,7 @@ onMounted(loadConfig)
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
@@ -255,7 +254,7 @@ onMounted(loadConfig)
 }
 
 .preference-hint {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: var(--spacing-0);
   line-height: var(--leading-normal);
@@ -274,7 +273,7 @@ onMounted(loadConfig)
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-family: monospace;
   transition: border-color var(--transition-fast);
 }
@@ -303,7 +302,7 @@ onMounted(loadConfig)
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -317,7 +316,7 @@ onMounted(loadConfig)
   padding: var(--spacing-sm) var(--spacing-md);
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -328,7 +327,7 @@ onMounted(loadConfig)
   padding: var(--spacing-sm) var(--spacing-md);
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--color-error);
 }
 
@@ -338,22 +337,4 @@ onMounted(loadConfig)
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--border-color);
 }
-
-.save-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity var(--transition-fast);
-}
-
-.save-btn:hover:not(:disabled) { opacity: 0.85; }
-.save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

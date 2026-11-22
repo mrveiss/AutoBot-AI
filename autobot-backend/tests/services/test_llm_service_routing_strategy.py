@@ -16,7 +16,6 @@ way ``test_llm_service_caching.py`` does, because the harness stubs
 
 from __future__ import annotations
 
-import importlib.util as _ilu
 import pathlib
 import sys
 from unittest.mock import patch
@@ -29,6 +28,7 @@ from llm_shared.tiered_routing.cost_router import CostRouter
 from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_config import ComplexityResult
 from llm_shared.types import LLMType
+from testkit.real_llm_service import load_real_llm_service
 
 # The harness stubs the llm_shared.tiered_routing package, whose catch-all
 # __getattr__ would hand back a mock for ``registry``; take the real module.
@@ -38,20 +38,7 @@ _BACKEND = pathlib.Path(__file__).resolve().parents[2]  # autobot-backend/
 _MESSAGES = [{"role": "user", "content": "summarise the quarterly report"}]
 
 
-def _load_real_module(private_name: str, relpath: str):
-    """Load a real module file under a private name (no sys.modules clobber)."""
-    spec = _ilu.spec_from_file_location(private_name, str(_BACKEND / relpath))
-    assert spec and spec.loader
-    mod = _ilu.module_from_spec(spec)
-    sys.modules[private_name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-if "llm_shared.rate_limit_backoff" not in sys.modules:
-    _load_real_module("llm_shared.rate_limit_backoff", "llm_shared/rate_limit_backoff.py")
-
-LLMService = _load_real_module("_real_llm_service_18297", "services/llm_service.py").LLMService
+LLMService = load_real_llm_service().LLMService
 
 
 class _NoProviderRegistry:

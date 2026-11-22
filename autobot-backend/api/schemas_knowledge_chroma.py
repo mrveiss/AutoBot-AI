@@ -69,6 +69,7 @@ class SearchResultItem(BaseModel):
     document: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     distance: Optional[float] = Field(None, description="Similarity distance score")
+    quarantined: bool = Field(False, description="Research-quarantined fact, read through the audited opt-out (#19163)")
 
 
 class ChromaSearchResponse(BaseModel):
@@ -78,3 +79,26 @@ class ChromaSearchResponse(BaseModel):
     data: Optional[List[SearchResultItem]] = None
     query: Optional[str] = None
     error: Optional[str] = None
+
+
+class EmptyCollectionsResponse(BaseModel):
+    """Zero-count collections. ``unreadable`` could not be counted: never read them as empty (#19725)."""
+
+    total: int
+    empty: List[str]
+    unreadable: List[str]
+
+
+class EmptyCollectionCleanupRequest(BaseModel):
+    """Propose deleting one zero-count collection."""
+
+    collection: str
+
+
+class EmptyCollectionCleanupResponse(BaseModel):
+    """The PENDING approval created; nothing has been deleted."""
+
+    approval_id: str
+    status: str
+    action: str
+    collection: str

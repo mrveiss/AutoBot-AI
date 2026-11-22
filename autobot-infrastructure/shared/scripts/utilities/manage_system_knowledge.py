@@ -27,6 +27,7 @@ import yaml  # noqa: E402 - must follow the sys.path setup above
 
 from agents.system_knowledge_manager import SystemKnowledgeManager  # noqa: E402
 from autobot_shared.ssot_constants import CategoryDefaults  # noqa: E402
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs, system_knowledge_templates_dir  # noqa: E402
 from knowledge_factory import get_knowledge_base_async  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ def list_knowledge():
     logger.info("=" * 50)
 
     # List original templates
-    system_dir = Path("system_knowledge")
+    system_dir = system_knowledge_templates_dir()
     if system_dir.exists():
         logger.info("\n🔒 ORIGINAL TEMPLATES (Immutable):")
         for category_dir in system_dir.iterdir():
@@ -98,7 +99,7 @@ def list_knowledge():
         logger.warning("\n⚠️ Original templates directory not found")
 
     # List runtime copies
-    runtime_dir = Path("data/system_knowledge")
+    runtime_dir = system_knowledge_dirs().runtime
     if runtime_dir.exists():
         logger.info("\n✏️ RUNTIME COPIES (Editable):")
         for category_dir in runtime_dir.iterdir():
@@ -110,7 +111,7 @@ def list_knowledge():
         logger.warning("\n⚠️ Runtime knowledge directory not found")
 
     # List backups
-    backup_dir = Path("data/system_knowledge_backups")
+    backup_dir = system_knowledge_dirs().backup
     if backup_dir.exists() and any(backup_dir.iterdir()):
         logger.info("\n🗄️ BACKUPS:")
         for backup in sorted(backup_dir.iterdir()):
@@ -122,7 +123,7 @@ def list_knowledge():
 
 def edit_knowledge(category: str, filename: str):
     """Open knowledge file for editing"""
-    runtime_file = Path("data/system_knowledge") / category / f"{filename}.yaml"
+    runtime_file = system_knowledge_dirs().runtime / category / f"{filename}.yaml"
 
     if not runtime_file.exists():
         logger.error(f"❌ File not found: {runtime_file}")
@@ -203,7 +204,7 @@ def validate_knowledge():
     errors = []
     warnings = []
 
-    runtime_dir = Path("data/system_knowledge")
+    runtime_dir = system_knowledge_dirs().runtime
     if not runtime_dir.exists():
         logger.error("❌ Runtime knowledge directory not found")
         return False
@@ -336,7 +337,7 @@ def create_template(category: str, name: str):
         logger.error("Invalid category. Must be: tools, workflows, procedures")
         return False
 
-    runtime_dir = Path("data/system_knowledge") / category
+    runtime_dir = system_knowledge_dirs().runtime / category
     runtime_dir.mkdir(parents=True, exist_ok=True)
 
     template_file = runtime_dir / f"{name}.yaml"

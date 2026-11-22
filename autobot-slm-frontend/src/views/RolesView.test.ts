@@ -31,6 +31,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { createPinia } from 'pinia'
 import RolesView from './RolesView.vue'
 import en from '@/locales/en.json'
 
@@ -38,6 +39,8 @@ const TOKEN_KEY = 'slm_access_token'
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
+// A Response body can be read once: every fetch call needs its own Response, so the mocks
+// below build one per call (mockImplementation), never share one (mockResolvedValue). #18254
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -45,8 +48,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+/** What each mount request answers by default: its own shape per endpoint, never one body for all. */
+const EMPTY_FLEET_HEALTH = { health: 'healthy', required_down: [], optional_down: [], detail: '' }
+function servedBody(url: string, nodes: unknown[] = []): unknown {
+  const u = String(url).split('?')[0]! // the node list is read as `/nodes?page=1&per_page=100` (#21584)
+  return u.endsWith('/nodes') ? { nodes, total: nodes.length } : u.endsWith('/fleet-health') ? EMPTY_FLEET_HEALTH : []
+}
+
 function mountView() {
-  return mount(RolesView, { global: { plugins: [i18n] } })
+  return mount(RolesView, { global: { plugins: [i18n, createPinia()] } })
 }
 
 /** The URLs requested, in call order. */
@@ -60,7 +70,7 @@ describe('RolesView transport', () => {
   beforeEach(() => {
     sessionStorage.clear()
     localStorage.clear()
-    fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    fetchMock = vi.fn().mockImplementation(async (url: string) => jsonResponse(servedBody(url)))
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -75,7 +85,7 @@ describe('RolesView transport', () => {
     const urls = requestedUrls(fetchMock)
     expect(urls).toContain('/api/roles')
     expect(urls).toContain('/api/roles/fleet-health')
-    expect(urls).toContain('/api/nodes')
+    expect(urls).toContain('/api/nodes?page=1&per_page=100') // the fleet store's first (here only) page
   })
 
   it('applies the client timeout the raw fetch never had', async () => {
@@ -116,7 +126,7 @@ describe('RolesView transport', () => {
   it("surfaces the backend's own detail message, not a status code", async () => {
     // The reason this helper calls rawRequest: the typed helpers would replace
     // "role store is locked" with "HTTP 409".
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'role store is locked' }, 409))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'role store is locked' }, 409))
     const wrapper = mountView()
     await flushPromises()
 
@@ -134,7 +144,7 @@ describe('RolesView transport', () => {
   })
 
   it('dispatches each failed mount read ONCE, inheriting no retry budget', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'nope' }, 500))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'nope' }, 500))
     mountView()
     await flushPromises()
 
@@ -152,7 +162,7 @@ describe('RolesView transport', () => {
       const wrapper = mountView()
       await flushPromises()
 
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'role store is locked' }, 500))
+      fetchMock.mockImplementation(async () => jsonResponse({ detail: 'role store is locked' }, 500))
       const beforeWrite = fetchMock.mock.calls.length
       const vm = wrapper.vm as unknown as { deleteRole: (name: string) => Promise<void> }
       await vm.deleteRole('worker')
@@ -174,7 +184,7 @@ describe('RolesView transport', () => {
     // in `utils/ApiClient.test.ts` ('clears session and redirects to /login on 401
     // when a token was attached'), so it is named here rather than duplicated.
     sessionStorage.setItem(TOKEN_KEY, 'still-valid')
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'internal' }, 500))
+    fetchMock.mockImplementation(async () => jsonResponse({ detail: 'internal' }, 500))
     mountView()
     await flushPromises()
 
@@ -190,12 +200,8 @@ describe('RolesView migrate target nodes (#19002 review)', () => {
   it('reads GET /nodes as NodeListResponse and offers each node as a target', async () => {
     // fails if fetchNodes treats the { nodes, total } envelope as the list again
     const node = { node_id: 'node-a', ip_address: 'addr-a', status: 'online', roles: [] }
-    const health = { health: 'healthy', required_down: [], optional_down: [], detail: '' }
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      const u = String(url)
-      return jsonResponse(u.endsWith('/nodes') ? { nodes: [node], total: 1 } : u.endsWith('/fleet-health') ? health : [])
-    }))
-    const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { Teleport: true } } })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => jsonResponse(servedBody(url, [node]))))
+    const wrapper = mount(RolesView, { global: { plugins: [i18n, createPinia()], stubs: { Teleport: true } } })
     await flushPromises()
     Object.assign(wrapper.vm as unknown as Record<string, unknown>, { showMigrateDialog: true })
     await flushPromises()

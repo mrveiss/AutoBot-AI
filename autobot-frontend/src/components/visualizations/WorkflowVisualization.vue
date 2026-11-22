@@ -263,7 +263,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { formatDuration } from '@/utils/formatHelpers'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -497,9 +497,7 @@ function formatStatus(status?: string): string {
   return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1)
 }
 
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString()
-}
+const formatTime = createDateFormatter({ kind: 'time' })
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text

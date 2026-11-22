@@ -19,6 +19,9 @@ from knowledge.pipeline.registry import TaskRegistry
 
 logger = get_logger(__name__)
 
+#: ``PipelineContext.metadata`` key naming the source fact's collection, stamped onto its summaries (#19163).
+SUMMARY_COLLECTION_KEY = "collection"
+
 
 @TaskRegistry.register_loader("chromadb")
 class ChromaDBLoader(BaseLoader):
@@ -62,7 +65,7 @@ class ChromaDBLoader(BaseLoader):
         if self.load_summaries:
             summaries: List[Summary] = context.summaries
             if summaries:
-                await self._load_summaries(summaries)
+                await self._load_summaries(summaries, context.metadata.get(SUMMARY_COLLECTION_KEY))
 
         logger.info(f"Loaded {len(chunks)} chunks, " f"{len(context.summaries)} summaries to ChromaDB")
 
@@ -96,21 +99,27 @@ class ChromaDBLoader(BaseLoader):
 
         await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
 
-    async def _load_summaries(self, summaries: List[Summary]) -> None:
-        """Load summaries to ChromaDB collection."""
+    async def _load_summaries(self, summaries: List[Summary], collection_marker: str | None = None) -> None:
+        """Load summaries to ChromaDB collection, each carrying the source fact's collection marker."""
         try:
             collection = await self.client.get_or_create_collection(name=self.summary_collection_name)
 
             for i in range(0, len(summaries), self.batch_size):
                 batch = summaries[i : i + self.batch_size]
-                await self._upsert_summary_batch(collection, batch)
+                await self._upsert_summary_batch(collection, batch, collection_marker)
 
             logger.info("Loaded %s summaries to ChromaDB", len(summaries))
         except Exception as e:
             logger.error("Failed to load summaries to ChromaDB: %s", e)
 
-    async def _upsert_summary_batch(self, collection: Any, summaries: List[Summary]) -> None:
-        """Upsert a batch of summaries."""
+    async def _upsert_summary_batch(
+        self, collection: Any, summaries: List[Summary], collection_marker: str | None = None
+    ) -> None:
+        """Upsert a batch of summaries.
+
+        A summary derived from a research-quarantined fact must stay quarantined (#19163), so the
+        source's ``collection`` marker is copied onto every summary; ``summary_search`` filters on it.
+        """
         ids = [str(summary.id) for summary in summaries]
         documents = [summary.content for summary in summaries]
         metadatas = [
@@ -123,5 +132,8 @@ class ChromaDBLoader(BaseLoader):
             }
             for summary in summaries
         ]
+        if collection_marker:
+            for metadata in metadatas:
+                metadata["collection"] = collection_marker
 
         await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)

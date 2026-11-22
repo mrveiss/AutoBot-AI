@@ -10,12 +10,14 @@ Issue #6702: consolidates 4+ duplicate ssl.create_default_context() call sites
 one function with a documented trust hierarchy.
 """
 
+import logging
 import os
 import ssl
 from pathlib import Path
 from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 
 # #14039: acquired lazily, never at module scope. This module is imported by
 # autobot-slm-backend, whose conftest stubs the config LoggingManager reads --
@@ -30,8 +32,6 @@ MIN_TLS_VERSION: ssl.TLSVersion = ssl.TLSVersion.TLSv1_2
 
 # Hosts treated as loopback for TLS trust decisions (#6654).
 _LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
-
-_loopback_permissive_warned: bool = False
 
 
 def _is_loopback_target(target_url: Optional[str]) -> bool:
@@ -62,6 +62,15 @@ def tls_verify_enabled() -> bool:
         True to verify (the default); False only on an explicit opt-out.
     """
     return os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
+
+
+def _project_ca_fallback() -> str:
+    """``<project_root>/<AUTOBOT_TLS_CERT_DIR>/ca/ca-cert.pem``, with the one default (#19317)."""
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", DEFAULT_TLS_CERT_DIR)
+    return os.path.join(project_root, cert_dir, "ca", "ca-cert.pem")
 
 
 def get_internal_tls_context(
@@ -116,9 +125,7 @@ def get_internal_tls_context(
         return ctx
 
     # 4. AutoBot project CA fallback (single-host installs with self-signed certs)
-    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
-    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
+    _fallback_ca = _project_ca_fallback()
     if os.path.isfile(_fallback_ca):
         ctx.load_verify_locations(_fallback_ca)
         if client_cert and client_key:
@@ -127,14 +134,14 @@ def get_internal_tls_context(
 
     # 5. Loopback target — accept self-signed certs (no MITM possible, #6654)
     if _is_loopback_target(target_url):
-        global _loopback_permissive_warned
-        if not _loopback_permissive_warned:
-            get_logger(__name__).warning(
-                "TLS verification disabled for loopback target %s — no CA configured "
-                "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
-                target_url,
-            )
-            _loopback_permissive_warned = True
+        log_once(
+            get_logger(__name__),
+            logging.WARNING,
+            "loopback_permissive",
+            "TLS verification disabled for loopback target %s — no CA configured "
+            "(set AUTOBOT_TLS_CA_PATH for strict verification, #6654)",
+            target_url,
+        )
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx

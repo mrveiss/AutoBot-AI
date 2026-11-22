@@ -167,8 +167,13 @@ function handleOverlayClick(): void {
 }
 
 .aui-drawer {
+  /* Positioned, so a consumer can pin content to the panel edge (a resize handle, #14780). */
+  position: relative;
   height: 100%;
   max-width: 100vw;
+  /* Teleported to body, outside the app's own insets: clear the device's safe areas. */
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   background: var(--aui-color-surface);

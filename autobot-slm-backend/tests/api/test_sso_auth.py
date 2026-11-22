@@ -458,7 +458,7 @@ def _make_sso_service_stub(*, succeed: bool, provider_id: uuid.UUID | None = Non
     fake_user = MagicMock()
     fake_user.id = uuid.uuid4()
     fake_user.username = "testuser"
-    fake_user.is_platform_admin = False
+    fake_user.is_platform_admin = True
 
     sso_service_instance = MagicMock()
     sso_service_instance.complete_oauth_login = (

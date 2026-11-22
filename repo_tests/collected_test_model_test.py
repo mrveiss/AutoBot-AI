@@ -41,13 +41,7 @@ def _written(source: str) -> int:
     return len(own_nodes(_function(source), (ast.Assert, ast.Raise)))
 
 
-SWALLOWED = (
-    "def test_a():\n"
-    "    try:\n"
-    "        assert False\n"
-    "    except Exception:\n"
-    "        pass\n"
-)
+SWALLOWED = "def test_a():\n" "    try:\n" "        assert False\n" "    except Exception:\n" "        pass\n"
 
 
 def test_a_handler_catching_assertions_makes_the_assert_in_its_body_inert() -> None:
@@ -107,13 +101,7 @@ def test_only_the_try_body_is_covered_by_that_trys_own_handlers() -> None:
             "        assert False\n"
         )
         assert _live(source) == 1, f"an assert in `{clause}` is not caught by that try"
-    handler_body = (
-        "def test_a():\n"
-        "    try:\n"
-        "        pass\n"
-        "    except Exception:\n"
-        "        assert False\n"
-    )
+    handler_body = "def test_a():\n" "    try:\n" "        pass\n" "    except Exception:\n" "        assert False\n"
     assert _live(handler_body) == 1, "a handler does not catch what it raises itself"
 
 
@@ -133,8 +121,7 @@ def test_an_outer_swallow_survives_an_inner_handler_that_re_raises() -> None:
         "inside the OUTER try body, so the outer bare except eats that too"
     )
     assert swallowed_assertions(nested) == [("test_a", 4)], (
-        "and the inner assert is eaten by the outer bare except, not saved by "
-        "the inner handler that re-raises"
+        "and the inner assert is eaten by the outer bare except, not saved by " "the inner handler that re-raises"
     )
 
 
@@ -210,6 +197,5 @@ def test_modules_prunes_skip_directories_during_the_walk_not_after(tmp_path, mon
         "exactly the negative-control gap this test closes."
     )
     assert modules == [kept_dir / "test_kept.py"], (
-        "the sentinel file under the SKIP directory must never reach the "
-        "returned list either"
+        "the sentinel file under the SKIP directory must never reach the " "returned list either"
     )

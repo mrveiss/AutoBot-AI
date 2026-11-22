@@ -12,7 +12,7 @@ import json
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -26,6 +26,7 @@ import threading
 
 from api.schemas_system import StartupMessage, StartupPhase, StartupPhaseUpdateData, StartupStatusResponse
 from api.ws_security import enforce_ws_origin
+from autobot_shared.client_disconnect import PEER_CLOSED_ERRORS
 
 _startup_lock = threading.Lock()
 
@@ -156,7 +157,7 @@ async def startup_websocket(websocket: WebSocket):
         while True:
             try:
                 await websocket.receive_text()
-            except WebSocketDisconnect:
+            except PEER_CLOSED_ERRORS:
                 break
 
     except Exception as e:

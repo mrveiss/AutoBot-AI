@@ -72,23 +72,6 @@ _VALIDATION_PATTERNS: Dict[str, Pattern] = {
     "uuid": re.compile(r"uuid|isUuid|\.uuid\(", re.I),
 }
 
-# Common skip directories
-_SKIP_DIRS: frozenset = frozenset(
-    {
-        "node_modules",
-        "__pycache__",
-        ".git",
-        ".venv",
-        "venv",
-        "dist",
-        "build",
-        ".next",
-        ".nuxt",
-        "coverage",
-        ".pytest_cache",
-    }
-)
-
 
 # Issue #1217: Truncate code blocks during extraction to limit memory
 # Full code is rarely needed — 500 chars is enough for pattern matching

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
+from autobot_shared.ai_lines import DECLARED_CATEGORIES_KEY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import valid_approval_categories
 from llc.services.slm_policy import fetch_slm_policy_json
@@ -27,6 +28,11 @@ logger = get_logger(__name__)
 
 #: SLM server-wide setting naming the approval categories an administrator has relaxed.
 RELAXED_CATEGORIES_SETTING_KEY = "chat.relaxed_approval_categories"
+
+#: SLM server-wide setting an administrator turns on to stop attachment turns (and the later turns of a chat that
+#: used one) asking for every tool call (#20195). Off unless it reads exactly ``true`` / ``{"enabled": true}``;
+#: written only through the SLM settings API, which needs the admin config-write permission.
+AUTO_APPROVE_ATTACHMENTS_SETTING_KEY = "chat.auto_approve_attachment_turns"
 
 
 def _categories_from_setting(data: Any) -> frozenset[str]:
@@ -42,6 +48,12 @@ async def relaxed_approval_categories() -> frozenset[str]:
     return _categories_from_setting(await fetch_slm_policy_json(RELAXED_CATEGORIES_SETTING_KEY))
 
 
+async def attachment_auto_approve_enabled() -> bool:
+    """Whether the admin setting lifts the attachment floor; False when unset, malformed or unreadable (asks)."""
+    data = await fetch_slm_policy_json(AUTO_APPROVE_ATTACHMENTS_SETTING_KEY)
+    return (data.get("enabled") if isinstance(data, dict) else data) is True
+
+
 async def baseline_approval_categories() -> List[str]:
     """Every valid category except the ones the SLM setting relaxes (sorted, stable)."""
     return sorted(valid_approval_categories() - await relaxed_approval_categories())
@@ -53,6 +65,26 @@ def union_categories(*groups: Optional[Iterable[str]]) -> List[str]:
     for group in groups:
         merged.update(c for c in (group or ()) if isinstance(c, str))
     return sorted(merged)
+
+
+def stamp_declared_categories(
+    context: Optional[Dict[str, Any]], session_categories: Optional[Iterable[str]] = ()
+) -> Dict[str, Any]:
+    """Record what the work item and the session declared, before the baseline overlay mixes it in (#19957).
+
+    Overwrites any client-supplied value: only the server decides what was declared. ``None`` (the session's
+    declaration could not be read) stamps EVERY valid category as declared, so none holds less than before, even one
+    the administrator relaxed in the baseline.
+    """
+    base = dict(context or {})
+    if session_categories is None:
+        base[DECLARED_CATEGORIES_KEY] = sorted(valid_approval_categories())
+        return base
+    declared = base.get("requires_approval_before")
+    base[DECLARED_CATEGORIES_KEY] = union_categories(
+        session_categories, declared if isinstance(declared, (list, tuple)) else ()
+    )
+    return base
 
 
 async def with_baseline_categories(

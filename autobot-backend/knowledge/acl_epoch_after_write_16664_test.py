@@ -21,13 +21,14 @@ from knowledge.ownership import KnowledgeOwnership
 
 
 @pytest.mark.asyncio
-async def test_the_async_bump_increments_the_counter_and_fails_loudly():
-    client = MagicMock(incr=AsyncMock(return_value=7))
-    assert await bump_acl_epoch_async(client) == 7
-    client.incr.assert_awaited_once_with(ACL_EPOCH_KEY)
+async def test_the_async_bump_sets_a_fresh_token_and_fails_loudly():
+    client = MagicMock(set=AsyncMock())
+    token = await bump_acl_epoch_async(client)
+    assert isinstance(token, str) and token != await bump_acl_epoch_async(client)
+    client.set.assert_any_await(ACL_EPOCH_KEY, token)
 
     with pytest.raises(AclEpochBumpError):
-        await bump_acl_epoch_async(MagicMock(incr=AsyncMock(side_effect=ConnectionError("down"))))
+        await bump_acl_epoch_async(MagicMock(set=AsyncMock(side_effect=ConnectionError("down"))))
     with pytest.raises(AclEpochBumpError):
         await bump_acl_epoch_async(None)
 
@@ -43,13 +44,13 @@ def _kb_with_one_owned_record(events: list) -> AsyncMock:
 
 
 def _redis(events: list, incr_error: Exception | None = None) -> AsyncMock:
-    async def _incr(key):
+    async def _set(key, _value):
         if incr_error is not None:
             raise incr_error
         events.append(("bump", key))
-        return 3
+        return True
 
-    return AsyncMock(incr=AsyncMock(side_effect=_incr))
+    return AsyncMock(set=AsyncMock(side_effect=_set))
 
 
 @pytest.mark.asyncio
@@ -100,7 +101,7 @@ def test_unsharing_bumps_the_epoch_again_after_the_metadata_write():
 
     events: list = []
     redis = MagicMock()
-    redis.incr.side_effect = lambda _key: events.append("bump") or len(events)
+    redis.set.side_effect = lambda _key, _value: events.append("bump")
     kb = MagicMock(ownership_manager=KnowledgeOwnership(redis_client=redis))
     kb.get_fact = MagicMock(
         return_value={"metadata": {"owner_id": "u1", "visibility": "shared", "shared_with": ["u2"]}}

@@ -124,4 +124,11 @@ describe('nav icon viewBox (GH#12729)', () => {
     expect(prefs?.iconViewBox).toBe('0 0 24 24')
     expect(prefs?.iconStroke).toBe(true)
   })
+
+  it('Home draws the one canonical house glyph, stroked on its 24 grid', () => {
+    const home = navItems.find((item) => item.to === '/home')
+    expect(home?.iconPaths).toEqual([ICONS.home])
+    expect(home?.iconViewBox).toBe('0 0 24 24')
+    expect(home?.iconStroke).toBe(true)
+  })
 })

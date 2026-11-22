@@ -44,7 +44,11 @@ dict anywhere under a tracked ``.py`` and this goes red naming the file.
 
 from __future__ import annotations
 
+import functools
+
 from repo_tests.model_pricing_tables_agree_15912_test import discover_pricing_tables
+
+from tools.lint import _parse_cache as parse_cache
 
 #: Every literal price table that may exist, by ``path::NAME``. Shrinking is
 #: always allowed. Adding an entry is a review decision, and the comment beside
@@ -71,6 +75,12 @@ _PERMITTED = {
 }
 
 
+@functools.lru_cache(maxsize=1)
+def _discovered():
+    """Memoised (#20814): 2 tests read the same sweep of the live tree."""
+    return discover_pricing_tables()
+
+
 def test_the_sweep_still_finds_the_permitted_tables() -> None:
     """Runs first: an empty sweep would make the census below pass over nothing.
 
@@ -79,7 +89,7 @@ def test_the_sweep_still_finds_the_permitted_tables() -> None:
     hardcoded price tables" while being unable to see any at all -- the exact
     shape of false clean this file is here to prevent one level down.
     """
-    found = set(discover_pricing_tables())
+    found = set(_discovered())
     missing = _PERMITTED - found
 
     assert not missing, (
@@ -92,7 +102,7 @@ def test_the_sweep_still_finds_the_permitted_tables() -> None:
 
 
 def test_no_price_table_exists_outside_the_permitted_set() -> None:
-    new = sorted(set(discover_pricing_tables()) - _PERMITTED)
+    new = sorted(set(_discovered()) - _PERMITTED)
 
     assert not new, (
         "hardcoded price table(s) added outside the permitted set (#16233):\n  "
@@ -127,7 +137,7 @@ _NOT_A_TABLE = '_LIMITS = {"a": {"min": 1.0, "max": 2.0}, "b": {"min": 3.0, "max
 
 def _detects(source: str) -> bool:
     """Whether the shape-matchers see a price table in *source*."""
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
         value = node.value

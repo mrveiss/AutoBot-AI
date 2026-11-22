@@ -36,6 +36,7 @@ from typing import Any
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 
 logger = get_logger(__name__)
 
@@ -117,7 +118,7 @@ class Layer1EssentialStory:
             from memory.essential_story import EssentialStoryGenerator
 
             model_name: str | None = context.get("model_name")
-            return await EssentialStoryGenerator().generate(model_name)
+            return await EssentialStoryGenerator().generate(model_name, principal=context.get("principal"))  # #16665
         except Exception:
             logger.warning("Layer1EssentialStory.render failed", exc_info=True)
             return ""
@@ -257,7 +258,7 @@ class Layer3DeepSearch:
                 query=user_message,
                 conversation_history=[],
                 top_k=5,
-                score_threshold=0.3,
+                score_threshold=RAG_SCORE_THRESHOLD,
                 force_retrieval=True,
                 principal=context.get("principal"),  # #16664: None raises, caught below -- never unscoped
             )
