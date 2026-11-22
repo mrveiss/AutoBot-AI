@@ -10,7 +10,8 @@ import pytest
 from fastapi import HTTPException
 
 from api import knowledge_mcp
-from knowledge.read_path_fakes_16665 import (
+from knowledge.schemas.mcp import KnowledgeSearchRequest
+from testkit.read_path_fakes_16665 import (
     PRIVATE_A,
     PRIVATE_B,
     RESEARCH,
@@ -19,7 +20,6 @@ from knowledge.read_path_fakes_16665 import (
     quarantined_fact,
     text_of,
 )
-from knowledge.schemas.mcp import KnowledgeSearchRequest
 
 ALICE = {"user_id": "alice"}
 BOB = {"user_id": "bob"}

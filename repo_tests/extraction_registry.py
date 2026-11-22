@@ -81,19 +81,26 @@ def inlines_source_root(tree: ast.AST) -> bool:
     Keyed on the return, not on reading ``clone_path``: the indexing paths legitimately
     read it, and only a function that hands back the path is a second resolver. Follows
     one hop: ``root = Path(x.clone_path); return root`` (the name assigned exactly once in
-    the same function). Limit, by design: reassignment, tuple unpacking, attribute targets
-    and flows across functions are not followed, because chasing them needs real dataflow
-    and a wrong guess would flag the legitimate indexing paths.
+    the same function), and both arms of a conditional return. Limit, by design: reassignment,
+    tuple unpacking, attribute targets and flows across functions are not followed, because
+    chasing them needs real dataflow and a wrong guess would flag the legitimate indexing paths.
     """
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) or "get_source" not in _calls(fn):
             continue
         via_name = _names_bound_once_to_clone_path(fn)
         for ret in (n for n in ast.walk(fn) if isinstance(n, ast.Return)):
-            v = ret.value
-            if _is_path_of_clone_path(v) or (isinstance(v, ast.Name) and v.id in via_name):
-                return True
+            for v in _returned_values(ret.value):
+                if _is_path_of_clone_path(v) or (isinstance(v, ast.Name) and v.id in via_name):
+                    return True
     return False
+
+
+def _returned_values(v: ast.AST | None) -> list[ast.AST | None]:
+    """The value(s) a ``return`` can hand back: both arms of ``return A if c else B`` (#17995)."""
+    if isinstance(v, ast.IfExp):
+        return [*_returned_values(v.body), *_returned_values(v.orelse)]
+    return [v]
 
 
 def inlines_wav_duration(tree: ast.AST) -> bool:
