@@ -84,16 +84,25 @@ async def test_declared_category_wins_over_route_fallback(exc, status, level, ca
     assert [r.levelno for r in caplog.records if "declared_op" in r.getMessage()] == [level]
 
 
-@pytest.mark.parametrize("category,status", [(ErrorCategory.USER_INPUT, 400), (ErrorCategory.NOT_FOUND, 404)])
+@pytest.mark.parametrize(
+    "category,status,level",
+    [
+        (ErrorCategory.USER_INPUT, 400, logging.WARNING),
+        (ErrorCategory.NOT_FOUND, 404, logging.WARNING),
+        (ErrorCategory.CONFLICT, 409, logging.WARNING),
+        (ErrorCategory.SERVER_ERROR, 500, logging.ERROR),
+    ],
+)
 @pytest.mark.asyncio
-async def test_route_category_still_applies_to_undeclared_exceptions(category, status):
+async def test_route_category_still_applies_to_undeclared_exceptions(category, status, level, caplog):
     @with_error_handling(category=category, operation="route_cat_op")
     async def _endpoint():
         raise ValueError("x")
 
-    with pytest.raises(HTTPException) as raised:
+    with caplog.at_level(logging.WARNING), pytest.raises(HTTPException) as raised:
         await _endpoint()
     assert raised.value.status_code == status
+    assert [r.levelno for r in caplog.records if "route_cat_op" in r.getMessage()] == [level]
 
 
 @pytest.mark.asyncio

@@ -239,6 +239,7 @@ _CLIENT_FAULT_CATEGORIES = frozenset(
         ErrorCategory.AUTHENTICATION,
         ErrorCategory.AUTHORIZATION,
         ErrorCategory.NOT_FOUND,
+        ErrorCategory.CONFLICT,
         ErrorCategory.RATE_LIMIT,
     }
 )
