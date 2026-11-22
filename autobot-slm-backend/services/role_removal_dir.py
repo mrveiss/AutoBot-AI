@@ -4,28 +4,38 @@
 # Author: mrveiss
 """Which install directory removing a role from a node may delete (#22030, #21974).
 
-``Role.target_path`` is where the code-sync writes, which is not necessarily a directory the role owns: the roles of
-one manifest (backend, celery, scheduler) share its ``destination``, and the removal playbook deletes whatever
-directory it is handed. So the directory comes from the manifest ``destination``, and only for a role that owns the
-whole manifest; a role that merely tags a service of a shared manifest owns no directory and removes none. A directory
-another role on the node resolves to is kept too. A role no manifest resolves to keeps its own ``target_path``.
+The result is a directory RELATIVE to the install root (possibly several segments, e.g. the agent's ``slm/agent``
+package) or None, and None is the answer whenever removal is not provably safe. Removing any single role can never
+delete the install root, a ``.`` / ``..`` path, a path outside the root, or a directory another role still needs:
+
+* the directory comes from the manifest ``destination`` (not the code-sync target), and only for a role that owns the
+  whole manifest -- a role that merely tags a service of a shared manifest (celery, redis, ...) owns none;
+* a role no manifest resolves to keeps its own ``target_path`` only when that path is strictly inside the root;
+* a ``deploy_to_all`` manifest (``autobot_shared``, the SLM agent) and a ``required`` role are never removed with
+  their directory -- the other roles import from, or are managed by, them;
+* a directory that is, contains or sits inside the directory of any other role on the node is kept. "Other roles" are
+  the node's ``NodeRole`` rows plus its detected roles (``Node.detected_roles``, filled from the agent's heartbeat
+  role report); if the node's detected roles are unknown (never reported) or older than the heartbeat timeout,
+  nothing is removed, because a role running on the node but missing from ``NodeRole`` would be invisible.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, Mapping
 
+from autobot_shared.install_paths import overlaps, relative_to_root
 from models.manifest import RoleManifest
 from services.role_manifest_shape import find_role_manifest
 
 
 def _install_dir(role_name: str, manifests: Dict[str, RoleManifest], target_paths: Mapping[str, str | None]):
-    """(directory path, whether role_name owns it) -- the manifest destination, else the role's own target path."""
+    """(relative directory or None, whether role_name owns it, whether it is never removed with its directory)."""
     manifest, owns_whole = find_role_manifest(role_name, manifests)
     if manifest is not None:
-        return manifest.deploy.destination.rstrip("/"), owns_whole
-    path = (target_paths.get(role_name) or "").rstrip("/")
-    return (path or None), bool(path)
+        return relative_to_root(manifest.deploy.destination), owns_whole, manifest.deploy_to_all
+    rel = relative_to_root(target_paths.get(role_name))
+    return rel, rel is not None, False
 
 
 def removal_path(
@@ -33,32 +43,48 @@ def removal_path(
     other_roles: Iterable[str],
     manifests: Dict[str, RoleManifest],
     target_paths: Mapping[str, str | None],
+    required: frozenset = frozenset(),
 ) -> str | None:
-    """The directory to remove with ``role_name``, or None when it owns none or another role on the node uses it."""
-    path, owns = _install_dir(role_name, manifests, target_paths)
-    if not path or not owns:
+    """The directory (relative to the install root) to remove with ``role_name``, or None to remove none."""
+    rel, owns, protected = _install_dir(role_name, manifests, target_paths)
+    if rel is None or not owns or protected or role_name in required:
         return None
     for other in other_roles:
-        if _install_dir(other, manifests, target_paths)[0] == path:
+        theirs = _install_dir(other, manifests, target_paths)[0]
+        if theirs is not None and overlaps(rel, theirs):
             return None
-    return path
+    return rel
+
+
+def detected_roles_if_fresh(node, now: datetime, timeout_s: float):
+    """The node's detected roles, or None when they are unknown (never reported) or older than ``timeout_s``."""
+    from services.node_health_status import as_utc
+
+    beat = as_utc(getattr(node, "last_heartbeat", None))
+    if node is None or node.detected_roles is None or beat is None or beat < now - timedelta(seconds=timeout_s):
+        return None
+    return set(node.detected_roles)
 
 
 async def role_removal_path(db, node_id: str, role_name: str) -> str | None:
-    """:func:`removal_path` for ``role_name`` on ``node_id``, reading the node's other roles from the database."""
+    """:func:`removal_path` for ``role_name`` on ``node_id``; None unless the node's role picture is complete."""
     from sqlalchemy import select
 
-    from models.database import NodeRole, Role
+    from config import settings
+    from models.database import Node, NodeRole, Role
     from services.manifest_loader import get_manifest_loader
 
-    others = (
-        (
-            await db.execute(
-                select(NodeRole.role_name).where(NodeRole.node_id == node_id, NodeRole.role_name != role_name)
-            )
-        )
-        .scalars()
-        .all()
+    node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
+    detected = detected_roles_if_fresh(
+        node, datetime.now(timezone.utc), settings.heartbeat_interval * settings.unhealthy_threshold
     )
-    rows = (await db.execute(select(Role.name, Role.target_path).where(Role.name.in_([role_name, *others])))).all()
-    return removal_path(role_name, others, get_manifest_loader().load_all(), {name: path for name, path in rows})
+    if detected is None:
+        return None
+    assigned = (await db.execute(select(NodeRole.role_name).where(NodeRole.node_id == node_id))).scalars().all()
+    others = (set(assigned) | detected) - {role_name}
+    rows = (
+        await db.execute(select(Role.name, Role.target_path, Role.required).where(Role.name.in_([role_name, *others])))
+    ).all()
+    required = frozenset(name for name, _path, req in rows if req)
+    paths = {name: path for name, path, _req in rows}
+    return removal_path(role_name, others, get_manifest_loader().load_all(), paths, required)

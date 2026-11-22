@@ -30,6 +30,7 @@ from api.node_ssh_helpers import (  # noqa: F401  # used by test-connection belo
     _handle_file_not_found_error,
 )
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.install_paths import safe_relative_dir
 from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
@@ -1141,11 +1142,11 @@ async def remove_role_from_node(
 
     # Look up the systemd service name and target path from Role table
     service_name = await _get_role_service(db, role_name)
-    target_path = await role_removal_path(db, node_id, role_name)  # #22030: own install dir, not the sync target
+    target_dir = await role_removal_path(db, node_id, role_name)  # #22030: own install dir, not the sync target
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
-        ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_path)
+        ansible_result = await _run_role_removal(node_id, role_name, service_name, backup, target_dir)
         if not ansible_result["success"]:
             logger.error(
                 "Role removal failed for node %s role %s: %s",
@@ -1237,9 +1238,9 @@ async def _run_role_removal(
     role_name: str,
     service_name: str,
     backup: bool,
-    target_path: str | None = None,
+    target_dir: str | None = None,
 ) -> dict:
-    """Execute the remove-role Ansible playbook."""
+    """Execute the remove-role Ansible playbook; ``target_dir`` is relative to the install root (#22030)."""
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
@@ -1248,14 +1249,13 @@ async def _run_role_removal(
         "systemd_service": service_name,
         "backup_before_removal": str(backup).lower(),
     }
-    if target_path:
-        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))  # /opt/x/y -> y
+    if rel_dir := safe_relative_dir(target_dir):  # #22030: never the root, "..", an absolute path or outside it
+        extra_vars["role_target_dir"] = rel_dir
     try:
         result = await executor.execute_playbook("playbooks/remove-role.yml", limit=[node_id], extra_vars=extra_vars)
     except ValueError:  # #19005: Role.systemd_service is not a unit name; the sink refused before spawning
         logger.warning("Role removal refused: role=%s systemd_service=%s", role_name, repr(service_name)[:80])
         return {"success": False, "output": "Role systemd_service is not a valid unit name"}
-    # Extract backup path from output if backup was requested
     if backup and result["success"]:
         result["backup_path"] = _parse_backup_path(result.get("output", ""))
     return result
