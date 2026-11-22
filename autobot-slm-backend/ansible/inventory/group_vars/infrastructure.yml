@@ -41,34 +41,50 @@ dns_nameservers:
 # For Ansible plays, prefer the flat variables (backend_host, redis_host, etc.)
 # defined in production.yml which use hostvars lookups.
 
+# One definition each of the host addresses and the ports. They sit OUTSIDE the
+# `infrastructure` mapping and `infrastructure` reuses them through YAML anchors
+# (#21343): Ansible resolves a variable whole, so `infrastructure.urls` reading
+# `infrastructure.hosts.*` made looking up `infrastructure` template the dict, whose
+# urls looked up `infrastructure` again -- a recursion that was only avoided while an
+# unguarded group lookup left `infrastructure` undefined. The urls below read these
+# two flat variables instead, so the dict never refers to itself.
+#
+# One rule for every entry: the first host of the group is THIS host -> loopback (a service on the
+# node you are configuring is reached locally, which is also the only address a loopback-only listener
+# has); another host -> that host's address; no such group -> loopback. Before #21399 the whole dict was
+# masked as undefined on registry nodes, so every `infrastructure is defined` consumer rendered loopback.
+infrastructure_hosts: &infrastructure_hosts
+  slm: "{{ ('127.0.0.1' if groups['slm'][0] == inventory_hostname else (hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('slm') else '127.0.0.1' }}"
+  backend: "{{ ('127.0.0.1' if groups['backend'][0] == inventory_hostname else (hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('backend') else '127.0.0.1' }}"
+  frontend: "{{ ('127.0.0.1' if groups['frontend'][0] == inventory_hostname else (hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('frontend') else '127.0.0.1' }}"
+  npu: "{{ ('127.0.0.1' if groups['npu'][0] == inventory_hostname else (hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('npu') else '127.0.0.1' }}"
+  database: "{{ ('127.0.0.1' if groups['database'][0] == inventory_hostname else (hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('database') else '127.0.0.1' }}"
+  aiml: "{{ ('127.0.0.1' if groups['aiml'][0] == inventory_hostname else (hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('aiml') else '127.0.0.1' }}"
+  browser: "{{ ('127.0.0.1' if groups['browser'][0] == inventory_hostname else (hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('browser') else '127.0.0.1' }}"
+  reserved_1: "{{ ('127.0.0.1' if groups['vnc_nodes'][0] == inventory_hostname else (hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1'))) if groups.get('vnc_nodes') else '127.0.0.1' }}"
+  reserved_2: "127.0.0.1"
+
+
+infrastructure_ports: &infrastructure_ports
+  slm: 8000
+  backend: 8001
+  frontend: 5173
+  npu_worker: 8081
+  redis: 6379
+  ai_stack: "{{ ai_stack_port }}"
+  browser: 9001  # #19324: the browser service, not Grafana
+  vnc: 6080
+  ollama: 11434
+
+
 infrastructure:
-  hosts:
-    slm: "{{ (hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('slm') else '127.0.0.1' }}"
-    backend: "{{ (hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('backend') else '127.0.0.1' }}"
-    frontend: "{{ (hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('frontend') else '127.0.0.1' }}"
-    npu: "{{ (hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('npu') else '127.0.0.1' }}"
-    database: "{{ (hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('database') else '127.0.0.1' }}"
-    aiml: "{{ (hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('aiml') else '127.0.0.1' }}"
-    browser: "{{ (hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('browser') else '127.0.0.1' }}"
-    reserved_1: "{{ (hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1')) if groups.get('vnc_nodes') else '127.0.0.1' }}"
-    reserved_2: "127.0.0.1"
-
-  ports:
-    slm: 8000
-    backend: 8001
-    frontend: 5173
-    npu_worker: 8081
-    redis: 6379
-    ai_stack: "{{ ai_stack_port }}"
-    browser: 9001  # #19324: the browser service, not Grafana
-    vnc: 6080
-    ollama: 11434
-
-  # Service URLs (derived from hosts and ports above)
+  hosts: *infrastructure_hosts
+  ports: *infrastructure_ports
+  # Service URLs (derived from infrastructure_hosts / infrastructure_ports above)
   urls:
-    backend: "http://{{ infrastructure.hosts.backend }}:{{ infrastructure.ports.backend }}"
-    frontend: "http://{{ infrastructure.hosts.frontend }}:{{ infrastructure.ports.frontend }}"
-    redis: "redis://{{ infrastructure.hosts.database }}:{{ infrastructure.ports.redis }}"
-    ai_stack: "http://{{ infrastructure.hosts.aiml }}:{{ infrastructure.ports.ai_stack }}"
-    npu_worker: "http://{{ infrastructure.hosts.npu }}:{{ infrastructure.ports.npu_worker }}"
-    browser: "http://{{ infrastructure.hosts.browser }}:{{ infrastructure.ports.browser }}"
+    backend: "http://{{ infrastructure_hosts.backend }}:{{ infrastructure_ports.backend }}"
+    frontend: "http://{{ infrastructure_hosts.frontend }}:{{ infrastructure_ports.frontend }}"
+    redis: "redis://{{ infrastructure_hosts.database }}:{{ infrastructure_ports.redis }}"
+    ai_stack: "http://{{ infrastructure_hosts.aiml }}:{{ infrastructure_ports.ai_stack }}"
+    npu_worker: "http://{{ infrastructure_hosts.npu }}:{{ infrastructure_ports.npu_worker }}"
+    browser: "http://{{ infrastructure_hosts.browser }}:{{ infrastructure_ports.browser }}"

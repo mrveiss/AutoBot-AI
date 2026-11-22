@@ -12,9 +12,9 @@
  * response carries no "may manage" fact, so the controls are shown and a refusal is reported, never
  * guessed from a role here.
  *
- * The view is not remounted when the route moves to another company, so everything is scoped to the
- * company a request was sent for: the id is captured at send time, a change of company drops the rows,
- * and a response for a company no longer shown is discarded.
+ * The company layout remounts the view on a company switch (#21502), but a late answer can still
+ * arrive for a company no longer shown, so the id is captured at send time, a change of company
+ * drops the rows, and such an answer is discarded.
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

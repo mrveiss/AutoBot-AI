@@ -22,6 +22,16 @@ verdict logic: it asks this module (and ``preboard_guard_lane_report`` for the v
 * ``meta``      -- what one shard records: its exit code, the merge state, the floor and the
   recorded test files it was expected to cover, derived from the tree it tested.
 * ``types-meta`` -- what the types job records: the merge state and the base commit it tested.
+* ``changed-tests`` -- the test files the head adds or changes (#21509), split by who runs them: the
+  guard shards already run the guard roots in full; the ``own-tests`` job runs the rest, so a member's
+  own new tests execute before the train instead of first inside it.
+* ``changed-specs`` -- the Vitest spec files the head adds or changes (#21509), grouped by the frontend package that
+  collects them (rules read from its own ``vitest.config.*`` by ``preboard_guard_lane_specs``); the ``own-specs``
+  job runs just those, so a member's new specs execute before the train and not first inside it.
+* ``added-headers`` -- the files the head ADDS (or renames or copies into place) in the license-header check's
+  scope, judged on the committed text at the dispatched head: one without the header fails the lane (#21535).
+  The check is the shared ``lacks_header`` of ``tools/lint/check_spdx_header.py``, which the train content gate
+  also calls, so what a train rejects after boarding the lane rejects before it.
 * ``summarize`` -- the machine-readable result and its job summary.
 """
 
@@ -29,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import fnmatch
 import json
 import math
 import os
@@ -36,7 +47,7 @@ import re
 import subprocess  # nosec B404  # git, argv list, no shell
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 # The repository root (autobot_shared, tools) and this directory (the report module, not a package).
 for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).resolve().parent)):
@@ -44,9 +55,12 @@ for _entry in (str(Path(__file__).resolve().parent.parent), str(Path(__file__).r
         sys.path.insert(0, _entry)
 
 import preboard_guard_lane_report as report  # noqa: E402
+import preboard_guard_lane_specs as specs  # noqa: E402
 
+from autobot_shared.git_probe import committed_text  # noqa: E402
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 from tools.lint._comment_syntax import code_lines  # noqa: E402
+from tools.lint.check_spdx_header import in_scope, lacks_header  # noqa: E402
 
 #: The guard and tooling trees, as named in pytest.ini's ``testpaths``. The only copy of this list.
 GUARD_ROOTS = (
@@ -70,6 +84,20 @@ PRODUCT_ROOTS = (
     "libs",
     "plugins/core-plugins",
 )
+
+#: The product root that runs under the SLM interpreter, and the product roots that run in the backend one.
+SLM_ROOT = "autobot-slm-backend"
+OWN_TEST_ROOTS = tuple(r for r in PRODUCT_ROOTS if r != SLM_ROOT)
+
+#: Prefixes pytest.ini's ``addopts --ignore`` leaves uncollected: a test file there never runs.
+IGNORED_PREFIXES = ("autobot-slm-backend/ansible/", "autobot-npu-worker/resources/")
+
+#: Where a changed test file runs. ``guarded`` files belong to the guard shards, which run their roots in full.
+OWN_GROUPS = ("main", "slm", "guarded", "uncollected")
+
+#: ``--diff-filter`` letters: every file a head changes (test selection), and the files it brings in under a path.
+CHANGED_FILTER = "ACMR"
+ARRIVED_FILTER = "ACR"
 
 #: The suite's own record of the tests it runs, one node id per entry.
 DURATIONS_FILE = ".test_durations"
@@ -182,6 +210,129 @@ def merge_base_into_head(base_sha: str) -> dict[str, str]:
     return {**info, "merged": "true" if merged else "false"}
 
 
+def python_file_patterns(root: Path) -> list[str]:
+    """The file-name patterns pytest.ini collects (``python_files``)."""
+    parser = configparser.ConfigParser(inline_comment_prefixes=("#",))
+    parser.read(root / "pytest.ini", encoding="utf-8")
+    patterns = parser.get("pytest", "python_files", fallback="").split()
+    if not patterns:
+        raise SystemExit("pytest.ini declares no python_files; the lane cannot tell which files are tests")
+    return patterns
+
+
+def _under(path: str, roots: tuple[str, ...]) -> bool:
+    return any(path.startswith(f"{r}/") for r in roots)
+
+
+def group_of(path: str, patterns: list[str]) -> str | None:
+    """Where the test file *path* runs (one of :data:`OWN_GROUPS`), or ``None`` for a file that is no test."""
+    if not path.endswith(".py") or not any(fnmatch.fnmatchcase(path.rsplit("/", 1)[-1], p) for p in patterns):
+        return None
+    if path.startswith(IGNORED_PREFIXES):
+        return "uncollected"
+    if _under(path, GUARD_ROOTS):
+        return "guarded"
+    if path.startswith(f"{SLM_ROOT}/"):
+        return "slm"
+    return "main" if _under(path, OWN_TEST_ROOTS) else "uncollected"
+
+
+def select_own_tests(paths: list[str], patterns: list[str], exists: Callable[[str], bool]) -> dict[str, list[str]]:
+    """Group the changed *paths* that are test files and still *exist* in the tested tree."""
+    groups: dict[str, list[str]] = {name: [] for name in OWN_GROUPS}
+    for path in sorted(set(paths)):
+        group = group_of(path, patterns)
+        if group is not None and exists(path):
+            groups[group].append(path)
+    return groups
+
+
+def changed_paths(base_sha: str, head_sha: str, kinds: str = CHANGED_FILTER) -> list[str]:
+    """Files of the *kinds* (``--diff-filter`` letters) the head has relative to the merge base (three-dot diff)."""
+    for sha in (base_sha, head_sha):
+        if not BASE_SHA_PATTERN.fullmatch(sha):
+            raise SystemExit(f"{sha!r} is not a full commit id")
+    out = _git("diff", "--name-only", "-z", f"--diff-filter={kinds}", f"{base_sha}...{head_sha}")
+    return [p for p in out.split("\0") if p]
+
+
+def write_own_tests(root: Path, base_sha: str, head_sha: str, out_dir: Path) -> dict[str, int]:
+    """Write one ``<group>.txt`` per group (a path per line) into *out_dir*; return the counts."""
+    paths, patterns = changed_paths(base_sha, head_sha), python_file_patterns(root)
+    groups = select_own_tests(paths, patterns, lambda p: (root / p).is_file())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, files in groups.items():
+        (out_dir / f"{name}.txt").write_text("".join(f"{f}\n" for f in files), encoding="utf-8")
+    return {name: len(files) for name, files in groups.items()}
+
+
+def _changed_tests(root: Path, args: argparse.Namespace) -> None:
+    counts = write_own_tests(root, args.base_sha, args.head_sha, Path(args.out_dir))
+    sys.stdout.write("".join(f"{name}={count}\n" for name, count in counts.items()))
+    if not counts["main"] and not counts["slm"]:
+        sys.stderr.write("no changed test files\n")
+    if counts["guarded"]:
+        sys.stderr.write(f"{counts['guarded']} changed test file(s) in the guard roots run in the guard shards\n")
+    if counts["uncollected"]:
+        sys.stderr.write(f"::notice::{counts['uncollected']} changed test file(s) the suite does not collect\n")
+
+
+def _changed_specs(root: Path, args: argparse.Namespace) -> int:
+    try:
+        selected, notices, unrun = specs.select_specs(root, changed_paths(args.base_sha, args.head_sha))
+    except specs.UnreadableConfig as exc:
+        sys.stderr.write(f"::error::cannot read the frontend spec rules: {exc}\n")
+        return 1
+    specs.write_selection(selected, Path(args.out_dir))
+    total = sum(len(files) for files in selected.values())
+    sys.stdout.write(f"total={total}\npackages={len(selected)}\n")
+    if not total:
+        sys.stderr.write("no changed frontend specs\n")
+    for path in notices:
+        sys.stderr.write(
+            f"::notice::{path} looks like a spec but no frontend package runs it (outside all, or excluded)\n"
+        )
+    for path, package in unrun:
+        sys.stderr.write(
+            f"::error::{path} looks like a spec but package {package} does not collect it: no include rule matches\n"
+        )
+    return 1 if unrun else 0
+
+
+def examine_additions(base_sha: str, head_sha: str) -> tuple[int, int, list[str]]:
+    """``(added, in scope, header-less)``: the files the head brings in, those in the header check's scope, and
+    those whose COMMITTED text at the head has no header.
+
+    Read with ``committed_text`` (``git show``), never the working tree, which the lane has changed by merging the
+    base. A file the head only modifies is not judged: a header it already lacked is not this head's addition.
+    """
+    added = changed_paths(base_sha, head_sha, ARRIVED_FILTER)
+    scoped = [path for path in added if in_scope(Path(path))]
+    missing = [p for p in scoped if lacks_header(Path(p), lambda p=p: committed_text(head_sha, p))]
+    return len(added), len(scoped), missing
+
+
+def headerless_additions(base_sha: str, head_sha: str) -> list[str]:
+    """The files of :func:`examine_additions` that lack the header."""
+    return examine_additions(base_sha, head_sha)[2]
+
+
+def _added_headers(args: argparse.Namespace) -> int:
+    pinned_base_commit(args.base_sha)  # the base may not be in the branch's history: fetch it by id first
+    added, scoped, missing = examine_additions(args.base_sha, args.head_sha)
+    for path in missing:
+        sys.stderr.write(f"{path}: added without the SPDX/Apache-2.0 license header\n")
+    if missing:
+        sys.stderr.write(f"::error::{len(missing)} added file(s) lack the license header; add it and commit\n")
+        return 1
+    sys.stdout.write(
+        "no added files: nothing to examine\n"
+        if not added
+        else f"added files: {added}, in the header check's scope: {scoped}, with the header: {scoped - len(missing)}\n"
+    )
+    return 0
+
+
 def build_meta(root: Path, shard: int, splits: int, rc: int | None, env: dict[str, str]) -> dict[str, Any]:
     """What one shard records. ``rc`` is ``None`` when the head conflicted and no test ran."""
     roots = guard_roots(root)
@@ -236,6 +387,15 @@ def _parser() -> argparse.ArgumentParser:
     meta.add_argument("--splits", type=int, required=True)
     meta.add_argument("--rc", type=int, default=None)
     meta.add_argument("--out", required=True)
+    own = sub.add_parser("changed-tests")
+    for flag in ("--base-sha", "--head-sha", "--out-dir"):
+        own.add_argument(flag, required=True)
+    changed_specs = sub.add_parser("changed-specs")
+    for flag in ("--base-sha", "--head-sha", "--out-dir"):
+        changed_specs.add_argument(flag, required=True)
+    added = sub.add_parser("added-headers")
+    for flag in ("--base-sha", "--head-sha"):
+        added.add_argument(flag, required=True)
     summarize = sub.add_parser("summarize")
     for flag in ("--shards", "--types", "--out", "--markdown"):
         summarize.add_argument(flag, required=True)
@@ -257,6 +417,12 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.out).write_text(json.dumps(lane_durations(root, guard_roots(root))) + "\n", encoding="utf-8")
     elif args.command == "meta":
         _write_meta(args)
+    elif args.command == "changed-tests":
+        _changed_tests(root, args)
+    elif args.command == "changed-specs":
+        return _changed_specs(root, args)
+    elif args.command == "added-headers":
+        return _added_headers(args)
     else:
         return _summarize(args)
     return 0

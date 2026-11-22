@@ -13,6 +13,15 @@ from autobot_shared import logging_once
 from autobot_shared.logging_once import first_time, log_once, reset_log_once
 
 
+def _own(caplog):
+    """Records of the loggers this file creates (``once.*``) only.
+
+    ``caplog`` captures the root logger, so an unrelated logger that fires while a test runs -- the
+    configuration loader on its first import is one -- would otherwise enter an assertion on the whole list.
+    """
+    return [r for r in caplog.records if r.name.startswith("once.")]
+
+
 @pytest.fixture(autouse=True)
 def _clean():
     reset_log_once()
@@ -25,14 +34,14 @@ def test_a_key_logs_once_at_the_given_level(caplog):
     with caplog.at_level(logging.INFO, logger="once.a"):
         assert log_once(log, logging.INFO, "k", "hello %s", "x") is True
         assert log_once(log, logging.INFO, "k", "hello %s", "y") is False
-    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [(logging.INFO, "hello x")]
+    assert [(r.levelno, r.getMessage()) for r in _own(caplog)] == [(logging.INFO, "hello x")]
 
 
 def test_the_record_points_at_the_caller(caplog):
     log = logging.getLogger("once.b")
     with caplog.at_level(logging.WARNING, logger="once.b"):
         log_once(log, logging.WARNING, "k", "m")
-    assert caplog.records[0].funcName == "test_the_record_points_at_the_caller"
+    assert _own(caplog)[0].funcName == "test_the_record_points_at_the_caller"
 
 
 def test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site(caplog):
@@ -40,15 +49,15 @@ def test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site(caplog
     with caplog.at_level(logging.WARNING, logger="once.kw"):
         log_once(log, logging.WARNING, "k", "m %s", "x", extra={"window": 7})
         log_once(log, logging.WARNING, "k", "m %s", "x", extra={"window": 8})
-    assert [r.window for r in caplog.records] == [7]
-    assert caplog.records[0].funcName == "test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site"
+    assert [r.window for r in _own(caplog)] == [7]
+    assert _own(caplog)[0].funcName == "test_keyword_arguments_reach_the_logger_and_the_caller_stays_the_site"
 
 
 def test_scope_is_the_logger_so_modules_may_share_a_key(caplog):
     with caplog.at_level(logging.WARNING):
         log_once(logging.getLogger("once.c1"), logging.WARNING, "k", "one")
         log_once(logging.getLogger("once.c2"), logging.WARNING, "k", "two")
-    assert [r.getMessage() for r in caplog.records] == ["one", "two"]
+    assert [r.getMessage() for r in _own(caplog)] == ["one", "two"]
 
 
 def test_reset_scopes(caplog):
@@ -93,4 +102,4 @@ def test_works_with_get_logger(caplog):
     with caplog.at_level(logging.WARNING, logger="once.e"):
         log_once(log, logging.WARNING, "k", "via get_logger")
         log_once(log, logging.WARNING, "k", "via get_logger")
-    assert [r.getMessage() for r in caplog.records] == ["via get_logger"]
+    assert [r.getMessage() for r in _own(caplog)] == ["via get_logger"]

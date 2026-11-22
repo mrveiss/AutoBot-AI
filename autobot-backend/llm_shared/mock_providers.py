@@ -17,6 +17,7 @@ import logging
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.logging_once import log_once
+from autobot_shared.ollama_urls import ollama_chat_url
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
@@ -37,17 +38,9 @@ class LocalLLM:
         self._ollama_available = bool(self._ollama_url)
         self._default_model = config.default_llm_model
 
-        if self._ollama_available:
-            logger.info("LocalLLM initialized with Ollama at %s", self._ollama_url)
-        else:
-            # #10726: Raised to WARNING — a missing AUTOBOT_OLLAMA_ENDPOINT means the
-            # 'local' provider silently serves mock text, masking a prod misconfiguration.
-            logger.warning(
-                "LocalLLM (Ollama) not configured — AUTOBOT_OLLAMA_ENDPOINT is unset or empty. "
-                "The 'local' provider will return MOCK responses until Ollama is configured. "
-                "Other providers (OpenAI, Anthropic, Google) work independently. "
-                "Set AUTOBOT_OLLAMA_ENDPOINT in .env to enable real local inference."
-            )
+        # No log record here (#20894): ``local_llm`` below is built at import, and a record written then is
+        # an import-time file write. A missing endpoint is reported where it matters, at every MOCK reply
+        # in generate() (#10726).
 
     def _create_mock_response(self, prompt: str) -> dict:
         """Issue #665: Extracted from generate to reduce function length.
@@ -143,7 +136,7 @@ class LocalLLM:
 
             timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
             async with get_http_client().tracked_request(
-                "POST", f"{self._ollama_url}/api/chat", json=data, timeout=timeout
+                "POST", ollama_chat_url(self._ollama_url), json=data, timeout=timeout
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()

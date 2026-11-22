@@ -19,6 +19,27 @@ import type { components } from '@/types/generated/api'
 export type AuditResult = 'success' | 'denied' | 'failed' | 'error' | 'attempted'
 
 /**
+ * Whether each result is still unfinished. Typed against {@link AuditResult}, so a new member cannot be
+ * added without deciding which side it is on (#20665).
+ */
+const UNFINISHED_RESULT: Record<AuditResult, boolean> = {
+  success: false,
+  denied: false,
+  failed: false,
+  error: false,
+  attempted: true,
+}
+
+/**
+ * Whether an audit row's outcome is final. An `attempted` row records that an operation began, not how
+ * it ended, so it counts neither as a success nor as a failure. The wire row types `result` as a plain
+ * string, hence the parameter; a value outside {@link AuditResult} is not an unfinished claim.
+ */
+export function isTerminalAuditResult(result: string): boolean {
+  return UNFINISHED_RESULT[result as AuditResult] !== true
+}
+
+/**
  * One row as `GET /audit/logs` sends it: the generated `AuditEntryResponse`
  * (backend `api/schemas_audit.py`). `timestamp` is epoch SECONDS (a float),
  * the operation's data is in `details`, and there is no `metadata`,
@@ -55,11 +76,36 @@ export interface AuditQueryParams {
 export type AuditDashboardResponse<E = AuditEntry> = AuditQueryResponse<E, AuditQueryParams>
 
 /**
+ * What `GET /audit/statistics` carries in `statistics` today: the process counters and the 24-hour
+ * record count of `AuditLogger.get_statistics` (backend `services/audit_logger.py`). The generated
+ * schema types the object as `{ [key: string]: unknown }`, so this is the hand-written contract.
+ * `entries_last_24h` is absent when the store is unreachable (`redis_available` false). The
+ * per-result counts and rate are NOT sent; they are optional here so a server that starts sending
+ * them is used as sent ({@link resolveAuditStatistics}, #21513).
+ */
+export interface AuditServerStatistics {
+  total_logged?: number
+  total_failed?: number
+  redis_available?: boolean
+  entries_last_24h?: number
+  total_entries?: number
+  success_count?: number
+  denied_count?: number
+  failed_count?: number
+  error_count?: number
+  success_rate?: number
+  operations_by_type?: Record<string, number>
+  entries_by_hour?: Record<string, number>
+  top_users?: Array<{ user_id: string; count: number }>
+  top_operations?: Array<{ operation: string; count: number }>
+}
+
+/**
  * Audit statistics response from backend
  */
 export interface AuditStatisticsResponse {
   success: boolean
-  statistics: AuditStatistics
+  statistics: AuditServerStatistics
   vm_info: {
     vm_source: string
     vm_name: string
@@ -67,7 +113,8 @@ export interface AuditStatisticsResponse {
 }
 
 /**
- * Audit statistics data structure
+ * The figures the statistics panel shows: {@link AuditServerStatistics} resolved by
+ * {@link resolveAuditStatistics}, so every count is present (served, else derived from the rows).
  */
 export interface AuditStatistics {
   total_entries: number
@@ -191,11 +238,54 @@ export const DEFAULT_AUDIT_FILTER: AuditFilter = {
 }
 
 /**
- * Helper to calculate success rate percentage
+ * The one definition of the success rate: successes as a whole percentage of the rows whose outcome is
+ * final (see {@link isTerminalAuditResult}). With no final row there is no rate to speak of, so it is 0.
  */
-export function calculateSuccessRate(stats: AuditStatistics): number {
-  if (stats.total_entries === 0) return 0
-  return Math.round((stats.success_count / stats.total_entries) * 100)
+export function calculateSuccessRate(successCount: number, terminalCount: number): number {
+  if (terminalCount === 0) return 0
+  return Math.round((successCount / terminalCount) * 100)
+}
+
+/** A server-sent figure when it is a finite number, else undefined. */
+function served(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/**
+ * The figures the statistics panel shows (#20665 AC3, #21513). A count or rate the server sent is used
+ * as sent; one it did not send is derived from the loaded `entries`, which describes that window and
+ * not the whole log. An `attempted` row is neither a success nor a failure: it is in no result count
+ * and not in the rate's denominator ({@link isTerminalAuditResult}). Null when there is neither a
+ * statistics object nor a row to derive from.
+ */
+export function resolveAuditStatistics(
+  server: AuditServerStatistics | null,
+  entries: ReadonlyArray<{ result: string }>
+): AuditStatistics | null {
+  if (!server && entries.length === 0) return null
+  const count = (result: AuditResult) => entries.filter((e) => e.result === result).length
+  const success = served(server?.success_count) ?? count('success')
+  const denied = served(server?.denied_count) ?? count('denied')
+  const failed = served(server?.failed_count) ?? count('failed')
+  const error = served(server?.error_count) ?? count('error')
+  // No count served: the rows alone decide the rate, over every FINAL outcome (timed_out included, attempted
+  // excluded). Counts the server did serve are the figures shown, so the rate is taken over those.
+  const anyServed = [server?.success_count, server?.denied_count, server?.failed_count, server?.error_count].some((v) => served(v) !== undefined)
+  const denominator = anyServed ? success + denied + failed + error : entries.filter((e) => isTerminalAuditResult(e.result)).length
+  return {
+    ...server,
+    operations_by_type: server?.operations_by_type ?? {},
+    entries_by_hour: server?.entries_by_hour ?? {},
+    top_users: server?.top_users ?? [],
+    top_operations: server?.top_operations ?? [],
+    total_entries: served(server?.total_entries) ?? entries.length,
+    success_count: success,
+    denied_count: denied,
+    failed_count: failed,
+    error_count: error,
+    // A rate the server did not send is derived from the counts shown beside it, or from the final rows; `attempted` is in neither.
+    success_rate: served(server?.success_rate) ?? calculateSuccessRate(success, denominator),
+  }
 }
 
 /**

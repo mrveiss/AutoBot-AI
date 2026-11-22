@@ -153,10 +153,6 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         "#15022 -- a state replay, not a lock: an outage-time needs_reauth mark is written back with `nx` "
         "so it never overwrites a newer mark another worker wrote. No holder, no renewal, nothing to release.",
     ),
-    "autobot-backend/llc/notifications/router.py": (
-        1,
-        "#8579 — one uvicorn worker runs the notification router.",
-    ),
     "autobot-backend/llc/services/work_item_service.py": (
         2,
         "#8213 — an LLC *work item* checkout: product domain state, not agent coordination.",

@@ -48,21 +48,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
     ),
-    "*.conf.j2": (
-        {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
-        "root-relative `*.conf.j2` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.j2": (
-        {
-            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
-            "repo_tests/browser_port_single_home_19324_test.py",
-            "repo_tests/nginx_internal_api_key_auth_gate_test.py",
-            "repo_tests/slm_admin_password_one_home_19318_test.py",
-            "repo_tests/slm_frontend_publish_contract_test.py",
-            "repo_tests/user_mode_values_19437_test.py",
-        },
-        "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
-    ),
     "*.json": (
         {"repo_tests/i18n_untranslated_ratchet_test.py", "repo_tests/user_mode_values_19437_test.py"},
         "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
@@ -96,10 +81,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
         },
         "root-relative `*.service` sweep; the matching files live outside the python filter's trees",
-    ),
-    "*.service.j2": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
-        "root-relative `*.service.j2` sweep; the matching files live outside the python filter's trees",
     ),
     "*.sh": (
         {
@@ -327,5 +308,14 @@ GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
         "the Liquid-tag guard runs on its own docs-gated job in seconds; covering `docs/**/*.md` "
         "in the python filter would instead spend the twelve-shard suite on every documentation "
         "edit, which is the trade this record exists to keep visible (owner decision, #17930)",
+    ),
+    # #21713: the promotion-base wiring guard reads every workflow; actionlint.yml already fires on
+    # that tree, so it runs the guard there instead of spending the suite on every workflow edit.
+    ".github/workflows/*.y*ml": (
+        {"repo_tests/release_promotion_base_wiring_21713_test.py"},
+        ".github/workflows/actionlint.yml",
+        "the guard reads only workflow YAML and repo_tests imports; actionlint.yml fires on every "
+        "workflow change, and covering `.github/workflows/**` in the python filter would run the "
+        "twelve-shard suite on each one (#21713)",
     ),
 }

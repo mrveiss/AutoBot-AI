@@ -29,13 +29,26 @@ import re
 import pytest
 from repo_tests._analytics_routes_20513 import CROSS_SOURCE_PATHS, DEFERRED_CALLERS, DEFERRED_TO_PR2, OPS_SUFFIXES
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
+from autobot_shared.testfile_names import is_test_filename
 from tools.lint._comment_syntax import code_lines
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 FRONTEND_SRC = "autobot-frontend/src"
 MIN_SITES_EXAMINED = 30
 
-LITERAL = re.compile(r"(?:/api|\$\{getApiBase\(\)\})/analytics/codebase/([A-Za-z0-9_\-/{}$.]+)")
+#: ``/analytics/codebase/<path>`` (group 1 is ``<path>``), and the routes outside it that also require a source:
+#: ``/reporting`` ``report`` / ``summary`` and ``/code-intelligence`` ``security/score/cached`` / ``analyze``
+#: (group 1 is the whole path from ``reporting/`` / ``code-intelligence/``; #21463).
+LITERAL = re.compile(
+    r"(?:/api|\$\{getApiBase\(\)\})/(?:analytics/codebase/|(?=reporting/(?:report|summary)\b)"
+    r"|(?=code-intelligence/security/score/(?:cached|analyze)\b))([A-Za-z0-9_\-/{}$.]+)"
+)
+#: A constant that holds one source-required route's literal: its USES are the call sites, its definition is not.
+ROUTE_CONSTANTS = {"CACHED_SECURITY_SCORE_PATH": "code-intelligence/security/score/cached"}
+_CONSTANT_USE = re.compile(r"\b(" + "|".join(ROUTE_CONSTANTS) + r")\b")
+_CONSTANT_DEFINITION = re.compile(r"^\s*(?:export\s+)?const\s+(?:" + "|".join(ROUTE_CONSTANTS) + r")\b")
 EVIDENCE = re.compile(r"withSourceId\(|sourceIdQuery|source_id")
 SCOPE_FLAG = re.compile(r"scopeToSource:\s*true")
 REQUIRE_FLAG = re.compile(r"requireSource:\s*true")
@@ -48,6 +61,14 @@ PR2_REASON = "#20513 PR 2"
 def _normalise(raw: str) -> str:
     """``sources/${id}/sync?x=1`` -> ``sources/{x}/sync``."""
     return re.sub(r"\$\{[^}]*\}", "{x}", raw.split("?")[0]).rstrip("/")
+
+
+def _route_sites(line: str) -> list[tuple[str, int]]:
+    """``(route, column)`` for each source-required route *line* names: a literal, or a constant holding one."""
+    if _CONSTANT_DEFINITION.match(line):
+        return []  # the definition names the route once; the places that use it are the calls
+    sites = [(_normalise(m.group(1)), m.start()) for m in LITERAL.finditer(line)]
+    return sites + [(ROUTE_CONSTANTS[m.group(1)], m.start()) for m in _CONSTANT_USE.finditer(line)]
 
 
 def _exempt(path: str) -> str | None:
@@ -136,11 +157,10 @@ def scan_text(
         if index + 1 not in code_text_by_line:
             continue
         line = code_text_by_line[index + 1]
-        for match in LITERAL.finditer(line):
-            path = _normalise(match.group(1))
+        for path, column in _route_sites(line):
             if _exempt(path):
                 continue
-            statement = _call_span(text, line_offset + match.start())
+            statement = _call_span(text, line_offset + column)
             preceding = "\n".join(lines[max(0, index - 2) : index + 1])
             ok = _has_scope_evidence(statement, preceding, file_scopes, file_has_source)
             entry = _deferred_entry(deferred, filename, path, statement)
@@ -154,26 +174,43 @@ def scan_text(
     return examined, violations
 
 
-def _frontend_files():
-    root = repo_root() / FRONTEND_SRC
-    for path in sorted(root.rglob("*")):
-        if path.suffix not in {".ts", ".vue"}:
-            continue
-        parts = path.parts
-        if "node_modules" in parts or "generated" in parts or "__tests__" in parts:
-            continue
-        if path.name.endswith((".test.ts", ".spec.ts", ".d.ts")):
-            continue
-        yield path
+def _discover(root) -> list[str]:
+    """Tracked frontend ``.ts`` / ``.vue`` sources (no tests, generated or typings); an empty tree yields ``[]``."""
+    try:
+        found = tracked_paths(root, FRONTEND_SRC)
+    except EmptyEnumeration:
+        return []
+    skipped_dirs = {"node_modules", "generated", "__tests__"}
+    return [
+        p
+        for p in found
+        if p.endswith((".ts", ".vue"))
+        and not p.endswith(".d.ts")
+        and not is_test_filename(p)
+        and not skipped_dirs & set(p.split("/"))
+    ]
+
+
+#: The frontend sources this scan reads (1262 measured at the base). A declaration new in this PR has no base
+#: declaration to compute a floor from, so it pins ``floor=`` until it lands; the pin can go after merge (#19676).
+REACH = declare(
+    "analytics-callers-scope-to-source-20513",
+    discover=_discover,
+    what="frontend .ts/.vue sources",
+    floor=1260,
+    growth=400,
+    roots=(FRONTEND_SRC,),
+)
 
 
 def test_every_scoped_analytics_call_sends_its_source():
     total, failures = 0, []
-    for path in _frontend_files():
-        rel = str(path.relative_to(repo_root()))
-        examined, violations = scan_text(path.read_text(encoding="utf-8"), rel)
+    files = REACH.examined(repo_root())
+    for rel in files:
+        examined, violations = scan_text((repo_root() / rel).read_text(encoding="utf-8"), rel)
         total += examined
         failures += [f"{rel}: {v}" for v in violations]
+    REACH.completed(files, repo_root())
     assert total >= MIN_SITES_EXAMINED, f"only {total} call sites examined; the scan stopped seeing them"
     assert not failures, "analytics calls with no source_id (#20513):\n  " + "\n  ".join(failures)
 
@@ -229,7 +266,8 @@ def test_control_a_stale_deferred_entry_is_detected():
 def test_the_exempt_paths_are_the_shared_lists():
     assert _exempt("impact") == "cross-source"
     assert _exempt("patterns/tasks") == "cross-source"
-    assert _exempt("index/current") == PR2_REASON
+    assert _exempt("index/cancel") == PR2_REASON
+    assert _exempt("index/current") is None  # scoped now: a caller must send its source
     assert _exempt("patterns/tasks/clear-stuck") == "task or ops route"
     assert _exempt("stats") is None
 
@@ -317,3 +355,82 @@ def test_control_a_body_evidence_in_the_same_call_passes_and_one_outside_it_does
     assert scan_text(outside, "autobot-frontend/src/composables/analytics/useIndexingJob.ts")[
         1
     ], "the exemption covers only the anchored call"
+
+
+REPORTING_FILE = "autobot-frontend/src/composables/analytics/useAnalyticsDataFetchers.ts"
+
+
+def test_the_unified_report_caller_is_examined_and_skips_the_request_without_a_source():
+    """#21463: ``/api/reporting/report`` requires a source; the caller must be seen by the scan and be scoped."""
+    text = (repo_root() / REPORTING_FILE).read_text(encoding="utf-8")
+    examined, violations = scan_text(text, REPORTING_FILE)
+    reporting = text.count("/api/reporting/report")
+    assert reporting >= 1, "the unified report caller moved; point this test at it"
+    assert examined >= 1 and not violations, violations
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "useFetchEndpoint({ path: '/api/reporting/report', scopeToSource: true }, { withSourceId })",
+        "apiClient.get('/api/reporting/summary')",
+    ],
+)
+def test_control_a_reporting_call_without_a_skip_or_source_is_flagged(snippet):
+    examined, violations = scan_text(snippet)
+    assert examined == 1 and len(violations) == 1
+
+
+def test_control_a_scoped_reporting_call_passes_and_an_optional_one_is_not_examined():
+    scoped = "useFetchEndpoint({ path: '/api/reporting/report', scopeToSource: true, requireSource: true }, { withSourceId })"
+    assert scan_text(scoped) == (1, [])
+    assert scan_text("apiClient.get('/api/reporting/trends')") == (0, [])
+
+
+CODE_INTEL_ROUTES = ("security/score/cached", "security/score/analyze")
+
+
+@pytest.mark.parametrize("route", CODE_INTEL_ROUTES)
+def test_control_a_bare_code_intelligence_source_route_is_flagged(route):
+    for snippet in (
+        f"apiClient.get('/api/code-intelligence/{route}')",
+        f"post(`${{getApiBase()}}/code-intelligence/{route}`)",
+    ):
+        examined, violations = scan_text(snippet)
+        assert examined == 1 and len(violations) == 1, snippet
+
+
+@pytest.mark.parametrize("route", CODE_INTEL_ROUTES)
+def test_control_a_scoped_code_intelligence_source_route_passes(route):
+    assert scan_text(f"apiClient.get(withSourceId('/api/code-intelligence/{route}'))") == (1, [])
+
+
+def test_control_code_intelligence_routes_that_take_a_path_not_a_source_are_not_examined():
+    text = "\n".join(
+        [
+            "api.get('/api/code-intelligence/security/score')",
+            "api.post('/api/code-intelligence/security/analyze', body)",
+            "api.get(`${getApiBase()}/code-intelligence/security/score/status/${id}`)",
+            "api.get('/api/code-intelligence/health-score')",
+        ]
+    )
+    assert scan_text(text) == (0, [])
+
+
+def test_control_a_use_of_the_cached_score_constant_is_a_call_and_its_definition_is_not():
+    definition = "export const CACHED_SECURITY_SCORE_PATH = '/api/code-intelligence/security/score/cached'"
+    assert scan_text(definition) == (0, [])
+    bare = "useFetchEndpoint({ path: CACHED_SECURITY_SCORE_PATH, label: 'x' })"
+    assert scan_text(bare) == (1, ["line 1: code-intelligence/security/score/cached"])
+    scoped = "useFetchEndpoint({ path: CACHED_SECURITY_SCORE_PATH, scopeToSource: true, requireSource: true }, { withSourceId })"
+    assert scan_text(scoped) == (1, [])
+
+
+CACHED_READER = "autobot-frontend/src/composables/analytics/useCachedSecurityScore.ts"
+
+
+def test_the_cached_score_reader_is_examined_and_skips_the_request_without_a_source():
+    """#21463: the one reader of ``security/score/cached`` must be seen by the scan and be scoped."""
+    text = (repo_root() / CACHED_READER).read_text(encoding="utf-8")
+    examined, violations = scan_text(text, CACHED_READER)
+    assert examined >= 1 and not violations, violations

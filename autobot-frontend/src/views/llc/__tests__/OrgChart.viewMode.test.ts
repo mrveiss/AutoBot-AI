@@ -20,9 +20,11 @@ vi.mock('@/plugins/api', () => ({
   // #21001: the viewer's role comes from the members list; answer it as an owner, off the test's `get` script.
   useApiClient: () => ({
     get: (url: string, ...rest: unknown[]) =>
-      String(url).endsWith('/members')
-        ? Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true })
-        : get(url, ...rest),
+      String(url).startsWith('/api/llc/workflows/')
+        ? Promise.resolve([]) // #21242: the company's workflows, listed on canvas entry
+        : String(url).endsWith('/members')
+          ? Promise.resolve({ members: [{ user_id: 'u1', display_name: 'Ada', role: 'owner' }], viewer_can_manage: true })
+          : get(url, ...rest),
     post,
   }),
 }))

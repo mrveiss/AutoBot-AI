@@ -91,12 +91,49 @@ def test_the_rescue_neutralises_braces_in_the_embedded_error_text() -> None:
     ), "a templating error quotes the failing expression; the line is templated again, so braces must go"
 
 
+_BINDING = re.compile(r"\{%-?\s*set\s+(\w+)\s*=\s*ansible_failed_result\s*\|\s*default\(")
+
+
+def _failed_result_names(text: str) -> set[str]:
+    """`ansible_failed_result` itself plus every variable the text binds from it (with a default)."""
+    return {"ansible_failed_result", *_BINDING.findall(text)}
+
+
+def _embeds_the_whole_result(text: str) -> bool:
+    """True when a `{{ }}` prints the failed result object itself, bare, filtered or serialised."""
+    for name in _failed_result_names(text):
+        if re.search(rf"\{{\{{-?\s*{name}\s*(\}}\}}|\|\s*(to_json|to_nice_json|string|to_yaml|to_nice_yaml)\b)", text):
+            return True
+    return False
+
+
 def test_the_rescue_reports_status_and_field_names_not_the_whole_result() -> None:
     text = _dump(_unit()["rescue"])
-    for shape in ("ansible_failed_result.status", "ansible_failed_result.keys()", "internal_api_key_realign_report"):
-        assert shape in text, f"the rescue must report {shape}"
-    whole = [t for t in _unit()["rescue"] if "{{ ansible_failed_result }}" in _dump(t)]
-    assert not whole, "never print the whole failed result: it can carry request headers"
+    names = _failed_result_names(text)
+    assert len(names) > 1 or "ansible_failed_result" in text, "the rescue must read ansible_failed_result"
+    bound = names - {"ansible_failed_result"}
+    assert bound, "the rescue must bind the failed result once, with a default, so a missing one cannot fail it"
+    var = next(iter(bound))
+    assert f"{var}.status | default(" in text, "the rescue must report the failed result's HTTP status, defaulted"
+    assert f"{var}.keys()" in text, "the rescue must report the failed result's field names"
+    assert "internal_api_key_realign_report" in text, "the rescue must record the line the summary prints"
+    assert not _embeds_the_whole_result(text), "never print the whole failed result: it can carry request headers"
+
+
+def test_the_whole_result_control_still_catches_a_rescue_that_prints_it() -> None:
+    """Control for the test above: each spelling of 'print the entire result' must be detected."""
+    bound = "{% set _r = ansible_failed_result | default({}) %}"
+    for bad in (
+        "report: {{ ansible_failed_result }}",
+        "report: {{ ansible_failed_result | to_json }}",
+        f"{bound} report: {{{{ _r }}}}",
+        f"{bound} report: {{{{ _r | to_json }}}}",
+    ):
+        assert _embeds_the_whole_result(bad), bad
+    good = (
+        f"{bound} (HTTP {{{{ _r.status | default('none') }}}}; fields: {{{{ _r.keys() | list | sort | join(',') }}}})"
+    )
+    assert not _embeds_the_whole_result(good)
 
 
 def test_the_rescue_withholds_error_text_that_holds_a_key() -> None:
@@ -182,11 +219,12 @@ def test_the_backend_health_wait_uses_the_same_port_variable() -> None:
 
 
 def test_every_infrastructure_host_entry_uses_the_guarded_group_idiom() -> None:
-    """The idiom all.yml uses for vnc_nodes: index `hostvars[groups[x][0]]` only when `groups.get(x)` is non-empty."""
+    """Index `hostvars[groups[x][0]]` only when `groups.get(x)` is non-empty; this host being first is loopback."""
     path = _ANSIBLE / "inventory" / "group_vars" / "infrastructure.yml"
-    hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure"]["hosts"]
+    hosts = yaml.safe_load(path.read_text(encoding="utf-8"))["infrastructure_hosts"]
     pattern = re.compile(
-        r"\{\{ \(hostvars\[groups\['(\w+)'\]\[0\]\]\['ansible_host'\] \| default\('127\.0\.0\.1'\)\) "
+        r"\{\{ \('127\.0\.0\.1' if groups\['(\w+)'\]\[0\] == inventory_hostname "
+        r"else \(hostvars\[groups\['\1'\]\[0\]\]\['ansible_host'\] \| default\('127\.0\.0\.1'\)\)\) "
         r"if groups\.get\('\1'\) else '127\.0\.0\.1' \}\}$"
     )
     templated = {k: v for k, v in hosts.items() if "{{" in str(v)}

@@ -106,6 +106,7 @@ WRITE_PATHS: dict[str, tuple[str, str]] = {
     ),
 }
 for _script in (
+    "scripts/claude_md_reindex_cli.py",
     "scripts/identity_config_utility.py",
     "scripts/quick_populate_kb.py",
     "scripts/reset_kb_dimensions.py",

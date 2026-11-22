@@ -4,6 +4,7 @@
 
 REACH_ROOTS = {
     "repo_tests/ai_line_single_policy_18430_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/analytics_callers_scope_to_source_20513_test.py": ("autobot-frontend/src",),
     "repo_tests/ansible_concept_forks_17856_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/ansible_credentials_never_logged_19764_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/ansible_secret_renders_diff_and_root_key_20941_test.py": ("autobot-slm-backend/ansible",),
@@ -22,6 +23,7 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/browser_worker_one_manifest_21852_test.py": ("autobot-browser-worker",),
     "repo_tests/cache_never_in_repo_19553_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/captcha_type_fork_guard_18131_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/chat_history_async_calls_awaited_18316_test.py": ("autobot-backend/api",),
@@ -33,6 +35,7 @@ REACH_ROOTS = {
         "autobot_shared",
     ),
     "repo_tests/ci_requirements_one_install_20191_test.py": (".github/workflows",),
+    "repo_tests/company_os_exception_text_21579_test.py": ("autobot-backend/llc",),
     "repo_tests/compat_module_needs_importer_18552_test.py": ("autobot-backend",),
     "repo_tests/compose_nodes_one_home_19323_test.py": (
         "autobot-infrastructure",
@@ -89,6 +92,7 @@ REACH_ROOTS = {
         "docker-compose",
         "docker/",
     ),
+    "repo_tests/docker_smoke_required_context_17126_test.py": (".github/workflows",),
     "repo_tests/docs_liquid_tags_are_defined_17930_test.py": ("docs",),
     "repo_tests/duplicate_names_ratchet_14908_test.py": (
         "autobot-frontend/src",
@@ -120,6 +124,14 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/extraction_registry_17995_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "pipeline-scripts",
+        "scripts",
+        "tools/lint",
+    ),
     "repo_tests/file_type_sets_one_home_19339_test.py": ("autobot-backend",),
     "repo_tests/frontend_backend_origin_one_home_19821_test.py": ("autobot-frontend/src",),
     "repo_tests/frontend_hand_built_relative_time_19606_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
@@ -144,7 +156,21 @@ REACH_ROOTS = {
     ),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
+    "repo_tests/hardcoded_colour_ratchet_17560_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
+    "repo_tests/hosted_model_literal_guard_15501_test.py": (
+        "autobot-backend",
+        "autobot-frontend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-plugins",
+        "autobot-slm-backend",
+        "autobot-slm-frontend",
+        "autobot_shared",
+        "docs",
+        "libs",
+        "plugins",
+    ),
     "repo_tests/icon_rule_sets_font_size_only_19875_test.py": ("autobot-frontend/src",),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
     "repo_tests/inline_lazy_singleton_20889_test.py": (
@@ -182,6 +208,34 @@ REACH_ROOTS = {
         "scripts/",
         "tools/",
     ),
+    "repo_tests/kb_destructive_paths_guard_21383_test.py": (
+        ".claude",
+        ".github",
+        "autobot-backend",
+        "autobot-browser-worker",
+        "autobot-frontend",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot-slm-frontend",
+        "autobot-tts-worker",
+        "autobot_shared",
+        "check-grafana-health.sh",
+        "conftest.py",
+        "data",
+        "debug",
+        "docker",
+        "install.sh",
+        "libs",
+        "main.py",
+        "pipeline-scripts",
+        "plugins",
+        "run_agent.sh",
+        "scripts",
+        "site",
+        "sync-frontend.sh",
+        "verify_causal_extractor.py",
+    ),
     "repo_tests/kb_populate_one_home_19339_test.py": ("autobot-infrastructure",),
     "repo_tests/kb_read_visibility_guard_test.py": (
         "autobot-backend/",
@@ -195,6 +249,12 @@ REACH_ROOTS = {
         "autobot-slm-frontend/src",
     ),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
+    "repo_tests/llc_acting_identity_from_credential_20521_test.py": ("autobot-backend/llc/api",),
+    "repo_tests/llm_quality_seam_16133_test.py": (
+        "autobot-backend/agent_loop",
+        "autobot-backend/judges",
+        "autobot-backend/rlm",
+    ),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (
         "autobot-backend",
@@ -222,6 +282,17 @@ REACH_ROOTS = {
         "install.sh",
     ),
     "repo_tests/oauth_bundle_no_app_secret_13630_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/ollama_host_reads_ssot_host_21859_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
+    "repo_tests/ollama_urls_single_builder_21856_test.py": (
+        "autobot-backend",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/one_actor_id_15754_test.py": ("autobot-backend/llc",),
     "repo_tests/one_admin_gate_16333_test.py": ("autobot-backend",),
     "repo_tests/one_aead_core_17981_test.py": ("autobot_shared",),
@@ -256,6 +327,11 @@ REACH_ROOTS = {
         "pipeline-scripts",
         "scripts",
     ),
+    "repo_tests/one_compare_and_delete_script_19631_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/one_content_digest_15722_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_deployment_mode_detector_12771_test.py": ("autobot-backend/", "autobot-infrastructure/"),
     "repo_tests/one_doc_indexer_18129_test.py": (
@@ -266,6 +342,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/one_done_path_21503_test.py": ("autobot-backend",),
     "repo_tests/one_fact_read_authorization_18184_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -287,6 +364,7 @@ REACH_ROOTS = {
         "autobot-frontend",
         "autobot-infrastructure",
     ),
+    "repo_tests/one_rate_limiter_18087_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/one_semantic_chunker_14485_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_serving_predicate_18820_test.py": ("autobot-backend", "autobot_shared", "libs", "plugins"),
     "repo_tests/one_session_ownership_validator_14016_test.py": (
@@ -294,7 +372,6 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "autobot_shared",
     ),
-    "repo_tests/one_session_scope_15068_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/one_shared_authority_callers_17855_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -314,6 +391,7 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "docs",
         "install.sh",
+        "scripts/deployment",
     ),
     "repo_tests/opt_autobot_literal_ratchet_18880_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/optimization_taxonomies_13049_test.py": (
@@ -331,12 +409,22 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/primary_fill_class_label_reads_text_on_primary_21543_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+    ),
     "repo_tests/primary_fill_label_reads_text_on_primary_20425_test.py": ("autobot-frontend/src",),
     "repo_tests/provenance_accessor_17527_test.py": ("autobot-backend",),
     "repo_tests/provider_key_env_reads_route_through_vault_18094_test.py": (
         "autobot-backend",
         "autobot_shared",
         "plugins",
+    ),
+    "repo_tests/provider_tool_schema_single_source_16815_test.py": (
+        "autobot-backend/api/llm.py",
+        "autobot-backend/chat_workflow/manager.py",
+        "autobot-backend/llm_shared",
+        "autobot-backend/modern_ai_integration.py",
     ),
     "repo_tests/redaction_placeholder_one_home_19337_test.py": (
         "autobot-backend",
@@ -368,6 +456,7 @@ REACH_ROOTS = {
         "scripts",
         "tools",
     ),
+    "repo_tests/scheduled_workflows_covered_by_failure_report_21592_test.py": (".github/workflows",),
     "repo_tests/script_module_names_unique_14873_test.py": ("autobot-infrastructure/shared/scripts",),
     "repo_tests/search_mode_one_home_19335_test.py": ("autobot-backend",),
     "repo_tests/service_port_homes_test.py": (
@@ -393,7 +482,11 @@ REACH_ROOTS = {
     ),
     "repo_tests/shadowed_literal_routes_18720_test.py": ("autobot-backend", "autobot-slm-backend"),
     "repo_tests/sigterm_grace_one_home_19340_test.py": ("autobot-backend/llc",),
-    "repo_tests/single_attribute_writer_18240_test.py": ("autobot-frontend/src",),
+    "repo_tests/single_attribute_writer_18240_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+        "libs/autobot-ui/src",
+    ),
     "repo_tests/single_constant_time_compare_20761_test.py": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -435,8 +528,10 @@ REACH_ROOTS = {
     ),
     "repo_tests/unconnected_code_gate_20512_test.py": (
         "autobot-backend",
+        "autobot-frontend/src",
         "autobot-infrastructure",
         "autobot-slm-backend",
+        "autobot-slm-frontend/src",
         "autobot_shared",
     ),
     "repo_tests/v_html_sanitiser_guard_19118_test.py": (

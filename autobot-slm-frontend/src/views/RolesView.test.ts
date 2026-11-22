@@ -31,6 +31,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { createPinia } from 'pinia'
 import RolesView from './RolesView.vue'
 import en from '@/locales/en.json'
 
@@ -50,12 +51,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 /** What each mount request answers by default: its own shape per endpoint, never one body for all. */
 const EMPTY_FLEET_HEALTH = { health: 'healthy', required_down: [], optional_down: [], detail: '' }
 function servedBody(url: string, nodes: unknown[] = []): unknown {
-  const u = String(url)
+  const u = String(url).split('?')[0]! // the node list is read as `/nodes?page=1&per_page=100` (#21584)
   return u.endsWith('/nodes') ? { nodes, total: nodes.length } : u.endsWith('/fleet-health') ? EMPTY_FLEET_HEALTH : []
 }
 
 function mountView() {
-  return mount(RolesView, { global: { plugins: [i18n] } })
+  return mount(RolesView, { global: { plugins: [i18n, createPinia()] } })
 }
 
 /** The URLs requested, in call order. */
@@ -84,7 +85,7 @@ describe('RolesView transport', () => {
     const urls = requestedUrls(fetchMock)
     expect(urls).toContain('/api/roles')
     expect(urls).toContain('/api/roles/fleet-health')
-    expect(urls).toContain('/api/nodes')
+    expect(urls).toContain('/api/nodes?page=1&per_page=100') // the fleet store's first (here only) page
   })
 
   it('applies the client timeout the raw fetch never had', async () => {
@@ -200,7 +201,7 @@ describe('RolesView migrate target nodes (#19002 review)', () => {
     // fails if fetchNodes treats the { nodes, total } envelope as the list again
     const node = { node_id: 'node-a', ip_address: 'addr-a', status: 'online', roles: [] }
     vi.stubGlobal('fetch', vi.fn(async (url: string) => jsonResponse(servedBody(url, [node]))))
-    const wrapper = mount(RolesView, { global: { plugins: [i18n], stubs: { Teleport: true } } })
+    const wrapper = mount(RolesView, { global: { plugins: [i18n, createPinia()], stubs: { Teleport: true } } })
     await flushPromises()
     Object.assign(wrapper.vm as unknown as Record<string, unknown>, { showMigrateDialog: true })
     await flushPromises()

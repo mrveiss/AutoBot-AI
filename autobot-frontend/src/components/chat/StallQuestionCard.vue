@@ -32,13 +32,14 @@
 import { computed, ref } from 'vue'
 import { BaseButton, BaseInput } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
+import { setStallDraft, useStallDraft } from '@/composables/chat/useStallDraft'
 import { ResumeRejectedError, useStallAnswer } from '@/composables/useGraphApproval'
 import type { ChatMessage } from '@/stores/useChatStore'
 
 const props = defineProps<{ message: ChatMessage }>()
 
 const answerStallQuestion = useStallAnswer()
-const draft = ref('')
+const draft = useStallDraft(() => props.message.id) // outside the card: scrolling it out of the virtual window unmounts it (#21793)
 const answered = computed(() => props.message.metadata?.answered === true)
 const answerText = computed(() => String(props.message.metadata?.answer_text ?? ''))
 const submitting = ref(false)
@@ -61,6 +62,7 @@ async function send(text: string): Promise<void> {
   failure.value = null
   try {
     await answerStallQuestion(props.message, text)
+    setStallDraft(props.message.id, '') // sent: the draft is spent (#21793)
   } catch (error) {
     failure.value = failureKey(error) // not accepted: the form stays so the person can try again
   } finally {

@@ -133,13 +133,19 @@ async def guarded_delete(
     delete proceeds past dependents only when the set listed under the lock has that digest. The
     caller commits after this returns, which releases the lock. Any exception rolls the
     transaction back first, so a refusal leaves the secret and its dependents untouched and the
-    caller's audit write runs with no lock held.
+    caller's audit write runs with no lock held. A lock timeout on ANY statement here (the row lock,
+    the re-listing, the delete) is the same 503 with ``Retry-After``.
     """
     try:
         await dependents()  # unlocked: enforces the caller's authority and the secret's existence
         await lock_secret_row(session, secret_id)
         refuse_unless_confirmed(await dependents(), confirmed_digest)
         await delete()
+    except DBAPIError as exc:  # the lock_timeout stays in force for every later statement (#21386)
+        await session.rollback()
+        if _is_lock_timeout(exc):
+            raise _lock_timeout_refusal() from exc
+        raise
     except Exception:
         await session.rollback()
         raise

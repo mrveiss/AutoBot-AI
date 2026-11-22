@@ -149,3 +149,62 @@ register_env_var(
         component="chat",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_OWNER_INDEX_COMPLETE_TTL",
+        type=int,
+        default=86400,
+        range=(1, 2591999),
+        description=(
+            "Seconds the per-user marker that says the chat owner index is complete lives; without it the "
+            "index is rebuilt from the session files (security/session_owner_index.py, #21664). Kept below "
+            "the 30-day index TTL so the marker never outlives the index."
+        ),
+        component="chat",
+    )
+)
+
+# --- chat share adoption (#18890) ---
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SESSION_SHARE_ADOPT_LOCK_TTL_MS",
+        type=int,
+        default=60000,
+        description=(
+            "How long one worker may hold the lock while it copies pre-table Redis chat shares into the "
+            "durable table (#18890). A crashed holder frees it after this long."
+        ),
+        component="security",
+        range=(1000, 600000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SESSION_SHARE_ADOPT_WAIT_SECONDS",
+        type=int,
+        default=30,
+        description=(
+            "How long a worker that lost the adoption lock waits for the other to finish before an unshare "
+            "fails closed (#18890)."
+        ),
+        component="security",
+        range=(0, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_INTERPRETATION_TIMEOUT_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Own time budget of one post-command LLM interpretation (chat_workflow/interpretation_guard.py, "
+            "#21938), so an auxiliary call cannot use up the chat turn's budget. On expiry the interpretation is "
+            "dropped and the command's result stands."
+        ),
+        component="chat",
+    )
+)

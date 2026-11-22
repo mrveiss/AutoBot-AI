@@ -229,6 +229,13 @@ async def _verify_postgres_connection() -> None:
         await conn.execute(text("SELECT 1"))
 
 
+async def _apply_secret_unique_constraint() -> None:
+    """#17850: create the secrets uniqueness constraint migration 117 skipped. Never raises."""
+    from services.secret_unique_constraint import ensure_secret_unique_at_startup
+
+    await ensure_secret_unique_at_startup()
+
+
 async def init_database() -> None:
     """
     Initialize the database connection and verify connectivity.
@@ -265,6 +272,7 @@ async def init_database() -> None:
         try:
             await _verify_postgres_connection()
             logger.info("PostgreSQL connection verified successfully (attempt %d)", attempt)
+            await _apply_secret_unique_constraint()
             return
         except Exception as e:
             if _is_permanent_db_error(e):

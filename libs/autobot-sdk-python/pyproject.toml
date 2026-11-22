@@ -10,9 +10,13 @@ version = "0.1.0"
 description = "Typed Python SDK for the AutoBot API"
 requires-python = ">=3.14"
 license = { text = "Apache-2.0" }
+# Floor-only ranges, not bare names (#21471): this is a published package, and a user installing it
+# outside this repo cannot read constraints/shared.txt through `-c`. Each floor stays at the shared
+# floor for the same package -- never below it -- and scripts/check_constraint_drift.py fails one that
+# drops below. No upper caps: an installer must stay free to take newer compatible releases.
 dependencies = [
     "httpx>=0.28.1",
-    "pydantic>=2.14.2",
+    "pydantic>=2.14.3",
 ]
 
 [project.optional-dependencies]

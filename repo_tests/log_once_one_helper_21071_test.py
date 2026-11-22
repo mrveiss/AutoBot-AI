@@ -41,14 +41,16 @@ from collections import Counter
 from pathlib import Path
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 from tools.lint import _parse_cache as parse_cache
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _HELPER = "autobot_shared/logging_once.py"
 _NAME = re.compile(r"(warned|logged|reported)", re.IGNORECASE)
 _DEF_NAMES = {"_warn_once", "_log_once"}
 _LOG_METHODS = {"debug", "info", "warning", "warn", "error", "critical", "exception", "log"}
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 _SKIP = re.compile(r"(^|/)(repo_tests|tests|testkit|node_modules|e2e)/|(_test\.py|/test_[^/]*\.py|conftest\.py)$")
 
 #: Not log-once: the state is reset, or it compares consecutive values, or its scope is the object. Each says why.
@@ -82,8 +84,26 @@ _WARNINGS_WARN = {
 #: Real copies in files an open PR still holds (file -> that PR). Empty: every copy is migrated.
 _DEFERRED: dict[tuple[str, str], str] = {}
 
+
+def _swept_paths(root: Path) -> list[str]:
+    """Every tracked non-test ``.py`` the sweep parses: all of them bar the helper itself."""
+    try:
+        found = tracked_paths(root, "*.py", "**/*.py")
+    except EmptyEnumeration:
+        return []  # an empty tree: the floor below raises the typed refusal instead
+    return [rel for rel in found if rel != _HELPER and not _SKIP.search(rel)]
+
+
 #: Floor on files EXAMINED (not on findings: finding nothing is also what a broken sweep reports).
-_MIN_FILES_PARSED = 2000
+#: Re-measured, not carried across (#15928): 4101 on the merged tree (`git ls-files '*.py' '**/*.py'` minus
+#: the helper and the `_SKIP` paths), allowance 300 as for the other tracked-Python sweeps.
+REACH = declare(
+    "log-once-hand-rolled-sweep-21071",
+    discover=_swept_paths,
+    floor=3951,  # mid-window: population 4101, window [3801, 4101]
+    growth=300,
+    what="tracked non-test Python files, swept for hand-rolled log-once state",
+)
 
 
 def _is_empty_state(value: ast.AST | None) -> bool:
@@ -204,8 +224,19 @@ def _only_logs_and_remembers(stmts: list[ast.stmt]) -> bool:
     return any(is_log(st) for st in stmts) and all(is_log(st) or is_noop(st) for st in stmts)
 
 
+def _own_nodes(fn: ast.AST):
+    """*fn* and the nodes that run as part of it: stops at a nested ``def`` / ``async def`` / ``lambda``, whose
+    nodes belong to that function's own visit (``ast.walk`` would count them again for every enclosing one)."""
+    stack = [fn]
+    while stack:
+        node = stack.pop()
+        yield node
+        stack.extend(c for c in ast.iter_child_nodes(node) if not isinstance(c, _SCOPES))
+
+
 def _blocks(fn: ast.AST):
-    for n in ast.walk(fn):
+    """Statement lists of *fn* itself (inside if/for/while/with/try/match and class bodies, not nested functions)."""
+    for n in _own_nodes(fn):
         for field in ("body", "orelse", "finalbody"):
             block = getattr(n, field, None)
             if isinstance(block, list) and block and isinstance(block[0], ast.stmt):
@@ -220,7 +251,7 @@ def _decorator_name(dec: ast.AST) -> str:
 def _is_cache_dedupe(fn: ast.AST) -> bool:
     """``@lru_cache`` / ``@cache`` on a function that logs and returns no value: memoised "log once"."""
     cached = any(_decorator_name(d) in {"lru_cache", "cache"} for d in fn.decorator_list)
-    valued = any(isinstance(n, ast.Return) and n.value is not None for n in ast.walk(fn))
+    valued = any(isinstance(n, ast.Return) and n.value is not None for n in _own_nodes(fn))
     return cached and _logs(fn) and not valued
 
 
@@ -299,15 +330,14 @@ def _sweep() -> tuple[set[tuple[str, str]], set[tuple[str, str]], dict[str, int]
     named: set[tuple[str, str]] = set()
     warns: dict[str, int] = {}
     parsed = 0
-    for rel in tracked_paths(root, "*.py", "**/*.py"):
-        if rel == _HELPER or _SKIP.search(rel):
-            continue
+    for rel in REACH.examined(root):
         parsed += 1
         text = Path(root, rel).read_text(encoding="utf-8")
         found |= {(rel, n) for n in hand_rolled_in(text)}
         named |= {(rel, n) for n in _named_state_any_value(text)}
         if count := warn_calls_in(text):
             warns[rel] = count
+    REACH.completed(parsed, root)
     return found, named, warns, parsed
 
 
@@ -349,6 +379,36 @@ def test_the_detector_sees_the_shapes_by_what_they_do_not_what_they_are_called()
     assert hand_rolled_in(_INSTANCE_GUARD_RETURN) == ["_x"]
 
 
+_EMIT = "        global _once\n        if not _once:\n            logger.warning('x')\n            _once = True\n"
+_NESTED = "_once = False\ndef outer():\n    def emit():\n" + _EMIT + "    emit()\n"
+_NESTED_ASYNC = _NESTED.replace("def emit", "async def emit")
+_NESTED_IN_CLASS = "_once = False\ndef outer():\n    class K:\n        def emit(self):\n" + "".join(
+    "    " + line for line in _EMIT.splitlines(True)
+)
+_GUARD_G = "def g():\n    global _once\n    if not _once:\n        logger.warning('y')\n        _once = True\n"
+_TWO_FUNCTIONS = _RENAMED + _GUARD_G
+_OUTER_AND_NESTED = (
+    "_once = False\ndef outer():\n    global _once\n    if not _once:\n        logger.warning('y')\n"
+    "        _once = True\n    def emit():\n" + _EMIT
+)
+
+
+def test_a_guard_in_a_nested_function_is_counted_once() -> None:
+    """A nested function's guard was visited for the outer function too, so the flag looked read elsewhere."""
+    for source in (_NESTED, _NESTED_ASYNC, _NESTED_IN_CLASS, _TWO_FUNCTIONS, _OUTER_AND_NESTED):
+        assert hand_rolled_in(source) == ["_once"], source
+
+
+def test_a_flag_read_elsewhere_stays_state_even_when_guarded_in_a_nested_function() -> None:
+    """Control: the nested guard plus a real read (``total != guarded``) is a lifecycle flag, not a log guard."""
+    assert hand_rolled_in(_NESTED + "def g():\n    return _once\n") == []
+
+
+def test_a_nested_functions_return_does_not_make_the_cached_outer_valued() -> None:
+    cached = "import functools\n@functools.lru_cache\ndef outer(k):\n    logger.info('x')\n    def helper():\n        return 1\n"
+    assert hand_rolled_in(cached + "    helper()\n") == ["outer"]
+
+
 def test_the_detector_leaves_ordinary_state_alone() -> None:
     """Negative controls: a memoised value, a lifecycle flag that is read elsewhere, a flag with real work."""
     memo = "import functools\n@functools.lru_cache\ndef h():\n    logger.info('x')\n    return 1\n"
@@ -375,7 +435,7 @@ def test_the_name_sweep_and_the_warnings_counter_see_their_plants() -> None:
 def test_no_new_hand_rolled_log_once() -> None:
     """Every once-state is in the helper; the only exceptions are the tables, exactly."""
     found, named, warns, parsed = _sweep()
-    assert parsed >= _MIN_FILES_PARSED, f"sweep examined {parsed} files; it is not looking at the tree"
+    assert parsed, "the sweep parsed nothing"
     copies = found - set(_NOT_LOG_ONCE)
     new = sorted(copies - set(_DEFERRED))
     assert not new, f"hand-rolled log-once outside {_HELPER} (use log_once / first_time): {new}"

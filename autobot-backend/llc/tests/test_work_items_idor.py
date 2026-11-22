@@ -134,8 +134,8 @@ def _make_idor_app(
         mock_item = None
 
     patch("llc.services.work_item_service.WorkItemService.get", new=AsyncMock(return_value=mock_item)).start()
-    # Also patch WorkItemService.update to return mock_item so PATCH succeeds.
     patch("llc.services.work_item_service.WorkItemService.update", new=AsyncMock(return_value=mock_item)).start()
+    patch("llc.api.work_items.require_may_act_as", new=AsyncMock()).start()  # tenant scope only; own tests (#20521)
     # #11684: _item_to_dict now awaits _relations_to_list (awaitable_attrs); these
     # IDOR tests use a MagicMock item without an awaitable awaitable_attrs and
     # don't exercise relation serialization — stub it (matches the sibling tests).
@@ -341,14 +341,14 @@ class TestWorkItemsIdorM4:
     def test_checkout_own_company_returns_200(self):
         org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=org, item_company_id=org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 200
 
     def test_checkout_cross_tenant_returns_404(self):
         caller_org = str(uuid.uuid4())
         other_org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=caller_org, item_company_id=other_org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/checkout", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 404
 
     # --- release ---
@@ -356,14 +356,14 @@ class TestWorkItemsIdorM4:
     def test_release_own_company_returns_200(self):
         org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=org, item_company_id=org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 200
 
     def test_release_cross_tenant_returns_404(self):
         caller_org = str(uuid.uuid4())
         other_org = str(uuid.uuid4())
         client = _make_idor_app(caller_org_id=caller_org, item_company_id=other_org)
-        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": "agent-1"})
+        resp = client.post(f"/work-items/{uuid.uuid4()}/release", json={"agent_id": str(uuid.uuid4())})
         assert resp.status_code == 404
 
     # --- transition ---

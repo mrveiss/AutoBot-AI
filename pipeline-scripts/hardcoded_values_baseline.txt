@@ -634,7 +634,6 @@
 2|ssot|autobot-frontend/src/test/utils/test-setup-helpers.ts|:3000
 2|ssot|autobot-frontend/src/test/vitest-setup.ts|:3000
 2|other|autobot-frontend/src/utils/ApiClient.ts|'user'
-1|other|autobot-frontend/src/utils/ErrorHandler.js|10
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
 1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
 1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot

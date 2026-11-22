@@ -164,7 +164,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     const base = conversationApi()
     listLoading.value = true
     try {
-      const data = await api.get<BackendFileList>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/list`)
+      const data = await api.get<BackendFileList>(`${conversationApi()}/list`)
       // Only the latest request may write: a reply for a conversation the user left, or an older one, is dropped.
       if (data && listRequest.isCurrent(token) && requestedSession === currentSessionId()) {
         const mapped = mapFileList(data, base)
@@ -189,7 +189,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     try {
       const formData = new FormData()
       Array.from(fileList).forEach((file) => formData.append('files', file))
-      const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/upload`, formData, {
+      const data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent: UploadProgressEvent) => {
           if (progressEvent.total && owns()) {
@@ -237,11 +237,14 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     }
 
     error.value = null
+    const session = currentSessionId()
 
     return wrap(async () => {
       try {
-        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}`)
+        await api.delete<unknown>(`${conversationApi()}/files/${fileId}`)
 
+        // A switch while the delete was pending: the new conversation's state is not ours to touch.
+        if (currentSessionId() !== session) return true
         // Remove file from local state
         files.value = files.value.filter(f => f.file_id !== fileId)
         dropPreviewOf([fileId])
@@ -252,7 +255,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
         return true
 
       } catch (err: unknown) {
-        error.value = failureText(err, tr('deleteFailed'))
+        if (currentSessionId() === session) error.value = failureText(err, tr('deleteFailed'))
         logger.error('Delete error:', err)
         return false
       }
@@ -265,9 +268,10 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
       return
     }
 
+    const session = currentSessionId()
     try {
       const response = await api.rawRequest(
-        `${getApiBase()}/conversation-files/conversation/${currentSessionId()}/download/${fileId}`,
+        `${conversationApi()}/download/${fileId}`,
         { method: 'GET' }
       )
 
@@ -277,13 +281,13 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
       saveBlob(blob, name)
 
     } catch (err: unknown) {
-      error.value = failureText(err, tr('downloadFailed'))
+      if (currentSessionId() === session) error.value = failureText(err, tr('downloadFailed'))
       logger.error('Download error:', err)
     }
   }
 
   const { preview, previewLoading, previewFile, closePreview, dropPreviewOf } = useConversationFilePreview({
-    api, currentSessionId, files, error, tr, failureText, downloadFile
+    api, conversationApi, currentSessionId, files, error, tr, failureText, downloadFile
   })
 
   /**
@@ -313,14 +317,15 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const createFile = async (filename: string, content: string = '', mimeType: string = 'text/plain'): Promise<boolean> => {
     if (!currentSessionId()) { error.value = tr('noSession'); return false }
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
       try {
-        const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/create`, { filename, content, mime_type: mimeType })
+        const data = await api.post<{ success: boolean }>(`${conversationApi()}/files/create`, { filename, content, mime_type: mimeType })
         if (data?.success) { await loadFiles(); return true }
-        error.value = tr('createFailed')
+        if (currentSessionId() === session) error.value = tr('createFailed')
         return false
       } catch (err: unknown) {
-        error.value = failureText(err, tr('createFailed'))
+        if (currentSessionId() === session) error.value = failureText(err, tr('createFailed'))
         logger.error('Create file error:', err)
         return false
       }
@@ -330,18 +335,20 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const renameFile = async (fileId: string, newFilename: string): Promise<boolean> => {
     if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     try {
-      const data = await api.put<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/rename`, { new_filename: newFilename })
+      const data = await api.put<{ success: boolean }>(`${conversationApi()}/files/${fileId}/rename`, { new_filename: newFilename })
       if (data?.success) {
+        if (currentSessionId() !== session) return true
         const file = files.value.find(f => f.file_id === fileId)
         if (file) file.filename = newFilename
         dropPreviewOf([fileId])
         return true
       }
-      error.value = tr('renameFailed')
+      if (currentSessionId() === session) error.value = tr('renameFailed')
       return false
     } catch (err: unknown) {
-      error.value = failureText(err, tr('renameFailed'))
+      if (currentSessionId() === session) error.value = failureText(err, tr('renameFailed'))
       logger.error('Rename error:', err)
       return false
     }
@@ -349,11 +356,12 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
 
   const getFileContent = async (fileId: string): Promise<string | null> => {
     if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return null }
+    const session = currentSessionId()
     try {
-      const data = await api.get<{ content: string }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/content`)
+      const data = await api.get<{ content: string }>(`${conversationApi()}/files/${fileId}/content`)
       return data?.content ?? null
     } catch (err: unknown) {
-      error.value = failureText(err, tr('readFailed'))
+      if (currentSessionId() === session) error.value = failureText(err, tr('readFailed'))
       logger.error('Get content error:', err)
       return null
     }
@@ -362,13 +370,14 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const updateFileContent = async (fileId: string, content: string): Promise<boolean> => {
     if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     try {
-      const data = await api.put<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/content`, { content })
+      const data = await api.put<{ success: boolean }>(`${conversationApi()}/files/${fileId}/content`, { content })
       if (data?.success) { await loadFiles(); return true }
-      error.value = tr('saveFailed')
+      if (currentSessionId() === session) error.value = tr('saveFailed')
       return false
     } catch (err: unknown) {
-      error.value = failureText(err, tr('saveFailed'))
+      if (currentSessionId() === session) error.value = failureText(err, tr('saveFailed'))
       logger.error('Update content error:', err)
       return false
     }
@@ -377,14 +386,15 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
   const copyFile = async (fileId: string, newFilename?: string): Promise<boolean> => {
     if (!currentSessionId() || !fileId) { error.value = tr('missingParameters'); return false }
     error.value = null
+    const session = currentSessionId()
     return wrap(async () => {
       try {
-        const data = await api.post<{ success: boolean }>(`${getApiBase()}/conversation-files/conversation/${currentSessionId()}/files/${fileId}/copy`, { new_filename: newFilename || null })
+        const data = await api.post<{ success: boolean }>(`${conversationApi()}/files/${fileId}/copy`, { new_filename: newFilename || null })
         if (data?.success) { await loadFiles(); return true }
-        error.value = tr('copyFailed')
+        if (currentSessionId() === session) error.value = tr('copyFailed')
         return false
       } catch (err: unknown) {
-        error.value = failureText(err, tr('copyFailed'))
+        if (currentSessionId() === session) error.value = failureText(err, tr('copyFailed'))
         logger.error('Copy error:', err)
         return false
       }
@@ -416,7 +426,7 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     let failure: unknown = null
     for (const fid of ids) {
       try {
-        await api.delete<unknown>(`${getApiBase()}/conversation-files/conversation/${session}/files/${fid}`)
+        await api.call('delete', '/api/conversation-files/conversation/{session_id}/files/{file_id}', { path: { session_id: session, file_id: fid } })
         deleted.push(fid)
       } catch (err: unknown) {
         failure ??= err
@@ -438,7 +448,8 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
       dropPreviewOf(deleted)
       deleted.forEach(fid => fileSelection.deselectByKey(fid))
       await loadFiles()
-      if (failure !== null) error.value = failureText(failure, tr('deleteFailed'))
+      // The reload may have outlived the conversation: its failure text is not the new conversation's to show.
+      if (failure !== null && currentSessionId() === session) error.value = failureText(failure, tr('deleteFailed'))
       return failure === null
     })
   }
