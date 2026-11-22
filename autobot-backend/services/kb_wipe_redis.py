@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
+from knowledge.category_keys import FACTS_KEY, QUARANTINED_KEY, REBUILT_MARKER
 from knowledge.index_scope import kb_index_names
 
 #: Redis databases the wipe may touch. Knowledge only; sessions, settings and queues are never listed.
@@ -65,7 +66,9 @@ KB_KEY_PREFIXES: tuple[str, ...] = (
     "user:facts:",
     "kb:",
     "tag:",
-    "category:facts:",
+    FACTS_KEY.format(""),
+    QUARANTINED_KEY.format(""),  # #21957: derived from the category fact sets x fact metadata
+    REBUILT_MARKER,  # #21957: a wipe re-triggers the index rebuild
     "collection:facts:",
     "connector:*:ts:",
     "connector:*:checkpoint",

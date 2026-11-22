@@ -25,6 +25,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCHESTRATOR = _REPO_ROOT / "autobot-slm-backend" / "services" / "sync_orchestrator.py"
 _REGISTRY = _REPO_ROOT / "autobot-slm-backend" / "services" / "role_registry.py"
 
+_MANIFESTS: dict | None = None  # loaded once: the manifests are read from the checkout, not per entry
+
 _RELATIVE_INCLUDE = re.compile(r"^\s*-(c|r)\s+(\.\./)+", re.MULTILINE)
 
 
@@ -194,7 +196,7 @@ def _registry_entries() -> list[dict]:
         if not isinstance(node, ast.Dict):
             continue
         keys = {k.value for k in node.keys if isinstance(k, ast.Constant)}
-        if {"name", "source_paths"} <= keys:
+        if {"name", "display_name"} <= keys:
             entry = {}
             for key, value in zip(node.keys, node.values):
                 if not isinstance(key, ast.Constant):
@@ -214,8 +216,28 @@ def _registry_entries() -> list[dict]:
                         entry[key.value] = ast.unparse(value)
                 else:
                     entry[key.value] = ast.unparse(value)
-            entries.append(entry)
+            entries.append(_with_manifest_shape(entry))
     return entries
+
+
+def _with_manifest_shape(entry: dict) -> dict:
+    """The entry as DEFAULT_ROLES holds it: `source_paths`/`target_path` come from the manifests (#16025).
+
+    The registry no longer declares them for the roles a manifest resolves to, so a scan of its
+    source alone sees no `source_paths` and (before this) found 3 roles of 13. The manifests are
+    read from the checkout and run through the same `apply_manifest_shape` the registry itself uses,
+    so this checks what the code-sync actually receives, placeholders included.
+    """
+    from services.manifest_loader import ManifestLoader
+    from services.role_manifest_shape import apply_manifest_shape
+
+    global _MANIFESTS
+    if _MANIFESTS is None:
+        _MANIFESTS = ManifestLoader(infra_base=_REPO_ROOT / "autobot-infrastructure").load_all()
+    shaped = apply_manifest_shape(dict(entry), _MANIFESTS, {"base_dir": "<BASE>", "agent_dir": "<AGENTDIR>"})
+    # Only the two sync fields move: the rest stays as the registry source declares it (the shaping
+    # also rewrites `systemd_service` into a list, which the venv rule below reads as one unit name).
+    return {**entry, "source_paths": shaped["source_paths"], "target_path": shaped["target_path"]}
 
 
 def test_the_registry_scan_found_roles():

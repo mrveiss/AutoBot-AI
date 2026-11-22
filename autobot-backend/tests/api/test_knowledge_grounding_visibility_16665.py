@@ -14,9 +14,9 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import QuarantineGatedKB, quarantined_fact
 from services.grounded_agent import GroundedAgent
 from services.knowledge_grounding_models import Claim, ClaimStatus
+from testkit.read_path_fakes_16665 import QuarantineGatedKB, quarantined_fact
 
 
 @pytest.fixture
