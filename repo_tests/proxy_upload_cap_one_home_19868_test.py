@@ -16,7 +16,7 @@ _TEMPLATES = [
     f"{_ANSIBLE}/roles/frontend/templates/nginx-frontend.conf.j2",
     f"{_ANSIBLE}/roles/slm_manager/templates/autobot-slm.conf.j2",
 ]
-_LOOKUP = "{{ lookup('file', role_path ~ '/../../_shared/files/upload-cap.conf') }}"
+_LOOKUP = "{{ lookup('file', proxy_upload_cap_file) }}"
 _MOUNT = f"./{_HOME}:/etc/nginx/upload-cap.conf:ro"
 
 
@@ -70,3 +70,17 @@ def test_each_container_serving_that_location_gets_the_cap() -> None:
 
 def test_the_unread_group_var_is_gone() -> None:
     assert "client_max_body_size" not in _read(f"{_ANSIBLE}/inventory/group_vars/frontend.yml")
+
+
+def test_the_path_resolves_in_a_role_and_in_a_play() -> None:
+    """#22045: role_path is undefined when a play renders a template, so the var must not need it bare."""
+    group_vars = yaml.safe_load(_read(f"{_ANSIBLE}/inventory/group_vars/all.yml"))
+    expr = group_vars["proxy_upload_cap_file"]
+    assert "role_path is defined" in expr and "playbook_dir" in expr
+    assert (repo_root() / _ANSIBLE / "playbooks" / "../_shared/files/upload-cap.conf").resolve().is_file()
+
+
+def test_no_template_reads_role_path_bare() -> None:
+    """A template rendered from a play (provision-fleet-roles.yml Phase 4c) has no role_path."""
+    for template in _TEMPLATES:
+        assert "role_path" not in _read(template)
