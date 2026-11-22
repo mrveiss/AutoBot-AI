@@ -83,7 +83,7 @@
               </span>
             </td>
             <td class="px-4 py-3 text-xs text-autobot-text-muted">
-              {{ key.expires_at ? new Date(key.expires_at * 1000).toLocaleDateString() : '—' }}
+              {{ key.expires_at ? formatKeyExpiry(key.expires_at) : '—' }}
             </td>
             <td class="px-4 py-3">
               <div class="flex gap-2">
@@ -173,6 +173,7 @@
 </template>
 
 <script setup lang="ts">
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
@@ -180,6 +181,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { BaseModal } from '@autobot/ui'
 
 const { t } = useI18n()
+const formatKeyExpiry = createDateFormatter({ kind: 'date', unit: 'seconds' })
 const logger = createLogger('LlmApiKeysView')
 
 interface KeyRow {

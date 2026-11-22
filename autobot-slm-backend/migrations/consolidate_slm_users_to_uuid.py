@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_slm_users_db_url() -> str:
-    """Get the slm_users database URL (sync) from environment.
+    """Get the slm_users database URL (sync) from the one SLM resolver (#18094).
 
     The slm_users table was in the main SLM database (renamed from 'users').
     The target users (UUID PK) table lives in the slm_users database,
@@ -33,21 +33,9 @@ def _get_slm_users_db_url() -> str:
 
     Returns the sync URL for psycopg2 (strips asyncpg prefix).
     """
-    import os
+    from user_management.config import get_slm_db_config
 
-    url = os.getenv("SLM_USERS_DATABASE_URL", "")
-    if url:
-        return url.replace("postgresql+asyncpg://", "postgresql://")
-
-    # Fall back to component env vars matching user_management/config.py
-    host = os.getenv("SLM_POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("SLM_POSTGRES_PORT", "5432")
-    database = os.getenv("SLM_POSTGRES_DB", "slm_users")
-    user = os.getenv("SLM_POSTGRES_USER", "slm_app")
-    password = os.getenv("SLM_POSTGRES_PASSWORD", "")
-    if password:
-        return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-    return f"postgresql://{user}@{host}:{port}/{database}"
+    return get_slm_db_config().sync_url
 
 
 def migrate(db_url: str) -> None:

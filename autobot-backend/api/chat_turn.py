@@ -6,9 +6,9 @@
 
 POST /api/chat/sessions/{session_id}/turn/cancel
 
-Owner-only (``validate_session_ownership``, STRICT posture). Idempotent: with no turn
-running it answers ``status="no_active_turn"`` instead of failing, so a stop button pressed
-just as the reply finishes is not an error. The cancel runs the same teardown a
+Owner-only (``validate_strict_hidden``: STRICT posture, a foreign id answers 404 like an unknown one,
+#20413). Idempotent: with no turn running it answers ``status="no_active_turn"`` instead of failing, so a
+stop button pressed just as the reply finishes is not an error. The cancel runs the same teardown a
 client disconnect does (``chat_workflow.turn_control``), so it reaches the
 in-flight LLM call.
 """
@@ -24,8 +24,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_workflow.turn_cancel_bus import CancelOutcome, request_cancel
 from chat_workflow.turn_control import REASON_CLIENT_CANCEL, cancel_turn
-from security.session_ownership import validate_session_ownership
-from security.session_posture import SessionPosture
+from security.session_posture import validate_strict_hidden
 
 router = APIRouter(tags=["chat"])
 logger = get_logger(__name__)
@@ -54,7 +53,7 @@ async def cancel_chat_turn(
     """Cancel the turn currently running for *session_id* (owner only, on whichever worker)."""
     # STRICT: this tears a run down and drops its checkpoint, so it never rides the default
     # posture's log_only mode, which lets a non-owner who knows the id through.
-    await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    await validate_strict_hidden(session_id, request, must_exist=True)
     outcome = await request_cancel(session_id, REASON_CLIENT_CANCEL, cancel_turn)
     logger.info("Turn cancel requested: session=%s cancelled=%d", session_id, outcome.cancelled)
     return DataResponse(

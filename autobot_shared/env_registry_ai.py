@@ -30,7 +30,6 @@ Closes GH#7081.
 
 from __future__ import annotations
 
-from autobot_shared import env_registry_rag  # noqa: E402,F401
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
 from autobot_shared.llm_provider_order import DEFAULT_ORDER
 
@@ -52,10 +51,10 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OPENVINO_CACHE_DIR",
         type=str,
-        default="data/openvino_cache",
+        default=None,
         description=(
-            "Directory for compiled OpenVINO model artefacts. Relative to the "
-            "working directory unless given as an absolute path."
+            "Directory for compiled OpenVINO model artefacts. Unset: "
+            "shared_cache_path('openvino') in the user cache, never the repo (#19553)."
         ),
         component="ai",
     )

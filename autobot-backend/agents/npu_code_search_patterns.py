@@ -45,7 +45,7 @@ _SHELL_NAME_BY_EXTENSION: Dict[str, str] = {".zsh": "zsh"}
 _DEFAULT_SHELL_NAME = "bash"
 
 
-def detect_language(file_ext: str) -> str:
+def language_name_for_extension(file_ext: str) -> str:
     """Detect programming language name from file extension.
 
     One detector: ``code_intelligence.base_analyzer.detect_language``. Its Language

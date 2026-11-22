@@ -73,6 +73,7 @@ same PR) and ``initialization/lifespan.py`` (an existing, allowlisted gap).
 
 from __future__ import annotations
 
+import functools
 import re
 from pathlib import Path
 
@@ -245,12 +246,15 @@ def _is_production_file(rel_path: str) -> bool:
     return not any(needle in rel_path for needle in _SKIP_PATH_SUBSTRINGS)
 
 
+@functools.lru_cache(maxsize=1)
 def production_credential_reads() -> dict[tuple[str, str], list[tuple[int, str]]]:
     """Every ``(repo-relative file, field) -> [(line_no, line), ...]`` direct read.
 
     A file that fails to tokenize (see :class:`UnparseableSourceError`) fails this
     call outright, with the offending path attached, rather than being silently
     skipped -- #15280.
+
+    Memoised (#20814): 2 tests read the same sweep.
     """
     fields = credential_shaped_fields(SSOT_CONFIG.read_text(encoding="utf-8"))
     found: dict[tuple[str, str], list[tuple[int, str]]] = {}

@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from autobot_shared.ssot_config import config
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
 from skills.models import GovernanceMode, SkillActivationLevel
@@ -295,13 +296,6 @@ class LLMCurrentResponse(BaseModel):
 
     model: str
     provider: str
-
-
-class LLMEmbeddingModelsResponse(BaseModel):
-    """Response for GET /llm/embedding/models."""
-
-    models: List[Any]
-    total_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -648,7 +642,7 @@ class GoalRequest(BaseModel):
     context: Dict[str, Any] = {}
 
 
-class GoalResponse(BaseModel):
+class AgentGoalResponse(BaseModel):
     """Response for POST /intelligent-agent/process."""
 
     success: bool
@@ -657,7 +651,7 @@ class GoalResponse(BaseModel):
     metadata: Dict[str, Any] = {}
 
 
-class HealthResponse(BaseModel):
+class IntelligentAgentHealthResponse(BaseModel):
     """Response for GET /intelligent-agent/health."""
 
     status: str
@@ -1107,22 +1101,21 @@ class ChainOfCommandResponse(BaseModel):
 
 
 class AgentStatusItem(BaseModel):
-    """Runtime status for one registered agent (#10502).
-
-    Shape consumed by the Home dashboard "Agent Activity Monitor"
-    (frontend ``useAgentActivityData`` ``Agent`` interface).
-    """
+    """Home dashboard "Agent Activity Monitor" agent (#10502); an unmeasured field is None, never 0 (#17514, #21270)."""
 
     id: str
     name: str
     type: str = "worker"
-    status: str = "idle"
+    status: str | None = None
+    companyId: str | None = None
+    companyName: str | None = None
     currentTask: str | None = None
-    tasksCompleted: int = 0
-    uptime: int = 0
-    successRate: int = 0
-    recentTasks: List[Dict[str, Any]] = Field(default_factory=list)
-    activityTimeline: List[Dict[str, Any]] = Field(default_factory=list)
+    tasksCompleted: int | None = None
+    uptime: int | None = None
+    successRate: int | None = None
+    recentTasks: List[Dict[str, Any]] | None = None
+    activityTimeline: List[Dict[str, Any]] | None = None
+    activityWindowStart: int | None = None  # UTC ms of the timeline axis start (6 one-hour columns)
 
 
 class AgentStatusListResponse(BaseModel):
@@ -1512,7 +1505,6 @@ class OrganizationCreate(BaseModel):
     slug: str | None = Field(None, max_length=100)
     description: str | None = Field(None, max_length=500)
     settings: dict | None = Field(default_factory=dict)
-    subscription_tier: str = Field("free")
     max_users: int = Field(-1)
 
 
@@ -1520,7 +1512,6 @@ class OrganizationUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=500)
     settings: dict | None = None
-    subscription_tier: str | None = None
     max_users: int | None = None
 
 
@@ -1530,7 +1521,6 @@ class OrganizationResponse(BaseModel):
     slug: str
     description: str | None
     settings: dict
-    subscription_tier: str
     max_users: int
     is_active: bool
     created_at: str
@@ -1561,7 +1551,6 @@ class OrganizationStatsResponse(BaseModel):
     organization_id: str
     name: str
     slug: str
-    subscription_tier: str
     users: dict
     teams: dict
     is_active: bool
@@ -1706,7 +1695,7 @@ class GapRequest(BaseModel):
     agent_output: str = Field("")
 
 
-class ApprovalDecision(BaseModel):
+class SkillApprovalDecision(BaseModel):
     """Request body for approving or rejecting a skill approval record."""
 
     approved: bool
@@ -1777,10 +1766,9 @@ class InferenceOptimizationSettings(BaseModel):
     prompt_compression_min_length: int = 100
     prompt_compression_preserve_code: bool = True
     prompt_compression_aggressive: bool = False
-
     cache_enabled: bool = True
-    cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
+    cache_l1_size: int = config.misc.cache_l1_size  # #19730
+    cache_l2_ttl: int = config.misc.cache_l2_ttl
 
     cloud_connection_pool_size: int = 100
     cloud_batch_window_ms: int = 50
@@ -1966,7 +1954,7 @@ class AgentModelUpdate(BaseModel):
 
     agent_id: str
     model: str
-    provider: str | None = "ollama"
+    provider: str | None = config.llm.provider  # #19730
 
 
 # ---------------------------------------------------------------------------
@@ -2084,58 +2072,6 @@ class EnterprisePhase4ValidationResponse(BaseModel):
     status: str
     validation: Dict[str, Any] = Field(default_factory=dict)
     message: str = ""
-
-
-# ---------------------------------------------------------------------------
-# agent_config.py schemas (GH #6509 Batch D)
-# ---------------------------------------------------------------------------
-
-
-class AgentConfigListAgentsResponse(BaseModel):
-    """Response for GET /agents."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    global_provider_type: str = ""
-    timestamp: str = ""
-
-
-class AgentConfigAllAgentsResponse(BaseModel):
-    """Response for GET /agents/all."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    specialized_agents: List[Dict[str, Any]] = Field(default_factory=list)
-    summary: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class AgentConfigSpecializedListResponse(BaseModel):
-    """Response for GET /agents/specialized."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    total_count: int = 0
-    categories: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class AgentConfigSpecializedDetailResponse(BaseModel):
-    """Response for GET /agents/specialized/{agent_id}."""
-
-    id: str = ""
-    name: str = ""
-    description: str = ""
-    tools: List[str] = Field(default_factory=list)
-    model: str | None = None
-    category: str | None = None
-
-
-class AgentConfigUsageResponse(BaseModel):
-    """Response for GET /agents/usage."""
-
-    agents: List[Dict[str, Any]] = Field(default_factory=list)
-    daily_trend: List[Dict[str, Any]] = Field(default_factory=list)
-    total_tasks: int = 0
-    timestamp: str = ""
 
 
 # ---------------------------------------------------------------------------

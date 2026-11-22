@@ -46,8 +46,9 @@ from typing import Dict, FrozenSet, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
+from code_intelligence.python_files import discover_files
 from constants.path_constants import PATH
-from utils.file_categorization import is_skipped_path
+from utils.file_categorization import HTML_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -61,7 +62,6 @@ TYPESCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".ts", ".tsx"})
 JAVASCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".js", ".jsx", ".mjs"})
 VUE_EXTENSIONS: FrozenSet[str] = frozenset({".vue"})
 CSS_EXTENSIONS: FrozenSet[str] = frozenset({".css", ".scss", ".sass", ".less"})
-HTML_EXTENSIONS: FrozenSet[str] = frozenset({".html", ".htm"})
 CONFIG_EXTENSIONS: FrozenSet[str] = frozenset({".json", ".yaml", ".yml", ".toml", ".ini"})
 SHELL_EXTENSIONS: FrozenSet[str] = frozenset({".sh", ".bash", ".zsh"})
 
@@ -73,7 +73,7 @@ ALL_CODE_EXTENSIONS: FrozenSet[str] = PYTHON_EXTENSIONS | FRONTEND_EXTENSIONS | 
 
 
 @dataclass
-class CacheEntry:
+class FileListCacheEntry:
     """Single cache entry with metadata."""
 
     files: List[Path]
@@ -153,7 +153,7 @@ class FileListCache:
         """Initialize cache."""
         self._ttl = ttl
         self._root_path = root_path or DEFAULT_ROOT_PATH
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: Dict[str, FileListCacheEntry] = {}
         self._stats = CacheStats()
         self._cache_lock = threading.Lock()
 
@@ -164,13 +164,9 @@ class FileListCache:
         ext_str = ",".join(sorted(extensions))
         return f"{root_path}:{ext_str}"
 
-    def _is_valid(self, entry: CacheEntry) -> bool:
+    def _is_valid(self, entry: FileListCacheEntry) -> bool:
         """Check if cache entry is still valid."""
         return (time.time() - entry.timestamp) < self._ttl
-
-    def _should_skip_path(self, path: Path, root_path: Path) -> bool:
-        """Check if path should be skipped, relative to the scan root (#13602)."""
-        return is_skipped_path(path, root_path)
 
     async def _scan_files(
         self,
@@ -185,13 +181,7 @@ class FileListCache:
         start_time = time.time()
 
         def _do_scan() -> List[Path]:
-            files = []
-            for ext in extensions:
-                pattern = f"*{ext}"
-                for file_path in root_path.rglob(pattern):
-                    if file_path.is_file() and not self._should_skip_path(file_path, root_path):
-                        files.append(file_path)
-            return sorted(files)
+            return discover_files(root_path, [f"*{ext}" for ext in extensions])
 
         files = await asyncio.to_thread(_do_scan)
 
@@ -238,7 +228,7 @@ class FileListCache:
         files = await self._scan_files(extensions, root)
 
         with self._cache_lock:
-            self._cache[cache_key] = CacheEntry(
+            self._cache[cache_key] = FileListCacheEntry(
                 files=files,
                 timestamp=time.time(),
                 root_path=str(root),

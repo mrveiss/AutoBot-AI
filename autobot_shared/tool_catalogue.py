@@ -79,6 +79,35 @@ CODE_EXEC_TOOLS = ("code_interpreter",)
 PROCESS_EXEC_TOOLS = ("run_shell", "start_process", "stop_process", "manage_service")
 DATA_WRITE_TOOLS = ("set_redis_value", "insert_database")
 BROWSER_ACTION_TOOLS = ("navigate", "click", "fill", "select", "evaluate")
+#: #18430: browser tools that only observe the page (and hover), and the index-addressed form of the actions.
+BROWSER_READ_TOOLS = ("hover", "screenshot", "get_text", "get_attribute", "wait_for_selector", "browser_state")
+BROWSER_INDEXED_TOOLS = ("click_index", "fill_index", "select_index", "hover_index")
+BROWSER_TOOLS = BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS
+#: #21772: tools that read a page without a selector. Governed elsewhere (read effect / web research), so kept out of
+#: BROWSER_TOOLS; the chat prompt teaches the union below.
+PAGE_READING_TOOLS = ("extract_content", "scrape_url", "extract_structured_data")
+BROWSER_PROMPT_TOOLS = BROWSER_TOOLS + PAGE_READING_TOOLS
+#: tool name -> (params hint, one-line description). Prompt wording per tool; membership is BROWSER_PROMPT_TOOLS.
+BROWSER_PROMPT_WORDING: "dict[str, tuple[str, str]]" = {
+    "navigate": ('{"url": ...}', "go to a URL"),
+    "screenshot": ("{}", "capture the current page"),
+    "click": ('{"selector": ...}', "click an element by CSS selector"),
+    "fill": ('{"selector": ..., "value": ...}', "type into an input by CSS selector"),
+    "select": ('{"selector": ..., "value": ...}', "choose an option in a dropdown"),
+    "hover": ('{"selector": ...}', "hover over an element"),
+    "evaluate": ('{"script": ...}', "run JavaScript on the page"),
+    "get_text": ('{"selector": ...}', "text of ONE element you already know the selector of"),
+    "get_attribute": ('{"selector": ..., "attribute": ...}', "an attribute of an element"),
+    "wait_for_selector": ('{"selector": ...}', "wait for an element to appear"),
+    "browser_state": ("{}", "URL, title and a numbered menu of the page's interactive elements"),
+    "click_index": ('{"index": N}', "click an element by its menu number"),
+    "fill_index": ('{"index": N, "value": ...}', "fill an element by its menu number"),
+    "select_index": ('{"index": N, "value": ...}', "select an option by its menu number"),
+    "hover_index": ('{"index": N}', "hover an element by its menu number"),
+    "extract_content": ('{"goal": ...}', "READ the live page you are on, guided by a goal (no selector needed)"),
+    "scrape_url": ('{"url": ...}', "fetch a URL and read it as markdown without driving the browser"),
+    "extract_structured_data": ('{"url": ..., "schema": {...}}', "fetch a URL and return data matching a JSON schema"),
+}
 DELEGATION_TOOLS = ("compose", "delegate")
 
 # --- composed catalogues (each reproduces its former literal exactly) ------
@@ -104,6 +133,11 @@ SENSITIVE_TOOLS = frozenset(
     + BROWSER_ACTION_TOOLS
     + DELEGATION_TOOLS
 )
+
+#: Owner ruling 2026-11-17 (#17237, approval only): navigate is always available. It stays in "browser actions", a
+#: sensitive tool and a mutating effect, so a work item can still ask for approval and roles and the verifier still
+#: cover it; only the AI lines leave it unmanaged -- no baseline floor, no unset-line hold. A stored line still applies.
+ALWAYS_AVAILABLE_TOOLS = frozenset({"navigate"})
 
 #: Work-item approval categories → the tools that constitute each action (seam gate).
 #: Note: "destructive operations" intentionally excludes SYSTEM_EXEC/DEPLOY, and
@@ -179,6 +213,19 @@ class ApprovalCategory(str, Enum):
 _VALID_APPROVAL_CATEGORIES = frozenset(c.value for c in ApprovalCategory)
 
 
+def approval_category_for(tool_name: str, categories: Iterable[str]) -> Optional[str]:
+    """Return the first of *categories* that gates *tool_name*, else ``None`` (GH#11160, #18430).
+
+    The one matcher every approval surface uses (the chat seam, the plan-time interrupt and the
+    AI-line enforcement point). Word-boundary matching (GH#11206): ``deploy`` gates
+    ``deploy_service`` but not ``deployment_status``. A false positive only ever adds a hold.
+    """
+    for category in categories:
+        if match_tool_name(tool_name, APPROVAL_CATEGORY_TOOLS.get(category, ()), word_boundary=True):
+            return category
+    return None
+
+
 def valid_approval_categories() -> "frozenset[str]":
     """Return the set of valid ``requires_approval_before`` category strings."""
     return _VALID_APPROVAL_CATEGORIES
@@ -246,6 +293,9 @@ TOOL_EFFECTS: "dict[str, ToolEffect]" = {
     **_entries(("semantic_search", "search_knowledge"), _E.READ),
     **_entries(("web_search", "scrape_url", "map_site", "extract_structured_data"), _E.READ | _E.ISOLATED_READ),
     **_entries(("sleep", "wait", "poll", "check_status"), _E.POLL),
+    # #18430: tools the live seam dispatches that were declared nowhere. The AI lines treat an unknown tool as
+    # mutating (fail closed), so every builtin that only observes must be KNOWN to be a read.
+    **_entries(BROWSER_READ_TOOLS + ("extract_content", "crawl_site", "read_spilled_output"), _E.READ),
 }
 
 #: Tools whose arguments name a file path (artifact capture, config guard, fact-forcing).
@@ -262,6 +312,11 @@ for _tool in _IN_PLACE_EDIT_TOOLS:
 TOOL_ALIASES: "dict[str, str]" = {
     "delete_directory": "remove_directory",
     "list_dir": "list_directory",
+    # #18430: the index-addressed browser variants are the same action as their selector form.
+    "click_index": "click",
+    "fill_index": "fill",
+    "select_index": "select",
+    "hover_index": "hover",
 }
 
 

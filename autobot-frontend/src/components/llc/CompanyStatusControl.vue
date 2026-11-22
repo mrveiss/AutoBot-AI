@@ -12,7 +12,7 @@
 -->
 <template>
   <div class="company-status-control">
-    <BaseBadge :variant="badgeVariant" size="sm">
+    <BaseBadge :variant="badgeVariant" size="sm" tone="solid">
       {{ t(`llcCompanyStatus.${status}`) }}
     </BaseBadge>
 
@@ -157,7 +157,7 @@ async function apply(action: CompanyStatusAction): Promise<void> {
 .company-status-error {
   flex-basis: 100%;
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   color: var(--color-danger);
 }
 

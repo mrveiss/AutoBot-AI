@@ -22,6 +22,11 @@ _spec.loader.exec_module(providers)
 _ENV_VALUE = "env-video-key-0cc175b9"  # pragma: allowlist secret
 
 
+def teardown_module() -> None:
+    """Drop the registration above, so no later import inherits this module object."""
+    sys.modules.pop("vg_providers_slot_test", None)
+
+
 @pytest.fixture(autouse=True)
 def _reset_slot():
     yield

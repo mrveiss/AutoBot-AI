@@ -239,7 +239,7 @@ class TestStructuredLLMRequestPath:
 
     @pytest.mark.asyncio
     async def test_optimize_payload_if_enabled_no_longer_raises_attributeerror(self) -> None:
-        """Bugfix regression (#10945): OptimizationResult has no .optimized/.optimized_content."""
+        """Bugfix regression (#10945): PayloadOptimizationResult has no .optimized/.optimized_content."""
         from utils.claude_api_integration import ClaudeAPIBatchManager, ClaudeAPIConfig
 
         with patch("utils.graceful_degradation.Path.mkdir"):

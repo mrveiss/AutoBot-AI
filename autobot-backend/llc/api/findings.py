@@ -19,7 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.http_refusal import http_refusal
 from autobot_shared.logging_manager import get_logger
+from llc.api._common import actor_id
 from llc.deps import get_session
 from llc.deps import load_owned_project as _load_owned_project
 from llc.models.finding_proposal import LLCFindingProposal
@@ -140,11 +142,11 @@ async def scan_findings(
     try:
         return await scan(project, session)
     except FindingsDisabledError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        raise http_refusal(403, exc, scope="findings.scan_findings") from None
     except ValueError as exc:
         # The linked source was deleted / left "ready" between the check above and
         # the scan (gather/clone-path resolution) — treat as a 409, not a 500.
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise http_refusal(409, exc, scope="findings.scan_findings") from None
 
 
 @router.get("/projects/{project_id}/findings/proposals", response_model=List[FindingProposalResponse])
@@ -173,11 +175,11 @@ async def promote_proposal(
 ) -> dict:
     """Promote a pending proposal to a work item (or gate on approval)."""
     proposal = await _load_owned_proposal(proposal_id, session, ctx)
-    actor_id = uuid.UUID(str(current_user.get("id") or current_user.get("user_id")))
+    actor = actor_id(current_user)
     try:
-        result = await promote(proposal, session, actor_id)
+        result = await promote(proposal, session, actor)
     except ProposalStateError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise http_refusal(409, exc, scope="findings.promote_proposal") from None
     if isinstance(result, dict):
         return result
     # Return a summary of the created work item.
@@ -202,5 +204,5 @@ async def dismiss_proposal(
     try:
         await dismiss(proposal, session, body.reason)
     except ProposalStateError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise http_refusal(409, exc, scope="findings.dismiss_proposal") from None
     return {"result": "dismissed"}

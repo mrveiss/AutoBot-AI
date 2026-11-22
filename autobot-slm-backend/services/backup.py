@@ -24,8 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.security.path_validator import require_path_string
 from config import settings
-from models.database import Backup, BackupStatus, Node
-from services.backup_ssh import run_command, ssh_base_command, systemctl_redis
+from models.database import Backup, BackupServiceType, BackupStatus, Node
+from services.backup_ssh import (
+    run_command,
+    scp_download_command,
+    scp_upload_command,
+    ssh_base_command,
+    systemctl_redis,
+)
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.role_units import REDIS_UNIT
 
@@ -265,15 +271,7 @@ class BackupService:
         backup_path = backup.backup_path
 
         # Copy from SLM storage to temporary location
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-P",
-            str(ssh_port),
-            backup_path,
-            f"{ssh_user}@{host}:/tmp/restore.rdb",
-        ]
+        scp_cmd = scp_upload_command(host, ssh_user, ssh_port, backup_path, "/tmp/restore.rdb")
         success, _ = await self._run_command(scp_cmd, timeout=300)
         if not success:
             return False, "Failed to copy backup to target"
@@ -330,13 +328,8 @@ class BackupService:
 
         return True, verify_output
 
-    async def execute_restore(
-        self,
-        db: AsyncSession,
-        backup_id: str,
-        target_node: Node,
-    ) -> Tuple[bool, str]:
-        """Restore a Redis backup to a target node.
+    async def execute_restore(self, db: AsyncSession, backup_id: str, target_node: Node) -> Tuple[bool, str]:
+        """Restore a Redis backup to a target node; any other type is refused before Redis is touched (#19455).
 
         Returns (success, message).
         """
@@ -347,6 +340,8 @@ class BackupService:
 
         if backup.status != BackupStatus.COMPLETED.value:
             return False, f"Cannot restore backup in status: {backup.status}"
+        if not BackupServiceType.is_restorable(backup.service_type):
+            return False, f"A {backup.service_type} backup cannot be restored over Redis"
 
         host = target_node.ip_address
         ssh_user = target_node.ssh_user or "autobot"
@@ -585,17 +580,7 @@ class BackupService:
         backup_filename = f"{backup_id}_{timestamp}{suffix}"
         backup_path = BACKUP_STORAGE_DIR / backup_filename
 
-        scp_cmd = [
-            "/usr/bin/scp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=30",
-            "-P",
-            str(ssh_port),
-            f"{ssh_user}@{host}:{rdb_path}",
-            str(backup_path),
-        ]
+        scp_cmd = scp_download_command(host, ssh_user, ssh_port, rdb_path, str(backup_path))
         success, scp_output = await self._run_command(scp_cmd, timeout=300)
         return success, backup_path, scp_output
 

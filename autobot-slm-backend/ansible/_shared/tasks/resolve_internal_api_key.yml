@@ -1,0 +1,119 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #20750: the backend's AUTOBOT_INTERNAL_API_KEY, resolved one way for install and update.
+#
+# The SLM sends its own key (slm-secrets.env) on every call into the backend, so that key is the
+# canonical source (#11507). Install took it from there, but every update read the backend's own
+# env file and rendered that back. Once the two differed, the backend kept refusing the SLM:
+# 118 System-vault calls answered 401 over seven days, with nothing visible.
+#
+# One rule now, for both paths, per env file:
+#   - a file with no key (a fresh install): it renders the canonical key;
+#   - a file with a key: it renders that same key, whatever the other files or the SLM hold.
+#     Replacing a stored credential needs the owner's approval (#17038), never a silent rewrite;
+#     that action is #20750's second half.
+#   - any two keys that differ (between the files, or a file and the SLM's): a FINDING naming the
+#     files, never the values. The SLM also records the refusal it sees as an admin-visible
+#     finding (services/backend_key_finding.py). A canonical key that can't be read is a finding too.
+#
+# The canonical read is on the SLM host, as read_redis_password.yml's is (owner decision
+# 2026-09-13): the SLM runs every playbook, so `delegate_to: localhost` reaches its own file.
+#
+# `internal_api_key_canonical_file` defaults to the SLM's /etc/autobot/slm-secrets.env (tests point it
+# elsewhere). Caller sets `internal_api_key_current_env_files`: every backend env file that carries the
+# key. Sets `internal_api_key_by_file` (path -> its key), `internal_api_key_resolved` (for a file with
+# none), `internal_api_key_mismatch` and `internal_api_key_differing_files`. Each render passes
+# `internal_api_key_render` for its own destination (backend.env.j2).
+---
+
+- name: "Internal key | Stat the SLM's slm-secrets.env (#12145)"
+  ansible.builtin.stat:
+    path: "{{ internal_api_key_canonical_file | default('/etc/autobot/slm-secrets.env') }}"
+  register: _internal_key_slm_secrets_stat
+  delegate_to: localhost
+  run_once: true
+  become: false  # as read_redis_password.yml: the SLM reads its own file
+
+- name: "Internal key | Read the SLM's AUTOBOT_INTERNAL_API_KEY, the canonical source (#11507, #20750)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      {{ internal_api_key_canonical_file | default('/etc/autobot/slm-secrets.env') | quote }} 2>/dev/null | tail -n 1 || true
+  register: _internal_key_canonical
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  run_once: true
+  become: false  # as read_redis_password.yml: the SLM reads its own file
+  no_log: true
+  # #12145: retry a transient empty read (the file mid-write during a concurrent deploy); stops at
+  # once when the file is absent.
+  until: >-
+    (_internal_key_canonical.stdout | default('') | trim | length > 0)
+    or (not (_internal_key_slm_secrets_stat.stat.exists | default(false)))
+  retries: 5
+  delay: 2
+
+- name: "Internal key | Read each backend env file's AUTOBOT_INTERNAL_API_KEY (#20750)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*' {{ item | quote }} 2>/dev/null | tail -n 1 || true
+  loop: "{{ internal_api_key_current_env_files }}"
+  register: _internal_key_current
+  changed_when: false
+  failed_when: false
+  become: true
+  no_log: true
+
+# Each file keeps the key it already holds: a render writes `internal_api_key_by_file[dest]` when
+# the destination has one, and the canonical key only into a file that has none. So no run ever
+# replaces a stored key, whichever file it is in; an approved realign is the only path that does.
+- name: "Internal key | Resolve the key each file renders (#20750)"
+  ansible.builtin.set_fact:
+    internal_api_key_by_file: >-
+      {{ dict(_internal_key_current.results | selectattr('stdout', 'defined')
+              | rejectattr('stdout', 'equalto', '') | map(attribute='item')
+              | zip(_internal_key_current.results | selectattr('stdout', 'defined')
+                    | rejectattr('stdout', 'equalto', '') | map(attribute='stdout') | map('trim'))) }}
+    internal_api_key_canonical: "{{ _internal_key_canonical.stdout | default('') | trim }}"
+  no_log: true
+
+- name: "Internal key | Compare the files with each other and with the SLM's key (#20750)"
+  ansible.builtin.set_fact:
+    internal_api_key_resolved: >-
+      {{ internal_api_key_canonical or (internal_api_key_by_file.values() | list | first | default(''))
+         or (autobot_internal_api_key | default('')) }}
+    internal_api_key_mismatch: >-
+      {{ ((internal_api_key_by_file.values() | list) + ([internal_api_key_canonical] if internal_api_key_canonical else []))
+         | unique | length > 1 }}
+    # Names only, never values: each file whose key is not the SLM's (or, with no canonical key, all of them).
+    internal_api_key_differing_files: >-
+      {{ internal_api_key_by_file | dict2items
+         | rejectattr('value', 'equalto', internal_api_key_canonical) | map(attribute='key') | list }}
+  no_log: true
+
+- name: "Internal key | Keep the resolved key for other consumers of the variable (#20750)"
+  ansible.builtin.set_fact:
+    autobot_internal_api_key: "{{ internal_api_key_resolved }}"
+  no_log: true
+
+- name: "Internal key | WARNING: the stored keys differ; each file kept its own, none rewritten (#20750)"
+  ansible.builtin.debug:
+    msg: >-
+      FINDING #20750: the backend's AUTOBOT_INTERNAL_API_KEY differs from the SLM's, or its env files
+      disagree with each other. Files whose key is not the SLM's: {{ internal_api_key_differing_files | join(', ') }}.
+      The backend refuses every SLM call made with the other key (System vault, the voice, personality
+      and memory proxies, VNC registration). This run KEPT each file's own key: re-aligning is a
+      credential change that needs the owner's approval (#17038). Nothing was rewritten.
+  when: internal_api_key_mismatch | bool
+
+- name: "Internal key | WARNING: the SLM's key could not be read; nothing was compared (#20750)"
+  ansible.builtin.debug:
+    msg: >-
+      FINDING #20750: the SLM's AUTOBOT_INTERNAL_API_KEY could not be read from
+      {{ internal_api_key_canonical_file | default('/etc/autobot/slm-secrets.env') }} (absent or empty after
+      retries). Each backend env file kept the key it has, and none was checked against the SLM's.
+  when: internal_api_key_canonical | length == 0

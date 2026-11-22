@@ -864,12 +864,12 @@ class TestNonstandardComponentPathMap:
         result = get_default_source_dir("autobot-ai-stack")
         assert result == str(fake_repo / "autobot-infrastructure" / "shared" / "docker" / "ai-stack")
 
-    def test_slm_agent_source_path_is_role_files_subtree(self, monkeypatch, tmp_path):
-        """slm-agent's source of truth is the per-file copy: tasks in the
-        slm_agent role (files/slm/agent/*.py), not a top-level
+    def test_slm_agent_source_path_is_the_slm_backend_agent_tree(self, monkeypatch, tmp_path):
+        """slm-agent's source of truth is autobot-slm-backend/slm/agent/ (the
+        tree the slm_agent role deploys from, #18548), not a top-level
         code_source/autobot-slm-agent dir."""
         fake_repo = tmp_path / "repo"
-        nested = fake_repo / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "files" / "slm" / "agent"
+        nested = fake_repo / "autobot-slm-backend" / "slm" / "agent"
         nested.mkdir(parents=True)
         monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(fake_repo))
         result = get_default_source_dir("autobot-slm-agent")
@@ -1223,7 +1223,7 @@ class TestRenderedComparisonPrefersChecksum:
 # ---------------------------------------------------------------------------
 
 _AGENT_ROLE = Path(__file__).resolve().parents[2] / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent"
-_AGENT_SOURCE = _AGENT_ROLE / "files" / "slm" / "agent"
+_AGENT_SOURCE = _AGENT_ROLE.parents[2] / "slm" / "agent"  # the one tree the role deploys from (#18548)
 
 
 def test_the_agent_excludes_its_undeployed_tests():
@@ -1242,12 +1242,12 @@ def test_the_exclusion_is_not_global():
 def test_the_role_really_does_not_deploy_those_files():
     """The premise. If the role ever starts copying its tests, this exclusion
     would hide real drift instead of removing a false signal."""
-    tasks = (_AGENT_ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-    test_sources = [p.name for p in _AGENT_SOURCE.glob("*_test.py")]
+    import yaml
 
-    assert test_sources, "no test files in the agent source — this test proves nothing"
-    for name in test_sources:
-        assert name not in tasks, f"the role now deploys {name}; the exclusion would hide drift"
+    defaults = (_AGENT_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8")
+    excludes = yaml.safe_load(defaults)["slm_agent_source_excludes"]
+    tests = [p.name for p in _AGENT_SOURCE.glob("*_test.py")]
+    assert tests and all(any(Path(n).match(x) for x in excludes) for n in tests), "role would deploy a test"
 
 
 def test_every_excluded_pattern_matches_something_in_the_source():

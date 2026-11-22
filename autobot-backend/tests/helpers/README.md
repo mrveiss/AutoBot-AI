@@ -16,7 +16,7 @@ This matches the third-occurrence rule from `docs/developer/PRIMITIVES.md`.
 
 ## Naming conventions
 
-- `fake_redis.py` — in-memory Redis stubs (sync + async variants)
+- `_fake_redis.py` — in-memory Redis stubs (sync + async variants; its pipeline is `testkit.fake_redis_pipeline`)
 - `fake_kb.py` — Knowledge Base test doubles
 - `llm_fixtures.py` — LLM mock fixtures (if not better placed in root `conftest.py`)
 - `<subsystem>_fixtures.py` — domain-specific fixture collections

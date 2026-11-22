@@ -174,3 +174,15 @@ Prioritized, highest first.
 | G | `knowledge/summary_search.py`, `tools/tool_registry.py`, `markdown_reference_system.py` |
 
 **Already tracked — no new filing:** #18075 (extract task method missing), #18138 (fact consolidation via approval gate), #18074 (forget-everywhere KB facts), #17278 (per-turn prepend), #16836 (layering contract — receives C as design input), #16767 (layered role-holder prompts), #17277 (prompt drift detection), #16777 umbrella with #16770/#16771/#16776 (document→action taint).
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #18162 — feat(memory): agent-initiated facts persist with no user confirmation — route them through a proposed-fact review
+- #18163 — security(agents): delegated-agent output and file reads enter context without untrusted-content delimiting
+- #18164 — fix(filesystem): write_file_mcp overwrites in place — atomic replace and an optional expected-hash precondition
+- #18165 — feat(chat): skills are invisible to the chat agent — list name and description in the stable prompt head, load the body on selection
+- #18166 — feat(tools): document overview and drill-down exist only behind REST — expose them as agent tools
+- #18167 — feat(frontend): the memory privacy panel cannot amend a memory — wire the existing PUT endpoint
+- #18168 — observability(audit): code-exec audit events carry no session id, so they cannot be traced to a conversation

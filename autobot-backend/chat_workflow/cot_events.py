@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.secret_redaction import MatchPolicy, is_credential_entry
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER, MatchPolicy, is_credential_entry
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 # the placeholder string before the event is sent over WebSocket.
 # ---------------------------------------------------------------------------
 
-_REDACTED = "<redacted>"
+_REDACTED = REDACTED_PLACEHOLDER  # the one value placeholder (#19337)
 
 
 def _is_sensitive(key: str, value: Any) -> bool:

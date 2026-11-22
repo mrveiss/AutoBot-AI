@@ -98,6 +98,17 @@ _MODEL_TYPE_MAP: Dict[str, str] = {
     "hgrn": ArchitectureFamily.LINEAR_ATTENTION,
 }
 
+
+def family_for_model_type(model_type: str) -> Optional[ArchitectureFamily]:
+    """Family of a HuggingFace ``model_type``, or ``None`` when it is unrecognised.
+
+    Public read accessor over ``_MODEL_TYPE_MAP`` (#13049 C1) so callers need not
+    import the private table. Exact match on the lower-cased spelling.
+    """
+    family = _MODEL_TYPE_MAP.get(model_type)
+    return ArchitectureFamily(family) if family else None
+
+
 # Pattern-match heuristics keyed on substrings of the model_id.
 # Used as last resort when neither YAML nor config.json provides the family.
 _PATTERN_MAP: list[tuple[str, str]] = [
@@ -234,7 +245,7 @@ def get_provider_model_id(
         provider: Provider name (e.g. ``"anthropic"``).
 
     Returns:
-        The string the provider API expects (e.g. ``"claude-sonnet-4-6"``).
+        The string the provider API expects (a pinned ID such as ``autobot_shared.ssot_claude_models.CLAUDE_SONNET``).
     """
     canonical = resolve_model_name(model)
     reg = _load_registry()

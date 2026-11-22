@@ -50,7 +50,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 from tools.lint._scan_helpers import tracked_paths
 
 _CONFIG = ".pre-commit-config.yaml"
@@ -142,7 +142,7 @@ def test_the_hook_is_still_armed() -> None:
 def _git(cwd: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
     """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=scrubbed_git_env())
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 @pytest.mark.parametrize("marker", [_OUTER_PREFIXES[0], _SEPARATOR, _OUTER_PREFIXES[1]])

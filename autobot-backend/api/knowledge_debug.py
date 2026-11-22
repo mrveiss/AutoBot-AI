@@ -20,7 +20,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
-from constants.threshold_constants import TimingConstants
+from knowledge_factory import get_knowledge_base_async
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -35,26 +35,14 @@ logger = get_logger(__name__)
     error_code_prefix="KNOWLEDGE_DEBUG",
 )
 async def get_fresh_knowledge_stats(request: Request = None):
-    """Get knowledge base stats using a completely fresh instance (bypasses all cache)"""
+    """Get knowledge base stats from the canonical shared instance (uncached read)"""
     try:
-        logger.info("=== Creating completely fresh knowledge base instance ===")
+        logger.info("=== Reading fresh stats from the canonical shared knowledge base instance ===")
 
-        # Import here to ensure fresh module loading
-        import importlib
-        import sys
-
-        # Force reload the knowledge base module
-        if "src.knowledge_base" in sys.modules:
-            importlib.reload(sys.modules["src.knowledge_base"])
-
-        from knowledge_base import KnowledgeBase
-
-        # Create completely fresh instance
-        kb = KnowledgeBase()
-
-        # Wait for async initialization
-        logger.info("Waiting for knowledge base initialization...")
-        await asyncio.sleep(TimingConstants.KB_INIT_DELAY)
+        # D5 (#18122): the canonical instance, already initialised -- no private KB
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
 
         # Get fresh stats
         logger.info("Getting fresh stats...")
@@ -171,11 +159,9 @@ async def rebuild_search_index():
     try:
         logger.info("=== Rebuilding search index ===")
 
-        from knowledge_base import KnowledgeBase
-
-        # Create fresh instance
-        kb = KnowledgeBase()
-        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
 
         # Rebuild index
         result = await kb.rebuild_search_index()
