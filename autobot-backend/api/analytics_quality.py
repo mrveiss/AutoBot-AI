@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse
 
 from api.analytics_quality_export import build_quality_export_report
+from api.analytics_quality_runtime import runtime_risk_for_source
 from api.analytics_shared import no_data_response
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.codebase_analytics.endpoints.shared import authorize_source_access, require_source_access
@@ -738,9 +739,7 @@ async def calculate_real_quality_metrics(
 
     # Resolve runtime-risk map once (async) then pass into the sync helper (#11184).
     # Awaited here so the sync helper never touches async infrastructure.
-    from code_analysis.src.runtime_risk import build_runtime_risk_map
-
-    runtime_risk_map = await build_runtime_risk_map()
+    runtime_risk_map = await runtime_risk_for_source(source_root)
 
     # Calculate metrics using helper (Issue #620, #11184)
     metrics = _calculate_all_quality_scores(problems, stats, total_files, runtime_risk_map)
@@ -1448,15 +1447,13 @@ async def get_quality_snapshot(
     }
 
 
-async def _drill_down_runtime_risk(limit: int = 50) -> dict[str, Any]:
+async def _drill_down_runtime_risk(source_root: Path, limit: int = 50) -> dict[str, Any]:
     """Return top files by runtime_risk score, sorted descending (#11184).
 
-    Each entry: {file: str, runtime_risk: float}.  Returns no_data shape when
-    Redis is unavailable or no failure patterns are recorded.
+    Each entry: {file: str, runtime_risk: float}, for files of the source's checkout only (#20513).
+    Returns no_data shape when Redis is unavailable or no failure patterns are recorded.
     """
-    from code_analysis.src.runtime_risk import build_runtime_risk_map
-
-    risk_map = await build_runtime_risk_map()
+    risk_map = await runtime_risk_for_source(source_root)
     if not risk_map:
         return no_data_response(
             "No runtime failure data available.",
@@ -1504,7 +1501,7 @@ async def drill_down_category(
 
     # Issue #11184: runtime_risk category resolves via the dedicated risk map.
     if category.lower() == "runtime_risk":
-        return await _drill_down_runtime_risk(limit=limit)
+        return await _drill_down_runtime_risk(source_root, limit=limit)
 
     problems, stats = await _get_problems_from_chromadb(source_root=source_root, source_id=source_id)
 
@@ -1616,6 +1613,11 @@ async def _handle_ws_subscribe(websocket: WebSocket, data: dict) -> None:
 
 async def _handle_ws_refresh(websocket: WebSocket, data: dict) -> None:
     """Handle WebSocket refresh message for the source the socket was opened for (Issue #315, #20513)."""
+    try:
+        await authorize_source_access(data["_source_id"], data["_user"])  # access can change while a socket is open
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
     snapshot = await get_quality_snapshot(source_id=data["_source_id"])
     await websocket.send_json({"type": "snapshot", "data": snapshot})
 
@@ -1660,7 +1662,8 @@ async def websocket_quality_updates(websocket: WebSocket, source_id: SourceIdQue
     Issue #315: Refactored to use dictionary dispatch for message handling.
     """
     # #17009: admin, like GET /snapshot; #20513: and allowed to see the source it asks about
-    if not await open_authenticated_ws(websocket, admin=True, allow=_may_see_source(source_id)):
+    user = await open_authenticated_ws(websocket, admin=True, allow=_may_see_source(source_id))
+    if user is None:
         return
     await manager.connect(websocket)
 
@@ -1678,7 +1681,7 @@ async def websocket_quality_updates(websocket: WebSocket, source_id: SourceIdQue
                 msg_type = data.get("type")
                 handler = _WS_MESSAGE_HANDLERS.get(msg_type)
                 if handler:
-                    await handler(websocket, {**data, "_source_id": source_id})
+                    await handler(websocket, {**data, "_source_id": source_id, "_user": user})
 
             except json.JSONDecodeError:
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})

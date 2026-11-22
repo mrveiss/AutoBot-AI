@@ -585,10 +585,11 @@ const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
 const drillDownData = ref<QualityDrillDown>({ total_files: 0, total_issues: 0, average_score: 0, files: [] });
 
 // WebSocket managed via useWebSocket composable
-const _qualityWsUrl = (() => {
+// #20513: the socket is of one source; its URL follows the selected source (useWebSocket reconnects on a change)
+const _qualityWsUrl = computed(() => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return withSourceId(`${protocol}//${window.location.host}/api/quality/ws`); // #20513: the socket is of one source
-})();
+  return withSourceId(`${protocol}//${window.location.host}/api/quality/ws`);
+});
 const {
   connect: wsConnect,
 } = useWebSocket(_qualityWsUrl, {
@@ -843,8 +844,7 @@ function closeExportMenu(): void {
 }
 
 function connectWebSocket(): void {
-  // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-  wsConnect();
+  if (sourceId.value) wsConnect(); // #20513: no source selected, no socket
 }
 
 function handleWebSocketMessage(message: QualityWsMessage): void {

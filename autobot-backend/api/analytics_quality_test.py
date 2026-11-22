@@ -351,18 +351,24 @@ class TestCalculateRuntimeRiskScore:
         assert abs(_calculate_runtime_risk_score(risk_map) - expected) < 1e-9
 
 
+def _touch_files(root, names) -> None:
+    for name in names:
+        (root / name).write_text("x = 1\n", encoding="utf-8")
+
+
 class TestDrillDownRuntimeRisk:
     """Tests for the runtime_risk drill-down path (#11184)."""
 
     @pytest.mark.asyncio
-    async def test_returns_top_files_sorted_desc(self):
+    async def test_returns_top_files_sorted_desc(self, tmp_path):
         """drill-down returns files sorted by runtime_risk descending."""
         risk_map = {"low.py": 0.1, "high.py": 0.9, "mid.py": 0.5}
+        _touch_files(tmp_path, risk_map)
 
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk(limit=10)
+            result = await aq._drill_down_runtime_risk(tmp_path, limit=10)
 
         assert result["status"] == "success"
         files = result["files"]
@@ -372,23 +378,24 @@ class TestDrillDownRuntimeRisk:
         assert files[0]["file"] == "high.py"
 
     @pytest.mark.asyncio
-    async def test_empty_map_returns_no_data(self):
+    async def test_empty_map_returns_no_data(self, tmp_path):
         """Empty risk map yields no_data response, not a crash."""
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value={})):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk()
+            result = await aq._drill_down_runtime_risk(tmp_path)
 
         assert result["status"] == "no_data"
 
     @pytest.mark.asyncio
-    async def test_limit_is_respected(self):
+    async def test_limit_is_respected(self, tmp_path):
         """Only `limit` top files are returned."""
         risk_map = {f"file{i}.py": i / 100.0 for i in range(20)}
+        _touch_files(tmp_path, risk_map)
 
         with patch("code_analysis.src.runtime_risk.build_runtime_risk_map", new=AsyncMock(return_value=risk_map)):
             from api import analytics_quality as aq
 
-            result = await aq._drill_down_runtime_risk(limit=5)
+            result = await aq._drill_down_runtime_risk(tmp_path, limit=5)
 
         assert len(result["files"]) == 5

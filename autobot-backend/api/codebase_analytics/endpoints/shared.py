@@ -8,7 +8,9 @@ Shared utilities and constants for codebase analytics endpoints
 
 from pathlib import Path
 
-from fastapi import HTTPException, Request, Response, status
+from fastapi import HTTPException, Response, status
+from starlette.requests import HTTPConnection
+from starlette.websockets import WebSocket
 
 # Issue #13470: ImportContext, STDLIB_MODULES, COMMON_THIRD_PARTY,
 # INTERNAL_MODULE_PREFIXES and is_external_module moved to
@@ -277,7 +279,7 @@ async def authorize_source_access(source_id: "str | None", user: "dict | None") 
         )
 
 
-async def require_source_access(request: Request) -> None:
+async def require_source_access(connection: HTTPConnection) -> None:
     """FastAPI dependency: authorize the request's ``source_id`` against the caller.
 
     Applied at the analytics router level (#12358) so every source-scoped
@@ -286,10 +288,14 @@ async def require_source_access(request: Request) -> None:
     in the request body (the index and pattern-analyze endpoints) authorize it
     inside their own handlers via ``authorize_source_access`` (#12375).
     """
+    if isinstance(connection, WebSocket):
+        # A socket cannot present the header credential this reads (it travels as the bearer subprotocol), so
+        # it authenticates in `open_authenticated_ws` and authorizes its own source there, via `allow`.
+        return
     from auth_middleware import get_current_user  # noqa: PLC0415
 
-    user = await get_current_user(request)
-    source_id = request.path_params.get("source_id") or request.query_params.get("source_id")
+    user = await get_current_user(connection)
+    source_id = connection.path_params.get("source_id") or connection.query_params.get("source_id")
     await authorize_source_access(source_id, user)
 
 

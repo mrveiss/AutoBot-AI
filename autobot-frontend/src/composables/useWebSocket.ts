@@ -245,6 +245,7 @@ export function useWebSocket(
       opts.autoReconnect &&
       !disposed &&
       event.code !== 1000 && // Normal closure
+      event.code !== 1008 && // Policy violation: the server refused this client, and a retry cannot change that
       (opts.maxReconnectAttempts === 0 || reconnectAttempts.value < opts.maxReconnectAttempts)
     ) {
       // Exponential backoff: delay * 2^attempts
