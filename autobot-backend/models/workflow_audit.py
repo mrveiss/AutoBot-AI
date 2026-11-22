@@ -5,8 +5,12 @@
 """
 WorkflowAuditLog Model (#2152)
 
-Immutable audit trail for all workflow lifecycle actions:
+Audit trail for all workflow lifecycle actions:
 create, edit, run, approve, delete, view, grant, revoke.
+
+Written once by convention. The database does not enforce it and the rows are not hash-chained
+(the chain covers ``audit_logs``; this table joins it when it is recorded through the canonical
+service, #18284).
 """
 
 import uuid
@@ -21,9 +25,10 @@ from user_management.models.base import Base
 
 class WorkflowAuditLog(Base):
     """
-    Immutable audit log entry for a workflow action (#2152).
+    Audit log entry for a workflow action (#2152).
 
-    Written once; never updated or deleted by the application.
+    Written once by convention: the application never updates or deletes it, but nothing in the
+    database prevents either, and the row is not chained (#18284).
     """
 
     __tablename__ = "workflow_audit_log"

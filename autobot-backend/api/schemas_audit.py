@@ -43,3 +43,40 @@ class AuditQueryResponse(BaseModel):
     has_more: bool
     entries: List[AuditEntryResponse]
     query: dict
+
+
+class AuditIntegrityFinding(BaseModel):
+    """One finding of an audit-chain verification, positioned at the ``chain_seq`` where it was found (#17219)."""
+
+    kind: str
+    seq: int
+    detail: str = ""
+
+
+class AuditIntegrityReport(BaseModel):
+    """The result of one audit-chain verification (``services/audit/integrity.py``)."""
+
+    ok: bool
+    checked_at: str
+    rows_checked: int
+    chain_started: bool
+    head_seq: int
+    head_hash: Optional[str] = None
+    pre_chain_count: int
+    unchained_count: int
+    from_seq: int
+    findings: List[AuditIntegrityFinding]
+
+
+class AuditIntegrityStatus(BaseModel):
+    """The last verification run in this process (None before the first) and the chain's current head."""
+
+    last_result: Optional[AuditIntegrityReport] = None
+    head_seq: int
+    head_hash: Optional[str] = None
+
+
+class AuditIntegrityRequest(BaseModel):
+    """Body of the verify route: where to start (default: the genesis)."""
+
+    from_seq: Optional[int] = None

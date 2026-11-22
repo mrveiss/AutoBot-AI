@@ -39,6 +39,14 @@ migrations:
   - 'autobot-backend/llc/services/workspace_lease.py'
   - 'autobot-backend/services/__init__.py'
   - 'autobot-backend/services/approval_gate_service.py'
+  # #17219: the audit-chain test imports the chain, its writer, the row builder, the model and the verifier
+  - 'autobot_shared/__init__.py'
+  - 'autobot_shared/audit_chain*.py'
+  - 'autobot_shared/secrets_envelope.py'
+  # #17219: the model and row builder the chain test inserts through
+  - 'autobot_shared/user_management/**'
+  # #17219: the verifier the chain test runs
+  - 'autobot-backend/services/audit/**'
   # #15907: the concurrent-move test
   - 'autobot-backend/llc/services/company.py'
   - 'autobot-backend/llc/services/company_ceo.py'

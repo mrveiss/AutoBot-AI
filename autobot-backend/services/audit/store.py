@@ -11,9 +11,12 @@ by ``autobot_shared.user_management.audit_rows.audit_row`` -- the one mapping
 onto this schema. The Redis keys in ``projection.py`` are a projection of this
 table and :func:`rebuild_projection` reconstructs them from it.
 
-Retention does not delete from here: this table is documented as immutable,
-and removing compliance records is an owner decision (#17038), not a policy
-this module applies on its own.
+Retention does not delete from here: removing compliance records is an owner
+decision (#17038), not a policy this module applies on its own. The table is
+tamper-evident, not immutable: every row written after the genesis anchor is
+sealed into a hash chain with a keyed MAC (``autobot_shared/audit_chain.py``,
+sealed by ``audit_chain_writer`` on insert, checked by ``integrity.verify_chain``);
+the database does not yet refuse an UPDATE or DELETE (#22004).
 """
 
 from datetime import datetime, timezone

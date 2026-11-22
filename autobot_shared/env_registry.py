@@ -67,6 +67,7 @@ from autobot_shared import (  # noqa: E402,F401
     env_registry_ai,
     env_registry_analytics,
     env_registry_approvals,
+    env_registry_audit_chain,
     env_registry_batch,
     env_registry_chat_attachments,
     env_registry_chat_history,

@@ -34,19 +34,53 @@ one `SELECT ... WHERE actor = U AND created_at BETWEEN ...` across every categor
 `query_filtered` raises `AuditStoreUnavailable` when the store cannot be read, so an unreadable
 trail is never reported as an empty one (#13258).
 
+## Tamper evidence (#17219)
+
+`audit_logs` is **tamper-evident, not immutable**. Every row written after the genesis anchor carries
+`chain_seq` (gap-free), `prev_hash`, `row_hash = SHA-256(prev_hash || canonical(row))`, `row_mac =
+HMAC-SHA-256(key, row_hash)` and `key_id`. One serialization and one hash function live in
+`autobot_shared/audit_chain.py`; the writer (`autobot_shared/audit_chain_writer.py`, a `before_insert`
+listener on `AuditLog`) and the verifier (`services/audit/integrity.py`) both use it.
+
+| Property | How |
+|---|---|
+| Every ORM insert is chained | the listener runs for the canonical service and for the identity writers that insert inside the caller's transaction; `repo_tests/audit_writer_single_source_17225_test.py` fails on a core or raw insert that would skip it |
+| One chain per database | the backend database and the SLM's own database each have one; `pg_advisory_xact_lock` serializes writers (bounded wait, `AUTOBOT_AUDIT_CHAIN_LOCK_TIMEOUT_MS`), a partial unique index on `chain_seq` is the backstop |
+| Gap-free | `chain_seq` is tail + 1 taken under the lock, not a database sequence: a rolled-back insert returns its number |
+| Key | derived by HKDF from the secrets root key under its own label (`secrets_envelope.derive_audit_chain_key`), never stored; no key means no row is written and the SLM refuses to start (the backend already refuses without the root key) |
+| Covered columns | `id`, `chain_seq`, `created_at`, `category`, `actor`, `action`, `resource_type`, `resource_ref`, `resource_id`, `outcome`, `details`, `ip_address`, `user_agent`, `session_id`, `org_ref`. Not `user_id`/`org_id`: deleting a user or organisation sets them to NULL and must not fail verification |
+| Start | the genesis anchor (`audit_chain_anchors`) is written by the first chained insert and records how many rows predate the chain; those rows are pre-chain (`chain_seq IS NULL`), never rewritten and never reported as faults |
+
+Verification: `GET /api/audit/integrity` (admin; last result in this process plus the current head),
+`POST /api/audit/integrity/verify` (admin, human only) and `python -m services.audit.integrity`
+(exit 1 on a finding) all call `integrity.verify_chain`. It reports, with the sequence where found: a
+modified row, a removed row (gap), a reordered row, a row whose MAC does not verify, and a row inserted
+without a chain entry (the count of unchained rows differs from the genesis). A failed verification is a
+report; it never locks an operation out.
+
+Limits:
+
+* A removed **tail** row is not detectable until the head is published somewhere else (#22005).
+* The database does not yet refuse an UPDATE or DELETE (#22004); the owning role could also disable a trigger.
+* An attacker with the database, the root key and a published head defeats the chain.
+* `actor` is hashed, so an actor id cannot be erased from a chained row without a re-anchor.
+* Chaining runs on PostgreSQL only; the in-memory SQLite of the unit tests writes complete, unchained rows.
+* The stores in rows 5, 10, 11 and 12 above are not chained until they are recorded through the canonical
+  service (#18284, #18285, #18286).
+
 ## Inventory
 
 | # | Module | Store | Status | Writers | Retention | Tamper protection |
 |---|---|---|---|---|---|---|
-| 1 | `services/audit/` (canonical) | Postgres `audit_logs` (row 9), projected to Redis `audit:unified` + `audit:category:<cat>` | **Canonical.** `store_authority.py`: `audit_trail`, POSTGRES, projection REDIS. | All of rows 2, 3, 4, 7, 8 below, plus direct `emit`/`record` producers | Projection: `retention.py` table. Rows: not purged (see D5). | The table is append-only by convention; no trigger or revoke. |
+| 1 | `services/audit/` (canonical) | Postgres `audit_logs` (row 9), projected to Redis `audit:unified` + `audit:category:<cat>` | **Canonical.** `store_authority.py`: `audit_trail`, POSTGRES, projection REDIS. | All of rows 2, 3, 4, 7, 8 below, plus direct `emit`/`record` producers | Projection: `retention.py` table. Rows: not purged (see D5). | Hash chain with a keyed MAC from the genesis anchor (see "Tamper evidence", #17219). The database does not yet refuse a change (#22004). |
 | 2 | `services/audit/audit_log.py` | Redis `audit_log:<user>` / `audit_log:global` | **Retired (D2), module deleted.** `AuditAction` moved to `taxonomy.py`; `audit_record` is the canonical helper. | 0. Callers already used the canonical bridge: 14 `audit_record` sites in `api/chat_sessions.py` (3), `api/knowledge.py` (5), `api/secrets.py` (2), `services/device_jwt.py` (1), `services/run_jwt.py` (3) | Old keys expire by their 90-day TTL | n/a |
 | 3 | `services/audit_logger.py` | Redis `audit` database (db 10): daily `audit:log:<date>` and five index zsets, JSONL fallback | **Adapter (D3).** Stores nothing; `AuditEntry` is recorded as a SECURITY `AuditEvent` and read back from #1. | `audit_log()`: 18 sites in 11 modules (`api/feature_flags.py` 2, `api/knowledge_source_liveness.py` 1, `api/mcp_external_servers.py` 1, `api/memory_privacy.py` 6, `api/scheduler_toggles.py` 2, `services/approval_execution.py` 1, `services/mcp_external_bridge.py` 1, `services/orphan_repair.py` 1, `services/orphan_storage_cleanup_action.py` 1, `services/realtime_mcp_bridge.py` 1, `scripts/migrate_shared_facts_index.py` 1); `get_audit_logger().log`: 4 (`middleware/audit_middleware.py` 3, `services/gateway/egress_governor.py` 1). Reader: `api/audit.py` (6 endpoints). | db-10 keys expire by the TTL they were written with | n/a |
-| 4 | `security_layer.py` `SecurityLayer.audit_log` | JSONL file at `config.audit_log_file` | **Routed through #1 (D6).** One tamper mechanism; no second hash chain. A record that cannot be scheduled is counted (`autobot_audit_write_failures_total`, `NotScheduled`). | 64 call sites in 15 modules (`api/agent.py`, `auth_middleware.py`, `auth_rbac.py`, `worker_node.py`, ...). Readers `get_command_history` and `get_audit_entries` (`api/security.py`). | Table (SECURITY) | via #1 |
+| 4 | `security_layer.py` `SecurityLayer.audit_log` | JSONL file at `config.audit_log_file` | **Routed through #1 (D6).** One tamper mechanism (the chain on `audit_logs`); no second hash chain. A record that cannot be scheduled is counted (`autobot_audit_write_failures_total`, `NotScheduled`). | 64 call sites in 15 modules (`api/agent.py`, `auth_middleware.py`, `auth_rbac.py`, `worker_node.py`, ...). Readers `get_command_history` and `get_audit_entries` (`api/security.py`). | Table (SECURITY) | via #1 |
 | 5 | `models/workflow_audit.py` + `services/workflow_permission_service.py` | Postgres `workflow_audit_log` | Decided: record through #1 -- #18284. | 1 | None | Convention only |
 | 6 | `middleware/audit_middleware.py` | Not a store: feeds #3 | via #3 | 3 | via #1 | via #1 |
 | 7 | `services/event_log.py` | Redis `autobot:event_log` | **Retired (D2), module deleted.** `ComplianceEventType` moved to `taxonomy.py`. | 0. `api/voice_bundle_admin.py` (1, the only direct writer, whose records were invisible to the admin events API) and `api/auth.py` (2) now call `emit_compliance`. | Old key expires by its 90-day TTL | n/a |
 | 8 | `knowledge/audit_log.py` | Redis `audit:user:<id>`, `audit:fact:<id>`, `audit:org:<id>` + `setex` bodies | **Retired (D2), module deleted.** `knowledge_view.KnowledgeAuditLog` records and reads KNOWLEDGE events in #1; the double write is gone. | 0 (no production caller ever called `log_event`). Reader: `api/knowledge_audit.py` (5 endpoints). | Old keys expire by their TTL | n/a |
-| 9 | `autobot_shared/user_management/models/audit.py` (`AuditLog`) | Postgres `audit_logs` (+ `category`, `actor`, `session_id`, `resource_ref` from #17225) | **The system of record (D1).** | All through `audit_row`: `services/audit/store.py`, `rbac_middleware.py` (denial audit, #14750), `organization_service.py`, `team_service.py`, `user_service_base.py` (the one UserService both backends use since #18267), the SLM's `services/rollback_audit.py` (a rollback request, #20214). | None | Convention only |
+| 9 | `autobot_shared/user_management/models/audit.py` (`AuditLog`) | Postgres `audit_logs` (+ `category`, `actor`, `session_id`, `resource_ref` from #17225; `chain_seq`, `prev_hash`, `row_hash`, `row_mac`, `key_id`, `org_ref` from #17219) | **The system of record (D1).** | All through `audit_row`: `services/audit/store.py`, `rbac_middleware.py` (denial audit, #14750), `organization_service.py`, `team_service.py`, `user_service_base.py` (the one UserService both backends use since #18267), the SLM's `services/rollback_audit.py` (a rollback request, #20214). | None | Hash-chained from the genesis anchor (#17219); rows before it are unchained |
 | 10 | `services/secrets_audit_store.py` | SQLite `secrets_audit` | Missed. Decided: record through #1 -- #18284. | 1 module | None | None |
 | 11 | `a2a/trust_score.py` | SQLite `trust_audit` | Missed. Decided: a domain history table emitting GOVERNANCE events -- #18285. | 1 module | None | None |
 | 12 | `security/enterprise/compliance_manager.py` | Encrypted/plain JSONL under `audit_base_path` | Missed. Decided: wire in through #1 -- #18286. `ComplianceManager` has no production constructor call (exported only). | 1 module | None | Fernet encryption for sensitive events |
@@ -66,7 +100,7 @@ keeps an `audit_log.json` outside the guard's roots.
 | D2 | Retire #2, #7, #8 by repointing callers; old keys expire by TTL | **Done.** Modules deleted, callers repointed, guard forbids their import. No stored data was touched. |
 | D3 | `audit_log()` becomes an adapter onto #1 | **Done.** |
 | D4 | Daemon keys get their own prefix | **Not implemented: needs a data move.** `audit:deferred_findings` is a dead-letter queue with no TTL; renaming the key in code orphans every queued finding, and `audit:dead_code:last_inventory` is the diff baseline (losing it re-files every finding). The move needs a `RENAME` of the existing keys at the same moment as the code change, which is a #17038 action. The harm the shared prefix caused (the retention task trimming daemon zsets) is gone with D5: the purge no longer scans `audit:*`. |
-| D5 | One retention policy table | **Done for the projection.** `retention.py` (`AUTOBOT_AUDIT_<CATEGORY>_RETENTION_DAYS`, defaults 90/90/365/365) drives the projection TTLs and the one purge path. `audit_logs` rows are not purged: the table is documented as immutable and deleting compliance records is an owner decision (#17038). `AUTOBOT_AUDIT_RETENTION_DAYS` stays the nightly purge's on-switch (0 = off) and only ever shortens a period. The old task trimmed every `audit:*` zset at one period, cutting 365-day records at 90. |
+| D5 | One retention policy table | **Done for the projection.** `retention.py` (`AUTOBOT_AUDIT_<CATEGORY>_RETENTION_DAYS`, defaults 90/90/365/365) drives the projection TTLs and the one purge path. `audit_logs` rows are not purged: deleting compliance records is an owner decision (#17038), and a purge would have to write a `reanchor` row (see "Tamper evidence"). `AUTOBOT_AUDIT_RETENTION_DAYS` stays the nightly purge's on-switch (0 = off) and only ever shortens a period. The old task trimmed every `audit:*` zset at one period, cutting 365-day records at 90. |
 | D6 | Route `security_layer.py` through #1 | **Done.** |
 
 ## Behaviour changes a reviewer should know
@@ -141,8 +175,8 @@ because `autobot_shared` must not import backend code; the guard fails when an a
 | `threat_detection/ingest.engine_action()` | read | canonicalises before translating to the analyzers' vocabulary; `config.update` becomes `system_configuration_change`, the only `InsiderThreatAnalyzer._HIGH_RISK_ACTIONS` name a bus event can reach (#19015 tracks the rest) |
 | SLM `api/sso.py` health query | read | `spellings_of("auth.login")` instead of `"login"` |
 
-The alias half of every read shrinks once the approved data migration (#17038) has rewritten stored
-`audit_logs` rows; code never rewrites stored rows. The SLM's own `slm_node_audit_logs` writers pass the
+The alias half of every read is permanent: stored `audit_logs` rows are never rewritten (owner decision
+2026-11-21; the chain covers `action`, so a rewrite would break it), and code never rewrites them either. The SLM's own `slm_node_audit_logs` writers pass the
 canonical literal directly (the `success` column carries the outcome).
 
 **One backend login writes three `auth.login` rows (owner decision 2026-10-20, kept as distinct facts).**

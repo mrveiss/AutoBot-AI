@@ -585,9 +585,10 @@ class SecurityLayer:
         This used to append to a JSONL file and call it tamper-resistant; the
         only mechanism was append mode. The record now goes through
         ``services.audit.audit`` like every other audit event, so there is one
-        store and one tamper mechanism, not a second one here. Never raises: an
-        audit problem must not turn a correct 403 into a 500 (#14843), and a
-        record that could not even be scheduled is counted (#14750).
+        store and one tamper mechanism (the hash chain on ``audit_logs``, #17219),
+        not a second one here. Never raises: an audit problem must not turn a
+        correct 403 into a 500 (#14843), and a record that could not even be
+        scheduled is counted (#14750).
         """
         scheduled = emit_security(
             action,

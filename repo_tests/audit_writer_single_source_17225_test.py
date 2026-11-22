@@ -315,3 +315,53 @@ def test_audit_logs_rows_have_one_constructor() -> None:
         )
     )
     assert set(direct) == _DIRECT_ROW_CONSTRUCTORS, f"#17225: build audit_logs rows with audit_rows.audit_row: {direct}"
+
+
+# --- #17219: an insert that skips the ORM skips the chain hook -------------------------------------
+# `audit_chain_writer` seals rows in a `before_insert` listener. A core `insert(AuditLog)`, an
+# `AuditLog.__table__.insert()` or a raw `INSERT INTO audit_logs` never fires it: that row would be
+# unchained, which the verifier reports and the guard refuses to let in.
+_RAW_AUDIT_LOGS_INSERT = re.compile(r"\binsert\s+into\s+(?:\w+\.)?audit_logs\b", re.IGNORECASE)
+
+
+def _bypasses_chain_hook(source: str) -> bool:
+    """True when `source` inserts into `audit_logs` without going through the ORM unit of work."""
+    tree = parse_cache.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _RAW_AUDIT_LOGS_INSERT.search(node.value):
+            return True
+        if _is_call(node, name="insert", attr_in=frozenset({"insert"})) and _names_audit_log_table(node):
+            return True
+    return False
+
+
+def _names_audit_log_table(call: ast.Call) -> bool:
+    """`insert(AuditLog)`, `sa.insert(AuditLog.__table__)` or `AuditLog.__table__.insert()`."""
+    parts = list(call.args) + [call.func]
+    return any(isinstance(n, ast.Name) and n.id == "AuditLog" for part in parts for n in ast.walk(part))
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected"),
+    [
+        ("core insert of the model", "def f(s):\n    s.execute(insert(AuditLog).values(a=1))\n", True),
+        ("qualified core insert", "def f(s):\n    s.execute(sa.insert(AuditLog.__table__))\n", True),
+        ("table insert method", "def f(s):\n    s.execute(AuditLog.__table__.insert())\n", True),
+        ("raw sql insert", 'def f(c):\n    c.execute("INSERT INTO audit_logs (id) VALUES (1)")\n', True),
+        ("orm add through the builder", "def f(s):\n    s.add(audit_row(action='x', resource_type='r'))\n", False),
+        ("an insert into another table", "def f(s):\n    s.execute(insert(AuditChainAnchor))\n", False),
+        ("a read of audit_logs", 'def f(c):\n    c.execute("SELECT 1 FROM audit_logs")\n', False),
+    ],
+)
+def test_the_bypass_matcher_tells_a_core_insert_from_an_orm_add(label: str, source: str, expected: bool) -> None:
+    """Contrast pair: without it, a clean sweep could mean a matcher that never fires."""
+    assert _bypasses_chain_hook(source) is expected, label
+
+
+def test_no_insert_bypasses_the_audit_chain_hook() -> None:
+    """#17219: every audit_logs row goes through the ORM, where the chain listener seals it."""
+    root = repo_root()
+    hits = [rel for rel in REACH.examined(root) if _bypasses_chain_hook((root / rel).read_text(encoding="utf-8"))]
+    assert (
+        not hits
+    ), f"#17219: {hits} insert into audit_logs without the ORM; the row would be unchained. Use audit_row."

@@ -15,13 +15,20 @@ Endpoints:
 - GET /api/audit/user/{user_id} - Get audit trail for specific user
 - GET /api/audit/failures - Get failed/denied operations for security monitoring
 - POST /api/audit/cleanup - Trigger cleanup of old audit logs (admin only)
+- GET /api/audit/integrity - Last audit-chain verification and the chain's current head (admin only)
+- POST /api/audit/integrity/verify - Run the audit-chain verification (admin only, human only)
 """
 
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from api.schemas_audit import AuditQueryResponse
+from api.schemas_audit import (
+    AuditIntegrityReport,
+    AuditIntegrityRequest,
+    AuditIntegrityStatus,
+    AuditQueryResponse,
+)
 from api.schemas_system import (
     AuditCleanupData,
     AuditCleanupRequest,
@@ -34,7 +41,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.time_utils import parse_utc_iso
 from security.human_admin import refuse_service_principal
+from services.audit.integrity import current_head, last_report, report_summary, verify_chain
 from services.audit_logger import AuditResult, get_audit_logger
+from user_management.database import db_session_context
 from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
@@ -377,3 +386,38 @@ async def list_operation_types(request: Request, admin_check: bool = Depends(che
     except Exception as e:
         logger.error("Failed to list operations: %s", e)
         raise_server_error("API_0003", "Operation listing error")
+
+
+@router.get("/integrity", response_model=AuditIntegrityStatus)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_audit_integrity",
+    error_code_prefix="AUDIT",
+)
+async def get_audit_integrity(request: Request, admin_check: bool = Depends(check_admin_permission)):
+    """The last chain verification run by this process and the chain's current head (#17219)."""
+    async with db_session_context() as session:
+        head_seq, head_hash = await current_head(session)
+    last = last_report()
+    return {
+        "last_result": report_summary(last) if last else None,
+        "head_seq": head_seq,
+        "head_hash": head_hash,
+    }
+
+
+@router.post("/integrity/verify", response_model=AuditIntegrityReport)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="verify_audit_integrity",
+    error_code_prefix="AUDIT",
+)
+async def verify_audit_integrity(
+    request: Request,
+    body: AuditIntegrityRequest | None = None,
+    _human: None = Depends(refuse_service_principal),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Verify the audit hash chain now. A failed verification is reported, never enforced (#17219)."""
+    report = await verify_chain((body.from_seq if body else None))
+    return report_summary(report)

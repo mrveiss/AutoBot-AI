@@ -628,6 +628,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Audit Integrity
+         * @description The last chain verification run by this process and the chain's current head (#17219).
+         */
+        get: operations["get_audit_integrity_api_audit_integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/audit/integrity/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Audit Integrity
+         * @description Verify the audit hash chain now. A failed verification is reported, never enforced (#17219).
+         */
+        post: operations["verify_audit_integrity_api_audit_integrity_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -61351,6 +61391,74 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * AuditIntegrityFinding
+         * @description One finding of an audit-chain verification, positioned at the ``chain_seq`` where it was found (#17219).
+         */
+        AuditIntegrityFinding: {
+            /** Kind */
+            kind: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityReport
+         * @description The result of one audit-chain verification (``services/audit/integrity.py``).
+         */
+        AuditIntegrityReport: {
+            /** Ok */
+            ok: boolean;
+            /** Checked At */
+            checked_at: string;
+            /** Rows Checked */
+            rows_checked: number;
+            /** Chain Started */
+            chain_started: boolean;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+            /** Pre Chain Count */
+            pre_chain_count: number;
+            /** Unchained Count */
+            unchained_count: number;
+            /** From Seq */
+            from_seq: number;
+            /** Findings */
+            findings: components["schemas"]["AuditIntegrityFinding"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityRequest
+         * @description Body of the verify route: where to start (default: the genesis).
+         */
+        AuditIntegrityRequest: {
+            /** From Seq */
+            from_seq?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * AuditIntegrityStatus
+         * @description The last verification run in this process (None before the first) and the chain's current head.
+         */
+        AuditIntegrityStatus: {
+            last_result?: components["schemas"]["AuditIntegrityReport"] | null;
+            /** Head Seq */
+            head_seq: number;
+            /** Head Hash */
+            head_hash?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * AuditLogData
          * @description Response data for get_audit_log.
          */
@@ -110549,6 +110657,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditOperationsData"];
+                };
+            };
+        };
+    };
+    get_audit_integrity_api_audit_integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityStatus"];
+                };
+            };
+        };
+    };
+    verify_audit_integrity_api_audit_integrity_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuditIntegrityRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditIntegrityReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
