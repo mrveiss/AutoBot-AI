@@ -65,7 +65,7 @@ def analytics(monkeypatch, tmp_path):
     async def cached_deps(prefix, source_id):
         if source_id in state["deps_error"]:
             raise HTTPException(status_code=409, detail="failed")
-        return DEPS
+        return state.get("deps", DEPS)
 
     async def get_redis(database=None):
         return redis
@@ -94,7 +94,13 @@ async def test_the_summary_outlives_the_call_graph_cache_entry(analytics):
         "files_total": 3,
         "truncated": False,
     }
-    assert meta["dependencies"] == {"total_modules": 3, "total_import_relationships": 4, "circular_dependency_count": 1}
+    assert meta["dependencies"] == {
+        "total_modules": 3,
+        "total_import_relationships": 4,
+        "circular_dependency_count": 1,
+        "stale": False,
+        "completed_at": None,
+    }
     assert list(meta)[-2:] == ["call_graph", "dependencies"]
 
 
@@ -186,8 +192,9 @@ async def test_codebases_are_on_the_first_page_only_and_recorded_in_the_ledger(a
     kb = ListingKB([], await client_with({}))
     _, _, sections, ledger = await _graph(kb)
     assert sorted(ledger.fact_ids) == ["codebase:src-alpha", "codebase:src-beta"]
-    _, _, paged, _ = await _graph(kb, offset=50)
-    assert paged == []
+    nodes, _, paged, paged_ledger = await _graph(kb, offset=50)
+    assert not [n for n in nodes if n["type"] == "codebase"] and paged_ledger.fact_ids == []
+    assert [(s["key"], s["returned"]) for s in paged] == [("code", 0)]
 
 
 @pytest.mark.asyncio
@@ -202,3 +209,24 @@ async def test_a_codebase_fault_leaves_the_bucket_sections_reporting(analytics, 
     assert not any(s.get("failed") for s in sections), sections
     assert not [n for n in nodes if n["type"] == "codebase"]
     assert "Codebase nodes omitted" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_stale_dependency_result_is_marked_stale_on_the_node(analytics):
+    analytics["deps_error"] = set()
+    analytics["deps"] = {**DEPS, "stale": True, "completed_at": "2026-11-01T08:00:00"}
+    nodes, _ = await cb.codebase_nodes_for_graph(None, viewer(admin=True))
+    deps = next(n["metadata"]["dependencies"] for n in nodes if n["metadata"]["source_id"] == ALPHA.id)
+    assert deps["stale"] is True and deps["completed_at"] == "2026-11-01T08:00:00" and deps["total_modules"] == 3
+    analytics["deps"] = {**DEPS, "stale": False, "completed_at": "2026-11-08T08:00:00"}
+    nodes, _ = await cb.codebase_nodes_for_graph(None, viewer(admin=True))
+    assert nodes[0]["metadata"]["dependencies"]["stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_the_code_section_total_is_the_same_on_every_page(analytics):
+    records = [("r1", {"k": "v"}), ("r2", {"k": "v"}), ("r3", {"k": "v"})]
+    kb = ListingKB([], await client_with({"autobot_code": records}))
+    _, _, first, _ = await _graph(kb, offset=0)
+    _, _, later, _ = await _graph(kb, offset=1)
+    assert first[0]["total"] == later[0]["total"] == 5  # 3 records + 2 codebases, whatever the page

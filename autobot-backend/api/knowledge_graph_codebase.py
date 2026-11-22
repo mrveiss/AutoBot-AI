@@ -60,7 +60,7 @@ async def indexed_codebases(user: Dict[str, Any] | None) -> List[CodeSource]:
 
 
 async def dependencies_summary(source_id: str) -> Dict[str, Any] | None:
-    """The latest ``/analytics/dependencies`` task summary for a source; None when none completed."""
+    """The latest dependency-scan summary of a source plus its ``stale``/``completed_at``; None if none completed."""
     try:
         cached = await cached_task_result(DEPENDENCIES_TASK_PREFIX, source_id)
     except HTTPException as exc:  # the latest scan failed: reported as not analysed, reason is in the task status
@@ -69,7 +69,8 @@ async def dependencies_summary(source_id: str) -> Dict[str, Any] | None:
     if cached.get("status") != "success":
         return None
     summary = cached.get("dependency_data", {}).get("summary", {})
-    return {f: summary.get(f) for f in DEPENDENCY_SUMMARY_FIELDS}
+    freshness = {"stale": bool(cached.get("stale")), "completed_at": cached.get("completed_at")}
+    return {**{f: summary.get(f) for f in DEPENDENCY_SUMMARY_FIELDS}, **freshness}  # counts + how old they are
 
 
 async def _summary_or_none(read, source_id: str, what: str) -> Dict[str, Any] | None:
@@ -99,6 +100,22 @@ async def _codebase_node(source: CodeSource) -> Dict[str, Any]:
     }
 
 
+async def _visible_codebases(user: Dict[str, Any] | None, viewer: Viewer) -> List[CodeSource]:
+    """The indexed codebases the caller may see; none unless admin or when the registry is unavailable."""
+    if not viewer.admin_read:
+        return []
+    try:
+        return await indexed_codebases(user)
+    except RegistryUnavailable as e:
+        logger.warning("Codebase nodes skipped: the source registry is unavailable: %s", e)
+        return []
+
+
+async def codebase_count_for_graph(user: Dict[str, Any] | None, viewer: Viewer) -> int:
+    """How many codebase nodes the caller's first page carries: the share of the code section's visible total."""
+    return len(await _visible_codebases(user, viewer))
+
+
 async def codebase_nodes_for_graph(
     user: Dict[str, Any] | None, viewer: Viewer
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -108,12 +125,8 @@ async def codebase_nodes_for_graph(
     ``list_sources`` exactly as the analytics endpoints do. Every codebase shown is recorded in the
     request's ``AdminReadLedger`` (#19860), as the admin bucket reads are.
     """
-    if not viewer.admin_read:
-        return [], []
-    try:
-        sources = await indexed_codebases(user)
-    except RegistryUnavailable as e:
-        logger.warning("Codebase nodes skipped: the source registry is unavailable: %s", e)
+    sources = await _visible_codebases(user, viewer)
+    if not sources:
         return [], []
     nodes = [await _codebase_node(s) for s in sources]
     viewer.ledger.record([{"id": n["id"]} for n in nodes])

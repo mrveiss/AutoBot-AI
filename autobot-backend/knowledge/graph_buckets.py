@@ -322,11 +322,14 @@ async def build_bucket_sections(
     return {"nodes": nodes, "edges": edges, "sections": report, "unmapped": unmapped}
 
 
-def attach_section_nodes(built: Dict[str, Any], key: str, nodes: List[Dict], edges: List[Dict]) -> None:
+def attach_section_nodes(
+    built: Dict[str, Any], key: str, nodes: List[Dict], edges: List[Dict], total_share: int | None = None
+) -> None:
     """Fold extra nodes into section ``key`` of a ``build_bucket_sections`` result (#20945).
 
     The section is the registry's, so its key and label stay defined once; when no collection fed it,
-    it is created here. The report's total and returned grow by the nodes added (they sit on page one).
+    it is created here. The report's returned grows by the nodes added (they sit on page one); its total grows
+    by ``total_share`` (default: the nodes added), so a later page, which adds none, still reports the full total.
     """
     section = next(s for s in BUCKET_SECTIONS if s.key == key)
     node_id = f"section:{key}"
@@ -343,7 +346,7 @@ def attach_section_nodes(built: Dict[str, Any], key: str, nodes: List[Dict], edg
     entry = next(r for r in built["sections"] if r["key"] == key)
     for counted in (meta, entry):  # a failed section has no known total to grow
         if counted["total"] is not None:
-            counted["total"] += len(nodes)
+            counted["total"] += len(nodes) if total_share is None else total_share
     entry["returned"] += len(nodes)
 
 

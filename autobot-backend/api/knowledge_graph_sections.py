@@ -6,7 +6,7 @@
 
 from typing import Any, Dict, List
 
-from api.knowledge_graph_codebase import codebase_nodes_for_graph
+from api.knowledge_graph_codebase import codebase_count_for_graph, codebase_nodes_for_graph
 from api.knowledge_graph_facts import FactsPage
 from api.schemas_knowledge_graph import GraphRequest
 from autobot_shared.logging_manager import get_logger
@@ -47,7 +47,9 @@ async def _built_buckets(kb: Any, body: GraphRequest, viewer: Any) -> Dict[str, 
 
 async def _fold_codebases(built: Dict[str, Any], body: GraphRequest, current_user: Any, viewer: Any) -> None:
     """Put the per-codebase nodes inside the code section the registry defines; no section of their own (#20945)."""
-    if body.offset:
+    if body.offset:  # the nodes sit on page one, but the section's visible total does not change with the page
+        if count := await codebase_count_for_graph(current_user, viewer):
+            attach_section_nodes(built, CODE_SECTION_KEY, [], [], total_share=count)
         return
     nodes, edges = await codebase_nodes_for_graph(current_user, viewer)
     if nodes:
