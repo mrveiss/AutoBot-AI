@@ -522,3 +522,63 @@ class TestRetryMechanismIntegration:
 if __name__ == "__main__":
     # Run tests
     pytest.main([__file__, "-v", "--tb=short"])
+
+
+class TestOnRetryHook:
+    """#17855: the ``on_retry`` callback integrated from the removed ``error_handler.retry``."""
+
+    @staticmethod
+    def _flaky(failures: int):
+        calls = {"n": 0}
+
+        def fn():
+            calls["n"] += 1
+            if calls["n"] <= failures:
+                raise ConnectionError(f"boom {calls['n']}")
+            return "ok"
+
+        return fn
+
+    def test_hook_runs_once_per_retry_with_the_failed_attempt_number(self):
+        seen = []
+        policy = RetryPolicy(
+            max_attempts=4, base_delay=0.0, jitter=False, on_retry=lambda e, n: seen.append((str(e), n))
+        )
+        assert RetryMechanism(policy).execute_sync(self._flaky(2)) == "ok"
+        assert seen == [("boom 1", 1), ("boom 2", 2)]
+
+    def test_hook_does_not_run_after_the_last_attempt_or_for_non_retryable_errors(self):
+        seen = []
+        policy = RetryPolicy(max_attempts=3, base_delay=0.0, jitter=False, on_retry=lambda e, n: seen.append(n))
+        with pytest.raises(RetryExhaustedError):
+            RetryMechanism(policy).execute_sync(self._flaky(99))
+        assert seen == [1, 2]
+
+        seen.clear()
+
+        def bad():
+            raise ValueError("not transient")
+
+        with pytest.raises(ValueError):
+            RetryMechanism(policy).execute_sync(bad)
+        assert seen == []
+
+    def test_a_raising_hook_does_not_change_the_outcome(self):
+        def hook(e, n):
+            raise RuntimeError("observer bug")
+
+        policy = RetryPolicy(max_attempts=3, base_delay=0.0, jitter=False, on_retry=hook)
+        assert RetryMechanism(policy).execute_sync(self._flaky(1)) == "ok"
+
+    @pytest.mark.asyncio
+    async def test_hook_runs_on_the_async_path(self):
+        seen = []
+        policy = RetryPolicy(max_attempts=3, base_delay=0.0, jitter=False, on_retry=lambda e, n: seen.append(n))
+
+        async def fn():
+            if not seen:
+                raise ConnectionError("once")
+            return "ok"
+
+        assert await RetryMechanism(policy).execute_async(fn) == "ok"
+        assert seen == [1]

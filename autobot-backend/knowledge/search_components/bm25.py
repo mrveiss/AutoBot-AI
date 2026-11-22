@@ -10,11 +10,52 @@ Provides IDF with Laplace smoothing and document length normalization.
 """
 
 import math
-from typing import Dict, List
+from typing import Callable, Dict, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+
+def bm25_tf_component(tf: int, doc_length: int, avg_doc_length: float, k1: float, b: float) -> float:
+    """
+    The one BM25 term-frequency saturation + length-normalisation formula (#18183).
+
+    tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl / avgdl)). Every BM25 scorer in
+    the codebase multiplies an IDF by this; the IDF is what differs per corpus.
+    """
+    denom = tf + k1 * (1.0 - b + b * doc_length / avg_doc_length)
+    return (tf * (k1 + 1.0)) / denom
+
+
+def bm25_score_terms(
+    query_terms: Sequence[str],
+    document_terms: Sequence[str],
+    avg_doc_len: float,
+    k1: float,
+    b: float,
+    idf: Callable[[str, int], float],
+) -> float:
+    """
+    Score a tokenised document against query terms with a caller-supplied IDF.
+
+    ``idf(term, tf)`` receives the term and its in-document frequency, so a
+    corpus with no document-frequency table (the memory graph) and one with
+    (the knowledge base) share this loop and the shared tf component.
+    Distinct query terms are scored once; absent terms contribute nothing.
+    """
+    if not query_terms or not document_terms:
+        return 0.0
+    term_freqs: Dict[str, int] = {}
+    for term in document_terms:
+        term_freqs[term] = term_freqs.get(term, 0) + 1
+    avg = max(avg_doc_len, 1)
+    score = 0.0
+    for term in set(query_terms):
+        tf = term_freqs.get(term, 0)
+        if tf:
+            score += idf(term, tf) * bm25_tf_component(tf, len(document_terms), avg, k1, b)
+    return score
 
 
 class BM25Scorer:
@@ -72,8 +113,7 @@ class BM25Scorer:
         if tf == 0:
             return 0.0
         dl = max(doc_length, 1)
-        denom = tf + self.k1 * (1.0 - self.b + self.b * dl / self.avg_doc_length)
-        return (tf * (self.k1 + 1.0)) / denom
+        return bm25_tf_component(tf, dl, self.avg_doc_length, self.k1, self.b)
 
     def score(self, query_terms: List[str], doc_text: str, doc_length: int) -> float:
         """

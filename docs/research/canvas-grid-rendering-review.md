@@ -190,7 +190,19 @@ places our surfaces are ahead of the general pattern, not behind it.
 | #13961 literal colours bypassing theme tokens | closed |
 | #14103 order-dependent RTL pan assertion | closed |
 | #14766 edge targets resolved by an O(N) scan | closed |
-| #14767 PNG export is 1x, leaks its blob URL, hardcodes white | open |
-| #14769 axis ticks generated for the whole range | open |
-| #14770 JS-driven motion ignores `prefers-reduced-motion` | open |
-| #14771 no safe-area inset handling | open |
+| #14767 PNG export is 1x, leaks its blob URL, hardcodes white | closed |
+| #14769 axis ticks generated for the whole range | closed |
+| #14770 JS-driven motion ignores `prefers-reduced-motion` | closed |
+| #14771 no safe-area inset handling | closed |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #14765 — fix(workflow/frontend): canvas grid background does not pan or zoom with the graph (closed)
+- #14766 — perf(workflow/frontend): connections computed resolves each edge target with an O(N) scan (closed)
+- #14767 — fix(llc/frontend): Gantt PNG export is 1x, leaks its blob URL, and hardcodes a white background (closed)
+- #14768 — feat(workflow/frontend): canvas draws a 20px grid but nothing snaps to it (closed)
+- #14769 — perf(llc/frontend): Gantt axis ticks are generated for the whole range with no viewport culling (closed)
+- #14770 — a11y(frontend): JS-driven motion ignores prefers-reduced-motion (graph layouts, router scroll) (closed)
+- #14771 — fix(frontend): no safe-area inset handling — bottom-anchored chrome sits under the home indicator (closed)

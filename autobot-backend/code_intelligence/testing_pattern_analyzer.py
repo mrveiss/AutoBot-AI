@@ -27,10 +27,12 @@ import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
+from autobot_shared.testfile_names import is_test_filename
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files
 
 logger = get_logger(__name__)
 
@@ -55,14 +57,10 @@ _EMPTY_STMT_TYPES = (ast.Pass, ast.Expr)
 # =============================================================================
 
 
-class TestPatternSeverity(Enum):
-    """Severity levels for test pattern issues."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Breakdowns that used to iterate this enum iterate `Severity.finding_ladder()` so the
+#: wire keeps its five keys.
+TestPatternSeverity = Severity
 
 
 class TestAntiPatternType(Enum):
@@ -330,48 +328,36 @@ class TestPatternAnalyzer:
         Args:
             exclude_dirs: Directories to exclude from analysis
             exclude_patterns: File patterns to exclude
-            test_file_patterns: Patterns to identify test files
+            test_file_patterns: Name patterns to identify test files; when omitted the
+                canonical ``is_test_filename`` rule applies
         """
-        self.exclude_dirs = exclude_dirs or [
-            "__pycache__",
-            ".git",
-            ".venv",
-            "venv",
-            "node_modules",
-            "dist",
-            "build",
-            ".pytest_cache",
-            ".mypy_cache",
-        ]
+        self.exclude_dirs = exclude_dirs or sorted(ANALYSIS_EXCLUDE_DIRS)
         self.exclude_patterns = exclude_patterns or [
             r".*\.pyc$",
             r".*\.pyo$",
             r".*\.egg-info.*",
         ]
-        self.test_file_patterns = test_file_patterns or [
-            r"test_.*\.py$",
-            r".*_test\.py$",
-            r"tests\.py$",
-        ]
+        self.test_file_patterns = test_file_patterns
 
         # Compile patterns
         self._flaky_patterns = [re.compile(p) for p in self.FLAKY_PATTERNS]
         self._external_patterns = [re.compile(p) for p in self.EXTERNAL_DEPENDENCY_PATTERNS]
         self._database_patterns = [re.compile(p) for p in self.DATABASE_PATTERNS]
         self._exclude_patterns = [re.compile(p) for p in self.exclude_patterns]
-        self._test_patterns = [re.compile(p) for p in self.test_file_patterns]
+        self._test_patterns = [re.compile(p) for p in test_file_patterns or []]
 
     def is_test_file(self, file_path: str) -> bool:
         """Check if a file is a test file based on naming patterns."""
         filename = os.path.basename(file_path)
+        if not self._test_patterns:
+            return is_test_filename(filename, include_js=False, include_conftest=False)
         return any(p.match(filename) for p in self._test_patterns)
 
     def _should_exclude(self, path: str) -> bool:
-        """Check if a path should be excluded from analysis."""
-        path_parts = Path(path).parts
-        for exclude_dir in self.exclude_dirs:
-            if exclude_dir in path_parts:
-                return True
+        """Check a path against the file-name exclusion patterns.
+
+        Directory exclusion is done once, root-relative, by ``discover_files`` (#21004).
+        """
         for pattern in self._exclude_patterns:
             if pattern.match(path):
                 return True
@@ -873,21 +859,15 @@ class TestPatternAnalyzer:
         test_files: List[str] = []
         source_files: List[str] = []
 
-        for root, dirs, files in os.walk(directory):
-            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
+        for path in discover_files(directory, ("*.py",), self.exclude_dirs):
+            file_path = str(path)
+            if self._should_exclude(file_path):
+                continue
 
-            for file in files:
-                if not file.endswith(".py"):
-                    continue
-
-                file_path = os.path.join(root, file)
-                if self._should_exclude(file_path):
-                    continue
-
-                if self.is_test_file(file_path):
-                    test_files.append(file_path)
-                else:
-                    source_files.append(file_path)
+            if self.is_test_file(file_path):
+                test_files.append(file_path)
+            else:
+                source_files.append(file_path)
 
         return test_files, source_files
 
@@ -1139,7 +1119,7 @@ def analyze_tests(path: str) -> TestAnalysisReport:
             coverage_gaps=report.coverage_gaps,
             quality_metrics=report.metrics,
             severity_distribution={
-                s.value: sum(1 for p in report.anti_patterns if p.severity == s) for s in TestPatternSeverity
+                s.value: sum(1 for p in report.anti_patterns if p.severity == s) for s in Severity.finding_ladder()
             },
             suggestions=report.suggestions,
         )
@@ -1159,4 +1139,4 @@ def get_test_quality_metrics() -> List[str]:
 
 def get_test_severity_levels() -> List[str]:
     """Get list of all severity levels."""
-    return [s.value for s in TestPatternSeverity]
+    return [s.value for s in Severity.finding_ladder()]

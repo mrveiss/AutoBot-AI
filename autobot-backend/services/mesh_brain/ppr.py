@@ -4,24 +4,11 @@
 # Author: mrveiss
 """Personalized PageRank over the mesh graph for importance-weighted expansion (#1994, #2057)."""
 
-from typing import Protocol
-
 from autobot_shared.logging_manager import get_logger
+from constants.rag_graph_constants import RAG_PPR_MAX_HOPS
+from services.mesh_brain.neighbor_store import NeighborStore
 
 logger = get_logger(__name__)
-
-
-# =============================================================================
-# Protocol
-# =============================================================================
-
-
-class NeighborStore(Protocol):
-    """Protocol for mesh database neighbor lookups used by PPR."""
-
-    async def get_neighbors(self, node_id: str, min_weight: float) -> list[dict]:
-        """Return list of {"to_node": str, "weight": float} for node_id."""
-        ...
 
 
 # =============================================================================
@@ -76,9 +63,10 @@ class PersonalizedPageRank:
         max_iterations: int = 20,
         min_weight: float = 0.3,
         top_k: int = 20,
+        max_hops: int = RAG_PPR_MAX_HOPS,
     ) -> list[tuple[str, float]]:
         """Run PPR from seed nodes. Returns [(node_id, ppr_score), ...] sorted desc."""
-        subgraph = await self._load_subgraph(seed_node_ids, max_hops=3, min_weight=min_weight)
+        subgraph = await self._load_subgraph(seed_node_ids, max_hops=max_hops, min_weight=min_weight)
         if not subgraph.nodes:
             return self._uniform_seed_scores(seed_node_ids)
         scores = self._init_scores(seed_node_ids, subgraph.nodes)
@@ -165,9 +153,8 @@ class PersonalizedPageRank:
         new_edges: list[tuple[str, str, float]] = []
         for node_id in frontier:
             neighbors = await self.db.get_neighbors(node_id, min_weight=min_weight)
-            for neighbor in neighbors:
-                nid = neighbor["to_node"]
-                new_edges.append((node_id, nid, neighbor["weight"]))
+            for nid, weight in neighbors:
+                new_edges.append((node_id, nid, weight))
                 if nid not in visited:
                     visited.add(nid)
                     next_frontier.append(nid)

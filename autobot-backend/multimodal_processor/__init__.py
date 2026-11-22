@@ -19,9 +19,9 @@ Usage:
     from multimodal_processor import (
         MultiModalProcessor,
         ModalityType,
-        ProcessingIntent,
+        MultimodalProcessingIntent,
         MultiModalInput,
-        ProcessingResult,
+        MultimodalResult,
         processor,  # Canonical singleton instance
     )
 
@@ -42,7 +42,7 @@ from typing import Any
 from .base import BaseModalProcessor
 
 # Data models
-from .models import MultiModalInput, ProcessingResult
+from .models import MultiModalInput, MultimodalResult
 
 # Main processor (Issue #10666 — prefix strip)
 from .processor import MultiModalProcessor
@@ -70,8 +70,8 @@ from .types import (
     VISUAL_MODALITY_TYPES,
     ConfidenceLevel,
     ModalityType,
+    MultimodalProcessingIntent,
     PersistenceOutcome,
-    ProcessingIntent,
 )
 
 # Backward compatibility: module-level constant alias (Issue #380)
@@ -122,7 +122,7 @@ ModalInput = MultiModalInput
 __all__ = [
     # Types and enums
     "ModalityType",
-    "ProcessingIntent",
+    "MultimodalProcessingIntent",
     "ConfidenceLevel",
     "PersistenceOutcome",
     # Command word constants
@@ -139,7 +139,7 @@ __all__ = [
     "_EMBEDDING_FIELDS",  # Backward compatibility
     # Models
     "MultiModalInput",
-    "ProcessingResult",
+    "MultimodalResult",
     # Base class
     "BaseModalProcessor",
     # Processors

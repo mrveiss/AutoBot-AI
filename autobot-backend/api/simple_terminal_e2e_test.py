@@ -9,23 +9,23 @@ import asyncio
 import json
 import time
 
-import pytest
 import websockets
 
-from autobot_shared.ssot_config import config as ssot_config
-from tests.test_helpers import get_test_backend_url
+from autobot_shared import node_proxy
+from tests.test_helpers import live_backend_url
 
 
 def _internal_api_key_headers() -> dict[str, str]:
     """Auth headers for this e2e script's own WebSocket handshake (#14989).
 
     api.terminal.terminal_websocket now authenticates every handshake
-    (#14960) via the canonical SSOT-configured internal-service key -- the
+    (#14960) via the internal-service key from its one reader,
+    node_proxy.internal_api_key() (#17856 row 13a) -- the
     same credential auth_middleware.verify_internal_api_key checks -- rather
     than a bare value or a parallel path. Empty when unconfigured, matching
     verify_internal_api_key's own "never matches" behaviour for a missing key.
     """
-    key = ssot_config.misc.internal_api_key
+    key = node_proxy.internal_api_key()
     return {"X-Internal-API-Key": key} if key else {}
 
 
@@ -43,7 +43,7 @@ async def _create_session_via_rest() -> str | None:
     try:
         async with aiohttp.ClientSession(headers=headers) as session:
             async with session.post(
-                get_test_backend_url() + "/api/terminal/sessions",
+                live_backend_url() + "/api/terminal/sessions",
                 json={"user_id": "e2e-test", "security_level": "standard"},
             ) as response:
                 if response.status != 200:
@@ -63,8 +63,7 @@ async def test_simple_terminal():
     # AUTOBOT_TEST_BACKEND_URL is set there). Skip loudly rather than either
     # silently passing (the pre-existing behaviour this file's other checks
     # still have) or failing every run with no backend configured (#14920).
-    if not get_test_backend_url():
-        pytest.skip("AUTOBOT_TEST_BACKEND_URL not set -- no live backend to test against")
+    live_backend_url()  # skips unless the run opted into live services (#19479)
 
     print("🧪 Testing Simple Terminal WebSocket")  # noqa: print
     print("=" * 40)  # noqa: print
@@ -80,8 +79,7 @@ async def test_simple_terminal():
     print(f"📝 Session ID: {session_id}")  # noqa: print
 
     uri = (
-        get_test_backend_url().replace("https://", "wss://").replace("http://", "ws://")
-        + f"/api/terminal/ws/{session_id}"
+        live_backend_url().replace("https://", "wss://").replace("http://", "ws://") + f"/api/terminal/ws/{session_id}"
     )
     print(f"🔗 Connecting to: {uri}")  # noqa: print
 
@@ -186,7 +184,7 @@ async def test_sessions_api():
     try:
         timeout = aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(get_test_backend_url() + "/api/terminal/sessions") as response:
+            async with session.get(live_backend_url() + "/api/terminal/sessions") as response:
                 if response.status == 200:
                     sessions = await response.json()
                     print(f"✅ Simple sessions API working: {json.dumps(sessions, indent=2)}")  # noqa: print
@@ -228,7 +226,7 @@ async def main():
     if terminal_success and api_success:
         print("\n🎉 SUCCESS: Simple terminal is a working replacement!")  # noqa: print
         print("User can now use the simple terminal endpoint:")  # noqa: print
-        _base = get_test_backend_url()
+        _base = live_backend_url()
         print(  # noqa: print
             f"  WebSocket: {_base.replace('https://', 'wss://').replace('http://', 'ws://')}/api/terminal/ws/{{session_id}}"
         )  # noqa: print

@@ -5,6 +5,9 @@ import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import en from '@/locales/en.json'
+// Imported at collection (vi.mock is hoisted above it), not inside the first test: the cold load
+// of the view and the kit took ~7 s of that test's 10 s budget and timed out under load (#18833).
+import TerminalTool from './TerminalTool.vue'
 
 /**
  * The terminal's host selector is the SLM node registry's answer (#15227).
@@ -54,7 +57,6 @@ vi.mock('@autobot/terminal', () => ({
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 async function mountTool() {
-  const TerminalTool = (await import('./TerminalTool.vue')).default
   const wrapper = mount(TerminalTool, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper

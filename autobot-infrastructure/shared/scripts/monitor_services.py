@@ -27,10 +27,16 @@ from pathlib import Path
 from threading import Thread
 from typing import Any, Dict, List, Optional
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# A deployment script must not import backend internals (autobot-backend/utils is not on
+# its path): the scripts' own registry is a sibling, and autobot_shared hangs off the repo root.
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPTS_DIR.parents[2]
+for _p in (_SCRIPTS_DIR, _REPO_ROOT):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
-from utils.service_registry import ServiceStatus, get_service_registry
+from autobot_shared.status_enums import HealthStatus  # noqa: E402
+from deployment_registry import ServiceRegistry  # noqa: E402
 
 # Optional web dependencies
 try:
@@ -51,7 +57,7 @@ class ServiceMonitor:
 
     def __init__(self, config_file: Optional[str] = None):
         """Initialize service monitor with registry and monitoring data structures."""
-        self.service_registry = get_service_registry(config_file)
+        self.service_registry = ServiceRegistry(config_file)
         self.monitoring_data: Dict[str, List[Dict[str, Any]]] = {}
         self.is_monitoring = False
         self.start_time = datetime.now()
@@ -84,7 +90,7 @@ class ServiceMonitor:
 
             # Calculate overall health statistics
             total_services = len(health_results)
-            healthy_services = sum(1 for h in health_results.values() if h.status == ServiceStatus.HEALTHY)
+            healthy_services = sum(1 for h in health_results.values() if h.status == HealthStatus.HEALTHY)
 
             overall_status = {
                 "timestamp": timestamp.isoformat(),

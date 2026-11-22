@@ -13,7 +13,7 @@ from orchestration.dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
     DAGNode,
-    NodeType,
+    DagNodeType,
     WorkflowDAG,
     _evaluate_condition,
     _evaluate_switch,
@@ -92,7 +92,7 @@ class TestWorkflowDAG:
     def test_condition_node_type(self):
         nodes = [_make_condition_node("cond", "True")]
         dag = WorkflowDAG(nodes, [])
-        assert dag.nodes["cond"].node_type == NodeType.CONDITION
+        assert dag.nodes["cond"].node_type == DagNodeType.CONDITION
 
     def test_has_condition_nodes_true(self):
         nodes = [_make_condition_node("c", "True")] + _make_step_nodes("a")
@@ -137,33 +137,33 @@ class TestEvaluateCondition:
         return ctx
 
     def test_literal_true(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "True"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "True"})
         assert _evaluate_condition(node, self._ctx()) is True
 
     def test_literal_false(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "False"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "False"})
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_result_lookup(self):
         ctx = self._ctx({"step1": {"exit_code": 0}})
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
         assert _evaluate_condition(node, ctx) is True
 
     def test_result_lookup_false_branch(self):
         ctx = self._ctx({"step1": {"exit_code": 1}})
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
         assert _evaluate_condition(node, ctx) is False
 
     def test_empty_expression_defaults_false(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": ""})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": ""})
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_syntax_error_defaults_false(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "((("})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "((("})
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_import_blocked(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "__import__('os').getcwd()"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "__import__('os').getcwd()"})
         # Should not raise; eval with no builtins will raise NameError → False
         assert _evaluate_condition(node, self._ctx()) is False
 
@@ -420,16 +420,16 @@ class TestEvaluateSwitch:
         return ctx
 
     def test_resolves_string_case(self):
-        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": "results['lang']['code']"})
+        node = DAGNode("sw", DagNodeType.SWITCH, {"switch_on": "results['lang']['code']"})
         ctx = self._ctx({"lang": {"code": "es"}})
         assert _evaluate_switch(node, ctx) == "es"
 
     def test_missing_switch_on_routes_default(self):
-        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": ""})
+        node = DAGNode("sw", DagNodeType.SWITCH, {"switch_on": ""})
         assert _evaluate_switch(node, self._ctx({})) == "default"
 
     def test_eval_error_routes_default(self):
-        node = DAGNode("sw", NodeType.SWITCH, {"switch_on": "results['missing']['x']"})
+        node = DAGNode("sw", DagNodeType.SWITCH, {"switch_on": "results['missing']['x']"})
         assert _evaluate_switch(node, self._ctx({})) == "default"
 
 
@@ -490,15 +490,15 @@ class TestConditionSafeEvaluation:
 
     def test_subclasses_escape_blocked(self):
         """__class__/__bases__ sandbox escape must NOT evaluate (returns False)."""
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results.__class__.__bases__"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "results.__class__.__bases__"})
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_attribute_access_blocked(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results.keys"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "results.keys"})
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_subscript_comparison_true(self):
         ctx = self._ctx()
         ctx.step_results = {"step1": {"exit_code": 0}}
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        node = DAGNode("c", DagNodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
         assert _evaluate_condition(node, ctx) is True

@@ -3,7 +3,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests for MCP tool wiring in OllamaProvider.
+Unit tests for MCP tool wiring in OllamaRequestExecutor.
 GH#7911
 """
 
@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from autobot_shared.http_client import get_http_client
 from llm_shared.models import LLMRequest, LLMSettings, ToolCall, ToolDefinition
-from llm_shared.providers.ollama import OllamaProvider, _model_supports_tools
+from llm_shared.providers.ollama import OllamaRequestExecutor, _model_supports_tools
 
 _TOOL = ToolDefinition(
     name="get_weather",
@@ -22,11 +22,11 @@ _TOOL = ToolDefinition(
 )
 
 
-def _make_provider() -> OllamaProvider:
+def _make_provider() -> OllamaRequestExecutor:
     settings = LLMSettings()
     streaming_manager = MagicMock()
     streaming_manager.should_use_streaming.return_value = False
-    return OllamaProvider(settings=settings, streaming_manager=streaming_manager)
+    return OllamaRequestExecutor(settings=settings, streaming_manager=streaming_manager)
 
 
 def _make_request(model: str = "llama3.1", tools=None, tool_choice=None, structured_output=False) -> LLMRequest:
@@ -282,7 +282,7 @@ class TestPrepareCharRequestToolAwareness:
 
 
 class TestSessionTracking:
-    """OllamaProvider._get_session() participates in HTTPClientManager
+    """OllamaRequestExecutor._get_session() participates in HTTPClientManager
     active-request tracking so a concurrent pool resize cannot close the shared
     session mid-stream (#12119). Uses the real singleton (only ``get_session``
     patched) so the true ``tracked_session()`` increment/decrement path runs.
@@ -301,3 +301,18 @@ class TestSessionTracking:
                 assert manager._active_requests == baseline + 1
 
         assert manager._active_requests == baseline, "counter must return to baseline after the CM exits"
+
+
+class TestRequestNumCtx:
+    """A request may carry its own context size (the verifier reusing the chat model, #21844)."""
+
+    def test_metadata_num_ctx_overrides_the_settings_default(self):
+        provider = _make_provider()
+        req = _make_request()
+        req.metadata["num_ctx"] = 8192
+        assert provider.build_request_data(req, "llama3.1", use_streaming=False)["options"]["num_ctx"] == 8192
+
+    def test_without_metadata_the_settings_num_ctx_is_kept(self):
+        provider = _make_provider()
+        data = provider.build_request_data(_make_request(), "llama3.1", use_streaming=False)
+        assert data["options"]["num_ctx"] == provider.settings.num_ctx

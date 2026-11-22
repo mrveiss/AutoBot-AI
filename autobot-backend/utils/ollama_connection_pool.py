@@ -32,6 +32,7 @@ from typing import Any, Callable, Dict
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
@@ -268,7 +269,7 @@ class OllamaConnectionPool:
             bool: True if response was successful (HTTP 200)
         """
         async with self.acquire_connection() as session:
-            health_url = f"{ollama_url}/api/tags"
+            health_url = ollama_tags_url(ollama_url)
             async with session.get(health_url) as response:
                 return response.status == 200
 

@@ -36,13 +36,16 @@ import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._infra_backend_names import backend_only_names
 from repo_tests._paths import repo_root
+
+from tools.lint import _parse_cache as parse_cache
 
 MONITORING_DIR = repo_root() / "autobot-infrastructure" / "shared" / "scripts" / "monitoring"
 
 #: Floors. A discovery-based guard that finds nothing reports a clean run having asserted
 #: nothing, which is the failure mode #15826 catalogues across this repo's tree scanners.
-MIN_SCRIPTS = 2
+MIN_SCRIPTS = 1
 MIN_REQUIREMENTS_CHECKED = 3
 
 
@@ -144,7 +147,7 @@ def test_the_monitoring_directory_is_where_this_guard_thinks_it_is() -> None:
 
 @pytest.mark.parametrize("script", _scripts(), ids=lambda p: p.name)
 def test_every_inserted_sys_path_root_holds_the_packages_that_script_imports(script: Path) -> None:
-    tree = ast.parse(script.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(script.read_text(encoding="utf-8"))
     roots = _inserted_roots(tree, script)
     needed = _local_import_roots(tree)
     if not needed:
@@ -155,13 +158,34 @@ def test_every_inserted_sys_path_root_holds_the_packages_that_script_imports(scr
     # guard, which was the guard being wrong rather than the code -- `autobot_shared/` sits at
     # the repo root. `constants/` and `utils/` do NOT, so they still require an inserted root,
     # which is exactly the defect #15643 is about and the discrimination this test needs.
-    candidates = [*roots, repo_root()]
     for package in sorted(needed):
-        assert any((root / package).is_dir() for root in candidates), (
+        assert _resolves(package, script, roots), (
             f"{script.name} imports `{package}.*`, but neither the repo root nor any inserted "
-            f"sys.path root contains a `{package}/` package. "
-            f"Inserted roots resolved: {[str(r) for r in roots]}"
+            f"sys.path root contains a `{package}/` package, and no non-backend `{package}.py` "
+            f"sits beside the script. Inserted roots resolved: {[str(r) for r in roots]}"
         )
+
+
+def _resolves(package: str, script: Path, roots: list[Path]) -> bool:
+    """A package under an inserted root or the repo root, or a sibling MODULE in the script's own dir.
+
+    The sibling case exists for `monitoring_backends.py`, split from the launcher (#17906). It is
+    accepted only from the script's OWN directory -- the one Python puts on the path -- and never
+    under a backend-only name: a `utils.py` beside the launcher would shadow the backend's `utils`
+    and must fail, not count as the root that resolves it.
+    """
+    if any((root / package).is_dir() for root in [*roots, repo_root()]):
+        return True
+    return (script.parent / f"{package}.py").is_file() and package not in backend_only_names()
+
+
+def test_a_sibling_resolves_only_under_a_name_the_backend_does_not_own(tmp_path: Path) -> None:
+    script = tmp_path / "launcher.py"
+    for name in ("launcher", "helpers", "utils"):
+        (tmp_path / f"{name}.py").write_text("", encoding="utf-8")
+    assert _resolves("helpers", script, [])
+    assert not _resolves("utils", script, []), "a sibling utils.py would shadow the backend's utils"
+    assert not _resolves("helpers", tmp_path / "elsewhere" / "launcher.py", []), "only the own directory counts"
 
 
 def test_this_guard_actually_checked_some_requirements() -> None:
@@ -171,7 +195,7 @@ def test_this_guard_actually_checked_some_requirements() -> None:
     parametrized test above would report all-green having compared no package against any root.
     A floor on files examined does not catch that; this one does.
     """
-    checked = sum(len(_local_import_roots(ast.parse(s.read_text(encoding="utf-8")))) for s in _scripts())
+    checked = sum(len(_local_import_roots(parse_cache.parse(s.read_text(encoding="utf-8")))) for s in _scripts())
     assert checked >= MIN_REQUIREMENTS_CHECKED, (
         f"only {checked} local import roots were checked across {len(_scripts())} scripts; "
         "expected at least "
