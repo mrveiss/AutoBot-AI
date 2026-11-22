@@ -211,6 +211,18 @@ def test_enforce_reach_is_silent_outside_full_repo_mode() -> None:
     assert enforce_reach(PY_FLOOR, PY_FLOOR, hook="probe", full_repo=True) == 0
 
 
+@pytest.mark.parametrize(("unit", "expected"), [(None, "0 file(s); floor"), ("play(s)", "0 play(s); floor")])
+def test_the_floor_refusal_names_what_was_counted(caplog: pytest.LogCaptureFixture, unit, expected: str) -> None:
+    """A sweep that counts reads or plays must not report them as files (#18094 review)."""
+    sys.path.insert(0, str(_REPO_ROOT / "tools" / "lint"))
+    from _scan_helpers import enforce_reach  # noqa: PLC0415
+
+    kwargs = {} if unit is None else {"unit": unit}
+    with caplog.at_level("ERROR"):
+        assert enforce_reach(0, 1, hook="probe", full_repo=True, **kwargs) == 1
+    assert expected in caplog.text, caplog.text
+
+
 def test_the_py_floor_leaves_headroom_over_the_real_tree() -> None:
     """A floor set at the current count fails on the first subtree that moves;
     one set near zero catches nothing. Both directions are pinned."""

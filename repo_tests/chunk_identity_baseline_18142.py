@@ -9,9 +9,6 @@ is missing from here, holds more than listed, or holds fewer (lower the number -
 """
 
 BASELINE: dict[str, int] = {
-    # `result.get("chunk_id") or result.get("id", "")`: a fifth alias (`id`) whose producers are unaudited,
-    # so folding it into the resolver's order would change which staleness row is read. Ruling: #19151.
-    "autobot-backend/knowledge/search_components/reranking.py": 2,
     # Reads a request payload / a stored fact record's own `chunk_id` field, not a search hit's identity.
     "autobot-backend/agents/knowledge_extraction_agent.py": 2,
     "autobot-backend/models/atomic_fact.py": 1,

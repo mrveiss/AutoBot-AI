@@ -303,6 +303,7 @@ class DistributedAgentCoordinator:
         chat_history: List[Dict[str, Any]] | None = None,
         preferred_agents: List[str] | None = None,
         authority: "Authority | None" = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Enhanced request processing supporting both legacy and distributed agents.
@@ -317,6 +318,9 @@ class DistributedAgentCoordinator:
             authority: The originator's authority (#16957), e.g. an A2A peer's
                 capabilities. None is an internal caller. An agent the originator
                 may not reach is refused before it runs.
+            user_id: The verified triggering user (#19591), from the caller's authenticated
+                identity, never from *context*. The KB librarian reads as this user; None
+                (an A2A peer, an internal caller) means it returns no facts.
 
         Returns:
             Dict containing response and routing information
@@ -333,7 +337,9 @@ class DistributedAgentCoordinator:
 
             # Fallback to legacy agent processing
             if LEGACY_AGENTS_AVAILABLE:
-                return await self._executor.process_with_legacy_agents(request, context, chat_history, authority)
+                return await self._executor.process_with_legacy_agents(
+                    request, context, chat_history, authority, user_id=user_id
+                )
             return self._build_no_agents_response()
 
         except Exception as e:

@@ -302,3 +302,13 @@ describe('endpoints stay relative to the API base (regression guard)', () => {
     )
   })
 })
+
+describe('a failed read is distinct from an empty one (#19887)', () => {
+  it('fetchServiceDefinitions resolves null on failure and [] for a genuinely empty list', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([]))
+    expect(await useOrchestrationManagement().fetchServiceDefinitions()).toEqual([])
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'down' }, 500))
+    expect(await useOrchestrationManagement().fetchServiceDefinitions()).toBeNull()
+  })
+})

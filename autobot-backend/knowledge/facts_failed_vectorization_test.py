@@ -127,3 +127,18 @@ async def test_write_buffer_rejection_records_failure(caplog):
     assert kb.redis_client.hset.call_args.kwargs["mapping"]["vectorization_status"] == "failed"
     # No success marker written.
     kb.redis_client.srem.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_buffer_stopped_by_a_rebind_sends_the_vector_to_its_own_store():
+    """#19379: the vector was embedded with the snapshot's model, so it goes to that snapshot's store."""
+    kb = _KB()
+    kb._write_buffer.stopped = True
+    kb._write_buffer.write = AsyncMock(return_value=False)
+
+    with patch.object(facts_mod, "_generate_embedding_with_npu_fallback", AsyncMock(return_value=[0.1, 0.2, 0.3])):
+        await kb._vectorize_fact_in_chromadb("fact-7", "some content", {})
+
+    kb._write_buffer.write.assert_not_called()
+    kb.vector_store.add.assert_called_once()
+    kb.redis_client.sadd.assert_not_called()  # not recorded as a failure

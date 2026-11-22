@@ -19,8 +19,11 @@ this step read jscpd's report through one parser, ``scripts/duplication_gate.py`
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -64,20 +67,36 @@ def _run_explain(main_outcome: str, slm_outcome: str, **extra_env: str) -> str:
     bash = shutil.which("bash")
     if bash is None:  # pragma: no cover - every CI image has bash
         pytest.skip("bash unavailable")
-    result = subprocess.run(
-        [bash, "-c", _explain_step()["run"]],
-        capture_output=True,
-        text=True,
-        cwd=repo_root(),
-        env={
-            "PATH": "/usr/bin:/bin",
-            "MAIN_OUTCOME": main_outcome,
-            "SLM_OUTCOME": slm_outcome,
-            "MAX_DUP_LINES": "11723",
-            "SLM_MAX_DUP_LINES": "4729",
-            **extra_env,
-        },
-    )
+    with tempfile.TemporaryDirectory() as scratch:
+        result = subprocess.run(
+            [bash, "-c", _explain_step()["run"]],
+            capture_output=True,
+            text=True,
+            cwd=repo_root(),
+            env={
+                "PATH": "/usr/bin:/bin",
+                "MAIN_OUTCOME": main_outcome,
+                "SLM_OUTCOME": slm_outcome,
+                "MAX_DUP_LINES": "11723",
+                "SLM_MAX_DUP_LINES": "4729",
+                "TOOLING_OUTCOME": "success",
+                "CROSS_GUI_OUTCOME": "success",
+                "CROSS_BACKEND_OUTCOME": "success",
+                "TOOLING_MAX_DUP_LINES": "230",
+                "CROSS_GUI_MAX_DUP_LINES": "9616",
+                "CROSS_BACKEND_MAX_DUP_LINES": "4107",
+                # The step's default log paths are /tmp files a local scan leaves behind; a
+                # leftover one turned "no captured log" into a measured verdict (#17377). Each
+                # run gets its own empty directory; a test that wants a log passes it in
+                # ``extra_env``, which wins.
+                "MAIN_LOG": str(Path(scratch) / "main-dup.log"),
+                "SLM_LOG": str(Path(scratch) / "slm-gate.log"),
+                "TOOLING_LOG": str(Path(scratch) / "tooling-gate.log"),
+                "CROSS_GUI_LOG": str(Path(scratch) / "cross-gui-gate.log"),
+                "CROSS_BACKEND_LOG": str(Path(scratch) / "cross-backend-gate.log"),
+                **extra_env,
+            },
+        )
     return result.stdout + result.stderr
 
 
@@ -136,6 +155,44 @@ def test_the_failing_scope_names_its_own_env_var(main_outcome, slm_outcome, name
     assert unnamed not in output, f"named {unnamed}, the passing scope's knob"
 
 
+@pytest.mark.parametrize(
+    ("outcome_var", "label", "scope", "pin"),
+    [
+        (
+            "TOOLING_OUTCOME",
+            "The tooling duplication scope",
+            "scripts + tools + pipeline-scripts",
+            "TOOLING_MAX_DUP_LINES",
+        ),
+        (
+            "CROSS_GUI_OUTCOME",
+            "The cross-GUI duplication scope",
+            "autobot-frontend/src + autobot-slm-frontend/src + autobot-plugins + libs/autobot-ui",
+            "CROSS_GUI_MAX_DUP_LINES",
+        ),
+        (
+            "CROSS_BACKEND_OUTCOME",
+            "The cross-backend duplication scope",
+            "autobot-backend + autobot-slm-backend + autobot_shared + plugins",
+            "CROSS_BACKEND_MAX_DUP_LINES",
+        ),
+    ],
+)
+def test_each_18559_scope_names_itself_and_its_own_env_var(outcome_var, label, scope, pin) -> None:
+    """#18559: the three added scopes are attributed like the first two.
+
+    Each fails alone; its label, tree list and ``(env NAME)`` token must appear,
+    and the two original scopes must not be blamed.
+    """
+    output = _run_explain("success", "success", **{outcome_var: "failure"})
+
+    assert label in output
+    assert scope in output
+    assert f"(env {pin})" in output
+    assert "outside every duplication gate" not in output
+    assert MAIN_SCOPE not in output and SLM_SCOPE not in output
+
+
 def test_both_are_named_when_both_fail() -> None:
     """Neither may be dropped when both exceeded."""
     output = _run_explain(main_outcome="failure", slm_outcome="failure")
@@ -151,7 +208,7 @@ def test_a_failure_outside_both_gates_says_so_rather_than_blaming_duplication() 
     is elsewhere.
     """
     output = _run_explain(main_outcome="success", slm_outcome="success")
-    assert "outside both duplication gates" in output
+    assert "outside every duplication gate" in output
     assert MAIN_SCOPE not in output
     assert SLM_SCOPE not in output
 
@@ -166,6 +223,32 @@ def test_a_missing_log_reports_no_figure_rather_than_a_guessed_one() -> None:
     output = _run_explain(main_outcome="failure", slm_outcome="success")
     assert "no captured log" in output or "could not read jscpd totals" in output
     assert "OVER BY" not in output, "reported an overage with no log to measure from"
+
+
+@pytest.mark.xdist_group("tmp_main_dup_log")
+def test_a_stray_tmp_log_cannot_change_the_verdict() -> None:
+    """#17377: a leftover ``/tmp/main-dup.log`` from a local scan must not be read.
+
+    The stray file holds a real jscpd row over the pin; were the step to read it, the
+    output would carry a measured overage instead of "no captured log".
+
+    The path is shared with the CI duplication job and concurrent test processes, so it
+    is created with ``O_EXCL`` (never overwritten; skipped when present) and only the
+    file this test created is removed.
+    """
+    stray = Path("/tmp/main-dup.log")
+    try:
+        fd = os.open(stray, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        pytest.skip(f"{stray} already exists (a live scan or another test owns it); never overwritten")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(_REAL_JSCPD_TOTAL_ROW + "\n")
+        output = _run_explain(main_outcome="failure", slm_outcome="success")
+    finally:
+        stray.unlink(missing_ok=True)
+    assert "no captured log" in output
+    assert "OVER BY" not in output, "the explain step read the real /tmp log"
 
 
 #: One real jscpd Total row, captured verbatim from run 34414434867 -- the run
@@ -240,7 +323,9 @@ def test_each_gate_scans_its_declared_scope_and_applies_its_own_pin(step_id, tre
 
 
 def test_the_pins_are_duplicated_line_counts_not_percentages() -> None:
+    # The pins moved to .github/duplication-pins.json (#16324); the job env carries none.
     env = _job()["env"]
+    pins = json.loads((repo_root() / ".github" / "duplication-pins.json").read_text(encoding="utf-8"))
 
-    assert env["MAX_DUP_LINES"].isdigit() and env["SLM_MAX_DUP_LINES"].isdigit()
+    assert isinstance(pins["MAX_DUP_LINES"], int) and isinstance(pins["SLM_MAX_DUP_LINES"], int)
     assert "THRESHOLD" not in env and "SLM_THRESHOLD" not in env

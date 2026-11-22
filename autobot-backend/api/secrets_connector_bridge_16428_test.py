@@ -26,6 +26,17 @@ from api.schemas_system import ChatSecretScope
 from autobot_shared.status_enums import SecretType
 
 
+@pytest.fixture(autouse=True)
+def committed_audit():
+    """The canonical audit store commits the required before-write record (#20557).
+
+    A unit test has no ``audit_logs`` database; the 503 a failed record gives is proven
+    in ``secrets_defects_20557_test.py`` and against Postgres in ``tests/migrations``.
+    """
+    with patch("services.audit.audit.record_committed", AsyncMock(return_value=True)) as recorded:
+        yield recorded
+
+
 def _connector_secret_request(**overrides):
     from api.schemas_system import SecretCreateRequest
 

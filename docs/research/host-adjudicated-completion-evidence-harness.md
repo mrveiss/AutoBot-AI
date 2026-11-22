@@ -562,7 +562,7 @@ recorded here as witnesses, not refiled.
 **Audit — AutoBot has thirteen ratchets and none is edit-scoped.** Every one is either a frozen
 absolute count checked on a full-repo scan, or a shrink-only allow-list keyed on file path or exact
 string. `scripts/check_python_file_size.py` + `repo_tests/python_file_size_ratchet_baseline.py`
-(per-file ceiling, `MAX_KNOWN_LARGE_ENTRIES = 486`); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
+(per-file ceiling; the `MAX_KNOWN_LARGE_ENTRIES = 486` total it had then was retired by #19283 for a per-entry base comparison); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
 (raw regex-match scalars, asserted equal in **both** directions); `i18n_untranslated_ratchet_test.py`;
 `background_task_retention_ratchet_test.py`; `credential_vault_resolution_ratchet_test.py`;
 `.github/workflows/ratchet-base-guard.yml` (re-runs the file-size audit on push to catch "a violation
@@ -608,7 +608,7 @@ run, `security.yml`/`coverage.yml` nightly) plus Celery Beat tasks in `workers/a
 
 Repair authority is encoded **per skill**, not centrally: `research-to-issues` is research-only with
 a *tool-restricted agent* variant giving "a hard guarantee (structurally unable to write code)"
-(`.claude/skills/research-to-issues/SKILL.md:26`); `repo-sweeper` "never draws conclusions… Do NOT
+(plugin `autobot-dev-skills` `skills/lifecycle/references/research-to-issues.md`, formerly `.claude/skills/research-to-issues/SKILL.md:26`); `repo-sweeper` "never draws conclusions… Do NOT
 use for anything that writes"; `bulk-audit` may fix but only after validating on 2–3 files first.
 `bugfix`, `implement`, `adopt`, `parallel` are unrestricted. There is **no** repo-wide "exactly one
 loop may repair" rule and **no** fix-in-lane-vs-file size threshold — greps for

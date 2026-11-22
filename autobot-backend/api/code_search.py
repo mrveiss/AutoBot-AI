@@ -22,6 +22,7 @@ from agents.npu_code_search_agent import (
     index_project,
     search_codebase,
 )
+from api.code_search_duplicates import RESULTS_SCOPE, build_duplicate_candidate, build_duplicates_response
 from api.code_search_examples import SEARCH_EXAMPLES_DATA
 from api.embedding_refusal import reraise_http_or_refusal
 from api.schemas_code import (
@@ -534,55 +535,9 @@ async def _search_pattern_for_duplicates(pattern: str) -> dict | None:
     similar_blocks = [_build_similar_block_entry(result) for result in results]
 
     if len(similar_blocks) > 1:
-        return _build_duplicate_candidate(pattern, similar_blocks)
+        return build_duplicate_candidate(pattern, similar_blocks)
 
     return None
-
-
-def _build_duplicates_response(patterns_count: int, duplicate_candidates: list) -> dict:
-    """
-    Build the response dictionary for duplicate detection.
-
-    Issue #665: Extracted from find_code_duplicates.
-    """
-    return {
-        "summary": {
-            "patterns_analyzed": patterns_count,
-            "duplicate_candidates_found": len(duplicate_candidates),
-            "total_similar_blocks": sum(len(c["similar_blocks"]) for c in duplicate_candidates),
-            "highest_priority_pattern": (duplicate_candidates[0]["pattern"] if duplicate_candidates else None),
-        },
-        "duplicate_candidates": duplicate_candidates[:10],
-        "recommendations": [
-            "Consider extracting common patterns into utility functions",
-            "Look for opportunities to create base classes or mixins",
-            "Evaluate if similar error handling can be centralized",
-            "Check if configuration loading can be standardized",
-            "Consider creating shared validation utilities",
-        ],
-    }
-
-
-def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
-    """
-    Build a duplicate candidate entry from similar blocks.
-
-    Issue #281: Extracted from find_code_duplicates to reduce function length
-    and centralize candidate building logic.
-
-    Args:
-        pattern: The pattern name that matched
-        similar_blocks: List of similar block entries
-
-    Returns:
-        Dict with duplicate candidate info including refactor priority
-    """
-    return {
-        "pattern": pattern,
-        "similar_blocks": similar_blocks,
-        "potential_savings": (f"Could refactor {len(similar_blocks)} similar blocks"),
-        "refactor_priority": (len(similar_blocks) * max(block["confidence"] for block in similar_blocks)),
-    }
 
 
 def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
@@ -599,6 +554,7 @@ def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
             "most_reused_declaration": most_reused["name"],
             "max_usage_count": most_reused["usage_count"],
             "analysis_root": root_path,
+            "results_scope": RESULTS_SCOPE,
             "pattern_types_analyzed": list(DECLARATION_PATTERNS.keys()),
         },
         "declarations_by_type": analysis_results,
@@ -695,7 +651,9 @@ async def find_code_duplicates(request: CodeAnalyticsRequest):
         # Build response (Issue #665: uses helper)
         return JSONResponse(
             status_code=200,
-            content=_build_duplicates_response(len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates),
+            content=build_duplicates_response(
+                len(_DUPLICATE_DETECTION_PATTERNS), duplicate_candidates, request.root_path
+            ),
         )
 
     except Exception as e:

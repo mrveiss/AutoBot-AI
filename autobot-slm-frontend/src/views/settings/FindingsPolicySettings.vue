@@ -1,7 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
@@ -81,43 +81,38 @@ onMounted(load)
 
 <template>
   <div class="p-6">
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.findingsPolicySettings.findingsPolicy') }}</h2>
-      <p class="text-sm text-gray-500 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-2">{{ $t('settings.findingsPolicySettings.findingsPolicy') }}</h2>
+      <p class="text-sm text-autobot-text-tertiary mb-6">
         {{ $t('settings.findingsPolicySettings.controlsHowCompanyOS') }}
       </p>
 
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        {{ $t('settings.findingsPolicySettings.policySavedSuccessfully') }}
-      </div>
+      <BaseAlert v-if="saved" variant="success" class="mb-4" :message="$t('settings.findingsPolicySettings.policySavedSuccessfully')" />
 
       <div class="space-y-6">
         <!-- Enabled -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.enableFindingsPolicy') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.enableFindingsPolicy') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.whenDisabledNoFindings') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.enabled" class="sr-only peer" data-test="toggle-enabled" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.enabled" :label="$t('settings.findingsPolicySettings.enableFindingsPolicy')" data-test="toggle-enabled" />
         </div>
 
         <!-- Minimum severity -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.minimumSeverity') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.minimumSeverity') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.onlyFindingsAtOr') }}
             </p>
           </div>
           <select
             v-model="policy.min_severity"
-            class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             data-test="select-min-severity"
           >
             <option value="high">{{ $t('settings.findingsPolicySettings.high') }}</option>
@@ -127,38 +122,32 @@ onMounted(load)
         </div>
 
         <!-- Require approval to promote -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.requireApprovalToPromote') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.requireApprovalToPromote') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.whenEnabledFindingsRequire') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.require_approval_to_promote" class="sr-only peer" data-test="toggle-require-approval" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.require_approval_to_promote" :label="$t('settings.findingsPolicySettings.requireApprovalToPromote')" data-test="toggle-require-approval" />
         </div>
 
         <!-- Run on index -->
-        <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+        <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.runOnIndex') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.runOnIndex') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.automaticallyTriggerFindings') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.run_on_index" class="sr-only peer" data-test="toggle-run-on-index" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.run_on_index" :label="$t('settings.findingsPolicySettings.runOnIndex')" data-test="toggle-run-on-index" />
         </div>
 
         <!-- Verify batch size -->
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.verifyBatchSize') }}</label>
-            <p class="text-xs text-gray-500 mt-1">
+            <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.findingsPolicySettings.verifyBatchSize') }}</label>
+            <p class="text-xs text-autobot-text-tertiary mt-1">
               {{ $t('settings.findingsPolicySettings.numberOfFindingsProcessed') }}
             </p>
           </div>
@@ -166,14 +155,14 @@ onMounted(load)
             v-model.number="policy.verify_batch_size"
             type="number"
             min="1"
-            class="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             data-test="input-verify-batch-size"
           />
         </div>
       </div>
 
       <!-- Save Button -->
-      <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+      <div class="mt-8 pt-6 border-t border-autobot-border flex justify-end">
         <button
           data-test="save-policy"
           :disabled="saving"

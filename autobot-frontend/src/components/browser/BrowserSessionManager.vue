@@ -223,12 +223,13 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
-import { BaseModal, BaseButton } from '@autobot/ui'
+import { BaseModal, BaseButton, createRecencyFormatter } from '@autobot/ui'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import Icon from '@/components/ui/Icon.vue'
 import type { SessionStatus } from '@/types/browser'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('BrowserSessionManager')
 
@@ -242,7 +243,7 @@ export default {
     Icon
   },
   setup() {
-    const { t } = useI18n()
+    const { t, locale } = useI18n()
     const { confirm } = useConfirmDialog()
     const {
       sessions,
@@ -382,23 +383,9 @@ export default {
       }
     }
 
-    const formatDate = (dateStr: string): string => {
-      return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date(dateStr))
-    }
+    const formatDate = createDateFormatter({ locale: () => locale.value, intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
-    const formatTimeAgo = (dateStr: string): string => {
-      const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-
-      if (seconds < 60) return `${seconds}s ago`
-      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-      return `${Math.floor(seconds / 86400)}d ago`
-    }
+    const formatTimeAgo = createRecencyFormatter({ locale: () => locale.value, maxUnit: 'day', invalidText: '—' })
 
     return {
       sessions,

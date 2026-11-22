@@ -108,6 +108,12 @@ class TestSensitivePortsSanity:
         for p in (5432, 6379, 3306, 27017):
             assert spa.SENSITIVE_PORTS[p][1] == "high"
 
+    def test_chromadb_is_watched_on_the_ssot_port(self):
+        # #19321: the port comes from PortConfig.chromadb, not a second literal.
+        from autobot_shared.ssot_config import config
+
+        assert spa.SENSITIVE_PORTS[config.port.chromadb] == ("chromadb", "high")
+
 
 class _RecordingEvent:
     """Stand-in for the SlmSecurityEvent model (stubbed by the slm conftest).

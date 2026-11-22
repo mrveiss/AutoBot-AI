@@ -212,7 +212,7 @@ const recentMessages = computed(() => props.state.messages.slice(-5))
   flex: 1;
 }
 
-.progress-message i {
+.progress-message .icon {
   margin-right: var(--spacing-2);
 }
 

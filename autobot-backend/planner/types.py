@@ -148,6 +148,9 @@ class ExecutionPlan:
     completed_steps: int = 0
     failed_steps: int = 0
 
+    # Free-form flags; ``fallback`` marks a canned plan the LLM did not write (#21023).
+    metadata: dict = field(default_factory=dict)
+
     def get_current_step(self) -> PlanStep | None:
         """Get the currently active step"""
         for step in self.steps:
@@ -248,6 +251,7 @@ class ExecutionPlan:
             "total_steps": self.total_steps,
             "completed_steps": self.completed_steps,
             "failed_steps": self.failed_steps,
+            "metadata": self.metadata,
         }
 
     @classmethod
@@ -265,6 +269,7 @@ class ExecutionPlan:
             completed_at=(parse_utc_iso(data["completed_at"]) if data.get("completed_at") else None),
             version=data.get("version", 1),
             update_history=data.get("update_history", []),
+            metadata=data.get("metadata", {}),
         )
         plan.update_metrics()
         return plan

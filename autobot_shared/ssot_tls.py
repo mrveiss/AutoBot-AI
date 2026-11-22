@@ -21,6 +21,8 @@ from typing import ClassVar, FrozenSet, List
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The TLS cert-dir defaults' one home (#19317), read by the Field defaults below.
+from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR, DEFAULT_TLS_REMOTE_CERT_DIR
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 
@@ -74,19 +76,19 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
 
     # Certificate paths (relative to project root)
     cert_dir: str = Field(
-        default="certs",
+        default=DEFAULT_TLS_CERT_DIR,
         alias="AUTOBOT_TLS_CERT_DIR",
         description="Directory containing certificates",
     )
 
     ca_cert: str = Field(
-        default="certs/ca/ca-cert.pem",
+        default=f"{DEFAULT_TLS_CERT_DIR}/ca/ca-cert.pem",
         alias="AUTOBOT_TLS_CA_CERT",
         description="Path to CA certificate",
     )
 
     ca_key: str = Field(
-        default="certs/ca/ca-key.pem",
+        default=f"{DEFAULT_TLS_CERT_DIR}/ca/ca-key.pem",
         alias="AUTOBOT_TLS_CA_KEY",
         description="Path to CA private key",
     )
@@ -119,7 +121,7 @@ class TLSConfig(RedactedReprMixin, BaseSettings):
 
     # Remote paths on VMs
     remote_cert_dir: str = Field(
-        default="/etc/autobot/certs",
+        default=DEFAULT_TLS_REMOTE_CERT_DIR,
         alias="AUTOBOT_TLS_REMOTE_CERT_DIR",
         description="Certificate directory on remote VMs",
     )

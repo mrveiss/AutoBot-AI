@@ -201,6 +201,7 @@ import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.v
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
 import { BaseModal } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { useTabs } from '@/composables/useTabs'
 
 defineProps<{
@@ -308,11 +309,7 @@ function showError(msg: string): void {
   setTimeout(() => { errorMessage.value = null }, 5000)
 }
 
-function formatDate(dateValue: Date | string | undefined | null): string {
-  if (!dateValue) return t('profile.never')
-  const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
-}
+const formatDate = createDateFormatter({ emptyText: () => t('profile.never') })
 </script>
 
 <style scoped>
@@ -350,8 +347,9 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border-bottom-color: var(--color-primary);
 }
 
-.tab-btn i {
-  font-size: var(--text-sm);
+.tab-btn .icon {
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .profile-section {
@@ -441,7 +439,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .option-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 
@@ -471,7 +469,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   margin-top: var(--spacing-4);
   padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-primary);
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -534,8 +532,8 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .toast.error {
-  background: var(--color-error);
-  color: var(--text-inverse);
+  background: var(--color-error-solid);
+  color: var(--text-on-error);
 }
 
 @keyframes slideIn {

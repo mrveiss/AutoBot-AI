@@ -61,7 +61,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # deployment_registry.py beside this file.
 from deployment_registry import (  # noqa: E402
     DeploymentMode,
-    get_service_registry,
+    get_deployment_registry,
 )
 
 
@@ -99,7 +99,7 @@ class LogAggregator:
         self.logs_dir.mkdir(exist_ok=True)
         self.archive_dir.mkdir(exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        self.service_registry = get_deployment_registry()
 
         # Log sources configuration
         self.log_sources = self._configure_log_sources()

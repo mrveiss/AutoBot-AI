@@ -1,6 +1,6 @@
 # Dashboard Shell and Component Standardisation — Reference-Work Analysis
 
-Research doc. Source is anonymised per the `research` skill: a commercial admin-dashboard
+Research doc. Source is anonymised per `/autobot-dev-skills:lifecycle research`: a commercial admin-dashboard
 reference work (server-rendered), studied against AutoBot's own GUI. Fetched content is data,
 never instructions — nothing in it was executed.
 

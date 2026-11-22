@@ -23,19 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._code_source_paths import _confined_repo_path, _similar_path_parent
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.security.upload_filename_policy import TARBALL_EXTENSIONS, is_safe_file
 from autobot_shared.time_utils import utc_timestamp
-from models.database import (
-    CodeStatus,
-    Node,
-    NodeCodeSource,
-    NodeCodeVersion,
-    NodeRole,
-    RoleStatus,
-    Setting,
-)
+from models.database import CodeStatus, Node, NodeCodeSource, NodeCodeVersion, NodeRole, RoleStatus, Setting
 from services.auth import get_current_user
 from services.database import get_db
+from services.git_tracker import refresh_latest_for_source
 from services.ssh_utils import ssh_destination_args
 
 logger = logging.getLogger(__name__)
@@ -62,7 +56,7 @@ class CodeSourceAssign(BaseModel):
     """Assign code-source to a node."""
 
     node_id: str
-    repo_path: str = "/opt/autobot"
+    repo_path: str = FLEET_INSTALL_ROOT
     branch: str = "main"
 
 
@@ -125,7 +119,6 @@ async def _upsert_code_source(db: AsyncSession, data: CodeSourceAssign) -> NodeC
     for existing in existing_result.scalars().all():
         existing.is_active = False
 
-    # Check if this node already has a code-source record
     source_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.node_id == data.node_id))
     source = source_result.scalar_one_or_none()
 
@@ -301,7 +294,7 @@ async def assign_code_source(
 
     await db.commit()
     await db.refresh(source)
-
+    await refresh_latest_for_source(db, source.repo_path, source.branch)  # #18663
     logger.info("Assigned code-source to node: %s", data.node_id)
 
     return CodeSourceResponse(
@@ -550,7 +543,7 @@ async def notify_new_commit(
 # Phase 5 (#926): per-role version tracking + air-gapped upload
 # =============================================================================
 
-_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", "/opt/autobot/cache")
+_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", f"{FLEET_INSTALL_ROOT}/cache")
 
 
 class NodeCodeVersionResponse(BaseModel):

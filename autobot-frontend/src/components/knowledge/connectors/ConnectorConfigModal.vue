@@ -10,6 +10,7 @@
  */
 
 import { ref, computed, watch } from 'vue'
+import { connectorScheduleOptions } from './connectorScheduleOptions'
 import type {
   ConnectorConfig,
   ConnectorType
@@ -30,7 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  saved: [config: ConnectorConfig]
+  saved: [config: ConnectorConfig, syncStarted: boolean]
 }>()
 
 // =========================================================================
@@ -51,6 +52,7 @@ const verificationMode = ref<'autonomous' | 'collaborative'>('autonomous')
 const scheduleCron = ref<string | null>(null)
 const scheduleOption = ref('manual')
 const enabled = ref(true)
+const syncNow = ref(true)
 
 // File server config
 const fsBasePath = ref('')
@@ -163,13 +165,7 @@ const typeCards = computed(() => [
   }
 ])
 
-const scheduleOptions = computed(() => [
-  { value: 'manual', label: t('knowledge.connectors.config.scheduleManual'), cron: null },
-  { value: '15min', label: t('knowledge.connectors.config.schedule15min'), cron: '*/15 * * * *' },
-  { value: 'hourly', label: t('knowledge.connectors.config.scheduleHourly'), cron: '0 * * * *' },
-  { value: 'daily', label: t('knowledge.connectors.config.scheduleDaily'), cron: '0 0 * * *' },
-  { value: 'weekly', label: t('knowledge.connectors.config.scheduleWeekly'), cron: '0 0 * * 0' }
-])
+const scheduleOptions = computed(() => connectorScheduleOptions(t))
 
 // =========================================================================
 // Populate form when editing
@@ -262,6 +258,7 @@ function resetForm() {
   scheduleOption.value = 'manual'
   scheduleCron.value = null
   enabled.value = true
+  syncNow.value = true
   saving.value = false
   testing.value = false
   testResult.value = null
@@ -317,13 +314,14 @@ function resetForm() {
 // Build Config
 // =========================================================================
 
-function buildPayload(): Partial<ConnectorConfig> & { secret_id?: string } {
-  const base: Partial<ConnectorConfig> & { secret_id?: string } = {
+function buildPayload(): Partial<ConnectorConfig> & { sync_now?: boolean; secret_id?: string } {
+  const base: Partial<ConnectorConfig> & { sync_now?: boolean; secret_id?: string } = {
     connector_type: connectorType.value,
     name: connectorName.value,
     verification_mode: verificationMode.value,
     schedule_cron: scheduleCron.value,
-    enabled: enabled.value
+    enabled: enabled.value,
+    ...(isEditing.value ? {} : { sync_now: syncNow.value })
   }
 
   switch (connectorType.value) {
@@ -559,7 +557,7 @@ async function handleSave() {
       logger.info('Connector created: %s', result.connector_id)
     }
 
-    emit('saved', result)
+    emit('saved', result, !isEditing.value && syncNow.value && enabled.value)
     emit('update:modelValue', false)
   } catch (error) {
     saveError.value = (error as Error).message || t('knowledge.connectors.config.saveFailed')
@@ -1216,12 +1214,12 @@ function closeModal() {
 
       <div class="form-group">
         <label class="toggle-row">
-          <input
-            type="checkbox"
-            v-model="enabled"
-            class="toggle-checkbox"
-          />
+          <input v-model="enabled" type="checkbox" class="toggle-checkbox" />
           <span class="toggle-label">{{ $t('knowledge.connectors.config.enabled') }}</span>
+        </label>
+        <label v-if="!isEditing" class="toggle-row">
+          <input v-model="syncNow" type="checkbox" class="toggle-checkbox" />
+          <span class="toggle-label">{{ $t('knowledge.connectors.config.syncNow') }}</span>
         </label>
       </div>
     </div>
