@@ -68,6 +68,8 @@ async function uploadOne(file: File, path: string, overwrite: boolean): Promise<
       body: formData,
     })
     if (response.ok) return null
+    // 409: the API's text says to send overwrite=true, which this UI cannot do.
+    if (response.status === 409) return i18n.global.t('fileBrowser.browser.uploadAlreadyExists')
     return (await extractResponseErrorDetail(response)) || i18n.global.t('fileBrowser.browser.uploadFailedHint')
   } catch {
     return i18n.global.t('fileBrowser.browser.uploadFailedHint')

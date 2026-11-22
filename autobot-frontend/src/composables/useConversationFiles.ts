@@ -48,6 +48,16 @@ function failureText(err: unknown, fallback: string): string {
   return describeApiRefusal(err, t) ?? (extractApiErrorMessage(err, fallback) || fallback)
 }
 
+/** An upload that failed on one file of a batch; `describe` names that file in the user-facing text. */
+class UploadFileFailure extends Error {
+  constructor(readonly fileName: string, readonly cause: unknown) {
+    super(`upload failed: ${fileName}`)
+  }
+  describe(text: string): string {
+    return this.fileName ? `${this.fileName}: ${text}` : text
+  }
+}
+
 /**
  * File metadata interface matching backend ConversationFile model
  */
@@ -181,19 +191,13 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
     }
   }
 
-  /** Run one upload; progress, errors and the reload belong to the session that started it (#21159). */
-  const sendUpload = async (fileList: FileList | File[], session: string, token: number): Promise<boolean> => {
-    const inSession = (): boolean => currentSessionId() === session
-    // The token only gates the shared progress display; the reload and the error belong to the session.
-    const owns = (): boolean => uploadRequest.isCurrent(token) && inSession()
-    try {
-      // The route takes ONE file per request, in the form field `file` (#22015): N files are N requests.
-      const batch = Array.from(fileList)
-      let data: { success: boolean } | undefined
-      for (const [index, file] of batch.entries()) {
-        const formData = new FormData()
-        formData.append('file', file)
-        data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
+  /** POST each file on its own (the route takes one `file` per request, #22015); returns how many were stored, or throws naming the file that failed. */
+  const postEach = async (batch: File[], owns: () => boolean, stored: { count: number }): Promise<boolean> => {
+    for (const [index, file] of batch.entries()) {
+      const formData = new FormData()
+      formData.append('file', file)
+      try {
+        const data = await api.post<{ success: boolean }>(`${conversationApi()}/upload`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (progressEvent: UploadProgressEvent) => {
             if (progressEvent.total && owns()) {
@@ -201,20 +205,37 @@ export function useConversationFiles(sessionIdSource: MaybeRefOrGetter<string>) 
             }
           }
         })
-        if (!data?.success) break
+        if (!data?.success) return false
+        stored.count += 1
+      } catch (err: unknown) {
+        throw new UploadFileFailure(file.name, err)
       }
-      if (data?.success) {
-        if (inSession()) await loadFiles()
+    }
+    return true
+  }
+
+  /** Run one upload; progress, errors and the reload belong to the session that started it (#21159). */
+  const sendUpload = async (fileList: FileList | File[], session: string, token: number): Promise<boolean> => {
+    const inSession = (): boolean => currentSessionId() === session
+    // The token only gates the shared progress display; the reload and the error belong to the session.
+    const owns = (): boolean => uploadRequest.isCurrent(token) && inSession()
+    const stored = { count: 0 }
+    const unknown = i18n.global.t('chat.input.uploadError.unknown')
+    try {
+      const ok = await postEach(Array.from(fileList), owns, stored)
+      if (ok) {
         if (owns()) uploadProgress.value = 100
         return true
       }
-      if (inSession()) error.value = i18n.global.t('chat.input.uploadError.unknown')
+      if (inSession()) error.value = unknown
       return false
     } catch (err: unknown) {
-      if (inSession()) error.value = failureText(err, i18n.global.t('chat.input.uploadError.unknown'))
-      logger.error('Upload error:', err)
+      const failure = err instanceof UploadFileFailure ? err : new UploadFileFailure('', err)
+      if (inSession()) error.value = failure.describe(failureText(failure.cause, unknown))
+      logger.error('Upload error:', failure.cause)
       return false
     } finally {
+      if (stored.count > 0 && inSession()) await loadFiles() // reload for a full batch and for files stored before a mid-batch failure
       // Reset progress after a short delay, unless a newer upload or a conversation switch took it over.
       setTimeout(() => { if (owns()) uploadProgress.value = 0 }, 2000)
     }

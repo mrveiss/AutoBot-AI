@@ -7,6 +7,10 @@ on every upload from the chat's Files panel. Two mocks agreeing with each other 
 the route's real signature (FastAPI's own dependant) and the frontend's committed source (a static scan, nothing
 is executed) and compares the two. The same is done for the sibling ``rename`` and ``create_directory`` routes
 the composable also posts forms to, and for the conversation upload route the chat composable posts to.
+
+Existing guards and why this one is separate: ``frontend_api_contract_ratchet_test.py`` and
+``sdk_ts_request_contract_test.py`` pin URLs, verbs, query parameters and JSON body fields. Neither looks at the
+multipart FORM fields a ``FormData`` carries, which is exactly where ``file`` vs ``files`` went unseen.
 """
 
 from __future__ import annotations
@@ -34,7 +38,7 @@ def _required_field_names(router, suffix: str) -> set[str]:
 def _upload_form_fields(source: str) -> set[str]:
     block = re.search(r"UPLOAD_FORM_FIELDS\s*=\s*\{(.*?)\}\s*as const", source, re.S)
     assert block, "UPLOAD_FORM_FIELDS is no longer declared in useFileBrowser.ts"
-    return set(re.findall(r":\s*'([^']+)'", block.group(1)))
+    return set(re.findall(r""":\s*['"]([^'"]+)['"]""", block.group(1)))
 
 
 def _section(source: str, marker: str) -> str:
@@ -44,7 +48,7 @@ def _section(source: str, marker: str) -> str:
 
 
 def _literal_appends(text: str) -> set[str]:
-    return set(re.findall(r"\.append\(\s*'([^']+)'", text))
+    return set(re.findall(r"""\.append\(\s*['"]([^'"]+)['"]""", text))
 
 
 def test_upload_form_fields_are_the_route_parameters():
@@ -64,8 +68,9 @@ def test_upload_sends_every_required_field():
 
 def test_upload_appends_through_the_pinned_field_names():
     section = _section(_FILE_BROWSER.read_text(encoding="utf-8"), "/** Upload one file;")
-    assert "append(UPLOAD_FORM_FIELDS.file," in section
-    assert "append('files'" not in section
+    for name in ("file", "path", "overwrite"):
+        assert f"append(UPLOAD_FORM_FIELDS.{name}," in section, f"{name} is not appended through the pinned constant"
+    assert not re.search(r"""append\(\s*['"]files['"]""", section)
 
 
 @pytest.mark.parametrize(
@@ -92,5 +97,5 @@ def test_conversation_upload_sends_the_declared_file_field():
 
 
 def _section_of_send_upload(source: str) -> str:
-    start = source.index("const sendUpload")
+    start = source.index("const postEach")
     return source[start : source.index("const uploadFiles", start)]

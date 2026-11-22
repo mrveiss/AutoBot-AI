@@ -33,11 +33,16 @@ describe('useFileBrowser.uploadFiles', () => {
   it.each([
     [413, 'File too large. Maximum size: 50MB'],
     [400, 'File type not allowed: run.exe'],
-    [409, 'File already exists. Use overwrite=true to replace it.'],
   ])('reports the server reason for a %i and keeps uploading the rest', async (status, detail) => {
     fetchWithAuth.mockResolvedValueOnce(json(status, { detail })).mockResolvedValueOnce(json(200, {}))
     const outcome = await useFileBrowser().uploadFiles(selection('bad.bin', 'ok.txt'), 'docs')
     expect(outcome).toEqual({ uploaded: ['ok.txt'], failed: [{ name: 'bad.bin', reason: detail }] })
+  })
+
+  it('maps a 409 to the translated already-exists text, not the overwrite=true API text', async () => {
+    fetchWithAuth.mockResolvedValue(json(409, { detail: 'File already exists. Use overwrite=true to replace it.' }))
+    const outcome = await useFileBrowser().uploadFiles(selection('a.txt'), 'docs')
+    expect(outcome?.failed).toEqual([{ name: 'a.txt', reason: 'fileBrowser.browser.uploadAlreadyExists' }])
   })
 
   it('falls back to the translated hint when the body carries no reason', async () => {
