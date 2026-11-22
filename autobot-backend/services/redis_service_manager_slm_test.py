@@ -281,6 +281,19 @@ class TestAMovedRoleIsNotHitUntilTheCacheExpires:
         assert client.list_node_services.await_args.args[0] == "new"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [TimeoutError(), ConnectionError("reset"), aiohttp.ClientConnectionError()])
+    async def test_a_timeout_or_connection_error_on_status_clears_the_cached_node(self, error) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        client = self._moving("new")
+        client.list_node_services = AsyncMock(side_effect=error)
+        with _patched(client):
+            with pytest.raises(type(error)):
+                await mgr._slm_get_service_status()
+            client.list_node_services = AsyncMock(return_value={"services": []})
+            await mgr._slm_get_service_status()
+        assert client.list_node_services.await_args.args[0] == "new"
+
+    @pytest.mark.asyncio
     async def test_a_refusal_clears_the_cached_node(self) -> None:
         mgr = RedisServiceManager(slm_node_id="")
         client = self._moving("new")

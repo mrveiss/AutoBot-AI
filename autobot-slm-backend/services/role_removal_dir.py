@@ -15,7 +15,8 @@ delete the install root, a ``.`` / ``..`` path, a path outside the root, or a di
   their directory -- the other roles import from, or are managed by, them;
 * a directory that is, contains or sits inside the directory of any other role on the node is kept. "Other roles" are
   the node's ``NodeRole`` rows plus its detected roles (``Node.detected_roles``, filled from the agent's heartbeat
-  role report); if the node's detected roles are unknown (never reported) or older than the heartbeat timeout,
+  role report); the roles count as known only when that list is non-empty, contains the role being removed and is
+  fresh (an empty list is the column default and what an agent without role definitions sends), otherwise
   nothing is removed, because a role running on the node but missing from ``NodeRole`` would be invisible.
 """
 
@@ -44,8 +45,19 @@ def removal_path(
     manifests: Dict[str, RoleManifest],
     target_paths: Mapping[str, str | None],
     required: frozenset = frozenset(),
+    known_roles: frozenset | None = None,
 ) -> str | None:
-    """The directory (relative to the install root) to remove with ``role_name``, or None to remove none."""
+    """The directory (relative to the install root) to remove with ``role_name``, or None to remove none.
+
+    ``known_roles`` are the roles that have a ``Role`` row. When given, a role -- the one removed or any other on the
+    node -- with neither a row nor a manifest is one nothing is known about (its ``required`` flag, its directory),
+    so nothing is removed rather than guessed.
+    """
+    other_roles = list(other_roles)
+    if known_roles is not None and any(
+        name not in known_roles and find_role_manifest(name, manifests)[0] is None for name in (role_name, *other_roles)
+    ):
+        return None
     rel, owns, protected = _install_dir(role_name, manifests, target_paths)
     if rel is None or not owns or protected or role_name in required:
         return None
@@ -56,14 +68,20 @@ def removal_path(
     return rel
 
 
-def detected_roles_if_fresh(node, now: datetime, timeout_s: float):
-    """The node's detected roles, or None when they are unknown (never reported) or older than ``timeout_s``."""
+def detected_roles_if_fresh(node, now: datetime, timeout_s: float, role_name: str):
+    """The node's detected roles, or None unless they are provably a real, current report.
+
+    ``Node.detected_roles`` defaults to ``[]`` and the agent sends ``{}`` when it has no role definitions, so an empty
+    list means "never reported", not "runs nothing". A report is trusted only when it is a non-empty list that
+    CONTAINS ``role_name`` (the agent reports a role it runs) and the last heartbeat is within ``timeout_s``.
+    """
     from services.node_health_status import as_utc
 
     beat = as_utc(getattr(node, "last_heartbeat", None))
-    if node is None or node.detected_roles is None or beat is None or beat < now - timedelta(seconds=timeout_s):
+    detected = getattr(node, "detected_roles", None)
+    if not isinstance(detected, list) or role_name not in detected or beat is None:
         return None
-    return set(node.detected_roles)
+    return set(detected) if beat >= now - timedelta(seconds=timeout_s) else None
 
 
 async def role_removal_path(db, node_id: str, role_name: str) -> str | None:
@@ -87,4 +105,6 @@ async def role_removal_path(db, node_id: str, role_name: str) -> str | None:
     ).all()
     required = frozenset(name for name, _path, req in rows if req)
     paths = {name: path for name, path, _req in rows}
-    return removal_path(role_name, others, get_manifest_loader().load_all(), paths, required)
+    return removal_path(
+        role_name, others, get_manifest_loader().load_all(), paths, required, frozenset(name for name, *_ in rows)
+    )

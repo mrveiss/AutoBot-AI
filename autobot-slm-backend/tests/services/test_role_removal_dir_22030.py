@@ -152,15 +152,32 @@ def _node(detected, beat):
     return SimpleNamespace(detected_roles=detected, last_heartbeat=beat)
 
 
-def test_detected_roles_are_trusted_only_when_known_and_fresh():
+def test_detected_roles_are_trusted_only_when_a_fresh_report_names_the_removed_role():
     now = datetime(2026, 11, 22, 12, 0, tzinfo=timezone.utc)
     fresh = now - timedelta(seconds=30)
-    assert detected_roles_if_fresh(_node(["backend"], fresh), now, 90) == {"backend"}
-    assert detected_roles_if_fresh(_node([], fresh), now, 90) == set()
-    assert detected_roles_if_fresh(_node(None, fresh), now, 90) is None
-    assert detected_roles_if_fresh(_node(["backend"], None), now, 90) is None
-    assert detected_roles_if_fresh(_node(["backend"], now - timedelta(seconds=91)), now, 90) is None
-    assert detected_roles_if_fresh(None, now, 90) is None
+    assert detected_roles_if_fresh(_node(["backend", "celery"], fresh), now, 90, "backend") == {"backend", "celery"}
+    assert detected_roles_if_fresh(_node(["backend"], None), now, 90, "backend") is None
+    assert detected_roles_if_fresh(_node(["backend"], now - timedelta(seconds=91)), now, 90, "backend") is None
+    assert detected_roles_if_fresh(None, now, 90, "backend") is None
+
+
+def test_a_node_whose_agent_never_sent_a_role_report_is_not_known_to_run_nothing():
+    """An empty ``Node.detected_roles`` (the column default, or an agent with no definitions) is "never reported"."""
+    now = datetime(2026, 11, 22, 12, 0, tzinfo=timezone.utc)
+    fresh = now - timedelta(seconds=5)
+    assert detected_roles_if_fresh(_node([], fresh), now, 90, "backend") is None
+    assert detected_roles_if_fresh(_node(None, fresh), now, 90, "backend") is None
+    assert detected_roles_if_fresh(_node({}, fresh), now, 90, "backend") is None
+    assert detected_roles_if_fresh(_node(["celery"], fresh), now, 90, "backend") is None, "the removed role is absent"
+
+
+def test_a_role_nothing_is_known_about_blocks_the_removal(manifests):
+    known = frozenset({"npu-worker", "tts-worker"})
+    paths = {"tts-worker": f"{ROOT}/autobot-tts-worker"}
+    assert removal_path("tts-worker", [], manifests, paths, frozenset(), known) == "autobot-tts-worker"
+    assert removal_path("tts-worker", ["mystery"], manifests, paths, frozenset(), known) is None
+    assert removal_path("mystery", [], manifests, paths, frozenset(), known) is None
+    assert removal_path("tts-worker", ["backend"], manifests, paths, frozenset(), known) == "autobot-tts-worker"
 
 
 def test_a_node_running_every_other_role_keeps_the_backend_directory(manifests):

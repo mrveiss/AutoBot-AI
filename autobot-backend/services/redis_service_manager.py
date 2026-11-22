@@ -182,6 +182,9 @@ class RedisServiceManager:
         except aiohttp.ClientResponseError as exc:
             clear_resolved_node()
             raise access_error(exc) or RedisConnectionError(f"SLM status query failed: HTTP {exc.status}") from exc
+        except Exception:
+            clear_resolved_node()  # a timeout or connection error may mean the node moved; ask again next time
+            raise
         services = data.get("services", [])
         return services[0].get("status", "unknown") if services else "unknown"
 

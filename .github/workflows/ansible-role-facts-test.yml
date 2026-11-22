@@ -35,6 +35,8 @@ on:
       - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
+      - 'autobot-slm-backend/ansible/playbooks/remove-role.yml'  # #22030: its role_target_dir checks run here
+      - 'autobot-slm-backend/tests/test_remove_role_rejects_hostile_dir_22030.py'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
@@ -71,6 +73,8 @@ on:
       - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
+      - 'autobot-slm-backend/ansible/playbooks/remove-role.yml'  # #22030: its role_target_dir checks run here
+      - 'autobot-slm-backend/tests/test_remove_role_rejects_hostile_dir_22030.py'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/update-all-nodes.yml'
       - 'autobot-slm-backend/ansible/roles/*/tasks/clean.yml'
@@ -322,7 +326,7 @@ jobs:
 
       - name: "The fleet-address facts tests ran, not skipped (#19944)"
         run: |
-          out=$(python3 -m pytest repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py repo_tests/gpu_detection_finds_wsl2_19731_test.py -q -rs) || { echo "$out"; exit 1; }
+          out=$(python3 -m pytest repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py repo_tests/gpu_detection_finds_wsl2_19731_test.py autobot-slm-backend/tests/test_remove_role_rejects_hostile_dir_22030.py -q -rs) || { echo "$out"; exit 1; }
           echo "$out"
           if grep -q SKIPPED <<< "$out"; then
             echo "::error::a fleet-address facts test was skipped"
