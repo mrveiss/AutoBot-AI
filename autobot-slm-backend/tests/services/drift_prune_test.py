@@ -129,7 +129,7 @@ async def test_confirmed_removed_from_source_files_are_removed_and_nothing_else(
     _write(deployed / "keep.py", "k = 2\n")  # modified
     _write(deployed / "node_modules" / "pkg" / "index.js")
 
-    result = await apply_prune("autobot-browser-worker", ["gone.py", "other_gone.py"], str(deployed), str(repo))
+    result = await apply_prune("autobot-browser-worker", ["gone.py", "other_gone.py"], str(repo))
 
     assert sorted(result.removed) == ["gone.py", "other_gone.py"]
     assert not (deployed / "gone.py").exists() and not (deployed / "other_gone.py").exists()
@@ -148,7 +148,7 @@ async def test_a_crafted_list_naming_host_state_artifact_and_modified_files_remo
     _write(deployed / "node_modules" / "pkg" / "index.js")
     asked = ["package-lock.json", "keep.py", "data/runtime.db", "node_modules/pkg/index.js", "gone.py"]
 
-    result = await apply_prune("autobot-browser-worker", asked, str(deployed), str(repo))
+    result = await apply_prune("autobot-browser-worker", asked, str(repo))
 
     assert result.removed == ["gone.py"]
     assert sorted(result.refused) == sorted(asked[:-1]), result.refused
@@ -159,7 +159,7 @@ async def test_a_crafted_list_naming_host_state_artifact_and_modified_files_remo
 async def test_only_the_confirmed_subset_is_removed(tmp_path, monkeypatch) -> None:
     repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
 
-    result = await apply_prune("autobot-browser-worker", ["gone.py"], str(deployed), str(repo))
+    result = await apply_prune("autobot-browser-worker", ["gone.py"], str(repo))
 
     assert result.removed == ["gone.py"]
     assert (deployed / "other_gone.py").exists(), "an eligible file the operator did not confirm stays"
@@ -172,7 +172,7 @@ async def test_a_path_that_stopped_being_eligible_since_the_preview_is_refused(t
     _write(repo / "autobot-browser-worker" / "gone.py")  # source has it again: now plain drift, not debris
     _commit_all(repo, "restore gone.py")
 
-    result = await apply_prune("autobot-browser-worker", _paths(plan), str(deployed), str(repo))
+    result = await apply_prune("autobot-browser-worker", _paths(plan), str(repo))
 
     assert "gone.py" in result.refused and (deployed / "gone.py").exists()
     assert result.removed == ["other_gone.py"]
@@ -184,7 +184,7 @@ async def test_the_plugins_component_is_accepted_and_pruned(tmp_path, monkeypatc
     repo, deployed = _setup(tmp_path, monkeypatch, "plugins", source_rel="plugins/core-plugins/telemetry")
 
     plan = await plan_prune("plugins", str(repo))
-    result = await apply_prune("plugins", _paths(plan), str(deployed), str(repo))
+    result = await apply_prune("plugins", _paths(plan), str(repo))
 
     assert _paths(plan) == ["gone.py", "other_gone.py"]
     assert sorted(result.removed) == ["gone.py", "other_gone.py"]
@@ -207,7 +207,52 @@ async def test_a_component_that_cannot_be_judged_removes_nothing(tmp_path, monke
     repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
     monkeypatch.setattr(_ftd, "get_live_dir", lambda c: str(tmp_path / "nowhere"))  # not colocated: skipped
 
-    result = await apply_prune("autobot-browser-worker", ["gone.py"], str(deployed), str(repo))
+    result = await apply_prune("autobot-browser-worker", ["gone.py"], str(repo))
 
     assert result.removed == [] and "gone.py" in result.refused
+    assert (deployed / "gone.py").exists()
+
+
+async def test_a_leaf_symlink_is_removed_and_its_target_stays(tmp_path, monkeypatch) -> None:
+    repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
+    src = repo / "autobot-browser-worker"
+    _write(src / "linked.py")
+    _commit_all(repo, "add linked.py")
+    (src / "linked.py").unlink()
+    _commit_all(repo, "delete linked.py")
+    target = tmp_path / "elsewhere.txt"
+    _write(target, "keep me")
+    os.symlink(target, deployed / "linked.py")
+
+    result = await apply_prune("autobot-browser-worker", ["linked.py"], str(repo))
+
+    assert result.removed == ["linked.py"], (result.refused, result.failed)
+    assert not os.path.lexists(deployed / "linked.py")
+    assert _read(target) == "keep me", "unlinking the link must never touch what it points at"
+
+
+async def test_a_directory_path_is_refused(tmp_path, monkeypatch) -> None:
+    repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
+    _write(deployed / "sub" / "inner.txt")
+
+    removed, reason = _dp._unlink_one(str(deployed), "sub")
+    result = await apply_prune("autobot-browser-worker", ["sub"], str(repo))
+
+    assert (removed, reason) == (False, "is a directory")
+    assert result.removed == [] and "sub" in result.refused
+    assert (deployed / "sub" / "inner.txt").exists()
+
+
+async def test_a_failing_last_moment_check_removes_nothing(tmp_path, monkeypatch) -> None:
+    repo, deployed = _setup(tmp_path, monkeypatch, "autobot-browser-worker")
+
+    async def _deploy_started() -> None:
+        raise RuntimeError("a deploy started")
+
+    try:
+        await apply_prune("autobot-browser-worker", ["gone.py"], str(repo), before_delete=_deploy_started)
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("the check's failure must propagate")
     assert (deployed / "gone.py").exists()

@@ -27,12 +27,12 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.code_sync import _reject_if_deploy_in_progress, router
+from api.code_sync import router
 from api.security import create_audit_log
 from autobot_shared.auth.permissions import Permission
 from services.auth import require_permission
 from services.database import get_db
-from services.deployed_dir_resolver import get_live_dir
+from services.deploy_activity import read_deploy_activity
 from services.drift_checker import VISIBILITY_COMPONENTS
 from services.drift_prune import (
     PruneResult,
@@ -87,25 +87,55 @@ def _require_component(component: str) -> None:
         )
 
 
-async def _audit_prune(db: AsyncSession, user: dict, result: PruneResult, requested: int) -> None:
-    """Record one audit row per prune run; it lands in the same transaction as the commit."""
+async def _refuse_unless_deploy_idle() -> None:
+    """409 unless a self-update play is KNOWN not to be running (#22082).
+
+    The strict twin of ``code_sync._reject_if_deploy_in_progress``, which logs and
+    proceeds when the probe cannot answer (right for a resync). Removing files is
+    not undone by retrying, so a probe that raises or reports "unknown" refuses.
+    """
+    try:
+        activity = await read_deploy_activity()
+    except Exception as exc:  # noqa: BLE001 - an unanswerable probe must refuse, never proceed
+        raise HTTPException(status_code=409, detail=f"Cannot confirm no deploy is running: {exc}") from exc
+    if activity.in_progress is not False:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A self-update play is running or its state is unknown ({activity.reason}); retry once it is idle.",
+        )
+
+
+async def _audit_pending(db: AsyncSession, user: dict, component: str, paths: list[str]):
+    """Commit the intent BEFORE anything is removed: no deletion without a durable row."""
     actor = str(user.get("sub", ""))
-    await create_audit_log(
+    log = await create_audit_log(
         db,
         category="deploy",
         action="drift_prune",
         user_id=actor,
         username=actor,
         resource_type="component",
-        resource_id=result.component,
-        description=f"Removed {len(result.removed)} of {requested} confirmed removed_from_source file(s)",
-        success=not result.failed,
-        extra_data={
-            "removed": result.removed,
-            "refused": result.refused,
-            "failed": result.failed,
-        },
+        resource_id=component,
+        description=f"Pending removal of {len(paths)} confirmed removed_from_source file(s)",
+        success=False,
+        extra_data={"status": "pending", "requested": paths},
     )
+    await db.commit()
+    return log
+
+
+async def _audit_outcome(db: AsyncSession, log, result: PruneResult | None, error: str | None = None) -> None:
+    """Record what the run did on the row written before it."""
+    extra = dict(log.extra_data or {})
+    if result is None:
+        extra.update(status="aborted", error=error)
+        log.description = f"Aborted before removal: {error}"
+        log.success = False
+    else:
+        extra.update(status="completed", removed=result.removed, refused=result.refused, failed=result.failed)
+        log.description = f"Removed {len(result.removed)} of {len(extra.get('requested', []))} confirmed file(s)"
+        log.success = not result.failed
+    log.extra_data = extra
     await db.commit()
 
 
@@ -137,12 +167,14 @@ async def confirm_drift_prune(
     that stopped being eligible since the preview -- is refused and left alone.
     """
     _require_component(request.component)
-    await _reject_if_deploy_in_progress()
-    result = await apply_prune(request.component, request.paths, get_live_dir(request.component))
-    await _audit_prune(db, user, result, len(request.paths))
+    await _refuse_unless_deploy_idle()
+    log = await _audit_pending(db, user, request.component, request.paths)
+    try:
+        result = await apply_prune(request.component, request.paths, before_delete=_refuse_unless_deploy_idle)
+    except Exception as exc:
+        await _audit_outcome(db, log, None, f"{type(exc).__name__}: {exc}")
+        raise
+    await _audit_outcome(db, log, result)
     return DriftPruneResponse(
-        component=result.component,
-        removed=result.removed,
-        refused=result.refused,
-        failed=result.failed,
+        component=result.component, removed=result.removed, refused=result.refused, failed=result.failed
     )

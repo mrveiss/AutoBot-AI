@@ -33,9 +33,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import stat
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import services.full_tree_drift as _ftd
 from autobot_shared.logging_manager import get_logger
 from services.drift_checker import VISIBILITY_COMPONENTS
 from services.full_tree_drift import (
@@ -56,6 +59,7 @@ class PrunePlan:
 
     component: str
     files: list[tuple[str, str | None]] = field(default_factory=list)  # (path, removing commit)
+    deployed_dir: str = ""  # the tree the verdicts describe, from the classifier's own resolver
     error: str | None = None
 
 
@@ -85,35 +89,59 @@ def _plan_from_drift(drift: ComponentDrift) -> PrunePlan:
 
 async def plan_prune(component: str, repo_root: str = DEFAULT_REPO_PATH) -> PrunePlan:
     """The preview: every ``removed_from_source`` file of *component*, nothing else."""
-    return _plan_from_drift(await compute_full_tree_drift(component, repo_root))
+    plan = _plan_from_drift(await compute_full_tree_drift(component, repo_root))
+    plan.deployed_dir = _ftd.get_live_dir(component)  # the same call the classifier walked
+    return plan
 
 
-def _resolve_inside(deployed_dir: str, rel_path: str) -> Path | None:
-    """The real path of *rel_path* under *deployed_dir*, or None if it escapes or is unsafe."""
+def _open_parent(deployed_dir: str, rel_path: str) -> tuple[int, str] | str:
+    """(fd of the file's parent directory, file name), or the reason it cannot be opened.
+
+    The walk opens every directory with ``O_NOFOLLOW`` relative to the previous fd, so a
+    symlinked component -- or one swapped in after the verdict -- is refused, and the fd
+    that is unlinked against is the one that was checked (no path re-resolution, no TOCTOU).
+    """
     pure = Path(rel_path)
     if not rel_path or pure.is_absolute() or ".." in pure.parts:
-        return None
-    root = Path(os.path.realpath(deployed_dir))
-    parent = Path(os.path.realpath(root / pure.parent))
-    if parent != root and root not in parent.parents:
-        return None
-    return parent / pure.name
-
-
-def _unlink_one(deployed_dir: str, rel_path: str) -> tuple[bool, str]:
-    """Unlink one file. Returns (removed, reason) -- reason is empty on success."""
-    target = _resolve_inside(deployed_dir, rel_path)
-    if target is None:
-        return False, "path resolves outside the deployed tree"
-    if target.is_dir() and not target.is_symlink():
-        return False, "is a directory"
+        return "path resolves outside the deployed tree"
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open(os.path.realpath(deployed_dir), flags)
     try:
-        target.unlink()
+        for part in pure.parent.parts:
+            next_fd = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+    except OSError:
+        os.close(fd)
+        return "path resolves outside the deployed tree"
+    return fd, pure.name
+
+
+def _unlink_at(fd: int, name: str) -> tuple[bool, str]:
+    try:
+        if stat.S_ISDIR(os.stat(name, dir_fd=fd, follow_symlinks=False).st_mode):
+            return False, "is a directory"
+        os.unlink(name, dir_fd=fd)
     except FileNotFoundError:
         return False, _ABSENT
     except OSError as exc:
         return False, f"{type(exc).__name__}: {exc.strerror or exc}"
     return True, ""
+
+
+def _unlink_one(deployed_dir: str, rel_path: str) -> tuple[bool, str]:
+    """Unlink one file. Returns (removed, reason) -- reason is empty on success."""
+    try:
+        opened = _open_parent(deployed_dir, rel_path)
+    except OSError as exc:
+        return False, f"{type(exc).__name__}: {exc.strerror or exc}"
+    if isinstance(opened, str):
+        return False, opened
+    fd, name = opened
+    try:
+        return _unlink_at(fd, name)
+    finally:
+        os.close(fd)
 
 
 def _remove_confirmed(plan: PrunePlan, deployed_dir: str, confirmed: list[str]) -> PruneResult:
@@ -136,18 +164,22 @@ def _remove_confirmed(plan: PrunePlan, deployed_dir: str, confirmed: list[str]) 
 async def apply_prune(
     component: str,
     confirmed: list[str],
-    deployed_dir: str,
     repo_root: str = DEFAULT_REPO_PATH,
+    before_delete: Callable[[], Awaitable[None]] | None = None,
 ) -> PruneResult:
     """Remove the *confirmed* paths that are still ``removed_from_source`` now.
 
     The eligible set is re-derived from git at call time, never trusted from the
-    caller's preview, so a stale or hand-crafted list cannot widen what is removed.
+    caller's preview. *before_delete* runs after that derivation and immediately
+    before the first unlink, so a safety check (a deploy started meanwhile) is
+    taken at the last moment; if it raises, nothing is removed.
     """
     plan = await plan_prune(component, repo_root)
     if plan.error:
         return PruneResult(component=component, refused={p: plan.error for p in confirmed})
-    result = await asyncio.to_thread(_remove_confirmed, plan, deployed_dir, confirmed)
+    if before_delete is not None:
+        await before_delete()
+    result = await asyncio.to_thread(_remove_confirmed, plan, plan.deployed_dir, confirmed)
     logger.warning(
         "drift prune: %s removed=%d refused=%d failed=%d",
         component,
