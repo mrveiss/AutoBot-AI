@@ -138,28 +138,28 @@ onMounted(() => {
       <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Connection Status -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <div
               :class="[
                 'w-4 h-4 rounded-full',
-                connectionStatus === 'connected' ? 'bg-green-500' : '',
-                connectionStatus === 'failed' ? 'bg-red-500' : '',
-                connectionStatus === 'unknown' ? 'bg-gray-400' : '',
+                connectionStatus === 'connected' ? 'bg-autobot-dot-ok' : '',
+                connectionStatus === 'failed' ? 'bg-autobot-dot-bad' : '',
+                connectionStatus === 'unknown' ? 'bg-autobot-dot-idle' : '',
               ]"
             ></div>
             <div>
-              <p class="font-medium text-gray-900">
+              <p class="font-medium text-autobot-text-primary">
                 {{ connectionStatus === 'connected' ? $t('settings.backendSettings.connectedToBackend') : connectionStatus === 'failed' ? $t('settings.backendSettings.connectionFailed') : $t('settings.backendSettings.checking') }}
               </p>
-              <p v-if="responseTime !== null" class="text-sm text-gray-500">{{ $t('settings.backendSettings.responseTimeValue0Ms', { value0: responseTime }) }}</p>
+              <p v-if="responseTime !== null" class="text-sm text-autobot-text-tertiary">{{ $t('settings.backendSettings.responseTimeValue0Ms', { value0: responseTime }) }}</p>
             </div>
           </div>
           <button
             @click="testConnection"
             :disabled="testingConnection"
-            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center gap-2"
+            class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active disabled:opacity-50 flex items-center gap-2"
           >
             <svg
               :class="['w-4 h-4', { 'animate-spin': testingConnection }]"
@@ -175,15 +175,15 @@ onMounted(() => {
       </div>
 
       <!-- SLM Settings -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6 mb-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.backendSettings.sLMConfiguration') }}</h2>
 
         <div class="space-y-6">
           <!-- Heartbeat Timeout -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.heartbeatTimeout') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.timeBeforeANode') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.heartbeatTimeout') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.backendSettings.timeBeforeANode') }}</p>
             </div>
             <div class="flex gap-2">
               <input
@@ -191,7 +191,7 @@ onMounted(() => {
                 type="number"
                 min="10"
                 max="300"
-                class="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                class="w-32 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
               />
               <button
                 @click="saveSetting('heartbeat_timeout', settings.heartbeat_timeout)"
@@ -204,10 +204,10 @@ onMounted(() => {
           </div>
 
           <!-- Auto Reconcile -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.autoReconciliation') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.automaticallyAttemptToFix') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.autoReconciliation') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.backendSettings.automaticallyAttemptToFix') }}</p>
             </div>
             <BaseSwitch
                 v-model="settings.auto_reconcile"
@@ -217,15 +217,15 @@ onMounted(() => {
           </div>
 
           <!-- Backup Retention -->
-          <div class="flex items-center justify-between pb-4 border-b border-gray-100">
+          <div class="flex items-center justify-between pb-4 border-b border-autobot-border-subtle">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.backupRetention') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.howLongToKeep') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.backupRetention') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.backendSettings.howLongToKeep') }}</p>
             </div>
             <select
               v-model="settings.backup_retention"
               @change="saveSetting('backup_retention', settings.backup_retention)"
-              class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="7">{{ $t('settings.backendSettings.7Days') }}</option>
               <option value="14">{{ $t('settings.backendSettings.14Days') }}</option>
@@ -238,13 +238,13 @@ onMounted(() => {
           <!-- Log Level -->
           <div class="flex items-center justify-between">
             <div>
-              <label class="block text-sm font-medium text-gray-900">{{ $t('settings.backendSettings.logLevel') }}</label>
-              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.backendSettings.backendLoggingVerbosity') }}</p>
+              <label class="block text-sm font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.logLevel') }}</label>
+              <p class="text-xs text-autobot-text-tertiary mt-1">{{ $t('settings.backendSettings.backendLoggingVerbosity') }}</p>
             </div>
             <select
               v-model="settings.log_level"
               @change="saveSetting('log_level', settings.log_level)"
-              class="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-40 px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option value="DEBUG">{{ $t('settings.backendSettings.debug') }}</option>
               <option value="INFO">{{ $t('settings.backendSettings.info') }}</option>
@@ -256,39 +256,39 @@ onMounted(() => {
       </div>
 
       <!-- Server Info -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
         <h2 class="text-lg font-semibold mb-6">{{ $t('settings.backendSettings.serverConfiguration') }}</h2>
-        <p class="text-sm text-gray-500 mb-4">
+        <p class="text-sm text-autobot-text-tertiary mb-4">
           {{ $t('settings.backendSettings.theseSettingsAreRead') }}
         </p>
 
         <div class="space-y-4">
-          <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.aPIEndpoint') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.currentBackendAPIURL') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.aPIEndpoint') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.backendSettings.currentBackendAPIURL') }}</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
+            <p class="font-mono text-sm text-autobot-text-secondary bg-autobot-bg-tertiary px-3 py-1 rounded-sm">
               {{ settings.api_endpoint || getSlmApiBase() }}
             </p>
           </div>
 
-          <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.serverHost') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.bindAddress') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.serverHost') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.backendSettings.bindAddress') }}</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
+            <p class="font-mono text-sm text-autobot-text-secondary bg-autobot-bg-tertiary px-3 py-1 rounded-sm">
               {{ settings.server_host }}
             </p>
           </div>
 
-          <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+          <div class="flex items-center justify-between p-4 bg-autobot-bg-secondary rounded-lg">
             <div>
-              <p class="font-medium text-gray-900">{{ $t('settings.backendSettings.serverPort') }}</p>
-              <p class="text-sm text-gray-500">{{ $t('settings.backendSettings.aPIPort') }}</p>
+              <p class="font-medium text-autobot-text-primary">{{ $t('settings.backendSettings.serverPort') }}</p>
+              <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.backendSettings.aPIPort') }}</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
+            <p class="font-mono text-sm text-autobot-text-secondary bg-autobot-bg-tertiary px-3 py-1 rounded-sm">
               {{ settings.server_port }}
             </p>
           </div>

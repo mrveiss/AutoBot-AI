@@ -13,9 +13,9 @@ from fastapi.testclient import TestClient
 from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_mcp
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB, text_of
 from knowledge.schemas.mcp import KnowledgeSearchRequest
 from knowledge.search_filters import filter_for_caller, filter_for_user_id
+from testkit.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB, text_of
 
 ADMIN = {"user_id": "root", "role": "admin"}
 BOB = {"user_id": "bob", "role": "user"}

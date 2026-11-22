@@ -264,6 +264,11 @@ MIN_SCANNED_PY_FILES = 4000
 
 HOOK_ID = "env-vars-documented"
 
+#: What this hook looks at, stated wherever it reports so a green run is not read as wider (#17419).
+#: Variables bound by an ``alias="AUTOBOT_*"`` on an SSOT settings model are outside it; they are
+#: reconciled with the registry by ``repo_tests/env_planes_agree_on_defaults_17419_test.py``.
+POPULATION = "AUTOBOT_* os.getenv()/env-helper call sites only, not every AUTOBOT_* variable the SSOT models declare"
+
 
 def _discover_python_files(repo_root: Path) -> list[str]:
     """Every tracked ``.py`` file, for the no-argument sweep.
@@ -316,7 +321,7 @@ def main(argv: list[str]) -> int:
     if all_violations:
         # CLI hook: stderr is its interface (#1082 allows `# noqa: print` here).
         print(  # noqa: print
-            "env-vars-documented: AUTOBOT_* env var violations found:\n",
+            f"env-vars-documented: AUTOBOT_* env var violations found (population: {POPULATION}):\n",
             file=sys.stderr,
         )
         for v in all_violations:
@@ -330,6 +335,7 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
+    print(f"{HOOK_ID}: OK (population: {POPULATION})")  # noqa: print
     return 0
 
 
