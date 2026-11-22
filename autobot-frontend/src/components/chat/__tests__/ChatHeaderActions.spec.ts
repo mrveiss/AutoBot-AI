@@ -109,7 +109,7 @@ describe('ChatHeaderActions element reports (#18243)', () => {
     const w = render()
     await flushPromises()
     const fallback = w.emitted('button-el')!.find(([panel]) => panel === 'fallback')
-    expect((fallback?.[1] as HTMLElement).getAttribute('aria-label')).toBe(en.chat.interface.voiceOutputOff)
+    expect((fallback![1] as HTMLElement).getAttribute('aria-label')).toBe(en.chat.interface.voiceOutputOff)
     w.unmount()
   })
 })
