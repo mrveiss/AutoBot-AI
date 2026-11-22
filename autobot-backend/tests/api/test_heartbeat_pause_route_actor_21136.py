@@ -12,9 +12,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api import heartbeat
+from api import heartbeat, heartbeat_scope
 from api.schemas_heartbeat import HeartbeatConfigResponse
 from models.heartbeat import HeartbeatStatus
+from services.audit import outcome
 
 _BASE = "/api/heartbeat/a1"
 _CALLER = {"id": "principal-7", "username": "alice", "role": "admin"}
@@ -30,6 +31,7 @@ def _state() -> SimpleNamespace:
         paused_reason=None,
         paused_at=None,
         paused_by=None,
+        control_id=None,  # the row's last control (#21376); every control reads it to restore only its own change
         error_detail=None,
         error_at=None,
         error_code=None,
@@ -70,13 +72,17 @@ def harness(real_auth_middleware, monkeypatch):
     scheduler = MagicMock(disable_agent=AsyncMock(), enable_agent=AsyncMock())
     get_state = AsyncMock(return_value=state)
     names = AsyncMock(return_value=None)
-    monkeypatch.setattr(heartbeat, "record_committed", _record)
+    monkeypatch.setattr(outcome, "record_committed", _record)
     monkeypatch.setattr(heartbeat, "_get_or_create_state", get_state)
     monkeypatch.setattr(heartbeat, "_paused_by_name", names)
     app = FastAPI()
     app.include_router(heartbeat.router, prefix="/api/heartbeat")
     app.dependency_overrides[heartbeat.get_current_user] = real_auth_middleware.get_current_user
     app.dependency_overrides[heartbeat.get_db_session] = lambda: session
+    # Company scoping is covered by test_heartbeat_company_scope_21376; here the caller is a platform admin.
+    admin_scope = heartbeat_scope.AgentScope(company_id=None, platform_admin=True)
+    app.dependency_overrides[heartbeat_scope.read_scope] = lambda: admin_scope
+    app.dependency_overrides[heartbeat_scope.manage_scope] = lambda: admin_scope
     app.dependency_overrides[heartbeat._get_scheduler] = lambda: scheduler
     return SimpleNamespace(
         client=TestClient(app),
@@ -96,8 +102,8 @@ def test_pause_ignores_forged_body_actor(harness) -> None:
     assert response.status_code == 200
     # Fails if the route used the body: the state write would carry "system:forged".
     assert harness.state.paused_by == "principal-7"
-    # Fails if the audit named the body's value.
-    assert harness.audits == ["principal-7"]
+    # Fails if either audit row (attempted, then success) named the body's value.
+    assert harness.audits == ["principal-7", "principal-7"]
     body = HeartbeatConfigResponse.model_validate(response.json())
     assert (body.agent_id, body.status, body.paused_reason) == ("a1", HeartbeatStatus.PAUSED.value, "r")
     assert body.paused_by == "principal-7"
