@@ -1,171 +1,83 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  KnowledgeBatchToolbar — the selection bar of the Knowledge Browser (#18244, Refined UI
+  "Knowledge · Browser"): "N documents selected", Vectorize Selected, Clear Selection. It is the
+  one selection bar for the tree: it replaces the inline copy that lived in KnowledgeBrowser,
+  and carries the eligible-count note of the unmounted BatchSelectionToolbar. Advanced-only.
+-->
 <template>
-  <transition name="slide-down">
-    <div v-if="hasSelection" class="batch-toolbar">
-      <div class="toolbar-content">
-        <div class="toolbar-info">
-          <Icon name="check-square" />
-          <span>{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</span>
-        </div>
-        <div class="toolbar-actions">
-          <BaseButton
-            variant="primary"
-            @click="$emit('vectorize')"
-            :disabled="!canVectorize || isVectorizing"
-            :loading="isVectorizing"
-            class="toolbar-btn vectorize"
-          >
-            <Icon name="cubes" v-if="!isVectorizing" />
-            {{ $t('knowledge.batchToolbar.vectorizeSelected') }}
-          </BaseButton>
-          <BaseButton
-            variant="secondary"
-            @click="$emit('deselect-all')"
-            class="toolbar-btn cancel"
-          >
-            <Icon name="times" />
-            {{ $t('knowledge.batchToolbar.clearSelection') }}
-          </BaseButton>
-        </div>
-      </div>
-    </div>
-  </transition>
+  <div v-if="hasSelection" class="batch-toolbar adv" role="toolbar" :aria-label="$t('knowledge.batchToolbar.label')">
+    <strong class="batch-count">{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</strong>
+    <span v-if="eligibleCount !== undefined && eligibleCount < selectionCount" class="batch-eligible">
+      {{ $t('knowledge.batchSelection.eligible', { count: eligibleCount }) }}
+    </span>
+    <BaseTooltip :text="$t('knowledge.batchToolbar.vectorizeTip')" placement="top">
+      <template #default="{ describedby }">
+        <BaseButton
+          variant="primary"
+          size="sm"
+          class="batch-vectorize"
+          :disabled="!canVectorize || isVectorizing"
+          :loading="isVectorizing"
+          :aria-describedby="describedby"
+          @click="$emit('vectorize')"
+        >
+          {{ $t('knowledge.batchToolbar.vectorizeSelected') }}
+        </BaseButton>
+      </template>
+    </BaseTooltip>
+    <BaseButton variant="outline" size="sm" @click="$emit('deselect-all')">
+      {{ $t('knowledge.batchToolbar.clearSelection') }}
+    </BaseButton>
+  </div>
 </template>
 
 <script setup lang="ts">
-// AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
-// Author: mrveiss
-/**
- * Knowledge Batch Toolbar Component
- *
- * Floating toolbar for batch operations on selected documents.
- * Extracted from KnowledgeBrowser.vue for better maintainability.
- *
- * Issue #184: Split oversized Vue components
- */
+import { BaseButton, BaseTooltip } from '@autobot/ui'
 
-import Icon from '@/components/ui/Icon.vue'
-import { BaseButton } from '@autobot/ui'
+withDefaults(
+  defineProps<{
+    hasSelection: boolean
+    selectionCount: number
+    canVectorize: boolean
+    isVectorizing?: boolean
+    /** Selected documents that still need vectorizing; the note shows when it is below the selection. */
+    eligibleCount?: number
+  }>(),
+  { isVectorizing: false, eligibleCount: undefined },
+)
 
-interface Props {
-  hasSelection: boolean
-  selectionCount: number
-  canVectorize: boolean
-  isVectorizing?: boolean
-}
-
-interface Emits {
-  (e: 'vectorize'): void
-  (e: 'deselect-all'): void
-}
-
-withDefaults(defineProps<Props>(), {
-  isVectorizing: false
-})
-
-defineEmits<Emits>()
+defineEmits<{
+  vectorize: []
+  'deselect-all': []
+}>()
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
 .batch-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-20);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  padding: var(--spacing-3) var(--spacing-6);
-  box-shadow: var(--shadow-lg);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  margin: 0 var(--spacing-4) var(--spacing-4) var(--spacing-4);
-}
-
-.toolbar-content {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.toolbar-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  font-weight: var(--font-medium);
-}
-
-.toolbar-info .icon {
-  width: var(--text-lg);
-  height: var(--text-lg);
-}
-
-.toolbar-actions {
-  display: flex;
   gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface2);
+  border: var(--bw) solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text);
 }
 
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-weight: var(--font-medium);
-  transition: all var(--duration-200) var(--ease-in-out);
+.batch-count {
+  font-weight: 600;
 }
 
-.toolbar-btn.vectorize {
-  background: var(--bg-primary);
-  color: var(--color-primary-active);
+.batch-eligible {
+  color: var(--muted);
 }
 
-.toolbar-btn.vectorize:hover:not(:disabled) {
-  background: var(--color-primary-bg);
-  transform: translateY(-1px);
-}
-
-.toolbar-btn.vectorize:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.toolbar-btn.cancel {
-  background: var(--bg-primary-transparent);
-  color: var(--text-on-primary);
-  border: 1px solid var(--bg-primary-transparent-hover);
-}
-
-.toolbar-btn.cancel:hover {
-  background: var(--bg-primary-transparent-hover);
-}
-
-/* Transition */
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: all var(--duration-300) var(--ease-in-out);
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
-  opacity: 0;
-  transform: translateY(-100%);
-}
-
-@media (max-width: 768px) {
-  .toolbar-content {
-    flex-direction: column;
-    gap: var(--spacing-3);
-  }
-
-  .toolbar-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .toolbar-btn {
-    flex: 1;
-    justify-content: center;
-  }
+.batch-vectorize {
+  margin-inline-start: auto;
 }
 </style>

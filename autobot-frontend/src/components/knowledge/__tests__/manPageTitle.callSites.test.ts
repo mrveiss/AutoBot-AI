@@ -66,8 +66,8 @@ describe('man-page titles at each call site (#21037)', () => {
   })
 
   it('KnowledgeContentViewer: a browse node and a folder-search node', () => {
-    expect(viewer(BROWSE_NODE).find('h4').text()).toBe(SHOWN)
-    expect(viewer(FOLDER_NODE).find('h4').text()).toBe(SHOWN)
+    expect(viewer(BROWSE_NODE).find('.file-title').text()).toBe(SHOWN)
+    expect(viewer(FOLDER_NODE).find('.file-title').text()).toBe(SHOWN)
   })
 
   it('KBSearchResultPanel: results mapped from a backend search payload', async () => {

@@ -1,95 +1,83 @@
 <template>
-  <div class="tree-node">
+  <div
+    class="tree-node"
+    role="treeitem"
+    :aria-level="level"
+    :aria-expanded="isFolder ? isExpanded : undefined"
+    :aria-selected="node.id === selectedId"
+  >
     <div
       :class="{
         'node-content': true,
-        'is-folder': node.type === 'folder',
-        'is-file': node.type === 'file',
-        'is-expanded': node.type === 'folder' && expandedNodes.has(node.id),
+        'is-folder': isFolder,
+        'is-file': !isFolder,
+        'is-expanded': isExpanded,
         'is-selected': node.id === selectedId
       }"
+      :style="{ '--tree-level': level }"
     >
-      <!-- Checkbox for files -->
       <input
-        v-if="node.type === 'file'"
+        v-if="!isFolder"
         type="checkbox"
         class="node-checkbox"
         :checked="isSelected"
+        :aria-label="$t('knowledge.treeNode.selectDocument', { name: displayName })"
         @click.stop="$emit('toggle-select', node.id)"
       />
-      <span v-else class="checkbox-spacer"></span>
 
-      <!-- Expand button for folders -->
-      <button
-        v-if="node.type === 'folder'"
-        class="expand-btn"
-        @click.stop="$emit('toggle', node.id)"
-      >
-        <i :class="['fas', expandedNodes.has(node.id) ? 'fa-chevron-down' : 'fa-chevron-right']"></i>
-      </button>
-      <span v-else class="expand-spacer"></span>
-
-      <!-- Node icon -->
-      <button
-        class="node-icon-btn"
-        @click.stop="$emit('select', node)"
-        type="button"
-        :aria-label="displayName"
-        :title="displayName"
-      >
-        <i :class="['node-icon', nodeIcon]"></i>
+      <button class="node-name-btn" type="button" @click.stop="$emit('select', node)">
+        <Icon v-if="isFolder" :name="isExpanded ? 'chevron-down' : 'chevron-right'" class="node-chevron" aria-hidden="true" />
+        <Icon :name="nodeIcon" class="node-icon" aria-hidden="true" />
+        <span class="node-label" :class="{ 'is-strong': isFolder }">{{ displayName }}</span>
       </button>
 
-      <!-- Node name -->
-      <button class="node-name-btn" @click.stop="$emit('select', node)" type="button">{{ displayName }}</button>
+      <BaseTooltip v-if="isFolder && node.children" :text="$t('knowledge.treeNode.itemsCount', { count: node.children.length })" placement="left">
+        <template #default="{ describedby }">
+          <span class="folder-count" tabindex="0" :aria-describedby="describedby">{{ node.children.length }}</span>
+        </template>
+      </BaseTooltip>
+      <span v-else-if="node.size !== undefined" class="node-size">{{ formatFileSize(node.size, sizeOptions) }}</span>
 
-      <!-- Folder count or file size -->
-      <span v-if="node.type === 'folder' && node.children" class="folder-count">
-        {{ $t('knowledge.treeNode.itemsCount', { count: node.children.length }) }}
-      </span>
-      <span v-else-if="node.type === 'file' && node.size !== undefined" class="node-size">
-        {{ formatFileSize(node.size, sizeOptions) }}
-      </span>
+      <BaseTooltip v-if="isFolder && unvectorizedCount > 0" class="adv" :text="$t('knowledge.treeNode.vectorizeFolderTitle', { count: unvectorizedCount })" placement="left">
+        <template #default="{ describedby }">
+          <BaseButton
+            variant="ghost"
+            size="xs"
+            class="unvectorized-badge"
+            :aria-describedby="describedby"
+            @click.stop="$emit('vectorize-folder', node)"
+          >
+            {{ $t('knowledge.treeNode.unvectorized', { count: unvectorizedCount }) }}
+            <Icon name="play-circle" aria-hidden="true" />
+          </BaseButton>
+        </template>
+      </BaseTooltip>
 
-      <!-- Unvectorized count badge for folders -->
-      <button
-        v-if="node.type === 'folder' && unvectorizedCount > 0"
-        class="unvectorized-badge"
-        :title="$t('knowledge.treeNode.vectorizeFolderTitle', { count: unvectorizedCount, plural: unvectorizedCount !== 1 ? 's' : '' })"
-        @click.stop="$emit('vectorize-folder', node)"
-      >
-        <Icon name="exclamation-circle" />
-        {{ $t('knowledge.treeNode.unvectorized', { count: unvectorizedCount }) }}
-        <Icon name="play-circle" />
-      </button>
+      <VectorizationStatusBadge v-if="!isFolder" class="adv" :status="vectorizationStatus" :show-label="true" />
 
-      <!-- Vectorization status badge for files -->
-      <VectorizationStatusBadge
-        v-if="node.type === 'file'"
-        :status="vectorizationStatus"
-        :compact="true"
-      />
-
-      <!-- Vectorize button for non-vectorized files -->
-      <button
-        v-if="node.type === 'file' && canVectorize"
-        :class="['vectorize-btn', { 'retry-btn': vectorizationStatus === 'failed' }]"
-        :title="vectorizationStatus === 'failed' ? $t('knowledge.treeNode.retryTitle') : $t('knowledge.treeNode.vectorizeTitle')"
-        @click.stop="$emit('vectorize', node.id)"
-      >
-        <Icon :name="vectorizationStatus === 'failed' ? 'redo' : 'cube'" />
-      </button>
+      <BaseTooltip v-if="!isFolder && canVectorize" class="adv" :text="vectorizeTip" placement="left">
+        <template #default="{ describedby }">
+          <BaseButton
+            variant="ghost"
+            size="xs"
+            class="vectorize-btn"
+            :class="{ 'retry-btn': vectorizationStatus === 'failed' }"
+            :aria-label="vectorizeTip"
+            :aria-describedby="describedby"
+            @click.stop="$emit('vectorize', node.id)"
+          >
+            <Icon :name="vectorizationStatus === 'failed' ? 'redo' : 'cube'" aria-hidden="true" />
+          </BaseButton>
+        </template>
+      </BaseTooltip>
     </div>
 
-    <!-- Children (recursive) -->
-    <div
-      v-if="node.type === 'folder' && expandedNodes.has(node.id) && node.children"
-      class="node-children"
-    >
+    <div v-if="isExpanded && node.children" class="node-children" role="group">
       <TreeNodeComponent
         v-for="child in node.children"
         :key="child.id"
         :node="child"
+        :level="level + 1"
         :expanded-nodes="expandedNodes"
         :selected-id="selectedId"
         :selected-documents="selectedDocuments"
@@ -106,6 +94,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { BaseButton, BaseTooltip } from '@autobot/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
@@ -147,10 +136,13 @@ interface Props {
   selectedId?: string
   selectedDocuments: Set<string>
   vectorizationStates: Map<string, DocumentVectorizationState>
+  /** Depth in the tree, 1 for a top-level node (aria-level and the indent). */
+  level?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  selectedId: undefined
+  selectedId: undefined,
+  level: 1
 })
 
 // Emits
@@ -163,10 +155,11 @@ defineEmits<{
 }>()
 
 // Computed properties
+const isFolder = computed(() => props.node.type === 'folder')
+const isExpanded = computed(() => isFolder.value && props.expandedNodes.has(props.node.id))
+
 const nodeIcon = computed(() => {
-  if (props.node.type === 'folder') {
-    return props.expandedNodes.has(props.node.id) ? 'folder-open' : 'folder'
-  }
+  if (isFolder.value) return isExpanded.value ? 'folder-open' : 'folder'
   return 'file-alt'
 })
 
@@ -210,6 +203,10 @@ const unvectorizedCount = computed(() => {
 
 const { t } = useI18n()
 
+const vectorizeTip = computed(() =>
+  vectorizationStatus.value === 'failed' ? t('knowledge.treeNode.retryTitle') : t('knowledge.treeNode.vectorizeTitle'),
+)
+
 // #21037: display-only man-page label; node.name stays raw for search/icons.
 const displayName = computed(() =>
   formatManPageTitle(props.node.name, knowledgeNodeFactType(props.node.metadata), t),
@@ -226,204 +223,93 @@ const sizeOptions = computed(() => ({
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
-/* Tree node */
 .tree-node {
-  user-select: none;
+  display: block;
 }
 
 .node-content {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-3);
-  cursor: pointer;
+  padding: var(--spacing-1) var(--spacing-2);
+  padding-inline-start: calc(var(--spacing-2) + (var(--tree-level, 1) - 1) * var(--spacing-5));
   border-radius: var(--radius-md);
-  transition: all var(--duration-150) var(--ease-in-out);
-  margin: var(--spacing-0-5) 0;
+  border-inline-start: 3px solid transparent;
+  font-size: var(--text-sm);
+  color: var(--text);
 }
 
 .node-content:hover {
-  background: var(--bg-secondary);
+  background: var(--surface2);
 }
 
 .node-content.is-selected {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-weight: var(--font-medium);
+  background: var(--surface2);
+  border-inline-start-color: var(--primary);
 }
 
 .node-checkbox {
-  width: 1rem;
-  height: 1rem;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.checkbox-spacer {
-  width: 1rem;
-  flex-shrink: 0;
-}
-
-.expand-btn {
-  width: 1.25rem;
-  height: 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-0);
-  transition: transform var(--duration-200) var(--ease-in-out);
-}
-
-.expand-btn:hover {
-  color: var(--text-primary);
-}
-
-.expand-spacer {
-  width: 1.25rem;
-}
-
-.node-icon {
-  color: var(--color-primary);
-  font-size: var(--text-sm);
-  min-width: 1rem;
-  cursor: pointer;
-}
-
-.node-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: var(--spacing-0);
-  cursor: pointer;
-  color: var(--color-primary);
-  transition: all var(--duration-150) var(--ease-in-out);
-}
-
-.node-icon-btn:hover {
-  color: var(--color-primary-hover);
-}
-
-.node-name {
-  flex: 1 1 0;
-  min-width: 0;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
+  inline-size: 16px;
+  block-size: 16px;
+  flex: none;
+  accent-color: var(--primary);
 }
 
 .node-name-btn {
-  flex: 1 1 0;
-  min-width: 0;
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--spacing-1) 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.node-name-btn:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.node-chevron,
+.node-icon {
+  flex: none;
+  color: var(--stroke);
+}
+
+.node-label {
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: var(--spacing-0);
-  font-family: inherit;
-  text-align: left;
-  transition: all var(--duration-150) var(--ease-in-out);
 }
 
-.node-name-btn:hover {
-  color: var(--color-primary);
+.node-label.is-strong {
+  font-weight: 600;
 }
 
-.folder-count {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-md);
-  margin-left: var(--spacing-2);
-  font-weight: var(--font-medium);
+.is-selected .node-label {
+  font-weight: 600;
 }
 
+.folder-count,
 .node-size {
+  flex: none;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.unvectorized-badge {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  font-size: var(--text-xs);
-  color: var(--color-error);
-  background: var(--color-error-bg);
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-md);
-  margin-left: var(--spacing-2);
-  font-weight: var(--font-medium);
-  border: 1px solid var(--color-error-border);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-}
-
-.unvectorized-badge:hover {
-  background: var(--color-error-bg-hover);
-  border-color: var(--color-error);
-  transform: translateX(2px);
-  box-shadow: var(--shadow-sm);
-}
-
-.unvectorized-badge i {
-  font-size: var(--text-xs);
-}
-
-.unvectorized-badge i.fa-play-circle {
-  font-size: var(--text-sm);
-  margin-left: var(--spacing-1);
-  opacity: 0.7;
-}
-
-.unvectorized-badge:hover i.fa-play-circle {
-  opacity: 1;
-  color: var(--color-error-hover);
-}
-
-.vectorize-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-  font-size: var(--text-xs);
-}
-
-.vectorize-btn:hover {
-  background: var(--color-primary-hover);
-  transform: scale(1.1);
+  color: var(--muted);
 }
 
 .vectorize-btn.retry-btn {
-  background: var(--color-error);
-}
-
-.vectorize-btn.retry-btn:hover {
-  background: var(--color-error-hover);
+  color: var(--bad-fg);
 }
 
 .node-children {
-  padding-left: var(--spacing-6);
+  display: block;
 }
 </style>

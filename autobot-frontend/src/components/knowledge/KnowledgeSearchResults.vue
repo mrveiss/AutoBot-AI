@@ -1,33 +1,26 @@
 <template>
-  <div v-if="search.searchPerformed.value" class="search-results">
-    <!-- RAG Synthesized Response -->
-    <div v-if="search.useRagSearch.value && search.ragResponse.value?.synthesized_response" class="rag-synthesis">
-      <div class="synthesis-header">
-        <h4>
-          <Icon name="brain" class="rag-icon" />
-          {{ $t('knowledge.search.aiSynthesis') }}
-        </h4>
+  <BaseCard v-if="search.searchPerformed.value" class="search-results" flush>
+    <section v-if="search.useRagSearch.value && search.ragResponse.value?.synthesized_response" class="rag-synthesis">
+      <header class="synthesis-header">
+        <h4><Icon name="brain" class="rag-icon" aria-hidden="true" /> {{ $t('knowledge.search.aiSynthesis') }}</h4>
         <div v-if="search.ragResponse.value.rag_analysis" class="analysis-badges">
-          <span class="confidence-badge" :class="getConfidenceBadgeClass(search.ragResponse.value.rag_analysis.confidence)">
+          <BaseBadge :variant="confidenceVariant(search.ragResponse.value.rag_analysis.confidence)" size="sm">
             {{ $t('knowledge.search.confidence', { value: Math.round(search.ragResponse.value.rag_analysis.confidence * 100) }) }}
-          </span>
-          <span class="sources-badge">
+          </BaseBadge>
+          <BaseBadge variant="info" size="sm">
             {{ $t('knowledge.search.sourcesCount', { count: search.ragResponse.value.rag_analysis.sources_used }) }}
-          </span>
+          </BaseBadge>
         </div>
-      </div>
-
-      <div class="synthesis-content">
-        <p>{{ search.ragResponse.value.synthesized_response }}</p>
-      </div>
-
-      <div v-if="search.ragResponse.value.reformulated_query && search.ragResponse.value.reformulated_query !== search.ragResponse.value.query" class="query-reformulation">
-        <p class="reformulated-note">
-          <Icon name="lightbulb" />
-          {{ $t('knowledge.search.enhancedQuery') }}: "{{ search.ragResponse.value.reformulated_query }}"
-        </p>
-      </div>
-    </div>
+      </header>
+      <p class="synthesis-content">{{ search.ragResponse.value.synthesized_response }}</p>
+      <p
+        v-if="search.ragResponse.value.reformulated_query && search.ragResponse.value.reformulated_query !== search.ragResponse.value.query"
+        class="reformulated-note"
+      >
+        <Icon name="lightbulb" aria-hidden="true" />
+        {{ $t('knowledge.search.enhancedQuery') }}: "{{ search.ragResponse.value.reformulated_query }}"
+      </p>
+    </section>
 
     <!-- Issue #3296: KB search result panel with keyboard nav + highlight -->
     <!-- Issue #3940: Pass repository instance to eliminate duplicate creation -->
@@ -41,34 +34,30 @@
       @close="emit('close')"
     />
 
-    <!-- No Results -->
     <EmptyState
       v-if="search.searchResults.value.length === 0 && !search.isSearching.value"
       icon="search"
       :message="$t('knowledge.search.noResults')"
     >
       <p class="no-results-hint">
-        {{ search.useRagSearch.value
-          ? $t('knowledge.search.noResultsRagHint')
-          : $t('knowledge.search.noResultsHint')
-        }}
+        {{ search.useRagSearch.value ? $t('knowledge.search.noResultsRagHint') : $t('knowledge.search.noResultsHint') }}
       </p>
-      <div class="initialization-help">
-        <p><strong>{{ $t('knowledge.search.needToIndex') }}</strong></p>
-        <p>{{ $t('knowledge.search.indexHelpBefore') }} <router-link to="/knowledge/manage" class="help-link">{{ $t('knowledge.search.indexHelpLink') }}</router-link> {{ $t('knowledge.search.indexHelpAfter') }}</p>
-      </div>
+      <BaseAlert variant="info" :title="$t('knowledge.search.needToIndex')">
+        {{ $t('knowledge.search.indexHelpBefore') }}
+        <router-link to="/knowledge/manage" class="help-link">{{ $t('knowledge.search.indexHelpLink') }}</router-link>
+        {{ $t('knowledge.search.indexHelpAfter') }}
+      </BaseAlert>
     </EmptyState>
 
-    <!-- RAG Error Handling -->
-    <div v-if="search.useRagSearch.value && search.ragError.value" class="rag-error">
-      <div class="error-header">
-        <Icon name="exclamation-triangle" />
-        {{ $t('knowledge.search.ragUnavailable') }}
-      </div>
-      <p>{{ search.ragError.value }}</p>
-      <p class="fallback-note">{{ $t('knowledge.search.fallbackNote') }}</p>
-    </div>
-  </div>
+    <BaseAlert
+      v-if="search.useRagSearch.value && search.ragError.value"
+      variant="warning"
+      :title="$t('knowledge.search.ragUnavailable')"
+    >
+      <p class="rag-error-text">{{ search.ragError.value }}</p>
+      <p class="rag-error-text">{{ $t('knowledge.search.fallbackNote') }}</p>
+    </BaseAlert>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
@@ -77,6 +66,7 @@ import type { SearchResult } from '@/stores/useKnowledgeStore'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import KBSearchResultPanel from './KBSearchResultPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseAlert, BaseBadge, BaseCard } from '@autobot/ui'
 import type { useKnowledgeSearch } from '@/composables/knowledge/useKnowledgeSearch'
 
 defineProps<{ search: ReturnType<typeof useKnowledgeSearch> }>()
@@ -85,135 +75,80 @@ const emit = defineEmits<{
   (e: 'select', result: SearchResult): void
 }>()
 
-function getConfidenceBadgeClass(confidence: number): string {
-  if (confidence >= 0.8) return 'confidence-high'
-  if (confidence >= 0.6) return 'confidence-medium'
-  return 'confidence-low'
+const CONFIDENCE_HIGH = 0.8
+const CONFIDENCE_MEDIUM = 0.6
+
+function confidenceVariant(confidence: number): 'success' | 'warning' | 'error' {
+  if (confidence >= CONFIDENCE_HIGH) return 'success'
+  if (confidence >= CONFIDENCE_MEDIUM) return 'warning'
+  return 'error'
 }
 </script>
 
 <style scoped>
-@reference "../../assets/tailwind.css";
-
-/* Results */
 .search-results {
-  @apply space-y-4;
+  min-inline-size: 0;
 }
 
-/* RAG Synthesis */
 .rag-synthesis {
-  @apply mb-6 p-4 rounded-lg;
-  background: var(--color-info-bg);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-4);
+  background: var(--info-bg);
+  color: var(--info-fg);
+  border-block-end: var(--bw) solid var(--line);
 }
 
 .synthesis-header {
-  @apply flex justify-between items-start mb-3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-3);
 }
 
 .synthesis-header h4 {
-  @apply text-lg font-semibold flex items-center gap-2;
-  color: var(--text-primary);
-}
-
-.rag-icon {
-  color: var(--color-info);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
 }
 
 .analysis-badges {
-  @apply flex gap-2;
+  display: flex;
+  gap: var(--spacing-2);
 }
 
-.confidence-badge, .sources-badge {
-  @apply px-2 py-1 rounded-full text-xs font-medium;
-}
-
-.confidence-high {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.confidence-medium {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.confidence-low {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.sources-badge {
-  background: var(--color-info-bg);
-  color: var(--color-info);
+.synthesis-content,
+.reformulated-note,
+.no-results-hint,
+.rag-error-text {
+  margin: 0;
 }
 
 .synthesis-content {
-  @apply prose prose-sm max-w-none;
-}
-
-.synthesis-content p {
-  @apply text-autobot-text-primary leading-relaxed;
-}
-
-.query-reformulation {
-  @apply mt-3 pt-3 border-t;
-  border-color: rgba(59, 130, 246, 0.2);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text);
 }
 
 .reformulated-note {
-  @apply text-sm flex items-center gap-2;
-  color: var(--color-info);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
 }
 
-/* No Results */
 .no-results-hint {
-  @apply text-sm text-autobot-text-muted mt-2;
-}
-
-.initialization-help {
-  @apply mt-4 p-4 rounded-lg;
-  background: var(--color-info-bg);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-}
-
-.initialization-help p {
-  @apply text-sm mb-1;
-  color: var(--text-primary);
-}
-
-.initialization-help strong {
-  @apply font-semibold;
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .help-link {
-  @apply underline font-medium;
-  color: var(--color-info);
-}
-
-.help-link:hover {
-  color: var(--text-primary);
-}
-
-/* RAG Error */
-.rag-error {
-  @apply mt-4 p-4 rounded-lg;
-  background: var(--color-warning-bg);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.error-header {
-  @apply flex items-center gap-2 font-medium mb-2;
-  color: var(--color-warning);
-}
-
-.rag-error p {
-  @apply text-sm;
-  color: var(--color-warning);
-}
-
-.fallback-note {
-  @apply mt-2 text-xs font-medium;
-  color: var(--color-warning);
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: underline;
 }
 </style>

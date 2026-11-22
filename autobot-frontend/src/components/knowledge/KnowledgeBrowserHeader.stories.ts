@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Meta } from '@storybook/vue3'
 import type { StoryObj } from '@storybook/vue3'
+import { ref } from 'vue'
 import KnowledgeBrowserHeader from './KnowledgeBrowserHeader.vue'
 
 const meta = {
@@ -9,9 +10,7 @@ const meta = {
   component: KnowledgeBrowserHeader,
   tags: ['autodocs'],
   argTypes: {
-    categories: { control: 'object' },
-    selectedCategory: { control: 'text' },
-    searchQuery: { control: 'text' },
+    query: { control: 'text' },
   },
 } as Meta<typeof KnowledgeBrowserHeader>
 
@@ -19,45 +18,19 @@ export default meta
 // #7273: relaxed to StoryObj<Record<string, unknown>> for render-only stories that don't match component props
 type Story = StoryObj<Record<string, unknown>>
 
+// The search options the header's popover edits; the composable owns the real refs.
+const search = {
+  useRagSearch: ref(false),
+  ragOptions: ref({ reformulateQuery: true, enableReranking: false, limit: 10 }),
+  selectedAccessLevel: ref<string | null>(null),
+  toggleAccessLevel: () => {},
+  clearAccessLevelFilter: () => {},
+}
+
 export const Default: Story = {
-  args: {
-    categories: [
-      { value: null, label: 'All', icon: 'fas fa-th', count: 42 },
-      { value: 'system', label: 'System', icon: 'fas fa-cogs', count: 15 },
-      { value: 'user', label: 'User', icon: 'fas fa-user', count: 27 },
-    ],
-    selectedCategory: null,
-    searchQuery: '',
-  },
+  args: { query: '', search },
 }
 
-export const WithActiveCategory: Story = {
-  args: {
-    categories: [
-      { value: null, label: 'All', icon: 'fas fa-th', count: 42 },
-      { value: 'system', label: 'System', icon: 'fas fa-cogs', count: 15 },
-      { value: 'user', label: 'User', icon: 'fas fa-user', count: 27 },
-    ],
-    selectedCategory: 'system',
-    searchQuery: '',
-  },
-}
-
-export const WithSearch: Story = {
-  args: {
-    categories: [
-      { value: null, label: 'All', icon: 'fas fa-th', count: 42 },
-      { value: 'system', label: 'System', icon: 'fas fa-cogs', count: 15 },
-    ],
-    selectedCategory: null,
-    searchQuery: 'autobot config',
-  },
-}
-
-export const EmptyCategories: Story = {
-  args: {
-    categories: [],
-    selectedCategory: null,
-    searchQuery: '',
-  },
+export const WithQuery: Story = {
+  args: { query: 'fleet runbook', search },
 }

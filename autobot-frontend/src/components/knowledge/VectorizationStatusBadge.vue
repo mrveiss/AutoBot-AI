@@ -1,188 +1,84 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  VectorizationStatusBadge — whether a knowledge document is searchable yet (#18244):
+  Vectorized (ok), Pending (warn), Failed (bad), Unknown (idle), on the kit's one badge, with a
+  tooltip that says what the state means. The icon-only form (`showLabel` off) keeps its name
+  in an accessible label.
+-->
 <template>
-  <span
-    class="vectorization-badge"
-    :class="badgeClass"
-    :title="tooltipText"
-  >
-    <Icon :name="iconClass" />
-    <span v-if="showLabel" class="badge-label">{{ labelText }}</span>
-  </span>
+  <BaseTooltip :text="tooltipText" placement="left">
+    <template #default="{ describedby }">
+      <BaseBadge
+        class="vectorization-badge"
+        :class="`status-${status}`"
+        :variant="VARIANT[status] ?? 'neutral'"
+        :size="compact ? 'xs' : 'sm'"
+        tabindex="0"
+        :aria-describedby="describedby"
+      >
+        <Icon :name="ICON[status] ?? 'question-circle'" aria-hidden="true" />
+        <span v-if="showLabel" class="badge-label">{{ labelText }}</span>
+        <span v-else class="sr-only">{{ labelText }}</span>
+      </BaseBadge>
+    </template>
+  </BaseTooltip>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseBadge, BaseTooltip, type BadgeVariant } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
+
+const props = withDefaults(
+  defineProps<{
+    status: 'vectorized' | 'pending' | 'failed' | 'unknown'
+    showLabel?: boolean
+    compact?: boolean
+  }>(),
+  { showLabel: false, compact: false },
+)
 
 const { t } = useI18n()
 
-interface Props {
-  status: 'vectorized' | 'pending' | 'failed' | 'unknown'
-  showLabel?: boolean
-  compact?: boolean
+const VARIANT: Record<string, BadgeVariant> = {
+  vectorized: 'success',
+  pending: 'warning',
+  failed: 'error',
+  unknown: 'neutral',
 }
-
-const props = withDefaults(defineProps<Props>(), {
-  showLabel: false,
-  compact: false
-})
-
-const badgeClass = computed(() => {
-  const classes = ['vectorization-badge']
-
-  if (props.compact) {
-    classes.push('compact')
-  }
-
-  switch (props.status) {
-    case 'vectorized':
-      classes.push('status-vectorized')
-      break
-    case 'pending':
-      classes.push('status-pending')
-      break
-    case 'failed':
-      classes.push('status-failed')
-      break
-    default:
-      classes.push('status-unknown')
-  }
-
-  return classes.join(' ')
-})
-
-const iconClass = computed(() => {
-  switch (props.status) {
-    case 'vectorized':
-      return 'check-circle'
-    case 'pending':
-      return 'spinner'
-    case 'failed':
-      return 'times-circle'
-    default:
-      return 'question-circle'
-  }
-})
+const ICON: Record<string, IconName> = {
+  vectorized: 'check-circle',
+  pending: 'spinner',
+  failed: 'times-circle',
+  unknown: 'question-circle',
+}
 
 const labelText = computed(() => {
   switch (props.status) {
-    case 'vectorized':
-      return t('knowledge.vectorization.statusVectorized')
-    case 'pending':
-      return t('knowledge.vectorization.statusPending')
-    case 'failed':
-      return t('knowledge.vectorization.statusFailed')
-    default:
-      return t('knowledge.vectorization.statusUnknown')
+    case 'vectorized': return t('knowledge.vectorization.statusVectorized')
+    case 'pending': return t('knowledge.vectorization.statusPending')
+    case 'failed': return t('knowledge.vectorization.statusFailed')
+    default: return t('knowledge.vectorization.statusUnknown')
   }
 })
 
 const tooltipText = computed(() => {
   switch (props.status) {
-    case 'vectorized':
-      return t('knowledge.vectorization.tooltipVectorized')
-    case 'pending':
-      return t('knowledge.vectorization.tooltipPending')
-    case 'failed':
-      return t('knowledge.vectorization.tooltipFailed')
-    default:
-      return t('knowledge.vectorization.tooltipUnknown')
+    case 'vectorized': return t('knowledge.vectorization.tooltipVectorized')
+    case 'pending': return t('knowledge.vectorization.tooltipPending')
+    case 'failed': return t('knowledge.vectorization.tooltipFailed')
+    default: return t('knowledge.vectorization.tooltipUnknown')
   }
 })
-import Icon from '@/components/ui/Icon.vue'
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
 .vectorization-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-1) var(--spacing-2-5);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  transition: all var(--duration-200) var(--ease-in-out);
+  gap: var(--spacing-1);
   cursor: default;
-}
-
-.vectorization-badge.compact {
-  padding: var(--spacing-0-5) var(--spacing-1-5);
-  font-size: 0.6875rem;
-}
-
-.vectorization-badge .icon {
-  width: var(--text-sm);
-  height: var(--text-sm);
-}
-
-.vectorization-badge.compact .icon {
-  width: var(--text-xs);
-  height: var(--text-xs);
-}
-
-/* Vectorized status - green */
-.status-vectorized {
-  background: var(--color-success-bg-transparent);
-  color: var(--color-success);
-  border: 1px solid var(--color-success-border);
-}
-
-.status-vectorized .icon {
-  color: var(--color-success);
-}
-
-.status-vectorized:hover {
-  background: var(--color-success-bg);
-}
-
-/* Pending status - yellow */
-.status-pending {
-  background: var(--color-warning-bg-transparent);
-  color: var(--color-warning);
-  border: 1px solid var(--color-warning-border);
-}
-
-.status-pending .icon {
-  color: var(--color-warning);
-}
-
-.status-pending:hover {
-  background: var(--color-warning-bg);
-}
-
-/* Failed status - red */
-.status-failed {
-  background: var(--color-error-bg-transparent);
-  color: var(--color-error);
-  border: 1px solid var(--color-error-border);
-  cursor: pointer;
-}
-
-.status-failed .icon {
-  color: var(--color-error);
-}
-
-.status-failed:hover {
-  background: var(--color-error-bg);
-  transform: scale(1.05);
-}
-
-/* Unknown status - gray */
-.status-unknown {
-  background: var(--bg-tertiary-transparent);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.status-unknown .icon {
-  color: var(--text-tertiary);
-}
-
-.status-unknown:hover {
-  background: var(--bg-tertiary);
-}
-
-.badge-label {
-  white-space: nowrap;
 }
 </style>

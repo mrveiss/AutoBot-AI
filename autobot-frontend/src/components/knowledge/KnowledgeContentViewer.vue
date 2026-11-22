@@ -1,49 +1,50 @@
 <template>
-  <div class="content-pane">
+  <BaseCard class="content-pane" flush :aria-label="$t('knowledge.contentViewer.label')">
     <div v-if="!selectedFile" class="placeholder-state">
       <Icon name="file-alt" />
       <h4>{{ $t('knowledge.contentViewer.noFileSelected') }}</h4>
       <p>{{ $t('knowledge.contentViewer.selectFileHint') }}</p>
     </div>
 
-    <div v-else class="file-viewer">
-      <div class="file-header">
+    <article v-else class="file-viewer">
+      <header class="file-header">
+        <span class="tile" aria-hidden="true"><Icon :name="fileIcon" /></span>
         <div class="file-info">
-          <Icon :name="fileIcon" />
-          <div>
-            <h4>{{ displayName }}</h4>
-            <p class="file-meta">
-              {{ selectedFile.type }} • {{ formatFileSize(selectedFile.size || 0) }}
-              <span v-if="selectedFile.date"> • {{ formatDate(selectedFile.date) }}</span>
-            </p>
-          </div>
+          <h2 class="file-title">{{ displayName }}</h2>
+          <span class="file-meta">{{ metaLine }}</span>
         </div>
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          @click="$emit('close')"
-          class="close-btn"
-          :aria-label="$t('knowledge.contentViewer.closeFileViewer')"
-        >
-          <Icon name="times" />
-        </BaseButton>
-      </div>
+        <BaseTooltip :text="$t('knowledge.contentViewer.closeFileViewer')" placement="left">
+          <template #default="{ describedby }">
+            <BaseButton
+              variant="ghost"
+              size="sm"
+              :aria-label="$t('knowledge.contentViewer.closeFileViewer')"
+              :aria-describedby="describedby"
+              @click="$emit('close')"
+            >
+              <Icon name="times" aria-hidden="true" />
+            </BaseButton>
+          </template>
+        </BaseTooltip>
+      </header>
 
       <div class="file-content">
-        <div v-if="isLoading" class="loading-content">
-          <Icon name="spinner" class="animate-spin" />
+        <div v-if="isLoading" class="loading-content" role="status">
+          <BaseSpinner size="sm" />
           <p>{{ $t('knowledge.contentViewer.loadingContent') }}</p>
         </div>
-
-        <div v-else-if="error" class="error-content">
+        <div v-else-if="error" class="error-content" role="alert">
           <Icon name="exclamation-circle" />
           <p>{{ error }}</p>
         </div>
-
         <pre v-else class="content-display">{{ content }}</pre>
       </div>
-    </div>
-  </div>
+
+      <footer v-if="tags.length" class="file-tags">
+        <span v-for="tag in tags" :key="tag" class="tag">#{{ tag }}</span>
+      </footer>
+    </article>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
@@ -62,9 +63,9 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseCard, BaseSpinner, BaseTooltip } from '@autobot/ui'
 import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
-import { formatDate, formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
+import { formatCategoryName, formatDate, formatFileSize, formatManPageTitle, knowledgeNodeFactType } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 
 interface TreeNode {
@@ -106,6 +107,20 @@ const displayName = computed(() =>
   formatManPageTitle(props.selectedFile?.name, knowledgeNodeFactType(props.selectedFile?.metadata), t),
 )
 
+// The fact's own tags (metadata.tags), when the backend stored any.
+const tags = computed<string[]>(() => {
+  const raw = props.selectedFile?.metadata?.tags
+  return Array.isArray(raw) ? raw.filter((tag): tag is string => typeof tag === 'string') : []
+})
+
+const metaLine = computed(() => {
+  const file = props.selectedFile
+  if (!file) return ''
+  const parts = [file.category ? formatCategoryName(file.category) : '', formatFileSize(file.size || 0)]
+  if (file.date) parts.push(formatDate(file.date))
+  return parts.filter(Boolean).join(' · ')
+})
+
 const fileIcon = computed<IconName>(() => {
   if (!props.selectedFile) return 'file'
   // #9724: getFileIcon expects the file NAME — passing the whole TreeNode
@@ -115,134 +130,121 @@ const fileIcon = computed<IconName>(() => {
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
 .content-pane {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary);
-  border-left: 1px solid var(--border-default);
+  min-inline-size: 0;
 }
 
 .placeholder-state {
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-8);
+  gap: var(--spacing-2);
+  padding: var(--spacing-8) var(--spacing-4);
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--muted);
 }
 
-.placeholder-state .icon {
-  width: var(--text-4xl);
-  height: var(--text-4xl);
-  margin-bottom: var(--spacing-4);
-  opacity: 0.5;
-}
-
-.placeholder-state h4 {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-2);
-}
-
+.placeholder-state h4,
 .placeholder-state p {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
+  margin: 0;
 }
 
 .file-viewer {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-block-size: 0;
+  flex: 1;
 }
 
 .file-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-4) var(--spacing-6);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-default);
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-block-end: var(--bw) solid var(--line);
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  flex: none;
+  border-radius: var(--radius-lg);
+  background: var(--tile);
+  border: var(--bw) solid var(--tile-b);
+  color: var(--stroke);
 }
 
 .file-info {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-inline-size: 0;
 }
 
-.file-info .icon {
-  width: var(--text-2xl);
-  height: var(--text-2xl);
-  color: var(--color-primary);
-}
-
-.file-info h4 {
+.file-title {
+  margin: 0;
+  font-family: var(--font-mono);
   font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: var(--spacing-0);
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .file-meta {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: var(--spacing-1) 0 0 0;
-}
-
-.close-btn {
-  color: var(--text-secondary);
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 
 .file-content {
   flex: 1;
+  min-block-size: 0;
   overflow: auto;
-  padding: var(--spacing-6);
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.content-display {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .loading-content,
 .error-content {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary);
-}
-
-.loading-content .icon,
-.error-content .icon {
-  width: var(--text-3xl);
-  height: var(--text-3xl);
-  margin-bottom: var(--spacing-4);
+  gap: var(--spacing-2);
+  color: var(--muted);
 }
 
 .error-content {
-  color: var(--color-error);
+  color: var(--bad-fg);
 }
 
-.content-display {
-  margin: var(--spacing-0);
-  padding: var(--spacing-4);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-x: auto;
+.file-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-block-start: var(--bw) solid var(--line);
+}
+
+.tag {
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-md);
+  background: var(--surface2);
+  border: var(--bw) solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text2);
 }
 </style>

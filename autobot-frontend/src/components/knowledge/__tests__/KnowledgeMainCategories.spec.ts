@@ -164,3 +164,52 @@ describe('KnowledgeMainCategories — fetch-layer error panel (#5590)', () => {
     expect(wrapper.text()).not.toContain('knowledge.categoriesFetchError.title')
   })
 })
+
+describe('KnowledgeMainCategories — the cards (#18244)', () => {
+  const withCounts = SYSTEM_CATEGORIES.map((c) => ({ ...c, count: 2418 }))
+  const cards = (extra: Record<string, unknown> = {}) =>
+    mount(KnowledgeMainCategories, {
+      props: { categories: withCounts, populationStates: {}, ...extra },
+      global: { mocks: { $t: (key: string, params?: Record<string, unknown>) => (params?.name ? `${key}:${params.name}` : key) } },
+    })
+
+  it('draws one card per category with its name, description and a grouped fact count', () => {
+    const w = cards()
+    expect(w.findAll('.main-category-card')).toHaveLength(3)
+    expect(w.text()).toContain('AutoBot Documentation')
+    expect(w.text()).toContain((2418).toLocaleString())
+  })
+
+  it('Populate is offered on the two populatable categories only; Import on every card', () => {
+    const w = cards()
+    const names = w.findAll('.main-category-card').map((card) => card.findAll('button').map((b) => b.text()))
+    expect(names[0]).toContain('knowledge.browser.populate')
+    expect(names[1]).toContain('knowledge.browser.populate')
+    expect(names[2]).not.toContain('knowledge.browser.populate')
+    names.forEach((n) => expect(n).toContain('knowledge.browser.import'))
+  })
+
+  it('choosing a card selects its category and marks it pressed', async () => {
+    const w = cards({ selectedId: 'system-knowledge' })
+    const picks = w.findAll('.card-select')
+    expect(picks.map((p) => p.attributes('aria-pressed'))).toEqual(['false', 'true', 'false'])
+    await picks[2].trigger('click')
+    expect(w.emitted('select')?.[0]).toEqual(['user-knowledge'])
+  })
+
+  it('Edit, Populate and Import emit with the card they belong to', async () => {
+    const w = cards()
+    const first = w.findAll('.main-category-card')[0]
+    await first.get('button[aria-label="knowledge.browser.editCategory"]').trigger('click')
+    expect(w.emitted('edit')?.[0][0]).toMatchObject({ id: 'autobot-documentation' })
+    await first.findAll('button').find((b) => b.text() === 'knowledge.browser.populate')!.trigger('click')
+    expect(w.emitted('populate')?.[0]).toEqual(['autobot-documentation'])
+    await first.findAll('button').find((b) => b.text() === 'knowledge.browser.import')!.trigger('click')
+    expect(w.emitted('import')).toHaveLength(1)
+  })
+
+  it('shows the running percentage on a populating card', () => {
+    const w = cards({ populationStates: { 'system-knowledge': { isPopulating: true, progress: 40 } } })
+    expect(w.findAll('.main-category-card')[1].text()).toContain('40%')
+  })
+})

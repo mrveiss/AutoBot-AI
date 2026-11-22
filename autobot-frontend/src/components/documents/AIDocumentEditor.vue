@@ -1,69 +1,66 @@
 <template>
-  <!-- AI Document Editor — Issue #3245 -->
-  <div class="ai-document-editor">
-    <!-- Header bar -->
-    <div class="editor-header">
-      <div class="title-row">
-        <input
-          v-if="isEditingTitle"
-          ref="titleInputRef"
-          v-model="editableTitle"
-          class="title-input"
-          maxlength="500"
-          aria-label="Document title"
-          @blur="commitTitle"
-          @keyup.enter="commitTitle"
-          @keyup.escape="cancelTitle"
-        />
-        <h2
-          v-else
-          class="document-title"
-          tabindex="0"
-          title="Click to edit title"
-          @click="startEditTitle"
-          @keyup.enter="startEditTitle"
-        >
-          {{ localDoc?.title ?? 'Untitled Document' }}
-        </h2>
-      </div>
+  <!-- AI Document Editor — Issue #3245; Refined UI "Knowledge · AI documents" (#18244) -->
+  <BaseCard class="ai-document-editor" flush>
+    <header class="editor-header">
+      <input
+        v-if="isEditingTitle"
+        ref="titleInputRef"
+        v-model="editableTitle"
+        class="title-input"
+        maxlength="500"
+        :aria-label="$t('documents.editor.titleLabel')"
+        @blur="commitTitle"
+        @keyup.enter="commitTitle"
+        @keyup.escape="cancelTitle"
+      />
+      <BaseTooltip v-else :text="$t('documents.editor.editTitleTip')" placement="bottom" class="title-wrap">
+        <template #default="{ describedby }">
+          <h2
+            class="document-title"
+            tabindex="0"
+            :aria-describedby="describedby"
+            @click="startEditTitle"
+            @keyup.enter="startEditTitle"
+          >
+            {{ localDoc?.title ?? $t('documents.editor.untitled') }}
+          </h2>
+        </template>
+      </BaseTooltip>
 
       <div class="header-actions">
-        <BaseButton
-          v-if="isDirty"
-          variant="primary"
-          size="sm"
-          :disabled="composable.isSaving.value"
-          @click="saveChanges"
-        >
-          {{ composable.isSaving.value ? 'Saving…' : 'Save' }}
+        <BaseButton v-if="isDirty" variant="primary" size="sm" :disabled="composable.isSaving.value" @click="saveChanges">
+          {{ composable.isSaving.value ? $t('documents.editor.saving') : $t('common.save') }}
         </BaseButton>
-        <BaseButton
-          variant="ghost"
-          size="sm"
-          :disabled="composable.isRefining.value"
-          title="Refine with AI"
-          @click="showRefinePanel = !showRefinePanel"
-        >
-          Refine
-        </BaseButton>
+        <BaseTooltip :text="$t('documents.editor.refineTip')" placement="left">
+          <template #default="{ describedby }">
+            <BaseButton
+              variant="outline"
+              size="sm"
+              :aria-expanded="showRefinePanel"
+              :aria-describedby="describedby"
+              :disabled="composable.isRefining.value"
+              @click="showRefinePanel = !showRefinePanel"
+            >
+              <Icon name="magic" aria-hidden="true" />
+              {{ $t('documents.editor.refine') }}
+            </BaseButton>
+          </template>
+        </BaseTooltip>
         <slot name="extra-actions" />
       </div>
-    </div>
+    </header>
 
-    <!-- Error banner -->
-    <div v-if="composable.error.value" class="error-banner" role="alert">
-      {{ composable.error.value }}
-    </div>
+    <div v-if="composable.error.value" class="error-banner" role="alert">{{ composable.error.value }}</div>
 
-    <!-- Refine panel -->
-    <div v-if="showRefinePanel" class="refine-panel">
+    <section v-if="showRefinePanel" class="refine-panel">
+      <label for="refine-instruction" class="refine-label">{{ $t('documents.editor.refineHeading') }}</label>
       <textarea
+        id="refine-instruction"
         v-model="refineInstruction"
         class="refine-textarea"
-        placeholder="Describe how to refine this document…"
+        :placeholder="$t('documents.editor.refinePlaceholder')"
         rows="3"
         maxlength="2000"
-        aria-label="Refinement instruction"
       />
       <div class="refine-actions">
         <BaseButton
@@ -72,47 +69,47 @@
           :disabled="!refineInstruction.trim() || composable.isRefining.value"
           @click="submitRefine"
         >
-          {{ composable.isRefining.value ? 'Refining…' : 'Apply Refinement' }}
+          {{ composable.isRefining.value ? $t('documents.editor.refining') : $t('documents.editor.applyRefinement') }}
         </BaseButton>
-        <BaseButton variant="ghost" size="sm" @click="showRefinePanel = false">
-          Cancel
-        </BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="showRefinePanel = false">{{ $t('common.cancel') }}</BaseButton>
       </div>
-    </div>
+    </section>
 
-    <!-- Markdown editor (textarea) -->
     <div class="editor-body">
       <textarea
         v-model="editableContent"
         class="content-editor"
-        placeholder="Document content (markdown supported)…"
+        :placeholder="$t('documents.editor.contentPlaceholder')"
         spellcheck="true"
-        aria-label="Document content"
+        :aria-label="$t('documents.editor.contentLabel')"
         @input="onContentInput"
       />
     </div>
 
-    <!-- Footer metadata -->
-    <div class="editor-footer">
-      <span v-if="localDoc" class="meta">
-        Updated {{ formattedUpdatedAt }}
-      </span>
-      <span v-if="localDoc?.source_facts?.length" class="source-facts-count">
-        {{ localDoc.source_facts.length }} source
-        {{ localDoc.source_facts.length === 1 ? 'fact' : 'facts' }}
-      </span>
-    </div>
-  </div>
+    <footer class="editor-footer">
+      <span v-if="localDoc" class="meta">{{ $t('documents.editor.updated', { when: formattedUpdatedAt }) }}</span>
+      <BaseTooltip v-if="localDoc?.source_facts?.length" class="adv" :text="$t('documents.editor.sourceFactsTip')" placement="top">
+        <template #default="{ describedby }">
+          <BaseBadge variant="info" size="sm" tabindex="0" :aria-describedby="describedby">
+            {{ $t('documents.editor.sourceFacts', { count: localDoc.source_facts.length }) }}
+          </BaseBadge>
+        </template>
+      </BaseTooltip>
+    </footer>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
 import { formatISOString } from '@/utils/formatHelpers'
 import { ref, computed, watch, nextTick } from 'vue'
-import { BaseButton } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+import { BaseBadge, BaseButton, BaseCard, BaseTooltip } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument, type AIDocument } from '@/composables/useAIDocument'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AIDocumentEditor')
+const { t } = useI18n()
 
 // ---------------------------------------------------------------------------
 // Props / emits
@@ -163,8 +160,8 @@ watch(
       editableContent.value = doc.content
       isDirty.value = false
     } catch (err) {
-      logger.error('Failed to load document', err)
-      const msg = composable.error.value ?? 'Failed to load document'
+      logger.error(t('documents.editor.loadFailed'), err)
+      const msg = composable.error.value ?? t('documents.editor.loadFailed')
       emit('error', msg)
       emit('load-error', msg)
     }
@@ -183,7 +180,7 @@ function startEditTitle() {
 
 function commitTitle() {
   if (!editableTitle.value.trim()) {
-    editableTitle.value = localDoc.value?.title ?? 'Untitled Document'
+    editableTitle.value = localDoc.value?.title ?? t('documents.editor.untitled')
   }
   isEditingTitle.value = false
   if (localDoc.value && editableTitle.value !== localDoc.value.title) {
@@ -219,7 +216,7 @@ async function saveChanges() {
     isDirty.value = false
     emit('saved', updated)
   } catch {
-    emit('error', composable.error.value ?? 'Save failed')
+    emit('error', composable.error.value ?? t('documents.editor.saveFailed'))
   }
 }
 
@@ -241,7 +238,7 @@ async function submitRefine() {
     showRefinePanel.value = false
     emit('refined', refined)
   } catch {
-    emit('error', composable.error.value ?? 'Refinement failed')
+    emit('error', composable.error.value ?? t('documents.editor.refineFailed'))
   }
 }
 
@@ -259,108 +256,84 @@ const formattedUpdatedAt = computed(() => {
 .ai-document-editor {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  min-inline-size: 0;
 }
 
 .editor-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--border-default);
   gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-block-end: var(--bw) solid var(--line);
 }
 
-.title-row {
+.title-wrap {
   flex: 1;
-  min-width: 0;
+  min-inline-size: 0;
 }
 
 .document-title {
-  margin: var(--spacing-0);
-  font-size: 1.1rem;
+  margin: 0;
+  font-size: var(--text-lg);
   font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  outline: none;
-  padding: var(--spacing-0-5) var(--spacing-1);
-  border-radius: var(--radius-default);
-  transition: background var(--duration-150);
-}
-.document-title:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.document-title:hover {
-  background: var(--color-background-hover, var(--aidoc-hover-bg));
+  color: var(--text);
+  cursor: text;
+  overflow-wrap: anywhere;
 }
 
 .title-input {
-  width: 100%;
-  background: var(--color-background-input, var(--aidoc-input-bg));
-  color: inherit;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-default);
-  font-size: 1.1rem;
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--spacing-1) var(--spacing-2);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-lg);
   font-weight: 600;
-  padding: var(--spacing-0-5) var(--spacing-2);
-  outline: none;
-}
-.title-input:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: var(--spacing-2);
-  flex-shrink: 0;
 }
 
 .error-banner {
-  background: var(--color-error-bg);
-  color: var(--color-error);
   padding: var(--spacing-2) var(--spacing-4);
-  font-size: 0.85rem;
-  border-bottom: 1px solid var(--color-error);
+  background: var(--bad-bg);
+  color: var(--bad-fg);
+  font-size: var(--text-sm);
 }
 
 .refine-panel {
-  padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--border-default);
-  background: var(--color-background-secondary, var(--aidoc-panel-bg));
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--surface2);
+  border-block-end: var(--bw) solid var(--line);
 }
 
-.refine-textarea {
-  width: 100%;
-  resize: vertical;
-  background: var(--color-background-input, var(--aidoc-input-bg));
-  color: inherit;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-default);
-  padding: var(--spacing-2);
-  font-size: 0.9rem;
-  font-family: inherit;
-  outline: none;
+.refine-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.refine-textarea,
+.content-editor {
+  inline-size: 100%;
   box-sizing: border-box;
-}
-
-.refine-textarea:focus {
-  border-color: var(--color-primary);
-}
-.refine-textarea:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  padding: var(--spacing-3);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
 }
 
 .refine-actions {
@@ -369,41 +342,34 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .editor-body {
-  flex: 1;
   display: flex;
-  overflow: hidden;
+  flex: 1;
+  padding: var(--spacing-3) var(--spacing-4);
 }
 
 .content-editor {
   flex: 1;
-  resize: none;
-  background: transparent;
-  color: inherit;
-  border: none;
-  padding: var(--spacing-4);
-  font-size: 0.95rem;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  line-height: 1.6;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
+  min-block-size: 300px;
+  background: var(--surface2);
+  font-family: var(--font-mono);
+  line-height: 1.7;
 }
-.content-editor:focus-visible {
-  outline: 2px solid var(--color-primary);
+
+.title-input:focus-visible,
+.refine-textarea:focus-visible,
+.content-editor:focus-visible,
+.document-title:focus-visible {
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
 .editor-footer {
   display: flex;
   align-items: center;
-  gap: var(--spacing-4);
-  padding: var(--spacing-1-5) var(--spacing-4);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  border-top: 1px solid var(--border-default);
-}
-
-.source-facts-count {
-  margin-left: auto;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-block-start: var(--bw) solid var(--line);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 </style>

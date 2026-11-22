@@ -1,135 +1,122 @@
+<!--
+  Copyright 2025-2026 mrveiss
+  SPDX-License-Identifier: Apache-2.0
+
+  KnowledgeMainCategories — the three category cards of the Knowledge Browser (#18244,
+  Refined UI "Knowledge · Browser"): tile, Edit, name, description, fact count, Populate, Import.
+  Choosing a card filters the document tree to that category. Backend connectivity is shown
+  above the cards, empty-KB (#5201) apart from broken-KB and fetch-error (#5590).
+-->
 <template>
-  <div class="main-categories-wrapper">
-    <!-- Issue #5590: fetch-layer error (5xx / network) — generic message, no Redis blame -->
-    <div
+  <section class="main-categories-wrapper" :aria-label="$t('knowledge.browser.categoriesLabel')">
+    <BaseAlert
       v-if="kbFetchError"
       class="kb-status-panel kb-status-panel--error"
+      variant="error"
       role="alert"
-    >
-      <Icon name="exclamation-triangle" class="kb-status-panel__icon" />
-      <div class="kb-status-panel__body">
-        <h3 class="kb-status-panel__title">
-          {{ $t('knowledge.categoriesFetchError.title') }}
-        </h3>
-        <p class="kb-status-panel__text">
-          {{ $t('knowledge.categoriesFetchError.description') }}
-        </p>
-      </div>
-    </div>
-
-    <!-- Issue #5201: broken-KB alert — only when backend explicitly reports Redis down -->
-    <div
+      :title="$t('knowledge.categoriesFetchError.title')"
+      :message="$t('knowledge.categoriesFetchError.description')"
+    />
+    <BaseAlert
       v-else-if="!kbConnected"
       class="kb-status-panel kb-status-panel--error"
+      variant="error"
       role="alert"
-    >
-      <Icon name="exclamation-triangle" class="kb-status-panel__icon" />
-      <div class="kb-status-panel__body">
-        <h3 class="kb-status-panel__title">
-          {{ $t('knowledge.categoriesError.title') }}
-        </h3>
-        <p class="kb-status-panel__text">
-          {{ $t('knowledge.categoriesError.description') }}
-        </p>
-      </div>
-    </div>
-
-    <!-- Issue #5201: empty-KB hint — only when categories have loaded and every count is 0 -->
-    <div
+      :title="$t('knowledge.categoriesError.title')"
+      :message="$t('knowledge.categoriesError.description')"
+    />
+    <BaseAlert
       v-else-if="showEmptyStateHint"
       class="kb-status-panel kb-status-panel--info"
+      variant="info"
       role="status"
+      :title="$t('knowledge.emptyState.title')"
     >
-      <Icon name="info-circle" class="kb-status-panel__icon" />
-      <div class="kb-status-panel__body">
-        <h3 class="kb-status-panel__title">
-          {{ $t('knowledge.emptyState.title') }}
-        </h3>
-        <p class="kb-status-panel__text">
-          {{ $t('knowledge.emptyState.description') }}
-        </p>
-        <p class="kb-status-panel__text">
-          {{ $t('knowledge.emptyState.hint') }}
-        </p>
-      </div>
-    </div>
+      <p class="kb-status-panel__text">{{ $t('knowledge.emptyState.description') }}</p>
+      <p class="kb-status-panel__text">{{ $t('knowledge.emptyState.hint') }}</p>
+    </BaseAlert>
 
     <div class="main-categories">
-      <div
+      <BaseCard
         v-for="mainCat in categories"
         :key="mainCat.id"
         class="main-category-card"
-        :style="{ borderColor: mainCat.color }"
-        @click="$emit('select', mainCat.id)"
+        :class="{ 'is-selected': mainCat.id === selectedId }"
       >
-        <!-- Issue #11555: per-card edit affordance -->
-        <button
-          class="category-edit-btn"
-          :title="$t('knowledge.browser.editCategory')"
-          :aria-label="$t('knowledge.browser.editCategory')"
-          @click.stop="$emit('edit', mainCat)"
-        >
-          <Icon name="pencil-alt" />
-        </button>
-        <div class="category-icon" :style="{ backgroundColor: mainCat.color }">
-          <Icon :name="categoryIcon(mainCat)" />
+        <div class="card-top">
+          <button
+            type="button"
+            class="card-select"
+            :aria-pressed="mainCat.id === selectedId"
+            :aria-label="$t('knowledge.browser.showCategory', { name: mainCat.name })"
+            @click="$emit('select', mainCat.id)"
+          >
+            <span class="tile"><Icon :name="categoryIcon(mainCat)" /></span>
+          </button>
+          <BaseTooltip :text="$t('knowledge.browser.editCategory')" placement="left">
+            <template #default="{ describedby }">
+              <BaseButton
+                variant="outline"
+                size="sm"
+                :aria-label="$t('knowledge.browser.editCategory')"
+                :aria-describedby="describedby"
+                @click="$emit('edit', mainCat)"
+              >
+                <Icon name="pencil-alt" />
+              </BaseButton>
+            </template>
+          </BaseTooltip>
         </div>
-        <div class="category-info">
-          <h3>{{ mainCat.name }}</h3>
-          <p>{{ mainCat.description }}</p>
-          <div class="category-stats">
-            <span class="fact-count">{{ mainCat.count }} {{ $t('knowledge.browser.facts') }}</span>
-            <!-- Populate button for system categories -->
-            <BaseButton
-              v-if="mainCat.id !== 'user-knowledge'"
-              variant="primary"
-              size="sm"
-              :loading="populationStates[mainCat.id]?.isPopulating"
-              :disabled="populationStates[mainCat.id]?.isPopulating"
-              @click.stop="$emit('populate', mainCat.id)"
-              class="populate-btn"
-            >
-              <Icon name="sync" v-if="!populationStates[mainCat.id]?.isPopulating" />
-              <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.browser.populate') }}</span>
-              <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
-            </BaseButton>
-            <!-- Import button for user knowledge -->
-            <BaseButton
-              v-if="mainCat.id === 'user-knowledge'"
-              variant="primary"
-              size="sm"
-              @click.stop="$emit('import')"
-              class="populate-btn"
-            >
-              <Icon name="file-import" />
-              <span>{{ $t('knowledge.browser.import') }}</span>
-            </BaseButton>
-          </div>
+
+        <div class="card-text">
+          <h2 class="card-name">{{ mainCat.name }}</h2>
+          <p class="card-desc">{{ mainCat.description }}</p>
         </div>
-      </div>
+
+        <p class="card-count">
+          {{ formatCount(mainCat.count) }}
+          <BaseTooltip :text="$t('knowledge.browser.factsTip')" placement="top">
+            <template #default="{ describedby }">
+              <span class="card-count__unit" tabindex="0" :aria-describedby="describedby">{{ $t('knowledge.browser.facts') }}</span>
+            </template>
+          </BaseTooltip>
+        </p>
+
+        <div class="card-actions">
+          <BaseTooltip v-if="canPopulate(mainCat.id)" :text="$t('knowledge.browser.populateTip')" placement="top">
+            <template #default="{ describedby }">
+              <BaseButton
+                variant="outline"
+                size="sm"
+                :loading="populationStates[mainCat.id]?.isPopulating"
+                :disabled="populationStates[mainCat.id]?.isPopulating"
+                :aria-describedby="describedby"
+                @click="$emit('populate', mainCat.id)"
+              >
+                <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.browser.populate') }}</span>
+                <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
+              </BaseButton>
+            </template>
+          </BaseTooltip>
+          <BaseTooltip :text="$t('knowledge.browser.importTip')" placement="top">
+            <template #default="{ describedby }">
+              <BaseButton variant="outline" size="sm" :aria-describedby="describedby" @click="$emit('import')">
+                {{ $t('knowledge.browser.import') }}
+              </BaseButton>
+            </template>
+          </BaseTooltip>
+        </div>
+      </BaseCard>
     </div>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-// AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
-// Author: mrveiss
-/**
- * Knowledge Main Categories Component
- *
- * Displays the main category cards for knowledge navigation.
- * Extracted from KnowledgeBrowser.vue for better maintainability.
- *
- * Issue #184: Split oversized Vue components
- * Issue #5201: Distinguish empty-KB from broken-KB with clear CTA panels
- */
-
-import { asIconName } from '@/utils/iconMappings'
-import type { IconName } from '@/components/ui/Icon.vue'
-import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseCard, BaseTooltip } from '@autobot/ui'
+import Icon from '@/components/ui/Icon.vue'
+import type { IconName } from '@/components/ui/Icon.vue'
+import { asIconName } from '@/utils/iconMappings'
 
 interface MainCategory {
   id: string
@@ -140,13 +127,6 @@ interface MainCategory {
   count: number
 }
 
-// #9724: category icons come from the backend as plain strings — validate
-// against the ICONS registry so unknown names degrade to 'folder' instead of
-// rendering an empty SVG.
-function categoryIcon(cat: MainCategory): IconName {
-  return asIconName(cat.icon, 'folder')
-}
-
 interface PopulationState {
   isPopulating: boolean
   progress: number
@@ -155,233 +135,134 @@ interface PopulationState {
 interface Props {
   categories: MainCategory[]
   populationStates: Record<string, PopulationState>
-  // Issue #5201: reflects backend Redis/KB reachability. Defaults to true
-  // to preserve behavior with older backends that don't send the flag.
+  /** The card whose category filters the tree. */
+  selectedId?: string | null
+  // #5201: backend Redis/KB reachability; true for older backends that omit the flag.
   kbConnected?: boolean
-  // Issue #5590: true when the fetch itself failed (5xx / network error),
-  // distinct from kbConnected=false which the backend sets for Redis outages.
+  // #5590: the fetch itself failed (5xx / network), distinct from kbConnected=false.
   kbFetchError?: boolean
 }
 
-interface Emits {
-  (e: 'select', categoryId: string): void
-  (e: 'populate', categoryId: string): void
-  (e: 'import'): void
-  (e: 'edit', category: MainCategory): void
-}
-
 const props = withDefaults(defineProps<Props>(), {
+  selectedId: null,
   kbConnected: true,
   kbFetchError: false,
 })
-defineEmits<Emits>()
 
-// Show the empty-state hint only once categories have loaded AND every
-// visible card has a zero count. Rendering it before categories load
-// would flash a "you're empty" message during normal startup.
+defineEmits<{
+  select: [categoryId: string]
+  populate: [categoryId: string]
+  import: []
+  edit: [category: MainCategory]
+}>()
+
+// Only these two have a source to fill them from; the user's own knowledge is imported.
+const POPULATABLE = new Set(['autobot-documentation', 'system-knowledge'])
+const canPopulate = (id: string) => POPULATABLE.has(id)
+
+// #9724: icons come from the backend as plain strings; unknown names fall back to 'folder'.
+const categoryIcon = (cat: MainCategory): IconName => asIconName(cat.icon, 'folder')
+
+const formatCount = (n: number) => (n ?? 0).toLocaleString()
+
+// The empty hint shows only once categories loaded AND every count is 0 (no flash at startup).
 const showEmptyStateHint = computed(
-  () =>
-    props.kbConnected &&
-    props.categories.length > 0 &&
-    props.categories.every((c) => (c.count ?? 0) === 0),
+  () => props.kbConnected && props.categories.length > 0 && props.categories.every((c) => (c.count ?? 0) === 0),
 )
 </script>
 
 <style scoped>
-/* Issue #704: Migrated to CSS design tokens */
 .main-categories-wrapper {
   display: flex;
   flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.kb-status-panel__text {
+  margin: 0;
 }
 
 .main-categories {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-4);
-  padding: var(--spacing-6);
-  background: var(--bg-secondary);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-3);
 }
 
 .main-category-card {
   display: flex;
-  gap: var(--spacing-4);
-  padding: var(--spacing-5);
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  border: 2px solid transparent;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-  position: relative;
-}
-
-/* Issue #11555: per-card edit button */
-.category-edit-btn {
-  position: absolute;
-  top: var(--spacing-3);
-  right: var(--spacing-3);
-  width: 1.75rem;
-  height: 1.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: all var(--duration-150) var(--ease-in-out);
-  z-index: var(--z-raised);
-}
-
-.category-edit-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--color-info);
-  border-color: var(--color-info);
-}
-
-.main-category-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.category-icon {
-  width: 3rem;
-  height: 3rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-lg);
-  color: var(--text-on-primary);
-  font-size: var(--text-xl);
-  flex-shrink: 0;
-}
-
-.category-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.category-info h3 {
-  font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: 0 0 var(--spacing-1) 0;
-}
-
-.category-info p {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: 0 0 var(--spacing-3) 0;
-  line-height: var(--leading-normal);
-}
-
-.category-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--spacing-3);
 }
 
-.fact-count {
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-md);
+.main-category-card.is-selected {
+  border-color: var(--primary);
 }
 
-.populate-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-1-5) var(--spacing-3);
-  font-size: var(--text-xs);
-}
-
-.populate-btn .icon {
-  width: var(--text-xs);
-  height: var(--text-xs);
-}
-
-/* Issue #5201: status panels for empty-KB / broken-KB states */
-.kb-status-panel {
+.card-top {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-3);
-  margin: var(--spacing-4) var(--spacing-6) var(--spacing-0);
-  padding: var(--spacing-4) var(--spacing-5);
+  justify-content: space-between;
+}
+
+.card-select {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   border-radius: var(--radius-lg);
-  border: 1px solid transparent;
 }
 
-.kb-status-panel__icon {
-  font-size: var(--text-xl);
-  margin-top: var(--spacing-0-5);
-  flex-shrink: 0;
+.card-select:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
-.kb-status-panel__body {
-  flex: 1;
-  min-width: 0;
+.tile {
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--tile);
+  border: var(--bw) solid var(--tile-b);
+  color: var(--stroke);
 }
 
-.kb-status-panel__title {
+.card-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.card-name {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card-desc {
+  margin: 0;
   font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  margin: 0 0 var(--spacing-1) 0;
+  line-height: 1.45;
+  color: var(--text2);
 }
 
-.kb-status-panel__text {
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-  margin: 0 0 var(--spacing-1) 0;
+.card-count {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--text);
 }
 
-.kb-status-panel__text:last-child {
-  margin-bottom: var(--spacing-0);
+.card-count__unit {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
 }
 
-.kb-status-panel--info {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary-light);
-  color: var(--color-primary-dark);
-}
-
-.kb-status-panel--info .kb-status-panel__icon {
-  color: var(--color-primary);
-}
-
-.kb-status-panel--error {
-  background: var(--color-error-alpha-10);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.kb-status-panel--error .kb-status-panel__icon {
-  color: var(--color-error);
-}
-
-@media (max-width: 640px) {
-  .main-categories {
-    grid-template-columns: 1fr;
-    padding: var(--spacing-4);
-  }
-
-  .main-category-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .category-stats {
-    width: 100%;
-  }
-
-  .kb-status-panel {
-    margin: var(--spacing-3) var(--spacing-4) var(--spacing-0);
-    padding: var(--spacing-3);
-  }
+.card-actions {
+  display: flex;
+  gap: var(--spacing-2);
 }
 </style>

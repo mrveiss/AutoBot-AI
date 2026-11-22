@@ -68,8 +68,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
-    "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 625,
-    "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1772,  # #17563: 1785 -> 1772 (kit Breadcrumb)
     "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2068,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,

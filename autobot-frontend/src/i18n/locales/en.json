@@ -3241,11 +3241,19 @@
     "batchToolbar": {
       "documentsSelected": "{count} document(s) selected",
       "vectorizeSelected": "Vectorize Selected",
-      "clearSelection": "Clear Selection"
+      "clearSelection": "Clear Selection",
+      "label": "Selected documents",
+      "vectorizeTip": "Create embeddings so these documents become searchable"
     },
     "browserHeader": {
-      "searchPlaceholder": "Search files and folders...",
-      "clearSearch": "Clear search"
+      "searchPlaceholder": "Search the knowledge base…",
+      "clearSearch": "Clear search",
+      "title": "Knowledge Browser",
+      "subtitle": "Everything your agents can retrieve, by category",
+      "breadcrumb": "Knowledge Base / Browse",
+      "searchLabel": "Search knowledge",
+      "options": "Search options",
+      "optionsLabel": "Search options"
     },
     "browser": {
       "populate": "Populate",
@@ -3272,13 +3280,21 @@
       "documentsSelected": "{count} document(s) selected",
       "backToRoot": "Back to root",
       "filters": "Filters",
-      "editCategory": "Edit category"
+      "editCategory": "Edit category",
+      "categoriesLabel": "Categories",
+      "showCategory": "Show {name} in the tree",
+      "factsTip": "Fact: one stored, retrievable unit of knowledge (a chunk with metadata)",
+      "populateTip": "Auto-fill this category from its configured sources",
+      "importTip": "Upload files or a JSON export into this category. Audio and video (mp3, m4a, wav, mp4, mov, mkv) are transcribed first, then the transcript is added as text.",
+      "treeLabel": "Documents",
+      "filesLabel": "Files"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",
       "selectFileHint": "Select a file from the tree to view its contents",
       "loadingContent": "Loading content...",
-      "closeFileViewer": "Close file viewer"
+      "closeFileViewer": "Close file viewer",
+      "label": "Document"
     },
     "entries": {
       "uploadTab": "Upload",
@@ -4293,12 +4309,13 @@
       "errorLoadDocs": "Failed to load documents"
     },
     "treeNode": {
-      "itemsCount": "Items count",
-      "retryTitle": "Retry title",
-      "unvectorized": "Unvectorized",
-      "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title",
-      "zeroSize": "0B"
+      "itemsCount": "{count} documents in folder",
+      "retryTitle": "Retry vectorization",
+      "unvectorized": "{count} to vectorize",
+      "vectorizeFolderTitle": "Vectorize the {count} documents in this folder that are not searchable yet",
+      "vectorizeTitle": "Vectorize this document",
+      "zeroSize": "0B",
+      "selectDocument": "Select {name}"
     },
     "verification": {
       "approve": "Approve",
@@ -4502,6 +4519,41 @@
       "7": "miscellaneous",
       "8": "system administration",
       "9": "kernel routines"
+    },
+    "browserFilter": {
+      "removeFilter": "Remove filter",
+      "removeFilterNamed": "Remove filter: {category}"
+    },
+    "healthSummary": {
+      "label": "Knowledge base health",
+      "totalFacts": "Total Facts",
+      "totalVectors": "Total Vectors",
+      "vectorsTip": "Embeddings stored for semantic search; a fact can have several",
+      "databaseSize": "Database Size",
+      "ragAvailable": "RAG Available",
+      "ragUnavailable": "RAG Unavailable",
+      "ragTipOn": "Retrieval-augmented generation is on: chat answers can cite this knowledge",
+      "ragTipOff": "Retrieval-augmented generation is off: chat answers cannot cite this knowledge yet"
+    },
+    "searchPanel": {
+      "label": "Search results",
+      "searching": "Searching…",
+      "resultsFor": "{count} result(s) for",
+      "noResultsFor": "No results for",
+      "close": "Close search results",
+      "rankedLabel": "Ranked search results",
+      "relevance": "Relevance: {score}%",
+      "rerank": "Re-rank score: {score}%",
+      "general": "general",
+      "text": "text",
+      "untitled": "Untitled",
+      "viewerLabel": "Document viewer",
+      "selectResult": "Select a result to view the document",
+      "keyboardHint": "Use arrow keys to navigate, Enter to open",
+      "match": "{score}% match",
+      "loadingDocument": "Loading document…",
+      "copy": "Copy",
+      "copied": "Copied"
     }
   },
   "workflow": {
@@ -9986,7 +10038,29 @@
     "transcriberProjects": "Transcriber Projects",
     "viewAll": "View all",
     "saveHintPrefix": "Save an AI response from the",
-    "saveHintSuffix": "to create a document."
+    "saveHintSuffix": "to create a document.",
+    "loadFailed": "Failed to load documents",
+    "deleteFailed": "Delete failed",
+    "editor": {
+      "loadFailed": "Failed to load document",
+      "untitled": "Untitled Document",
+      "saveFailed": "Save failed",
+      "refineFailed": "Refinement failed",
+      "titleLabel": "Document title",
+      "editTitleTip": "Click to edit title",
+      "saving": "Saving…",
+      "refine": "Refine",
+      "refineTip": "Ask the AI to revise this document",
+      "refineHeading": "Refine with AI",
+      "refinePlaceholder": "Describe how to refine this document…",
+      "refining": "Refining…",
+      "applyRefinement": "Apply Refinement",
+      "contentPlaceholder": "Document content (markdown supported)…",
+      "contentLabel": "Document content",
+      "updated": "Updated {when}",
+      "sourceFacts": "{count} source facts",
+      "sourceFactsTip": "Knowledge-base facts the AI cited when writing this document"
+    }
   },
   "llcBrowser": {
     "retry": "Retry",
