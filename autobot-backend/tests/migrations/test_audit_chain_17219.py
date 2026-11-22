@@ -291,3 +291,97 @@ async def test_without_the_key_nothing_is_written(migrated, monkeypatch) -> None
     with pytest.raises(audit_chain_writer.ChainKeyUnavailable):
         await _insert(sessions, 1)
     assert await _scalar(sessions, "SELECT count(*) FROM audit_logs") == 0
+
+
+async def test_deleting_an_organisation_nulls_org_id_and_the_chain_still_verifies(migrated) -> None:
+    from user_management.models.organization import Organization
+
+    sessions, _ = migrated
+    async with sessions.begin() as session:
+        org = Organization(name="Chain Org", slug="chain-org")
+        session.add(org)
+        await session.flush()
+        org_id = org.id
+    await _insert(sessions, 2, org_id=org_id)
+    assert await _scalar(sessions, "SELECT count(*) FROM audit_logs WHERE org_id IS NOT NULL") == 2
+    await _exec(sessions, "DELETE FROM organizations WHERE id = :i", i=org_id)
+    assert await _scalar(sessions, "SELECT count(*) FROM audit_logs WHERE org_id IS NOT NULL") == 0
+    assert await _scalar(sessions, "SELECT count(*) FROM audit_logs WHERE org_ref = :r", r=str(org_id)) == 2
+    assert (await _verify()).ok
+
+
+# --- every in-transaction writer shape produces a chained row (#17219) -----------------------------
+
+
+def _service(session):
+    """The part of a service the shared ``_audit_log`` methods read: its session and caller context."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(session=session, context=SimpleNamespace(user_id=None, org_id=None))
+
+
+async def _identity_writer(cls_path: str, sessions) -> None:
+    import importlib
+
+    module, name = cls_path.rsplit(".", 1)
+    cls = getattr(importlib.import_module(module), name)
+    async with sessions.begin() as session:
+        extra = [None] if name == "OrganizationService" else []  # its signature also takes the org id
+        await cls._audit_log(_service(session), "x.created", "thing", None, *extra, {"k": 1})
+
+
+async def _rbac_denial(sessions, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from autobot_shared.user_management.middleware import rbac_middleware as rbac
+
+    @contextlib.asynccontextmanager
+    async def _context():
+        async with sessions.begin() as session:
+            yield session
+
+    monkeypatch.setattr(rbac, "_dependencies", SimpleNamespace(db_session_context=_context))
+    await rbac._emit_permission_denied_audit(None, "perm.x", "/api/x", ip_address="203.0.113.7")
+
+
+async def _slm_rollback(sessions, monkeypatch) -> None:
+    import importlib.util
+    import pathlib
+
+    from tests.migrations.conftest import REPO_ROOT
+
+    path = pathlib.Path(REPO_ROOT) / "autobot-slm-backend/services/rollback_audit.py"
+    spec = importlib.util.spec_from_file_location("_slm_rollback_audit_17219", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    @contextlib.asynccontextmanager
+    async def _slm_session():
+        async with sessions.begin() as session:
+            yield session
+
+    import user_management.database as database
+
+    monkeypatch.setattr(database, "get_slm_session", _slm_session, raising=False)
+    await module.record_rollback(actor="admin", commit="abc123", outcome="success", phase="requested")
+
+
+_IDENTITY_WRITERS = (
+    "autobot_shared.user_management.organization_service.OrganizationService",
+    "autobot_shared.user_management.team_service.TeamService",
+    "autobot_shared.user_management.user_service_base.UserServiceBase",
+)
+
+
+@pytest.mark.parametrize("writer", [*_IDENTITY_WRITERS, "rbac_denial", "slm_rollback"])
+async def test_every_in_transaction_writer_produces_a_chained_verifying_row(migrated, monkeypatch, writer) -> None:
+    sessions, _ = migrated
+    if writer == "rbac_denial":
+        await _rbac_denial(sessions, monkeypatch)
+    elif writer == "slm_rollback":
+        await _slm_rollback(sessions, monkeypatch)
+    else:
+        await _identity_writer(writer, sessions)
+    row = await _scalar(sessions, "SELECT count(*) FROM audit_logs WHERE chain_seq IS NOT NULL AND row_mac IS NOT NULL")
+    assert row == 1, f"{writer} wrote an unchained row"
+    assert (await _verify()).ok

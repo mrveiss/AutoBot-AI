@@ -9,7 +9,9 @@ shared ``audit_chain.seal`` exactly as the PostgreSQL listener seals them, then 
 The lock and sequence allocation are covered by the PostgreSQL test in ``tests/migrations``.
 """
 
+import asyncio
 import contextlib
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -63,13 +65,8 @@ def _values(seq: int, prev_hash: str) -> dict:
     }
 
 
-@pytest_asyncio.fixture
-async def chained(monkeypatch):
-    """A sealed chain of 5 rows after a genesis recording 2 pre-chain rows; yields ``(sessionmaker, hashes)``."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine
-    async with engine.begin() as conn:
-        await conn.run_sync(_sqlite_metadata().create_all)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+async def _seed(sessions) -> None:
+    """A genesis recording 2 pre-chain rows, those 2 rows, and a sealed chain of 5."""
     genesis = chain.genesis_hash(2, WHEN)
     async with sessions.begin() as session:
         await session.execute(
@@ -83,14 +80,24 @@ async def chained(monkeypatch):
                 pre_chain_max_created_at=WHEN,
             )
         )
-        for n in range(2):  # the two pre-chain rows the genesis counts
+        for _ in range(2):  # the two pre-chain rows the genesis counts
             await session.execute(insert(_AUDIT).values(id=uuid.uuid4(), action="old", resource_type="x", details={}))
-        prev, hashes = genesis, []
+        prev = genesis
         for seq in range(1, 6):
             values = _values(seq, prev)
             await session.execute(insert(_AUDIT).values(**values))
             prev = values["row_hash"]
-            hashes.append(prev)
+
+
+@pytest_asyncio.fixture
+async def chained(monkeypatch):
+    """A seeded chain; yields ``(sessionmaker, hashes)`` (hashes unused, kept for the tests' unpacking)."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")  # canonical: ignore py-adhoc-db-engine
+    async with engine.begin() as conn:
+        await conn.run_sync(_sqlite_metadata().create_all)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+    await _seed(sessions)
+    hashes: list = []
 
     @contextlib.asynccontextmanager
     async def _context():
@@ -234,3 +241,57 @@ async def test_batches_smaller_than_the_chain_still_verify_it_whole(chained, mon
     monkeypatch.setattr(integrity, "VERIFY_BATCH_SIZE", 2)
     report = await integrity.verify_chain()
     assert report.ok and report.rows_checked == 5
+
+
+# --- the CLI (#17219): the same function, an exit code and the report -----------------------------
+
+
+def _file_db(tmp_path, monkeypatch) -> str:
+    """A seeded SQLite file; ``integrity`` opens a fresh engine per call so ``asyncio.run`` owns its loop."""
+    url = f"sqlite+aiosqlite:///{tmp_path / 'audit.db'}"
+
+    async def _build() -> None:
+        engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine
+        async with engine.begin() as conn:
+            await conn.run_sync(_sqlite_metadata().create_all)
+        await _seed(async_sessionmaker(engine, expire_on_commit=False))  # canonical: ignore py-adhoc-db-engine
+        await engine.dispose()
+
+    asyncio.run(_build())
+
+    @contextlib.asynccontextmanager
+    async def _context():
+        engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine
+        try:
+            factory = async_sessionmaker(engine, expire_on_commit=False)  # canonical: ignore py-adhoc-db-engine
+            async with factory() as session:
+                yield session
+        finally:
+            await engine.dispose()
+
+    monkeypatch.setattr(integrity, "db_session_context", _context)
+    monkeypatch.setattr(integrity, "chain_key", lambda: (KEY, "kid"))
+    return url
+
+
+def test_the_cli_exits_zero_and_prints_the_report_for_a_clean_chain(tmp_path, monkeypatch, capsys) -> None:
+    _file_db(tmp_path, monkeypatch)
+    assert integrity.main([]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is True and report["rows_checked"] == 5 and report["findings"] == []
+
+
+def test_the_cli_exits_non_zero_and_names_the_tampered_row(tmp_path, monkeypatch, capsys) -> None:
+    url = _file_db(tmp_path, monkeypatch)
+
+    async def _tamper() -> None:
+        engine = create_async_engine(url)  # canonical: ignore py-adhoc-db-engine
+        async with engine.begin() as conn:
+            await conn.execute(update(_AUDIT).where(_AUDIT.c.chain_seq == 3).values(action="auth.logout"))
+        await engine.dispose()
+
+    asyncio.run(_tamper())
+    assert integrity.main(["--from-seq", "1"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["ok"] is False
+    assert report["findings"] == [{"kind": "modified_row", "seq": 3, "detail": report["findings"][0]["detail"]}]

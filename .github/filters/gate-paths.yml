@@ -47,6 +47,8 @@ migrations:
   - 'autobot_shared/user_management/**'
   # #17219: the verifier the chain test runs
   - 'autobot-backend/services/audit/**'
+  # #17219: the writer test swaps the SLM session accessor on this module
+  - 'autobot-backend/user_management/database.py'
   # #15907: the concurrent-move test
   - 'autobot-backend/llc/services/company.py'
   - 'autobot-backend/llc/services/company_ceo.py'
