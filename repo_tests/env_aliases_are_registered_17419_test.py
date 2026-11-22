@@ -26,8 +26,8 @@ SSOT_GLOB = "ssot*.py"
 REGISTRY_GLOB = "env_registry*.py"
 #: Aliases extracted when this guard landed was 447; a census that finds fewer than this has narrowed.
 MIN_ALIASES_EXTRACTED = 350
-#: Source files read (47 when measured), less a margin for removals.
-MIN_FILES_READ = 40
+#: Source files read (48 when measured, floor pinned to it), less a margin for removals.
+MIN_FILES_READ = 48
 
 
 def _sources(root: Path, pattern: str) -> list[Path]:
@@ -42,6 +42,7 @@ REACH = declare(
     "env-alias-registry-gap",
     discover=_population,
     floor=MIN_FILES_READ,
+    roots=("autobot_shared",),
     what="ssot*.py and env_registry*.py read for AUTOBOT_* aliases and registrations",
 )
 
