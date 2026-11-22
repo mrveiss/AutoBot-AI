@@ -153,6 +153,7 @@ async def _upsert_by_name(session, svc, vault, owner_uuid, sqlite_id, value, nam
 
 async def _may_adopt(session, svc, target, secret_type, sqlite_id) -> bool:
     """True when *target* may be adopted; otherwise the fixed refusal condition is logged (no ids, no names)."""
+    await session.refresh(target, with_for_update=True)  # lock + re-read: the grant check and marker stamp are atomic
     refusal = await _adoptable(session, svc, target, secret_type, sqlite_id)
     if refusal is not None:
         logger.warning("Envelope mirror skipped: same-name row not adoptable (%s)", refusal)

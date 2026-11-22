@@ -38,7 +38,7 @@ async def test_name_hit_without_marker_rotates_and_marks(monkeypatch):
     row = Secret(id=uuid.uuid4(), is_active=True, type="t", extra_data={"k": 1}, owner_vault=_VAULT)
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     svc.rotate_value.assert_awaited_once()
     svc.create.assert_not_awaited()
     assert row.extra_data == {"k": 1, cw._MARKER: "sid-1"}
@@ -47,7 +47,7 @@ async def test_name_hit_without_marker_rotates_and_marks(monkeypatch):
 async def test_no_row_creates(monkeypatch):
     svc = _svc(monkeypatch)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     svc.create.assert_awaited_once()
     svc.rotate_value.assert_not_awaited()
     assert svc.create.return_value.extra_data == {cw._MARKER: "sid-1"}
@@ -59,7 +59,7 @@ async def _refused(monkeypatch, **fields):
     )
     svc = _svc(monkeypatch, by_name=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     svc.rotate_value.assert_not_awaited()
     svc.create.assert_not_awaited()
     assert row.extra_data == fields.get("extra_data")
@@ -81,7 +81,7 @@ async def test_marker_hit_rotates(monkeypatch):
     row = SimpleNamespace(id=uuid.uuid4())
     svc = _svc(monkeypatch)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=row))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     svc.rotate_value.assert_awaited_once()
     svc.find_by_name.assert_not_awaited()
     svc.create.assert_not_awaited()
@@ -121,7 +121,7 @@ async def test_row_granted_to_another_vault_not_adopted(monkeypatch):
     svc = _svc(monkeypatch, by_name=row)
     svc.grantees = AsyncMock(return_value={_VAULT, "user:someone-else"})
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     svc.rotate_value.assert_not_awaited()
     svc.create.assert_not_awaited()
     assert row.extra_data is None
@@ -139,7 +139,7 @@ async def test_create_returning_another_mirrors_row_does_not_restamp(monkeypatch
     )
     svc.create = AsyncMock(return_value=other)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     assert other.extra_data == {cw._MARKER: "other-sid"}
     svc.rotate_value.assert_not_awaited()
 
@@ -151,7 +151,7 @@ async def test_create_returning_same_plaintext_unmarked_row_is_stamped(monkeypat
     )
     svc.create = AsyncMock(return_value=row)
     monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
-    await _run(MagicMock(flush=AsyncMock()))
+    await _run(MagicMock(flush=AsyncMock(), refresh=AsyncMock()))
     assert row.extra_data == {cw._MARKER: "sid-1"}
 
 
@@ -209,3 +209,12 @@ async def test_revocation_by_the_vault_user_removes_a_row_created_by_another_act
     _assert_asked_for_the_vault(session, row)
     svc.delete.assert_awaited_once()
     assert svc.delete.await_args.kwargs["secret_id"] == row.id
+
+
+async def test_adoption_locks_the_row_before_the_grant_check_and_stamp(monkeypatch):
+    row = Secret(id=uuid.uuid4(), is_active=True, type="t", extra_data=None, owner_vault=_VAULT)
+    _svc(monkeypatch, by_name=row)
+    monkeypatch.setattr(cw, "_find_by_marker", AsyncMock(return_value=None))
+    sess = MagicMock(flush=AsyncMock(), refresh=AsyncMock())
+    await _run(sess)
+    sess.refresh.assert_awaited_once_with(row, with_for_update=True)

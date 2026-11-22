@@ -200,16 +200,34 @@ def test_create_and_update_requests_share_one_reserved_name_rule():
         SecretCreateRequest(name="bad:name", type="api_key", scope=ChatSecretScope.GENERAL, value="v")
 
 
-async def test_create_route_answers_a_reserved_name_with_the_fixed_409_and_writes_nothing(monkeypatch):
+async def test_create_route_answers_a_reserved_name_with_the_fixed_409_and_audits_denied(monkeypatch):
     from api import secrets as secrets_api
     from api.schemas_system import ChatSecretScope, SecretCreateRequest
 
     request = SecretCreateRequest(name=_NAME, type="api_key", scope=ChatSecretScope.GENERAL, value="v")
-    writer = MagicMock()
+    writer, audit = MagicMock(), AsyncMock()
     monkeypatch.setattr(secrets_api, "check_rate_limit", AsyncMock())
+    monkeypatch.setattr(secrets_api, "get_auth_middleware", lambda: MagicMock(get_user_from_request=lambda _r: {}))
     monkeypatch.setattr(secrets_api.secrets_manager, "create_secret", writer)
-    monkeypatch.setattr(secrets_api, "audit_secret_op", AsyncMock())
+    monkeypatch.setattr(secrets_api, "audit_secret_op", audit)
     with pytest.raises(HTTPException) as caught:
         await secrets_api.create_secret(request, MagicMock(), True)
     assert caught.value.status_code == 409
     writer.assert_not_called()
+    audit.assert_awaited_once()
+    assert audit.await_args.args[0] == "CREATE" and audit.await_args.args[3] == "denied"
+    assert audit.await_args.kwargs["reason"] == "ReservedSecretNameError"
+
+
+@pytest.mark.parametrize("name", [_NAME, _NAME.replace("connector", "CONNECTOR")])
+async def test_slash_secrets_add_refuses_a_reserved_name_and_writes_nothing(monkeypatch, name):
+    from api.secrets import SecretsManager
+    from slash_command_handler import SecretsAddSubcommand
+
+    manager = SecretsManager.__new__(SecretsManager)
+    saved = MagicMock()
+    monkeypatch.setattr(manager, "_load_secrets", lambda: {}, raising=False)
+    monkeypatch.setattr(manager, "_save_secrets", saved, raising=False)
+    result = await SecretsAddSubcommand(manager, f"{name} api_key sk-test-value", None).execute()
+    assert result.success is False
+    saved.assert_not_called()
