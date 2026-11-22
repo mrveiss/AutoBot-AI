@@ -152,6 +152,8 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
 surfaced and neither hops nor marks, and one local request's 5xx or timeout does not degrade a local model for everyone. A hop with no
 provider, or from an unknown origin, counts as external and needs an operator-written chain; "local" is by provider type, not host. The
 event, the response metadata and the log line carry `fallback_provider` and `operator_configured`.
+- **Error boundary text (#13740, #21998):** `with_error_handling` never returns `str(e)` to a client; uncurated exception text carries paths and DSNs. An exception declaring
+  `error_category` is answered with that status and its `safe_message` as `details.reason`; client text is opted in explicitly (`ValidationError(client_message=...)`).
 - **Refactor fallout** historically outranks new code here: a renamed validator or store with
   call sites left on the old name silently removes the check. Grep the **old** identifier.
 - **Prompt injection (#16488):** content `research`/`adopt`/`web-fetch` fetch is data, never
