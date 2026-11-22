@@ -15,7 +15,7 @@ import pytest
 from autobot_shared.install_paths import overlaps, safe_relative_dir
 from models.manifest import ManifestDeploy, RoleManifest
 from services.manifest_loader import ManifestLoader
-from services.role_removal_dir import detected_roles_if_fresh, removal_path
+from services.role_removal_dir import detected_roles_if_fresh, removal_path, role_removal_path
 
 ROOT = "/opt/autobot"
 
@@ -183,3 +183,66 @@ def test_a_role_nothing_is_known_about_blocks_the_removal(manifests):
 def test_a_node_running_every_other_role_keeps_the_backend_directory(manifests):
     names, paths, required = _registry()
     assert removal_path("backend", [n for n in names if n != "backend"], manifests, paths, required) is None
+
+
+class _Result:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalar_one_or_none(self):
+        return self._rows
+
+    def scalars(self):
+        return SimpleNamespace(all=lambda: self._rows)
+
+    def all(self):
+        return self._rows
+
+
+class _FakeDb:
+    """Answers the three queries ``role_removal_path`` makes, in order: the node, its NodeRole names, the Role rows."""
+
+    def __init__(self, node, assigned, role_rows):
+        self._answers = [node, assigned, role_rows]
+
+    async def execute(self, _statement):
+        return _Result(self._answers.pop(0))
+
+
+@pytest.fixture()
+def _stubbed_imports(monkeypatch, manifests):
+    """``role_removal_path`` imports sqlalchemy, models.database, config and the manifest loader lazily."""
+    import sys
+    from unittest.mock import MagicMock
+
+    loader = SimpleNamespace(get_manifest_loader=lambda: SimpleNamespace(load_all=lambda: manifests))
+    monkeypatch.setitem(sys.modules, "sqlalchemy", SimpleNamespace(select=MagicMock()))
+    monkeypatch.setitem(sys.modules, "models.database", MagicMock())
+    monkeypatch.setitem(
+        sys.modules, "config", SimpleNamespace(settings=SimpleNamespace(heartbeat_interval=30, unhealthy_threshold=3))
+    )
+    monkeypatch.setitem(sys.modules, "services.manifest_loader", loader)
+
+
+@pytest.mark.asyncio
+async def test_role_removal_path_end_to_end_removes_a_known_role_on_a_fresh_report(_stubbed_imports):
+    node = _node(["npu-worker"], datetime.now(timezone.utc))
+    rows = [("npu-worker", f"{ROOT}/autobot-npu-worker", False)]
+    assert await role_removal_path(_FakeDb(node, [], rows), "n1", "npu-worker") == "autobot-npu-worker"
+
+
+@pytest.mark.asyncio
+async def test_role_removal_path_end_to_end_refuses_without_a_report_naming_the_role(_stubbed_imports):
+    rows = [("npu-worker", f"{ROOT}/autobot-npu-worker", False)]
+    for node in (None, _node([], datetime.now(timezone.utc)), _node(["backend"], datetime.now(timezone.utc))):
+        assert await role_removal_path(_FakeDb(node, [], list(rows)), "n1", "npu-worker") is None
+
+
+@pytest.mark.asyncio
+async def test_role_removal_path_end_to_end_spares_a_role_with_no_row_and_a_required_one(_stubbed_imports):
+    fresh = datetime.now(timezone.utc)
+    rows = [("npu-worker", f"{ROOT}/autobot-npu-worker", False)]
+    assigned = ["mystery"]
+    assert await role_removal_path(_FakeDb(_node(["npu-worker"], fresh), assigned, rows), "n1", "npu-worker") is None
+    required = [("npu-worker", f"{ROOT}/autobot-npu-worker", True)]
+    assert await role_removal_path(_FakeDb(_node(["npu-worker"], fresh), [], required), "n1", "npu-worker") is None

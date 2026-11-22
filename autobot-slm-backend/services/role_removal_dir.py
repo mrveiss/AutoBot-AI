@@ -94,7 +94,7 @@ async def role_removal_path(db, node_id: str, role_name: str) -> str | None:
 
     node = (await db.execute(select(Node).where(Node.node_id == node_id))).scalar_one_or_none()
     detected = detected_roles_if_fresh(
-        node, datetime.now(timezone.utc), settings.heartbeat_interval * settings.unhealthy_threshold
+        node, datetime.now(timezone.utc), settings.heartbeat_interval * settings.unhealthy_threshold, role_name
     )
     if detected is None:
         return None
