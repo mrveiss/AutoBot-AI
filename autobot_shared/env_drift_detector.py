@@ -36,9 +36,18 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 from autobot_shared.env_file import parse_env_file
+from autobot_shared.env_unknown_keys import (
+    POLICY_REFUSE,
+    POLICY_WARN,
+    declared_env_names,
+    describe_unknown_key,
+    is_agent_provider_override,
+    resolve_policy,
+    suggest_key,
+)
 from autobot_shared.paths import project_root
 
 logger = logging.getLogger(__name__)
@@ -68,12 +77,19 @@ class DriftReport:
     env_keys: List[str] = field(default_factory=list)
     drifted: List[DriftItem] = field(default_factory=list)
     unknown_keys: List[str] = field(default_factory=list)
+    unknown_suggestions: Dict[str, str | None] = field(default_factory=dict)
+    unknown_key_policy: str = POLICY_WARN
     error: str | None = None
 
     @property
     def has_drift(self) -> bool:
         """True when any drift or unknown entries are present."""
         return bool(self.drifted or self.unknown_keys)
+
+    @property
+    def refused(self) -> bool:
+        """True when unknown keys are present and the policy is to refuse them (#17419)."""
+        return bool(self.unknown_keys) and self.unknown_key_policy == POLICY_REFUSE
 
     @property
     def missing_keys(self) -> List[str]:
@@ -224,14 +240,16 @@ def _find_missing_keys(ssot_defaults: Dict[str, str], env_values: Dict[str, str]
     return items
 
 
-def _find_unknown_keys(ssot_defaults: Dict[str, str], env_values: Dict[str, str]) -> List[str]:
-    """Return keys present in .env that are not defined in SSOT config.
+def _find_unknown_keys(declared: Iterable[str], env_values: Dict[str, str]) -> List[str]:
+    """Return ``AUTOBOT_`` keys present in .env that no settings model or registry entry declares.
 
-    Only returns keys with the AUTOBOT_ prefix to avoid flagging unrelated
-    third-party variables (VITE_*, REDIS_*, TF_USE_LEGACY_KERAS, etc.).
+    *declared* is every name the models bind and the registry registers
+    (:func:`declared_env_names`), not just the subset with an SSOT default, so a key a model
+    reads through another class is not reported. Only the AUTOBOT_ prefix is flagged, to leave
+    unrelated third-party variables (VITE_*, REDIS_*, TF_USE_LEGACY_KERAS, etc.) alone.
     """
     autobot_env = {k for k in env_values if k.startswith("AUTOBOT_")}
-    return sorted(autobot_env - set(ssot_defaults.keys()))
+    return sorted(k for k in autobot_env - set(declared) if not is_agent_provider_override(k))
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +300,15 @@ def check_env_drift(env_path: str | None = None) -> DriftReport:
     report.drifted = _find_missing_keys(ssot_defaults, env_values)
 
     # Find unknown AUTOBOT_ keys (in .env but not in SSOT config)
-    report.unknown_keys = _find_unknown_keys(ssot_defaults, env_values)
+    try:
+        declared = declared_env_names() | set(ssot_defaults)
+    except Exception as exc:  # classifying against incomplete declarations would call valid names unknown
+        report.error = f"declaration lookup failed: {exc}"
+        logger.warning("env_drift_detector: %s", report.error)
+        return report
+    report.unknown_keys = _find_unknown_keys(declared, env_values)
+    report.unknown_suggestions = {key: suggest_key(key, declared) for key in report.unknown_keys}
+    report.unknown_key_policy = resolve_policy()
 
     _emit_drift_warnings(report)
 
@@ -329,8 +355,8 @@ def _emit_drift_warnings(report: DriftReport) -> None:
 
     for key in report.unknown_keys:
         logger.warning(
-            "env drift [UNKNOWN] AUTOBOT_ key '%s' present in .env but not in SSOT config",
-            key,
+            "env drift [UNKNOWN] %s",
+            describe_unknown_key(key, report.unknown_suggestions.get(key), report.unknown_key_policy),
         )
 
 
@@ -339,8 +365,12 @@ def _emit_drift_warnings(report: DriftReport) -> None:
 # ---------------------------------------------------------------------------
 
 
+#: Exit code for unknown ``AUTOBOT_`` keys once the policy has resolved to refuse (#17419).
+EXIT_UNKNOWN_KEYS_REFUSED = 3
+
+
 def _cli_main(args: List[str]) -> int:
-    """CLI runner. Returns exit code: 0 = no drift, 1 = drift found, 2 = error."""
+    """CLI runner. Returns exit code: 0 = no drift, 1 = drift found, 2 = error, 3 = unknown keys refused."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     env_path = args[0] if args else None
@@ -360,8 +390,12 @@ def _cli_main(args: List[str]) -> int:
     if report.unknown_keys:
         logger.warning("Unknown AUTOBOT_ keys in .env (%d):", len(report.unknown_keys))
         for key in report.unknown_keys:
-            logger.warning("  %s", key)
+            logger.warning(
+                "  %s", describe_unknown_key(key, report.unknown_suggestions.get(key), report.unknown_key_policy)
+            )
 
+    if report.refused:
+        return EXIT_UNKNOWN_KEYS_REFUSED
     return 1 if report.has_drift else 0
 
 
