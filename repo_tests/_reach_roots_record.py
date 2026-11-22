@@ -120,6 +120,7 @@ REACH_ROOTS = {
         "autobot_shared",
     ),
     "repo_tests/embedding_model_preserved_15502_test.py": ("autobot-slm-backend/ansible",),
+    "repo_tests/env_aliases_are_registered_17419_test.py": ("autobot_shared",),
     "repo_tests/env_file_family_18555_test.py": (".env", "autobot-frontend/", "autobot-slm-backend/", "docker/"),
     "repo_tests/env_fork_guard_18094_test.py": (
         "autobot-backend",
