@@ -26,11 +26,12 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from code_intelligence.python_files import ANALYSIS_EXCLUDE_DIRS, discover_files, is_excluded
 
 # #18094: the similarity-threshold triple has one owner (analytics_infrastructure,
 # which analysis_base also imports); it cannot live in shared/analysis_base because
 # that module imports analytics_infrastructure, so the dependency would be a cycle.
-from code_intelligence.analytics_infrastructure import SIMILARITY_MEDIUM
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 from knowledge.index_embedding_space import index_embedding_space
 
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
@@ -47,28 +48,6 @@ from .models import (
 )
 
 logger = get_logger(__name__)
-
-# Default directories to skip
-_SKIP_DIRS: frozenset = frozenset(
-    {
-        "node_modules",
-        "__pycache__",
-        ".git",
-        ".venv",
-        "venv",
-        "dist",
-        "build",
-        ".next",
-        ".nuxt",
-        "coverage",
-        ".pytest_cache",
-        "archive",
-        "archives",
-        "backup",
-        "backups",
-        ".mypy_cache",
-    }
-)
 
 # ChromaDB collection name
 PATTERNS_COLLECTION = "cross_language_patterns"
@@ -338,8 +317,8 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         return f"{pattern_type.value if hasattr(pattern_type, 'value') else pattern_type}: {name}"
 
     def _should_skip_directory(self, path: Path) -> bool:
-        """Check if directory should be skipped."""
-        return any(skip in path.parts for skip in _SKIP_DIRS)
+        """Check if directory should be skipped (root-relative, #13602)."""
+        return is_excluded(path, self.project_root, ANALYSIS_EXCLUDE_DIRS)
 
     async def _collect_files(self) -> Tuple[List[Path], List[Path], List[Path]]:
         """Collect files to analyze by language.
@@ -361,21 +340,14 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         # Collect Python files
         for search_dir in [backend_dir, legacy_backend_dir, src_dir]:
             if search_dir.exists():
-                for file_path in search_dir.rglob("*.py"):
-                    if not self._should_skip_directory(file_path):
-                        python_files.append(file_path)
+                python_files.extend(discover_files(search_dir, ("*.py",)))
 
         # Collect TypeScript files
         if frontend_dir.exists():
-            for ext in ["*.ts", "*.tsx", "*.js", "*.jsx"]:
-                for file_path in frontend_dir.rglob(ext):
-                    if not self._should_skip_directory(file_path):
-                        typescript_files.append(file_path)
+            typescript_files.extend(discover_files(frontend_dir, ("*.ts", "*.tsx", "*.js", "*.jsx")))
 
             # Collect Vue files separately
-            for file_path in frontend_dir.rglob("*.vue"):
-                if not self._should_skip_directory(file_path):
-                    vue_files.append(file_path)
+            vue_files.extend(discover_files(frontend_dir, ("*.vue",)))
 
         return python_files, typescript_files, vue_files
 

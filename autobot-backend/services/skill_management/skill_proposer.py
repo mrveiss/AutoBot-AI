@@ -12,11 +12,13 @@ Related Issue: #4338 - autonomous skill extraction from conversations
 """
 
 import asyncio
+import logging
 from typing import Dict, List
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.logging_once import log_once
 from autobot_shared.slm_rest_url import rest_url
 from autobot_shared.ssot_config import config
 from llc.services.slm_policy import fetch_slm_policy_json
@@ -32,20 +34,19 @@ logger = get_logger(__name__)
 #: header, and ``auto_validate`` needs a security review (#18367).
 SKILL_PROPOSAL_SETTING_KEY = "skill_proposal_policy"
 
-_disabled_logged = False
-
 
 async def _proposals_enabled() -> bool:
     """True only when the SLM-managed policy explicitly enables proposals; logs the off state once."""
-    global _disabled_logged
     policy = await fetch_slm_policy_json(SKILL_PROPOSAL_SETTING_KEY)
     if isinstance(policy, dict) and policy.get("enabled") is True:
         return True
-    if not _disabled_logged:
-        _disabled_logged = True
-        logger.info(
-            "Skill proposals are off (SLM setting %s not enabled, #18367); nothing is sent", SKILL_PROPOSAL_SETTING_KEY
-        )
+    log_once(
+        logger,
+        logging.INFO,
+        "proposals_off",
+        "Skill proposals are off (SLM setting %s not enabled, #18367); nothing is sent",
+        SKILL_PROPOSAL_SETTING_KEY,
+    )
     return False
 
 

@@ -52,6 +52,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
 from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
@@ -152,16 +153,6 @@ def audit_parity(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
     ]
 
 
-def run_audit() -> int:
-    compared, problems = audit_parity()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\nrequirements pin-parity audit FAILED over %d shared package(s) (#15070).", compared)
-        return 1
-    logger.info("requirements pin-parity audit clean over %d shared package(s) (#15070).", compared)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -173,7 +164,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    compared, problems = audit_parity()
+    return report_audit(
+        logger,
+        problems,
+        "\nrequirements pin-parity audit FAILED over %d shared package(s) (#15070).",
+        "requirements pin-parity audit clean over %d shared package(s) (#15070).",
+        compared,
+    )
 
 
 if __name__ == "__main__":

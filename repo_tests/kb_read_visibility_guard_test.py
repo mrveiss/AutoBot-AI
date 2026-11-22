@@ -50,6 +50,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 from repo_tests.kb_read_visibility_allowlist import ALLOWLIST
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 REPO_ROOT = repo_root()
@@ -108,6 +109,12 @@ FILTER_HELPERS = frozenset(
         # filter_non_private_results (SYSTEM_SCOPE); RAG legs call them, never a second filter.
         "filter_for_principal",
         "filter_ranked",
+        # #16665: the API-caller and identified-user adapters over filter_for_principal.
+        "filter_for_caller",
+        "filter_for_user_id",
+        # #19280: api/knowledge_search.py's permission filter plus the shared stale filter, in that order
+        # (filter_search_results_by_permission, then drop_stale) -- the same filter, not a second one.
+        "_readable_fresh",
     }
 )
 
@@ -188,7 +195,21 @@ MIN_READS_FOUND = 40
 #: No detector change. The optimizer's context path moved to ``rag_optimizer_context.py`` and the synthesis and
 #: lessons legs to ``services/rag_derived_context.py``; neither holds a detected read. The live set was compared
 #: before and after over every changed file: the only difference is that one key.
-UNFILTERED_READ_CEILING = 86
+#: Then 86 -> 87 (#19216): the system-knowledge import's ``_adopt_duplicate`` reads the matched fact's
+#: metadata only, from a job with no user, and returns an id and status (classified NOT_USER_FACING).
+#: Then 87 -> 71 (#16665): the MCP knowledge routes, chat citations, the async chat workflow, the grounded agent and claim
+#: verifier, the agent KB tools, the KB librarian, the agent diary and the essential story now filter through
+#: ``filter_for_caller`` / ``filter_for_user_id`` (adapters over ``filter_for_principal``, so not a second filter).
+#: 16 entries removed; no detector change beyond adding those two names to FILTER_HELPERS.
+#: Then 71 -> 64 (#16665): the agent context/research routes, the knowledge-retrieval agent, chat knowledge search, the
+#: research planner's skip-known read and the KB search task handler filter through ``filter_for_user_id``.
+#: Then 64 -> 65 (#16665, train-85f): ``knowledge/summary_visibility._source_metadata`` reads the source fact's
+#: metadata to make the visibility decision itself; classified SCOPED.
+#: Then 65 -> 64 (#16665, #19644): ``/ai-stack/knowledge/search`` scopes its local hits to the caller, so the scan
+#: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
+#: Then 64 -> 66 (#19647): the backup's vector read and the restore's existence check, both NOT_USER_FACING.
+#: Then 66 -> 67 (#20028): the sync's pre-delete check of a replaced fact, NOT_USER_FACING.
+UNFILTERED_READ_CEILING = 67
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -215,20 +236,14 @@ def _production_files(root: Path) -> list[str]:
     return [rel for rel in tracked if _is_production(rel)]
 
 
-#: FLOOR PINNED 2026-10-19 to 2762 against a measured population of 2887 production files by this
-#: guard's own filter (branch issue-18825-graph-owner-scope; the repo_tests run that reported
-#: "the window against a population of 2887 is [2637, 2887]"). With `growth=250` and `skips=0`
-#: that window is 2637..2887 and 2762 sits mid-window (`_reach` refuses a floor in the bottom 25).
-#: Earlier figure, no longer current: 2555 measured 2026-09-14 (2356 autobot-backend, 195
-#: autobot_shared, 4 infra MCP). The per-root split of 2887 was not recorded in that run. `growth=250`
-#: absorbs ordinary additions, since most feature work adds production modules. That
+#: Production files by this guard's own filter (the floor is computed from the base commit, #19676).
+#: `growth=250` absorbs ordinary additions, since most feature work adds production modules. That
 #: band cannot see a small root vanish, so `test_every_scan_root_is_reached` checks each root
 #: separately. `skips=0`: every discovered file is parsed, and an unparseable one fails the
 #: scan loudly.
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2762,
     growth=250,
     skips=0,
     what="production python files",
@@ -352,7 +367,7 @@ def kb_reads(source: str, rel: str = "") -> list[tuple[str, int, bool]]:
                 )
             visit(child, name)
 
-    visit(ast.parse(source), "")
+    visit(parse_cache.parse(source), "")
     return reads
 
 

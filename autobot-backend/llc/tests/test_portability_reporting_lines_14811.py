@@ -185,6 +185,8 @@ class TestTheImportActuallyRunsPassThree:
         with (
             patch.object(PortabilityService, "_validate_schema", return_value=None),
             patch.object(PortabilityService, "_resolve_or_create_company", AsyncMock(return_value=company_id)),
+            # The CEO step has its own SQLite tests (#19588); this mock session cannot run it.
+            patch("llc.services.portability.settle_imported_ceo", AsyncMock()),
             patch.object(PortabilityService, "_import_agent", side_effect=_import_agent),
         ):
             result = await svc.execute_import(template)

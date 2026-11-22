@@ -431,7 +431,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/ui/Icon.vue'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
@@ -615,9 +615,7 @@ const breadcrumb = computed<BreadcrumbItem[]>(() => [
   { label: t('llcBrowser.projects.title') },
 ])
 
-function formatDate(value: string | null): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 async function loadProjects(): Promise<void> {
   loading.value = true
@@ -1047,14 +1045,14 @@ onMounted(async () => {
 }
 
 .browser-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .browser-count {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -1091,14 +1089,14 @@ onMounted(async () => {
 }
 
 .card-name {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .card-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
   display: -webkit-box;
@@ -1109,7 +1107,7 @@ onMounted(async () => {
 }
 
 .card-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0;
 }
@@ -1121,7 +1119,7 @@ onMounted(async () => {
 }
 
 .stat {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
   background: var(--bg-hover);
@@ -1198,7 +1196,7 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 
@@ -1210,11 +1208,11 @@ onMounted(async () => {
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .create-help {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   margin: 0.25rem 0 0;
 }
@@ -1264,7 +1262,7 @@ onMounted(async () => {
 }
 
 .repo-path {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-family: var(--font-mono, monospace);
   color: var(--text-secondary);
   background: var(--bg-hover);
@@ -1274,7 +1272,7 @@ onMounted(async () => {
 }
 
 .repo-status {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   padding: 0.125rem 0.375rem;
   border-radius: 999px;

@@ -95,6 +95,41 @@ export type WorkflowStepStatus =
   | 'failed'
   | 'paused';
 
+/** Generated from `services.notification_types.NotificationEvent` */
+export type NotificationEvent =
+  | 'workflow_completed'
+  | 'workflow_failed'
+  | 'step_failed'
+  | 'approval_needed'
+  | 'service_failed';
+
+/** Generated from `services.notification_types.NotificationChannel` */
+export type NotificationChannel =
+  | 'email'
+  | 'slack'
+  | 'webhook'
+  | 'in_app'
+  | 'telegram';
+
+/** Generated from `services.workflow_automation.phases.WorkflowPhase` */
+export type WorkflowPhase =
+  | 'planning'
+  | 'awaiting_approval'
+  | 'executing'
+  | 'validating'
+  | 'complete'
+  | 'failed';
+
+/** Generated from `agents.overseer.types.OverseerStepStatus` */
+export type OverseerStepStatus =
+  | 'pending'
+  | 'running'
+  | 'streaming'
+  | 'waiting_explanation'
+  | 'explaining'
+  | 'completed'
+  | 'failed';
+
 /** Generated from `autobot_shared.status_enums.Severity` */
 export type Severity =
   | 'unknown'

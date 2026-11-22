@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.python_files import collect_python_files
+from code_intelligence.python_files import cache_covers_exclusions, collect_python_files, is_excluded
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 
 from .detectors import (
     BloaterDetector,
@@ -33,10 +34,7 @@ from .types import DEFAULT_IGNORE_PATTERNS, Thresholds
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
@@ -170,18 +168,21 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         python_files = self._get_python_files(directory)
         self._coupler.reset_import_graph()
 
+        failed = 0
         for file_path in python_files:
             try:
                 self._analyze_single_file(file_path, patterns)
             except SyntaxError as e:
+                failed += 1
                 logger.debug("Syntax error in %s: %s", file_path, e)
             except Exception as e:
+                failed += 1
                 logger.debug("Error analyzing %s: %s", file_path, e)
 
         if self.detect_circular:
             patterns.extend(self._coupler.detect_circular_dependencies())
 
-        return self._create_analysis_report(directory, python_files, patterns)
+        return self._create_analysis_report(directory, python_files, patterns, failed)
 
     def _parse_file_source(self, file_path: str) -> tuple[ast.AST | None, List[str], str | None]:
         """Parse file and return AST tree and lines. Issue #620.
@@ -403,23 +404,15 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         Get all Python files in directory using async cache.
 
         Issue #607: Uses shared FileListCache for performance optimization.
-        Filters results by exclude_dirs after cache lookup.
+        Filters by exclude_dirs after lookup; walks instead if the cache's SKIP_DIRS
+        filter is not implied by exclude_dirs, so both paths share one rule.
         """
         dir_path = Path(directory)
 
-        # Use shared cache if available
-        if self.use_shared_cache:
+        # Shared cache only when its fixed SKIP_DIRS filter equals exclude_dirs' (#20493)
+        if self.use_shared_cache and cache_covers_exclusions(self.exclude_dirs):
             all_files = await get_cached_python_files(dir_path)
-            # Filter by exclude_dirs
-            python_files = []
-            for py_file in all_files:
-                should_exclude = False
-                for exclude_dir in self.exclude_dirs:
-                    if exclude_dir in py_file.parts:
-                        should_exclude = True
-                        break
-                if not should_exclude:
-                    python_files.append(str(py_file))
+            python_files = [str(f) for f in all_files if not is_excluded(f, dir_path, self.exclude_dirs)]
             return sorted(python_files)
 
         # Fallback to sync method in thread pool
@@ -451,7 +444,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         self,
         file_path: str,
         patterns: List[AntiPatternResult],
-    ) -> None:
+    ) -> bool:
         """
         Analyze a single file using cached AST and append patterns. Issue #620.
 
@@ -462,7 +455,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         tree, source = get_ast_with_content(file_path)
         if tree is None:
             logger.debug("Skipping %s: failed to parse AST", file_path)
-            return
+            return False
 
         lines = source.split("\n") if source else []
 
@@ -475,12 +468,14 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
 
         patterns.extend(self._analyze_ast_nodes(tree, file_path, lines))
         patterns.extend(self._run_file_level_detections(tree, file_path))
+        return True
 
     def _create_analysis_report(
         self,
         directory: str,
         python_files: List[str],
         patterns: List[AntiPatternResult],
+        files_failed: int = 0,
     ) -> AnalysisReport:
         """
         Create an AnalysisReport from collected patterns. Issue #620.
@@ -501,6 +496,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             anti_patterns=patterns,
             summary=self._calculate_summary(patterns),
             severity_distribution=self._calculate_severity_distribution(patterns),
+            files_failed=files_failed,
+            cap_applied=False,  # discovery applies no file cap
         )
 
     async def _analyze_directory_with_cache(self, directory: str) -> AnalysisReport:
@@ -523,16 +520,19 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
         python_files = await self._get_python_files_async(directory)
         self._coupler.reset_import_graph()
 
+        failed = 0
         for file_path in python_files:
             try:
-                self._analyze_single_file_with_cache(file_path, patterns)
+                if not self._analyze_single_file_with_cache(file_path, patterns):
+                    failed += 1
             except Exception as e:
+                failed += 1
                 logger.debug("Error analyzing %s: %s", file_path, e)
 
         if self.detect_circular:
             patterns.extend(self._coupler.detect_circular_dependencies())
 
-        return self._create_analysis_report(directory, python_files, patterns)
+        return self._create_analysis_report(directory, python_files, patterns, failed)
 
     # Issue #554: Async semantic analysis methods
     # Issue #607: Enhanced with shared cache support
@@ -552,8 +552,8 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             "total_classes": report.total_classes,
             "total_functions": report.total_functions,
             "anti_patterns": [p.to_dict() for p in report.anti_patterns],
-            "summary": report.summary,
-            "severity_distribution": report.severity_distribution,
+            "summary": report.derived_summary,
+            "severity_distribution": report.derived_severity_distribution,
         }
 
     async def analyze_directory_async(
@@ -624,7 +624,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
@@ -651,16 +651,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             return False
 
         cache_key = self._generate_content_hash(directory)
-        report_dict = (
-            report.to_dict()
-            if hasattr(report, "to_dict")
-            else {
-                "scan_path": report.scan_path,
-                "total_files": report.total_files,
-                "anti_patterns": [p.to_dict() for p in report.anti_patterns],
-                "summary": report.summary,
-            }
-        )
+        report_dict = report.to_dict()
 
         return await self._cache_result(
             key=cache_key,

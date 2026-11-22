@@ -296,3 +296,37 @@ def test_both_new_routers_are_mounted_on_routers_main_gates_with_the_role_sync_d
     main = (SLM_ROOT / "main.py").read_text(encoding="utf-8")
     for router in ("nodes_router", "code_sync_router"):
         assert f'app.include_router({router}, prefix="/api", dependencies=_SM_OR_AGENT)' in main
+
+
+class _CapturingDb:
+    """Stands in for ``db_service``: keeps every row the recorder writes."""
+
+    def __init__(self):
+        self.rows = []
+
+    def session(self):
+        db = self
+
+        class _Ctx:
+            async def __aenter__(self):
+                return SimpleNamespace(add=db.rows.append, commit=AsyncMock())
+
+            async def __aexit__(self, *exc):
+                return False
+
+        return _Ctx()
+
+
+async def test_a_secret_in_post_sync_output_is_redacted_in_the_stored_row_and_the_get_response_18522(monkeypatch):
+    """#18522: stored record and GET response both carry the redacted output, never the secret."""
+    secret = "hunter2-s3cr3t-value"  # pragma: allowlist secret
+    capture = _CapturingDb()
+    monkeypatch.setattr(recorder, "db_service", capture)
+    ctx = recorder.RunContext("run1", "n1", "r")
+    out = recorder.ActionOutcome(True, 0, f"migrating\napi_key={secret}\ndone", None, _NOW, _NOW)
+    await recorder.record_action_run(ctx, "post_sync", "Post-sync command", f"deploy --password={secret}", None, out)
+    (row,) = capture.rows
+    assert secret not in row.output_tail and secret not in row.command
+    assert "migrating" in row.output_tail and "done" in row.output_tail  # only the secret is masked
+    response = _client(_db([[row]])).get("/api/code-sync/post-sync-runs/run1", headers=_SIGNED_IN)
+    assert response.status_code == 200 and secret not in response.text

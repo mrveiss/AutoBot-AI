@@ -13,13 +13,16 @@ rule the SLM follows (#16387). The answer is a 503 + Retry-After (#18892), not a
 The owner accepted the cost on 2026-09-12 -- a Redis outage takes backend login down with it.
 """
 
+import time
 from typing import Dict
 
 from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 from autobot_shared.user_management.password_epoch import (
+    LOGIN_TOKEN_LIFETIME_SECONDS,
     MalformedTokenClaims,
     RevocationCheckUnavailable,
     is_token_revoked_by_password_change,
@@ -28,6 +31,9 @@ from autobot_shared.user_management.password_epoch import (
 logger = get_logger(__name__)
 
 _BEARER_CHALLENGE = {"WWW-Authenticate": "Bearer"}
+
+#: Credentials the epoch can place in time: a JWT by its ``iat``, an ``X-Session-ID`` session by its creation (#20443).
+_EPOCH_GATED_METHODS = ("jwt", "session")
 
 
 async def reject_if_revoked_by_password_change(user_data: Dict) -> None:
@@ -93,6 +99,26 @@ async def resolve_human_user_via(middleware, request: Request) -> Dict | None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
         )
-    if user_data.get("auth_method") == "jwt":  # #12924, #16411: a token minted before a password change is void
+    if user_data.get("auth_method") in _EPOCH_GATED_METHODS:  # #12924, #16411: minted before a password change: void
         await reject_if_revoked_by_password_change(user_data)
+    return user_data
+
+
+def with_session_issue_time(user_data: Dict, session: Dict) -> Dict | None:
+    """*user_data* with the session's creation time as ``iat``, so the password-epoch gate covers it (#20443).
+
+    A session whose creation time cannot be read cannot be placed against an epoch: None, refused.
+    So is one older than a login token's lifetime: ``get_session`` extends the TTL on every use, so
+    polling would otherwise keep a session alive past the epoch marker, which is kept for a token's
+    lifetime plus a margin, and the voided session would be admitted again once the marker expired.
+    """
+    try:
+        user_data["iat"] = int(parse_utc_iso(session["created_at"]).timestamp())
+    except (KeyError, TypeError, ValueError):
+        logger.warning("Session refused: its creation time is unreadable")
+        return None
+    if time.time() - user_data["iat"] > LOGIN_TOKEN_LIFETIME_SECONDS:
+        logger.info("Session refused: it is older than a login's lifetime")
+        return None
+    user_data["sub"] = user_data.get("sub") or user_data.get("username")
     return user_data

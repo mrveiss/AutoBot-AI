@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, SystemdState
@@ -89,16 +90,15 @@ _SERVICE_DEFINITIONS = {
         default_host=os.environ.get("AUTOBOT_BACKEND_HOST", ""),  # noqa: ssot-fallback
         default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
-            "cd /opt/autobot/autobot-backend && "
-            "source venv/bin/activate && "
-            "nohup python backend/main.py > logs/backend.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-backend && "
+            "source venv/bin/activate && nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
         stop_command="pkill -f 'python.*backend/main.py'",
         health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         systemd_service="autobot-backend",  # #13915: was unnamed, so no query could find it
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-backend",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-backend",
         description="FastAPI backend API server",
     ),
     # Frontend (Vue.js on frontend VM, served by nginx on HTTPS 443)
@@ -106,19 +106,19 @@ _SERVICE_DEFINITIONS = {
         name="frontend",
         service_type=AutoBotServiceType.FRONTEND,
         default_host_env="AUTOBOT_FRONTEND_HOST",
-        default_port_env="AUTOBOT_FRONTEND_PORT",
+        default_port_env="AUTOBOT_FRONTEND_TLS_PORT",  # nginx HTTPS; AUTOBOT_FRONTEND_PORT is Vite (#19326)
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=443,  # Production nginx serves HTTPS on 443
+        default_port=config.tls.frontend_tls_port,
         systemd_service="nginx",  # Production uses nginx
         start_command=(
-            "cd /opt/autobot/autobot-slm-frontend && "
-            "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-slm-frontend && "
+            f"nohup npm run dev -- --host 0.0.0.0 --port {config.port.frontend} > /tmp/vite.log 2>&1 &"
         ),
-        stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
+        stop_command=f"pkill -f 'npm.*dev' || pkill -f 'vite.*{config.port.frontend}'",
         health_check_path="/",
         health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-slm-frontend",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-slm-frontend",
         description="Vue.js frontend (nginx+SSL)",
     ),
     # Redis Stack (database VM)
@@ -144,9 +144,8 @@ _SERVICE_DEFINITIONS = {
         default_port=8081,
         systemd_service="autobot-npu-worker",
         start_command=(
-            "cd /opt/autobot/autobot-npu-worker && "
-            "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 "
-            "> logs/npu-worker.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-npu-worker && "
+            "nohup python -m npu_worker.service --host 0.0.0.0 --port 8081 > logs/npu-worker.log 2>&1 &"
         ),
         stop_command="pkill -f 'npu.*worker'",
         health_check_path="/health",
@@ -181,13 +180,14 @@ _SERVICE_DEFINITIONS = {
         default_host=os.environ.get("AUTOBOT_BROWSER_SERVICE_HOST", ""),  # noqa: ssot-fallback
         default_port=3000,
         start_command=(
-            "cd /opt/autobot/autobot-browser-worker && " "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
+            f"cd {FLEET_INSTALL_ROOT}/autobot-browser-worker && "
+            "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
         health_check_path="/health",
         health_check_type="http",
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-browser-worker",
+        working_dir=f"{FLEET_INSTALL_ROOT}/autobot-browser-worker",
         description="Playwright browser automation service",
     ),
     # SLM Backend (this server)
@@ -258,7 +258,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_CHROMADB_HOST",
         default_port_env="AUTOBOT_CHROMADB_PORT",
         default_host=os.environ.get("AUTOBOT_CHROMADB_HOST", ""),  # noqa: ssot-fallback
-        default_port=8100,  # roles/ai-stack/defaults/main.yml: chromadb_port
+        default_port=config.port.chromadb,  # #19321: the SSOT; ansible chromadb_port is pinned to it
         systemd_service="autobot-chromadb",
         health_check_type="http",
         requires_sudo=True,
@@ -308,7 +308,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_PORT",
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=5173,
+        default_port=config.port.frontend,
         systemd_service="autobot-frontend",
         health_check_type="http",
         requires_sudo=True,

@@ -25,8 +25,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
 import ProcessMonitorTab from './ProcessMonitorTab.vue'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
@@ -49,28 +50,11 @@ class FakeWebSocket {
 }
 vi.stubGlobal('WebSocket', FakeWebSocket)
 
-vi.mock('axios', () => {
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: { use: () => undefined },
-      response: { use: () => undefined },
-    },
-  }
-  return { default: { create: () => instance } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-type MockedClient = { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> }
-
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
 
 const PROCESS = {
   id: 'p1',
@@ -109,11 +93,10 @@ function mountTab(): { vm: Vm } {
 
 describe('ProcessMonitorTab transport (#13079)', () => {
   beforeEach(() => {
-    const c = client()
-    c.get.mockReset()
-    c.post.mockReset()
-    c.get.mockResolvedValue({ data: { processes: [PROCESS] }, status: 200 })
-    c.post.mockResolvedValue({ data: { success: true }, status: 200 })
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+    backendClient.get.mockResolvedValue({ processes: [PROCESS] })
+    backendClient.post.mockResolvedValue({ success: true })
   })
 
   it('GETs /agents/{id}/processes with the limit and the selected status filter', async () => {
@@ -124,7 +107,7 @@ describe('ProcessMonitorTab transport (#13079)', () => {
     await vm.fetchProcesses()
     await flushPromises()
 
-    expect(client().get.mock.calls[0][0]).toBe(
+    expect(backendClient.get.mock.calls[0][0]).toBe(
       '/agents/orchestrator/processes?limit=50&status=running',
     )
   })
@@ -136,23 +119,23 @@ describe('ProcessMonitorTab transport (#13079)', () => {
 
     await vm.fetchProcesses()
 
-    expect(client().get.mock.calls[0][0]).toBe('/agents/orchestrator/processes?limit=50')
+    expect(backendClient.get.mock.calls[0][0]).toBe('/agents/orchestrator/processes?limit=50')
   })
 
   it('requests the log as text and stores it verbatim', async () => {
-    client().get.mockResolvedValue({ data: 'stdout line\nstderr line', status: 200 })
+    backendClient.get.mockResolvedValue('stdout line\nstderr line')
     const { vm } = mountTab()
 
     await vm.fetchFullLog('p1')
 
-    const [url, config] = client().get.mock.calls[0] as [string, { responseType: string }]
+    const [url, config] = backendClient.get.mock.calls[0] as [string, { responseType: string }]
     expect(url).toBe('/processes/p1/logs')
     expect(config.responseType).toBe('text')
     expect(vm.fullLog).toBe('stdout line\nstderr line')
   })
 
   it('keeps the "Failed to load log" placeholder when the log request rejects', async () => {
-    client().get.mockRejectedValue(new Error('gone'))
+    backendClient.get.mockRejectedValue(new Error('gone'))
     const { vm } = mountTab()
 
     await vm.fetchFullLog('p1')
@@ -166,12 +149,12 @@ describe('ProcessMonitorTab transport (#13079)', () => {
 
     await vm.signalProcess('p1', 'SIGKILL')
 
-    expect(client().post.mock.calls[0].slice(0, 2)).toEqual([
+    expect(backendClient.post.mock.calls[0].slice(0, 2)).toEqual([
       '/processes/p1/signal',
       { signal: 'SIGKILL' },
     ])
 
-    client().post.mockRejectedValue({ response: { data: { detail: 'process already exited' } } })
+    backendClient.post.mockRejectedValue(new HttpError(409, 'Error', { detail: 'process already exited' }))
     await vm.signalProcess('p1', 'SIGTERM')
 
     expect(vm.error).toBe('process already exited')
@@ -186,7 +169,7 @@ describe('ProcessMonitorTab transport (#13079)', () => {
 
     await vm.spawnProcess()
 
-    expect(client().post.mock.calls[0].slice(0, 2)).toEqual([
+    expect(backendClient.post.mock.calls[0].slice(0, 2)).toEqual([
       '/processes/spawn',
       {
         agent_id: 'orchestrator',
@@ -209,5 +192,37 @@ describe('ProcessMonitorTab transport (#13079)', () => {
     expect(socket.url).not.toContain('test-token')
     expect(socket.url).not.toContain('?')
     expect(socket.protocols).toEqual(['bearer', 'test-token'])
+  })
+})
+
+describe('ProcessMonitorTab duration labels (#19929)', () => {
+  const done = { ...PROCESS, completed_at: '2026-01-01T00:01:15Z' }
+  const labelled = createI18n({
+    legacy: true,
+    locale: 'xx',
+    fallbackLocale: 'en',
+    messages: { en, xx: { agents: { processMonitorTab: { durationSeconds: 'sek', durationMinutes: 'min' } } } },
+  })
+
+  it('renders the duration with the labels of the active locale', async () => {
+    backendClient.get.mockReset()
+    backendClient.get.mockResolvedValue({ processes: [done] })
+    const wrapper = mount(ProcessMonitorTab, { global: { plugins: [labelled] } })
+    const vm = wrapper.vm as unknown as Vm
+    vm.agentId = 'orchestrator'
+    await vm.fetchProcesses()
+    await flushPromises()
+    expect(wrapper.text()).toContain('1min 15sek')
+  })
+
+  it('keeps the English suffixes when the locale has no override', async () => {
+    backendClient.get.mockReset()
+    backendClient.get.mockResolvedValue({ processes: [done] })
+    const wrapper = mount(ProcessMonitorTab, { global: { plugins: [i18n] } })
+    const vm = wrapper.vm as unknown as Vm
+    vm.agentId = 'orchestrator'
+    await vm.fetchProcesses()
+    await flushPromises()
+    expect(wrapper.text()).toContain('1m 15s')
   })
 })

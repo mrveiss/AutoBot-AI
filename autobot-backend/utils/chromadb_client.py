@@ -36,6 +36,7 @@ from utils.async_chromadb_client import (
 )
 from utils.chromadb_auth import chroma_client_auth_kwargs
 from utils.chromadb_store_repairs import prepare_local_store
+from utils.leased_chroma import lease_client
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -100,6 +101,7 @@ def _open_local_client(cache_key: tuple, chroma_path: Path, allow_reset: bool, t
             settings=ChromaSettings(allow_reset=allow_reset, anonymized_telemetry=telemetry),
         )
         logger.info("ChromaDB persistent client at: %s", chroma_path)
+        client = lease_client(client)
         _sync_client_cache[cache_key] = client
         return client
 
@@ -130,7 +132,7 @@ def get_chromadb_client(
     # #10601: return the cached client instead of rebuilding it (and re-running
     # the legacy migrations below) on every call. Mirrors _async_client_cache.
     cache_key = (
-        f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else (db_path or "data/chromadb"),
+        chromadb_endpoint(db_path),
         allow_reset,
         anonymized_telemetry,
         _CHROMADB_AUTH_ENABLED,
@@ -154,6 +156,7 @@ def get_chromadb_client(
                 _CHROMADB_HOST,
                 _CHROMADB_PORT,
             )
+            client = lease_client(client)
             _sync_client_cache[cache_key] = client
             return client
 
@@ -164,6 +167,11 @@ def get_chromadb_client(
     except Exception as e:
         logger.error("Failed to initialize ChromaDB client: %s", e)
         raise
+
+
+def chromadb_endpoint(db_path: str | None = None) -> str:
+    """The store ``get_chromadb_client`` opens: the server URL when a host is set, else the local path (#20886)."""
+    return f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else (db_path or "data/chromadb")
 
 
 def get_all_paginated(

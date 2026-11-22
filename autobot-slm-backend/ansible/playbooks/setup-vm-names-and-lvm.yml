@@ -189,11 +189,11 @@
         group: autobot
         mode: '0755'
       loop:
-        - /opt/autobot
-        - /opt/autobot/logs
-        - /opt/autobot/config
-        - /opt/autobot/data
-        - /opt/autobot/backups
+        - "{{ autobot.base_dir }}"
+        - "{{ autobot.base_dir }}/logs"
+        - "{{ autobot.base_dir }}/config"
+        - "{{ autobot.base_dir }}/data"
+        - "{{ autobot.base_dir }}/backups"
         - /var/log/autobot
 
     - name: Set up log rotation for AutoBot
@@ -242,7 +242,7 @@
         echo "Memory: $(free -h | grep Mem)"
         echo "CPU Cores: $(nproc)"
         echo "System Load: $(uptime)"
-        echo "AutoBot directories created: $(ls -la /opt/autobot/)"
+        echo "AutoBot directories created: $(ls -la {{ autobot.base_dir }}/)"
       register: system_status
 
     - name: Display final VM status

@@ -27,11 +27,12 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _SCANNED = (
     "autobot-slm-backend/services/service_restart.py",
     "autobot-slm-backend/services/journal_fetch.py",
     "autobot-slm-backend/services/service_orchestrator.py",
-    "autobot-slm-backend/services/code_distributor.py",
     "autobot-slm-backend/api/services.py",
     "autobot-slm-backend/services/secrets_store_snapshot.py",
 )
@@ -40,11 +41,6 @@ _LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "cri
 
 #: (file, enclosing function, interpolated expression source) -> why it is safe. A new entry needs a reason a reviewer accepts.
 _ALLOWED: dict[tuple[str, str, str], str] = {
-    (
-        "autobot-slm-backend/services/code_distributor.py",
-        "_build_ssh_opts",
-        "ssh_port",
-    ): "an int port from the node row, typed `int` on every caller; reaches the LOCAL ssh argv option string",
     (
         "autobot-slm-backend/services/journal_fetch.py",
         "build_journal_command",
@@ -65,7 +61,7 @@ _ALLOWED: dict[tuple[str, str, str], str] = {
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
         "sudo",
-    ): "`sudo -n` or `sudo`, selected from a bool two lines above",
+    ): "`sudo -n` or `sudo`, selected from a bool the line above",
     (
         "autobot-slm-backend/services/service_restart.py",
         "systemctl_remote_command",
@@ -86,6 +82,11 @@ _ALLOWED: dict[tuple[str, str, str], str] = {
         "systemctl_remote_command",
         "quoted",
     ): "built from shlex.quote(validate_unit_name(u)) in the line above",
+    (
+        "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
+        "reset",
+    ): "a reset-failed line over the same validated units, or empty, selected by the action (#20767)",
 }
 
 
@@ -149,7 +150,7 @@ def _scoped_nodes(tree: ast.AST):
 
 def unsafe_interpolations(source: str, rel: str) -> list[str]:
     """Every interpolation into a remote-command string that is neither safe nor allowed."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     skipped = _skipped_ids(tree)
     bad: list[str] = []
     for node, scope in _scoped_nodes(tree):
@@ -174,7 +175,7 @@ def test_every_allowance_is_still_needed() -> None:
     """An allowance with no matching site is dead and hides the next one that reuses its spelling."""
     used: set[tuple[str, str, str]] = set()
     for rel in _SCANNED:
-        tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
+        tree = parse_cache.parse((repo_root() / rel).read_text(encoding="utf-8"))
         skipped = _skipped_ids(tree)
         for node, scope in _scoped_nodes(tree):
             found = None if id(node) in skipped else _interpolations(node)
@@ -236,7 +237,7 @@ def inline_destinations(source: str, rel: str) -> list[str]:
     f-string (``scheme://...``) is a connection string, not an ssh destination.
     """
     bad: list[str] = []
-    for node, scope in _scoped_nodes(ast.parse(source)):
+    for node, scope in _scoped_nodes(parse_cache.parse(source)):
         if not isinstance(node, ast.JoinedStr) or (rel, scope) == _DESTINATION_OWNER:
             continue
         parts = node.values
@@ -283,4 +284,4 @@ def test_the_destination_detector_has_contrast_fixtures(label: str, source: str,
 def test_the_validator_module_builds_the_destination_inside_ssh_destination() -> None:
     rel, scope = _DESTINATION_OWNER
     source = (repo_root() / rel).read_text(encoding="utf-8")
-    assert any(isinstance(n, ast.JoinedStr) and s == scope for n, s in _scoped_nodes(ast.parse(source)))
+    assert any(isinstance(n, ast.JoinedStr) and s == scope for n, s in _scoped_nodes(parse_cache.parse(source)))

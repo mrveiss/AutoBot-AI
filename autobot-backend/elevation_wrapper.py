@@ -13,6 +13,7 @@ import re
 import time
 from typing import Dict, Optional, Tuple
 
+from autobot_shared.deployment_profile import is_non_production
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.redaction import command_log_label
 from autobot_shared.security.redaction import safe_log_text as _safe_log_text
@@ -198,16 +199,19 @@ class ElevationWrapper:
         """Return True only when direct-sudo fallback is safe to use.
 
         Permitted when ANY of the following is true:
-        - AUTOBOT_ENVIRONMENT != "production"  (development / staging / etc.)
+        - AUTOBOT_ENVIRONMENT is an allow-listed non-production name
+          (``deployment_profile.NON_PRODUCTION_ENVIRONMENTS``: development, dev, test, ci).
+          It is an allow-list so it fails CLOSED: "Production", "prod", a typo, whitespace
+          or an empty value are all production (#19315 review).
         - CI env var is set (headless runner with NOPASSWD service account)
         - AUTOBOT_ALLOW_UNAPPROVED_SUDO=true   (explicit operator opt-in)
 
-        The default AUTOBOT_ENVIRONMENT is "development", so new deployments
-        that forget to configure an elevation_client are still safe — they only
-        break when AUTOBOT_ENVIRONMENT=production is set without a client.
+        An unset AUTOBOT_ENVIRONMENT resolves to "production" (#19315,
+        ``autobot_shared.deployment_profile``), so a host that configures
+        neither a client nor an environment refuses the fallback.
         Issue #10799.
         """
-        if config.environment != "production":
+        if is_non_production(config.environment):
             return True
         if config.misc.ci:
             return True

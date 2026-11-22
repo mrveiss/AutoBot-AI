@@ -10,7 +10,8 @@
  * Used across orchestration views for consistent confirmation UX.
  */
 
-import { BaseModal } from '@autobot/ui'
+import { computed } from 'vue'
+import { BaseModal, sanitizeHtml } from '@autobot/ui'
 
 interface Props {
   show: boolean
@@ -20,11 +21,15 @@ interface Props {
   isProcessing?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   title: 'Confirm Action',
   confirmButtonText: 'Confirm',
   isProcessing: false,
 })
+
+// #19118: message carries i18n markup plus interpolated hostnames/service names -- inline
+// formatting only, no links.
+const safeMessage = computed(() => sanitizeHtml(props.message, 'knowledge'))
 
 const emit = defineEmits<{
   confirm: []
@@ -47,7 +52,7 @@ const emit = defineEmits<{
       </svg>
       {{ title }}
     </template>
-    <div class="text-sm text-gray-600" v-html="message"></div>
+    <div class="text-sm text-gray-600" v-html="safeMessage"></div>
 
     <template #actions>
       <button

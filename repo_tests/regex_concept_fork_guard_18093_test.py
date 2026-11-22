@@ -38,6 +38,8 @@ import re
 import pytest
 from repo_tests._paths import repo_root
 
+from autobot_shared.testfile_names import is_test_filename
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: `re` entry points whose first positional argument is a pattern.
@@ -206,7 +208,7 @@ def _tracked_python_files() -> tuple[str, ...]:
 
 
 def _is_test(rel: str) -> bool:
-    return rel.endswith("_test.py") or "/tests/" in rel or rel.rsplit("/", 1)[-1].startswith("test_")
+    return is_test_filename(rel, include_js=False, include_conftest=False) or "/tests/" in rel
 
 
 @functools.lru_cache(maxsize=1)
@@ -222,7 +224,7 @@ def _regex_literals() -> tuple[tuple[str, int, str], tuple[int, ...]]:
     skipped = 0
     for rel in _tracked_python_files():
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             skipped += 1
             continue

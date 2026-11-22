@@ -22,6 +22,7 @@ from autobot_shared.env_utils import env_flag, env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.token_count import estimate_fast
 from constants.threshold_constants import CategoryDefaults
+from knowledge.search_filters import KbPrincipal, filter_for_principal, require_kb_principal
 
 logger = get_logger(__name__)
 
@@ -130,15 +131,18 @@ def _compute_facts_fingerprint(facts: list) -> str:
 class EssentialStoryGenerator:
     """Generate a compact always-loaded memory summary for LLM system prompts."""
 
-    async def generate(self, model_name: str | None = None) -> str:
+    async def generate(self, model_name: str | None = None, principal: KbPrincipal | None = None) -> str:
         """Generate compact memory summary fitting the model's token budget.
+
+        ``principal`` (#16665) is who the story is for: only facts that principal may read are
+        used. A missing principal yields an empty story, never an unscoped one.
 
         Never raises; returns empty string on any error so callers are
         unaffected when the knowledge base is unavailable.
         """
         try:
             budget = await self._get_token_budget(model_name or "default")
-            facts = await self._fetch_top_facts(budget)
+            facts = await self._fetch_top_facts(budget, principal)
             fingerprint = _compute_facts_fingerprint(facts)
             cached = await self._get_cached(model_name or "default", fingerprint)
             if cached is not None:
@@ -192,15 +196,18 @@ class EssentialStoryGenerator:
         """
         return estimate_fast(text)
 
-    async def _fetch_top_facts(self, max_tokens: int) -> List[Dict[str, Any]]:
-        """Query KB, sort by quality_score desc, return top facts within budget."""
+    async def _fetch_top_facts(self, max_tokens: int, principal: KbPrincipal | None = None) -> List[Dict[str, Any]]:
+        """Query KB, sort by quality_score desc, return top facts within budget (as *principal*, #16665)."""
         from knowledge._composed import get_knowledge_base
+
+        principal = require_kb_principal(principal)  # before any read: None raises, caught by generate()
 
         kb = await get_knowledge_base()
         # Issue #3808: limit the Redis scan to 200 facts so we never do a full
         # O(n) scan.  200 provides enough headroom to find the top-quality facts
         # for any model's token budget (max 800 tokens) after sorting.
         all_facts = await kb.get_all_facts(limit=200)
+        all_facts = await filter_for_principal(all_facts, principal, getattr(kb, "ownership_manager", None))
 
         # A2 (#12553): rank by the usage-aware effective score so frequently- and
         # recently-recalled facts rise. Collapses to raw quality_score when

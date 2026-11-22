@@ -12,9 +12,11 @@ import { BaseAlert } from '@autobot/ui'
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type PromptTemplate } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 
 // State
@@ -69,7 +71,7 @@ async function loadPrompts(): Promise<void> {
   try {
     prompts.value = await api.getPromptTemplates()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load prompts'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToLoadPrompts')
   } finally {
     loading.value = false
   }
@@ -77,7 +79,7 @@ async function loadPrompts(): Promise<void> {
 
 function selectPrompt(prompt: PromptTemplate): void {
   if (hasUnsavedChanges.value) {
-    if (!confirm('You have unsaved changes. Discard them?')) {
+    if (!confirm(t('settings.admin.promptsSettings.youHaveUnsavedChangesDiscardThem'))) {
       return
     }
   }
@@ -113,10 +115,10 @@ async function savePrompt(): Promise<void> {
 
     selectedPrompt.value.content = editedContent.value
 
-    success.value = 'Prompt saved successfully'
+    success.value = t('settings.admin.promptsSettings.promptSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save prompt'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToSavePrompt')
   } finally {
     saving.value = false
   }
@@ -125,7 +127,7 @@ async function savePrompt(): Promise<void> {
 async function revertToDefault(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  if (!confirm('Are you sure you want to revert this prompt to its default content?')) {
+  if (!confirm(t('settings.admin.promptsSettings.areYouSureYouWantToRevert'))) {
     return
   }
 
@@ -134,7 +136,7 @@ async function revertToDefault(): Promise<void> {
 
   try {
     await api.revertPromptToDefault(selectedPrompt.value.id)
-    success.value = 'Prompt reverted to default'
+    success.value = t('settings.admin.promptsSettings.promptReverted')
 
     // Reload prompts to get the default content
     await loadPrompts()
@@ -150,7 +152,7 @@ async function revertToDefault(): Promise<void> {
 
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to revert prompt'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToRevertPrompt')
   } finally {
     saving.value = false
   }
@@ -167,17 +169,12 @@ onMounted(() => {
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.promptsSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Header with Controls -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.promptsSettings.promptTemplates') }}</h2>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.promptsSettings.promptTemplates') }}</h2>
         <button
           @click="loadPrompts"
           :disabled="loading"
@@ -198,21 +195,21 @@ onMounted(() => {
       <div class="flex flex-col sm:flex-row gap-4">
         <div class="flex-1">
           <div class="relative">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-autobot-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               v-model="searchQuery"
               type="text"
               :placeholder="$t('settings.admin.promptsSettings.searchPrompts')"
-              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+              class="w-full pl-10 pr-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
         <div class="sm:w-48">
           <select
             v-model="selectedCategory"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+            class="w-full px-4 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500"
           >
             <option :value="null">{{ $t('settings.admin.promptsSettings.allCategories') }}</option>
             <option v-for="cat in categories" :key="cat" :value="cat">
@@ -225,9 +222,9 @@ onMounted(() => {
 
     <div class="grid lg:grid-cols-2 gap-6">
       <!-- Prompts List -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
-        <div class="p-4 bg-gray-50 border-b border-gray-200">
-          <h3 class="font-medium text-gray-900">{{ $t('settings.admin.promptsSettings.availablePromptsCount', { count: filteredPrompts.length }) }}</h3>
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden">
+        <div class="p-4 bg-autobot-bg-secondary border-b border-autobot-border">
+          <h3 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.promptsSettings.availablePromptsCount', { count: filteredPrompts.length }) }}</h3>
         </div>
 
         <!-- Loading -->
@@ -240,41 +237,41 @@ onMounted(() => {
 
         <!-- Empty State -->
         <div v-else-if="filteredPrompts.length === 0" class="p-8 text-center">
-          <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-12 h-12 text-autobot-text-tertiary mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p class="text-gray-500">
+          <p class="text-autobot-text-tertiary">
             {{ prompts.length === 0 ? $t('settings.admin.promptsSettings.noPromptsAvailable') : $t('settings.admin.promptsSettings.noPromptsMatchYourSearch') }}
           </p>
         </div>
 
         <!-- Prompts -->
-        <div v-else class="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+        <div v-else class="divide-y divide-autobot-border-subtle max-h-[500px] overflow-y-auto">
           <button
             v-for="prompt in filteredPrompts"
             :key="prompt.id"
             @click="selectPrompt(prompt)"
             :class="[
-              'w-full text-left p-4 hover:bg-gray-50 transition-colors',
+              'w-full text-left p-4 hover:bg-autobot-bg-hover transition-colors',
               selectedPrompt?.id === prompt.id ? 'bg-primary-50 border-l-4 border-primary-500' : '',
             ]"
           >
             <div class="flex items-start justify-between gap-3">
               <div class="flex-1 min-w-0">
-                <h4 class="font-medium text-gray-900 truncate">{{ prompt.name }}</h4>
-                <p class="text-sm text-gray-500 mt-1 line-clamp-2">
+                <h4 class="font-medium text-autobot-text-primary truncate">{{ prompt.name }}</h4>
+                <p class="text-sm text-autobot-text-tertiary mt-1 line-clamp-2">
                   {{ prompt.content.substring(0, 100) }}{{ prompt.content.length > 100 ? '...' : '' }}
                 </p>
                 <div class="flex items-center gap-2 mt-2">
-                  <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-sm text-xs">
+                  <span class="px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm text-xs">
                     {{ prompt.category }}
                   </span>
-                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-sm text-xs">
+                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-autobot-illus-1-tint text-autobot-text-primary rounded-sm text-xs">
                     {{ $t('settings.admin.promptsSettings.default') }}
                   </span>
                 </div>
               </div>
-              <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-autobot-text-tertiary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -283,44 +280,44 @@ onMounted(() => {
       </div>
 
       <!-- Prompt Editor -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
-        <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <h3 class="font-medium text-gray-900">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden">
+        <div class="p-4 bg-autobot-bg-secondary border-b border-autobot-border flex items-center justify-between">
+          <h3 class="font-medium text-autobot-text-primary">
             {{ selectedPrompt ? `Editing: ${selectedPrompt.name}` : $t('settings.admin.promptsSettings.selectAPrompt') }}
           </h3>
-          <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-sm text-xs font-medium">
+          <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-autobot-pill-warn-bg text-autobot-pill-warn-fg rounded-sm text-xs font-medium">
             {{ $t('settings.admin.promptsSettings.unsavedChanges') }}
           </div>
         </div>
 
         <div v-if="!selectedPrompt" class="p-8 text-center">
-          <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-12 h-12 text-autobot-text-tertiary mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
-          <p class="text-gray-500">{{ $t('settings.admin.promptsSettings.selectAPromptFrom') }}</p>
+          <p class="text-autobot-text-tertiary">{{ $t('settings.admin.promptsSettings.selectAPromptFrom') }}</p>
         </div>
 
         <div v-else class="p-4">
           <!-- Prompt Info -->
-          <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div class="mb-4 p-3 bg-autobot-bg-secondary rounded-lg">
             <div class="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.category') }}</span>
-                <span class="ml-2 font-medium text-gray-900">{{ selectedPrompt.category }}</span>
+                <span class="text-autobot-text-tertiary">{{ $t('settings.admin.promptsSettings.category') }}</span>
+                <span class="ml-2 font-medium text-autobot-text-primary">{{ selectedPrompt.category }}</span>
               </div>
               <div>
-                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.status') }}</span>
+                <span class="text-autobot-text-tertiary">{{ $t('settings.admin.promptsSettings.status') }}</span>
                 <span :class="[
                   'ml-2 font-medium',
-                  selectedPrompt.is_default ? 'text-blue-600' : 'text-gray-900',
+                  selectedPrompt.is_default ? 'text-autobot-text-link' : 'text-autobot-text-primary',
                 ]">
                   {{ selectedPrompt.is_default ? $t('settings.admin.promptsSettings.default') : $t('settings.admin.promptsSettings.custom') }}
                 </span>
               </div>
               <div class="col-span-2">
-                <span class="text-gray-500">{{ $t('settings.admin.promptsSettings.lastModified') }}</span>
-                <span class="ml-2 font-medium text-gray-900">
-                  {{ formatDateTime(selectedPrompt.modified_at ?? null) }}
+                <span class="text-autobot-text-tertiary">{{ $t('settings.admin.promptsSettings.lastModified') }}</span>
+                <span class="ml-2 font-medium text-autobot-text-primary">
+                  {{ formatFleetDateTime(selectedPrompt.modified_at ?? null) }}
                 </span>
               </div>
             </div>
@@ -328,11 +325,11 @@ onMounted(() => {
 
           <!-- Editor -->
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('settings.admin.promptsSettings.promptContent') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-2">{{ $t('settings.admin.promptsSettings.promptContent') }}</label>
             <textarea
               v-model="editedContent"
               rows="12"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm resize-y"
+              class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm resize-y"
               :placeholder="$t('settings.admin.promptsSettings.enterPromptContent')"
             ></textarea>
           </div>
@@ -342,7 +339,7 @@ onMounted(() => {
             <button
               @click="savePrompt"
               :disabled="saving || !hasUnsavedChanges"
-              class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 flex items-center gap-2"
             >
               <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -357,7 +354,7 @@ onMounted(() => {
             <button
               @click="revertToDefault"
               :disabled="saving || selectedPrompt.is_default"
-              class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary hover:bg-autobot-primary-hover rounded-lg disabled:opacity-50 flex items-center gap-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -367,7 +364,7 @@ onMounted(() => {
 
             <button
               @click="clearSelection"
-              class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+              class="px-4 py-2 bg-autobot-bg-tertiary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-active flex items-center gap-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

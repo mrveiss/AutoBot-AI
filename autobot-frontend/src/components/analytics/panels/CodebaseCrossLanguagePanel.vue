@@ -7,7 +7,7 @@
   <div class="cross-language-section analytics-section">
     <h3>
       <Icon name="language" /> {{ $t('analytics.codebase.crossLanguage.title') }}
-      <span v-if="analysis" class="total-count">({{ analysis.total_patterns }} patterns)</span>
+      <span v-if="analysis" class="total-count">({{ $t('analytics.codebase.shared.patterns', { count: analysis.total_patterns }, analysis.total_patterns) }})</span>
       <button
         @click="emit('refresh')"
         :disabled="loading"
@@ -118,24 +118,20 @@
           <transition name="accordion">
             <div v-if="isExpanded('dtoMismatches')" class="accordion-items">
               <div
-                v-for="(m, index) in analysis.dto_mismatches.slice(0, 20)"
+                v-for="(m, index) in visible('dto', analysis.dto_mismatches)"
                 :key="'dto-' + index"
                 class="list-item item-critical"
               >
                 <div class="item-header">
                   <span class="type-badge">{{ m.mismatch_type }}</span>
-                  <span class="item-name">{{ m.backend_type }} → {{ m.frontend_type || 'Unknown' }}</span>
+                  <span class="item-name">{{ m.backend_type }} → {{ m.frontend_type || $t('analytics.codebase.shared.unknown') }}</span>
                 </div>
-                <div class="item-field">Field: <code>{{ m.field_name }}</code></div>
+                <div class="item-field">{{ $t('analytics.codebase.shared.field') }} <code>{{ m.field_name }}</code></div>
                 <div v-if="m.recommendation" class="item-recommendation">
                   💡 {{ m.recommendation }}
                 </div>
               </div>
-              <div v-if="analysis.dto_mismatches.length > 20" class="show-more">
-                <span class="muted">
-                  Showing 20 of {{ analysis.dto_mismatches.length }} DTO mismatches
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('dto', analysis.dto_mismatches.length)" :total="analysis.dto_mismatches.length" :step="20" @show-more="showMore('dto')" />
             </div>
           </transition>
         </div>
@@ -162,7 +158,7 @@
           <transition name="accordion">
             <div v-if="isExpanded('apiMismatches')" class="accordion-items">
               <div
-                v-for="(m, index) in analysis.api_contract_mismatches.slice(0, 20)"
+                v-for="(m, index) in visible('contract', analysis.api_contract_mismatches)"
                 :key="'api-' + index"
                 :class="[
                   'list-item',
@@ -185,11 +181,7 @@
                 </div>
                 <div v-if="m.details" class="item-details">{{ m.details }}</div>
               </div>
-              <div v-if="analysis.api_contract_mismatches.length > 20" class="show-more">
-                <span class="muted">
-                  Showing 20 of {{ analysis.api_contract_mismatches.length }} API issues
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('contract', analysis.api_contract_mismatches.length)" :total="analysis.api_contract_mismatches.length" :step="20" @show-more="showMore('contract')" />
             </div>
           </transition>
         </div>
@@ -216,14 +208,14 @@
           <transition name="accordion">
             <div v-if="isExpanded('validationDups')" class="accordion-items">
               <div
-                v-for="(v, index) in analysis.validation_duplications.slice(0, 15)"
+                v-for="(v, index) in visible('validation', analysis.validation_duplications)"
                 :key="'val-' + index"
                 class="list-item item-info"
               >
                 <div class="item-header">
                   <span class="validation-type-badge">{{ v.validation_type }}</span>
                   <span class="similarity-score">
-                    {{ (v.similarity_score * 100).toFixed(0) }}% similar
+                    {{ $t('analytics.codebase.shared.similarPercent', { percent: (v.similarity_score * 100).toFixed(0) }) }}
                   </span>
                 </div>
                 <div class="item-locations">
@@ -238,11 +230,7 @@
                   💡 {{ v.recommendation }}
                 </div>
               </div>
-              <div v-if="analysis.validation_duplications.length > 15" class="show-more">
-                <span class="muted">
-                  Showing 15 of {{ analysis.validation_duplications.length }} duplications
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('validation', analysis.validation_duplications.length)" :total="analysis.validation_duplications.length" :step="20" @show-more="showMore('validation')" />
             </div>
           </transition>
         </div>
@@ -269,13 +257,13 @@
           <transition name="accordion">
             <div v-if="isExpanded('semanticMatches')" class="accordion-items">
               <div
-                v-for="(m, index) in analysis.pattern_matches.slice(0, 15)"
+                v-for="(m, index) in visible('patterns', analysis.pattern_matches)"
                 :key="'match-' + index"
                 class="list-item item-success"
               >
                 <div class="item-header">
                   <span class="similarity-score highlight">
-                    {{ (m.similarity_score * 100).toFixed(0) }}% match
+                    {{ $t('analytics.codebase.shared.matchPercent', { percent: (m.similarity_score * 100).toFixed(0) }) }}
                   </span>
                   <span class="match-type">{{ m.match_type }}</span>
                 </div>
@@ -289,11 +277,7 @@
                   </span>
                 </div>
               </div>
-              <div v-if="analysis.pattern_matches.length > 15" class="show-more">
-                <span class="muted">
-                  Showing 15 of {{ analysis.pattern_matches.length }} matches
-                </span>
-              </div>
+              <TruncationNotice :shown="shown('patterns', analysis.pattern_matches.length)" :total="analysis.pattern_matches.length" :step="20" @show-more="showMore('patterns')" />
             </div>
           </transition>
         </div>
@@ -318,8 +302,11 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from '../TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface PatternLocation {
   file_path: string
@@ -381,11 +368,15 @@ interface CrossLanguageAnalysisResult {
   analysis_time_ms: number
 }
 
-defineProps<{
+const props = defineProps<{
   analysis: CrossLanguageAnalysisResult | null
   loading: boolean
   error: string | null
 }>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.analysis)
 
 const emit = defineEmits<{
   refresh: []
@@ -396,14 +387,7 @@ const emit = defineEmits<{
 type Section = 'dtoMismatches' | 'apiMismatches' | 'validationDups' | 'semanticMatches'
 const { isExpanded, toggle } = useExpansion<Section>()
 
-function formatTimestamp(timestamp: string | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped src="@/design-system/styles/panel-api-cross-shared.css"></style>

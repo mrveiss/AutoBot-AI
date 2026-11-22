@@ -18,6 +18,7 @@ const DEFAULTS = (): DashboardLayout => ({
   dashboards: [{ id: 'default', name: 'n', widgets: [], createdAt: 0, updatedAt: 0 }],
   activeId: 'default',
 })
+const NO_RETRY = { retries: 0 }
 const STORED: DashboardLayout = {
   dashboards: [{ id: 'mine', name: 'Mine', widgets: [], createdAt: 1, updatedAt: 1 }],
   activeId: 'mine',
@@ -31,7 +32,7 @@ describe('useDashboardLayout', () => {
 
   it('after a failed GET, save and reset send nothing and the error is exposed', async () => {
     api.get.mockRejectedValueOnce(new Error('503'))
-    const d = useDashboardLayout('home', DEFAULTS)
+    const d = useDashboardLayout('home', DEFAULTS, NO_RETRY)
     await d.load()
     expect(d.loaded.value).toBe(false)
     expect(d.loadError.value).toBe('503')
@@ -55,7 +56,7 @@ describe('useDashboardLayout', () => {
 
   it('a retry after a failed GET clears the error and enables saving', async () => {
     api.get.mockRejectedValueOnce(new Error('503')).mockResolvedValueOnce({ data: { layout: STORED } })
-    const d = useDashboardLayout('home', DEFAULTS)
+    const d = useDashboardLayout('home', DEFAULTS, NO_RETRY)
     await d.load()
     await d.load()
     expect(d.loadError.value).toBeNull()

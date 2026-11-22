@@ -213,7 +213,7 @@ portainer stack`) — only this file has ever mentioned it; this is new ground.
   git-tracked, non-secret, but are wired in purely via
   `./docker/<script>:/path:ro` bind mounts (docker-compose.yml lines 192,
   222, 373, 562) — neither is `COPY`'d into any image. Same issue for
-  `docker/postgres/init-databases.sql` (line 90) and the default
+  `docker/postgres/init-databases.sh` (line 90) and the default
   `docker/nginx/nginx.conf` path override variable (already solved for the
   *built-in* default per point above, but the override mechanism itself is
   still bind-mount-only). None of these resolve without the repo checked out.

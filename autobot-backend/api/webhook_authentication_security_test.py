@@ -94,6 +94,22 @@ class TestTelegramWebhookAuthentication:
             assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
             assert "not configured" in response.json()["detail"].lower()
 
+    def test_telegram_webhook_fails_closed_when_secret_unreadable_17981(self, client, valid_telegram_update):
+        """A stored secret that cannot be decrypted is closed exactly like an unset one."""
+        from autobot_shared.field_encryption import FieldDecryptionError
+
+        with patch(
+            "api.telegram_bot.get_telegram_webhook_secret",
+            side_effect=FieldDecryptionError("redis:autobot:settings:telegram_webhook_secret: unreadable"),
+        ):
+            response = client.post(
+                "/api/telegram/webhook",
+                json=valid_telegram_update,
+                headers={"X-Telegram-Bot-Api-Secret-Token": "anything"},
+            )
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.json()["detail"]["code"] == "CREDENTIAL_UNREADABLE"
+
     @pytest.mark.asyncio
     async def test_telegram_webhook_returns_401_when_header_missing(self, client, valid_telegram_update):
         """

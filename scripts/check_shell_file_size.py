@@ -16,12 +16,12 @@ The ratchet has the same three-way semantics as the Python one, and turns one
 way only:
 
 * above its ceiling      -> fail; a grandfathered file may not grow
-* below its ceiling      -> fail; lower the ceiling to the count just achieved
+* below its ceiling      -> pass (#19673); the merge-base gate in the ratchet test bounds it
 * at or below MAX_LINES  -> fail; delete the entry, the file is compliant
 
-"Below its ceiling -> fail" is the part that looks wrong and is not: an
-unlowered ceiling re-licenses the lines just cut, so a shrink that is not
-recorded is a shrink that can be spent again.
+"Below its ceiling -> pass" (#19673): a ceiling above the measured size is harmless, because the
+ratchet test also bounds the file by its length at the merge base, so the lines just cut cannot
+be spent again.
 
 A file that cannot be read is a violation, not a skip. `count_lines` returns
 None for missing, unreadable, not-a-file and not-UTF-8 alike, and None means
@@ -43,7 +43,6 @@ growing while that happens.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import pathlib
 import sys
@@ -73,11 +72,6 @@ MAX_LINES = 600
 #: Repo-relative path of this hook, quoted in every message that asks for an edit.
 SELF_REL = "scripts/check_shell_file_size.py"
 
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: A ceiling lowered in one file alone leaves the other holding the old size,
-#: and the gap between them is spendable (#14498).
-RATCHET_REL = "repo_tests/shell_file_size_ratchet_baseline.py"
-
 #: Prefixes this gate does not cover, mirrored from its own `exclude:` in
 #: `.pre-commit-config.yaml`. The tree walk runs independently of pre-commit,
 #: so without this it would flag files pre-commit was never configured to gate.
@@ -92,26 +86,28 @@ MIN_TRACKED_SH_FILES = 180
 
 #: Grandfathered files: over MAX_LINES when this gate landed, mapped to the
 #: line count recorded for each. THIS MAPPING ONLY SHRINKS. Never add an entry
-#: to make a new file pass — split the file. Mirrored in RATCHET_REL; lower an
-#: entry in both in the same commit.
+#: to make a new file pass — split the file. The only copy
+#: (#19544): the ratchet test checks it against the base commit's.
 #:
 #: Ten entries, not the 509 the Python gate had to carry, which is why they sit
 #: inline here rather than in a sibling data module.
+#: The file ``--repin-ceilings`` rewrites (#19673): the table is inline, so it is this script.
+KNOWN_LARGE_FILE = pathlib.Path(__file__).resolve()
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 652,
+    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 651,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/zero-downtime-update.sh": 614,
     "autobot-infrastructure/shared/scripts/cleanup-disk-space.sh": 838,
     "autobot-infrastructure/shared/scripts/deployment/validate_access_control.sh": 659,
     "autobot-infrastructure/shared/scripts/install-bare-metal.sh": 882,
     "autobot-infrastructure/shared/scripts/install-slm.sh": 822,
-    "autobot-slm-backend/ansible/deploy.sh": 718,
+    "autobot-slm-backend/ansible/deploy.sh": 712,
     # #17929: +41 for the /dev/tty prompt helper. The documented `curl | sudo bash`
     # aborted silently at the password prompt -- stdin is the script pipe, `read`
     # got EOF, `set -e` killed it. The file is delivered BY curl, so it cannot
     # source a helper and cannot be split; the exemption's own reason still holds.
-    "install.sh": 1172,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
+    "install.sh": 1168,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
-    "scripts/pr-preflight.sh": 818,
+    "scripts/pr-preflight.sh": 815,
 }
 
 
@@ -139,15 +135,9 @@ check_paths = GUARD.check_paths
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for both the hook path and ``--audit-ceilings``."""
+    """Entry point for the hook path, ``--audit-ceilings`` and ``--repin-ceilings``."""
     configure_logging(logger)
-    parser = argparse.ArgumentParser(description="Reject oversized shell files (#17353).")
-    parser.add_argument("--audit-ceilings", action="store_true", help="walk every tracked .sh file")
-    parser.add_argument("paths", nargs="*", help="staged files, as pre-commit passes them")
-    args = parser.parse_args(argv)
-    if args.audit_ceilings:
-        return run_audit()
-    return GUARD.check_paths(args.paths)
+    return GUARD.cli(argv, "Reject oversized shell files (#17353).", "walk every tracked .sh file")
 
 
 if __name__ == "__main__":

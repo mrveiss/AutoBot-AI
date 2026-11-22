@@ -14,13 +14,12 @@ names, so that import really runs. Against the old import each of these fails.
 
 import dataclasses
 import importlib.util
-import sys
-from pathlib import Path
 
 import pytest
 
 from chat_history.context_overflow import ConversationSummarizer, SummarizationFailed
 from llm_shared.models import LLMResponse
+from testkit.real_llm_service import load_real_llm_service
 
 _MESSAGES = [{"sender": "user", "text": "Hello"}]
 
@@ -96,24 +95,6 @@ async def test_a_provider_error_is_named_in_the_failure(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _real_llm_service_module(monkeypatch):
-    """Load ``services/llm_service.py`` for real, under a name nothing else imports.
-
-    The root conftest keeps ``services.llm_service`` a deliberate stub (its
-    Redis/NPU import chain), so importing it by name yields a MagicMock surface
-    with no real ``chat``. Loading the file privately leaves that stub in place
-    for every other test. If the file cannot load here this test fails. It must
-    not skip, or the request-field criterion would read as checked when it was not.
-    """
-    name = "_llm_service_real_14840"
-    path = Path(__file__).resolve().parents[1] / "services" / "llm_service.py"
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, name, module)
-    spec.loader.exec_module(module)
-    return module
-
-
 class _RecordingProvider:
     """The provider boundary: receives the ``LLMRequest`` that ``LLMService.chat`` builds."""
 
@@ -144,7 +125,7 @@ async def test_the_provider_receives_the_settings_as_request_fields(monkeypatch)
     this was once meant to reach would have put all three in ``metadata``.
     """
     provider = _RecordingProvider()
-    service = _real_llm_service_module(monkeypatch).LLMService(registry=_StubRegistry(provider))
+    service = load_real_llm_service().LLMService(registry=_StubRegistry(provider))
     monkeypatch.setattr(service, "_response_cache", None)  # no L1/L2 response cache, so no Redis
     _serve(monkeypatch, service)
 

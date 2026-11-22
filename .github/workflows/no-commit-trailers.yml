@@ -60,40 +60,41 @@ jobs:
           # have comparison but no arithmetic, hence a threshold, not `commits + N`.
           fetch-depth: ${{ (github.event_name == 'merge_group' || github.event.pull_request.commits > 90) && '0' || '100' }}
 
-      - name: Scan PR commits for banned trailers
+      # #19466: a PR into `release` is judged only on commits not already on main
+      # (owner ruling 2026-10-24: "Gates judge only new commits"). Every commit on
+      # main passed this gate on its own PR, and main cannot be rewritten, so
+      # re-scanning a promotion's 1670 commits found 36 trailers nothing can ever
+      # remove. The action yields the head's merge base with main and the count of
+      # commits not on main; for any other event or base it yields nothing and the
+      # range below is the PR's own, as before.
+      - uses: ./.github/actions/release-promotion-base
+        id: release-base
+        with:
+          fetch: 'true'
+
+      # #22001: the range and its cross-check live in scripts/ci/trailer_gate_range.sh so
+      # they are tested against temp repos. It takes the CURRENT base-branch tip (what
+      # GitHub counts `commits` against) and deepens an over-count; a short count is a
+      # truncated scan and fails.
+      - name: Resolve the commit range
+        id: range
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           # The TRUE number of commits in the PR, from GitHub rather than from the
           # clone. This is what makes truncation detectable (#16210 review).
           EXPECTED_COMMITS: ${{ github.event.pull_request.commits || '' }}
+          BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          RELEASE_BASE_SHA: ${{ steps.release-base.outputs.base-sha }}
+          RELEASE_NEW_COMMITS: ${{ steps.release-base.outputs.new-commits }}
+        run: bash scripts/ci/trailer_gate_range.sh
+
+      - name: Scan PR commits for banned trailers
+        env:
+          BASE_SHA: ${{ steps.range.outputs.base-sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
-          echo "Scanning commits ${BASE_SHA}..${HEAD_SHA}"
-          # An unreachable endpoint makes `git rev-list BASE..HEAD` scan nothing, and
-          # a gate that scans zero commits reports clean. That is worse than the
-          # seconds the shallow fetch saves, so it is checked explicitly (#16207).
-          for _endpoint in "${BASE_SHA}" "${HEAD_SHA}"; do
-            if ! git cat-file -e "${_endpoint}^{commit}" 2>/dev/null; then
-              echo "::error::${_endpoint} is not present in the checkout -- this PR is"
-              echo "::error::deeper than the checkout. Raise fetch-depth in this workflow;"
-              echo "::error::do NOT widen it back to 0 without re-measuring (#16207)."
-              exit 1
-            fi
-          done
-          # Endpoint presence is NOT enough. A PR with more of its own commits than
-          # the fetch depth leaves BOTH endpoints present while `git rev-list` returns
-          # a TRUNCATED, non-empty range -- no error, no warning, errexit untripped,
-          # and the oldest commits are never scanned. Reproduced at depth 100: a
-          # 150-commit branch yielded 99. The guard checked the endpoints; the risk
-          # was the range (#16210 review).
-          _scanned="$(git rev-list --count "${BASE_SHA}..${HEAD_SHA}")"
-          if [ -n "${EXPECTED_COMMITS}" ] && [ "${_scanned}" != "${EXPECTED_COMMITS}" ]; then
-            echo "::error::scanned ${_scanned} commits but GitHub reports ${EXPECTED_COMMITS}"
-            echo "::error::for this PR -- the checkout is too shallow and the oldest"
-            echo "::error::commits would go unexamined. Raise fetch-depth (#16207)."
-            exit 1
-          fi
           # Agent/tooling trailers are never allowed, for any author (#13654).
           #
           # #15848: ALL THREE ARMS ARE NOW ANCHORED to a trailer position. The

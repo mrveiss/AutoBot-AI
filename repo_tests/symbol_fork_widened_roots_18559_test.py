@@ -23,6 +23,7 @@ from repo_tests._paths import repo_root
 
 from autobot_shared.isolated_git import isolated_git_env
 from autobot_shared.symbol_forks import FORK_ROOTS, fork_find_clusters, fork_tracked_python_files
+from tools.lint import _parse_cache as parse_cache
 
 ADDED_ROOTS = (
     "autobot-npu-worker",
@@ -39,7 +40,7 @@ _FUNCTION = "generate_message_id"
 
 def _backend_function_source() -> str:
     text = (repo_root() / _SOURCE).read_text(encoding="utf-8")
-    for node in ast.parse(text).body:
+    for node in parse_cache.parse(text).body:
         if isinstance(node, ast.FunctionDef) and node.name == _FUNCTION:
             segment = ast.get_source_segment(text, node)
             assert segment, f"{_FUNCTION} has no source segment in {_SOURCE}"

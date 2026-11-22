@@ -232,7 +232,7 @@ const showEmptyStateHint = computed(
   cursor: pointer;
   font-size: var(--text-sm);
   transition: all var(--duration-150) var(--ease-in-out);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .category-edit-btn:hover {
@@ -301,8 +301,9 @@ const showEmptyStateHint = computed(
   font-size: var(--text-xs);
 }
 
-.populate-btn i {
-  font-size: var(--text-xs);
+.populate-btn .icon {
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 /* Issue #5201: status panels for empty-KB / broken-KB states */

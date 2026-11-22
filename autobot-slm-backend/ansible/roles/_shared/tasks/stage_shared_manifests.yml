@@ -30,6 +30,19 @@
 # Idempotent and guarded by a per-host fact, so including it from several roles
 # in one run stages once. Including it is always safe.
 
+# #20509: every caller is a role, so the repo root is `role_path`'s fixed-depth tree, or an
+# explicit `repo_source_root`. Never the playbook's folder; no anchor is a loud failure.
+- name: "Shared manifests | Resolve the repo root without playbook_dir (#20509)"
+  ansible.builtin.set_fact:
+    shared_manifests_repo_root: "{{ repo_source_root | default(role_path ~ '/../../../..' if role_path is defined else '', true) }}"
+
+- name: "Shared manifests | Fail when no repo root anchor exists (#20509)"
+  ansible.builtin.assert:
+    that: shared_manifests_repo_root | length > 0
+    fail_msg: >-
+      stage_shared_manifests.yml has no repo root: it was included outside a role without
+      repo_source_root. Pass repo_source_root (the checkout the manifests come from).
+
 - name: "Shared manifests | Ensure the constraints directory exists on the node (#17331)"
   ansible.builtin.file:
     path: "{{ autobot.base_dir }}/constraints"
@@ -40,7 +53,7 @@
 
 - name: "Shared manifests | Stage constraints/shared.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../constraints/shared.txt"
+    src: "{{ shared_manifests_repo_root }}/constraints/shared.txt"
     dest: "{{ autobot.base_dir }}/constraints/shared.txt"
     owner: "{{ autobot.user }}"
     mode: "0644"
@@ -53,8 +66,39 @@
 # It declares no includes of its own, so staging it needs nothing further.
 - name: "Shared manifests | Stage the root requirements.txt onto the node (#17331)"
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../../requirements.txt"
+    src: "{{ shared_manifests_repo_root }}/requirements.txt"
     dest: "{{ autobot.base_dir }}/requirements.txt"
+    owner: "{{ autobot.user }}"
+    mode: "0644"
+  become: true
+
+# #20942: autobot_shared/python_floor.py reads <install root>/.python-version at
+# startup (the Python floor SSOT, #13842). Nothing placed it on a node, so every
+# backend start logged ".python-version unreadable" and fell back to a hardcoded floor.
+# Read from deploy_ref -- the same ref Play 0 archives autobot_shared from -- and never
+# from code_source_dir's WORKING TREE: a checkout that is not at deploy_ref would
+# overwrite the archive's correct copy with a different version. HEAD applies only to
+# a caller that defines no deploy_ref, whose checkout is then the deployed tree.
+- name: "Shared manifests | Read .python-version at deploy_ref on the controller (#20942)"
+  ansible.builtin.command:
+    argv:
+      - git
+      - -c
+      - "safe.directory={{ code_source_dir | default(shared_manifests_repo_root) }}"
+      - -C
+      - "{{ code_source_dir | default(shared_manifests_repo_root) }}"
+      - show
+      - "{{ deploy_ref | default('HEAD') }}:.python-version"
+  register: shared_manifests_python_version
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+
+- name: "Shared manifests | Stage .python-version onto the node (#20942)"
+  ansible.builtin.copy:
+    content: "{{ shared_manifests_python_version.stdout }}\n"
+    dest: "{{ autobot.base_dir }}/.python-version"
     owner: "{{ autobot.user }}"
     mode: "0644"
   become: true

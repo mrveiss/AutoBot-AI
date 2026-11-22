@@ -14,6 +14,14 @@
 # Related: #1654 - pre-commit stash pop can switch active branch
 # Related: #1503 - pre-commit stash/restore can stage untracked files
 #
+# During a merge (MERGE_HEAD present), a deletion of a file the protected base
+# (origin/main) has ALREADY removed is main's history arriving, not an accident:
+# catching an old branch up with main legitimately stages every file main removed
+# since. Only files that existed at the merge base qualify: a file the branch added
+# itself is the branch's own deletion and still counts. Keyed on origin/main, never on MERGE_HEAD: merging a branch that itself
+# deletes files (a PR head into main or a train) leaves them on origin/main, so
+# they are still counted. If origin/main cannot be resolved, everything counts.
+#
 # This hook catches mass deletions BEFORE they're committed, allowing the
 # developer to either:
 #   1. Verify the deletion is intentional with `--no-verify`
@@ -33,9 +41,52 @@ source "$SCRIPT_DIR/lib/_common.sh" || {
 # (anything >50 is almost certainly a stash bug, not intended cleanup)
 DELETION_THRESHOLD=50
 
+# During a merge, drop a deletion only when the path existed at the merge base of HEAD and
+# origin/main AND origin/main has since removed it (it is not an entry of its tree). A file
+# the branch itself added never existed at the base, so deleting it is the branch's own
+# deletion and still counts. Outside a merge, or when origin/main, the merge base or either
+# tree cannot be read, keep every deletion. Membership is read from the tree listing, never
+# from object availability: a gitlink whose commit is absent locally is still an entry.
+# Reads DELETED, writes DELETIONS; $1 is a scratch file for the NUL-delimited listing.
+read_tree_set() {
+    local -n set_ref="$2"
+    local f
+    git ls-tree -r -z --full-tree --name-only "$3" >"$1" 2>/dev/null || return 1
+    while IFS= read -r -d '' f; do
+        set_ref["$f"]=1
+    done <"$1"
+}
+
+drop_deletions_main_already_made() {
+    local listing="$1" main_ref base f
+    local -A on_main=() at_base=()
+    DELETIONS=("${DELETED[@]}")
+    git rev-parse -q --verify MERGE_HEAD >/dev/null || return 0
+    main_ref=$(git rev-parse -q --verify refs/remotes/origin/main) || return 0
+    base=$(git merge-base HEAD "$main_ref" 2>/dev/null) || return 0
+    read_tree_set "$listing" on_main "$main_ref" || return 0
+    read_tree_set "$listing" at_base "$base" || return 0
+    DELETIONS=()
+    for f in "${DELETED[@]}"; do
+        if [ -n "${on_main[$f]+present}" ] || [ -z "${at_base[$f]+present}" ]; then
+            DELETIONS+=("$f")
+        fi
+    done
+}
+
 main() {
-    # Count files staged for deletion (git ls-files --deleted)
-    deletion_count=$(git diff --cached --name-only --diff-filter=D | wc -l)
+    local listing deletion_count
+    listing=$(mktemp)
+    trap 'rm -f "$listing"' EXIT
+    # NUL-delimited, so a path holding a tab, newline, quote or non-ASCII byte arrives
+    # intact rather than in git's C-quoted form. A redirect at top level, not a command
+    # substitution inside a function: a git failure aborts under set -e instead of
+    # reading as "0 deletions" (#14151).
+    git diff --cached --name-only -z --diff-filter=D >"$listing"
+    DELETED=()
+    mapfile -d '' -t DELETED <"$listing"
+    drop_deletions_main_already_made "$listing"
+    deletion_count=${#DELETIONS[@]}
 
     if [ "$deletion_count" -le "$DELETION_THRESHOLD" ]; then
         # Normal deletion count — allow the commit
@@ -57,7 +108,7 @@ main() {
     echo "    3. Did a branch switch occur silently during stash?"
     echo ""
     echo -e "  ${YELLOW}First 20 files staged for deletion:${NC}"
-    git diff --cached --name-only --diff-filter=D | head -20 | sed 's/^/    /'
+    printf '    %q\n' "${DELETIONS[@]:0:20}"
     if [ "$deletion_count" -gt 20 ]; then
         echo "    ... and $((deletion_count - 20)) more"
     fi

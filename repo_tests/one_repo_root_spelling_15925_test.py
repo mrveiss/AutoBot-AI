@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import tracked_paths
 
 #: The one file allowed to bind the root from `__file__`: it is the anchor the
@@ -102,7 +103,7 @@ def _base_of(node: ast.AST) -> ast.AST:
 def hand_rolled_roots_in(source: str, file_path: Path, root: Path) -> list[tuple[int, str]]:
     """Module-level bindings in *source* that re-derive *root* from ``__file__``."""
     found: list[tuple[int, str]] = []
-    for node in ast.parse(source).body:
+    for node in parse_cache.parse(source).body:
         if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
             continue
         if not any(isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(node.value)):
@@ -197,11 +198,14 @@ def test_a_ratchet_exemption_is_still_blocked() -> None:
     Without this the set above is a wish list: a file could shrink, the reason
     evaporate, and the entry sit there exempting a migration nothing prevents.
     """
-    from repo_tests.python_file_size_ratchet_baseline import RATCHET_BASELINE
+    from tools.lint._file_size_guard import load_known_large
 
     root = repo_root()
+    known_large = load_known_large(
+        str(root / "scripts" / "check_python_file_size.py"), "python_file_size_known_large.py"
+    )
     for rel in sorted(_RATCHET_BLOCKED):
-        ceiling = RATCHET_BASELINE.get(rel)
+        ceiling = known_large.get(rel)
         assert ceiling is not None, f"{rel} is exempted for the ratchet but carries no ceiling"
         lines = len((root / rel).read_text(encoding="utf-8").splitlines())
         assert lines >= ceiling, (

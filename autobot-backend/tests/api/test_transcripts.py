@@ -332,7 +332,7 @@ def test_ws_analyze_streams_and_closes():
     """Test WS streams analysis chunks for a valid recording, then closes."""
     from starlette.websockets import WebSocketDisconnect
 
-    async def fake_stream(content, request):
+    async def fake_stream(content, request, **_attribution):
         yield "analysis-chunk"
 
     client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=MOCK_USER)
