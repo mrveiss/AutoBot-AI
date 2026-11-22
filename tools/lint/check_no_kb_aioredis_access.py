@@ -102,7 +102,7 @@ ALLOWLIST = {
     "autobot-backend/utils/stats_counter_parsing_test.py",
     "autobot-backend/api/knowledge_audit_test.py",
     # #16665, #21957: the shared fake KB that satisfies the real CategoriesMixin Redis-present guard.
-    "autobot-backend/knowledge/read_path_fakes_16665.py",
+    "autobot-backend/testkit/read_path_fakes_16665.py",
     # Pre-existing string-literal-in-source assertion (Pattern D, #5225).
     "autobot-backend/api/api_endpoint_migrations_test.py",
 }

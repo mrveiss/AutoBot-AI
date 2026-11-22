@@ -20,8 +20,8 @@ from knowledge.category_quarantine import (
     rebuild_category_quarantine_index,
     sync_fact_quarantine,
 )
-from knowledge.read_path_fakes_16665 import CategoryKB
 from services.kb_wipe_redis import KB_KEY_PREFIXES
+from testkit.read_path_fakes_16665 import CategoryKB
 
 HELD = {"collection": config.research_quarantine_collection}
 SERVABLE = 5

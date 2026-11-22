@@ -11,8 +11,8 @@ import pytest
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge import summary_visibility
-from knowledge.read_path_fakes_16665 import FakeKB
 from knowledge.search_filters import KbReader
+from testkit.read_path_fakes_16665 import FakeKB
 
 SOURCES = {
     "q": {"owner_id": "admin", "visibility": "system", "collection": config.research_quarantine_collection},

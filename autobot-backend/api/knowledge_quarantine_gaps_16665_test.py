@@ -17,7 +17,7 @@ from api.knowledge_graph_facts import visible_facts_page
 from api.schemas_knowledge import SearchRequest
 from autobot_shared.ssot_config import config
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import OPEN_META, CategoryKB
+from testkit.read_path_fakes_16665 import OPEN_META, CategoryKB
 
 QUARANTINE = config.research_quarantine_collection
 
