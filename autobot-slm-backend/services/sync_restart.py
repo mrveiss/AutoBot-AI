@@ -14,15 +14,15 @@ before.
 """
 
 import asyncio
-import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 from autobot_shared.backend_start_marker import BACKEND_UNIT, parse_unix_timestamp, write_marker
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.logging_manager import get_logger
 from services.secrets_store_snapshot import BACKEND_DATA_DIR
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: How long the updater waits for ``systemctl show`` before it gives up recording the start.
 SYSTEMCTL_TIMEOUT_S = env_int_clamped("SLM_BACKEND_START_PROBE_TIMEOUT_S", 10, min_v=1, max_v=120)
