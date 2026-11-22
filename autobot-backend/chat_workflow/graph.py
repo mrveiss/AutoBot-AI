@@ -1104,29 +1104,24 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
     all_llm_responses = state.get("all_llm_responses", [])
-    # Review B3 makes ``all_llm_responses`` carry "" for an iteration with no
-    # prose, so the blanks must be dropped here or a leading/interior "\n\n"
-    # reaches conversation_history — which feeds the NEXT turn's LLM context —
-    # plus the transcript file and the LOOP_COMPLETE/BEFORE_RESPONSE_SEND hooks.
+    # Review B3: ``all_llm_responses`` carries "" for an iteration with no prose; drop the blanks here or a stray
+    # "\n\n" reaches conversation_history (the NEXT turn's LLM context), the transcript and the response hooks.
     combined_response = "\n\n".join(r for r in all_llm_responses if r)
 
     # Emit LOOP_COMPLETE hook to notify extensions
     await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
 
+    proof = None
     try:
         session = await manager.get_or_create_session(session_id)
-        # Issue #4263: allow extensions to inspect/modify response before sending.
-        # Issue #13295: the (rare, default no-op) hook output feeds the combined
-        # session-level view below; it is intentionally NOT threaded into
-        # all_llm_responses, since a single edited string cannot be split back
-        # into the per-iteration entries _persist_workflow_messages now needs
-        # to interleave with tool output.
+        # #4263: extensions may edit the response. #13295: that edit feeds only the combined view below, not
+        # all_llm_responses: one edited string cannot be split back into per-iteration entries.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
         model = (state.get("llm_params") or {}).get("selected_model")  # the rolling-summary refresh folds with it
         await manager._persist_conversation(session_id, session, state["user_message"], combined_response, model)
 
         wf_messages = _build_workflow_messages_from_state(state)
-        await manager._persist_workflow_messages(
+        proof = await manager._persist_workflow_messages(
             session_id,
             wf_messages,
             all_llm_responses,
@@ -1134,6 +1129,8 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
             turn_id=state.get("turn_id", ""),
+            history=state.get("execution_history", []),
+            user_message=state.get("user_message", ""),
         )
 
         logger.info(
@@ -1148,6 +1145,8 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     except Exception as exc:
         logger.error("Failed to persist conversation: %s", exc, exc_info=True)
 
+    if proof is not None and (stream_cb := config["configurable"].get("stream_callback")):
+        stream_cb(proof)  # #21976: sources and proof, live as stored; outside the try: not a persist failure
     return {}
 
 
