@@ -368,6 +368,21 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_TEST_DRAIN_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "Seconds repo_tests._hang_guard waits for a killed test subprocess's output to drain "
+            "before closing its pipes and reaping it anyway. Bounds the case where a descendant "
+            "that left the process group keeps the pipe open (#21862)."
+        ),
+        component="testing",
+        range=(1.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_TEST_STALL_SECONDS",
         type=float,
         default=120.0,

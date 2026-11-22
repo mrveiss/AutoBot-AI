@@ -19,6 +19,7 @@ Linux ``/proc`` only, like the shell suites these tests drive.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -30,6 +31,7 @@ from autobot_shared.env_utils import env_float_clamped
 
 STALL_SECONDS = env_float_clamped("AUTOBOT_TEST_STALL_SECONDS", 120.0, 5.0, 3600.0, positive_finite=True)
 CPU_BUDGET_SECONDS = env_float_clamped("AUTOBOT_TEST_CPU_BUDGET_SECONDS", 900.0, 10.0, 7200.0, positive_finite=True)
+DRAIN_SECONDS = env_float_clamped("AUTOBOT_TEST_DRAIN_SECONDS", 10.0, 1.0, 300.0, positive_finite=True)
 _POLL_SECONDS = 1.0
 _CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 _PROC = Path("/proc")
@@ -45,21 +47,36 @@ def _stat_fields(entry: Path) -> list[str] | None:
     return raw.rsplit(")", 1)[1].split()
 
 
+def _session_members(root_pid: int) -> list[tuple[Path, int]]:
+    """``(proc entry, session id)`` of every live process whose session id is *root_pid*."""
+    members = []
+    for entry in _PROC.glob("[0-9]*"):
+        fields = _stat_fields(entry)
+        if fields is not None and int(fields[3]) == root_pid:  # field 6: session id
+            members.append((entry, root_pid))
+    return members
+
+
 def cpu_seconds(root_pid: int) -> float:
     """CPU of the live process tree of *root_pid* plus everything its members reaped.
 
     The child runs with ``start_new_session=True``, so every descendant shares session id
-    *root_pid*. ``cutime``/``cstime`` count only REAPED children, so live descendants are summed
-    by their own ``utime``/``stime``.
+    *root_pid*. Two passes, in this order, so a child is never counted twice: first the reaped-CPU
+    (``cutime``/``cstime``) of every member, then ``utime``/``stime`` of the members STILL present.
+    A child that exits between the passes is already in its parent's first-pass reaped total.
     """
     if not _PROC.is_dir():
         raise RuntimeError("hang guard needs /proc (Linux only); it cannot tell a stall from no data")
+    members = _session_members(root_pid)
     ticks = 0
-    for entry in _PROC.glob("[0-9]*"):
+    for entry, _ in members:  # pass 1: reaped children's CPU
         fields = _stat_fields(entry)
-        if fields is None or int(fields[3]) != root_pid:  # field 6: session id
-            continue
-        ticks += sum(int(fields[i]) for i in (11, 12, 13, 14))  # utime stime cutime cstime
+        if fields is not None:
+            ticks += int(fields[13]) + int(fields[14])  # cutime cstime
+    for entry, sid in members:  # pass 2: own CPU of whoever is still alive
+        fields = _stat_fields(entry)
+        if fields is not None and int(fields[3]) == sid:
+            ticks += int(fields[11]) + int(fields[12])  # utime stime
     return ticks / _CLOCK_TICKS
 
 
@@ -70,12 +87,37 @@ def _kill_group(proc: subprocess.Popen) -> None:
         pass
 
 
+def _close_and_reap(proc: subprocess.Popen) -> None:
+    """Close the pipes and reap the direct child, whatever still holds the pipe's other end."""
+    for pipe in (proc.stdout, proc.stderr):
+        if pipe is not None:
+            try:
+                pipe.close()
+            except OSError:
+                pass
+    try:
+        proc.kill()
+    except ProcessLookupError:
+        pass
+    proc.wait()
+
+
+def _kill_and_drain(proc: subprocess.Popen) -> tuple[str, str]:
+    """Kill the group and collect its output; a descendant that escaped holding a pipe cannot hang us."""
+    _kill_group(proc)
+    try:
+        return proc.communicate(timeout=DRAIN_SECONDS)
+    except subprocess.TimeoutExpired:
+        _close_and_reap(proc)
+        raise
+
+
 def _sample_cpu(proc: subprocess.Popen) -> float:
     try:
         return cpu_seconds(proc.pid)
     except RuntimeError:
-        _kill_group(proc)  # no /proc: never leave the child running unobserved
-        proc.communicate()  # reap it and close its pipes before re-raising
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            _kill_and_drain(proc)  # no /proc: never leave the child running unobserved
         raise
 
 
@@ -114,6 +156,21 @@ def run_guarded(
         start_new_session=True,
     )
     started = time.monotonic()
+    try:
+        done = _monitor(proc, argv, started)
+        if isinstance(done, subprocess.CompletedProcess):
+            return done
+        _raise_killed(proc, argv, done, started)
+    except subprocess.TimeoutExpired:
+        raise  # already killed, drained and reaped
+    except BaseException:  # incl. KeyboardInterrupt: never leave the group running or the pipes open
+        _kill_group(proc)
+        _close_and_reap(proc)
+        raise
+
+
+def _monitor(proc: subprocess.Popen, argv: Sequence[str], started: float):
+    """Poll until the process ends (a CompletedProcess) or must be killed (the reason string)."""
     state = (0.0, started, 0.0)  # last_cpu, last_progress, peak_cpu
     while True:
         try:
@@ -121,9 +178,16 @@ def run_guarded(
             return subprocess.CompletedProcess(argv, proc.returncode, out, err)
         except subprocess.TimeoutExpired:
             pass
-        now = time.monotonic()
-        state, reason = _poll(proc, state, now)
+        state, reason = _poll(proc, state, time.monotonic())
         if reason:
-            _kill_group(proc)
-            out, err = proc.communicate()
-            raise subprocess.TimeoutExpired(list(argv), now - started, output=f"{reason}\n{out}", stderr=err)
+            return reason
+
+
+def _raise_killed(proc: subprocess.Popen, argv: Sequence[str], reason: str, started: float) -> None:
+    elapsed = time.monotonic() - started
+    try:
+        out, err = _kill_and_drain(proc)
+    except subprocess.TimeoutExpired as exc:
+        note = f"{reason}\n(a descendant outside the process group kept the pipes open; output is partial)"
+        raise subprocess.TimeoutExpired(list(argv), elapsed, output=note, stderr=exc.stderr) from exc
+    raise subprocess.TimeoutExpired(list(argv), elapsed, output=f"{reason}\n{out}", stderr=err)

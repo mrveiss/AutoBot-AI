@@ -486,7 +486,7 @@ fi
 _scan_err="$(mktemp)"
 _scan_out=$(
     unset "${GIT_ROOT_AMBIENT_VARS[@]}"
-    git -C "$REPO_ROOT" grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' -- '*.sh' 2>"$_scan_err"
+    git -C "$REPO_ROOT" -c grep.lineNumber=false -c grep.column=false grep --no-color -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' -- '*.sh' 2>"$_scan_err"
 )
 _scan_rc=$?
 if [ "$_scan_rc" -gt 1 ]; then
