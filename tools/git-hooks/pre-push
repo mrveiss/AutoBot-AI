@@ -393,13 +393,12 @@ stage_record() {
 }
 
 # ---------------------------------------------------------------------------
-# #18058/#20903/#21163: run pytest on the repo interpreter, resolved by the one
-# resolver every git hook shares (scripts/lib/hook-python.sh): the floor is .python-version
-# (the SSOT), the order is the repo venv, then python<floor>, then a python3
-# that verifiably meets the floor (one that also imports pytest is preferred).  When none exists the
-# push stops here, naming the required version -- it never runs the selection
-# on an older python3 and reports the resulting StrEnum / cachetools collection
-# errors as test failures.
+# #18058/#20903/#21163/#21351: run pytest on the repo interpreter, resolved by the one
+# resolver every git hook shares (scripts/lib/hook-python.sh); the floor is .python-version
+# (the SSOT). Resolution is PREFERRED-THEN-FLOOR: first an interpreter that meets the floor
+# AND imports pytest; failing that, any interpreter that meets the floor. None at or above the
+# floor stops the push here, naming the required version -- it never runs the selection on an
+# older python3 and reports its StrEnum / cachetools collection errors as test failures.
 # ---------------------------------------------------------------------------
 # The pushing checkout's copy wins: an installed hook is shared by every worktree and can be
 # newer than the checkout it was installed from, which then has no such library yet.
@@ -414,11 +413,10 @@ fi
 # remote) is judged by the checkout this hook belongs to.
 _PY_ROOT="$REPO_ROOT"
 [ -r "$REPO_ROOT/.python-version" ] || _PY_ROOT="$_HOOK_ROOT"
-# pytest is PREFERRED, not required, at resolution time: the selection, the PR-body check and
-# the dependency scan below run on the floor interpreter alone, and every stage that runs pytest
-# re-checks `import pytest` and stops the push through could_not_run. Requiring it up front would
-# block pushes that never run pytest. The floor itself is never relaxed: with no interpreter at
-# or above it the resolver's own message names the version and the push stops here.
+# pytest is PREFERRED, not required: the selection, the PR-body check and the dependency scan
+# run on the floor interpreter alone, and every stage that runs pytest re-checks `import pytest`
+# and stops the push through could_not_run (AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE=1 accepts it).
+# Requiring it up front would block pushes that select no tests. The floor is never relaxed.
 if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT" --require pytest 2>/dev/null)"; then
     if ! PYTEST_PYTHON="$(resolve_repo_python --root "$_PY_ROOT")"; then
         echo "[pre-push FAIL] Push BLOCKED: no interpreter that meets .python-version (see above)." >&2
@@ -768,7 +766,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # ------------------------------------------------------------------------
   if ! command -v gh >/dev/null 2>&1; then
     log "gh CLI not installed — PR body NOT checked (#16859); before pushing, validate it yourself:"
-    log "  \"\$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
+    log "  \"$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
   else
     gh_view_output=$(gh pr view "$branch_name" --json number --jq '.number' 2>&1)
     gh_view_exit=$?
@@ -790,7 +788,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       # skip that looks identical to "nothing to check".
       log "no open PR yet for $branch_name — this hook cannot check a body before 'gh pr create' (#16859)"
       log "  before 'gh pr create --body-file <path>', validate it yourself:"
-      log "  \"\$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
+      log "  \"$PYTEST_PYTHON\" scripts/validate_pr_body.py --file <path>"
     else
       # gh ran and failed for a reason OTHER than "no PR" -- not signed in,
       # offline, rate-limited, an API error. Must not read as "no open PR":
