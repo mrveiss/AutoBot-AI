@@ -78,7 +78,12 @@ function detailFromPayload(payload: unknown): string {
   // sits at error.message rather than at the top level.
   const nested = obj.error
   if (nested && typeof nested === 'object') {
-    const message = (nested as Record<string, unknown>).message
+    // `details.reason` is the client-safe sentence (#21999); `message` is the generic one.
+    const nestedObj = nested as Record<string, unknown>
+    const details = nestedObj.details
+    const reason = details && typeof details === 'object' ? (details as Record<string, unknown>).reason : undefined
+    if (typeof reason === 'string' && reason.trim()) return reason.trim()
+    const message = nestedObj.message
     if (typeof message === 'string' && message.trim()) return message.trim()
   }
 
