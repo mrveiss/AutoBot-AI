@@ -9,11 +9,35 @@ Split out of the manager to keep it within the file-size ceiling; ``redis_servic
 
 from __future__ import annotations
 
+import os
+import time
+
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
+
+
+def _resolve_node_cache_ttl() -> float:
+    """Seconds a resolved node id is reused, from AUTOBOT_REDIS_NODE_CACHE_TTL (0 disables); bad values use 60."""
+    raw = os.getenv("AUTOBOT_REDIS_NODE_CACHE_TTL")
+    try:
+        return max(0.0, float(raw)) if raw is not None else 60.0
+    except ValueError:
+        logger.warning("AUTOBOT_REDIS_NODE_CACHE_TTL=%r is not a number; using 60s", raw)
+        return 60.0
+
+
+REDIS_NODE_CACHE_TTL_S = _resolve_node_cache_ttl()
+_resolved: tuple[str, float] | None = None  # (node id, monotonic expiry) of the last role-owner lookup
+
+
+def clear_resolved_node() -> None:
+    """Forget the cached node id (a role moved, or a test)."""
+    global _resolved
+    _resolved = None
+
 
 #: The SLM role whose owner node runs the Redis Stack service (``role_registry``'s ``redis``).
 REDIS_ROLE = "redis"
@@ -40,6 +64,10 @@ class RedisPermissionError(RedisServiceException):
     """Raised when user lacks permissions for operation"""
 
 
+#: What the manager re-raises instead of folding into a failed or unknown result (#22030).
+SLM_REFUSALS = (RedisNodeUnresolvedError, RedisSlmAccessError)
+
+
 def access_error(exc: aiohttp.ClientResponseError) -> RedisSlmAccessError | None:
     """The error for a refused credential (401/403), None for any other status."""
     if exc.status in (401, 403):
@@ -52,8 +80,11 @@ async def resolve_redis_node_id(client, configured: str) -> str:
 
     Never returns an empty id -- an empty one made every request go to ``/api/nodes//services``.
     """
+    global _resolved
     if configured:
         return configured
+    if _resolved is not None and time.monotonic() < _resolved[1]:
+        return _resolved[0]
     try:
         owners = (await client.get_role_owners()).get(REDIS_ROLE) or []
     except aiohttp.ClientResponseError as exc:
@@ -66,4 +97,5 @@ async def resolve_redis_node_id(client, configured: str) -> str:
         )
     if len(owners) > 1:
         logger.warning("Several nodes hold the '%s' role (%s); using %s", REDIS_ROLE, owners, owners[0])
+    _resolved = (owners[0], time.monotonic() + REDIS_NODE_CACHE_TTL_S)
     return owners[0]

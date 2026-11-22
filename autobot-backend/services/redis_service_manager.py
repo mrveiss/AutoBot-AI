@@ -27,6 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from services.redis_service_errors import (  # noqa: F401  (re-exported: callers import the errors from here)
+    SLM_REFUSALS,
     RedisConnectionError,
     RedisNodeUnresolvedError,
     RedisPermissionError,
@@ -141,6 +142,12 @@ class RedisServiceManager:
         if client is None:
             raise RedisConnectionError("SLM client is not initialised")
         return client
+
+    async def _record_refusal(self, operation: str, error: Exception, user_id: str | None = None) -> None:
+        """Count and audit an unresolved node or refused credential, which the caller then re-raises (#22030)."""
+        logger.error("Redis %s cannot reach the SLM service API: %s", operation, error)
+        await self._record_error()
+        self._audit_log(f"redis_service_{operation}_refused", {"error": type(error).__name__}, user_id=user_id)
 
     async def _slm_service_action(self, action: str) -> Tuple[bool, str]:
         """Call SLM API to start/stop/restart the Redis service.
@@ -270,7 +277,6 @@ class RedisServiceManager:
         self._audit_log("redis_service_start_attempt", {"user_id": user_id}, user_id=user_id)
 
         try:
-            # Check if already running (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "running":
                 duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
@@ -304,6 +310,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await self._record_refusal("start", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Start service failed: %s", e)
@@ -368,6 +377,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await self._record_refusal("stop", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Stop service failed: %s", e)
@@ -423,6 +435,9 @@ class RedisServiceManager:
             )
             return operation_result
 
+        except SLM_REFUSALS as e:
+            await self._record_refusal("restart", e, user_id)
+            raise
         except Exception as e:
             duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Restart service failed: %s", e)
@@ -444,7 +459,6 @@ class RedisServiceManager:
         Returns:
             ManagedServiceStatus with current status information
         """
-        # Check cache
         if (
             use_cache
             and self._status_cache
@@ -457,16 +471,13 @@ class RedisServiceManager:
             status_str = await self._slm_get_service_status()
             service_status = ManagedServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
 
-            # Update cache
             self._status_cache = service_status
             self._status_cache_time = datetime.now(tz=timezone.utc)
 
             return service_status
 
-        except (RedisNodeUnresolvedError, RedisSlmAccessError) as e:
-            # #16346: a missing node or a refused credential is a failure to ask, not "the service state is unknown".
-            logger.error("Cannot determine Redis service status: %s", e)
-            await self._record_error()
+        except SLM_REFUSALS as e:
+            await self._record_refusal("status", e)  # #16346: a failure to ask, not "the state is unknown"
             raise
         except Exception as e:
             logger.error("Failed to get service status: %s", e)

@@ -15,9 +15,37 @@ credential (401/403) from a missing node (404) instead of reading both as an emp
 
 from __future__ import annotations
 
+import os
 from urllib.parse import quote
 
+import aiohttp
+
 from autobot_shared.http_egress_guard import assert_egress_policy
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
+_DEFAULT_REQUEST_TIMEOUT_S = 15.0
+
+
+def _resolve_request_timeout() -> float:
+    """Total seconds one request may take, from AUTOBOT_SLM_REQUEST_TIMEOUT; a bad or non-positive value falls back."""
+    raw = os.getenv("AUTOBOT_SLM_REQUEST_TIMEOUT")
+    if raw is None:
+        return _DEFAULT_REQUEST_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_SLM_REQUEST_TIMEOUT=%r is not a positive number; using %ss", raw, _DEFAULT_REQUEST_TIMEOUT_S
+        )
+        return _DEFAULT_REQUEST_TIMEOUT_S
+    return value
+
+
+SLM_REQUEST_TIMEOUT_S = _resolve_request_timeout()
 
 
 class SLMNodeServicesMixin:
@@ -27,7 +55,8 @@ class SLMNodeServicesMixin:
         session = await self._get_session()
         url = self._rest_url(path)
         await assert_egress_policy(url)
-        async with session.request(method, url, allow_redirects=False, **kwargs) as response:
+        timeout = aiohttp.ClientTimeout(total=SLM_REQUEST_TIMEOUT_S)
+        async with session.request(method, url, allow_redirects=False, timeout=timeout, **kwargs) as response:
             response.raise_for_status()
             return await response.json()
 

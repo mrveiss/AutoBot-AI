@@ -9,14 +9,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
+import services.redis_service_errors as redis_service_errors
 import services.redis_service_manager as redis_service_manager_module
-from services.redis_service_errors import resolve_redis_node_id
+from services.redis_service_errors import clear_resolved_node, resolve_redis_node_id
 from services.redis_service_manager import (
     RedisConnectionError,
     RedisNodeUnresolvedError,
     RedisServiceManager,
     RedisSlmAccessError,
 )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_node_cache():
+    clear_resolved_node()
+    yield
+    clear_resolved_node()
 
 
 @pytest.fixture()
@@ -73,6 +81,25 @@ class TestNodeResolution:
     async def test_an_unset_id_resolves_to_the_role_owner(self) -> None:
         client = _client(owners={"redis": ["07-Redis"], "backend": ["01-Main"]})
         assert await resolve_redis_node_id(client, "") == "07-Redis"
+
+    @pytest.mark.asyncio
+    async def test_a_resolved_owner_is_reused_until_its_ttl_ends(self, monkeypatch) -> None:
+        clock = [1000.0]
+        monkeypatch.setattr("services.redis_service_errors.time.monotonic", lambda: clock[0])
+        client = _client(owners={"redis": ["07-Redis"]})
+        assert await resolve_redis_node_id(client, "") == "07-Redis"
+        assert await resolve_redis_node_id(client, "") == "07-Redis"
+        assert client.get_role_owners.await_count == 1
+        clock[0] += redis_service_errors.REDIS_NODE_CACHE_TTL_S + 1
+        await resolve_redis_node_id(client, "")
+        assert client.get_role_owners.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_a_failed_lookup_is_never_cached(self) -> None:
+        with pytest.raises(RedisNodeUnresolvedError):
+            await resolve_redis_node_id(_client(owners={}), "")
+        client = _client(owners={"redis": ["n9"]})
+        assert await resolve_redis_node_id(client, "") == "n9"
 
     @pytest.mark.asyncio
     async def test_no_owner_fails_loudly_instead_of_querying_an_empty_id(self) -> None:
@@ -189,3 +216,32 @@ class TestCheckRedisConnectivity:
             connected, response_ms = await manager._check_redis_connectivity()
         assert connected is False
         assert response_ms == 0.0
+
+
+class TestRefusalsAreNotFoldedIntoResults:
+    """An unresolved node or a refused credential reaches the caller from start/stop/restart too (#22030)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["start_service", "stop_service", "restart_service"])
+    async def test_a_refused_credential_is_raised(self, manager, operation) -> None:
+        with _patched(_client(error=_http_error(401))), pytest.raises(RedisSlmAccessError):
+            await getattr(manager, operation)()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["start_service", "stop_service", "restart_service"])
+    async def test_an_unresolved_node_is_raised(self, operation) -> None:
+        mgr = RedisServiceManager(slm_node_id="")
+        with _patched(_client(owners={})), pytest.raises(RedisNodeUnresolvedError):
+            await getattr(mgr, operation)()
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_is_counted_as_an_error(self, manager) -> None:
+        with _patched(_client(error=_http_error(403))), pytest.raises(RedisSlmAccessError):
+            await manager.start_service()
+        assert await manager._get_error_count_last_hour() >= 1
+
+    @pytest.mark.asyncio
+    async def test_a_transport_failure_is_still_a_failed_result(self, manager) -> None:
+        with _patched(_client(error=Exception("down"))):
+            result = await manager.start_service()
+        assert result.success is False

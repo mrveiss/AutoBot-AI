@@ -24,12 +24,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.human_admin import refuse_service_principal, require_human_operator
-from services.redis_service_manager import (
-    RedisConnectionError,
-    RedisNodeUnresolvedError,
-    RedisServiceManager,
-    RedisSlmAccessError,
-)
+from services.redis_service_manager import SLM_REFUSALS, RedisConnectionError, RedisServiceManager
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
@@ -110,6 +105,9 @@ async def start_redis_service(
 
     except HTTPException:
         raise
+    except SLM_REFUSALS as e:
+        logger.error("Redis service cannot reach the SLM: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))  # #22030: say what failed
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
         raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
@@ -159,6 +157,9 @@ async def stop_redis_service(
 
     except HTTPException:
         raise
+    except SLM_REFUSALS as e:
+        logger.error("Redis service cannot reach the SLM: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))  # #22030: say what failed
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
         raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
@@ -204,6 +205,9 @@ async def restart_redis_service(
 
     except HTTPException:
         raise
+    except SLM_REFUSALS as e:
+        logger.error("Redis service cannot reach the SLM: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))  # #22030: say what failed
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
         raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
@@ -237,9 +241,8 @@ async def get_redis_status(
             last_check=status.last_check,
         )
 
-    except (RedisNodeUnresolvedError, RedisSlmAccessError) as e:
-        # #16346: say what failed instead of answering 200 "unknown".
-        logger.error("Get status error: %s", e)
+    except SLM_REFUSALS as e:
+        logger.error("Get status error: %s", e)  # #16346: say what failed instead of answering 200 "unknown"
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.error("Get status error: %s", e)

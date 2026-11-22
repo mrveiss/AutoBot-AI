@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from autobot_shared import egress_allowlist as al
+from services import slm_node_services
 from services.slm_client import SLMClient
 
 INTERNAL = "http://127.0.0.1:8001"
@@ -75,3 +76,20 @@ async def test_a_private_non_allowlisted_origin_sends_no_request(base):
     with pytest.raises(Exception):
         await client.get_role_owners()
     session.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_every_request_carries_the_total_timeout():
+    client, session = _client(INTERNAL, {"owners": {}})
+    await client.get_role_owners()
+    timeout = session.request.call_args.kwargs["timeout"]
+    assert timeout.total == slm_node_services.SLM_REQUEST_TIMEOUT_S > 0
+
+
+@pytest.mark.parametrize("raw,expected", [(None, 15.0), ("30", 30.0), ("0", 15.0), ("-2", 15.0), ("soon", 15.0)])
+def test_the_timeout_comes_from_the_environment_with_a_safe_fallback(monkeypatch, raw, expected):
+    if raw is None:
+        monkeypatch.delenv("AUTOBOT_SLM_REQUEST_TIMEOUT", raising=False)
+    else:
+        monkeypatch.setenv("AUTOBOT_SLM_REQUEST_TIMEOUT", raw)
+    assert slm_node_services._resolve_request_timeout() == expected
