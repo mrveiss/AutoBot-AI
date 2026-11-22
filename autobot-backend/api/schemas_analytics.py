@@ -2168,7 +2168,6 @@ class EvolutionTimelineRequest(BaseModel):
 class EvolutionAnalysisRequest(BaseModel):
     """Request to trigger code evolution analysis."""
 
-    repo_path: str = Field(description="Path to git repository to analyze")
     start_date: str | None = Field(None, description="Start date for analysis (ISO format)")
     end_date: str | None = Field(None, description="End date for analysis (ISO format)")
     commit_limit: int = Field(100, description="Maximum number of commits to analyze", ge=1, le=1000)

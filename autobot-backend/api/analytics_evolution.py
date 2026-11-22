@@ -19,10 +19,11 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
+from api.codebase_analytics.endpoints.shared import require_source_access, resolve_scan_root
 from api.schemas_analytics import (
     AnalyticsEvolutionExportResponse,
     AnalyticsEvolutionPatternSnapshotResponse,
@@ -38,46 +39,40 @@ from api.schemas_analytics import (
     PatternSnapshot,
 )
 from api.schemas_common import DataResponse
+from api.source_scope import SourceIdQuery, require_source_id
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.redis_utils import decode_redis_value as _decode_redis_value
-from autobot_shared.security.path_validator import PROJECT_ALLOWED_ROOTS, validate_path
 from autobot_shared.ssot_constants import TTL_365_DAYS
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
-router = APIRouter(tags=["code-evolution", "analytics"])  # Prefix set in router_registry
+router = APIRouter(
+    tags=["code-evolution", "analytics"],
+    dependencies=[Depends(require_source_access)],
+)  # Prefix set in router_registry
 
 
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
 AGGREGATION_GRANULARITIES = {"weekly", "monthly"}
 
-# Redis key prefixes for evolution data (global, unscoped)
+# Redis key prefix for evolution data; always followed by a source id (see _build_evolution_prefixes)
 EVOLUTION_PREFIX = "evolution:"
-SNAPSHOT_PREFIX = f"{EVOLUTION_PREFIX}snapshot:"
-METRICS_PREFIX = f"{EVOLUTION_PREFIX}metrics:"
-PATTERNS_PREFIX = f"{EVOLUTION_PREFIX}patterns:"
 
 
-def _build_evolution_prefixes(source_id: str | None) -> tuple[str, str, str]:
-    """Return (evolution_prefix, snapshot_prefix, patterns_prefix) scoped to source_id.
+def _build_evolution_prefixes(source_id: str) -> tuple[str, str, str]:
+    """Return (evolution_prefix, snapshot_prefix, patterns_prefix) for ONE source.
 
-    Issue #3441: When source_id is provided, all Redis keys are namespaced as
-    ``evolution:{source_id}:*`` so snapshots and patterns are stored and
-    retrieved per-project rather than globally.
+    Issue #3441: every Redis key is namespaced ``evolution:{source_id}:*`` so snapshots and
+    patterns are stored and read per project. #20513: there is no global namespace; an empty
+    or malformed source id raises rather than reaching the shared ``evolution:`` keys.
 
-    Args:
-        source_id: Project source identifier, or None for global data.
-
-    Returns:
-        Three-tuple of (evolution_prefix, snapshot_prefix, patterns_prefix).
+    Raises:
+        ValueError: ``source_id`` is empty or malformed.
     """
-    if source_id:
-        ev = f"evolution:{source_id}:"
-    else:
-        ev = EVOLUTION_PREFIX
+    ev = f"{EVOLUTION_PREFIX}{require_source_id(source_id, 'evolution key')}:"
     return ev, f"{ev}snapshot:", f"{ev}patterns:"
 
 
@@ -125,11 +120,6 @@ def _get_pattern_snapshots(redis_client, pattern_keys: list) -> list:
     return snapshots
 
 
-def _extract_pattern_types(all_keys: list) -> set:
-    """Extract unique pattern types from Redis keys (Issue #315)."""
-    return _extract_pattern_types_from_prefix(all_keys, PATTERNS_PREFIX)
-
-
 def _extract_pattern_types_from_prefix(all_keys: list, patterns_prefix: str) -> set:
     """Extract unique pattern types from Redis keys using an arbitrary prefix.
 
@@ -156,7 +146,7 @@ def _fetch_timeline_snapshots(
     redis_client,
     start_ts: float,
     end_ts: float,
-    evolution_prefix: str = EVOLUTION_PREFIX,
+    evolution_prefix: str,
 ) -> list:
     """Fetch timeline snapshots from Redis within a date range.
 
@@ -228,8 +218,8 @@ def get_evolution_redis():
     return get_redis_client(database="analytics")
 
 
-async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
-    """Store a quality snapshot in Redis.
+async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot, source_id: str) -> bool:
+    """Store a quality snapshot in Redis under ``evolution:{source_id}:``.
 
     Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
     when calling sync Redis operations.
@@ -241,13 +231,14 @@ async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
 
     try:
         # Store snapshot with timestamp-based key
-        key = f"{SNAPSHOT_PREFIX}{snapshot.timestamp}"
+        evolution_prefix, snapshot_prefix, _ = _build_evolution_prefixes(source_id)
+        key = f"{snapshot_prefix}{snapshot.timestamp}"
         timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_snapshot():
             redis_client.set(key, snapshot.json(), ex=TTL_365_DAYS)  # Keep for 1 year
-            redis_client.zadd(f"{EVOLUTION_PREFIX}timeline", {key: timestamp_score})
+            redis_client.zadd(f"{evolution_prefix}timeline", {key: timestamp_score})
 
         await asyncio.to_thread(_store_snapshot)
 
@@ -259,8 +250,8 @@ async def store_quality_snapshot(snapshot: EvolutionQualitySnapshot) -> bool:
         return False
 
 
-async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
-    """Store a pattern snapshot in Redis.
+async def store_pattern_snapshot(snapshot: PatternSnapshot, source_id: str) -> bool:
+    """Store a pattern snapshot in Redis under ``evolution:{source_id}:patterns:``.
 
     Issue #361: Uses asyncio.to_thread() to avoid blocking event loop
     when calling sync Redis operations.
@@ -270,9 +261,10 @@ async def store_pattern_snapshot(snapshot: PatternSnapshot) -> bool:
         return False
 
     try:
-        key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:{snapshot.timestamp}"
+        patterns_prefix = _build_evolution_prefixes(source_id)[2]
+        key = f"{patterns_prefix}{snapshot.pattern_type}:{snapshot.timestamp}"
         timestamp_score = parse_utc_iso(snapshot.timestamp).timestamp()
-        timeline_key = f"{PATTERNS_PREFIX}{snapshot.pattern_type}:timeline"
+        timeline_key = f"{patterns_prefix}{snapshot.pattern_type}:timeline"
 
         # Issue #361: Execute sync Redis ops in thread pool
         def _store_pattern():
@@ -318,6 +310,7 @@ def _build_timeline_response(timeline: list, start_date: str, end_date: str, gra
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_evolution_timeline(
+    source_id: SourceIdQuery,
     date_range: DateRangeParams = Depends(),
     granularity: str = Query("daily", description="Data granularity: hourly, daily, weekly, monthly"),
     metrics: str = Query(
@@ -325,7 +318,6 @@ async def get_evolution_timeline(
         description="Comma-separated metrics",
     ),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get code evolution timeline (Issue #398: refactored).
 
@@ -391,11 +383,11 @@ async def get_evolution_timeline(
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_pattern_evolution(
+    source_id: SourceIdQuery,
     pattern_type: str | None = Query(None, description="Filter by pattern type (e.g., god_class, long_method)"),
     start_date: str | None = Query(None, description="Start date (ISO format)"),
     end_date: str | None = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get pattern evolution data (Issue #315: depth 6→3).
@@ -461,7 +453,7 @@ def _fetch_trend_snapshots_sync(
     redis_client,
     start_ts: float,
     end_ts: float,
-    evolution_prefix: str = EVOLUTION_PREFIX,
+    evolution_prefix: str,
 ) -> List[Dict]:
     """Fetch snapshots from Redis within timestamp range (Issue #398, #480: pipeline batching).
 
@@ -547,9 +539,9 @@ def _build_trends_success_response(trends: dict, days: int, snapshot_count: int)
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_quality_trends(
+    source_id: SourceIdQuery,
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get quality trend analysis (Issue #398: refactored).
 
@@ -614,6 +606,7 @@ async def get_quality_trends(
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def record_quality_snapshot(
+    source_id: SourceIdQuery,
     snapshot: EvolutionQualitySnapshot,
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -624,7 +617,8 @@ async def record_quality_snapshot(
 
     Issue #744: Requires admin authentication.
     """
-    success = await store_quality_snapshot(snapshot)
+    await _resolve_source_or_404(source_id)
+    success = await store_quality_snapshot(snapshot, source_id)
 
     if success:
         return JSONResponse(
@@ -651,6 +645,7 @@ async def record_quality_snapshot(
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def record_pattern_snapshot(
+    source_id: SourceIdQuery,
     snapshot: PatternSnapshot,
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -661,7 +656,8 @@ async def record_pattern_snapshot(
 
     Issue #744: Requires admin authentication.
     """
-    success = await store_pattern_snapshot(snapshot)
+    await _resolve_source_or_404(source_id)
+    success = await store_pattern_snapshot(snapshot, source_id)
 
     if success:
         return JSONResponse(
@@ -688,9 +684,9 @@ def _parse_export_date_range(start_date: str | None, end_date: str | None) -> tu
     return start_ts, end_ts
 
 
-def _fetch_export_data_sync(redis_client, start_ts: float, end_ts: float) -> list:
+def _fetch_export_data_sync(redis_client, start_ts: float, end_ts: float, evolution_prefix: str) -> list:
     """Fetch export data from Redis synchronously (Issue #398, #480: pipeline batching)."""
-    snapshot_keys = redis_client.zrangebyscore(f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts)
+    snapshot_keys = redis_client.zrangebyscore(f"{evolution_prefix}timeline", start_ts, end_ts)
 
     if not snapshot_keys:
         return []
@@ -755,6 +751,7 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def export_evolution_data(
+    source_id: SourceIdQuery,
     format: str = Query("json", description="Export format: json, csv"),
     start_date: str | None = Query(None, description="Start date (ISO format)"),
     end_date: str | None = Query(None, description="End date (ISO format)"),
@@ -763,6 +760,8 @@ async def export_evolution_data(
     """Export evolution data in JSON or CSV format (Issue #398: refactored, #543: no demo data).
 
     Issue #744: Requires admin authentication."""
+    await _resolve_source_or_404(source_id)
+    evolution_prefix = _build_evolution_prefixes(source_id)[0]
     redis_client = get_evolution_redis()
 
     if not redis_client:
@@ -777,7 +776,9 @@ async def export_evolution_data(
 
     try:
         start_ts, end_ts = _parse_export_date_range(start_date, end_date)
-        timeline_data = await asyncio.to_thread(_fetch_export_data_sync, redis_client, start_ts, end_ts)
+        timeline_data = await asyncio.to_thread(
+            _fetch_export_data_sync, redis_client, start_ts, end_ts, evolution_prefix
+        )
 
         if not timeline_data:
             return JSONResponse(
@@ -812,8 +813,8 @@ async def export_evolution_data(
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def get_evolution_summary(
+    source_id: SourceIdQuery,
     admin_check: bool = Depends(check_admin_permission),
-    source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get a summary of code evolution including key statistics.
@@ -821,9 +822,10 @@ async def get_evolution_summary(
     Provides overview for dashboard display.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3436: Requires source_id; results are that project's alone (#20513).
     """
     await _resolve_source_or_404(source_id)
+    evolution_prefix = _build_evolution_prefixes(source_id)[0]
     redis_client = get_evolution_redis()
 
     summary = {
@@ -838,12 +840,12 @@ async def get_evolution_summary(
         try:
             # Issue #361 - avoid blocking - fetch summary data in thread pool
             def _fetch_summary_data():
-                total = redis_client.zcard(f"{EVOLUTION_PREFIX}timeline")
+                total = redis_client.zcard(f"{evolution_prefix}timeline")
                 first_data = None
                 last_data = None
                 if total > 0:
-                    first_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", 0, 0)
-                    last_keys = redis_client.zrange(f"{EVOLUTION_PREFIX}timeline", -1, -1)
+                    first_keys = redis_client.zrange(f"{evolution_prefix}timeline", 0, 0)
+                    last_keys = redis_client.zrange(f"{evolution_prefix}timeline", -1, -1)
                     first_data = _get_snapshot_data(redis_client, first_keys)
                     last_data = _get_snapshot_data(redis_client, last_keys)
                 return total, first_data, last_data
@@ -1077,7 +1079,7 @@ def _generate_demo_trends(days: int) -> Dict[str, Any]:
 # =============================================================================
 
 
-async def _store_pattern_snapshots(analysis_result: Dict) -> int:
+async def _store_pattern_snapshots(analysis_result: Dict, source_id: str) -> int:
     """
     Store pattern snapshots from analysis results (Issue #243).
 
@@ -1102,7 +1104,7 @@ async def _store_pattern_snapshots(analysis_result: Dict) -> int:
                         top_files=[],
                     )
 
-                    success = await store_pattern_snapshot(snapshot)
+                    success = await store_pattern_snapshot(snapshot, source_id)
                     if success:
                         snapshots_stored += 1
 
@@ -1112,29 +1114,14 @@ async def _store_pattern_snapshots(analysis_result: Dict) -> int:
     return snapshots_stored
 
 
-def _validate_evolution_repo_path(repo_path_str: str):
-    """Helper for trigger_evolution_analysis. Ref: #1088.
+async def _evolution_repo_path(source_id: str):
+    """The repository to mine: the selected source's checkout (#20513).
 
-    Returns (repo_path, error_response) where error_response is None if valid.
+    Returns (repo_path, error_response); error_response is None when the checkout is a git repository.
     """
-
-    try:
-        repo_path = validate_path(repo_path_str, allowed_roots=PROJECT_ALLOWED_ROOTS)
-    except ValueError:
-        return None, EvolutionAnalysisResponse(
-            status="error",
-            message="Invalid repository path: outside allowed directories",
-        )
-    if not repo_path.exists():
-        return None, EvolutionAnalysisResponse(
-            status="error",
-            message=f"Repository path not found: {repo_path_str}",
-        )
+    repo_path = await resolve_scan_root(source_id)
     if not (repo_path / ".git").exists():
-        return None, EvolutionAnalysisResponse(
-            status="error",
-            message=f"Not a git repository: {repo_path_str}",
-        )
+        return None, EvolutionAnalysisResponse(status="error", message="The source checkout is not a git repository")
     return repo_path, None
 
 
@@ -1145,6 +1132,7 @@ def _validate_evolution_repo_path(repo_path_str: str):
     error_code_prefix="ANALYTICS_EVOLUTION",
 )
 async def trigger_evolution_analysis(
+    source_id: SourceIdQuery,
     request: EvolutionAnalysisRequest,
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -1163,7 +1151,7 @@ async def trigger_evolution_analysis(
     start_time = time.time()
 
     try:
-        repo_path, err = _validate_evolution_repo_path(request.repo_path)
+        repo_path, err = await _evolution_repo_path(source_id)
         if err:
             return err
 
@@ -1179,7 +1167,7 @@ async def trigger_evolution_analysis(
         analysis_result = await asyncio.to_thread(_run_analysis)
 
         # Store pattern snapshots in Redis for timeline tracking
-        await _store_pattern_snapshots(analysis_result)
+        await _store_pattern_snapshots(analysis_result, source_id)
 
         duration = time.time() - start_time
 
@@ -1193,6 +1181,8 @@ async def trigger_evolution_analysis(
             analysis_duration_seconds=round(duration, 2),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Evolution analysis failed: %s", e)
         return EvolutionAnalysisResponse(

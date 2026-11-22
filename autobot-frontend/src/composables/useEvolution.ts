@@ -20,7 +20,6 @@ import { getApiBase } from '@/config/ssot-config'
 const logger = createLogger('useEvolution')
 
 export interface EvolutionAnalysisRequest {
-  repo_path: string
   start_date?: string
   end_date?: string
   commit_limit?: number
@@ -113,7 +112,8 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
     try {
       const data = await wrap(() =>
         ApiClient.post<EvolutionAnalysisResponse>(
-          `${getApiBase()}/evolution/analyze`,
+          // #20513: the backend mines the selected source's checkout; there is no path to send
+          `${getApiBase()}/evolution/analyze?${new URLSearchParams(withSourceId()).toString()}`,
           request,
           { timeout: 120000 }
         )
@@ -254,7 +254,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
-      const qs = new URLSearchParams(params).toString()
+      const qs = new URLSearchParams(withSourceId(params)).toString()
       const response = await ApiClient.rawRequest(
         `${getApiBase()}/evolution/export?${qs}`
       )

@@ -279,16 +279,6 @@
       @close="showAnalysisModal = false"
     >
         <div class="modal-body">
-          <div class="field-group">
-            <label>{{ $t('analytics.evolution.modal.repoPath') }}</label>
-            <input
-              v-model="analysisForm.repo_path"
-              type="text"
-              class="field-input"
-              placeholder="/opt/autobot"
-            />
-          </div>
-
           <div class="form-row">
             <div class="field-group">
               <label>{{ $t('analytics.evolution.modal.startDateOptional') }}</label>
@@ -334,7 +324,7 @@
         <button
           @click="runAnalysis"
           class="btn-action-primary"
-          :disabled="!analysisForm.repo_path || evolution.loading.value"
+          :disabled="!sourceId || evolution.loading.value"
         >
           <Icon name="sync-alt" :spin="true" v-if="evolution.loading.value" />
           <Icon name="play-circle" v-else />
@@ -385,7 +375,6 @@ const availableMetrics = computed(() => [
 ])
 
 const analysisForm = ref({
-  repo_path: '/opt/autobot',
   start_date: '',
   end_date: '',
   commit_limit: 100,
@@ -411,7 +400,6 @@ async function applyFilters() {
 
 async function runAnalysis() {
   const request: EvolutionAnalysisRequest = {
-    repo_path: analysisForm.value.repo_path,
     commit_limit: analysisForm.value.commit_limit,
   }
 

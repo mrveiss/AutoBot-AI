@@ -23678,7 +23678,7 @@ export interface paths {
          *     Provides overview for dashboard display.
          *
          *     Issue #744: Requires admin authentication.
-         *     Issue #3436: Accepts optional source_id to scope results to a project.
+         *     Issue #3436: Requires source_id; results are that project's alone (#20513).
          */
         get: operations["get_evolution_summary_api_evolution_summary_get"];
         put?: never;
@@ -77071,11 +77071,6 @@ export interface components {
          * @description Request to trigger code evolution analysis.
          */
         EvolutionAnalysisRequest: {
-            /**
-             * Repo Path
-             * @description Path to git repository to analyze
-             */
-            repo_path: string;
             /**
              * Start Date
              * @description Start date for analysis (ISO format)
@@ -140619,13 +140614,13 @@ export interface operations {
     };
     get_evolution_timeline_api_evolution_timeline_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Data granularity: hourly, daily, weekly, monthly */
                 granularity?: string;
                 /** @description Comma-separated metrics */
                 metrics?: string;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
                 /** @description Start date (YYYY-MM-DD) */
                 start_date?: string | null;
                 /** @description End date (YYYY-MM-DD) */
@@ -140659,15 +140654,15 @@ export interface operations {
     };
     get_pattern_evolution_api_evolution_patterns_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Filter by pattern type (e.g., god_class, long_method) */
                 pattern_type?: string | null;
                 /** @description Start date (ISO format) */
                 start_date?: string | null;
                 /** @description End date (ISO format) */
                 end_date?: string | null;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -140697,11 +140692,11 @@ export interface operations {
     };
     get_quality_trends_api_evolution_trends_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Number of days to analyze */
                 days?: number;
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -140731,7 +140726,10 @@ export interface operations {
     };
     record_quality_snapshot_api_evolution_snapshot_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -140764,7 +140762,10 @@ export interface operations {
     };
     record_pattern_snapshot_api_evolution_pattern_snapshot_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -140797,7 +140798,9 @@ export interface operations {
     };
     export_evolution_data_api_evolution_export_get: {
         parameters: {
-            query?: {
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
                 /** @description Export format: json, csv */
                 format?: string;
                 /** @description Start date (ISO format) */
@@ -140833,9 +140836,9 @@ export interface operations {
     };
     get_evolution_summary_api_evolution_summary_get: {
         parameters: {
-            query?: {
-                /** @description Project source ID to scope analysis */
-                source_id?: string | null;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
             };
             header?: never;
             path?: never;
@@ -140865,7 +140868,10 @@ export interface operations {
     };
     trigger_evolution_analysis_api_evolution_analyze_post: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Required (#17758): the code source this result belongs to */
+                source_id: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
