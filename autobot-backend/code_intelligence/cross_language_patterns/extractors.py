@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Pattern, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.vue_sfc import VUE_SCRIPT_RE
 
 from .models import CrossLangPatternCategory, CrossLangPatternType, PatternLocation
 
@@ -49,11 +50,7 @@ _TS_ZOD_RE: Pattern = re.compile(r"z\.(?:object|string|number|boolean|array)\s*\
 
 # Vue patterns (#1721: hardened against bad-tag-filter bypass)
 # #1733: ReDoS fix - replaced nested quantifier ([^<]*(?:...[^<]*)*)  with [\s\S]*?
-# #5695: \s* before > to match closing tags with trailing whitespace (bad-tag-filter)
-_VUE_SCRIPT_RE: Pattern = re.compile(
-    r"<script[^>]*>([\s\S]*?)</script\s*>",
-    re.IGNORECASE,
-)
+# #21641: the <script> extractor lives in autobot_shared.vue_sfc (VUE_SCRIPT_RE)
 _VUE_TEMPLATE_RE: Pattern = re.compile(
     r"<template>([\s\S]*?)</template>",
     re.IGNORECASE,
@@ -435,7 +432,7 @@ class TypeScriptPatternExtractor(BasePatternExtractor):
 
         # For Vue files, extract script section first
         if file_path.suffix.lower() == ".vue":
-            script_match = _VUE_SCRIPT_RE.search(self.source_code)
+            script_match = VUE_SCRIPT_RE.search(self.source_code)
             if script_match:
                 script_content = script_match.group(1)
                 # Temporarily replace source for extraction

@@ -28,6 +28,7 @@ from typing import Any, Dict, List
 import aiofiles
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.vue_sfc import VUE_SCRIPT_RE
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base_or_none
@@ -49,11 +50,7 @@ _VUE_TEMPLATE_RE = re.compile(
     re.IGNORECASE,
 )
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
-# #5695: \s* before > to match closing tags with trailing whitespace (bad-tag-filter)
-_VUE_SCRIPT_RE = re.compile(
-    r"<script[^>]*>([\s\S]*?)</script\s*>",
-    re.IGNORECASE,
-)
+# #21641: the <script> extractor lives in autobot_shared.vue_sfc (VUE_SCRIPT_RE)
 # #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
 _VUE_STYLE_RE = re.compile(
     r"<style[^>]*>([\s\S]*?)</style>",
@@ -321,7 +318,7 @@ class CodeChunker:
         """Chunk Vue files by template, script, and style sections."""
         chunks = []
         template_match = _VUE_TEMPLATE_RE.search(content)
-        script_match = _VUE_SCRIPT_RE.search(content)
+        script_match = VUE_SCRIPT_RE.search(content)
         style_match = _VUE_STYLE_RE.search(content)
 
         if template_match:
