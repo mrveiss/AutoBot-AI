@@ -31,6 +31,7 @@ Issue: #751 - Consolidate Common Utilities
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from typing import Any, Dict
@@ -219,6 +220,12 @@ class ConfigRegistry:
             if cls._redis_client is not None:
                 return cls._redis_client
             if time.monotonic() < cls._redis_retry_after:
+                return None
+
+            # #20008: reached while redis_client is itself importing (its loggers load this package), so
+            # importing it here would fail partway. Same outcome as below, without the loop.
+            loading = sys.modules.get("autobot_shared.redis_client")
+            if loading is not None and not hasattr(loading, "get_redis_client"):
                 return None
 
             try:

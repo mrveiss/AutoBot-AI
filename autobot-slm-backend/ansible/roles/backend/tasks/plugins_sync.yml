@@ -17,7 +17,10 @@
     src: "{{ code_source_dir }}/plugins/"
     dest: "{{ backend_code_dir }}/plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
-  notify: restart backend
+  # Templated so an update play that restarts explicitly can opt out of the
+  # handler (handlers ignore tags); provisioning keeps the default (#18324).
+  notify: "{{ [] if not (backend_plugins_sync_notify_restart | default(true) | bool) else ['restart backend'] }}"
   tags: ['backend', 'deploy']

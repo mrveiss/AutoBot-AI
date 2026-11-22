@@ -38,6 +38,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint import _parse_cache as parse_cache
+
 _ROOT = repo_root()
 _ANSIBLE = _ROOT / "autobot-slm-backend" / "ansible"
 _BUILDER = _ROOT / "autobot-slm-backend/services/inventory_builder.py"
@@ -69,7 +71,7 @@ def test_every_network_definition_refuses_instead_of_falling_back() -> None:
 
 def test_the_slm_generated_inventory_refuses_too() -> None:
     """inventory_builder.py builds both values through one helper; it must end in a refusal."""
-    tree = ast.parse(_BUILDER.read_text(encoding="utf-8"))
+    tree = parse_cache.parse(_BUILDER.read_text(encoding="utf-8"))
     helper = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_secrets_lookup")
     body = ast.unparse(helper)
     assert "undef(hint=" in body and "0.0.0.0" not in body and "or ''" not in body
@@ -184,12 +186,12 @@ def _compose_hosts() -> dict[str, int]:
 def test_the_management_network_has_no_built_in_range() -> None:
     subnet = _compose()["networks"]["autobot-mgmt"]["ipam"]["config"][0]["subnet"]
     assert subnet.startswith("${AUTOBOT_DOCKER_MGMT_PREFIX:?") and subnet.endswith("}.0/24"), subnet
-    assert len(_compose_hosts()) == 8
+    assert len(_compose_hosts()) == 9  # +1: autobot-slm-postgres (.18), #20639
     assert "172.30." not in (_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
 
 def test_compose_fleet_host_numbers_match_compose() -> None:
-    tree = ast.parse((_ROOT / "autobot-slm-backend/services/compose_fleet.py").read_text(encoding="utf-8"))
+    tree = parse_cache.parse((_ROOT / "autobot-slm-backend/services/compose_fleet.py").read_text(encoding="utf-8"))
     fleet = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Dict):

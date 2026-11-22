@@ -7,7 +7,7 @@
 Shell had no size gate at all before this. These tests hold the three things
 that make the gate real rather than decorative:
 
-1. the two copies of the ceilings agree, so a shrink cannot be un-shrunk;
+1. the ceilings are one table, checked against the base commit's (#19544);
 2. the ratchet's three-way verdict is enforced, including the branch that looks
    wrong -- a file UNDER its ceiling is a failure until the ceiling is lowered;
 3. the walk actually reaches the tree, so a clean run means "looked and found
@@ -21,8 +21,7 @@ import importlib.util
 import pytest
 import yaml
 from repo_tests._paths import repo_root
-from repo_tests._ratchet_base import base_table, raised_entries
-from repo_tests.shell_file_size_ratchet_baseline import RATCHET_BASELINE
+from repo_tests._ratchet_base import base_table, growth_over_base, raised_entries
 
 #: Asks git first, so a worktree resolves to its own tree (#15925). Deriving it
 #: from __file__ here would answer confidently and wrongly under a nested
@@ -44,8 +43,7 @@ def _prefixes_from_exclude(pattern: str) -> set[str]:
     return {alt.replace("\\", "") for alt in body.split("|") if alt}
 
 
-@pytest.fixture(scope="module")
-def hook():
+def _load_hook():
     """Load the hook by path — scripts/ is not an importable package."""
     spec = importlib.util.spec_from_file_location("_check_shell_file_size", HOOK_PATH)
     module = importlib.util.module_from_spec(spec)
@@ -53,39 +51,15 @@ def hook():
     return module
 
 
-# Equality of this gate's two ceiling records moved to
-# ``ceiling_record_parity_17872_test.py``, which asserts it for BOTH gates and adds what
-# the assertion here lacked: a reach check (two empty records are equal), a message naming
-# both values and neither direction, and the per-key mismatch. The sentence worth keeping
-# -- the gap between a lowered hook and an unlowered mirror is exactly the lines just cut,
-# and it is spendable -- moved into that file's failure message with it (#17872). Removed
-# rather than left duplicated: two records of one check is the shape that issue is about.
+@pytest.fixture(scope="module")
+def hook():
+    return _load_hook()
 
 
-def test_no_ceiling_exceeds_its_recorded_baseline(hook):
-    """The ratchet turns one way. This is the direction check, stated separately."""
-    raised = {
-        rel: (ceiling, RATCHET_BASELINE[rel])
-        for rel, ceiling in hook.KNOWN_LARGE.items()
-        if rel in RATCHET_BASELINE and ceiling > RATCHET_BASELINE[rel]
-    }
-    assert not raised, f"ceilings raised above their baseline (never allowed): {raised}"
-
-
-def test_every_grandfathered_file_is_at_its_ceiling(hook):
-    """Each entry names a real file whose measured size equals its ceiling."""
-    wrong: dict[str, str] = {}
-    for rel, ceiling in hook.KNOWN_LARGE.items():
-        path = REPO_ROOT / rel
-        if not path.is_file():
-            wrong[rel] = "no such file — remove the entry from both copies"
-            continue
-        measured = hook.count_lines(path)
-        if measured is None:
-            wrong[rel] = "could not be read, so it was never measured"
-        elif measured != ceiling:
-            wrong[rel] = f"measured {measured}, ceiling {ceiling}"
-    assert not wrong, f"grandfathered entries out of step with the files: {wrong}"
+def test_no_grandfathered_file_grows_past_the_base(hook):
+    """lines(F@HEAD) <= min(ceiling, lines(F@base)) for every entry; a file new at the base is blocked (#19673)."""
+    found = growth_over_base(REPO_ROOT, dict(hook.KNOWN_LARGE))
+    assert found == {}, f"grandfathered files grew, or are new, against the merge base: {found}"
 
 
 def test_no_unlisted_shell_file_is_oversized(hook):
@@ -158,31 +132,35 @@ def test_the_infrastructure_tree_is_in_scope(hook):
     assert infra, "the walk found no autobot-infrastructure/ shell files at all — scope has regressed"
 
 
-#: install.sh's ceiling, read from the baseline rather than written as a
+#: install.sh's ceiling, read from the table rather than written as a
 #: literal. A literal here is how the first version of this test came to assert
 #: that 900 lines was ABOVE a ceiling of 1265 -- the parametrisation has to move
 #: when the ceiling is lowered, and only a derived value does that.
-_CEILING = RATCHET_BASELINE["install.sh"]
+_CEILING = _load_hook().KNOWN_LARGE["install.sh"]
 
 
 @pytest.mark.parametrize(
     ("measured", "expect"),
     [
         (_CEILING + 1, "may not grow"),
-        (_CEILING - 1, "Lower the ceiling"),
         (500, "within the"),
     ],
 )
 def test_the_three_way_verdict(hook, measured, expect):
-    """Over, under and compliant are all failures, each with its own instruction."""
+    """Over and compliant are failures, each with its own instruction; under passes (#19673)."""
     message = hook.verdict("install.sh", measured)
     assert message is not None, f"{measured} lines against a ceiling of {_CEILING} must not pass silently"
     assert expect in message, f"expected {expect!r} in: {message}"
 
 
+def test_a_file_under_its_ceiling_passes(hook):
+    """A shrink needs no table edit (#19673); the merge-base gate bounds it instead."""
+    assert hook.verdict("install.sh", max(_CEILING - 1, hook.MAX_LINES + 1)) is None  # above the limit: a real shrink
+
+
 def test_a_file_at_its_exact_ceiling_passes(hook):
     """The ratchet freezes a size; it does not demand a shrink on every commit."""
-    assert hook.verdict("install.sh", RATCHET_BASELINE["install.sh"]) is None
+    assert hook.verdict("install.sh", hook.KNOWN_LARGE["install.sh"]) is None
 
 
 def test_an_unlisted_compliant_file_passes(hook):

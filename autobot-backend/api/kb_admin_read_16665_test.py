@@ -7,13 +7,13 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_mcp
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, FakeKB, text_of
+from knowledge.read_path_fakes_16665 import PRIVATE_A, PRIVATE_B, SHARED, FakeKB, text_of
 from knowledge.schemas.mcp import KnowledgeSearchRequest
 from knowledge.search_filters import filter_for_caller, filter_for_user_id
 
@@ -50,10 +50,12 @@ async def test_a_non_admin_is_scoped_and_never_audited_as_admin(audit):
 
 
 @pytest.mark.asyncio
-async def test_an_admin_read_is_withheld_when_the_audit_trail_cannot_record_it():
+async def test_an_admin_read_is_refused_with_503_when_the_audit_trail_cannot_record_it():
     kb = FakeKB()
     with patch("services.audit_logger.audit_log", new=AsyncMock(side_effect=RuntimeError("down"))):
-        assert await filter_for_caller(await kb.search(), kb, ADMIN) == []
+        with pytest.raises(HTTPException) as refused:
+            await filter_for_caller(await kb.search(), kb, ADMIN)
+    assert refused.value.status_code == 503  # not an empty 200 that reads as "no facts" (#19860)
 
 
 @pytest.mark.asyncio
@@ -129,3 +131,41 @@ async def test_the_claim_verifier_cache_does_not_share_a_partition_between_admin
         verifier._build_cache_key(claim, "root"),
     }
     assert len(keys) == 2  # admin partition differs; a scoped reader and a bare id share one on purpose
+
+
+def _mcp_reads():
+    return {
+        "summarize": lambda u: knowledge_mcp.mcp_summarize_knowledge_topic({"topic": "t"}, u),
+        "vector": lambda u: knowledge_mcp.mcp_vector_similarity_search({"query": "q", "threshold": 0.1}, u),
+        "qa": lambda u: knowledge_mcp.mcp_langchain_qa_chain({"question": "q", "context_size": 5}, u),
+        "resource": lambda u: knowledge_mcp.read_kb_resource({"uri": "kb://doc/f-a"}, u),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["vector", "resource"])
+async def test_plain_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
+    read = _mcp_reads()[tool]
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
+        patch.object(knowledge_mcp, "_get_chat_ollama", return_value=None),
+    ):
+        as_admin, as_bob = text_of(await read(ADMIN)), text_of(await read(BOB))
+
+    assert PRIVATE_A in as_admin and PRIVATE_A not in as_bob
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["summarize", "qa"])
+async def test_prompt_feeding_mcp_tool_gives_an_admin_no_cross_user_fact(tool, audit):
+    """Owner 2026-11-21: summarize and qa feed a prompt, so an admin reads by the normal rules (no bypass)."""
+    read = _mcp_reads()[tool]
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
+        patch.object(knowledge_mcp, "_get_chat_ollama", return_value=None),
+    ):
+        as_admin = text_of(await read(ADMIN))
+
+    assert SHARED in as_admin, "the system fact still reads, so an error or empty result cannot pass"
+    assert PRIVATE_A not in as_admin and PRIVATE_B not in as_admin
+    audit.assert_not_awaited()

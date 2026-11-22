@@ -177,6 +177,33 @@ describe('usePollingJob', () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
+  // #21474: an async caller resuming after its component unmounted used to start an interval that
+  // nothing owned any more, polling forever. Pre-fix: isPolling true and the fetcher called 11 times.
+  it('refuses a start() after the owning scope is disposed: no tick, no interval', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ status: 'PENDING' })
+    const scope = effectScope()
+    const handle = scope.run(() => usePollingJob(fetcher, { intervalMs: 50 }))!
+    scope.stop()
+
+    handle.start('task-after-dispose')
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(handle.isPolling.value).toBe(false)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('a poller created outside any scope still starts (it has no owner to outlive)', async () => {
+    const fetcher = vi.fn().mockResolvedValue({ status: 'PENDING' })
+    const handle = usePollingJob(fetcher, { intervalMs: 50 })
+
+    handle.start('task-unscoped')
+    await vi.advanceTimersByTimeAsync(120)
+
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    handle.stop()
+  })
+
   it('last-caller-wins: restart with new taskId abandons in-flight old tick', async () => {
     let resolveFirst: (v: { status: string; which: string }) => void = () => {}
     const firstPromise = new Promise<{ status: string; which: string }>((r) => {
@@ -285,6 +312,51 @@ describe('usePollingJob', () => {
 
     await vi.advanceTimersByTimeAsync(500)
     expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('a restart with the same taskId drops the tick still in flight (#19482)', async () => {
+    let release: (v: string) => void = () => {}
+    const fetcher = vi.fn()
+      .mockImplementationOnce(() => new Promise<string>((res) => { release = res }))
+      .mockResolvedValue('fresh')
+    const { start, data } = usePollingJob(fetcher, { intervalMs: 1000 })
+
+    start('')
+    start('') // e.g. a Refresh while the first tick is still running
+    await vi.advanceTimersByTimeAsync(0)
+    release('stale')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(data.value).toBe('fresh')
+  })
+
+  it('flags pausedOnErrors only for an errors stop, and start() clears it (#19482)', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('down'))
+    const { start, stop, pausedOnErrors } = usePollingJob(fetcher, { intervalMs: 100, consecutiveErrorLimit: 2 })
+
+    start('')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pausedOnErrors.value).toBe(false)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(pausedOnErrors.value).toBe(true)
+
+    fetcher.mockResolvedValue({ ok: true })
+    start('')
+    expect(pausedOnErrors.value).toBe(false)
+
+    // A deliberate stop right after a failed tick is not a pause.
+    fetcher.mockRejectedValueOnce(new Error('blip'))
+    start('')
+    await vi.advanceTimersByTimeAsync(0)
+    stop()
+    expect(pausedOnErrors.value).toBe(false)
+
+    // A deliberate stop after an errors pause clears the flag too.
+    fetcher.mockRejectedValue(new Error('down'))
+    start('')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(pausedOnErrors.value).toBe(true)
+    stop()
+    expect(pausedOnErrors.value).toBe(false)
   })
 
   it('resets consecutive error count on success (circuit-breaker survives recovery)', async () => {

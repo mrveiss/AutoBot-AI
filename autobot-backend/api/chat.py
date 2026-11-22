@@ -32,7 +32,15 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
-from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, principal_scope
+from api.chat_streaming import (
+    _stream_chat_workflow_messages,
+    _stream_direct_response,
+    _stream_graph_resume,
+    attach_scope,
+    principal_scope,
+    resume_attachment_verdict,
+    resume_decision,
+)
 from api.schemas_chat import (
     ChatCapabilitiesData,
     ChatData,
@@ -56,12 +64,14 @@ from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.time_utils import utc_timestamp
-from chat_history.deduplication import parse_message_timestamp
+from chat_history.deduplication import parse_message_timestamp, timestamp_sort_key
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
 from chat_history.overflow_integration import create_summary_message, handle_message_completion
+from chat_history.session_merge import dropped_keys
 from chat_workflow.session_work_item import SessionWorkItemService
+from chat_workflow.stall_pending import guarded_resume
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -71,11 +81,13 @@ from dependencies import provide_config_manager, provide_knowledge_base
 from exceptions import get_exceptions_lazy
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_filters import filter_for_user_id
+from llm_shared.run_credentials import llm_principal_scope_for
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.chat_message_safety import scan_chat_message
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from services.chat_budget_gate import budget_refusal_reply
 from services.llm_service import get_llm_service  # process-wide singleton (#18689)
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
@@ -313,7 +325,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
-from api.chat_sessions import log_request_context
+from api.chat_sessions import list_user_sessions, log_request_context
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -593,17 +605,8 @@ async def _generate_ai_response(
     Issue #9017: reasoning_effort threaded to provider via metadata["api_kwargs"].
     Issue #11585: model/provider threaded into registry resolution.
 
-    Args:
-        llm_service: LLM service instance
-        llm_context: Context messages for LLM
-        session_id: Session ID
-        request_id: Request ID
-        reasoning_effort: Optional effort level; None/'auto' → no change (#9017)
-        model: Optional per-request model override (#11585)
-        provider: Optional per-request provider override (#11585)
-
-    Returns:
-        Tuple of (AI response dict with content and role, LLMResponse object or None)
+    Returns ``(AI response dict, LLMResponse or None)``. A budget refusal (#16845) is returned as the
+    reply so the user reads why; any other error becomes a generic retry message.
     """
     try:
         # #11585: conversation_id lets the registry apply the per-conversation
@@ -620,6 +623,8 @@ async def _generate_ai_response(
             request_id=request_id,
             **extra_kwargs,
         )
+        if (refusal := budget_refusal_reply(response)) is not None:  # the user sees why (#16845)
+            return refusal, None
         if response.error:
             logger.warning("LLM returned error for request %s: %s", request_id, response.error)
             return {
@@ -949,7 +954,7 @@ async def list_chats(
     request: Request = None,
 ):
     """
-    List all available chat sessions with improved error handling (consolidated).
+    List the caller's own chat sessions (consolidated; same listing as GET /chat/sessions).
 
     Issue #744: Requires authenticated user.
     """
@@ -969,9 +974,8 @@ async def list_chats(
             details={"component": "chat_history_manager"},
         )
 
-    # Get sessions directly - decorator handles all errors
-    # list_sessions_fast is async (uses asyncio.to_thread internally)
-    sessions = await chat_history_manager.list_sessions_fast()
+    # #21664: the caller's own sessions through the one shared listing, never the instance-wide list
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
     return create_chat_response(
         data=sessions,
         message="Chat sessions retrieved successfully",
@@ -1024,19 +1028,20 @@ async def send_message(
     # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
     chat_timeout = float(config.chat_timeout)
     try:
-        response_data = await asyncio.wait_for(
-            process_chat_message(
-                message,
-                chat_history_manager,
-                llm_service,
-                memory_interface,
-                knowledge_base,
-                config,
-                request_id,
-                author_id=author_id,
-            ),
-            timeout=chat_timeout,
-        )
+        with llm_principal_scope_for(current_user):  # the budget gate and spend attribution name this user (#16845)
+            response_data = await asyncio.wait_for(
+                process_chat_message(
+                    message,
+                    chat_history_manager,
+                    llm_service,
+                    memory_interface,
+                    knowledge_base,
+                    config,
+                    request_id,
+                    author_id=author_id,
+                ),
+                timeout=chat_timeout,
+            )
     except asyncio.TimeoutError:
         logger.error(
             "[%s] Chat message processing timed out after %.1fs",
@@ -1158,7 +1163,7 @@ async def set_session_work_item(
     caller name another company's work item and have its goal titles rendered
     into their own prompt.
     """
-    from llc.services.work_item_service import WorkItemService
+    from llc.services.accessors import get_work_item_service
     from user_management.database import get_async_session_factory
 
     await validate_chat_ownership(session_id, request)  # SECURITY: caller must own the session
@@ -1175,7 +1180,7 @@ async def set_session_work_item(
     async with factory() as db:
         # SECURITY: company-scoped fetch — a work item owned by another company
         # is indistinguishable from one that does not exist.
-        item = await WorkItemService().get(db, work_item_id, company_id=str(ctx.org_id))
+        item = await get_work_item_service().get(db, work_item_id, company_id=str(ctx.org_id))
         if item is None:
             raise HTTPException(status_code=404, detail="Work item not found")
 
@@ -1540,36 +1545,9 @@ async def send_chat_message_by_id(
             # request_data — `context` above is the caller's own bag and is
             # explicitly not trusted for this.
             auth_role=(current_user or {}).get("role"),
-            auth_scope=principal_scope(current_user),  # #18430: the AI lines' scope, server-verified
+            auth_scope=await attach_scope(current_user, chat_id, request, context),  # #18430/#20195: verified
         )
     )
-
-
-async def _stream_graph_resume(
-    chat_workflow_manager,
-    chat_id: str,
-    decision: dict,
-    request_id: str,
-):
-    """Stream graph resume after command approval interrupt (#1043)."""
-    try:
-        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-        async for msg in chat_workflow_manager.resume_graph(session_id=chat_id, decision=decision):
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        yield (f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n")
-
-    except Exception as e:
-        logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
-        evt = {
-            "type": "error",
-            "content": "An internal error occurred",
-            "request_id": request_id,
-        }
-        yield f"data: {json.dumps(evt)}\n\n"
 
 
 @router.post("/chats/{chat_id}/resume", response_model=None)  # StreamingResponse — no Pydantic schema
@@ -1593,26 +1571,23 @@ async def resume_chat_graph(
     Body:
         approved (bool): Whether the command was approved
         reason (str, optional): Reason for denial
+        answer (str, optional): The answer to a stall question the graph asked (#21022)
     """
     request_id = generate_request_id()
     log_request_context(request, "resume_chat_graph", request_id)
 
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_workflow_manager(chat_workflow_manager)
+    decision = resume_decision(request_data, chat_id)
+    strict = await resume_attachment_verdict(chat_workflow_manager, chat_id, current_user, request)  # #21939
 
-    decision = {
-        "approved": request_data.get("approved", False),
-        "reason": scan_chat_message(request_data.get("reason", ""), chat_id),  # #16561
-    }
-
-    return _create_streaming_response(
-        _stream_graph_resume(
-            chat_workflow_manager,
-            chat_id,
-            decision,
-            request_id,
+    async def _open():  # #21022
+        # auth_scope: the budget gate names this user (#16845, #19241)
+        return _stream_graph_resume(
+            chat_workflow_manager, chat_id, decision, request_id, strict, auth_scope=principal_scope(current_user)
         )
-    )
+
+    return _create_streaming_response(await guarded_resume(chat_id, request_data, chat_workflow_manager, _open))
 
 
 async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
@@ -1654,7 +1629,7 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
     final_merged = _process_streaming_groups(merged)
 
     # Sort by timestamp to maintain chronological order
-    final_merged.sort(key=lambda m: m.get("timestamp", ""))
+    final_merged.sort(key=timestamp_sort_key)  # #21846: old and new timestamp formats order together
 
     logger.debug(
         f"Merged messages: {len(existing)} existing + {len(new)} new = "
@@ -1666,50 +1641,47 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
 
 async def _merge_chat_messages(
     chat_history_manager, chat_id: str, new_messages: List[Dict], request_id: str
-) -> List[Dict]:
+) -> tuple[List[Dict], frozenset]:
     """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted).
+
+    Returns the merged list and the keys of the stored messages it dropped (#20862).
 
     Issue #1797: Granular exception mapping for session load failures.
     """
     try:
         existing_messages = await chat_history_manager.load_session(chat_id)
         merged_messages = await merge_messages(existing_messages, new_messages)
-        logger.info(
-            "[%s] Merged %d existing + %d new = %d total messages",
-            request_id,
-            len(existing_messages),
-            len(new_messages),
-            len(merged_messages),
-        )
-        return merged_messages
+        counts = (len(existing_messages), len(new_messages), len(merged_messages))
+        logger.info("[%s] Merged %d existing + %d new = %d total messages", request_id, *counts)
+        return merged_messages, dropped_keys(existing_messages, merged_messages)
     except FileNotFoundError:
         logger.warning(
             "[%s] Session file not found for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except PermissionError:
         logger.warning(
             "[%s] Unable to access chat session %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except ValueError:
         logger.warning(
             "[%s] Chat session data is corrupted for %s, using new messages",
             request_id,
             chat_id,
         )
-        return new_messages
+        return new_messages, frozenset()
     except Exception as merge_error:
         logger.warning(
             "[%s] Message merge failed, using new messages only: %s",
             request_id,
             merge_error,
         )
-        return new_messages
+        return new_messages, frozenset()
 
 
 async def _durable_owner_metadata(chat_history_manager, session_id: str, ownership: "dict | None") -> dict | None:
@@ -1767,7 +1739,7 @@ async def save_chat_by_id(
         )
 
     save_data = request_data.get("data", {})
-    merged_messages = await _merge_chat_messages(
+    merged_messages, discard = await _merge_chat_messages(
         chat_history_manager, chat_id, save_data.get("messages", []), request_id
     )
 
@@ -1776,6 +1748,7 @@ async def save_chat_by_id(
         messages=merged_messages,
         name=save_data.get("name", ""),
         metadata=await _durable_owner_metadata(chat_history_manager, chat_id, ownership),
+        discard=discard,
     )
 
     return JSONResponse(
@@ -2616,38 +2589,20 @@ async def summarize_conversation(
     if not messages_to_summarize:
         raise HTTPException(status_code=404, detail="No messages found with the provided IDs")
 
-    # Build prompt for summarization
-    conversation_text = "\n\n".join(
-        [f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in messages_to_summarize]
-    )
-
-    summarization_prompt = f"""Summarize the following conversation segment concisely.
-Preserve key context, decisions, and technical details that would be needed to continue the conversation naturally.
-
-Target length: approximately {body.target_length or 500} tokens.
-
-Conversation:
-{conversation_text}
-
-Summary:"""
-
-    # Get LLM service and generate summary
-    llm_service = get_llm_service()
+    # #20852: the one summariser every caller uses, on the configured model.
+    from chat_history.context_overflow import ConversationSummarizer
+    from chat_history.summarization_prompt import SUMMARIZER_DEFAULT_MAX_TOKENS
 
     try:
-        summary_response = await llm_service.generate_response(
-            messages=[{"role": "user", "content": summarization_prompt}],
-            model="gpt-4o-mini",  # Fast, cheap model for summarization
-            max_tokens=body.target_length or 500,
-            temperature=0.3,  # Lower temperature for focused summarization
+        summary = await ConversationSummarizer().summarize_with_usage(
+            messages_to_summarize,
+            provide_config_manager().get_selected_model(),
+            max_tokens=body.target_length or SUMMARIZER_DEFAULT_MAX_TOKENS,
         )
-
-        summary_text = summary_response.get("content", "")
-        summary_tokens = summary_response.get("usage", {}).get("total_tokens", 0)
-
     except Exception as e:
         logger.exception("[%s] Failed to generate summary", request_id)
         raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
+    summary_text, summary_tokens = summary.text, summary.total_tokens  # provider usage when reported
 
     result_data = ConversationSummarizeData(
         summary=summary_text,

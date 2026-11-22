@@ -15,12 +15,12 @@
  * Issue #729 - Integrated monitoring into SLM.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { ref, onMounted } from 'vue'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { GPUNodeStatus } from '@/types/slm'
-import { useMetricsSummary } from '@autobot/ui'
+import { HttpError, useMetricsSummary, createLogger } from '@autobot/ui'
 // Types and the pure summary helper live in fleetMetricsModel.ts (#18225).
 import { summariseGpus } from './fleetMetricsModel'
 import type {
@@ -34,7 +34,7 @@ import type {
   MonitoringAlertsWire,
   NpuNodesWire,
 } from './fleetMetricsModel'
-// Metric shapes shared with autobot-frontend's useInstallMetrics.ts — see the kit
+// Metric shapes shared with useInstallMetricsApi.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
 // directly in this file), so it is re-exported but not locally imported —
@@ -125,7 +125,6 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
   const lastUpdate = ref<Date | null>(null)
   const isConnected = ref(false)
 
-  let pollingInterval: ReturnType<typeof setInterval> | null = null
 
   // ===== Computed Values =====
 
@@ -190,7 +189,7 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
     }
   }
 
-  async function fetchAlerts(): Promise<void> {
+  async function fetchAlerts(): Promise<boolean> {
     try {
       const data = await slmApiClient.get<MonitoringAlertsWire>('/monitoring/alerts', POLL_OPTS)
       alerts.value = {
@@ -212,8 +211,10 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
         }) as PerformanceAlert[],
       }
       error.value = null
+      return true
     } catch (err) {
       logger.error('Failed to fetch alerts:', err)
+      return false
     }
   }
 
@@ -289,17 +290,19 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
 
   // ===== New Metrics Methods (Issue #896) =====
 
-  async function fetchFleetMetrics(): Promise<void> {
+  async function fetchFleetMetrics(): Promise<boolean> {
     try {
       fleetMetrics.value = await slmApiClient.get<FleetMetricsDetailed>(
         '/monitoring/metrics/fleet',
         POLL_OPTS
       )
       error.value = null
+      return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch fleet metrics'
       logger.error('Failed to fetch fleet metrics:', err)
       error.value = message
+      return false
     }
   }
 
@@ -318,31 +321,35 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
     }
   }
 
-  async function fetchPerformanceOverview(): Promise<void> {
+  async function fetchPerformanceOverview(): Promise<boolean> {
     try {
       performanceOverview.value = await slmApiClient.get<PerformanceOverview>(
         '/performance/overview',
         POLL_OPTS
       )
       error.value = null
+      return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch performance overview'
       logger.error('Failed to fetch performance overview:', err)
       error.value = message
+      return false
     }
   }
 
-  async function fetchNPUFleetMetrics(): Promise<void> {
+  async function fetchNPUFleetMetrics(): Promise<boolean> {
     try {
       npuFleetMetrics.value = await slmApiClient.get<NPUFleetMetrics>(
         '/npu/metrics',
         POLL_OPTS
       )
       error.value = null
+      return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch NPU fleet metrics'
       logger.error('Failed to fetch NPU fleet metrics:', err)
       error.value = message
+      return false
     }
   }
 
@@ -358,7 +365,7 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
         prometheusExport.value = await response.text()
         error.value = null
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Prometheus export'
@@ -367,15 +374,17 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
     }
   }
 
-  async function refreshMetrics(): Promise<void> {
+  /** Resolves false when every read failed, so a poller counts the tick as a failure (#19482). */
+  async function refreshMetrics(): Promise<boolean> {
     isLoading.value = true
     try {
-      await Promise.all([
+      const results = await Promise.all([
         fetchFleetMetrics(),
         fetchPerformanceOverview(),
         fetchNPUFleetMetrics(),
       ])
       lastUpdate.value = new Date()
+      return results.some(Boolean)
     } finally {
       isLoading.value = false
     }
@@ -383,16 +392,24 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
 
   // ===== Polling Methods =====
 
+  // #19482: the shared dashboard policy (stops with the owning scope and after repeated
+  // failures; the view shows PollingPausedAlert and Retry calls `poller.start('')`).
+  // fetchDashboard is the only writer of isConnected, so it decides whether a tick failed.
+  const poller = useDashboardPoller(async () => {
+    await fetchAll()
+    throwUnlessLoaded(isConnected.value)
+  }, pollInterval)
+
+  /** Start polling; its first tick is a full fetchAll. */
   function startPolling(): void {
-    if (pollingInterval) return
+    if (poller.isPolling.value) return
     logger.debug(`Starting polling with interval: ${pollInterval}ms`)
-    pollingInterval = setInterval(fetchAll, pollInterval)
+    poller.start('')
   }
 
   function stopPolling(): void {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
+    if (poller.isPolling.value) {
+      poller.stop()
       logger.debug('Polling stopped')
     }
   }
@@ -409,16 +426,13 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
   // ===== Lifecycle =====
 
   onMounted(() => {
-    if (autoFetch) {
+    if (pollInterval > 0) {
+      // The poller's first tick is the fetchAll. A caller that sets autoFetch off owns its
+      // own reads (and its own poller), so it is not polled behind its back.
+      if (autoFetch) startPolling()
+    } else if (autoFetch) {
       fetchAll()
     }
-    if (pollInterval > 0) {
-      startPolling()
-    }
-  })
-
-  onUnmounted(() => {
-    stopPolling()
   })
 
   return {
@@ -455,6 +469,7 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
     fetchNPUDetails,
     fetchAll,
     startPolling,
+    poller,
     stopPolling,
     connectWebSocket,
     disconnectWebSocket,

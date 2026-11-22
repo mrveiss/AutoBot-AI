@@ -348,6 +348,7 @@
       register: _report_result
       ignore_errors: true
       when: _key_gen is not skipped
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Node [{{ inventory_hostname }}] | Clean up temp files on SLM"
       ansible.builtin.file:

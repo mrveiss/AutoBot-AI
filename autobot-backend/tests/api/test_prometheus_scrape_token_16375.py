@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 import api.prometheus_endpoint as endpoint
 import monitoring.prometheus_scrape_auth as scrape_auth
+from autobot_shared.security import constant_time
 
 _TOKEN = "scrape-token-for-tests-0123456789"  # nosec B105  # test fixture, not a credential
 _PATH = "/api/metrics/prometheus"
@@ -66,8 +67,8 @@ def test_an_unset_server_token_refuses_even_an_empty_credential(client, monkeypa
 
 def test_the_compare_is_constant_time(monkeypatch) -> None:
     calls = []
-    real = scrape_auth.secrets.compare_digest
-    monkeypatch.setattr(scrape_auth.secrets, "compare_digest", lambda a, b: calls.append(1) or real(a, b))
+    real = constant_time.hmac.compare_digest
+    monkeypatch.setattr(constant_time.hmac, "compare_digest", lambda a, b: calls.append(1) or real(a, b))
     monkeypatch.setattr(scrape_auth.ssot_config.misc, "prometheus_scrape_token", _TOKEN)
     assert scrape_auth.scrape_token_matches(_TOKEN)
     assert calls == [1]

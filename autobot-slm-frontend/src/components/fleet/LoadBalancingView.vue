@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch } from '@autobot/ui'
+import { BaseAlert, BaseSwitch, PollingPausedAlert, useToast, createLogger } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -16,10 +16,10 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  * Related to Issue #590 (NPU Dashboard Improvements).
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import type {
   NPULoadBalancingConfig,
   NPUFleetMetrics,
@@ -30,6 +30,7 @@ const logger = createLogger('LoadBalancingView')
 
 const fleetStore = useFleetStore()
 const { t } = useI18n()
+const { showToast } = useToast()
 
 // ============================================================
 // State
@@ -38,9 +39,8 @@ const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
-const notification = ref<string | null>(null)
 const autoRebalance = ref(false)
-const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+const REFRESH_INTERVAL_MS = 10_000
 
 const selectedStrategy = ref<NPULoadBalancingConfig['strategy']>('round-robin')
 
@@ -115,11 +115,11 @@ function getWorkerConfig(nodeId: string) {
  * Return the bar color class based on queue depth relative to max.
  */
 function queueBarColor(queueDepth: number): string {
-  if (maxQueueDepth.value === 0) return 'bg-green-500'
+  if (maxQueueDepth.value === 0) return 'bg-autobot-dot-ok'
   const ratio = queueDepth / maxQueueDepth.value
-  if (ratio > 0.7) return 'bg-red-500'
-  if (ratio >= 0.3) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (ratio > 0.7) return 'bg-autobot-dot-bad'
+  if (ratio >= 0.3) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 }
 
 /**
@@ -134,19 +134,9 @@ function queueBarWidth(queueDepth: number): number {
  * Return the utilization bar color class.
  */
 function utilizationColor(utilization: number): string {
-  if (utilization >= 80) return 'bg-red-500'
-  if (utilization >= 60) return 'bg-yellow-500'
-  return 'bg-green-500'
-}
-
-/**
- * Show a temporary notification message.
- */
-function showNotification(message: string): void {
-  notification.value = message
-  setTimeout(() => {
-    notification.value = null
-  }, 4000)
+  if (utilization >= 80) return 'bg-autobot-dot-bad'
+  if (utilization >= 60) return 'bg-autobot-dot-warn'
+  return 'bg-autobot-dot-ok'
 }
 
 // ============================================================
@@ -155,6 +145,8 @@ function showNotification(message: string): void {
 
 /**
  * Load all data: fleet metrics, load balancing config, worker configs.
+ * The poller's tick follows the dashboard (nodes) read: only fetchNodes throws, the store's
+ * NPU fetches swallow their errors, so an NPU-only outage does not pause the poller.
  */
 async function refreshData(): Promise<void> {
   loading.value = true
@@ -174,9 +166,13 @@ async function refreshData(): Promise<void> {
 
     // Fetch per-worker configs for priority/weight display
     const nodeMetrics = fleetMetrics.value?.node_metrics ?? []
-    await Promise.all(
+    // One node's failed config read is logged and does not hide the others' (the store rethrows it).
+    const results = await Promise.allSettled(
       nodeMetrics.map(m => fleetStore.fetchNpuWorkerConfig(m.node_id))
     )
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') logger.warn(`Worker config load failed for ${nodeMetrics[i].node_id}`, r.reason)
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToLoadData')
     error.value = msg
@@ -199,7 +195,7 @@ async function saveStrategy(): Promise<void> {
       modelAffinity: currentConfig.value?.modelAffinity ?? {},
     }
     await fleetStore.updateNpuLoadBalancing(config)
-    showNotification(t('fleet.loadBalancingView.strategyUpdated'))
+    showToast(t('fleet.loadBalancingView.strategyUpdated'), 'success')
     logger.info('Strategy updated to', selectedStrategy.value)
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToSaveStrategy')
@@ -219,7 +215,7 @@ async function rebalanceNow(): Promise<void> {
 
   try {
     await fleetStore.fetchNpuFleetMetrics()
-    showNotification(t('fleet.loadBalancingView.metricsRefreshed'))
+    showToast(t('fleet.loadBalancingView.metricsRefreshed'), 'success')
     logger.info('Manual rebalance triggered')
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.rebalanceFailed')
@@ -255,32 +251,15 @@ const autoRebalanceRecommendation = computed(() => {
 // Lifecycle
 // ============================================================
 
-onMounted(() => {
-  refreshData()
-  refreshIntervalId.value = setInterval(refreshData, 10_000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
 
-onBeforeUnmount(() => {
-  if (refreshIntervalId.value !== null) {
-    clearInterval(refreshIntervalId.value)
-    refreshIntervalId.value = null
-  }
-})
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Notification Banner -->
-    <Transition
-      enter-active-class="transition-all duration-300 ease-out"
-      enter-from-class="opacity-0 -translate-y-2"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition-all duration-200 ease-in"
-      leave-from-class="opacity-100 translate-y-0"
-      leave-to-class="opacity-0 -translate-y-2"
-    >
-      <BaseAlert v-if="notification" variant="success" size="compact" :message="notification" />
-    </Transition>
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="refreshPoller.start('')" />
 
     <!-- Error Banner -->
     <BaseAlert v-if="error" variant="error" :message="error" />
@@ -288,27 +267,27 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.strategyConfiguration') }}</h2>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.strategyConfiguration') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-end gap-4">
         <div class="flex-1">
           <label
             for="lb-strategy"
-            class="block text-sm font-medium text-gray-700 mb-1"
+            class="block text-sm font-medium text-autobot-text-secondary mb-1"
           >
             {{ $t('fleet.loadBalancingView.currentStrategy') }}
           </label>
           <select
             id="lb-strategy"
             v-model="selectedStrategy"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white text-sm"
           >
             <option value="round-robin">{{ $t('fleet.loadBalancingView.roundRobin') }}</option>
             <option value="least-loaded">{{ $t('fleet.loadBalancingView.leastLoaded') }}</option>
             <option value="model-affinity">{{ $t('fleet.loadBalancingView.modelAffinity') }}</option>
           </select>
-          <p class="text-xs text-gray-500 mt-1">
+          <p class="text-xs text-autobot-text-tertiary mt-1">
             {{ strategyDescriptions[selectedStrategy] }}
           </p>
         </div>
@@ -326,10 +305,10 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Task Distribution Bar Chart                                   -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.taskDistribution') }}</h2>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.taskDistribution') }}</h2>
 
-      <div v-if="workerMetrics.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
+      <div v-if="workerMetrics.length === 0 && !loading" class="text-sm text-autobot-text-tertiary text-center py-8">
         {{ $t('fleet.loadBalancingView.noNPUWorkerMetrics') }}
       </div>
 
@@ -341,13 +320,13 @@ onBeforeUnmount(() => {
         >
           <!-- Worker label -->
           <div class="w-36 shrink-0 text-sm">
-            <span class="font-medium text-gray-900 truncate block">
+            <span class="font-medium text-autobot-text-primary truncate block">
               {{ getWorkerHostname(worker.node_id) }}
             </span>
           </div>
 
           <!-- Bar -->
-          <div class="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative">
+          <div class="flex-1 h-6 bg-autobot-bg-tertiary rounded-full overflow-hidden relative">
             <div
               :class="['h-full rounded-full transition-all duration-500', queueBarColor(worker.queue_depth)]"
               :style="{ width: `${Math.max(queueBarWidth(worker.queue_depth), 2)}%` }"
@@ -355,12 +334,12 @@ onBeforeUnmount(() => {
             <span
               v-if="worker.queue_depth > 0"
               class="absolute inset-0 flex items-center justify-center text-xs font-medium"
-              :class="queueBarWidth(worker.queue_depth) > 40 ? 'text-white' : 'text-gray-700'"
+              :class="queueBarWidth(worker.queue_depth) > 40 ? 'text-white' : 'text-autobot-text-secondary'"
             >{{ $t('fleet.loadBalancingView.value0Tasks', { value0: worker.queue_depth }) }}</span>
           </div>
 
           <!-- Percentage -->
-          <div class="w-14 text-right text-sm font-medium text-gray-600">
+          <div class="w-14 text-right text-sm font-medium text-autobot-text-secondary">
             {{ queueBarWidth(worker.queue_depth) }}%
           </div>
         </div>
@@ -369,20 +348,20 @@ onBeforeUnmount(() => {
       <!-- Total summary -->
       <div
         v-if="workerMetrics.length > 0"
-        class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500"
+        class="mt-4 pt-3 border-t border-autobot-border-subtle flex items-center justify-between text-sm text-autobot-text-tertiary"
       >
         <span>{{ $t('fleet.loadBalancingView.totalQueueDepthAcross') }}</span>
-        <span class="font-medium text-gray-900">{{ totalQueueDepth }}</span>
+        <span class="font-medium text-autobot-text-primary">{{ totalQueueDepth }}</span>
       </div>
     </div>
 
     <!-- ============================================================ -->
     <!-- Worker Load Overview                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.workerLoadOverview') }}</h2>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.workerLoadOverview') }}</h2>
 
-      <div v-if="sortedWorkers.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
+      <div v-if="sortedWorkers.length === 0 && !loading" class="text-sm text-autobot-text-tertiary text-center py-8">
         {{ $t('fleet.loadBalancingView.noNPUWorkersFound') }}
       </div>
 
@@ -390,23 +369,23 @@ onBeforeUnmount(() => {
         <div
           v-for="worker in sortedWorkers"
           :key="worker.node_id"
-          class="border border-gray-200 rounded-lg p-4 hover:border-primary-300 transition-colors"
+          class="border border-autobot-border rounded-lg p-4 hover:border-primary-300 transition-colors"
         >
           <!-- Header: hostname + IP -->
           <div class="mb-3">
-            <h3 class="font-medium text-gray-900 text-sm">
+            <h3 class="font-medium text-autobot-text-primary text-sm">
               {{ getWorkerHostname(worker.node_id) }}
             </h3>
-            <p class="text-xs text-gray-500">{{ getWorkerIp(worker.node_id) }}</p>
+            <p class="text-xs text-autobot-text-tertiary">{{ getWorkerIp(worker.node_id) }}</p>
           </div>
 
           <!-- Utilization bar -->
           <div class="mb-3">
-            <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <div class="flex items-center justify-between text-xs text-autobot-text-tertiary mb-1">
               <span>{{ $t('fleet.loadBalancingView.utilization') }}</span>
               <span class="font-medium">{{ worker.utilization.toFixed(1) }}%</span>
             </div>
-            <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div class="w-full h-2 bg-autobot-bg-active rounded-full overflow-hidden">
               <div
                 :class="['h-full rounded-full transition-all duration-500', utilizationColor(worker.utilization)]"
                 :style="{ width: `${worker.utilization}%` }"
@@ -416,32 +395,32 @@ onBeforeUnmount(() => {
 
           <!-- Stats grid -->
           <div class="grid grid-cols-2 gap-2 text-center">
-            <div class="p-2 bg-gray-50 rounded-sm">
-              <p class="text-sm font-semibold text-gray-900">{{ worker.queue_depth }}</p>
-              <p class="text-xs text-gray-500">{{ $t('fleet.loadBalancingView.queueDepth') }}</p>
+            <div class="p-2 bg-autobot-bg-secondary rounded-sm">
+              <p class="text-sm font-semibold text-autobot-text-primary">{{ worker.queue_depth }}</p>
+              <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.loadBalancingView.queueDepth') }}</p>
             </div>
-            <div class="p-2 bg-gray-50 rounded-sm">
-              <p class="text-sm font-semibold text-gray-900">
+            <div class="p-2 bg-autobot-bg-secondary rounded-sm">
+              <p class="text-sm font-semibold text-autobot-text-primary">
                 {{ getWorkerConfig(worker.node_id)?.assigned_models?.length ?? 0 }}
               </p>
-              <p class="text-xs text-gray-500">{{ $t('fleet.loadBalancingView.models') }}</p>
+              <p class="text-xs text-autobot-text-tertiary">{{ $t('fleet.loadBalancingView.models') }}</p>
             </div>
           </div>
 
           <!-- Priority & Weight (from worker config) -->
           <div
             v-if="getWorkerConfig(worker.node_id)"
-            class="mt-3 flex items-center gap-3 text-xs text-gray-500"
+            class="mt-3 flex items-center gap-3 text-xs text-autobot-text-tertiary"
           >
             <span>
               {{ $t('fleet.loadBalancingView.priority') }}
-              <span class="font-medium text-gray-700">
+              <span class="font-medium text-autobot-text-secondary">
                 {{ getWorkerConfig(worker.node_id)?.priority ?? '-' }}
               </span>
             </span>
             <span>
               {{ $t('fleet.loadBalancingView.weight') }}
-              <span class="font-medium text-gray-700">
+              <span class="font-medium text-autobot-text-secondary">
                 {{ getWorkerConfig(worker.node_id)?.weight ?? '-' }}
               </span>
             </span>
@@ -453,8 +432,8 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Rebalancing Controls                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('fleet.loadBalancingView.rebalancingControls') }}</h2>
+    <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-6">
+      <h2 class="text-lg font-semibold text-autobot-text-primary mb-4">{{ $t('fleet.loadBalancingView.rebalancingControls') }}</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
         <!-- Rebalance Now button -->
@@ -477,7 +456,7 @@ onBeforeUnmount(() => {
         <!-- Auto-rebalance toggle -->
         <label class="flex items-center gap-2 cursor-pointer select-none">
           <BaseSwitch v-model="autoRebalance" size="sm" :label="$t('fleet.loadBalancingView.autoRebalance')" />
-          <span class="text-sm text-gray-700">{{ $t('fleet.loadBalancingView.autoRebalance') }}</span>
+          <span class="text-sm text-autobot-text-secondary">{{ $t('fleet.loadBalancingView.autoRebalance') }}</span>
         </label>
       </div>
 
@@ -503,7 +482,7 @@ onBeforeUnmount(() => {
     <!-- Loading overlay for initial load -->
     <div
       v-if="loading && workerMetrics.length === 0"
-      class="flex items-center justify-center py-12 text-gray-500 text-sm"
+      class="flex items-center justify-center py-12 text-autobot-text-tertiary text-sm"
     >
       <svg class="w-5 h-5 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Entregar",
     "cancel": "Cancelar",
     "save": "Ahorrar",
@@ -109,7 +110,8 @@
       "medium": "Medio",
       "high": "Alto",
       "critical": "Crítico"
-    }
+    },
+    "logsLoadFailed": "No se pudieron cargar los registros: {error}"
   },
   "chat": {
     "sendMessage": "Enviar un mensaje...",
@@ -261,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Reintentar subir",
+      "uploadError": {
+        "http": "Error al subir el archivo (estado {status})",
+        "invalidResponse": "El servidor envió una respuesta ilegible",
+        "network": "Error de red durante la subida",
+        "cancelled": "Subida cancelada",
+        "unknown": "Error al subir el archivo"
+      },
       "filesAttached": "Archivos {count} adjuntos",
       "clearAll": "Borrar todo",
       "removeFile": "Eliminar archivo",
@@ -305,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "El archivo «{name}» es demasiado grande (máx. {max})",
+      "voiceUnsupported": "La entrada de voz requiere Chrome, Edge o Safari 15+. La transcripción no está disponible en este navegador.",
+      "micDenied": "Se denegó el acceso al micrófono. Permita el acceso al micrófono en la configuración del navegador."
     },
     "translate": {
       "title": "Traducir texto",
@@ -521,6 +533,7 @@
         "pending": "Pendiente",
         "running": "Correr",
         "streaming": "Transmitiendo",
+        "waiting_explanation": "Esperando explicación",
         "explaining": "explicando",
         "completed": "Terminado",
         "failed": "Fallido"
@@ -564,6 +577,13 @@
       "readOnlyNote": "Read only note",
       "revokeLink": "Revoke link",
       "revoking": "Revoking",
+      "sharedWithNow": "Currently shared with",
+      "unshare": "Remove access",
+      "unsharing": "Removing",
+      "unshareFailed": "Could not remove access. Try again.",
+      "participantsLoadFailed": "Could not load who this is shared with. Try again.",
+      "retryLoad": "Retry",
+      "noParticipants": "Not shared with anyone yet",
       "shareWithUsers": "Share with users",
       "requireLogin": "Requiere inicio de sesión para ver",
       "requireLoginHint": "Solo los usuarios que iniciaron sesión pueden abrir este enlace",
@@ -771,6 +791,16 @@
       "browser": "Navegador",
       "novnc": "Escritorio remoto",
       "ariaLabel": "Secciones del chat"
+    },
+    "attachmentNotice": {
+      "unavailable": "No se encontró un archivo adjunto en esta conversación, así que no se usó.",
+      "too_many": "Solo se usaron los primeros {limit} archivos adjuntos; el resto se omitió.",
+      "image": "\"{filename}\" es una imagen y no se puede leer como texto, así que no se usó.",
+      "unsupported": "\"{filename}\" no es un archivo de texto que el asistente pueda leer, así que no se usó.",
+      "unreadable": "No se pudo leer \"{filename}\", así que no se usó.",
+      "empty": "\"{filename}\" no tiene texto legible, así que no se usó.",
+      "truncated": "\"{filename}\" es largo, así que solo se usó el principio.",
+      "over_budget": "Los archivos adjuntos alcanzaron el límite de tamaño, así que no se usó \"{filename}\"."
     }
   },
   "settings": {
@@ -783,15 +813,7 @@
     "logging": "Explotación florestal",
     "prompts": "Indicaciones",
     "backend": "Backend",
-    "save": "Guardar configuración",
     "reset": "Restablecer los valores predeterminados",
-    "panelLoadFailed": "No se pudo cargar el panel de configuración",
-    "loadingSettings": "Cargando configuración...",
-    "backendOffline": "Backend sin conexión: muestra la configuración en caché",
-    "saving": "Ahorro...",
-    "discardChanges": "Descartar cambios",
-    "cacheApiUnavailable": "API de caché no disponible",
-    "cachedSettings": "Uso de la configuración en caché (backend sin conexión)",
     "appearanceDesc": "Personalice la apariencia de su espacio de trabajo",
     "voiceDesc": "Configurar voz de texto a voz y perfiles de voz",
     "languageDesc": "Elija su idioma preferido para la interfaz y las respuestas de IA",
@@ -1099,7 +1121,6 @@
       "quality": {
         "title": "Calidad del código",
         "overallScore": "Puntuación general",
-        "testCoverage": "Cobertura de prueba",
         "codeDuplicates": "Duplicados de código",
         "technicalDebt": "Deuda Técnica",
         "noMetrics": "No hay métricas de calidad de código disponibles."
@@ -1305,7 +1326,7 @@
       "ownership": {
         "title": "Análisis de propiedad del código",
         "analyzing": "Analizando la propiedad del código...",
-        "overview": "Descripción general",
+        "overview": "Resumen",
         "contributors": "Colaboradores",
         "filesTab": "Archivos",
         "knowledgeGaps": "Brechas de conocimiento",
@@ -2298,7 +2319,6 @@
       "noCommunicationData": "Sin datos de comunicación",
       "codeQuality": "Calidad del código",
       "overallScore": "Puntuación general",
-      "testCoverage": "Cobertura de pruebas",
       "codeDuplicates": "Duplicados de código",
       "technicalDebt": "Deuda técnica",
       "noQualityMetrics": "Sin métricas de calidad",
@@ -2491,8 +2511,6 @@
         "docs": "Documentation"
       },
       "justNow": "Ahora mismo",
-      "minutesAgo": "hace {count} minutos",
-      "hoursAgo": "hace {count} horas",
       "installSuccess": "Hooks instalados exitosamente",
       "installFailed": "Instalación fallida",
       "uninstallSuccess": "Hooks desinstalados exitosamente",
@@ -3180,6 +3198,7 @@
       "reasonUnknown": "motivo no informado"
     },
     "connectors": {
+      "syncNotStarted": "The sync didn't start. This connector may already be syncing; try again when it finishes.",
       "title": "Conectores de fuentes",
       "addConnector": "Añadir conector",
       "loadingConnectors": "Cargando conectores...",
@@ -3811,10 +3830,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4236,6 +4256,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4351,7 +4373,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Abriendo la automatización de tu empresa…",
-      "companyRequired": "Selecciona una empresa para abrir la automatización."
+      "companyRequired": "Selecciona una empresa para abrir la automatización.",
+      "planBeforeBuilding": "Planificar antes de crear"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4528,6 +4551,9 @@
       "stepApproved": "Paso aprobado",
       "stepSkipped": "Paso omitido",
       "rerunNotFound": "No se encontró el flujo de trabajo para volver a ejecutarlo",
+      "draftDiscardedOnCompanySwitch": "Company changed: the unsaved workflow draft was discarded",
+      "reloadAfterCompanySwitchFailed": "Company changed, but the workflow data could not be reloaded. Use Refresh to try again.",
+      "companySwitching": "The company is still switching. Try again once the page has finished loading.",
       "rerunning": "Volviendo a ejecutar «{name}»",
       "rerunFailed": "No se pudo volver a ejecutar el flujo de trabajo",
       "notificationsSaved": "Configuración de notificaciones guardada"
@@ -4659,7 +4685,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Dirección de correo electrónico no válida: {emails}",
+      "invalidUrl": "Formato de URL no válido"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4994,7 +5022,8 @@
       "emergencyKillFailed": "❌ La parada de emergencia falló: {message}",
       "interrupted": "^C (Proceso interrumpido por el usuario)",
       "error": "Se produjo un error: {error}"
-    }
+    },
+    "urlCopied": "¡URL del terminal copiada al portapapeles!"
   },
   "llm": {
     "unavailable": "No disponible",
@@ -5862,6 +5891,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violeta — Creativo y elegante",
       "system": "Sistema",
       "highContrast": "Alto contraste",
       "monochrome": "Monocromo",
@@ -5985,6 +6015,7 @@
       "cleanupConfirm": "Delete Old Logs",
       "cancel": "Cancel",
       "deleteOldLogs": "Delete Old Logs",
+      "statisticsError": "Server statistics could not be loaded. The figures shown are estimates from the loaded log rows.",
       "initError": "Failed to initialize audit data"
     },
     "browserAutomation": {
@@ -6170,48 +6201,11 @@
       "subtitle": "Code search, generation, and productivity tools",
       "actionsToday": "Actions Today",
       "error": "Error",
-      "quickSearch": "Quick Search",
-      "snippetsTab": "Snippets ({count})",
-      "templatesTab": "Templates ({count})",
-      "quickActions": "Quick Actions",
-      "quickCodeSearch": "Quick Code Search",
-      "searchPlaceholder": "Search for files, code, or symbols...",
-      "allTypes": "All Types",
-      "files": "Files",
-      "code": "Code",
-      "symbols": "Symbols",
-      "search": "Search",
-      "results": "Results ({count})",
-      "line": "Line {num}",
-      "score": "Score: {value}",
-      "noResults": "No results found",
-      "generateCodeSnippet": "Generate Code Snippet",
-      "language": "Language",
-      "description": "Description",
-      "snippetPlaceholder": "Describe what you want the code to do...",
-      "generateSnippet": "Generate Snippet",
       "copy": "Copy",
-      "created": "Created: {date}",
-      "noSnippets": "No snippets yet. Generate your first one above!",
       "allCategories": "All Categories",
       "refresh": "Refresh",
       "variables": "Variables",
-      "noTemplates": "No templates available",
-      "quickCodeActions": "Quick Code Actions",
-      "action": "Action",
-      "suggestRefactorings": "Suggest Refactorings",
-      "optimizeCode": "Optimize Code",
-      "formatCode": "Format Code",
-      "fixLinting": "Fix Linting Issues",
-      "generateTests": "Generate Tests",
-      "codePlaceholder": "Paste your code here...",
-      "processing": "Processing...",
-      "runAction": "Run Action",
-      "refactorSuggestions": "Refactor Suggestions ({count})",
-      "impact": "{level} impact",
-      "before": "Before",
-      "after": "After",
-      "generatedTests": "Generated Tests ({count})"
+      "noTemplates": "No templates available"
     },
     "plugins": {
       "title": "Plugin Manager",
@@ -6504,16 +6498,6 @@
       "roleOwner": "Owner",
       "roleViewer": "Viewer"
     },
-    "presence": {
-      "tabLabel": "Active tab",
-      "unknownTab": "Unknown tab",
-      "you": "You",
-      "noParticipants": "No participants",
-      "participants": "Participants",
-      "offline": "Offline",
-      "collaboratorTooltip": "Collaborator",
-      "youStatus": "Your status"
-    },
     "panel": {
       "title": "Colaboración",
       "invite": "Invitar",
@@ -6529,7 +6513,6 @@
       "sessionLabel": "Sesión {id}",
       "invitedAt": "Invitado {time}",
       "justNow": "ahora mismo",
-      "minutesAgo": "hace {count} min",
       "accept": "Aceptar",
       "decline": "Rechazar",
       "respondError": "No se pudo procesar esta respuesta. Inténtalo de nuevo.",
@@ -6619,9 +6602,6 @@
       "title": "Registro de auditoría de secretos",
       "allActions": "Todas las acciones",
       "access": "Acceso",
-      "inject": "Inyectar",
-      "copy": "Copiar",
-      "reveal": "Revelar",
       "allUsers": "Todos los usuarios",
       "by": "por",
       "details": "Detalles",
@@ -6632,8 +6612,10 @@
       "hoursAgo": "hace {hours} h",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Listar",
+      "transfer": "Transferir",
+      "bulkDelete": "Eliminación masiva"
     },
     "vault": {
       "title": "Bóveda de secretos",
@@ -6839,12 +6821,6 @@
       "loadingValue": "Loading...",
       "timeJustNow": "just now",
       "timeInAMoment": "in a moment",
-      "timeMinutesAgo": "{count}m ago",
-      "timeInMinutes": "in {count}m",
-      "timeHoursAgo": "{count}h ago",
-      "timeInHours": "in {count}h",
-      "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d",
       "categories": {
         "api_key": "Claves API",
         "token": "Tokens de acceso",
@@ -6980,6 +6956,7 @@
       "subtitle": "Discover and interact with UI elements on the current screen",
       "refresh": "Refresh",
       "analyzingScreen": "Analyzing screen for automation opportunities...",
+      "loadFailed": "Could not load automation opportunities. Check the connection and try Refresh.",
       "verifying": "Verifying...",
       "execute": "Execute",
       "details": "Details",
@@ -7367,7 +7344,16 @@
       "initComplete": "Inicialización completada"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Reglas de alerta",
+      "overview": "Resumen",
+      "slos": "SLO",
+      "traces": "Trazas"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7382,7 +7368,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Compruebe los límites de tamaño de archivo y los requisitos de formato"
     },
     "header": {
       "title": "File Browser",
@@ -7571,13 +7558,6 @@
       "actionEnforced": "Full enforcement mode was enabled",
       "system": "System",
       "justNow": "Just now",
-      "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minute(s) ago",
-      "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hour(s) ago",
-      "dayAgo": "1 day ago",
-      "daysAgo": "{count} day(s) ago",
-      "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
@@ -7666,7 +7646,6 @@
       "vmName": "Nombre de VM",
       "vmSource": "Origen de VM",
       "ipAddress": "Dirección IP",
-      "errorMessage": "Mensaje de error",
       "details": "Detalles",
       "loading": "Cargando registros de auditoría...",
       "viewDetails": "Ver detalles"
@@ -8090,6 +8069,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "No se pudo activar la ventana de mantenimiento",
+      "completeWindowFailed": "No se pudo completar la ventana de mantenimiento",
+      "deleteWindowFailed": "No se pudo eliminar la ventana de mantenimiento",
+      "drainNodeFailed": "No se pudo drenar el nodo. Inténtalo de nuevo.",
+      "resumeNodeFailed": "No se pudo reanudar el nodo. Inténtalo de nuevo.",
+      "saveKeysFailed": "No se pudieron guardar las claves de API. Consulta la consola para más detalles.",
+      "addNodeFailed": "No se pudo añadir el nodo"
     }
   },
   "mobile": {
@@ -8601,7 +8589,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
       "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa.",
-      "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él."
+      "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él.",
+      "viewPlanner": "Planificador"
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
@@ -8946,6 +8935,170 @@
         "unavailable": "No se pudo contactar con el registro; no se envió nada.",
         "error": "Algo salió mal y no se pudo confirmar la entrega. Actualiza para ver si la reserva sigue activa."
       }
+    },
+    "workflowPlanner": {
+      "title": "Planificador de flujos de trabajo",
+      "plans": "Planes",
+      "newPlan": "Nuevo plan",
+      "open": "Abrir",
+      "back": "Volver a los planes",
+      "retry": "Reintentar",
+      "loading": "Cargando planes...",
+      "loadFailed": "No se pudo cargar el plan.",
+      "stale": {
+        "plan": "No se pudo actualizar este plan, por lo que lo mostrado puede estar desactualizado. {reason}",
+        "gate": "No se pudieron actualizar las comprobaciones de preparación, por lo que la lista de lo que falta puede estar desactualizada. {reason}",
+        "both": "No se pudieron actualizar ni el plan ni sus comprobaciones de preparación, por lo que lo mostrado puede estar desactualizado. {reason}"
+      },
+      "rereadRetry": "Recargar el plan",
+      "saveFailed": "No se pudo guardar el cambio.",
+      "createFailed": "No se pudo crear el plan.",
+      "emptyTitle": "Aún no hay planes",
+      "emptyHint": "Empiece un plan para mapear un proceso, medirlo y elegir el número que quiere mejorar.",
+      "unavailableTitle": "El planificador de flujos de trabajo no está disponible",
+      "unavailableHint": "Esta función está desactivada en su espacio de trabajo, así que aún no hay nada que mostrar.",
+      "statusFlow": "Progreso del plan",
+      "status": {
+        "draft": "Borrador",
+        "measured": "Medido",
+        "labeled": "Etiquetado",
+        "approved": "Aprobado",
+        "converted": "Convertido"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revisión",
+        "status": "Estado",
+        "actions": "Acciones"
+      },
+      "form": {
+        "name": "Nombre del plan",
+        "startsAt": "Dónde empieza el proceso",
+        "endsAt": "Dónde termina el proceso",
+        "create": "Crear plan"
+      },
+      "steps": {
+        "map": "Mapear",
+        "measure": "Medir",
+        "oneNumber": "Elegir un número",
+        "label": "Desglosar y etiquetar",
+        "convert": "Crear flujo de trabajo"
+      },
+      "map": {
+        "empty": "Aún no hay nada mapeado",
+        "emptyHint": "Añada primero quién participa (carriles) y luego los pasos de cada uno.",
+        "handoffs": "{count} traspasos",
+        "waitNote": "¿Qué espera en este traspaso?",
+        "laneName": "Nombre del carril",
+        "addLane": "Añadir carril",
+        "stepLabel": "Paso",
+        "stepLane": "Carril del paso",
+        "addStep": "Añadir paso"
+      },
+      "source": {
+        "self_reported": "Usted lo dijo",
+        "email": "Comprobado con el correo",
+        "calendar": "Comprobado con el calendario"
+      },
+      "measure": {
+        "hint": "¿Con qué frecuencia ocurre cada paso y cuánto tarda?",
+        "needSteps": "Mapee primero al menos un paso.",
+        "perWeek": "Por semana",
+        "duration": "Duración",
+        "unit": "Unidad de duración",
+        "save": "Guardar",
+        "clear": "Borrar"
+      },
+      "unit": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "días"
+      },
+      "oneNumber": {
+        "hint": "Los pasos que midió, primero las esperas más largas. Usted decide cuál importa.",
+        "needMetrics": "Mida primero al menos un paso.",
+        "rate": "{freq} por semana, {dur} {unit}",
+        "title": "Ponga nombre a este número",
+        "returnKind": "Lo que recupera",
+        "target": "Objetivo",
+        "save": "Guardar como mi número"
+      },
+      "returnKind": {
+        "hours_back": "Horas recuperadas",
+        "more_yeses": "Más síes",
+        "money_sooner": "Cobrar antes"
+      },
+      "label": {
+        "needNumber": "Elija primero su número; su paso es el que se desglosa aquí.",
+        "subStep": "Subpaso",
+        "addSubStep": "Añadir subpaso",
+        "unlabel": "Quitar etiqueta",
+        "edgeCase": "Caso límite: {text}",
+        "byHandNote": "Esto lo hacen personas. La IA nunca actúa sobre ello.",
+        "acknowledge": "He leído la lista A mano",
+        "acknowledged": "Lista A mano leída"
+      },
+      "labels": {
+        "ai": "IA",
+        "automation": "Automatización",
+        "by_hand": "A mano"
+      },
+      "gate": {
+        "missing": "Aún falta",
+        "title": "¿Listo para crear?",
+        "unknown": "Otra comprobación",
+        "state": {
+          "met": "Cumplido",
+          "open": "Abierto",
+          "pending": "Aún sin comprobar"
+        },
+        "name": {
+          "G1": "El mapa es válido",
+          "G2": "Cada paso está medido",
+          "G3": "El paso elegido está desglosado",
+          "G4": "Cada subpaso y caso límite tiene etiqueta",
+          "G5": "Lista «A mano» leída y pasos de IA cubiertos por aprobaciones",
+          "G6": "La vista previa no tiene errores",
+          "G7": "Usted aprobó este plan",
+          "converted": "Los flujos de trabajo están creados"
+        }
+      },
+      "readOnly": "Este plan está {status}, así que los pasos 1 a 4 son de solo lectura.",
+      "firstProcess": {
+        "title": "Su empresa está lista",
+        "body": "Planifique su primer proceso: represéntelo, mídalo y elija el número que quiere mejorar.",
+        "plan": "Planificar mi primer proceso",
+        "later": "Más tarde"
+      },
+      "convert": {
+        "notReady": "Termine primero los pasos 1 a 4. Las comprobaciones de arriba muestran lo que falta.",
+        "previewTitle": "Qué se creará (vista previa, aún no existe nada)",
+        "createdTitle": "Qué se creó",
+        "counts": "Flujos de trabajo: {workflows}. Procesos: {processes}.",
+        "ownerLane": "Responsable: {lane}",
+        "errors": "Errores por corregir antes de aprobar",
+        "warnings": "Advertencias",
+        "documented": "Se conserva como texto del manual, no se construye:",
+        "failedProposals": "No se pudieron presentar {count} propuestas de línea de IA. Reintente para presentarlas.",
+        "turnOnNotAvailable": "Activar los flujos de trabajo aún no está disponible: nada los ejecuta hasta entonces.",
+        "openWorkflows": "Abrir flujos de trabajo",
+        "unavailable": "Esta acción no está disponible: el Planificador de flujos de trabajo está desactivado en su espacio de trabajo o el plan ya no existe.",
+        "blocked": "Aún no está listo. Las comprobaciones de arriba muestran lo que falta.",
+        "approvedBy": "Aprobado por {by} el {at}.",
+        "preview": "Ver qué se creará",
+        "previewAgain": "Actualizar la vista previa",
+        "approve": "Aprobar",
+        "create": "Crear flujos de trabajo",
+        "retry": "Reintentar propuestas de línea de IA",
+        "approveTitle": "¿Aprobar este plan?",
+        "approveMessage": "Usted aprueba la vista previa mostrada. Cualquier edición posterior del plan anula esta aprobación.",
+        "previewFailed": "No se pudo generar la vista previa.",
+        "approveFailed": "No se pudo aprobar el plan.",
+        "approveBlocked": "La aprobación está bloqueada hasta que se resuelva lo siguiente:",
+        "approveDetail": "Detalle del servidor: {detail}",
+        "convertFailed": "No se pudieron crear los flujos de trabajo.",
+        "retryFailed": "No se pudieron reintentar las propuestas de línea de IA."
+      }
     }
   },
   "code": {
@@ -8958,13 +9111,10 @@
   "devices": {
     "addDevice": "Add device",
     "confirmDelete": "Confirm delete",
-    "daysAgo": "Days ago",
     "error": "Error",
-    "hoursAgo": "Hours ago",
     "justNow": "Just now",
     "lastSeen": "Last seen",
     "loading": "Loading",
-    "minutesAgo": "Minutes ago",
     "noDevices": "No devices",
     "pairDevice": "Pair device",
     "pairFirst": "Pair first",
@@ -9351,6 +9501,11 @@
       "subtitle": "Vocabulario de permisos detallado y paquetes de ámbitos para claves de API",
       "comingSoonTitle": "Disponible en una versión posterior",
       "comingSoonMessage": "Los ámbitos de permisos detallados —un vocabulario de permisos, paquetes de ámbitos y la aplicación de ámbitos en claves de API— no están disponibles en esta versión. Esta página le permitirá definirlos y asignarlos una vez que estén disponibles."
+    },
+    "layout": {
+      "title": "Administración",
+      "subtitle": "Herramientas de back-office para administradores",
+      "ariaLabel": "Sección de administración"
     }
   },
   "components": {

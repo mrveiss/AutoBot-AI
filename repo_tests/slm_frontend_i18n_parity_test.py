@@ -74,13 +74,11 @@ def _en_message_keys(root: Path | None = None) -> list[str]:
 #: -- because copying the old constant into `declare` would pin a number nobody
 #: had checked against this tree, which is the whole point of the migration.
 #:
-#: Pinned mid-window: 3,161 leaves room for 30 more keys before the meta-test
-#: asks for a bump, where `population - growth` would put the slack exactly at
-#: the allowance and red on the next key anyone adds (#17142).
+#: The floor is computed from the base commit (#19676), not pinned here.
 REACH = declare(
     "slm-frontend-locale-keys",
     discover=_en_message_keys,
-    floor=3588,  # #18863 main-merge: re-pinned on 3,541 keys
+    floor=3974,  # re-pinned mid-window on 3,668 keys (#12363, #19816)
     what="message keys in autobot-slm-frontend's en.json",
     growth=60,
 )
@@ -188,6 +186,46 @@ def test_every_locale_has_exactly_english_keys(locale: str) -> None:
         "Regenerate with scripts/lift_locale_translations.py rather than hand-editing -- "
         "the generator is what keeps every locale's key set identical."
     )
+
+
+#: Keys that sit as English in a non-English locale on purpose (#21796): English is the only required language (owner,
+#: 2026-10-18), and `fallbackLocale: 'en'` renders the same words for a missing key, so a copy is not a regression.
+#: What a locale must still do is keep the placeholders the English message interpolates; a copy that dropped one
+#: would render a blank where the count goes. `orchestrationView.serviceCount` is the plural pair (`a | b`). An entry
+#: ending in a dot is a key prefix and covers every key under it: the whole Log Forwarding page is accepted English.
+_ENGLISH_ACCEPTED = ("orchestrationView.serviceCount", "settings.admin.logForwardingSettings.")
+_PLACEHOLDER = re.compile(r"\{(\w+)\}")
+
+
+def _placeholders(message: object) -> set[str]:
+    return set(_PLACEHOLDER.findall(message)) if isinstance(message, str) else set()
+
+
+def _accepted_keys(english: dict[str, object]) -> list[str]:
+    """Every English key an `_ENGLISH_ACCEPTED` entry names: itself, or all keys under a trailing-dot prefix."""
+    return [k for k in english if any(k == a or (a.endswith(".") and k.startswith(a)) for a in _ENGLISH_ACCEPTED)]
+
+
+def test_the_accepted_entries_resolve_to_keys_in_english() -> None:
+    english = _flatten(json.loads((repo_root() / _LOCALES / "en.json").read_text(encoding="utf-8")))
+    assert "orchestrationView.serviceCount" in _accepted_keys(english)
+    assert len([k for k in _accepted_keys(english) if k.startswith("settings.admin.logForwardingSettings.")]) > 10
+    assert _accepted_keys({"a.b": "x", "ab": "y"}) == []
+
+
+@pytest.mark.parametrize("locale", [loc for loc in _EXPECTED_LOCALES if loc != "en"])
+def test_an_accepted_english_fallback_keeps_the_placeholders_of_its_source(locale: str) -> None:
+    english = _flatten(json.loads((repo_root() / _LOCALES / "en.json").read_text(encoding="utf-8")))
+    theirs = _flatten(json.loads((repo_root() / _LOCALES / f"{locale}.json").read_text(encoding="utf-8")))
+    for key in _accepted_keys(english):
+        assert key in theirs, (locale, key)
+        assert _placeholders(theirs[key]) == _placeholders(english[key]), (locale, key, theirs[key])
+
+
+def test_the_placeholder_reader_sees_a_count_and_nothing_in_prose() -> None:
+    assert _placeholders("{count} service | {count} services") == {"count"}
+    assert _placeholders("No placeholders here") == set()
+    assert _placeholders(["not a string"]) == set()
 
 
 @pytest.mark.parametrize("locale", _EXPECTED_LOCALES)

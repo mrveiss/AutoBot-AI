@@ -89,7 +89,7 @@ is returned as-is (nothing to hide) instead of `***`.
 (`**********`) replaces a redacted *value* (dict fields, events, stored snapshots), and `LOG_MASK` (`***`) replaces a
 secret scrubbed out of free *text* (log lines, error messages, output). A new redactor imports one of them and never
 spells its own; `repo_tests/redaction_placeholder_one_home_19337_test.py` counts the spellings left outside the home
-under a down-only pin (the remaining display masks are listed on #19337). Config revisions stored before #19337 keep
+under a pin of zero. A key is never partly shown, in a display mask either (#18221): `repo_tests/no_partial_key_mask_18221_test.py`. Config revisions stored before #19337 keep
 `***REDACTED***`; nothing compares it, so old rows are left as they are.
 
 **Behaviour that changed in `redact_nested` / `redact_dict` (#18205).**
@@ -114,6 +114,13 @@ substring-matched and feeds `credential_redaction.SENSITIVE_KEYS`.
 because their last token is `pin` (pinned by `test_a_pin_in_any_other_sense_is_masked_too_by_the_whole_word_ruling`). The vocabulary and matcher live in
 `secret_redaction_vocabulary.py` (split from `secret_redaction.py` for the 600-line ceiling); it is the same
 canonical module, re-exported, and the census guard treats the pair as one home.
+
+**File names (#19339).** Whether a FILE name holds a secret is judged by
+`secret_redaction_vocabulary.is_credential_file_stem` (re-exported by `secret_redaction`), which reuses `PRECISE`
+on each word-aligned prefix of the stem and on the same prefix with its last separator removed
+(`pass_word` -> `password`). `autobot_shared/secret_file_names.py` keeps only the file globs and calls it; it declares
+no nouns. `AMBIGUOUS_FILE_NOUNS` (`seed_data.sql`, `salt_states.sls`) and `FILE_COMPOUND_NOUNS` (`apikeys.json`) are
+file-only tables, not field vocabulary: never consult them for a field name.
 
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as

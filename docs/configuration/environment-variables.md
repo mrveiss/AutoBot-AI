@@ -33,6 +33,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 | `AUTOBOT_ROUTING_MODEL` | `llama3.2:1b` | Routing | Orchestrator, request routing |
 | `AUTOBOT_CLASSIFICATION_MODEL` | `gemma2:2b` | Classification | Intent detection, category assignment |
 | `AUTOBOT_LIGHT_PROCESSING_MODEL` | `phi3:mini` | Light Processing | Extraction, formatting |
+| `AUTOBOT_VERIFIER_MODEL` | `""` (the light-processing model) | Verifier | Pre-action verifier (own small model; #21844). Fit rule: the dedicated model is used only when the provider is Ollama AND it is already loaded or nothing else is loaded (`/api/ps`). Ollama reports no free VRAM, so a verifier model that is not resident never evicts the chat model: the configured chat model answers instead when it is loaded (else this model is used), with the chat `num_ctx` so the runner is not reloaded (a cold chat reload was measured at 74 s). To keep both resident set `OLLAMA_MAX_LOADED_MODELS` to at least 2 and size VRAM for both. Must be pulled on the Ollama host, else the provider default answers and a startup warning plus a `verifier_model` health degradation say so. |
 | `AUTOBOT_INSTRUCTION_MODEL` | `mistral:7b-instruct` | Instruction | RAG, step execution |
 | `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
 | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |
@@ -43,13 +44,13 @@ When the primary model hits a rate limit (429) or quota cap, AutoBot automatical
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_FALLBACK_CHAIN_<MODEL>` | _(none)_ | Comma-separated fallback models for `<MODEL>`. Use `provider:model` format to specify provider (e.g. `anthropic:claude-sonnet-4,openai:gpt-4o-mini`). Model suffix uses uppercase with underscores (hyphens are auto-converted). |
+| `AUTOBOT_FALLBACK_CHAIN_<MODEL>` | _(none)_ | Comma-separated fallback models for `<MODEL>`. Use `provider:model` format to specify provider (e.g. `anthropic:sonnet,openai:gpt-4o-mini`). Model suffix uses uppercase with underscores (hyphens are auto-converted). |
 
 **Examples:**
 
 ```bash
 # Claude Opus → Sonnet → GPT-4o-mini if Anthropic quota exhausted
-AUTOBOT_FALLBACK_CHAIN_CLAUDE_OPUS_4=anthropic:claude-sonnet-4,openai:gpt-4o-mini
+AUTOBOT_FALLBACK_CHAIN_OPUS=anthropic:sonnet,openai:gpt-4o-mini
 
 # GPT-4o → mini → local Ollama as last resort
 AUTOBOT_FALLBACK_CHAIN_GPT_4O=openai:gpt-4o-mini,ollama:llama3
@@ -131,7 +132,7 @@ Proactive per-provider token-bucket rate limiter (Redis-backed, shared across al
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_ENABLE_ENCRYPTION` | `false` | Enable data encryption |
-| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(required)_ | 32-byte AES-256-GCM encryption key (base64url-encoded) for encrypting sensitive fields like Telegram bot tokens. **Required for Telegram bot integration.** Generate with: `python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"` (GH#9606) |
+| `AUTOBOT_FIELD_ENCRYPTION_KEY` | _(unset)_ | **Legacy, read-only (#17981).** Needed only to read Telegram, WhatsApp, company PM and SSO values sealed before #17981. New values are sealed under a key derived from `AUTOBOT_SECRETS_ROOT_KEY`, bound to where they are stored, and are re-sealed when the product next saves them. **Rotating `AUTOBOT_SECRETS_ROOT_KEY` leaves every such value unreadable until it is re-entered**: rotation re-wraps vault grants only (#20744). |
 | `AUTOBOT_SESSION_TIMEOUT` | `30` | Session timeout in minutes |
 | `AUTOBOT_EMBED_ALLOWED_ORIGINS` | `*` | Comma-separated list of allowed origins for embed widget. Use `*` (default) to allow all origins, or specify domains like `https://example.com,https://app.acme.io` to restrict access (GH#9117) |
 | `AUTOBOT_EMBED_TRUSTED_PROXIES` | `` | Comma-separated list of trusted proxy IPs for X-Forwarded-For validation. Only connections from these IPs will have their X-Forwarded-For header trusted for rate limiting. Leave empty (default) to rate-limit by direct connection IP only. Example: `10.0.1.100,10.0.1.101` (GH#9117) |
@@ -193,14 +194,11 @@ export AUTOBOT_DEBUG_LOGGING=true
 export AUTOBOT_LOG_LEVEL=debug
 ```
 
-### Telegram Bot Encryption (GH#9606)
-```bash
-# Generate a secure encryption key
-export AUTOBOT_FIELD_ENCRYPTION_KEY=$(python -c "import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())")
-
-# Configure Telegram bot token (will be encrypted automatically)
-# Note: Bot tokens are encrypted at rest in Redis using AES-256-GCM
-```
+### Telegram Bot Encryption (GH#9606, #17981)
+Bot tokens and webhook secrets are encrypted at rest in Redis with AES-256-GCM,
+under a key derived from `AUTOBOT_SECRETS_ROOT_KEY` (provisioned by every install
+path). Nothing extra needs to be set. `AUTOBOT_FIELD_ENCRYPTION_KEY` is only needed
+to read a token saved before #17981.
 
 ## Configuration Priority
 

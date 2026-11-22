@@ -173,11 +173,11 @@ function blockInertClick(event: MouseEvent): void {
 }
 
 .aui-btn--error {
-  background-color: var(--aui-color-error);
+  background-color: var(--aui-color-error-solid);
   color: var(--aui-color-error-contrast);
 }
 .aui-btn--error:hover:not(:disabled):not([aria-disabled='true']) {
-  background-color: color-mix(in srgb, var(--aui-color-error) 88%, black);
+  background-color: color-mix(in srgb, var(--aui-color-error-solid) 88%, black);
 }
 
 .aui-btn--success {
@@ -197,11 +197,11 @@ function blockInertClick(event: MouseEvent): void {
 }
 
 .aui-btn--info {
-  background-color: var(--aui-color-info);
+  background-color: var(--aui-color-info-solid);
   color: var(--aui-color-info-contrast);
 }
 .aui-btn--info:hover:not(:disabled):not([aria-disabled='true']) {
-  background-color: color-mix(in srgb, var(--aui-color-info) 88%, black);
+  background-color: color-mix(in srgb, var(--aui-color-info-solid) 88%, black);
 }
 
 .aui-btn--outline {

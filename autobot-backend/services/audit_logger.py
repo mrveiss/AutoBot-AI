@@ -43,7 +43,8 @@ logger = get_logger(__name__)
 # shown as the backend address in the audit dashboard (#10502 item #11).
 _NON_ROUTABLE_HOSTS = frozenset({"0.0.0.0", "::", "127.0.0.1", "::1", "localhost", ""})
 
-AuditResult = Literal["success", "denied", "failed", "error"]
+# "attempted" is written before the work runs, so nothing counts it as done until its own "success" (#20030, #20665).
+AuditResult = Literal["success", "denied", "failed", "error", "attempted"]
 
 #: Actor recorded when an operation has no user (a system action).
 SYSTEM_ACTOR = "system"
@@ -109,6 +110,7 @@ class AuditEntry:
     session_id: str | None = None
     user_role: str | None = None
     resource: str | None = None
+    resource_type: str | None = None
     vm_source: str | None = None
     vm_name: str | None = None
     details: Metadata = field(default_factory=dict)
@@ -134,6 +136,7 @@ class AuditEntry:
             actor_id=self.user_id or SYSTEM_ACTOR,
             id=self.id,
             resource_id=self.resource,
+            resource_type=self.resource_type,
             metadata=meta,
             occurred_at=self.timestamp,
             ip_address=self.ip_address,
@@ -157,6 +160,7 @@ class AuditEntry:
             ip_address=event.get("ip_address"),
             session_id=event.get("session_id"),
             resource=event.get("resource_id"),
+            resource_type=event.get("resource_type"),
             details=meta.pop("details", meta),
             **extra,
         )
@@ -224,15 +228,27 @@ class AuditLogger:
         session_id: str | None = None,
         ip_address: str | None = None,
         resource: str | None = None,
+        resource_type: str | None = None,
         user_role: str | None = None,
         details: Metadata | None = None,
         performance_ms: float | None = None,
+        durable: bool = False,
     ) -> bool:
-        """Record one operation. Non-blocking: the write is scheduled, never awaited (#1088)."""
+        """Record one operation. Non-blocking: the write is scheduled, never awaited (#1088).
+
+        With ``durable`` the write is awaited and the result is whether the ``audit_logs`` row was
+        committed, for a caller that must not act without one (#19860, as #20026).
+        """
         fields = dict(user_id=user_id, session_id=session_id, ip_address=ip_address, resource=resource)
-        fields.update(user_role=user_role, details=details, performance_ms=performance_ms)
+        fields.update(resource_type=resource_type, user_role=user_role, details=details, performance_ms=performance_ms)
         try:
-            canonical.emit(self._entry(operation, result, **fields).to_event())
+            event = self._entry(operation, result, **fields).to_event()
+            if durable:
+                written = await canonical.record_committed(event)
+                self._total_logged += int(written)
+                self._total_failed += int(not written)
+                return written
+            canonical.emit(event)
         except Exception as exc:  # noqa: BLE001 -- an audit failure must not fail the operation
             self._total_failed += 1
             logger.error("Audit logging failed for %s: %s", operation, type(exc).__name__)

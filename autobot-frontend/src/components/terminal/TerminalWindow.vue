@@ -142,9 +142,11 @@
 </template>
 
 <script>
+import { saveTextFile, createDateFormatter, isoDateStamp } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
+import { useToast } from '@/composables/useToast';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
@@ -155,7 +157,6 @@ import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
 import { escapeHtml, sanitizeHtml } from '@/utils/sanitize';
 import { buildAutomationSteps, exampleWorkflow, useAutomationPacing, workflowStartedLines } from '@/composables/useAutomationPacing';
-
 const logger = createLogger('TerminalWindow');
 
 export default {
@@ -169,6 +170,7 @@ export default {
   setup() {
     const { t } = useI18n();
     const { confirm } = useConfirmDialog();
+    const { showToast } = useToast();
     const route = useRoute();
 
     // Get the terminal service with all its methods
@@ -897,22 +899,12 @@ export default {
     };
 
     const downloadLog = () => {
+      const stamp = createDateFormatter();
       const logContent = outputLines.value
-        .map(line => {
-          const timestamp = line.timestamp ? `[${line.timestamp.toLocaleString()}] ` : '';
-          return `${timestamp}${line.content || line}`;
-        })
+        .map(line => `${line.timestamp ? `[${stamp(line.timestamp)}] ` : ''}${line.content || line}`)
         .join('\n');
 
-      const blob = new Blob([logContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `terminal-${sessionId.value}-${new Date().toISOString().split('T')[0]}.log`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveTextFile(logContent, `terminal-${sessionId.value}-${isoDateStamp()}.log`);
     };
 
     const shareSession = async () => {
@@ -933,7 +925,7 @@ export default {
         // Fallback: copy to clipboard
         try {
           await navigator.clipboard.writeText(url);
-          alert('Terminal URL copied to clipboard!');
+          showToast(t('terminal.urlCopied'), 'success');
         } catch {
           prompt('Copy this URL:', url);
         }
@@ -1063,7 +1055,6 @@ export default {
         const rect = terminalMain.value.getBoundingClientRect();
         const charWidth = 8; // Approximate character width
         const charHeight = 16; // Approximate character height
-
         const cols = Math.floor((rect.width - 20) / charWidth);
         const rows = Math.floor((rect.height - 100) / charHeight);
 
@@ -1501,7 +1492,7 @@ export default {
 }
 
 .footer-button.workflow-test {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   border-color: var(--color-info-hover);
   color: var(--text-on-primary);
   font-weight: 600;

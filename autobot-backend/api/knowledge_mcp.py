@@ -27,7 +27,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
+from knowledge.ownership_index import refuses_platform_wide
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
@@ -44,10 +44,13 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
-from knowledge.search_filters import caller_principal, filter_for_caller
+from knowledge.search_filters import caller_principal, filter_for_caller, filter_for_user_id, scoped_reader
+from knowledge.write_scope import add_document_as
 from knowledge_base import KnowledgeBase
+from services.kb_wipe_request import request_vector_flush
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
+from user_management.database import get_async_session_factory
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
@@ -387,7 +390,7 @@ def _get_knowledge_management_tools() -> List[McpToolsResponse]:
                     "operation": {
                         "type": "string",
                         "enum": ["info", "flush", "reindex", "backup"],
-                        "description": "Redis vector operation to perform",
+                        "description": "Redis vector operation to perform; flush requests a wipe for approval",
                     },
                     "params": {
                         "type": "object",
@@ -486,10 +489,8 @@ async def mcp_add_to_knowledge_base(
         raise HTTPException(status_code=403, detail="Only admins can make knowledge visible to every signed-in user")
     try:
         kb = get_knowledge_base()
-        doc_id = await kb.add_document(
-            content=request.content,
-            metadata=drop_ownership_unless_admin(request.metadata, current_user.get("role")),
-            source=request.source,
+        doc_id = await add_document_as(  # #19517: drops the caller's ownership, stamps their own id
+            kb, current_user, content=request.content, metadata=request.metadata, source=request.source
         )
         return {"success": True, "document_id": doc_id, "message": "Document added successfully"}
 
@@ -564,7 +565,7 @@ async def mcp_summarize_knowledge_topic(
         # Search for relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         results = await kb.search(query=topic, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
-        results = await filter_for_caller(results, kb, current_user)  # #16665
+        results = await filter_for_user_id(results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not results:
             return {
@@ -679,7 +680,7 @@ async def mcp_langchain_qa_chain(
         # First get relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         search_results = await kb.search(question, context_size, filters=RESEARCH_QUARANTINE_FILTER)
-        search_results = await filter_for_caller(search_results, kb, current_user)  # #16665
+        search_results = await filter_for_user_id(search_results, kb, scoped_reader(current_user))  # #16665 no bypass
 
         if not search_results:
             return {
@@ -884,24 +885,10 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
         "operation": "info",
         "data": {
             "used_memory": info.get("used_memory_human", "unknown"),
-            "total_keys": info.get("db8", {}).get("keys", 0),
+            "total_keys": await asyncio.to_thread(vector_db.dbsize),  # its own DB, whichever number (#19232)
             "vector_index": kb.redis_index_name if kb else "unknown",
         },
     }
-
-
-async def _vector_op_flush(kb, vectors_client, params: dict) -> dict:
-    """Handle vector flush operation. (Issue #315 - extracted)"""
-    if not params.get("confirm", False):
-        return {
-            "success": False,
-            "operation": "flush",
-            "error": "Confirmation required (set params.confirm = true)",
-        }
-    if not vectors_client:
-        return {"success": False, "operation": "flush", "error": "Redis not available"}
-    await asyncio.to_thread(vectors_client.flushdb)
-    return {"success": True, "operation": "flush", "message": "Vector database flushed"}
 
 
 async def _vector_op_reindex(kb, vectors_client, params: dict) -> dict:
@@ -931,7 +918,6 @@ async def _vector_op_backup(kb, vectors_client, params: dict) -> dict:
 # Issue #315: Dispatch table for vector operations
 _VECTOR_OPERATIONS = {
     "info": _vector_op_info,
-    "flush": _vector_op_flush,
     "reindex": _vector_op_reindex,
     "backup": _vector_op_backup,
 }
@@ -949,12 +935,15 @@ async def mcp_redis_vector_operations(
 ):
     """MCP tool: Direct Redis vector store operations.
 
-    Issue #744: Requires authenticated user. Admin operations (flush, reindex)
-    should be further restricted at the application level.
+    Issue #744: Requires authenticated user. ``flush`` deletes nothing (#21048, #17038): it requests a knowledge
+    wipe, for an admin user only, and the wipe runs after a human approves it.
     """
     try:
         operation = request.get("operation")
         params = request.get("params", {})
+        if operation == "flush":
+            async with get_async_session_factory()() as session:  # only this branch needs the database
+                return await request_vector_flush(current_user, session)
 
         kb = get_knowledge_base()
         vectors_client = get_vectors_redis_client()

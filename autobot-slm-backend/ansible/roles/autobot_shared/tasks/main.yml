@@ -19,6 +19,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared/"
     dest: "{{ backend_shared_standalone_dir }}/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"

@@ -58,6 +58,7 @@ REGISTRY_DEFAULTS = {
     # Ports (for port.X access pattern) — sourced from SSOT PortConfig
     "port.backend": str(_ssot.port.backend),
     "port.frontend": str(_ssot.port.frontend),
+    "port.frontend_http": str(_ssot.port.frontend_http),  # #19326: nginx HTTP; HTTPS is tls.frontend_port
     "port.redis": str(_ssot.port.redis),
     "port.ollama": str(_ssot.port.ollama),
     "port.llm": str(_ssot.port.ollama),  # Provider-agnostic LLM port (defaults to Ollama)
@@ -66,7 +67,7 @@ REGISTRY_DEFAULTS = {
     "port.aistack": str(_ssot.port.aistack),
     "port.chromadb": str(_ssot.port.chromadb),  # #19321
     "port.npu": str(_ssot.port.npu),
-    "port.npu_windows": str(_ssot.port.npu),
+    "port.npu_windows": str(_ssot.port.npu_windows),  # #19325: was port.npu (8081), not the Windows worker
     "port.slm": str(_ssot.port.slm),  # Issue #768: SLM admin server
     "port.prometheus": str(_ssot.port.prometheus),
     "port.grafana": str(_ssot.port.grafana),

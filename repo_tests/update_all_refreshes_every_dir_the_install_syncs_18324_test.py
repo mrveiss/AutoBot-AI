@@ -21,7 +21,7 @@ _ROLE_TASKS = _ANSIBLE / "roles" / "backend" / "tasks"
 _PLAYBOOK = _ANSIBLE / "playbooks" / "update-all-nodes.yml"
 
 _SRC = re.compile(r'src:\s*"\{\{\s*code_source_dir\s*\}\}/([A-Za-z0-9_.-]+)/')
-_INCLUDE_LOCAL = re.compile(r"include_tasks:\s*([A-Za-z0-9_.-]+\.yml)")
+_INCLUDE_LOCAL = re.compile(r"include_tasks:\s*(?:file:\s*)?([A-Za-z0-9_.-]+\.yml)")
 _TASKS_FROM = re.compile(r"tasks_from:\s*([A-Za-z0-9_.-]+?)(?:\.yml)?\s*$", re.M)
 _BACKEND_ROLE_BLOCK = re.compile(r"name:\s*backend\s*\n\s*tasks_from:\s*([A-Za-z0-9_.-]+?)(?:\.yml)?\s*$", re.M)
 
@@ -68,3 +68,9 @@ def test_update_all_refreshes_every_dir_the_fresh_install_role_syncs():
         f"directories synced from code_source on a fresh install but never on update-all: {missing}. "
         "Pull the role's sync through a tasks_from file (#18324)."
     )
+
+
+def test_src_detector_has_a_contrast_pair():
+    """Positive and negative fixture for the extractor itself (#18324)."""
+    assert _SRC.findall('src: "{{ code_source_dir }}/covered/"') == ["covered"]
+    assert not _SRC.findall('src: "{{ other_source_dir }}/uncovered/"')

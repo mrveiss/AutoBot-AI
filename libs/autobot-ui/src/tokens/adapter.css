@@ -48,8 +48,10 @@
   --aui-color-warning-contrast: var(--text-on-warning);
   --aui-color-error: var(--color-error);
   --aui-color-error-contrast: var(--text-on-error);
+  --aui-color-error-solid: var(--color-error-solid);
   --aui-color-info: var(--color-info);
-  --aui-color-info-contrast: var(--text-on-primary);
+  --aui-color-info-contrast: var(--text-on-info);
+  --aui-color-info-solid: var(--color-info-solid);
 
   /* ---- Overlay (modal backdrop) -------------------------------------- */
   --aui-color-overlay: var(--bg-overlay);
@@ -101,12 +103,16 @@
   --aui-z-dropdown: var(--z-dropdown);
   --aui-z-modal: var(--z-modal);
   --aui-z-tooltip: var(--z-tooltip);
+  --aui-z-toast: var(--z-toast);
 
   /* ---- Tooltip ------------------------------------------------------- */
   --aui-tooltip-delay: var(--tooltip-delay);
   --aui-tooltip-hide-delay: var(--tooltip-hide-delay);
   --aui-tooltip-offset: var(--tooltip-offset);
   --aui-tooltip-max: var(--tooltip-max);
+
+  /* ---- Card (both apps define --card-padding; density scopes resize it, #17564) ---- */
+  --aui-card-padding: var(--card-padding);
 
   /* ---- Table (both apps define --tbl-*; the SLM in slm-scheme.css) ---- */
   --aui-table-font-size: var(--tbl-font-size);

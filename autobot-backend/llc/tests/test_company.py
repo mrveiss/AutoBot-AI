@@ -50,6 +50,7 @@ def _make_org(
         issue_counter=0,
         brand_color=None,
         require_approval_for_hires=False,
+        require_approval_for_budget_raises=False,
         pause_reason=None,
         paused_at=None,
     )
@@ -378,12 +379,20 @@ class TestCycleGuardOnUpdate:
         svc._get_or_404 = AsyncMock(return_value=org)
         svc._assert_prefix_unique = AsyncMock()
         svc._assert_no_cycle = AsyncMock()
+        svc._authorize_move_target = AsyncMock()
+        svc._lock_move_rows = AsyncMock()
+        svc._authorize_locked_move = AsyncMock()
+        actor = uuid.uuid4()
 
         data = CompanyUpdate(parent_org_id=uuid.uuid4())
         # #15907: a top-level org moved under a parent also retires its CEO.
         with patch("llc.services.company.CompanyCEOService.sync_with_parent", new=AsyncMock()) as sync:
-            await svc.update(org.id, data)
+            await svc.update(org.id, data, actor_user_id=actor)
 
+        # #19634 / #19593: authorized, then the move's rows locked, then the cycle check.
+        svc._authorize_move_target.assert_awaited_once_with(org.id, data.parent_org_id, actor, False)
+        svc._lock_move_rows.assert_awaited_once_with(org.id, data.parent_org_id)
+        svc._authorize_locked_move.assert_awaited_once_with(org, data.parent_org_id, actor, False)
         svc._assert_no_cycle.assert_awaited_once_with(org.id, data.parent_org_id)
         sync.assert_awaited_once_with(svc.session, org.id, data.parent_org_id)
         # #15907 review: the move reads the org row under a lock.
@@ -395,6 +404,9 @@ class TestCycleGuardOnUpdate:
         svc = _make_service()
         svc._get_or_404 = AsyncMock(return_value=org)
         svc._assert_no_cycle = AsyncMock(side_effect=CompanyCycleError("cycle"))
+        svc._authorize_move_target = AsyncMock()
+        svc._lock_move_rows = AsyncMock()
+        svc._authorize_locked_move = AsyncMock()
 
         data = CompanyUpdate(parent_org_id=uuid.uuid4())
         with pytest.raises(CompanyCycleError):
@@ -457,9 +469,11 @@ class TestDeleteOrphanFix:
         svc._get_or_404 = AsyncMock(return_value=org)
         svc.list_children = AsyncMock(return_value=[])
 
-        await svc.delete(org.id)
+        with patch("llc.services.company.CompanyCEOService.stop_company_heartbeats", AsyncMock()) as stop:
+            await svc.delete(org.id)
 
         org.soft_delete.assert_called_once()
+        stop.assert_awaited_once_with(svc.session, org.id, None)  # #15907: no deleted company keeps a heartbeat
 
 
 class TestListRootCompaniesArchiveFilter:

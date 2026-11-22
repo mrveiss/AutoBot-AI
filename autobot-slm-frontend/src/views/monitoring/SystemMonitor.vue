@@ -11,13 +11,22 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
 import NodeGpuSummary from '@/components/monitoring/NodeGpuSummary.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
+import { injectFleetMetrics } from '@/composables/monitoringPollContext'
 
+const { t } = useI18n()
 const fleetStore = useFleetStore()
+// #19851: MonitoringView owns the poll and shows the paused notice; this view only
+// polls (and shows its own notice) when rendered without that layout.
+const { state: fleetMetrics, ownsPoll } = injectFleetMetrics(() =>
+  useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
+)
 const {
   cpuUsage,
   memoryUsage,
@@ -25,7 +34,8 @@ const {
   systemHealth,
   gpuNodes,
   gpuUnavailable,
-} = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
+  poller,
+} = fleetMetrics
 
 // #15226: each node's GPUs, matched to its card by node_id
 const gpuByNode = computed(() => new Map(gpuNodes.value.map((gpuNode) => [gpuNode.node_id, gpuNode])))
@@ -62,8 +72,8 @@ function getStatusColor(status: string): string {
     case 'healthy': return 'bg-success-500'
     case 'degraded': return 'bg-warning-500'
     case 'unhealthy': return 'bg-error-500'
-    case 'offline': return 'bg-gray-400'
-    default: return 'bg-gray-400'
+    case 'offline': return 'bg-autobot-dot-idle'
+    default: return 'bg-autobot-dot-idle'
   }
 }
 
@@ -76,9 +86,10 @@ function getMetricColor(value: number): string {
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert v-if="ownsPoll" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="poller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.systemMonitor.systemMonitoring') }}</h2>
+      <h2 class="text-xl font-bold text-autobot-text-primary">{{ $t('monitoring.systemMonitor.systemMonitoring') }}</h2>
       <div class="flex gap-2">
         <button
           @click="viewMode = 'grafana'"
@@ -86,7 +97,7 @@ function getMetricColor(value: number): string {
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'grafana'
               ? 'bg-primary-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,7 +111,7 @@ function getMetricColor(value: number): string {
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'details'
               ? 'bg-primary-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,7 +125,7 @@ function getMetricColor(value: number): string {
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             viewMode === 'metrics'
               ? 'bg-primary-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,8 +147,8 @@ function getMetricColor(value: number): string {
           :class="[
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
             activeDashboard === dash.id
-              ? 'bg-gray-900 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-autobot-ink text-autobot-on-ink'
+              : 'bg-autobot-bg-tertiary text-autobot-text-secondary hover:bg-autobot-bg-active'
           ]"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,7 +159,7 @@ function getMetricColor(value: number): string {
       </div>
 
       <!-- Dashboard Container -->
-      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden min-h-[600px]">
+      <div class="bg-white rounded-lg shadow-xs border border-autobot-border overflow-hidden min-h-[600px]">
         <GrafanaDashboard
           :dashboard="activeDashboard"
           :height="600"
@@ -164,25 +175,25 @@ function getMetricColor(value: number): string {
     <div v-else-if="viewMode === 'details'" class="space-y-6">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.cPUUsage') }}</p>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.systemMonitor.cPUUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(cpuUsage)">{{ cpuUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.memoryUsage') }}</p>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.systemMonitor.memoryUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(memoryUsage)">{{ memoryUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.diskUsage') }}</p>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.systemMonitor.diskUsage') }}</p>
           <p class="text-2xl font-bold" :class="getMetricColor(diskUsage)">{{ diskUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
-          <p class="text-sm text-gray-500">{{ $t('monitoring.systemMonitor.systemHealth') }}</p>
+        <div class="bg-white rounded-lg shadow-xs border border-autobot-border p-4">
+          <p class="text-sm text-autobot-text-tertiary">{{ $t('monitoring.systemMonitor.systemHealth') }}</p>
           <p class="text-2xl font-bold capitalize" :class="{
             'text-success-600': systemHealth === 'healthy',
             'text-warning-600': systemHealth === 'degraded',
             'text-error-600': systemHealth === 'critical',
-            'text-gray-400': systemHealth === 'unknown',
+            'text-autobot-text-tertiary': systemHealth === 'unknown',
           }">{{ systemHealth }}</p>
         </div>
       </div>
@@ -192,39 +203,39 @@ function getMetricColor(value: number): string {
         <div
           v-for="node in nodeMetrics"
           :key="node.node_id"
-          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-autobot-border p-4"
         >
           <div class="flex items-center gap-3 mb-4">
-            <div :class="['w-3 h-3 rounded-full', getStatusColor(node.status)]"></div>
+            <div :class="['w-3 h-3 rounded-full border border-autobot-border-strong', getStatusColor(node.status)]"></div>
             <div>
-              <h3 class="font-semibold text-gray-900">{{ node.hostname }}</h3>
-              <p class="text-xs text-gray-500">{{ node.ip_address }}</p>
+              <h3 class="font-semibold text-autobot-text-primary">{{ node.hostname }}</h3>
+              <p class="text-xs text-autobot-text-tertiary">{{ node.ip_address }}</p>
             </div>
           </div>
 
           <div class="space-y-2">
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.cPU') }}</span>
+              <span class="text-autobot-text-secondary">{{ $t('monitoring.systemMonitor.cPU') }}</span>
               <span :class="getMetricColor(node.cpu)">{{ node.cpu.toFixed(1) }}%</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.memory') }}</span>
+              <span class="text-autobot-text-secondary">{{ $t('monitoring.systemMonitor.memory') }}</span>
               <span :class="getMetricColor(node.memory)">{{ node.memory.toFixed(1) }}%</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-gray-600">{{ $t('monitoring.systemMonitor.disk') }}</span>
+              <span class="text-autobot-text-secondary">{{ $t('monitoring.systemMonitor.disk') }}</span>
               <span :class="getMetricColor(node.disk)">{{ node.disk.toFixed(1) }}%</span>
             </div>
             <NodeGpuSummary :status="gpuByNode.get(node.node_id)" :unavailable="gpuUnavailable" />
           </div>
 
-          <div v-if="node.services.length > 0" class="mt-4 pt-3 border-t border-gray-100">
-            <p class="text-xs text-gray-500 mb-2">{{ $t('monitoring.systemMonitor.services') }}</p>
+          <div v-if="node.services.length > 0" class="mt-4 pt-3 border-t border-autobot-border-subtle">
+            <p class="text-xs text-autobot-text-tertiary mb-2">{{ $t('monitoring.systemMonitor.services') }}</p>
             <div class="flex flex-wrap gap-1">
               <span
                 v-for="service in node.services"
                 :key="service.name"
-                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 rounded-full"
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-autobot-bg-tertiary rounded-full"
               >
                 <span :class="['w-1.5 h-1.5 rounded-full', getStatusColor(service.status)]"></span>
                 {{ service.name }}

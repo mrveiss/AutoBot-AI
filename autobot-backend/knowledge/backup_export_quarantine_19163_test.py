@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -21,6 +21,7 @@ from autobot_shared.ssot_config import config
 from knowledge.adapters.okf_adapter import OKFAdapter
 from knowledge.bulk import BulkOperationsMixin
 from knowledge.documents import DocumentsMixin
+from knowledge.fact_stream_test import fake_fact_redis
 from knowledge.facts import FactsMixin
 from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR
 
@@ -48,11 +49,7 @@ class _KB(FactsMixin, DocumentsMixin, BulkOperationsMixin):
         return list(self._rows)
 
     def redis(self):
-        pipe = MagicMock()
-        pipe.execute = AsyncMock(return_value=list(self._rows.values()))
-        client = MagicMock()
-        client.pipeline.return_value = pipe
-        return client
+        return fake_fact_redis(self._rows)
 
     async def get_stats(self):
         return {}

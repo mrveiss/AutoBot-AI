@@ -87,7 +87,7 @@ describe('ProviderOAuthConnect', () => {
     del.mockResolvedValue({ provider_revoked: false, provider_error: 'HTTP 500' })
     const wrapper = mountIt({ flows: ['redirect'], configured: true })
     await flushPromises()
-    await wrapper.get('.btn-danger-sm').trigger('click')
+    await wrapper.get('.aui-btn--error').trigger('click')
     await flushPromises()
     expect(del).toHaveBeenCalledWith('/api/llm-auth/openai?scope=user')
     expect(wrapper.get('[data-testid="revoke-warning"]').text()).toContain('HTTP 500')
@@ -98,7 +98,7 @@ describe('ProviderOAuthConnect', () => {
     const wrapper = mountIt({ scope: 'system', flows: ['redirect'], configured: true })
     await flushPromises()
     expect(wrapper.find('[data-testid="shared-superadmin-only"]').exists()).toBe(true)
-    expect(wrapper.find('.btn-danger-sm').exists()).toBe(false)  // no plain disconnect: it would be refused
+    expect(wrapper.find('.aui-btn--error').exists()).toBe(false)  // no plain disconnect: it would be refused
   })
 
   it('a superadmin is led to the confirmed shared revoke instead', async () => {

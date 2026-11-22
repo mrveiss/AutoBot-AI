@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, createLogger } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -15,8 +15,7 @@ import { BaseAlert } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
-import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const logger = createLogger('ConfigDefaultsSettings')
 const { t } = useI18n()
@@ -130,10 +129,6 @@ async function deleteConfig(key: string): Promise<void> {
   }
 }
 
-function formatDate(d: string): string {
-  return formatDateTime(d)
-}
-
 // Lifecycle
 onMounted(() => { fetchDefaults() })
 </script>
@@ -143,16 +138,16 @@ onMounted(() => { fetchDefaults() })
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.configDefaultsSettings.configDefaults') }}</h2>
-        <p class="text-sm text-gray-500">{{ $t('settings.admin.configDefaultsSettings.globalDefaultConfigurationsApplied') }}</p>
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.configDefaultsSettings.configDefaults') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.configDefaultsSettings.globalDefaultConfigurationsApplied') }}</p>
       </div>
       <div class="flex gap-2">
         <button @click="fetchDefaults" :disabled="isLoading"
-          class="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm disabled:opacity-50">
+          class="px-3 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover text-sm disabled:opacity-50">
           {{ isLoading ? $t('settings.admin.configDefaultsSettings.loading') : $t('settings.admin.configDefaultsSettings.refresh') }}
         </button>
         <button @click="openAddForm"
-          class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+          class="px-3 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover text-sm">
           {{ $t('settings.admin.configDefaultsSettings.addDefault') }}
         </button>
       </div>
@@ -164,25 +159,25 @@ onMounted(() => { fetchDefaults() })
 
     <!-- Add/Edit Form -->
     <div v-if="showAddForm" class="bg-white rounded-lg border">
-      <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h3 class="font-medium text-gray-900">{{ editingKey ? $t('settings.admin.configDefaultsSettings.editKey', { key: editingKey }) : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
-        <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
+      <div class="px-4 py-3 bg-autobot-bg-secondary border-b flex items-center justify-between">
+        <h3 class="font-medium text-autobot-text-primary">{{ editingKey ? $t('settings.admin.configDefaultsSettings.editKey', { key: editingKey }) : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
+        <button @click="showAddForm = false" class="text-autobot-text-tertiary hover:text-autobot-text-secondary">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
       </div>
       <form @submit.prevent="saveConfig" class="p-4 space-y-4">
         <div class="grid grid-cols-3 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.key') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.configDefaultsSettings.key') }}</label>
             <input v-model="newKey" :disabled="!!editingKey" required
-              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
+              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-autobot-bg-tertiary"
               :placeholder="$t('settings.admin.configDefaultsSettings.eGMonitoringInterval')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.value') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.configDefaultsSettings.value') }}</label>
             <input v-model="newValue" required
               class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('settings.admin.configDefaultsSettings.egThirty')" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.configDefaultsSettings.type') }}</label>
+            <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.configDefaultsSettings.type') }}</label>
             <select v-model="newValueType" class="w-full px-3 py-2 border rounded-lg text-sm">
               <option value="string">{{ $t('settings.admin.configDefaultsSettings.string') }}</option>
               <option value="int">{{ $t('settings.admin.configDefaultsSettings.integer') }}</option>
@@ -192,11 +187,11 @@ onMounted(() => { fetchDefaults() })
           </div>
         </div>
         <div class="flex gap-2">
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+          <button type="submit" class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover text-sm">
             {{ editingKey ? $t('settings.admin.configDefaultsSettings.update') : $t('settings.admin.configDefaultsSettings.create') }}
           </button>
           <button type="button" @click="showAddForm = false"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('settings.admin.configDefaultsSettings.cancel') }}</button>
+            class="px-4 py-2 border border-autobot-border-strong rounded-lg hover:bg-autobot-bg-hover text-sm">{{ $t('settings.admin.configDefaultsSettings.cancel') }}</button>
         </div>
       </form>
     </div>
@@ -205,44 +200,44 @@ onMounted(() => { fetchDefaults() })
     <div class="flex items-center gap-4">
       <input v-model="prefixFilter" :placeholder="$t('settings.admin.configDefaultsSettings.filterByKey')"
         class="px-3 py-2 border rounded-lg text-sm w-64" />
-      <span class="text-sm text-gray-500">{{ $t('settings.admin.configDefaultsSettings.countOfCount2Configs', { count: filteredConfigs.length, count2: configs.length }) }}</span>
+      <span class="text-sm text-autobot-text-tertiary">{{ $t('settings.admin.configDefaultsSettings.countOfCount2Configs', { count: filteredConfigs.length, count2: configs.length }) }}</span>
     </div>
 
     <!-- Config Table -->
     <div class="bg-white rounded-lg border">
       <table class="w-full">
-        <thead class="bg-gray-50">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.key1') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.value1') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.type') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.updated') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{{ $t('settings.admin.configDefaultsSettings.actions') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('settings.admin.configDefaultsSettings.key1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('settings.admin.configDefaultsSettings.value1') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('settings.admin.configDefaultsSettings.type') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('settings.admin.configDefaultsSettings.updated') }}</th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase">{{ $t('settings.admin.configDefaultsSettings.actions') }}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
-          <tr v-for="cfg in filteredConfigs" :key="cfg.config_key" class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-sm font-mono text-gray-900">{{ cfg.config_key }}</td>
-            <td class="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" :title="cfg.config_value">
+        <tbody class="divide-y divide-autobot-border">
+          <tr v-for="cfg in filteredConfigs" :key="cfg.config_key" class="hover:bg-autobot-bg-hover">
+            <td class="px-4 py-3 text-sm font-mono text-autobot-text-primary">{{ cfg.config_key }}</td>
+            <td class="px-4 py-3 text-sm text-autobot-text-secondary max-w-xs truncate" :title="cfg.config_value">
               {{ cfg.config_value }}
             </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">{{ cfg.value_type }}</span>
+              <span class="px-2 py-1 text-xs rounded-full bg-autobot-bg-tertiary text-autobot-text-secondary">{{ cfg.value_type }}</span>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(cfg.updated_at) }}</td>
+            <td class="px-4 py-3 text-sm text-autobot-text-tertiary">{{ formatFleetDateTime(cfg.updated_at) }}</td>
             <td class="px-4 py-3 text-right">
               <button @click="openEditForm(cfg)"
-                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-bg-tertiary text-autobot-text-secondary rounded-sm hover:bg-autobot-bg-active mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>
               <button @click="deleteConfig(cfg.config_key)"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">{{ $t('settings.admin.configDefaultsSettings.delete') }}</button>
+                class="px-2 py-1 text-xs bg-autobot-pill-bad-bg text-autobot-pill-bad-fg rounded-sm hover:bg-autobot-pill-bad-bg">{{ $t('settings.admin.configDefaultsSettings.delete') }}</button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-if="!filteredConfigs.length && !isLoading" class="p-8 text-center text-gray-500">
+      <div v-if="!filteredConfigs.length && !isLoading" class="p-8 text-center text-autobot-text-tertiary">
         {{ $t('settings.admin.configDefaultsSettings.noConfigDefaultsFound') }}
       </div>
-      <div v-if="isLoading" class="p-8 text-center text-gray-500">{{ $t('settings.admin.configDefaultsSettings.loadingConfigs') }}</div>
+      <div v-if="isLoading" class="p-8 text-center text-autobot-text-tertiary">{{ $t('settings.admin.configDefaultsSettings.loadingConfigs') }}</div>
     </div>
   </div>
 </template>

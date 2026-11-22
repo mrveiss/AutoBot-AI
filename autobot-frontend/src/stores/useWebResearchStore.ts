@@ -7,7 +7,9 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { isHttpError } from '@autobot/ui'
 import ApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -30,7 +32,7 @@ export interface RateLimiter {
   max_requests?: number
 }
 
-export interface CacheStats {
+export interface ResearchCacheStats {
   cache_size?: number
   rate_limiter?: RateLimiter
 }
@@ -38,27 +40,33 @@ export interface CacheStats {
 export interface ResearchStatus {
   enabled: boolean
   preferred_method: string
-  cache_stats: CacheStats | null
+  cache_stats: ResearchCacheStats | null
   circuit_breakers: Record<string, unknown> | null
 }
 
-export interface WebResearchSettings {
-  enabled: boolean
-  require_user_confirmation: boolean
-  preferred_method: 'basic' | 'advanced' | 'api_based'
-  max_results: number
-  timeout_seconds: number
-  auto_research_threshold: number
-  rate_limit_requests: number
-  rate_limit_window: number
-  store_results_in_kb: boolean
-  anonymize_requests: boolean
-  filter_adult_content: boolean
-}
+/**
+ * The settings this app reads, taken from the backend's generated `WebResearchSettings`
+ * (the SLM editor writes the full set, including the daily limit and quality threshold);
+ * `preferred_method` is narrowed to the values the backend accepts.
+ */
+type ServedSettings = components['schemas']['WebResearchSettings']
+export type WebResearchStoreSettings = Pick<
+  ServedSettings,
+  | 'enabled'
+  | 'require_user_confirmation'
+  | 'max_results'
+  | 'timeout_seconds'
+  | 'auto_research_threshold'
+  | 'rate_limit_requests'
+  | 'rate_limit_window'
+  | 'store_results_in_kb'
+  | 'anonymize_requests'
+  | 'filter_adult_content'
+> & { preferred_method: 'basic' | 'advanced' | 'api_based' }
 
 export const useWebResearchStore = defineStore('webResearch', () => {
   // State
-  const settings = ref<WebResearchSettings>({
+  const settings = ref<WebResearchStoreSettings>({
     enabled: false,
     require_user_confirmation: true,
     preferred_method: 'basic',
@@ -103,7 +111,7 @@ export const useWebResearchStore = defineStore('webResearch', () => {
 
   // Actions
   // Internal: hydrates the state from the backend read in loadFromBackend.
-  function updateSettings(newSettings: Partial<WebResearchSettings>) {
+  function updateSettings(newSettings: Partial<WebResearchStoreSettings>) {
     settings.value = { ...settings.value, ...newSettings }
   }
 
@@ -123,7 +131,7 @@ export const useWebResearchStore = defineStore('webResearch', () => {
       const data = await ApiClient.get<Record<string, unknown>>(
         `${base}${WEB_RESEARCH_API.settings}`
       )
-      const backendSettings = data.settings as Partial<WebResearchSettings> | undefined
+      const backendSettings = data.settings as Partial<WebResearchStoreSettings> | undefined
       if (backendSettings) updateSettings(backendSettings)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -138,13 +146,13 @@ export const useWebResearchStore = defineStore('webResearch', () => {
       updateStatus({
         enabled: Boolean(data.enabled),
         preferred_method: String(data.preferred_method ?? status.value.preferred_method),
-        cache_stats: (data.cache_stats as CacheStats | null) ?? null,
+        cache_stats: (data.cache_stats as ResearchCacheStats | null) ?? null,
         circuit_breakers: (data.circuit_breakers as Record<string, unknown> | null) ?? null
       })
       researcherAvailable.value = true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('HTTP 503')) {
+      if (isHttpError(err) && err.status === 503) {
         researcherAvailable.value = false
       } else {
         logger.warn('Failed to load web research status from backend:', msg)

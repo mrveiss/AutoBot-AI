@@ -24,7 +24,9 @@ from typing import Any
 
 import psutil
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_tags_url
 from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
@@ -165,8 +167,9 @@ async def run_doctor() -> dict[str, Any]:
     chromadb_host = config.vm.chromadb
     chromadb_port = config.port.chromadb
 
-    ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
-    chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v2/heartbeat")
+    ollama_reachable, ollama_detail = await _probe_http(ollama_tags_url(ollama_base))
+    chromadb_url = f"http://{chromadb_host}:{chromadb_port}{CHROMADB_HEARTBEAT_PATH}"  # #19423
+    chromadb_reachable, chromadb_detail = await _probe_http(chromadb_url)
     redis_reachable, redis_detail = await _probe_redis()
 
     services = {

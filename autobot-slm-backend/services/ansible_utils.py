@@ -12,6 +12,9 @@ import shutil
 from pathlib import Path
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.regex_whitespace import HSPACE, NOT_WS, WS
+from autobot_shared.ssot_config import config
+from services.ansible_extra_vars import port_vars
 from services.process_group import kill_process_group
 
 # Common install locations checked when ansible-playbook isn't on PATH
@@ -43,14 +46,22 @@ def _find_ansible_playbook() -> str:
     raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
 
+# Inventory-level: the run as a whole targeted nothing. A per-play "skipping: no hosts matched" is
+# NOT here -- a multi-play playbook prints it for every play whose group the limit leaves out, while
+# the target's own plays run; the recap checks below decide whether the target ran (#19762).
 _NO_HOSTS_MARKERS = (
-    "skipping: no hosts matched",
     "Could not match supplied host pattern",
     "No inventory was parsed",
 )
 
 
-_RECAP_LINE_RE = re.compile(r"^\s*(\S+)\s*:\s*ok=(\d+)\s+changed=\d+\s+unreachable=(\d+)\s+failed=(\d+)", re.MULTILINE)
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
+# #21987: leading indent is horizontal only. ``^\s*`` also ate newlines, so a run of blank lines was rescanned
+# from every line start (quadratic); a recap line after blank lines still matches at its own line start.
+_RECAP_LINE_RE = re.compile(
+    rf"^{HSPACE}*({NOT_WS}+){WS}*:{WS}*ok=(\d+){WS}+changed=\d+{WS}+unreachable=(\d+){WS}+failed=(\d+)",
+    re.MULTILINE,
+)
 
 
 def ansible_config_env(ansible_dir) -> dict:
@@ -68,6 +79,50 @@ def ansible_exit_code(output: str, host: str | None, returncode: int | None) -> 
     return 1 if returncode == 0 and ansible_run_failure(output, host, returncode) else returncode
 
 
+def _last_recap(output: str) -> dict[str, tuple[int, int, int]]:
+    """``{host: (ok, unreachable, failed)}`` from the LAST PLAY RECAP of ``output``."""
+    tail = output[max(output.rfind("PLAY RECAP"), 0) :]
+    return {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
+
+
+def _hosts_without_a_run(output: str, hosts: list[str] | None) -> list[str]:
+    """Those of ``hosts``, localhost aside, the LAST recap does not show with ok>=1."""
+    recap = _last_recap(output)
+    return [h for h in (hosts or ()) if h not in _LOCAL_HOSTS and recap.get(h, (0,))[0] < 1]
+
+
+def limit_run_failure(output: str, limit: list[str] | None, must_run: list[str] | None = None) -> str | None:
+    """Why a limited run left a required host without a task run, or None (#19762, #19766).
+
+    A multi-play playbook skips every play whose group the limit leaves out, which is normal, so a
+    run proves only what the last recap shows. Every host in ``limit`` is required unless ``must_run``
+    narrows that: a caller's limit can hold rows no play targets, like self-update's co-located rows.
+    Every caller names hosts; a group name is never in a recap, so it would read as a host that did not run.
+    """
+    absent = _hosts_without_a_run(output, limit if must_run is None else must_run)
+    return f"hosts named by the limit ran no task: {absent}" if absent else None
+
+
+def with_limit_proof(result: dict, limit: list[str] | None, must_run: list[str] | None = None) -> dict:
+    """``result`` with an exit-0 run that ``limit_run_failure`` rejects turned into exit 1 (#19762).
+
+    The reason LEADS the output as an ``ERROR!`` line: callers report the first fatal-looking line,
+    and an exit-0 run is full of debug ``msg:`` lines that would otherwise come first. Hosts the limit
+    names beyond ``must_run`` that did not run are reported at the end, and fail nothing.
+    """
+    if result.get("returncode") != 0:
+        return result
+    why = limit_run_failure(result["output"], limit, must_run)
+    if why:
+        return {**result, "returncode": 1, "output": f"ERROR! {why}\n{result['output']}"}
+    idle = _hosts_without_a_run(result["output"], limit) if must_run is not None else []
+    return (
+        {**result, "output": f"{result['output']}\nNOTE: the limit also named hosts that ran no task: {idle}"}
+        if idle
+        else result
+    )
+
+
 def ansible_run_failure(output: str, host: str | None, returncode: int | None) -> str | None:
     """Why an ansible run did not prove success, or None if it did (#19475).
 
@@ -76,10 +131,8 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
     0, printed no no-hosts marker, and the LAST PLAY RECAP shows no unreachable/failed host.
     With ``host`` (a single-target run) that host must also be listed with ok>=1; with
     ``host=None`` (multi-host or inventory-file play) there is no single target, but the
-    recap must still be non-empty and list at least one host with ok>=1. The no-hosts
-    markers are matched across the WHOLE output, every play of a multi-play run, not only the
-    last recap: a "skipping: no hosts matched" in an early play fails the run even if a later
-    play succeeded (the conservative limit).
+    recap must still be non-empty and list at least one host with ok>=1. The inventory-level
+    no-hosts markers are matched across the WHOLE output; a per-play skip is not one (#19762).
     Returns the text to report: the raw output on a non-zero exit, else the reason.
     """
     if returncode != 0:
@@ -87,8 +140,7 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
     for marker in _NO_HOSTS_MARKERS:
         if marker in output:
             return f"ansible matched no hosts ({marker!r})"
-    tail = output[max(output.rfind("PLAY RECAP"), 0) :]
-    recap = {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
+    recap = _last_recap(output)
     if host is not None and host not in recap:
         return f"target host {host} is absent from the PLAY RECAP"
     if host is not None and recap[host][0] < 1:
@@ -102,6 +154,16 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
 
 
 _HOST_KEY_ARGS = "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'"
+
+
+def bare_inventory_args(host: str) -> list[str]:
+    """``-i "<host>,"`` plus the SSOT backend ports as extra vars (#21400).
+
+    A bare host-list inventory has no group_vars beside it, so a role that reads ``backend_port`` or
+    ``backend_nginx_port`` would see them undefined. Every command that targets one host this way builds
+    its inventory arguments here, so those plays get the same ports the generated inventory carries.
+    """
+    return ["-i", f"{host},", "-e", json.dumps(port_vars(config))]
 
 
 async def run_single_host_playbook(
@@ -122,7 +184,7 @@ async def run_single_host_playbook(
     the whole process group before re-raising, so no ansible run outlives its caller. *env* reaches the playbook
     through the subprocess environment only, never argv or disk.
     """
-    cmd = ["ansible-playbook", str(playbook_path), "-i", f"{host},"]
+    cmd = ["ansible-playbook", str(playbook_path), *bare_inventory_args(host)]
     for var in (*extra_vars, f"ansible_user={ssh_user}", f"ansible_port={ssh_port}", _HOST_KEY_ARGS):
         cmd += ["-e", var]
     process = await asyncio.create_subprocess_exec(

@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseButton, createDateFormatter } from '@autobot/ui'
 /**
  * SecretsSettings - System Secrets Management (#1417)
  *
@@ -195,9 +195,7 @@ function cancelEdit(): void {
   editValue.value = ''
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 function categoryLabel(value: string): string {
   return categories.find((c) => c.value === value)?.label || value
@@ -219,13 +217,13 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">{{ $t('settings.admin.secretsSettings.systemSecrets') }}</h2>
-        <p class="text-sm text-gray-500 mt-1">
+        <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('settings.admin.secretsSettings.systemSecrets') }}</h2>
+        <p class="text-sm text-autobot-text-tertiary mt-1">
           {{ $t('settings.admin.secretsSettings.encryptedTokensAndCredentials') }}
         </p>
       </div>
       <button
-        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+        class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover transition-colors text-sm font-medium"
         @click="showAddForm = !showAddForm"
       >
         {{ showAddForm ? $t('settings.admin.secretsSettings.cancel') : $t('settings.admin.secretsSettings.addSecret') }}
@@ -233,23 +231,23 @@ onMounted(() => {
     </div>
 
     <!-- Add Secret Form -->
-    <div v-if="showAddForm" class="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-4">
-      <h3 class="font-medium text-gray-900">{{ $t('settings.admin.secretsSettings.newSecret') }}</h3>
+    <div v-if="showAddForm" class="bg-autobot-bg-secondary border border-autobot-border rounded-lg p-5 space-y-4">
+      <h3 class="font-medium text-autobot-text-primary">{{ $t('settings.admin.secretsSettings.newSecret') }}</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.key') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.secretsSettings.key') }}</label>
           <input
             v-model="newSecret.key"
             type="text"
             :placeholder="$t('settings.admin.secretsSettings.placeholderKey')"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.category') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.secretsSettings.category') }}</label>
           <select
             v-model="newSecret.category"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
           >
             <option v-for="cat in categories" :key="cat.value" :value="cat.value">
               {{ cat.label }}
@@ -257,28 +255,28 @@ onMounted(() => {
           </select>
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.value') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.secretsSettings.value') }}</label>
           <input
             v-model="newSecret.value"
             type="password"
             :placeholder="$t('settings.admin.secretsSettings.placeholderValue')"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm font-mono"
           />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('settings.admin.secretsSettings.description') }}</label>
+          <label class="block text-sm font-medium text-autobot-text-secondary mb-1">{{ $t('settings.admin.secretsSettings.description') }}</label>
           <input
             v-model="newSecret.description"
             type="text"
             :placeholder="$t('settings.admin.secretsSettings.placeholderDescription')"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+            class="w-full px-3 py-2 border border-autobot-border-strong rounded-md focus:ring-autobot-focus focus:border-autobot-primary text-sm"
           />
         </div>
       </div>
       <div class="flex justify-end">
         <button
           :disabled="!newSecret.key || !newSecret.value || saving"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+          class="px-4 py-2 bg-autobot-primary text-autobot-text-on-primary rounded-lg hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="addSecret"
         >
           {{ saving ? $t('settings.admin.secretsSettings.saving') : $t('settings.admin.secretsSettings.createSecret') }}
@@ -304,16 +302,16 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
     </div>
 
     <!-- Empty State -->
     <div
       v-else-if="secrets.length === 0"
-      class="text-center py-12 bg-gray-50 rounded-lg border border-gray-200"
+      class="text-center py-12 bg-autobot-bg-secondary rounded-lg border border-autobot-border"
     >
       <svg
-        class="mx-auto h-12 w-12 text-gray-400"
+        class="mx-auto h-12 w-12 text-autobot-text-tertiary"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -325,57 +323,57 @@ onMounted(() => {
           d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
         />
       </svg>
-      <h3 class="mt-2 text-sm font-medium text-gray-900">{{ $t('settings.admin.secretsSettings.noSecretsConfigured') }}</h3>
-      <p class="mt-1 text-sm text-gray-500">{{ $t('settings.admin.secretsSettings.addSystemTokensLike') }}</p>
+      <h3 class="mt-2 text-sm font-medium text-autobot-text-primary">{{ $t('settings.admin.secretsSettings.noSecretsConfigured') }}</h3>
+      <p class="mt-1 text-sm text-autobot-text-tertiary">{{ $t('settings.admin.secretsSettings.addSystemTokensLike') }}</p>
     </div>
 
     <!-- Secrets Table -->
-    <div v-else class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+    <div v-else class="bg-white border border-autobot-border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-autobot-border">
+        <thead class="bg-autobot-bg-secondary">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
               {{ $t('settings.admin.secretsSettings.key') }}
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
               {{ $t('settings.admin.secretsSettings.category') }}
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
               {{ $t('settings.admin.secretsSettings.description') }}
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th class="px-6 py-3 text-left text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
               {{ $t('settings.admin.secretsSettings.updated') }}
             </th>
-            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th class="px-6 py-3 text-right text-xs font-medium text-autobot-text-tertiary uppercase tracking-wider">
               {{ $t('settings.admin.secretsSettings.actions') }}
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
+        <tbody class="divide-y divide-autobot-border">
           <template v-for="secret in secrets" :key="secret.id">
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="text-sm font-mono font-medium text-gray-900">{{ secret.key }}</span>
+                <span class="text-sm font-mono font-medium text-autobot-text-primary">{{ secret.key }}</span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                   :class="{
-                    'bg-blue-100 text-blue-800': secret.category === 'system',
-                    'bg-purple-100 text-purple-800': secret.category === 'api_token',
-                    'bg-green-100 text-green-800': secret.category === 'service',
+                    'bg-autobot-illus-1-tint text-autobot-text-primary': secret.category === 'system',
+                    'bg-autobot-illus-2-tint text-autobot-text-primary': secret.category === 'api_token',
+                    'bg-autobot-illus-3-tint text-autobot-text-primary': secret.category === 'service',
                   }"
                 >
                   {{ categoryLabel(secret.category) }}
                 </span>
               </td>
-              <td class="px-6 py-4 text-sm text-gray-500">
+              <td class="px-6 py-4 text-sm text-autobot-text-tertiary">
                 {{ secret.description || '-' }}
-                <p v-if="hasDependentRoles(secret.key)" class="mt-1 text-xs text-amber-600">
+                <p v-if="hasDependentRoles(secret.key)" class="mt-1 text-xs text-autobot-warning">
                   {{ $t('settings.admin.secretsSettings.staleValueHint') }}
                 </p>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-autobot-text-tertiary">
                 {{ formatDate(secret.updated_at) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
@@ -385,16 +383,16 @@ onMounted(() => {
                       v-model="editValue"
                       type="password"
                       :placeholder="$t('settings.admin.secretsSettings.placeholderNewValue')"
-                      class="w-48 px-2 py-1 border border-gray-300 rounded-sm text-sm font-mono"
+                      class="w-48 px-2 py-1 border border-autobot-border-strong rounded-sm text-sm font-mono"
                     />
                     <button
                       :disabled="!editValue || saving"
-                      class="text-green-600 hover:text-green-800 disabled:opacity-50"
+                      class="text-autobot-success hover:bg-autobot-pill-ok-bg hover:text-autobot-pill-ok-fg disabled:opacity-50"
                       @click="updateSecretValue(secret.key)"
                     >
                       {{ $t('settings.admin.secretsSettings.save') }}
                     </button>
-                    <button class="text-gray-500 hover:text-gray-700" @click="cancelEdit">
+                    <button class="text-autobot-text-tertiary hover:text-autobot-text-secondary" @click="cancelEdit">
                       {{ $t('settings.admin.secretsSettings.cancel') }}
                     </button>
                   </div>
@@ -403,7 +401,7 @@ onMounted(() => {
                   <button
                     v-if="hasDependentRoles(secret.key)"
                     :disabled="applyingKey === secret.key"
-                    class="text-amber-600 hover:text-amber-800 mr-3 disabled:opacity-50"
+                    class="text-autobot-warning hover:bg-autobot-pill-warn-bg hover:text-autobot-pill-warn-fg mr-3 disabled:opacity-50"
                     @click="applyToServices(secret.key)"
                   >
                     {{ applyingKey === secret.key
@@ -411,13 +409,13 @@ onMounted(() => {
                       : $t('settings.admin.secretsSettings.applyToServices') }}
                   </button>
                   <button
-                    class="text-blue-600 hover:text-blue-800 mr-3"
+                    class="text-autobot-text-link hover:bg-autobot-pill-info-bg hover:text-autobot-pill-info-fg mr-3"
                     @click="startEdit(secret.key)"
                   >
                     {{ $t('settings.admin.secretsSettings.update') }}
                   </button>
                   <button
-                    class="text-red-600 hover:text-red-800"
+                    class="text-autobot-error hover:bg-autobot-pill-bad-bg hover:text-autobot-pill-bad-fg"
                     @click="removeSecret(secret.key)"
                   >
                     {{ $t('settings.admin.secretsSettings.delete') }}
@@ -426,13 +424,13 @@ onMounted(() => {
               </td>
             </tr>
             <tr v-if="applyResult && applyResult.key === secret.key">
-              <td colspan="5" class="px-6 py-3 bg-gray-50">
-                <p class="text-xs font-medium mb-1" :class="applyResult.success ? 'text-green-700' : 'text-red-700'">
+              <td colspan="5" class="px-6 py-3 bg-autobot-bg-secondary">
+                <p class="text-xs font-medium mb-1" :class="applyResult.success ? 'bg-autobot-pill-ok-bg text-autobot-pill-ok-fg' : 'bg-autobot-pill-bad-bg text-autobot-pill-bad-fg'">
                   {{ applyResult.success
                     ? $t('settings.admin.secretsSettings.applySuccess')
                     : $t('settings.admin.secretsSettings.applyFailed') }}
                 </p>
-                <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ applyResult.output }}</pre>
+                <pre class="bg-autobot-bg-tertiary text-autobot-success text-xs p-3 rounded-sm overflow-auto max-h-48">{{ applyResult.output }}</pre>
               </td>
             </tr>
           </template>

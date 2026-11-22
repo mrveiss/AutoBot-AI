@@ -19,6 +19,7 @@ import asyncio
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from services.config_manager_writer import set_nested_and_save
 from type_defs.common import Metadata
 
 # Import network constants
@@ -147,19 +148,19 @@ class LLMConfigurationSynchronizer:
         """
         try:
             from api.agent_config import DEFAULT_AGENT_CONFIGS
-            from config import config as global_config_manager
+            from config import config as config_instance
 
             logger.info("Starting LLM configuration synchronization...")
 
             # Get current model using helper (Issue #315: reduced nesting)
-            current_selected_model = LLMConfigurationSynchronizer._get_current_llm_model(global_config_manager)
+            current_selected_model = LLMConfigurationSynchronizer._get_current_llm_model(config_instance)
             logger.info("Current global LLM model: '%s'", current_selected_model)
 
             # Collect agent models using helper
             (
                 agent_models,
                 common_model,
-            ) = LLMConfigurationSynchronizer._collect_agent_models(global_config_manager, DEFAULT_AGENT_CONFIGS)
+            ) = LLMConfigurationSynchronizer._collect_agent_models(config_instance, DEFAULT_AGENT_CONFIGS)
             logger.info("Agent models: %s", agent_models)
             logger.info("Most common agent model: %s", common_model)
 
@@ -179,7 +180,7 @@ class LLMConfigurationSynchronizer:
 
             # Perform sync and return result (Issue #665: extracted helper)
             return LLMConfigurationSynchronizer._perform_sync_update(
-                global_config_manager,
+                config_instance,
                 current_selected_model,
                 common_model,
                 sync_reason,
@@ -199,7 +200,7 @@ class LLMConfigurationSynchronizer:
             Dict containing the population result
         """
         try:
-            from config import config as global_config_manager
+            from config import config as config_instance
             from utils.connection_utils import ModelManager
 
             logger.info("Ensuring models list is populated...")
@@ -216,10 +217,7 @@ class LLMConfigurationSynchronizer:
             logger.info("Found %s available models: %s", len(model_names), model_names)
 
             # Update the configuration with available models
-            global_config_manager.set_nested("backend.llm.local.providers.ollama.models", model_names)
-
-            # Save the configuration
-            global_config_manager.save_settings()
+            set_nested_and_save(config_instance, "backend.llm.local.providers.ollama.models", model_names)
 
             logger.info("✅ Models list populated successfully")
             return {

@@ -160,11 +160,16 @@ def _drive(monkeypatch, c):
     monkeypatch.setattr("security.session_ownership.get_auth_middleware", lambda: middleware)
     install_canonical_resolver(monkeypatch, "security.session_posture.resolve_human_user", middleware)
     monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda r: manager)
+    # #20025: these rows are a write on an id with no session; an existing ownerless one is covered there.
+    monkeypatch.setattr("chat_history.session_file.session_file_exists", AsyncMock(return_value=False))
     monkeypatch.setattr(
         "security.session_ownership.resolve_enforcement_mode_for_request",
         AsyncMock(return_value=ResolvedEnforcementMode(c["mode"])),
     )
     monkeypatch.setattr("autobot_shared.redis_client.get_redis_client", AsyncMock(return_value=redis))
+    # #18890: share access is the durable table, not Redis; adoption of legacy shares is out of scope here.
+    monkeypatch.setattr("security.session_shares.ensure_adopted", AsyncMock())
+    monkeypatch.setattr("security.session_shares.durable_is_participant", AsyncMock(return_value=c["shared"]))
     monkeypatch.setattr("services.feature_flags.get_feature_flags", AsyncMock(return_value=MagicMock()))
     monkeypatch.setattr("services.access_control_metrics.get_metrics_service", AsyncMock(return_value=None))
     return redis

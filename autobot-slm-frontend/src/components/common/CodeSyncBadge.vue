@@ -9,7 +9,8 @@
  * Displays a notification badge when nodes have pending code updates.
  * Can be used in the top bar or as a standalone notification indicator.
  */
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted } from 'vue'
+import { usePollingJob } from '@autobot/ui'
 import { useRouter } from 'vue-router'
 import { useCodeSync } from '@/composables/useCodeSync'
 import { useAuthStore } from '@/stores/auth'
@@ -20,7 +21,6 @@ const authStore = useAuthStore()
 
 // Polling interval for status updates (1 minute)
 const POLL_INTERVAL = 60000
-let pollTimer: ReturnType<typeof setInterval> | null = null
 
 /**
  * Navigate to the Code Sync management page.
@@ -36,17 +36,14 @@ async function refresh(): Promise<void> {
   await codeSync.fetchStatus()
 }
 
-onMounted(async () => {
-  if (!authStore.isAuthenticated) return
-  await refresh()
-  pollTimer = setInterval(refresh, POLL_INTERVAL)
-})
+// #19482: usePollingJob for scope disposal. No consecutiveErrorLimit and no paused
+// alert: this is a 60s status poll in the app chrome, where a banner would be the
+// wrong surface, so it keeps polling through failures as before.
+const statusPoller = usePollingJob(refresh, { intervalMs: POLL_INTERVAL, maxAttempts: Infinity })
 
-onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+onMounted(() => {
+  if (!authStore.isAuthenticated) return
+  statusPoller.start('')
 })
 </script>
 
@@ -94,21 +91,21 @@ onUnmounted(() => {
   background: transparent;
   border-radius: 8px;
   cursor: pointer;
-  color: #9ca3af; /* text-gray-400 */
+  color: var(--text-muted);
   transition: all 0.2s ease;
 }
 
 .code-sync-badge:hover {
-  background: rgba(55, 65, 81, 0.5); /* gray-700 with opacity */
-  color: #ffffff;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .code-sync-badge.has-updates {
-  color: #f59e0b; /* amber-500 / warning */
+  color: var(--color-warning);
 }
 
 .code-sync-badge.has-updates:hover {
-  color: #fbbf24; /* amber-400 */
+  color: var(--color-warning-hover);
 }
 
 .badge-count {
@@ -118,8 +115,8 @@ onUnmounted(() => {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  background: #f59e0b; /* amber-500 / warning */
-  color: white;
+  background: var(--color-warning);
+  color: var(--text-on-warning);
   border-radius: 8px;
   font-size: 10px;
   font-weight: 600;

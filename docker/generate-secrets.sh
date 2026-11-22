@@ -8,7 +8,7 @@
 # the docker-compose stack (GH#9775, #16275).
 #
 # PASSWORDS (#16275, #17793): this writes every credential compose requires --
-# AUTOBOT_DB_PASSWORD, GRAFANA_ADMIN_PASSWORD, AUTOBOT_ADMIN_PASSWORD and
+# AUTOBOT_DB_PASSWORD, AUTOBOT_REDIS_PASSWORD, GRAFANA_ADMIN_PASSWORD, AUTOBOT_ADMIN_PASSWORD and
 # SLM_ADMIN_PASSWORD (and VNC_PASSWORD for the playwright-vnc stack). Compose has no fallback for any of them and refuses to
 # start, naming the variable, when one is missing. Pass docker/.env.secrets AFTER
 # docker/.env.docker, as shown below, so the generated values win.
@@ -25,6 +25,8 @@
 # static fallback for AUTOBOT_JWT_SECRET / SECRET_KEY: a committed shared
 # signing secret allows JWT/session forgery against any default deployment.
 #
+# EXISTING compose stack: rerun this once. It adds the Redis password, and compose refuses to start without it.
+#
 # Everything is written to a gitignored docker/.env.secrets that you then pass
 # to compose. Idempotent: existing values are preserved, never overwritten or
 # printed.
@@ -40,6 +42,11 @@ if ! command -v openssl >/dev/null 2>&1; then
     echo "ERROR: openssl is required to generate secrets." >&2
     exit 1
 fi
+
+# #19864: decided before the file is created, for the encryption key below. An empty file is
+# still new: a run refused by the volume check below has already created it.
+NEW_INSTALL=true
+[ -s "$SECRETS_FILE" ] && NEW_INSTALL=false
 
 # Created owner-only from the first byte, not chmod-ed after a world-readable moment.
 (umask 077 && touch "$SECRETS_FILE")
@@ -106,6 +113,12 @@ ensure_secret() {
 }
 
 echo "Writing secrets to ${SECRETS_FILE}"
+# #19864: new installs only. Losing this key makes everything encrypted with it unreadable, so an
+# existing deployment opts in by setting it here rather than having a re-run switch it on.
+# First of all: a run stopped part-way leaves a non-empty file, which reads as existing on the rerun.
+if [ "$NEW_INSTALL" = true ]; then
+    ensure_secret AUTOBOT_ENCRYPTION_KEY
+fi
 ensure_secret AUTOBOT_JWT_SECRET
 ensure_secret SECRET_KEY
 # The canonical envelope secret store is unreachable without this, and every
@@ -121,6 +134,14 @@ ensure_secret GRAFANA_ADMIN_PASSWORD
 ensure_secret AUTOBOT_ADMIN_PASSWORD password
 # #17793: the SLM's first admin; compose no longer falls back to 'admin' and refuses to start without it.
 ensure_secret SLM_ADMIN_PASSWORD password
+# #17500: Redis authenticates. Hex: it goes into redis:// URLs and must need no escaping. An existing
+# deployment's Redis holds no password in its volume, so a new one locks nothing out.
+ensure_secret AUTOBOT_REDIS_PASSWORD
+# Rewritten each run, so the ACL file always matches the line above.
+AUTOBOT_REDIS_PASSWORD="$(grep '^AUTOBOT_REDIS_PASSWORD=' "$SECRETS_FILE" | cut -d= -f2-)" \
+    bash "$(dirname "$0")/write-redis-acl.sh"
+# #20629: what the SLM presents to the limited Docker proxy.
+ensure_secret AUTOBOT_DOCKER_PROXY_TOKEN
 # #17500: the playwright-vnc dev stack's VNC password; it no longer falls back to a fixed one.
 ensure_secret VNC_PASSWORD
 
@@ -146,3 +167,4 @@ echo "  (the value is not printed here; read it with: grep '^AUTOBOT_ADMIN_PASSW
 echo ""
 echo "Done. Start the stack with both env files:"
 echo "  docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d"
+echo "SLM, with the default port: http://localhost:8080/slm/ (AUTOBOT_DOCKER_SLM_HTTP_PORT changes it; see INSTALL.md to reach it from another machine)"

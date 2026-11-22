@@ -32,9 +32,12 @@
 # Discoverable: grep -rn "ensure_node_tls_cert.yml" lists all consumers.
 
 # #19366: the directory resolves once, from the group_vars home or its pinned fallback.
+# A role whose own setting may differ passes it as `node_tls_cert_dir_override` -- a
+# distinct name, because re-defining autobot_tls_remote_cert_dir from a role default that
+# is itself derived from it is a recursive template.
 - name: "TLS | Resolve the shared cert directory"
   ansible.builtin.set_fact:
-    autobot_node_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"
+    autobot_node_cert_dir: "{{ node_tls_cert_dir_override | default(autobot_tls_remote_cert_dir | default('/etc/autobot/certs')) }}"
 
 - name: "TLS | Ensure the shared cert directory exists"
   ansible.builtin.file:

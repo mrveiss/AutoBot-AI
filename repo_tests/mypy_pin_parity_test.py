@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Every lint-tool version is pinned twice; this keeps the two copies equal (#15134).
 
-``.github/workflows/code-quality.yml`` installs exact versions and says they
+``.github/workflows/_gate-code-quality.yml`` installs exact versions and says they
 "match .pre-commit-config.yaml". Nothing checked that. The two files can drift,
 and the drift is invisible in the worst direction: the local hook passes on one
 version while the required CI context runs another, so a developer's green run
@@ -29,8 +29,12 @@ import yaml
 from repo_tests._paths import repo_root
 
 REPO_ROOT = repo_root()
-CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "code-quality.yml"
+CODE_QUALITY = REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml"
 PRE_COMMIT = REPO_ROOT / ".pre-commit-config.yaml"
+CI_TEST_REQUIREMENTS = REPO_ROOT / "requirements-ci-test.txt"
+
+#: The formatters the python suite installs from ``requirements-ci-test.txt`` (#16796).
+SUITE_FORMATTERS = ("black", "isort")
 
 #: pre-commit repo slug -> the distribution name the CI workflow pip-installs.
 #: Only tools pinned in both places belong here; anything else is not a parity
@@ -50,8 +54,14 @@ _PINNED = re.compile(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==([0-9][A-Za-
 
 
 def _ci_pins() -> dict[str, str]:
-    """Exact versions ``code-quality.yml`` pip-installs, keyed by distribution."""
+    """Exact versions ``_gate-code-quality.yml`` pip-installs, keyed by distribution."""
     text = CODE_QUALITY.read_text(encoding="utf-8")
+    return {name.lower(): version for name, version in _PINNED.findall(text)}
+
+
+def _suite_pins() -> dict[str, str]:
+    """Exact versions ``requirements-ci-test.txt`` pins, keyed by distribution."""
+    text = CI_TEST_REQUIREMENTS.read_text(encoding="utf-8")
     return {name.lower(): version for name, version in _PINNED.findall(text)}
 
 
@@ -148,3 +158,89 @@ def test_every_mypy_hook_gets_the_stubs_ci_installs():
             f"mypy hook #{index} installs {sorted(hook_stubs)} while "
             f"{CODE_QUALITY.name} installs {sorted(ci_stubs)}"
         )
+
+
+@pytest.mark.parametrize("tool", SUITE_FORMATTERS)
+def test_the_suite_requirements_pin_the_formatter_the_hook_runs(tool):
+    """An unpinned formatter in the suite install floats away from the hook (#16796)."""
+    suite = _suite_pins()
+    assert tool in suite, f"{CI_TEST_REQUIREMENTS.name} does not pin {tool} exactly (==)"
+    assert suite[tool] == PRE_COMMIT_PINS[tool], (
+        f"{tool} is pinned to {suite[tool]} in {CI_TEST_REQUIREMENTS.name} but "
+        f"{PRE_COMMIT_PINS[tool]} in {PRE_COMMIT.name}. Bump both, or neither."
+    )
+
+
+def test_the_isort_hook_reads_the_project_settings_like_the_gate():
+    """The gate passes --settings-path=. so first-party classification matches; the hook must too (#16796)."""
+    config = yaml.safe_load(PRE_COMMIT.read_text(encoding="utf-8"))
+    args = [
+        arg
+        for repo in config.get("repos", [])
+        for hook in repo.get("hooks", [])
+        if hook.get("id") == "isort"
+        for arg in hook.get("args", [])
+    ]
+    assert "--settings-path=." in args, f"isort hook args {args} lack --settings-path=."
+    assert "--settings-path=." in CODE_QUALITY.read_text(encoding="utf-8")
+
+
+GATE_BLACK_TARGETS = ("autobot-backend/", "autobot-slm-backend/", "autobot_shared/")
+
+
+def _black_hook_text() -> str:
+    """The black hook's block in the pre-commit config, comments included."""
+    text = PRE_COMMIT.read_text(encoding="utf-8")
+    start = text.index("repo: https://github.com/psf/black")
+    return text[start : text.index("\n  # ", start)]
+
+
+_SHELL_OPERATORS = re.compile(r"\s*(\|\||&&|;|\||\n)")
+
+
+def gate_black_command(workflow_text: str) -> tuple[str, list[str]] | None:
+    """``(line_length_arg, targets)`` of the gate's ``black --check``, up to the first shell operator."""
+    match = re.search(r"black --check ([^\n]*)", workflow_text)
+    if not match:
+        return None
+    command = _SHELL_OPERATORS.split(match.group(1), maxsplit=1)[0]
+    tokens = command.split()
+    return next((t for t in tokens if t.startswith("--line-length=")), ""), [
+        t for t in tokens if not t.startswith("--")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {",
+            ("--line-length=120", list(GATE_BLACK_TARGETS)),
+        ),
+        (
+            "black --check --line-length=120 autobot-backend/ autobot-slm-backend/ autobot_shared/ scripts/ || {",
+            ("--line-length=120", [*GATE_BLACK_TARGETS, "scripts/"]),
+        ),
+        ("black --check --line-length=120 autobot_shared/ && echo ok", ("--line-length=120", ["autobot_shared/"])),
+    ],
+)
+def test_the_gate_black_parser_reads_the_whole_target_list(command, expected):
+    """Contrast: the current command parses to the pinned targets; an added target is seen, not dropped."""
+    assert gate_black_command(command) == expected
+
+
+def test_the_black_hook_and_gate_differ_in_targets_only_and_say_so():
+    """The hook is repo-wide, the gate checks three package dirs; same args, difference documented (#21839)."""
+    gate = gate_black_command(CODE_QUALITY.read_text(encoding="utf-8"))
+    assert gate, "the code-quality gate no longer runs `black --check --line-length=N <dirs>`"
+    line_length, targets = gate
+    assert tuple(targets) == GATE_BLACK_TARGETS, (
+        f"gate black targets are {targets}; update the hook comment in {PRE_COMMIT.name} and "
+        "GATE_BLACK_TARGETS here together"
+    )
+    hook = _black_hook_text()
+    assert f"args: [{line_length}]" in hook, f"black hook args differ from the gate's {line_length}"
+    assert "exclude: ^autobot-infrastructure/" in hook
+    assert (
+        "the gate\n        # checks " + " ".join(GATE_BLACK_TARGETS) + " only" in hook
+    ), f"the black hook in {PRE_COMMIT.name} must record why its targets differ from the gate's (#21839)"

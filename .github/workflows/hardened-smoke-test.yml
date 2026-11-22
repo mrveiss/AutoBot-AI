@@ -46,7 +46,18 @@ concurrency:
 
 jobs:
   hardened-smoke-test:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    # #21490, #21519: a dependabot pull request, or the release promotion pull request, does not start this
+    # on its own; a `train-*` head (dependabot) or the `ci:full` label (read when the run starts) lets it run.
+    if: >-
+      ${{ github.event_name != 'pull_request'
+          || (github.event.pull_request.draft == false
+              && (github.event.pull_request.user.login != 'dependabot[bot]'
+                  || startsWith(github.event.pull_request.head.ref, 'train-')
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))
+              && (github.event.pull_request.head.ref != github.event.repository.default_branch
+                  || github.event.pull_request.head.repo.full_name != github.repository
+                  || github.event.pull_request.base.ref != 'release'
+                  || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -57,24 +68,16 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
-          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
+          # The run itself consumes ~17 GB (images, layer cache, service images);
+          # 30 leaves headroom, and the toolchain removal runs only below it (#19527).
+          min-free-gb: '30'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
-
-      - name: Cache Docker layers
-        # #19308: keyed on what the image layers are built from, not on the commit. A
-        # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
-        # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
-        # exact hit skips the save, so a commit that changes no dependency adds nothing.
-        id: buildx-cache
-        uses: actions/cache/restore@v6
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-hardened-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-hardened-
-            ${{ runner.os }}-buildx-
+          # #19527: tearing the builder down cost 30-60s per run on a runner that is
+          # discarded anyway. A persistent self-hosted runner still cleans up.
+          cleanup: ${{ runner.environment == 'self-hosted' }}
 
       - name: Create .env from .env.example
         run: cp .env.example .env
@@ -99,71 +102,14 @@ jobs:
           bash docker/generate-secrets.sh
           cat docker/.env.secrets >> "$GITHUB_ENV"
 
-      - name: Build images with layer cache
-        run: |
-          echo "=== Building backend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/backend/Dockerfile \
-            --tag autobot/backend:latest \
-            --load \
-            .
-          echo "Backend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building SLM image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/slm/Dockerfile \
-            --tag autobot/slm:latest \
-            --load \
-            .
-          echo "SLM build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building frontend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/frontend/Dockerfile \
-            --tag autobot/frontend:latest \
-            --load \
-            .
-          echo "Frontend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building SLM-only GUI image (#18585) ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/frontend/Dockerfile \
-            --target slm-gui \
-            --tag autobot/slm-gui:latest \
-            --load \
-            .
-
-          echo ""
-          echo "=== Rotating cache ==="
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
-          echo "Final disk space:"
-          df -h
-
-
-      # #19308 review: restored everywhere, saved only from main. A save from every PR -- each
-      # dependency PR has a new key -- brought the eviction back under dependabot load.
-      - name: Save Docker layers (main only)
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.buildx-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+      - name: Build images
+        # Concurrent bake with a per-image layer cache, including the SLM-only GUI
+        # image (#18585), pulling the service images meanwhile (#19527).
+        uses: ./.github/actions/build-smoke-images
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-hardened-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
+          group: hardened
+          cache-key-prefix: buildx-bake-hardened
+          compose-args: -f docker-compose.yml -f docker-compose.hardened.yml --env-file docker/.env.docker
 
       - name: Start services with hardened overlay
         run: |
@@ -254,7 +200,7 @@ jobs:
           echo ""
           curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
-      - name: SLM web GUI comes up alone under the slm profile (#18585)
+      - name: SLM web GUI comes up alone (#18585)
         # The documented SLM-GUI-first path: the full stack is stopped, then only
         # autobot-slm-gui and its dependencies start. Proves the SLM-only nginx
         # config starts with no main backend, and prints the measured memory of
@@ -267,23 +213,23 @@ jobs:
               --env-file docker/.env.docker "$@"
           }
           compose down
-          compose --profile slm up -d --no-build autobot-slm-gui
+          compose up -d --no-build autobot-slm-gui
 
           for attempt in $(seq 1 60); do
-            if curl -s -f http://localhost/slm/ > /dev/null 2>&1 \
-               && curl -s -f http://localhost/slm/api/health > /dev/null 2>&1; then
-              echo "OK SLM GUI and SLM API respond with the slm profile only"
+            if curl -s -f http://localhost:8080/slm/ > /dev/null 2>&1 \
+               && curl -s -f http://localhost:8080/slm/api/health > /dev/null 2>&1; then
+              echo "OK SLM GUI and SLM API respond with the SLM GUI started alone"
               break
             fi
             if [ "$attempt" -eq 60 ]; then
               echo "FAIL: SLM-only stack not healthy within 600s"
-              compose --profile slm logs
+              compose logs
               exit 1
             fi
             sleep 10
           done
 
-          running=$(compose --profile slm ps --services --status running | sort | tr '\n' ' ')
+          running=$(compose ps --services --status running | sort | tr '\n' ' ')
           echo "Running services: ${running}"
           for heavy in autobot-backend autobot-worker autobot-chromadb autobot-frontend; do
             if [[ " ${running} " == *" ${heavy} "* ]]; then
@@ -323,7 +269,7 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            --profile slm config --services 2>/dev/null)
+            config --services 2>/dev/null)
           services=$(echo "$services" | xargs)
 
           if [ -z "$services" ]; then
@@ -423,13 +369,10 @@ jobs:
 
       - name: Clean up
         if: always()
-        # --profile slm: the SLM-only step's autobot-slm-gui is a profiled service,
-        # which a plain `down` neither stops nor detaches from its networks (#18581)
         run: |
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.hardened.yml \
             --env-file docker/.env.docker \
-            --profile slm \
             down
           rm -rf secrets/

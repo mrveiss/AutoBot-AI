@@ -175,9 +175,9 @@ def test_setup_python_suite_has_no_timeout_minutes_on_any_step():
 
 
 def test_code_quality_runs_the_audit():
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
     assert "check_composite_action_step_keys.py --audit" in workflow, (
-        "code-quality.yml no longer runs the composite-action step-key audit — the guard would stop "
+        "_gate-code-quality.yml no longer runs the composite-action step-key audit — the guard would stop "
         "blocking merges while these tests kept passing (#14550)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"

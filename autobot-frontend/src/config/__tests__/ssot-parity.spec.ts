@@ -173,6 +173,7 @@ const PYTHON_ONLY_PORTS = [
   // stated plainly instead of re-attaching an unrelated issue number.
   'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes
   'tts', // TTS worker — backend-to-worker only, no frontend consumer
+  'frontend_http', // nginx's plain-HTTP port, read only by the backend's config.frontend_url (#19326) — the browser frontend is served from it and addresses itself by its runtime origin
   'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only
   // raw VNC protocol port (x11vnc), consumed by the node's own systemd
   // service + the Ansible vnc role. The frontend's desktop viewer only ever
@@ -185,8 +186,12 @@ const PYTHON_ONLY_PORTS = [
   // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
   // dynamic runtime value with no static SSOT default on either side (#14173)
   'vnc_server',
+  // The Windows NPU worker (#19325): the backend pairs and dials it; the frontend never
+  // addresses it, and reads only the Linux worker's port ('npu' above).
+  'npu_windows',
 ] as const
-const TS_ONLY_PORTS = ['slmAdmin'] as const
+// frontendServed: the port the browser reaches on a nginx host; it has no Python reader (#20058)
+const TS_ONLY_PORTS = ['slmAdmin', 'frontendServed'] as const
 
 describe('Python source parser (self-check)', () => {
   it('reads the canonical Python config off disk', () => {

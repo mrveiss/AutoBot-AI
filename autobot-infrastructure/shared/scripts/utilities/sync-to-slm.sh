@@ -78,9 +78,9 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 rsync_cmd() {
     if [ -f "$SSH_KEY" ]; then
-        rsync -avz --delete -e "ssh -i $SSH_KEY $SSH_OPTS" "$@"
+        rsync -avz --chmod=o-w --delete -e "ssh -i $SSH_KEY $SSH_OPTS" "$@"
     else
-        rsync -avz --delete -e "ssh $SSH_OPTS" "$@"
+        rsync -avz --chmod=o-w --delete -e "ssh $SSH_OPTS" "$@"
     fi
 }
 

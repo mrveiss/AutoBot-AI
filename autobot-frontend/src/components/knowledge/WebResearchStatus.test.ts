@@ -7,6 +7,7 @@
  * and that no main-app source file can write web research settings again.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -14,7 +15,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import en from '@/i18n/locales/en.json'
 
-const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }))
+const { apiGet, userState } = vi.hoisted(() => ({ apiGet: vi.fn(), userState: { isAdmin: true } }))
+vi.mock('@/stores/useUserStore', () => ({ useUserStore: () => userState }))
 
 vi.mock('@/utils/ApiClient', () => ({ default: { get: apiGet } }))
 vi.mock('@/config/ssot-config', () => ({
@@ -57,6 +59,7 @@ describe('WebResearchStatus', () => {
     localStorage.clear()
     setActivePinia(createPinia())
     apiGet.mockReset()
+    userState.isAdmin = true
   })
 
   it('renders the backend values read-only', async () => {
@@ -78,8 +81,18 @@ describe('WebResearchStatus', () => {
     expect(link.text()).toBe(copy.configureLink)
   })
 
+  it('shows a non-admin an administrator note instead of the SLM link', async () => {
+    routeGets(STATUS)
+    userState.isAdmin = false
+    const wrapper = await mountStatus()
+    expect(wrapper.find('[data-testid="web-research-slm-link"]').exists()).toBe(false)
+    expect(wrapper.find('a').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="web-research-admin-note"]').text()).toBe(copy.adminManaged)
+    expect(wrapper.get('[data-testid="status-enabled"]').text()).toBe(copy.yes)
+  })
+
   it('shows the not-available state when the researcher answers 503', async () => {
-    routeGets(new Error('HTTP 503: researcher unavailable'))
+    routeGets(new HttpError(503, 'researcher unavailable'))
     const wrapper = await mountStatus()
     expect(wrapper.get('[data-testid="status-availability"]').text()).toBe(copy.notAvailable)
   })

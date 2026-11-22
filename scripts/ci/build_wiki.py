@@ -140,6 +140,22 @@ def check_api_page(page: str, paths: list[str]) -> list[str]:
     return sorted({p for p in re.findall(r"`(/api/[^`]*)`", page) if p not in known})
 
 
+#: The configuration page's source: generated from the env registry (pipeline-scripts/generate_env_docs.py).
+CONFIG_SOURCE = "docs/developer/ENV_VARS.md"
+
+
+def check_config_page(page: str, registered: set[str]) -> list[str]:
+    """Variables the configuration page documents that the env registry does not know -- must be empty."""
+    named = re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \|", page, re.MULTILINE)
+    return sorted({v for v in named if v not in registered})
+
+
+def _registered() -> set[str]:
+    from autobot_shared.env_registry import REGISTRY
+
+    return set(REGISTRY)
+
+
 def build(out: Path, sha: str, url: str) -> list[str]:
     """Write every manifest page into *out*; returns the page names written."""
     pages = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["pages"]
@@ -155,6 +171,10 @@ def build(out: Path, sha: str, url: str) -> list[str]:
             text = header(source, sha, url) + rewrite_links(
                 (ROOT / source).read_text(encoding="utf-8"), source, sha, url
             )
+            if source == CONFIG_SOURCE:
+                unknown = check_config_page(text, _registered())
+                if unknown:
+                    raise SystemExit(f"configuration page documents unregistered variables: {unknown[:5]}")
         text = redact(text)
         leaked = scan_output(name, text)
         if leaked:

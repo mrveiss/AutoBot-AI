@@ -49,6 +49,7 @@ def _load(name: str):
 
 core = _load("branch_sync_core")
 bs = _load("branch_sync")
+issue_api = sys.modules["issue_api"]  # the instance branch_sync imported
 
 
 class Runner:
@@ -285,8 +286,8 @@ def test_an_up_to_date_branch_without_sync_labels_costs_no_api_call() -> None:
 
 def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -> None:
     """The sync calls the ONE upsert (#12984); a bot comment carrying the marker is updated, not added."""
-    upsert = bs.load_upsert()
-    module = sys.modules[upsert.__module__]
+    module = issue_api.load_upsert()
+    upsert = module.upsert
     ours = {"id": 99, "user": {"type": "Bot"}, "body": f"{core.MARKER_CONFLICT}\nolder", "created_at": "2"}
     quoted = {"id": 5, "user": {"type": "User"}, "body": core.MARKER_CONFLICT, "created_at": "3"}
     calls: List[Tuple[str, str]] = []
@@ -301,8 +302,9 @@ def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_the_sync_reuses_the_canonical_upsert() -> None:
-    assert bs.load_upsert().__module__ == "upsert_pr_comment"
-    assert bs.UPSERT_SCRIPT.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
+    """The sync holds no loader of its own: it uses issue_api's one by-path loader (#12984, #19522)."""
+    assert bs.load_upsert is issue_api.load_upsert
+    assert issue_api.UPSERT_PATH.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
 
 
 def test_an_already_labelled_pr_gets_no_second_comment() -> None:
@@ -314,9 +316,13 @@ def test_an_already_labelled_pr_gets_no_second_comment() -> None:
 # --------------------------------------------------------------- planning
 
 
-def _pull(number: int, ref: str, *, repo: str = REPO, base: str = "main", draft: bool = False) -> Dict[str, Any]:
+def _pull(
+    number: int, ref: str, *, repo: str = REPO, base: str = "main", draft: bool = False, labelled: bool = True
+) -> Dict[str, Any]:
+    """A PR payload; it holds a CI slot (``land-next``) unless ``labelled=False`` (owner rule 2026-11-18)."""
     head = {"ref": ref, "sha": HEAD_SHA, "repo": {"full_name": repo} if repo else None}
-    return {"number": number, "head": head, "base": {"ref": base}, "labels": [], "draft": draft}
+    labels = [{"name": core.LABEL_LAND_NEXT}] if labelled else [{"name": "ci"}]
+    return {"number": number, "head": head, "base": {"ref": base}, "labels": labels, "draft": draft}
 
 
 def test_the_plan_skips_forks_includes_drafts_and_leaves_other_bases_alone() -> None:
@@ -330,7 +336,8 @@ def test_the_plan_skips_forks_includes_drafts_and_leaves_other_bases_alone() -> 
     ]
     branches = ["main", "issue-1", "issue-2", "stacked", "release", "parked-1", "rescued/stash-1", "HEAD", "-x"]
     plan = core.plan_run(pulls, branches, REPO)
-    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-1", 1), ("issue-2", 2), ("parked-1", None)]
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-1", 1), ("issue-2", 2)]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-1` (no PR)"]
     assert plan.skipped[core.FORK] == ["#3", "#4"]
     assert plan.skipped[core.OTHER_BASE] == ["#5 `stacked`"], "a PR into another base is neither synced nor parked"
     assert "#6 `release`" in plan.skipped[core.POLICY] and "`rescued/stash-1` (no PR)" in plan.skipped[core.POLICY]
@@ -342,7 +349,7 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
     pulls = [_pull(7, "dependabot/pip/x-1.2"), _pull(8, "automation/test-durations"), _pull(9, "issue-9")]
     branches = ["dependabot/npm_and_yarn/y", "automation/other", "parked-2"]
     plan = core.plan_run(pulls, branches, REPO)
-    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-9", 9), ("parked-2", None)]
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-9", 9)]
     for skipped in (
         "#7 `dependabot/pip/x-1.2`",
         "#8 `automation/test-durations`",
@@ -352,7 +359,16 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
         assert skipped in plan.skipped[core.POLICY], skipped
 
 
-def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
+def test_merge_train_branches_are_never_synced() -> None:
+    """A [skip ci] sync on a train supersedes the train's own full CI run (#19724)."""
+    pulls = [_pull(10, "train-2026-10-27-85t"), _pull(11, "issue-11")]
+    plan = core.plan_run(pulls, ["train-parked"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-11", 11)]
+    assert "#10 `train-2026-10-27-85t`" in plan.skipped[core.POLICY]
+    assert "`train-parked` (no PR)" in plan.skipped[core.POLICY]
+
+
+def test_prs_are_synced_oldest_first_and_a_branch_with_no_open_pr_is_skipped() -> None:
     """A run cut short by a timeout or a moved head still caught up the oldest PRs (owner rule 2026-10-26)."""
     pulls = [_pull(30, "issue-30"), _pull(10, "issue-10"), _pull(20, "issue-20")]
     pulls[0]["created_at"], pulls[1]["created_at"], pulls[2]["created_at"] = (
@@ -361,7 +377,34 @@ def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
         "2026-10-21T08:00:00Z",
     )
     plan = core.plan_run(pulls, ["parked-b", "parked-a"], REPO)
-    assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10", "parked-a", "parked-b"]
+    assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10"]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-a` (no PR)", "`parked-b` (no PR)"]
+
+
+def test_only_land_next_prs_are_synced_the_label_alone_decides() -> None:
+    """Owner rule 2026-11-18 (#21806): sync only the PRs that hold a CI slot."""
+    pulls = [
+        _pull(41, "issue-41"),
+        _pull(42, "issue-42", labelled=False),
+        _pull(43, "issue-43", draft=True),
+        _pull(44, "issue-44", draft=True, labelled=False),
+        _pull(45, "issue-45", repo="someone/fork"),
+        _pull(46, "issue-46", base="issue-41"),
+    ]
+    plan = core.plan_run(pulls, ["issue-41", "issue-42", "parked-3"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-41", 41), ("issue-43", 43)]
+    assert plan.skipped[core.NO_SLOT] == ["#42 `issue-42`", "#44 `issue-44`"]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-3` (no PR)"], "a PR-less branch stays untouched"
+    assert plan.skipped[core.FORK] == ["#45"] and plan.skipped[core.OTHER_BASE] == ["#46 `issue-46`"]
+
+
+def test_the_label_is_matched_exactly_and_policy_still_wins_over_it() -> None:
+    near = _pull(51, "issue-51", labelled=False)
+    near["labels"] = [{"name": "land-next-later"}, {"name": "Land-Next"}]
+    plan = core.plan_run([near, _pull(52, "train-52"), _pull(53, "dependabot/pip/x")], [], REPO)
+    assert plan.targets == []
+    assert plan.skipped[core.NO_SLOT] == ["#51 `issue-51`"]
+    assert len(plan.skipped[core.POLICY]) == 2, "a labelled train or dependabot branch is still never synced"
 
 
 @pytest.mark.parametrize(
@@ -431,9 +474,16 @@ def test_open_pulls_paginates_and_fails_closed() -> None:
 
 def test_the_summary_names_every_outcome() -> None:
     summary = bs.render_summary({core.SYNCED: ["#1 `a`"], core.FORK: ["#3"]}, dry_run=False)
-    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK):
+    for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK, core.NO_SLOT):
         assert f"| {outcome} |" in summary
     assert "| synced | 1 |" in summary and "- #1 `a`" in summary
+
+
+def test_the_summary_reports_branches_skipped_for_having_no_open_pr() -> None:
+    """The largest skip category: left out of the table, the totals would not add up (#20261)."""
+    plan = core.plan_run([], ["parked-a", "parked-b"], REPO)
+    summary = bs.render_summary(plan.skipped, dry_run=False)
+    assert f"| {core.NO_OPEN_PR} | 2 |" in summary and "- `parked-a` (no PR)" in summary
 
 
 # ------------------------------------------- real git: --no-ff and 0 behind

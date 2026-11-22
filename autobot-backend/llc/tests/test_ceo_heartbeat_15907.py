@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 from typing import AsyncIterator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -27,14 +27,18 @@ import pytest_asyncio
 import sqlalchemy as sa
 
 from llc.models.company import CompanyCreate, CompanyUpdate
-from llc.models.enums import ActivityEventType, LLCAgentStatus
+from llc.models.enums import ActivityEventType, LLCAgentStatus, MembershipRole
+from llc.services.activity_log import LLCActivityLogService
 from llc.services.company import CompanyService
-from llc.services.company_ceo import DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
+from llc.services.company_ceo import COMPANY_DELETED_REASON, DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
 from llc.services.controls_service import AgentNotFoundError, AgentNotSchedulableError, ControlsService
+from llc.services.membership_service import MembershipService
 from llc.tests import test_llc_org_chart as _org_chart_harness
 from models.agent_org import AgentOrgNode
 
 _CRON = "*/5 * * * *"
+#: Owner of every company the tests create.
+_ACTOR = uuid.uuid4()
 
 # The SQLite harness fixtures, re-exported so pytest finds them in this module.
 engine = _org_chart_harness.engine
@@ -42,10 +46,19 @@ session_factory = _org_chart_harness.session_factory
 
 
 async def _create(session_factory, name: str, parent: uuid.UUID | None = None) -> uuid.UUID:  # noqa: ANN001
+    """Create a company owned by ``_ACTOR``, as ``create_company`` makes its creator the OWNER."""
     async with session_factory() as session:
         org = await CompanyService(session).create(CompanyCreate(name=name, slug=name.lower(), parent_org_id=parent))
+        await MembershipService().add_member(session, str(org.id), str(_ACTOR), MembershipRole.OWNER)
         await session.commit()
         return org.id
+
+
+async def _demote(session_factory, company_id: uuid.UUID, parent: uuid.UUID) -> None:  # noqa: ANN001
+    """Move through the update path as the owner of both orgs (a move is admin-only, #19634)."""
+    async with session_factory() as session:
+        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent), actor_user_id=_ACTOR)
+        await session.commit()
 
 
 async def _ceo_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNode]:  # noqa: ANN001
@@ -116,9 +129,7 @@ async def test_demoting_a_company_retires_its_ceo_and_keeps_the_node(session_fac
     [ceo] = await _ceo_nodes(session_factory, company_id)
     await _toggle(session_factory, company_id, ceo.agent_id, True)
 
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
 
     assert await _designation(session_factory, company_id) is None
     [node] = await _ceo_nodes(session_factory, company_id)
@@ -133,9 +144,7 @@ async def test_promoting_back_reuses_the_retired_node(session_factory):  # noqa:
     parent = await _create(session_factory, "Parent")
     company_id = await _create(session_factory, "Acme")
     [original] = await _ceo_nodes(session_factory, company_id)
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
 
     async with session_factory() as session:
         await CompanyCEOService().sync_with_parent(session, company_id, None)
@@ -146,12 +155,6 @@ async def test_promoting_back_reuses_the_retired_node(session_factory):  # noqa:
     assert nodes[0].status == LLCAgentStatus.AVAILABLE.value
     assert nodes[0].heartbeat_enabled is False
     assert (await _designation(session_factory, company_id)).holder_agent_id == original.id
-
-
-async def _demote(session_factory, company_id: uuid.UUID, parent: uuid.UUID) -> None:  # noqa: ANN001
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
 
 
 async def _set_status(session_factory, company_id: uuid.UUID, status: str) -> None:  # noqa: ANN001
@@ -265,9 +268,7 @@ async def test_another_companys_agent_is_not_found(session_factory):  # noqa: AN
 async def test_a_dormant_ceo_cannot_be_put_on_the_heartbeat(session_factory):  # noqa: ANN001
     parent = await _create(session_factory, "Parent")
     company_id = await _create(session_factory, "Acme")
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
     with pytest.raises(AgentNotSchedulableError):
         await _toggle(session_factory, company_id, default_ceo_slug(company_id), True)
 
@@ -335,3 +336,226 @@ async def test_the_route_refuses_a_non_board_member(session_factory, client):  #
 
     assert resp.status_code == 403
     assert slug not in await _scheduler_enabled_slugs(session_factory)
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete
+# ---------------------------------------------------------------------------
+
+
+async def _hire_with_heartbeat(session_factory, company_id: uuid.UUID, slug: str) -> uuid.UUID:  # noqa: ANN001
+    """A non-CEO agent of the company whose heartbeat the owner switched on; returns its node id."""
+    node_id = uuid.uuid4()
+    async with session_factory() as session:
+        session.add(
+            AgentOrgNode(
+                id=node_id,
+                agent_id=slug,
+                name=slug,
+                company_id=company_id,
+                heartbeat_enabled=True,
+                heartbeat_cron=_CRON,
+            )
+        )
+        await session.commit()
+    return node_id
+
+
+async def _all_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNode]:  # noqa: ANN001
+    async with session_factory() as session:
+        stmt = sa.select(AgentOrgNode).where(AgentOrgNode.company_id == company_id)
+        return list((await session.execute(stmt)).scalars().all())
+
+
+def _build_real_entry(kwargs: dict) -> None:
+    """Run the real ``LLCActivityLogService`` row build (it parses ``entity_id`` as a UUID)."""
+    keys = ("company_id", "actor_type", "actor_id", "event_type", "entity_type", "entity_id", "before", "after")
+    LLCActivityLogService()._build_entry(*(kwargs.get(k) for k in keys), kwargs.get("metadata"))
+
+
+@pytest.mark.asyncio
+async def test_soft_deleting_a_company_leaves_no_dispatchable_heartbeat(session_factory):  # noqa: ANN001
+    """The scheduler never reads ``deleted_at``; the delete itself must switch the schedules off."""
+    company_id = await _create(session_factory, "Acme")
+    other_id = await _create(session_factory, "Other")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    await _toggle(session_factory, company_id, ceo.agent_id, True)
+    await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
+    await _hire_with_heartbeat(session_factory, other_id, "worker-other")
+    assert {ceo.agent_id, "worker-acme"} <= await _scheduler_enabled_slugs(session_factory)
+
+    record = AsyncMock()
+    async with session_factory() as session:
+        with patch("llc.services.activity_log.LLCActivityLogService.record", new=record):
+            await CompanyService(session).delete(company_id, actor_user_id=str(_ACTOR))
+        await session.commit()
+
+    enabled = await _scheduler_enabled_slugs(session_factory)
+    assert ceo.agent_id not in enabled
+    assert "worker-acme" not in enabled
+    assert "worker-other" in enabled  # a different company is untouched
+    [node] = await _ceo_nodes(session_factory, company_id)  # retired, never deleted
+    assert node.status == DORMANT_CEO_STATUS
+    # One toggle-shaped activity row per switched-off agent of the deleted company, none for the other.
+    nodes = {n.agent_id: n.id for n in await _all_nodes(session_factory, company_id)}
+    rows = {c.kwargs["entity_id"]: c.kwargs for c in record.await_args_list}
+    # entity_id is the node's UUID (the log parses it as one), never the agent_id slug.
+    assert set(rows) == {str(nodes[ceo.agent_id]), str(nodes["worker-acme"])}
+    assert record.await_count == 2
+    for kwargs in rows.values():
+        assert kwargs["event_type"] == ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET
+        assert kwargs["company_id"] == str(company_id)
+        assert kwargs["actor_type"] == "user"
+        _build_real_entry(kwargs)  # the real log accepts what the delete passes
+        assert kwargs["actor_id"] == str(_ACTOR)
+        assert kwargs["before"]["heartbeat_enabled"] is True
+        assert kwargs["after"]["heartbeat_enabled"] is False
+        assert kwargs["metadata"] == {"reason": COMPANY_DELETED_REASON}
+
+
+@pytest.mark.asyncio
+async def test_a_delete_with_no_actor_records_system_rows(session_factory):  # noqa: ANN001
+    company_id = await _create(session_factory, "Acme")
+    node_id = await _hire_with_heartbeat(session_factory, company_id, "worker-acme")
+
+    record = AsyncMock()
+    async with session_factory() as session:
+        with patch("llc.services.activity_log.LLCActivityLogService.record", new=record):
+            await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    assert record.await_count == 1
+    kwargs = record.await_args.kwargs
+    assert kwargs["entity_id"] == str(node_id)  # the node UUID, never the slug
+    assert kwargs["actor_type"] == "system"
+    assert kwargs["actor_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_enabling_a_heartbeat_on_a_soft_deleted_company_is_refused(session_factory):  # noqa: ANN001
+    from llc.services.company import CompanyNotFoundError
+
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    async with session_factory() as session:
+        await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    with pytest.raises(CompanyNotFoundError):
+        await _toggle(session_factory, company_id, ceo.agent_id, True)
+    assert ceo.agent_id not in await _scheduler_enabled_slugs(session_factory)
+
+
+@pytest.mark.asyncio
+async def test_the_enable_path_locks_the_organization_row(session_factory):  # noqa: ANN001
+    """The enable takes the canonical ``_get_or_404(for_update=True)`` lock, the one the delete takes."""
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    original = CompanyService._get_or_404
+    with patch.object(CompanyService, "_get_or_404", autospec=True, side_effect=original) as load:
+        await _toggle(session_factory, company_id, ceo.agent_id, True)
+    load.assert_awaited_once()
+    assert load.await_args.args[1] == company_id
+    assert load.await_args.kwargs == {"for_update": True}
+
+
+@pytest.mark.asyncio
+async def test_the_route_answers_404_for_a_soft_deleted_company(session_factory, client):  # noqa: ANN001
+    from llc.api import controls
+
+    company_id = await _create(session_factory, "Acme")
+    slug = default_ceo_slug(company_id)
+    async with session_factory() as session:
+        await CompanyService(session).delete(company_id)
+        await session.commit()
+
+    url = f"/api/llc/companies/{company_id}/controls/agents/{slug}/heartbeat"
+    with (
+        patch.object(controls, "require_board_role", new=AsyncMock(return_value=str(uuid.uuid4()))),
+        patch.object(controls, "schedule_heartbeat", new=AsyncMock(return_value=True)) as schedule,
+    ):
+        resp = await client.put(url, json={"heartbeat_enabled": True})
+
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"] == f"Company {company_id} not found"
+    schedule.assert_not_awaited()
+
+
+def _slug_session(row: tuple) -> AsyncMock:
+    """A session whose every SELECT/UPDATE ... RETURNING answers *row*."""
+    session = AsyncMock()
+    result = MagicMock()
+    result.fetchone.return_value = row
+    session.execute.return_value = result
+    return session
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("control", ["pause_agent", "pause_repeat", "resume_agent", "terminate_agent"])
+async def test_agent_control_rows_are_keyed_by_the_node_uuid_not_the_slug(control):
+    """A slug like ``ceo-<uuid>`` is no UUID; the log parses ``entity_id`` as one (#15907)."""
+    node_id, company = uuid.uuid4(), str(uuid.uuid4())
+    slug = f"ceo-{uuid.uuid4()}"
+    log = AsyncMock()
+    svc = ControlsService(activity_log=log)
+    rows = {
+        "pause_agent": ("available", node_id),  # UPDATE ... RETURNING pre_pause_status, id
+        "pause_repeat": None,  # the conditional pause matched nothing -> re-read below
+        "resume_agent": ("paused", "available", None, node_id),
+        "terminate_agent": ("available", None, None, node_id),
+    }
+    session = _slug_session(rows[control])
+    if control == "pause_repeat":
+        first, again = MagicMock(), MagicMock()
+        first.fetchone.return_value = None
+        again.fetchone.return_value = ("paused", "available", "hold", node_id)
+        session.execute.side_effect = [first, again]
+    call = {"pause_repeat": "pause_agent"}.get(control, control)
+    with patch("llc.services.controls_service.get_async_redis_client", AsyncMock(return_value=AsyncMock())):
+        await getattr(svc, call)(session, company, slug, str(_ACTOR))
+
+    kwargs = log.record.await_args.kwargs
+    assert kwargs["entity_id"] == str(node_id)
+    _build_real_entry(kwargs)  # the real log accepts it
+
+
+@pytest.mark.asyncio
+async def test_a_session_holding_the_organization_still_sees_a_concurrent_soft_delete(session_factory):  # noqa: ANN001
+    """A soft-delete committed by another session is refused on enable, though this session held the row."""
+    from llc.services.company import CompanyNotFoundError
+    from user_management.models.organization import Organization
+
+    company_id = await _create(session_factory, "Acme")
+    [ceo] = await _ceo_nodes(session_factory, company_id)
+    async with session_factory() as session_a:
+        held = await session_a.get(Organization, company_id)  # retained with deleted_at = None
+        assert held.deleted_at is None
+        async with session_factory() as session_b:
+            await CompanyService(session_b).delete(company_id)
+            await session_b.commit()
+
+        with pytest.raises(CompanyNotFoundError):
+            await ControlsService(activity_log=AsyncMock()).set_agent_heartbeat(
+                session_a, str(company_id), ceo.agent_id, True, str(uuid.uuid4()), _CRON
+            )
+    assert ceo.agent_id not in await _scheduler_enabled_slugs(session_factory)
+
+
+@pytest.mark.asyncio
+async def test_the_locked_read_refreshes_an_organization_already_in_the_identity_map(session_factory):  # noqa: ANN001
+    """Pins ``populate_existing``: a column the lookup does not filter on must come back fresh."""
+    from user_management.models.organization import Organization
+
+    company_id = await _create(session_factory, "Acme")
+    async with session_factory() as session_a:
+        held = await session_a.get(Organization, company_id)
+        assert held.name == "Acme"
+        async with session_factory() as session_b:
+            other = await session_b.get(Organization, company_id)
+            other.name = "Renamed"
+            await session_b.commit()
+
+        locked = await CompanyService(session_a).get_live_for_update(company_id)
+
+    assert locked is held  # the same identity-map object ...
+    assert locked.name == "Renamed"  # ... refreshed by the locked re-read

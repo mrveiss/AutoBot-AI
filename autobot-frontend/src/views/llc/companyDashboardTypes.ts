@@ -18,6 +18,9 @@ export interface AgentStatus {
   status: AgentDisplayStatus
   adapter_type: string
   last_heartbeat: string | null
+  // #20519: the server's answer to "can this agent start a run", and why not.
+  can_run?: boolean | null
+  cannot_run_reason?: string | null
 }
 
 export interface PendingApproval {
@@ -64,6 +67,10 @@ export interface CompanyDashboardData {
 export interface RawAgentRow {
   id: string
   name: string
+  title?: string | null
+  adapter_type?: string | null
+  can_run?: boolean | null
+  cannot_run_reason?: string | null
   last_heartbeat_at: string | null
   last_run_status: string | null
 }
@@ -84,29 +91,31 @@ export function mapAgent(r: RawAgentRow): AgentStatus {
   return {
     id: r.id,
     name: r.name,
-    title: '',
+    title: r.title ?? '',
     status: runStatusToAgentStatus(r.last_run_status),
-    adapter_type: '',
+    adapter_type: r.adapter_type ?? '',
     last_heartbeat: r.last_heartbeat_at,
+    can_run: r.can_run,
+    cannot_run_reason: r.cannot_run_reason,
   }
 }
 
-export function mapBudget(r: RawBudgetRow): BudgetInfo {
+export function mapBudget(r: RawBudgetRow, agentLabel?: string): BudgetInfo {
   return {
     spent: Number(r.budget_spent) || 0,
     total: Number(r.budget_limit) || 0,
-    label: r.agent_id,
+    label: agentLabel ?? r.agent_id,
   }
 }
 
-export function mapRun(r: RawRunRow): HeartbeatRun {
+export function mapRun(r: RawRunRow, agentLabel?: string): HeartbeatRun {
   const duration =
     r.started_at && r.finished_at
       ? new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()
       : null
   return {
     agent_id: r.agent_id,
-    agent_name: r.agent_id,
+    agent_name: agentLabel ?? r.agent_id,
     run_id: r.id,
     status: runStatusToRunDisplayStatus(r.status),
     started_at: r.started_at ?? '',
