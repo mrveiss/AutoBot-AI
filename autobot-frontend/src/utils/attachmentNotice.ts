@@ -21,6 +21,7 @@ export const ATTACHMENT_NOTICE_CODES = [
   'empty',
   'truncated',
   'over_budget',
+  'over_window',
 ] as const
 
 export type AttachmentNoticeCode = (typeof ATTACHMENT_NOTICE_CODES)[number]
@@ -29,6 +30,8 @@ export interface AttachmentNoticeMetadata {
   code?: string
   filename?: string
   limit?: number
+  used?: number
+  total?: number
 }
 
 export function attachmentNoticeText(metadata: AttachmentNoticeMetadata | undefined): string {
@@ -36,6 +39,8 @@ export function attachmentNoticeText(metadata: AttachmentNoticeMetadata | undefi
   return i18n.global.t(`chat.attachmentNotice.${known ?? 'unreadable'}`, {
     filename: metadata?.filename ?? '',
     limit: metadata?.limit ?? '',
+    used: metadata?.used ?? '',
+    total: metadata?.total ?? '',
   })
 }
 

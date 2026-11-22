@@ -140,3 +140,18 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE",
+        type=float,
+        default=0.25,
+        range=(0.05, 0.5),
+        description=(
+            "Share of the chat model's context window kept free for the reply (chat_workflow/prompt_window.py, "
+            "#22016): 0.25 of the 8192-token window is 2048 tokens, which is also the reply's num_predict. "
+            "Between 0.05 and 0.5."
+        ),
+        component="backend",
+    )
+)

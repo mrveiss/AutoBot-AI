@@ -19,7 +19,8 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => ({ showToast }) }))
 vi.mock('@/i18n', () => ({
   default: {
     global: {
-      t: (key: string, params: Record<string, unknown>) => `${key}|${params.filename}|${params.limit}`,
+      t: (key: string, params: Record<string, unknown>) =>
+        `${key}|${params.filename}|${params.limit}|${params.used}|${params.total}`,
     },
   },
 }))
@@ -30,8 +31,15 @@ describe('attachment notices (#20195)', () => {
   beforeEach(() => showToast.mockClear())
 
   it('renders the named code with the file name and limit', () => {
-    expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' })).toBe('chat.attachmentNotice.truncated|big.txt|')
-    expect(attachmentNoticeText({ code: 'too_many', limit: 5 })).toBe('chat.attachmentNotice.too_many||5')
+    expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt' })).toBe('chat.attachmentNotice.truncated|big.txt|||')
+    expect(attachmentNoticeText({ code: 'too_many', limit: 5 })).toBe('chat.attachmentNotice.too_many||5||')
+  })
+
+  it('a truncated file reports how much of it was used (#22016)', () => {
+    expect(attachmentNoticeText({ code: 'truncated', filename: 'big.txt', used: 20000, total: 90000 })).toBe(
+      'chat.attachmentNotice.truncated|big.txt||20000|90000',
+    )
+    expect(attachmentNoticeText({ code: 'over_window' })).toContain('chat.attachmentNotice.over_window')
   })
 
   it('an unknown or missing code is the generic unreadable text, never nothing', () => {
@@ -41,7 +49,7 @@ describe('attachment notices (#20195)', () => {
 
   it('shows a warning toast', () => {
     showAttachmentNotice({ code: 'image', filename: 'pic.png' })
-    expect(showToast).toHaveBeenCalledWith('chat.attachmentNotice.image|pic.png|', 'warning')
+    expect(showToast).toHaveBeenCalledWith('chat.attachmentNotice.image|pic.png|||', 'warning')
   })
 
   it('every code has text in all 11 locales', () => {

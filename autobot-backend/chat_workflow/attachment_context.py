@@ -71,8 +71,9 @@ _FALLBACK = {
     "unsupported": "This file type cannot be read as text, so it was not used.",
     "unreadable": "This file could not be read, so it was not used.",
     "empty": "This file has no readable text, so it was not used.",
-    "truncated": "This file is long; only the start of it was used.",
+    "truncated": "This file is long; only the first {used} of {total} characters were used.",
     "over_budget": "The attached files reached the size limit; this file was not used.",
+    "over_window": "The conversation is too long for the model's window, so some earlier text may not reach it.",
 }
 
 
@@ -95,7 +96,7 @@ def _notice(code: str, filename: str | None = None, **extra: Any) -> Dict[str, A
     metadata: Dict[str, Any] = {"code": code, **extra}
     if filename:
         metadata["filename"] = sanitize_injected(filename, _NAME_LIMIT)
-    return {"type": NOTICE_TYPE, "content": _FALLBACK[code], "metadata": metadata}
+    return {"type": NOTICE_TYPE, "content": _FALLBACK[code].format(**extra), "metadata": metadata}
 
 
 def requested_ids(context: Dict[str, Any] | None) -> tuple[List[str], int]:
@@ -174,10 +175,12 @@ def _bound(text: str, remaining: int) -> tuple[str, bool]:
     return text[:limit], len(text) > limit
 
 
-def _frame(name: str, text: str) -> str:
+def _frame(name: str, text: str, total: int | None = None) -> str:
+    """The framed file text; a cut file says so, so the model never takes the start for the whole (#22016)."""
     label = f"File name (data): {sanitize_injected(name, _NAME_LIMIT)}"
+    partial = [f"PARTIAL: only the first {len(text)} of {total} characters of this file are shown."] if total else []
     return frame_untrusted_block(
-        "ATTACHED_FILE", [*_WARNING, label], neutralize_frame_markers(text).splitlines() or [""]
+        "ATTACHED_FILE", [*_WARNING, label, *partial], neutralize_frame_markers(text).splitlines() or [""]
     )
 
 
@@ -229,9 +232,9 @@ async def resolve_attachments(
             continue
         shown, cut = _bound(text, remaining)
         remaining -= len(shown)
-        blocks.append(_frame(name, shown))
+        blocks.append(_frame(name, shown, len(text) if cut else None))
         if cut:
-            result.notices.append(_notice("truncated", name))
+            result.notices.append(_notice("truncated", name, used=len(shown), total=len(text)))
         logger.info("Attachment %s read into the prompt: %d of %d chars", file_id, len(shown), len(text))
     result.block = (_HEADER + "".join(blocks) + "\n") if blocks else ""
     return result
@@ -256,15 +259,32 @@ def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | No
     bounds still apply).
     """
     try:
+        from chat_workflow.prompt_window import measured_prompt_budget
         from context_window_manager import get_context_window_manager
 
         cwm = get_context_window_manager()
-        room_tokens = cwm.get_prompt_budget(llm_params.get("model")) - cwm.estimate_tokens(llm_params["prompt"])
-        overhead = len(_HEADER) + file_count * len(_frame("x" * _NAME_LIMIT, ""))
+        budget = measured_prompt_budget(cwm, llm_params.get("model"), llm_params.get("system_prompt"))
+        room_tokens = budget - cwm.estimate_tokens(llm_params["prompt"])
+        overhead = len(_HEADER) + file_count * len(_frame("x" * _NAME_LIMIT, "", 10**9))
         return room_tokens * cwm._chars_per_token() - overhead
     except Exception as exc:  # noqa: BLE001 -- a budgeting failure must not cost the user their turn
         logger.warning("Attachment window budget unavailable, using the configured bounds: %s", type(exc).__name__)
         return None
+
+
+def _window_notice(llm_params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """An ``over_window`` notice when system + prompt still exceed what the request's window holds (#22016)."""
+    from chat_workflow.prompt_window import send_overflow
+
+    try:
+        over = send_overflow(llm_params.get("model"), llm_params.get("system_prompt"), llm_params.get("prompt"))
+    except Exception as exc:  # noqa: BLE001 -- a check must not cost the user their turn
+        logger.warning("Send-window check unavailable: %s", type(exc).__name__)
+        return []
+    if over is None:
+        return []
+    logger.warning("[#22016] Prompt over the window: ~%(estimated)d of %(window)d tokens", over)
+    return [_notice("over_window", **over)]
 
 
 async def _resolve_turn(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> AttachmentResult:
@@ -295,7 +315,7 @@ async def apply_attachments(session, context: Dict[str, Any] | None, llm_params:
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
         llm_params["attachment_block"] = result.block
-    llm_params["attachment_notices"] = result.notices
+    llm_params["attachment_notices"] = [*result.notices, *_window_notice(llm_params)]
 
 
 def without_block(llm_params: Dict[str, Any]) -> str:

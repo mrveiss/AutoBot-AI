@@ -799,8 +799,9 @@
       "unsupported": "\"{filename}\" no es un archivo de texto que el asistente pueda leer, así que no se usó.",
       "unreadable": "No se pudo leer \"{filename}\", así que no se usó.",
       "empty": "\"{filename}\" no tiene texto legible, así que no se usó.",
-      "truncated": "\"{filename}\" es largo, así que solo se usó el principio.",
-      "over_budget": "Los archivos adjuntos alcanzaron el límite de tamaño, así que no se usó \"{filename}\"."
+      "truncated": "\"{filename}\" es largo, así que solo se usaron los primeros {used} de {total} caracteres.",
+      "over_budget": "Los archivos adjuntos alcanzaron el límite de tamaño, así que no se usó \"{filename}\".",
+      "over_window": "La conversación es más larga que la ventana del modelo, así que parte del texto anterior puede no llegar a él."
     }
   },
   "settings": {

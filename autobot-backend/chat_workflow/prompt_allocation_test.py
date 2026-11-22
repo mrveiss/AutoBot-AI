@@ -70,8 +70,14 @@ class TestPromptFitsTheWindow:
             handler._build_full_prompt(_text(20_000, "k"), _text(20_000, "c"), "question", _text(20_000, "t"))
 
         [call] = [c for c in log.info.call_args_list if c.args and "#13640" in str(c.args[0])]
-        dropped = call.args[6]
-        assert "trajectory" in dropped, f"trajectory must be dropped first, got dropped={dropped!r}"
+        # The budget is the real window less the reply reserve and the safety margin (#22016): the two larger
+        # sections' shares can fill it, leaving the trajectory nothing or only rounding crumbs - never a share.
+        trimmed, dropped = call.args[5], call.args[6]
+        assert "trajectory" in trimmed or "trajectory" in dropped, f"trajectory goes first: {trimmed!r} {dropped!r}"
+        knowledge, trajectory, conversation = handler._allocate_prompt_sections(
+            _text(20_000, "k"), _text(20_000, "t"), _text(20_000, "c"), "question", None
+        )
+        assert len(trajectory) < len(conversation) // 100
         assert "conversation" not in dropped, "conversation outranks trajectory and must survive it"
 
 

@@ -691,6 +691,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         conversation_context: str,
         message: str,
         model_name: str | None,
+        system_prompt: str | None = None,
     ) -> tuple[str, str, str]:
         """Fit the prompt's competing sections into the model's window (#13640).
 
@@ -720,7 +721,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 ContextSection("trajectory", trajectory_context, priority=10, max_share=0.2),
             ]
             message_tokens = cwm.estimate_tokens(message)
-            budget = max(0, cwm.get_prompt_budget(model_name) - message_tokens)
+            from chat_workflow.prompt_window import measured_prompt_budget
+
+            budget = max(0, measured_prompt_budget(cwm, model_name, system_prompt) - message_tokens)
             result = cwm.allocate_sections(sections, budget_tokens=budget)
         except Exception as exc:
             logger.warning("[#13640] Prompt allocation failed, using untrimmed sections: %s", exc, exc_info=True)
@@ -747,6 +750,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         message: str,
         trajectory_context: str = "",
         model_name: str | None = None,
+        system_prompt: str | None = None,
     ) -> str:
         """Build full prompt with optional knowledge and trajectory context.
 
@@ -761,7 +765,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         content first, and what was shed is logged instead of vanishing.
         """
         knowledge_context, trajectory_context, conversation_context = self._allocate_prompt_sections(
-            knowledge_context, trajectory_context, conversation_context, message, model_name
+            knowledge_context, trajectory_context, conversation_context, message, model_name, system_prompt
         )
         prefix = ""
         if knowledge_context:
@@ -879,7 +883,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             )
 
         full_prompt = self._build_full_prompt(
-            knowledge_context, conversation_context, message, trajectory_context, model_name=selected_model
+            knowledge_context, conversation_context, message, trajectory_context, selected_model, system_prompt
         )
 
         # Issue #4265: Emit AFTER_PROMPT_BUILD hook after full prompt is built

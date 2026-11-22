@@ -22,7 +22,7 @@ accident of ordering.
 
 from __future__ import annotations
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_float, env_int
 
 #: Maximum multi-step continuation iterations for one turn (#352, #17468).
 #: Env-backed per the project's configuration rule -- a budget written as a bare
@@ -75,3 +75,7 @@ ATTACHMENT_TEXT_CACHE_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE
 
 #: Files whose extracted text the in-process cache holds at once (#20195); the oldest is dropped first.
 ATTACHMENT_TEXT_CACHE_MAX_ENTRIES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_TEXT_CACHE_MAX_ENTRIES", default=32)
+
+#: Share of the chat window kept free for the reply (#22016): the prompt budget reserves it and ``num_predict`` is
+#: set to match, so what the budget leaves for the prompt is what the model really has.
+OUTPUT_RESERVE_SHARE: float = env_float("AUTOBOT_CHAT_OUTPUT_RESERVE_SHARE", default=0.25)

@@ -799,8 +799,9 @@
       "unsupported": "\"{filename}\" nav teksta fails, ko asistents var nolasīt, tāpēc tas netika izmantots.",
       "unreadable": "Failu \"{filename}\" neizdevās nolasīt, tāpēc tas netika izmantots.",
       "empty": "Failā \"{filename}\" nav nolasāma teksta, tāpēc tas netika izmantots.",
-      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantots tikai tā sākums.",
-      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots."
+      "truncated": "Fails \"{filename}\" ir garš, tāpēc tika izmantotas tikai pirmās {used} no {total} rakstzīmēm.",
+      "over_budget": "Pievienotie faili sasniedza izmēra ierobežojumu, tāpēc \"{filename}\" netika izmantots.",
+      "over_window": "Saruna ir garāka par modeļa logu, tāpēc daļa iepriekšējā teksta var tam nenonākt."
     }
   },
   "settings": {
