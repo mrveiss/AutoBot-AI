@@ -42,9 +42,8 @@ cssclasses:
 | Document | Description |
 |----------|-------------|
 | [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) | Core → SLM management layer → modules |
-| [Why Self-Hosted](self-hosted-advantages.md) | The case for owning your AI platform |
 | [Service Lifecycle Manager (SLM)](guides/slm-docker-ansible-deployment.md) | The management layer: deploy, operate, scale your AI infrastructure |
-| [AutoBot LLC](llc/_index.md) | Flagship module: an autonomous agent-company you install |
+| [Company OS](llc/_index.md) | Flagship module: an autonomous agent-company you install |
 | [Demos](DEMOS.md) | Feature walkthroughs and demo recording scripts |
 
 ---
@@ -242,7 +241,7 @@ cssclasses:
 |----------|-------------|
 | [Frontend Index](frontend/_index.md) | All frontend documentation |
 | [Design System](frontend/DESIGN_SYSTEM_COMPLETE.md) | Design system |
-| [Settings Panel Guide](frontend/settings-panel-guide.md) | Settings panel guide |
+| [Settings Panel Guide](frontend/settings-panel-guide.md) | Retired panel, kept as a record (#19532); settings live in the SLM admin views |
 
 ---
 

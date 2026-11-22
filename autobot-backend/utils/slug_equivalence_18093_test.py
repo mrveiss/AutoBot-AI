@@ -149,12 +149,7 @@ SITES = {
         {"allowed": '"a-zA-Z0-9_:.-"', "replacement": '"_"', "collapse": "False"},
     ),
     "doc_indexer_tag": (
-        "autobot-backend/services/knowledge/doc_indexer.py",
-        _old_tag,
-        {"allowed": '"a-zA-Z0-9_-"', "replacement": '""', "case": '"lower"'},
-    ),
-    "index_documentation_tag": (
-        "autobot-infrastructure/shared/tools/index_documentation.py",
+        "autobot-backend/services/knowledge/doc_markdown_chunks.py",
         _old_tag,
         {"allowed": '"a-zA-Z0-9_-"', "replacement": '""', "case": '"lower"'},
     ),

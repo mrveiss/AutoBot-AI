@@ -13,10 +13,10 @@
     <div class="picker-header">
       <h3 class="picker-title">
         <Icon name="palette" size="md" />
-        Theme Presets
+        {{ t('ui.themePresets.title') }}
       </h3>
       <p class="picker-description">
-        Choose a pre-configured theme or customize your own color scheme
+        {{ t('ui.themePresets.description') }}
       </p>
     </div>
 
@@ -34,8 +34,8 @@
           <div class="preview-accent"></div>
         </div>
         <div class="preset-info">
-          <span class="preset-name">{{ THEME_PRESETS[presetKey].name }}</span>
-          <span class="preset-description">{{ THEME_PRESETS[presetKey].description }}</span>
+          <span class="preset-name">{{ t(THEME_PRESETS[presetKey].nameKey) }}</span>
+          <span class="preset-description">{{ t(THEME_PRESETS[presetKey].descriptionKey) }}</span>
         </div>
         <div v-if="preset === presetKey" class="preset-check">
           <Icon name="check-circle" size="sm" />
@@ -47,14 +47,14 @@
     <details class="advanced-controls">
       <summary class="advanced-summary">
         <Icon name="sliders-h" size="sm" />
-        Advanced Customization
+        {{ t('ui.themePresets.advanced') }}
       </summary>
       <div class="advanced-content">
         <!-- Manual Theme Control -->
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="sun" size="sm" />
-            Base Theme
+            {{ t('ui.themePresets.baseTheme') }}
           </legend>
           <div class="option-group">
             <button
@@ -75,7 +75,7 @@
         <fieldset class="control-section">
           <legend class="control-label">
             <Icon name="palette" size="sm" />
-            Accent Color
+            {{ t('ui.preferences.accentColor') }}
           </legend>
           <div class="accent-grid">
             <button
@@ -95,19 +95,18 @@
       </div>
     </details>
 
-    <!-- Screen reader announcements -->
-    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
-      {{ announcement }}
-    </div>
+    <!-- Deployed (SLM) themes, #18240 -->
+    <div class="px-6 pb-6"><AdditionalThemesGroup /></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { getThemeIcon } from '@/composables/themeIcons'
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme, type Theme, type ThemePreset, type AccentColor } from '@/composables/useTheme'
 import Icon from '@/components/ui/Icon.vue'
+import AdditionalThemesGroup from '@/components/settings/AdditionalThemesGroup.vue'
+import { useAnnounce } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ThemePresetPicker')
@@ -128,25 +127,15 @@ const {
   THEME_PRESETS,
 } = useTheme()
 
-// Screen reader announcements
-const announcement = ref('')
-
-/**
- * Helper function to announce changes to screen readers
- */
-function announceChange(message: string): void {
-  announcement.value = message
-  setTimeout(() => {
-    announcement.value = ''
-  }, 1000)
-}
+// Screen reader announcements: the kit's one live region (#18240)
+const { announce: announceChange } = useAnnounce()
 
 /**
  * Handle preset selection
  */
 function handleSelectPreset(presetKey: ThemePreset): void {
   setPreset(presetKey)
-  announceChange(t('ui.themeToggle.presetChanged', { name: THEME_PRESETS[presetKey].name }))
+  announceChange(t('ui.themeToggle.presetChanged', { name: t(THEME_PRESETS[presetKey].nameKey) }))
   logger.debug(`Theme preset changed to: ${presetKey}`)
 }
 
@@ -180,19 +169,6 @@ function handleSetAccent(colorOption: AccentColor): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
   overflow: hidden;
-}
-
-/* Screen reader only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 /* ============================================

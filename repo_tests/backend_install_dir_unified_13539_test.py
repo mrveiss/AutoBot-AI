@@ -82,6 +82,13 @@ def _ansible_jinja_env():
     return env
 
 
+_GROUP_VARS_ALL_AUTOBOT = yaml.safe_load(
+    (Path(__file__).resolve().parents[1] / "autobot-slm-backend/ansible/inventory/group_vars/all.yml").read_text(
+        encoding="utf-8"
+    )
+)["autobot"]
+
+
 def _resolve(raw: dict) -> dict:
     """Iteratively render a flat vars mapping against itself (see the B4
     sibling test for why this needs more than one pass).
@@ -94,6 +101,8 @@ def _resolve(raw: dict) -> dict:
     """
     env = _ansible_jinja_env()
     context = {k: v for k, v in raw.items() if isinstance(v, (str, int, float, bool))}
+    # Role defaults derive their paths from the inventory's install root (#15632, #18880).
+    context.setdefault("autobot", _GROUP_VARS_ALL_AUTOBOT)
     for _ in range(6):
         progressed = False
         for key, value in list(context.items()):
@@ -116,9 +125,9 @@ def _pythonpath_line() -> str:
     line."""
     text = _BACKEND_TEMPLATE.read_text(encoding="utf-8")
     lines = [line for line in text.splitlines() if line.strip().startswith('Environment="PYTHONPATH=')]
-    assert len(lines) == 1, (
-        f"expected exactly one PYTHONPATH Environment= line in {_BACKEND_TEMPLATE}, found {len(lines)}"
-    )
+    assert (
+        len(lines) == 1
+    ), f"expected exactly one PYTHONPATH Environment= line in {_BACKEND_TEMPLATE}, found {len(lines)}"
     return lines[0].strip()
 
 
@@ -134,9 +143,9 @@ def _autobot_shared_entry(rendered_pythonpath: str) -> str:
     assert match, f"could not find a PYTHONPATH value in {rendered_pythonpath!r}"
     entries = match.group(1).split(":")
     shared_entries = [entry for entry in entries if entry.endswith("/autobot_shared")]
-    assert len(shared_entries) == 1, (
-        f"expected exactly one autobot_shared PYTHONPATH entry, found {shared_entries} in {rendered_pythonpath!r}"
-    )
+    assert (
+        len(shared_entries) == 1
+    ), f"expected exactly one autobot_shared PYTHONPATH entry, found {shared_entries} in {rendered_pythonpath!r}"
     return shared_entries[0]
 
 

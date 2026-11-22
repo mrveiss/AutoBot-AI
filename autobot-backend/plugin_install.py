@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import strict_git_env
 from autobot_shared.plugin_sdk.base import PluginManifest
 from autobot_shared.ssot_config import config
+from security.upload_filename_policy import ZIP_EXTENSIONS, is_safe_file
 
 logger = get_logger(__name__)
 
@@ -69,7 +70,26 @@ def _community_plugins_dir() -> Path:
     return target
 
 
+def _builtin_plugin_names() -> set[str]:
+    """Names declared by the built-in ``core-plugins`` manifests (#18094), read from disk, not a list."""
+    names: set[str] = set()
+    for manifest_file in (config.path.plugins_path / "core-plugins").rglob("plugin.json"):
+        try:
+            declared = json.loads(manifest_file.read_text(encoding="utf-8")).get("name")
+        except (OSError, ValueError, AttributeError):
+            logger.warning("Unreadable built-in plugin manifest: %s", manifest_file)
+            continue
+        if isinstance(declared, str):
+            names.add(declared)
+    return names
+
+
 def _sanitize_plugin_name(name: str) -> str:
+    if name in _builtin_plugin_names():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Plugin name is reserved by a built-in plugin.",
+        )
     if not _NAME_PATTERN.match(name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -134,7 +154,7 @@ def _find_plugin_root(extract_dir: Path) -> Path:
 
 
 async def install_from_zip(upload: UploadFile) -> InstallResult:
-    if not upload.filename or not upload.filename.lower().endswith(".zip"):
+    if not upload.filename or not is_safe_file(upload.filename, ZIP_EXTENSIONS):  # #19088: bare name, .zip only
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Upload must be a .zip file",

@@ -69,29 +69,12 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    ServiceRegistry,
+    get_deployment_registry,
 )
-
-
-
-
 
 
 # Port env aliases + defaults mirror autobot_shared/ssot_config.py;
 # health paths mirror autobot_shared/ssot_constants.py.
-
-
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry(config_file: Optional[str] = None) -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry(config_file)
-    return _registry
 
 
 # --- end standalone replacements (#11761) -----------------------------------
@@ -109,7 +92,7 @@ class AutoBotDeployer:
         self.deployment_started = False
 
         # Load deployment configuration
-        self.service_registry = get_service_registry(config_file)
+        self.service_registry = get_deployment_registry(config_file)
 
         logger.info("🚀 AutoBot Deployer initialized")
         logger.info(f"   Mode: {self.mode.value}")
@@ -136,6 +119,27 @@ class AutoBotDeployer:
         }
         symbol = status_symbols.get(status, "📋")
         print(f"{symbol} {step}")  # noqa: print  # canonical: ignore py-print-smoke
+
+    def _floor_python(self) -> str:
+        """The floor interpreter, from `.python-version` via the shared shell helper (#20932).
+
+        One lookup for every deploy script: scripts/lib/python_floor.sh provisions
+        the interpreter when it is missing, and refuses with a clear message when
+        it cannot -- never a bare `python3`, whatever the node happens to ship.
+        """
+        for parent in Path(__file__).resolve().parents:
+            helper = parent / "scripts" / "lib" / "python_floor.sh"
+            if helper.is_file():
+                result = subprocess.run(
+                    ["bash", str(helper), "ensure", str(parent)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(result.stderr.strip() or "floor Python interpreter unavailable")
+                return result.stdout.strip()
+        raise RuntimeError("scripts/lib/python_floor.sh not found above deploy_autobot.py")
 
     def run_command(self, command: str, check: bool = True, cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
         """Run shell command with error handling."""
@@ -240,7 +244,7 @@ class AutoBotDeployer:
             DeploymentMode.DISTRIBUTED,
         ]:
             self.print_step("Creating Python virtual environment", "info")
-            self.run_command(f"python3 -m venv {venv_path}")
+            self.run_command(f"{self._floor_python()} -m venv {venv_path}")
 
             # Install requirements
             pip_cmd = f"{venv_path}/bin/pip"

@@ -14,13 +14,14 @@
 -->
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import { useProviderFallbackApi } from '@/composables/useProviderFallbackApi'
 import type {
   ActiveFallbackEntry,
   ConfiguredFallbackChain,
   ProviderFallbackPayload,
 } from '@/constants/providerFallbackEvents'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { fetchFallbackStatus, subscribeToFallbackEvents } = useProviderFallbackApi()
 
@@ -41,10 +42,7 @@ const noData = computed(
     timeline.value.length === 0,
 )
 
-function formatTimestamp(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '—'
-  return new Date(seconds * 1000).toLocaleString()
-}
+const formatTimestamp = createDateFormatter({ unit: 'seconds', emptyText: '—', invalidText: '—' })
 
 async function refresh(): Promise<void> {
   loading.value = true

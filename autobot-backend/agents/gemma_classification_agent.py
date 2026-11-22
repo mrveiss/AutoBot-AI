@@ -15,10 +15,11 @@ from typing import Any, Dict, List
 
 import aiohttp
 
-from agents.classification_agent import ClassificationResult
+from agents.classification_agent import TaskClassificationResult
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ollama_urls import ollama_generate_url, ollama_tags_url
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -184,7 +185,7 @@ Respond with valid JSON:
 
         return result
 
-    async def classify_multiple(self, messages: List[str], max_concurrent: int = 10) -> List[ClassificationResult]:
+    async def classify_multiple(self, messages: List[str], max_concurrent: int = 10) -> List[TaskClassificationResult]:
         """
         Classify a batch of messages in parallel with deduplication.
 
@@ -197,7 +198,7 @@ Respond with valid JSON:
             max_concurrent:  Maximum simultaneous LLM requests.
 
         Returns:
-            List of ClassificationResult in the same order as *messages*.
+            List of TaskClassificationResult in the same order as *messages*.
         """
         if not messages:
             return []
@@ -213,12 +214,12 @@ Respond with valid JSON:
 
         sem = asyncio.Semaphore(max_concurrent)
 
-        async def _one(msg: str) -> ClassificationResult:
+        async def _one(msg: str) -> TaskClassificationResult:
             async with sem:
                 return await self.classify_request(msg)
 
         raw_results = await asyncio.gather(*[_one(m) for m in hash_to_msg.values()], return_exceptions=True)
-        unique_results: dict[str, ClassificationResult] = {}
+        unique_results: dict[str, TaskClassificationResult] = {}
         for h, msg, result in zip(hash_to_msg.keys(), hash_to_msg.values(), raw_results):
             if isinstance(result, BaseException):
                 logger.warning("classify_multiple: task failed for hash %s: %s", h, result)
@@ -230,7 +231,7 @@ Respond with valid JSON:
 
     # ------------------------------------------------------------------
 
-    async def classify_request(self, user_message: str) -> ClassificationResult:
+    async def classify_request(self, user_message: str) -> TaskClassificationResult:
         """Classify user request using Gemma models with fallback."""
         import time
 
@@ -293,7 +294,7 @@ Respond with valid JSON:
         timeout = aiohttp.ClientTimeout(total=10)
 
         async with await http_client.post(
-            f"{self.ollama_host}/api/generate",
+            ollama_generate_url(self.ollama_host),
             json={
                 "model": model,
                 "prompt": prompt,
@@ -337,7 +338,7 @@ Respond with valid JSON:
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5)
-            async with await http_client.get(f"{self.ollama_host}/api/tags", timeout=timeout) as response:
+            async with await http_client.get(ollama_tags_url(self.ollama_host), timeout=timeout) as response:
                 if response.status == 200:
                     models_data = await response.json()
                     return [model["name"] for model in models_data.get("models", [])]
@@ -370,7 +371,7 @@ Respond with valid JSON:
         gemma_result: Dict[str, Any],
         keyword_result: TaskComplexity,
         user_message: str,
-    ) -> ClassificationResult:
+    ) -> TaskClassificationResult:
         """Create result from successful Gemma classification."""
 
         try:
@@ -390,7 +391,7 @@ Respond with valid JSON:
                 gemma_complexity = TaskComplexity.COMPLEX
                 confidence = 0.6
 
-            return ClassificationResult(
+            return TaskClassificationResult(
                 complexity=gemma_complexity,
                 confidence=confidence,
                 reasoning=gemma_result.get("reasoning", "Gemma model analysis"),
@@ -415,10 +416,10 @@ Respond with valid JSON:
             logger.error("Error creating Gemma result: %s", e)
             return self._create_fallback_result(user_message, keyword_result)
 
-    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> ClassificationResult:
+    def _create_fallback_result(self, user_message: str, keyword_result: TaskComplexity) -> TaskClassificationResult:
         """Create fallback result using keyword classification."""
 
-        return ClassificationResult(
+        return TaskClassificationResult(
             complexity=keyword_result,
             confidence=0.5,
             reasoning=f"Keyword-based classification: {keyword_result.value}",

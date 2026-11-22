@@ -8,9 +8,6 @@ that could potentially bypass security controls or cause system failures.
 """
 
 import asyncio
-import json
-import os
-import tempfile
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -18,6 +15,7 @@ import pytest
 
 from autobot_shared.status_enums import CommandRisk
 from security_layer import SecurityLayer
+from tests.fixtures.audit_trail import InMemoryAuditTrail
 
 
 class TestSecurityEdgeCases:
@@ -25,14 +23,14 @@ class TestSecurityEdgeCases:
 
     def setup_method(self):
         """Set up test fixtures with realistic security configuration"""
-        self.temp_audit_file = tempfile.NamedTemporaryFile(delete=False)
-        self.temp_audit_file.close()
+        self.trail = InMemoryAuditTrail()
+        self.trail_patch = self.trail.patched()
+        self.trail_patch.start()
 
         # Create comprehensive security configuration
         self.security_config = {
             "enable_auth": True,
             "enable_command_security": True,
-            "audit_log_file": self.temp_audit_file.name,
             "command_approval_required": True,
             "use_docker_sandbox": True,
             "max_approval_timeout": 300,  # 5 minutes
@@ -94,10 +92,7 @@ class TestSecurityEdgeCases:
 
     def teardown_method(self):
         """Clean up test fixtures"""
-        try:
-            os.unlink(self.temp_audit_file.name)
-        except OSError:
-            pass
+        self.trail_patch.stop()
 
     # === Command Injection Edge Cases ===
 
@@ -318,43 +313,26 @@ class TestSecurityEdgeCases:
                 details={"test": malicious_input},
             )
 
-        # Verify log integrity
-        history = self.security.get_command_history()
-        for entry in history:
-            # Should be valid JSON
-            try:
-                if isinstance(entry, str):
-                    json.loads(entry)
-                else:
-                    # Already parsed, should be dict
-                    assert isinstance(entry, dict)
-            except json.JSONDecodeError:
-                pytest.fail(f"Corrupted log entry found: {entry}")
+        # Every hostile value comes back intact as a field of its own record:
+        # nothing it contains can split one record into two or forge another.
+        entries = await self.security.get_audit_entries(limit=100)
+        assert len(entries) == len(log_injection_attempts)
+        assert sorted(e["user"] for e in entries) == sorted(log_injection_attempts)
+        assert all(e["details"]["test"] == e["user"] for e in entries)
 
     async def test_log_file_tampering_resilience(self):
-        """Test resilience against log file tampering"""
-        # First, create some legitimate log entries
+        """A corrupted member in the audit store is skipped, never fatal (#17225 D6: no file to tamper)."""
         for i in range(5):
             self.security.audit_log(
-                action=f"test_action_{i}",
+                action="command_execution_attempt",
                 user="test_user",
                 outcome="success",
                 details={"iteration": i},
             )
+        self.trail.members[1:1] = ["TAMPERED_DATA", "{invalid_json", "}"]
 
-        # Simulate log file tampering
-        with open(self.temp_audit_file.name, "a", encoding="utf-8") as f:
-            f.write("TAMPERED_DATA\n")
-            f.write("{invalid_json\n")
-            f.write("}")
-
-        # Should handle corrupted entries gracefully
-        try:
-            history = self.security.get_command_history()
-            # Should still return valid entries, skipping corrupted ones
-            assert len(history) >= 0  # Should not crash
-        except Exception as e:
-            pytest.fail(f"Failed to handle corrupted log file: {e}")
+        history = await self.security.get_command_history()
+        assert len(history) == 5
 
     # === Configuration Bypass Edge Cases ===
 
@@ -547,14 +525,14 @@ class TestSecurityBoundaryConditions:
 
     def setup_method(self):
         """Set up boundary condition tests"""
-        self.temp_audit_file = tempfile.NamedTemporaryFile(delete=False)
-        self.temp_audit_file.close()
+        self.trail = InMemoryAuditTrail()
+        self.trail_patch = self.trail.patched()
+        self.trail_patch.start()
 
         # Minimal security configuration for boundary testing
         self.minimal_config = {
             "enable_auth": False,
             "enable_command_security": False,
-            "audit_log_file": self.temp_audit_file.name,
         }
 
         with patch("security_layer.get_config_manager") as mock_get_config_manager:
@@ -563,10 +541,7 @@ class TestSecurityBoundaryConditions:
 
     def teardown_method(self):
         """Clean up test fixtures"""
-        try:
-            os.unlink(self.temp_audit_file.name)
-        except OSError:
-            pass
+        self.trail_patch.stop()
 
     async def test_empty_security_configuration(self):
         """Test behavior with minimal/empty security configuration"""
@@ -629,7 +604,7 @@ class TestSecurityBoundaryConditions:
             )
 
         # Should still be able to retrieve history
-        history = self.security.get_command_history(limit=10)
+        history = await self.security.get_command_history(limit=10)
         assert len(history) <= 10
         assert isinstance(history, list)
 

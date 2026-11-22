@@ -203,10 +203,6 @@ def _liquid_rendered_docs(root: Path) -> list[Path]:
 #: Reach floor. A discovery-based guard that scans nothing reports a clean run having asserted
 #: nothing -- the failure #15826 catalogues across this repo's tree scanners.
 #:
-#: Re-measured at 131 for the front-matter population, NOT carried across from the 650 that was
-#: sized over 739 files of which 608 can never break the build (#15928 forbids carrying a floor
-#: across a population change, and that is the whole point of this re-pin).
-#:
 #: The numbers are measured, and the risk they are sized against is the CEILING, not shrinkage.
 #: `verify_floor` fails when `count - floor > skips + growth`, so an over-wide window is not free
 #: caution -- it is a date on which an unrelated PR goes red. Measured on `main` by counting the
@@ -216,29 +212,14 @@ def _liquid_rendered_docs(root: Path) -> list[Path]:
 #:
 #: That is +0.24 files/day, and the largest drawdown in the series is 3 files.
 #:
-#: * `floor=125` sits 6 below today -- twice the largest observed drawdown, so ordinary
-#:   archiving does not fire it, while the loss of a seventh file (4.6% of the sweep)
-#:   does.
-#: * `growth=50` puts the ceiling at 175, which is 44 above today: ~180 days at the measured
+#: * `growth=50` puts the ceiling ~44 files above today: ~180 days at the measured
 #:   rate before a deliberate ratchet is due.
 #:
-#: A `min_fraction` was reconsidered rather than dismissed (#17930 review). The earlier note
-#: claimed the relative mode was unusable because `archives/` grows the denominator -- that was
-#: only true of ONE candidate reference, and `reference=` is overridable. Against the
-#: non-excluded docs count the ratio is strikingly stable: 0.167 / 0.182 / 0.180 / 0.174 / 0.176
-#: / 0.171 / 0.170 / 0.165 / 0.177 over the same nine revisions, so `min_fraction=0.15` would
-#: never need re-pinning. It is still not taken, for a measured reason: 0.15 of 739 is 110, so
-#: the sweep could lose 21 files -- 16% -- before firing, where `floor=125` fires on the 7th
-#: (4.6%); partial loss is the failure that
-#: `test_every_declared_floor_is_pinned_to_its_population` exists for. The staleness that
-#: justifies trading that away does not apply at this scale -- the population that produced
-#: SEVENTEEN re-pins grew at ~33 files/day and burned its ceiling in hours; this one grows at
-#: 0.24/day and buys ~180 days. Revisit if the rate rises or the ratio starts drifting.
+#: The floor is computed from the base commit (#19676), so the window moves with the population.
 DOCS_SCANNED = declare(
     "jekyll-processed-docs",
     discover=_liquid_rendered_docs,
     roots=(DOCS,),
-    floor=125,
     growth=50,
     skips=0,
     what="Markdown docs with front matter, the only ones Jekyll renders through Liquid",

@@ -45,11 +45,10 @@ def _frontend_source_files(root) -> list[str]:
 
 
 #: Bound at the 1,411 .vue/.ts/.js files measured under autobot-frontend/src/
-#: when this guard was introduced (#16299).
+#: when this guard was introduced (#16299); the floor is now computed from the base commit (#19676).
 REACH = declare(
     "vnc-password-not-in-frontend-source",
     discover=_frontend_source_files,
-    floor=1411,
     growth=150,
     skips=0,
     what="frontend .vue/.ts/.js source files",

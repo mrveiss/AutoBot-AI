@@ -14,11 +14,11 @@
     <h3 class="text-lg font-semibold mb-2">Theme Variant</h3>
     <div class="flex gap-3">
       <button
-        v-for="variant in availableVariants"
+        v-for="variant in builtinVariants"
         :key="variant"
         @click="setThemeVariant(variant)"
         :class="{
-          'bg-autobot-primary text-white': themeVariant === variant,
+          'bg-autobot-primary text-autobot-text-on-primary': themeVariant === variant,
           'bg-autobot-bg-tertiary text-autobot-text-primary hover:bg-autobot-bg-hover': themeVariant !== variant
         }"
         class="px-4 py-2 rounded-md transition-colors duration-200"
@@ -55,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useThemeVariant } from '@/composables/useThemeVariant'
 
 const {
@@ -63,7 +64,14 @@ const {
   availableVariants,
   variantLabels,
   variantDescriptions,
+  installedThemes,
 } = useThemeVariant()
+
+// Deployed (SLM-installed) themes are offered by ThemePresetPicker's "Additional
+// themes" group (#18240); this toggle keeps the built-in variants only.
+const builtinVariants = computed(() =>
+  availableVariants.value.filter((variant) => !installedThemes.value.some((theme) => theme.id === variant)),
+)
 </script>
 
 <style scoped>

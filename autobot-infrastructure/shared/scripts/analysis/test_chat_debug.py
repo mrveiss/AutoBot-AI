@@ -25,7 +25,7 @@ for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
 
 import config as config  # noqa: E402
 from agents.classification_agent import ClassificationAgent  # noqa: E402
-from async_chat_workflow import process_chat_message  # noqa: E402
+from async_chat_workflow import process_chat_message_with_timeout  # noqa: E402
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -61,7 +61,7 @@ async def test_conversation_flow():
 
     try:
         # The conversation_manager this used was removed; the async chat workflow is its successor.
-        outcome = await process_chat_message("hello", "test_debug_chat")
+        outcome = await process_chat_message_with_timeout("hello", "test_debug_chat")
         result = {
             "response": outcome.response,
             "message_type": outcome.message_type.value,

@@ -73,7 +73,7 @@ widget-span and tooltip tokens. The app already has a token pipeline; extend it,
 
 ### 4.1 Top navigation
 Logo · Home · Chat · Knowledge · Company OS · Analytics (`adv`), then an icon cluster on the
-right: Secrets (key) · Preferences · **UI-mode toggle** · Platform admin (shield, "Platform admin —
+right: Secrets (key) · Preferences (a **cogwheel** — the old rays icon read as a light/dark switch; use the same cog for every "settings" control) · **UI-mode toggle** · Platform admin (shield, "Platform admin —
 opens the SLM console ↗") · Profile settings. Plugins lives in the SLM console nav, not the user
 top nav. Every icon has an `aria-label` and a tooltip. Active item: `--nav-on-bw` underline in `--accent`. Overflow collapses into the existing
 `NavOverflowMenu`. Agents is reached from its own pages' sub-navigation, not the top bar.
@@ -127,13 +127,42 @@ first item of the **Danger Zone** card in SLM console → Advanced control. Refe
 Route/view as found on `main` at 940da29. **New** = no view exists yet; confirm the backend before
 building UI for it.
 
-Page groups on the canvas (115 screens): Entry & Home 8 · Chat & Workspace 3 · Knowledge 13 ·
-Company OS 24 (includes BusinessIntelligence) · Automation 7 · Agents 3 · Analytics 6 · Settings 2
-(Secrets, Preferences) · **SLM console (server-wide) 23** · Auth & Account 10 · Components 16. The
-SLM console group holds Operations, ErrorMonitoring, FailureAnalysis, Plugins, Marketplace,
-SecretsApiKeys, SecretsAudit, LlmConfig, ThemeManager, the Admin* screens, AuditLogs, SystemHealth,
-Experiments, Benchmark, Evolution and DevSpeedup. The routes below are the current user-frontend
-routes; the group says where the mockup now puts the screen.
+Page groups on the canvas (130 screens; the 131st file, `screens/CompanyOSRefined.dc.html`, is not placed on the canvas): Entry & Home 8 · Chat & Workspace 3 · Knowledge 9 ·
+Company OS 40 (includes BusinessIntelligence, the Transcriber screens and Handbook) · Automation 8 · Agents 3 ·
+Analytics 6 · Settings 2 (Secrets, Preferences) · **SLM console (server-wide) 25** · Auth & Account
+10 · Components 16. The SLM console group holds Operations, ErrorMonitoring, FailureAnalysis,
+Plugins, Marketplace, SecretsApiKeys, SecretsAudit, LlmConfig, ThemeManager, the Admin* screens,
+AuditLogs, SystemHealth, **KnowledgeHealth**, **SlmAgentLedger**, Experiments, Benchmark, Evolution
+and DevSpeedup.
+
+**Company OS model (owner, 2026-10-11 — #18390).** Like a film script: people and agents are the
+actors, they hold **roles**, roles perform **workflows**, workflows are made of **processes**. A
+workflow belongs to one role, starts on a trigger (manual, schedule, email received, work item
+status change, webhook, file added to folder, another process's result) and joins processes with
+typed transitions (on success, on failure with optional retries, if/else, after timeout). A process
+is reusable across workflows, has one owner role, may require skills, and may also run alone on a
+routine as its owner role. Roles hold **skills** and **meta skills** (a reusable graph of processes
+with no trigger, called by workflows as one step). `OrgChart`, `ProcessCanvas`,
+`ProcessCanvasTable`, `Roles` and `Routines` follow this model; build to #18390 once its open
+decisions are made.
+
+**Three lines for AI (owner, 2026-10-12 — #18430).** Every tool action, process and meta skill is
+*Autonomous*, *AI drafts, a person sends* (waits in Approvals) or *AI never touches*. Unset = the
+middle line; agents never change a line; changing one is an approval. A process shows its effective
+line (strictest of its own and its tool actions'). Setting up an automation is **four moves** —
+connect, set the line, give the job, wire the trigger — `AutomationSetup`.
+
+**Handbook (#18431).** An employee handbook that onboards people and agents: company chapters plus a
+generated page for every role, workflow, process and meta skill, an onboarding path per role, and
+need-to-know scoping per reader. `Handbook`.
+
+**Schedules (#18432).** One clickable schedule picker (Routines, workflow Schedule trigger, automation
+setup); lists show a plain-language summary; storage is translated in the background to standard
+cron, an RFC 5545 calendar rule, or a one-off run. The routes below are the current user-frontend
+routes; the group says where the mockup now puts the screen. For the 25 SLM-console screens the Route
+column gives the route in `autobot-slm-frontend` on `main` (`router/index.ts`, `router/monitoringRoutes.ts`)
+or **new**; "moving from" is the user-frontend path being retired, and "closest today" is a route
+that exists but does not serve the screen.
 
 | Mockup | Route | View / component |
 |---|---|---|
@@ -145,20 +174,20 @@ routes; the group says where the mockup now puts the screen.
 | SharedChat | `/shared/:token` | `views/SharedChatView.vue` |
 | NotFound | catch-all | `views/NotFoundView.vue` |
 | PermissionDenied | `/permission-denied` | (route exists) |
-| Chat | `/chat` | `ChatView` → `components/chat/ChatInterface.vue` |
+| Chat | `/chat` | `ChatView` → `components/chat/ChatInterface.vue` — tabs Chat · Files · Terminal · Browser · Remote desktop (`ChatTabs`, `ChatTabContent`); right panels Session files (`ChatFilePanel`) and Voice chat (`VoiceConversationPanel`), one at a time |
 | Desktop | `/chat/novnc` (`/desktop` redirects) | `ChatInterface.vue` (noVNC tab) |
 | Canvas | `/canvas` | `views/CanvasView.vue` |
 | Knowledge | `/knowledge/browser` | `components/knowledge/KnowledgeBrowser.vue` |
 | KnowledgeGraph | `/knowledge/graph` | `components/knowledge/KnowledgeGraphView.vue` |
 | KnowledgeVectorStore | `/knowledge/vector-store` | (route `knowledge-vector-store`, #8999) |
-| KnowledgeHealth | `/knowledge/health` | `components/knowledge/KnowledgeHealth.vue` |
+| KnowledgeHealth | `/knowledge/health` → **SLM** Monitoring › Knowledge base (admin only) — SLM route **new** (closest today: `/monitoring/admin`) | `components/knowledge/KnowledgeHealth.vue` — moves to `autobot-slm-frontend`, install-wide |
 | KnowledgeResearch | `/knowledge/research` | `components/knowledge/KnowledgeResearchTabs.vue` |
 | KnowledgeMcpResources | `/knowledge/mcp-resources` | `components/knowledge/McpResourceBrowser.vue` |
 | KnowledgeSystemDocs | `/knowledge/system-docs` | `components/knowledge/KnowledgeSystemDocs.vue` |
-| KnowledgeManage | `/knowledge/manage` | `components/knowledge/KnowledgeEntries.vue` |
+| KnowledgeManage | `/knowledge/manage` | `components/knowledge/KnowledgeEntries.vue` — upload takes audio/video too: transcribed by Transcriber, transcript added as text (#17527) |
 | KnowledgeEntities | `/knowledge/entities` | `components/knowledge/EntityGraphManager.vue` |
 | Documents | `/documents` redirects to `/knowledge/browser` | AI documents view inside Knowledge |
-| TranscriberProjects / Project / Transcript | `/knowledge/transcriber/…` | `views/transcriber/ProjectsView.vue`, `ProjectDetailView.vue`, `TranscriptView.vue` |
+| TranscriberProjects / Project / Transcript | `/knowledge/transcriber/…` → **Company OS** › Work › Transcriber | `views/transcriber/ProjectsView.vue`, `ProjectDetailView.vue`, `TranscriptView.vue` — watch folders start a workflow; transcripts can be added to Knowledge |
 | CompanySelector | `/llc/select-company` | `views/llc/CompanySelectorView.vue` |
 | CompanyCreate | `/llc/companies/create` | `views/llc/CompanyCreationWizard.vue` |
 | CompanyOS | `/llc/companies/:id/dashboard` | `views/llc/CompanyDashboard.vue` |
@@ -171,17 +200,30 @@ routes; the group says where the mockup now puts the screen.
 | WorkItem | — | work-item detail (drawer/page) — confirm where it opens today |
 | ReviewInbox | `…/reviews` | `views/llc/ReviewInboxView.vue` |
 | Goals | `…/goals` | `views/llc/GoalTree.vue` |
-| OrgChart | `…/org-chart` | `views/llc/OrgChart.vue` |
+| OrgChart | `…/org-chart` | `views/llc/OrgChart.vue` — roles with holders, skills, workflows, processes, routines (#18390) |
+| ProcessCanvas / ProcessCanvasTable | — **new** | workflow graph editor, process library, meta skills, transitions (#18390) |
+| Teams | — **new** | teams inside a company |
+| MyPlace | — **new** | a member's own landing page in the company |
+| ProjectDetail | — **new** | project page opened from Projects |
+| EntityLifecycle | — pattern | edit / archive / delete for Company OS entities |
+| RunSupervision | — **new** | live heartbeat runs |
+| OperationHistory | — **new** | company operation log |
+| AgentLedger | — **new** | who is working on what, per company (#18391) |
+| ApprovalReview | — **new** | single approval opened from Approvals |
+| CompanyMailbox | — **new** | company mailboxes |
+| CompanySettings | — **new** | company-wide settings |
 | Members / Roles | `…/members`, `…/roles` | `views/llc/MembersView.vue`, `RolesView.vue` |
 | Approvals | `…/approvals` | `views/llc/ApprovalsInbox.vue` |
 | Costs | `…/costs` | `views/llc/CostDashboard.vue` |
 | HeartbeatMonitor | `…/heartbeat` | `views/llc/HeartbeatMonitor.vue` |
-| Routines | `…/routines` | `views/llc/RoutinesView.vue` |
+| Routines | `…/routines` | `views/llc/RoutinesView.vue` — schedule picker replaces cron entry (#18432); each routine runs a process as its owner role |
+| Handbook | — **new** | company handbook, generated role/workflow/process pages, onboarding, need-to-know (#18431) |
 | CeoChat | `…/ceo-chat` | `views/llc/CeoChatView.vue` |
 | Activity | `…/activity` | `views/llc/ActivityFeedView.vue` |
 | Portability | `…/portability` | `views/llc/CompanyPortabilityView.vue` |
-| CompanySecrets | `…/secrets` | `views/llc/SecretsView.vue` |
+| CompanySecrets | `…/secrets` | `views/llc/CompanySecretsView.vue` |
 | AutomationOverview / Automation / Templates / Runner / History | `…/automation/:section` | `WorkflowBuilderView` |
+| AutomationSetup | — **new** | four-move setup: connect, set the line per tool action, give the job, wire the trigger (#18430) |
 | BrowserAutomation | `…/automation/browser-automation` | (child route) |
 | VisionAutomation | `…/automation/vision-automation` | `views/VisionAutomationView.vue` |
 | Agents | `/agents/registry` | `views/AgentRegistryView.vue` |
@@ -193,28 +235,29 @@ routes; the group says where the mockup now puts the screen.
 | AnalyticsCodeGeneration | `/analytics/code-generation` | `components/analytics/CodeGenerationDashboard.vue` |
 | BusinessIntelligence | `/analytics/bi` | `views/BusinessIntelligenceView.vue` |
 | Usage | `/analytics/usage` | `views/UsageView.vue` |
-| Operations | `/analytics/operations` | `views/OperationsView.vue` |
-| ErrorMonitoring | `/analytics/errors` | `views/ErrorMonitoringView.vue` |
-| FailureAnalysis | `/analytics/diagnostics` | `views/FailureAnalysisDashboard.vue` |
-| Plugins / Marketplace | `/plugins`, `/plugins/marketplace` | `views/PluginsView.vue`, `MarketplaceView.vue` |
-| Secrets / SecretsApiKeys / SecretsAudit | `/secrets`, `/secrets/llm-keys`, `/secrets/audit-log` | `components/security/SecretsManager.vue` + child routes |
+| Operations | SLM — **new** (closest today: `/monitoring/system`); moving from `/analytics/operations` | `views/OperationsView.vue` |
+| ErrorMonitoring | SLM `/monitoring/errors`; moving from `/analytics/errors` | `views/ErrorMonitoringView.vue` → `autobot-slm-frontend` `views/monitoring/ErrorMonitor.vue` |
+| FailureAnalysis | SLM — **new** (closest today: `/monitoring/errors`); moving from `/analytics/diagnostics` | `views/FailureAnalysisDashboard.vue` |
+| Plugins / Marketplace | SLM — **new**; moving from `/plugins`, `/plugins/marketplace` | `views/PluginsView.vue`, `MarketplaceView.vue` |
+| Secrets / SecretsApiKeys / SecretsAudit | SLM — **new** (closest today: `/settings/admin/secrets`, system secrets only; there is no `/secrets` route in the SLM); moving from `/secrets`, `/secrets/llm-keys`, `/secrets/audit-log` | `components/security/SecretsManager.vue` + child routes |
 | Preferences | `/preferences` | `views/SettingsView.vue` |
-| LlmConfig | SLM `admin/llm` | `autobot-slm-frontend` (`/llm-config` in the user frontend redirects) |
+| LlmConfig | SLM `/settings/admin/llm` | `autobot-slm-frontend` (`/llm-config` in the user frontend redirects) |
 | ThemeManager | SLM — **new** | SLM admin screen for installed themes (#10472) |
-| AdminUsers | `/admin/users` | `views/AdminUsersView.vue` |
-| AdminSandbox | `/admin/sandbox` | `views/AdminSandboxView.vue` |
-| AdminAdvancedControl | `/admin/advanced-control` | `views/AdvancedControlView.vue` |
-| AdminBudgetPolicies | `/admin/budget-policies` | `views/BudgetPolicies.vue` |
-| AdminProviderFallback | `/admin/provider-fallback` | `views/ProviderFallbackView.vue` |
-| AdminPricing | `/admin/pricing` | `views/AdminPricingView.vue` |
-| AdminMcpServers | `/admin/mcp-servers` | `views/AdminMcpServersView.vue` |
-| AdminPermissionScopes | `/admin/permission-scopes` | `views/AdminPermissionScopesView.vue` (empty state today) |
-| AuditLogs | `/analytics/audit` | `views/AuditLogsView.vue` |
-| SystemHealth | `/admin/system-health` | `views/SystemHealthView.vue` |
-| Experiments | `/experiments` | `views/ExperimentDashboard.vue` |
-| Benchmark | `/analytics/benchmark` | `views/BenchmarkView.vue` |
-| Evolution | `/analytics/evolution` | `views/EvolutionView.vue` |
-| DevSpeedup | `/analytics/dev-tools` | (moved there by #902) |
+| AdminUsers | SLM `/settings/admin/users`; moving from `/admin/users` | `views/AdminUsersView.vue` → SLM `views/settings/admin/UserManagementSettings.vue` |
+| AdminSandbox | SLM — **new**; moving from `/admin/sandbox` | `views/AdminSandboxView.vue` |
+| AdminAdvancedControl | SLM `/tools/advanced-control`; moving from `/admin/advanced-control` | `views/AdvancedControlView.vue` → SLM `views/tools/admin/AdvancedControlTool.vue` |
+| AdminBudgetPolicies | SLM — **new** (closest today: `/settings/admin/budget-audit`, read-only audit); moving from `/admin/budget-policies` | `views/BudgetPolicies.vue` |
+| AdminProviderFallback | SLM `/settings/admin/llm-fallbacks`; moving from `/admin/provider-fallback` | `views/ProviderFallbackView.vue` → SLM `views/settings/admin/LLMFallbacksView.vue` |
+| AdminPricing | SLM — **new**; moving from `/admin/pricing` | `views/AdminPricingView.vue` |
+| AdminMcpServers | SLM — **new** (closest today: `/tools/mcp`, the MCP Registry); moving from `/admin/mcp-servers` | `views/AdminMcpServersView.vue` |
+| AdminPermissionScopes | SLM — **new**; moving from `/admin/permission-scopes` | `views/AdminPermissionScopesView.vue` (empty state today) |
+| AuditLogs | SLM `/security/audit` (Audit Logs tab); moving from `/analytics/audit` | `views/AuditLogsView.vue` → SLM `views/SecurityView.vue` |
+| SystemHealth | SLM — **new** (closest today: `/monitoring/system`); moving from `/admin/system-health` | `views/SystemHealthView.vue` |
+| SlmAgentLedger | SLM `/monitoring/agent-ledger` (admin only, #18391) | install-wide agent ledger: presence, claims, contention, dev-loop history — SLM `views/monitoring/AgentLedgerMonitor.vue` |
+| Experiments | SLM — **new**; moving from `/experiments` | `views/ExperimentDashboard.vue` |
+| Benchmark | SLM — **new**; moving from `/analytics/benchmark` | `views/BenchmarkView.vue` |
+| Evolution | SLM — **new**; moving from `/analytics/evolution` | `views/EvolutionView.vue` |
+| DevSpeedup | SLM — **new**; moving from `/analytics/dev-tools` | (moved there by #902) |
 | SignUp, ForgotPassword, TwoFactor, AcceptInvite | — **new** | confirm auth backend support first |
 | AccountSecurity, AccountNotifications, AccountApiKeys, AccountIntegrations | — **new** | account area linked from Profile settings |
 | HelpCenter, SearchResults | — **new** | — |
@@ -244,10 +287,15 @@ Each step is one PR-sized scope. A session should take one step, not the whole l
 3. **Shared primitives** — buttons, pills, cards, tables, form controls, dialogs, overlays,
    tooltip (#14779), command menu — from the `Components*` screens.
 4. **Home and Company OS dashboards** — including move/resize widgets.
-5. **Section by section** — Chat (incl. System Control move to Advanced control), Knowledge,
-   Company OS pages + Automation, Agents, Analytics, Settings, SLM console.
-6. **New screens** — account area, auth flows, help, search, mailbox — each only after its backend
-   is confirmed.
+5. **Section by section** — Chat (incl. System Control move to Advanced control), Knowledge
+   (without Health and Transcriber; with audio/video upload), Company OS pages + Automation +
+   Transcriber, Agents, Analytics, Settings, SLM console (now including Knowledge base health and
+   Agent ledger).
+6. **New screens** — account area, auth flows, help, search, mailbox, and the Company OS screens
+   marked **new** in §5 — each only after its backend is confirmed. The role → workflow → process
+   screens wait for #18390; the agent ledger screens for #18391's read APIs; the AI lines and
+   automation setup for #18430 (one enforcement point with the approval policies, #17463); the
+   handbook for #18431; the schedule picker for #18432's scheduler support.
 
 ## Related
 

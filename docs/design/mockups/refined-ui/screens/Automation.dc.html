@@ -107,6 +107,10 @@ textarea.inp{height:auto;padding:8px 10px}
 .fl{font-size:12.5px;font-weight:600;color:var(--text2)}
 .sw{width:12px;height:12px;border-radius:3px;border:1px solid var(--stroke);box-sizing:border-box}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.achip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 3px 0 9px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:12.5px;white-space:nowrap}
+.achip .x{width:22px;height:22px;border-radius:4px;border:0;background:transparent;cursor:pointer;display:grid;place-items:center;padding:0}
+.achip .x:hover{background:var(--surface)}
+.amenu{position:absolute;z-index:6;top:36px;left:0;width:300px;padding:14px;box-sizing:border-box;background:var(--surface);border:var(--bw) solid var(--stroke);border-radius:8px;display:flex;flex-direction:column;gap:10px}
 .th[data-ui="minimal"] .adv{display:none !important}
 .th[data-ui="minimal"] .adv-only-full{display:none !important}
 .th .only-min{display:none !important}
@@ -150,7 +154,7 @@ textarea.inp{height:auto;padding:8px 10px}
     <a href="Analytics.dc.html" class="adv">Analytics</a>
     <span style="flex-grow: 1" aria-hidden="true"></span>    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
     <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
-    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
     <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
     <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
     <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="bottom" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
@@ -206,8 +210,35 @@ textarea.inp{height:auto;padding:8px 10px}
         <button type="button" class="ibtn" aria-label="Redo" data-tip="Redo · Ctrl ⇧ Z" data-tip-pos="bottom"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2"/></svg></button>
         <button type="button" class="ibtn adv" aria-label="Auto Layout" data-tip="Auto layout — tidy node positions" data-tip-pos="bottom"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5" class="i2"/></svg></button>
         <div style="flex-grow: 1"></div>
+        <a href="AutomationSetup.dc.html" class="btn sm pri"><svg class="ic sonp" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Set up an automation</a>
         <button type="button" class="btn sm">Save</button>
         <button type="button" class="btn sm pri" data-tip="Run Workflow · Ctrl Enter" data-tip-pos="bottom"><svg class="ic sonp" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z" style="fill: var(--on-primary)"/></svg>Run Workflow</button>
+        <div role="group" aria-labelledby="att-l" style="flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; margin-top: 2px; border-top: var(--bw) solid var(--line)">
+          <span id="att-l" class="sub2" style="font-weight: 600" tabindex="0" data-tip="The role and org-chart process step this workflow runs for. Attached workflows show as process nodes on the Org Chart." data-tip-pos="bottom">Attached to</span>
+          <sc-for list="{{attached}}" as="a" hint-placeholder-count="1">
+            <span class="achip"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" class="it1"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg><b style="font-weight: 600">{{a.role}}</b><span aria-hidden="true">·</span><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg><span>{{a.step}}</span><button type="button" class="x" aria-label="{{a.detachLabel}}" data-tip="{{a.detachLabel}}" data-tip-pos="bottom" onClick="{{a.detach}}"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+          </sc-for>
+          <sc-if value="{{noAttached}}" hint-placeholder-val="{{ false }}">
+            <span class="sub2">Not attached. It won't appear on the Org Chart until it is attached to a role.</span>
+          </sc-if>
+          <div style="position: relative">
+            <button type="button" class="btn sm" aria-haspopup="dialog" aria-expanded="{{attExp}}" onClick="{{toggleAtt}}" data-tip="Only company admins can attach or detach workflows" data-tip-pos="bottom"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Attach to role or step</button>
+            <sc-if value="{{attOpen}}" hint-placeholder-val="{{ false }}">
+              <div class="amenu" role="dialog" aria-labelledby="att-h">
+                <strong id="att-h" style="font-size: 13.5px">Attach Fleet self-heal</strong>
+                <label style="display: flex; flex-direction: column; gap: 6px"><span class="fl">Role</span><select class="inp" onChange="{{onAttRole}}"><option>Ops Lead</option><option>Staff Engineer</option><option>Performance Lead</option></select></label>
+                <label style="display: flex; flex-direction: column; gap: 6px"><span class="fl">Process step <span class="sub2" style="font-weight: 400">(optional)</span></span><select class="inp" onChange="{{onAttStep}}"><option>Fleet process › Release</option><option>Fleet process › Patch</option><option>Fleet process › Incident</option><option>No step: role only</option></select></label>
+                <span class="sub2" style="font-size: 12px">The org-chart step it runs for. Steps come from the role's process on the Org Chart.</span>
+                <div style="display: flex; gap: 8px; justify-content: flex-end">
+                  <button type="button" class="btn sm" onClick="{{toggleAtt}}">Cancel</button>
+                  <button type="button" class="btn sm pri" onClick="{{attach}}">Attach</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <a href="OrgChart.dc.html" class="sub2 adv" style="margin-left: auto">View on Org Chart</a>
+          <span class="sr" role="status" aria-live="polite">{{attAnnounce}}</span>
+        </div>
       </div>
 
       <div style="flex-grow: 1; display: flex; flex-wrap: wrap; align-items: stretch">
@@ -317,7 +348,27 @@ class Component extends DCLogic {
     const cur = st.theme || this.props.theme || 'light';
     const ui = st.ui || this.props.ui || 'full';
     const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const att = st.att || [['Ops Lead', 'Fleet process › Release']];
+    const attRole = st.attRole || 'Ops Lead';
+    const attStep = st.attStep || 'Fleet process › Release';
+    const stepText = attStep === 'No step: role only' ? 'Role only' : attStep;
     return {
+      attached: att.map((a, i) => ({
+        role: a[0], step: a[1],
+        detachLabel: 'Detach from ' + a[0] + ', ' + a[1],
+        detach: () => this.setState({ att: att.filter((x, j) => j !== i), attAnnounce: 'Workflow detached from ' + a[0] })
+      })),
+      noAttached: att.length === 0,
+      attOpen: !!st.attOpen,
+      attExp: st.attOpen ? 'true' : 'false',
+      toggleAtt: () => this.setState({ attOpen: !st.attOpen }),
+      onAttRole: (e) => this.setState({ attRole: e.target.value }),
+      onAttStep: (e) => this.setState({ attStep: e.target.value }),
+      attach: () => {
+        const dup = att.some((x) => x[0] === attRole && x[1] === stepText);
+        this.setState({ att: dup ? att : att.concat([[attRole, stepText]]), attOpen: false, attAnnounce: dup ? 'Already attached to ' + attRole : 'Workflow attached to ' + attRole });
+      },
+      attAnnounce: st.attAnnounce || '',
       theme: cur,
       ui: ui,
       uiAnnounce: st.uiAnnounce || '',

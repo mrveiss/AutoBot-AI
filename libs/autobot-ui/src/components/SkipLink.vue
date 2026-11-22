@@ -38,7 +38,7 @@ function skip(event: MouseEvent): void {
   position: absolute;
   top: 0;
   left: var(--aui-space-2);
-  z-index: calc(var(--aui-z-modal) + 1);
+  z-index: var(--aui-z-skip-link);
   transform: translateY(-200%);
   padding: var(--aui-space-2) var(--aui-space-4);
   border-radius: 0 0 var(--aui-radius-md) var(--aui-radius-md);

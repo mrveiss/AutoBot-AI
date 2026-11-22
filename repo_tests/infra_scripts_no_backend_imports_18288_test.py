@@ -41,6 +41,8 @@ from repo_tests._reach import declare
 from repo_tests.infra_backend_imports_allowlist_18288 import ALLOWLIST, BACKEND_TOOLS
 from repo_tests.infra_monitoring_import_path_15643_test import _assignments, _resolve_path_expr
 
+from tools.lint import _parse_cache as parse_cache
+
 SCAN_ROOTS = ("autobot-infrastructure",)
 #: The backend has well over two hundred top-level names; a derivation that found few broke.
 MIN_BACKEND_NAMES = 150
@@ -55,8 +57,6 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "infra-backend-import-scan",
     discover=_population,
-    # Mid-window from REACH.window(): population 282, skips 0, growth 30 -> (252, 282, 267).
-    floor=267,
     what="python modules",
     roots=SCAN_ROOTS,
     growth=30,
@@ -128,7 +128,7 @@ def own_tree_names(tree: ast.Module, path: Path, infra_root: Path) -> set[str]:
 
 def backend_imports(source: str, backend: frozenset[str], path: Path, infra_root: Path) -> set[str]:
     """The backend-only packages *source* imports that its own tree does not provide."""
-    tree = ast.parse(source)
+    tree = parse_cache.parse(source)
     return (_imported_tops(tree) & backend) - own_tree_names(tree, path, infra_root)
 
 
@@ -226,6 +226,7 @@ _IMPORT = textwrap.dedent("""
     spec = importlib.util.spec_from_file_location("backend_tool_under_test", sys.argv[1])
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
     print("IMPORTED")
+    print("SHARED", importlib.util.find_spec("autobot_shared") is not None)
     """)
 
 
@@ -247,6 +248,9 @@ def _clean_import(path: Path, cwd: Path) -> subprocess.CompletedProcess:
 def test_a_backend_tool_puts_the_backend_on_its_own_path(rel: str, tmp_path: Path) -> None:
     done = _clean_import(repo_root() / rel, tmp_path)
     assert done.returncode == 0 and "IMPORTED" in done.stdout, done.stderr[-800:]
+    # The backend itself imports `autobot_shared`, so a tool that only puts autobot-backend/ on its
+    # path imports cleanly here and dies the first time it runs a backend function (#18289).
+    assert "SHARED True" in done.stdout, "the tool does not put the repository root on its path (autobot_shared)"
 
 
 def test_contrast_a_backend_import_without_the_bootstrap_fails_clean(tmp_path: Path) -> None:

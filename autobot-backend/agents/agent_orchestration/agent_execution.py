@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from security.authority import Authority
 
 from .capability_requirements import refusal, refused_agents
+from .reading_user import librarian_query
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
 
 if TYPE_CHECKING:
@@ -146,6 +147,9 @@ class AgentExecutor:
 
         #16957: *authority* is the originator's (an A2A peer's); None is an internal
         caller. An agent it may not reach is refused before it runs, not fallen back from.
+
+        #19591: takes no ``user_id`` -- the distributed path reads the KB with no user (so the
+        librarian denies) until a principal for it is defined (#19810).
         """
         selected_agent = await self._select_distributed_agent(request, context, preferred_agents)
 
@@ -221,8 +225,13 @@ class AgentExecutor:
         context: Dict[str, Any] | None = None,
         chat_history: List[Dict[str, Any]] | None = None,
         authority: Authority | None = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Process request using legacy agent system. #16957: *authority* as in the distributed path."""
+        """Process request using legacy agent system. #16957: *authority* as in the distributed path.
+
+        #19591: *user_id* is the verified triggering user (never read from *context*); the KB
+        librarian reads as that user, and with none it returns no facts.
+        """
         # Determine optimal agent routing
         routing_decision = await self.router.determine_routing(request, context)
         refused = refused_agents(authority, _routed_agent_types(routing_decision))
@@ -231,9 +240,11 @@ class AgentExecutor:
 
         # Execute based on routing decision
         if routing_decision["strategy"] == "single_agent":
-            result = await self._execute_single_agent(routing_decision["primary_agent"], request, context, chat_history)
+            result = await self._execute_single_agent(
+                routing_decision["primary_agent"], request, context, chat_history, user_id
+            )
         elif routing_decision["strategy"] == "multi_agent":
-            result = await self._execute_multi_agent(routing_decision, request, context, chat_history)
+            result = await self._execute_multi_agent(routing_decision, request, context, chat_history, user_id)
         else:
             # Fallback to direct orchestrator handling
             result = await self._execute_orchestrator_fallback(request, context, chat_history)
@@ -314,10 +325,12 @@ class AgentExecutor:
         agent = self._get_system_commands_agent()
         return await agent.process_command_request(request, context)
 
-    async def _execute_rag_agent(self, request: str, context: Dict | None) -> Dict[str, Any]:
+    async def _execute_rag_agent(
+        self, request: str, context: Dict | None, user_id: str | None = None
+    ) -> Dict[str, Any]:
         """Execute RAG agent with document retrieval (Issue #334 - extracted helper)."""
         kb_agent = self._get_kb_librarian()
-        kb_result = await kb_agent.process_query(request)
+        kb_result = await librarian_query(kb_agent, request, user_id)
         documents = kb_result.get("documents", [])
 
         agent = self._get_rag_agent()
@@ -329,14 +342,15 @@ class AgentExecutor:
         request: str,
         context: Dict[str, Any] | None,
         chat_history: List[Dict[str, Any]] | None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Execute request using a single specialized agent."""
         try:
             agent_handlers = {
                 AgentType.CHAT: lambda: self._execute_chat_agent(request, context, chat_history),
                 AgentType.SYSTEM_COMMANDS: lambda: self._execute_system_commands_agent(request, context),
-                AgentType.RAG: lambda: self._execute_rag_agent(request, context),
-                AgentType.KNOWLEDGE_RETRIEVAL: lambda: self._get_kb_librarian().process_query(request),
+                AgentType.RAG: lambda: self._execute_rag_agent(request, context, user_id),
+                AgentType.KNOWLEDGE_RETRIEVAL: lambda: librarian_query(self._get_kb_librarian(), request, user_id),
                 AgentType.RESEARCH: lambda: self._get_research_agent().research_query(request),
             }
 
@@ -368,6 +382,7 @@ class AgentExecutor:
         request: str,
         context: Dict[str, Any] | None,
         chat_history: List[Dict[str, Any]] | None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """Execute request using multiple coordinated agents."""
         try:
@@ -375,7 +390,7 @@ class AgentExecutor:
             secondary_agents = routing_decision.get("secondary_agents", [])
 
             # Execute primary agent
-            primary_result = await self._execute_single_agent(primary_agent, request, context, chat_history)
+            primary_result = await self._execute_single_agent(primary_agent, request, context, chat_history, user_id)
 
             # Execute secondary agents if needed
             secondary_results = []
@@ -385,7 +400,7 @@ class AgentExecutor:
                     secondary_request = self.router.adapt_request_for_secondary(request, primary_result, agent_type)
 
                     secondary_result = await self._execute_single_agent(
-                        agent_type, secondary_request, context, chat_history
+                        agent_type, secondary_request, context, chat_history, user_id
                     )
                     secondary_results.append(secondary_result)
 

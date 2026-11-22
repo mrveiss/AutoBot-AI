@@ -58,8 +58,8 @@ def test_every_search_credential_resolves_through_the_vault_seam(asked_names: li
     assert not missing, f"declared search credentials never resolved at runtime: {missing}"
 
 
-def test_env_var_wins_over_the_vault(monkeypatch) -> None:
-    """Dual-read, env-first: an Ansible-provisioned deployment is unaffected."""
+def test_the_vault_wins_over_the_env_var(monkeypatch) -> None:
+    """Vault first; the env var is only a logged migration fallback (#18094, owner decision 2026-10-12)."""
     import services.provider_key_vault as vault_mod
     from autobot_shared.ssot_config import config
 
@@ -71,7 +71,7 @@ def test_env_var_wins_over_the_vault(monkeypatch) -> None:
 
     provider = registry.get_provider("brave")
     assert provider is not None
-    assert provider.api_key == "env-value"
+    assert provider.api_key == "vault-value"
 
 
 def test_vault_only_credential_still_registers_the_provider(monkeypatch) -> None:

@@ -142,9 +142,9 @@ class TestCreatePermissiveSslContext:
         assert ctx.verify_mode != ssl.CERT_NONE
 
 
-# Placeholder operator token for WS tests. _ws_connect_and_listen only checks
-# that a token exists before connecting, so the value is never validated.
+# Placeholder operator token for WS tests: only its existence is checked, never its value.
 _WS_TOKEN_PLACEHOLDER = "placeholder-not-a-credential"  # nosec B105  # test fixture, never validated
+_WS_CONNECT = "services.slm_client.connect_no_redirect"  # the SLM websocket opener
 
 
 class TestSLMClientReconnectBackoff:
@@ -242,9 +242,9 @@ class TestSLMClientReconnectBackoff:
         # An explicit token keeps the test hermetic. Without one,
         # _ws_connect_and_listen falls back to _get_slm_signing_secret(), which
         # reads ambient deployment config: on a host with a populated .env it
-        # proceeded to websockets.connect, but on a bare CI runner it logged a
-        # warning and returned before reaching the code under test, so the
-        # assertion below failed for a reason unrelated to SSL handling (#13551).
+        # proceeded to connect, but on a bare CI runner it logged a warning and
+        # returned before reaching the code under test, so the assertion below
+        # failed for a reason unrelated to SSL handling (#13551).
         client.auth_token = _WS_TOKEN_PLACEHOLDER
         client._shutdown = True  # Don't loop
 
@@ -255,7 +255,7 @@ class TestSLMClientReconnectBackoff:
         mock_ws.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("websockets.connect", return_value=mock_ws),
+            patch(_WS_CONNECT, return_value=mock_ws),
             patch("services.slm_client.logger") as mock_logger,
         ):
             # Should not raise
@@ -380,7 +380,7 @@ class TestWsConnectAndListenJwtMinting:
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
             patch("services.slm_client._mint_service_jwt", wraps=_mint_service_jwt) as mock_mint,
-            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -402,7 +402,7 @@ class TestWsConnectAndListenJwtMinting:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=None),
-            patch("websockets.connect") as mock_connect,
+            patch(_WS_CONNECT) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -420,7 +420,7 @@ class TestWsConnectAndListenJwtMinting:
 
         with (
             patch("services.slm_client._mint_service_jwt") as mock_mint,
-            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: mock_ws_ctx) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -461,7 +461,7 @@ class TestWsUrlPrefixSelection:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -478,7 +478,7 @@ class TestWsUrlPrefixSelection:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -496,7 +496,7 @@ class TestWsUrlPrefixSelection:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -511,7 +511,7 @@ class TestWsUrlPrefixSelection:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: self._make_mock_ws()) as mock_connect,
         ):
             await client._ws_connect_and_listen()
 
@@ -594,7 +594,7 @@ class TestWsAuthFailureGuard:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: mock_ws_ctx),
         ):
             await client._ws_connect_and_listen()
 
@@ -619,7 +619,7 @@ class TestWsAuthFailureGuard:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: mock_ws_ctx),
             patch("services.slm_client.logger") as mock_logger,
         ):
             for _ in range(_WS_AUTH_FAIL_THRESHOLD):
@@ -652,7 +652,7 @@ class TestWsAuthFailureGuard:
 
         with (
             patch("services.slm_client._get_slm_signing_secret", return_value=_TEST_SECRET),
-            patch("websockets.connect", side_effect=lambda url, **kw: mock_ws_ctx),
+            patch(_WS_CONNECT, side_effect=lambda url, **kw: mock_ws_ctx),
         ):
             await client._ws_connect_and_listen()
 

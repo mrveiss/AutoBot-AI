@@ -12,6 +12,7 @@ the four hand-written branches the table replaced (browser #1368, web_search
 """
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -32,6 +33,16 @@ _DISPATCH_ARGS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _verifier_off(monkeypatch):
+    """Routing is tested in isolation: the pre-action verifier is its own suite's subject (#21844).
+
+    Unpatched, ``click``/``execute_command`` reach the real verifier, which asks whatever model the host's Ollama
+    has installed -- a verdict that depends on the machine, not on the routing table.
+    """
+    monkeypatch.setattr("autobot_shared.pre_action_verifier_guard.pre_action_verifier_enabled", lambda: False)
+
+
 def _mixin() -> ToolHandlerMixin:
     mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
     # Governance gates are covered by their own suites (GH#11145/11160/11177/11178);
@@ -39,7 +50,7 @@ def _mixin() -> ToolHandlerMixin:
     mixin._enforce_forbidden_work = lambda *a, **k: None
     mixin._enforce_config_protection = lambda *a, **k: None
     mixin._enforce_fact_forcing = lambda *a, **k: None
-    mixin._enforce_work_item_approval = lambda *a, **k: None
+    mixin._enforce_ai_line = AsyncMock(return_value=None)
     return mixin
 
 

@@ -51,10 +51,10 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_OPENVINO_CACHE_DIR",
         type=str,
-        default="data/openvino_cache",
+        default=None,
         description=(
-            "Directory for compiled OpenVINO model artefacts. Relative to the "
-            "working directory unless given as an absolute path."
+            "Directory for compiled OpenVINO model artefacts. Unset: "
+            "shared_cache_path('openvino') in the user cache, never the repo (#19553)."
         ),
         component="ai",
     )
@@ -238,6 +238,21 @@ register_env_var(
         component="ai",
     )
 )
+
+# Observed-headroom routing (#15028): the routing floor and the age past which a reading is ignored.
+for _name, _default, _description in (
+    (
+        "AUTOBOT_LLM_HEADROOM_FLOOR",
+        0.05,
+        "Remaining fraction of a rate-limit window at or below which routing moves on.",
+    ),
+    (
+        "AUTOBOT_LLM_HEADROOM_MAX_AGE_SECONDS",
+        120.0,
+        "Age in seconds beyond which an observed rate-limit reading is ignored.",
+    ),
+):
+    register_env_var(EnvVarSpec(name=_name, type=float, default=_default, description=_description, component="ai"))
 
 register_env_var(
     EnvVarSpec(

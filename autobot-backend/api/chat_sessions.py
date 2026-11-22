@@ -11,11 +11,16 @@ storage to the chat_history subsystem.
 """
 
 import json
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
+from api import chat_session_sharing as _sharing  # #18890, #21898: share routes + the owner-only gate
+from api.chat_activity_store import _process_activity_batch, _store_single_activity, activity_principal
+from api.chat_session_messages import fetch_session_messages
+from api.chat_session_team_access import require_team_member
+from api.chat_sessions_update import apply_session_update
 from api.schemas_chat import (
     ActivityAddData,
     ActivityBatchCreate,
@@ -28,9 +33,7 @@ from api.schemas_chat import (
     SessionCreate,
     SessionCreateData,
     SessionDeleteData,
-    SessionShareData,
     SessionSharePreviewData,
-    SessionShareRequest,
     SessionUpdate,
     SessionUpdateData,
 )
@@ -41,18 +44,19 @@ from api.session_events import (
     publish_session_deleted,
     publish_session_updated,
 )
-from auth_middleware import get_auth_middleware, get_current_user
+from auth_middleware import get_auth_middleware, get_current_user, resolve_human_user
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from chat_history.owner_keys import owner_from_metadata, strip_server_controlled
 
 # Import session lifecycle hooks (Issue #4260)
 from chat_workflow.session_handler import _emit_session_create, _emit_session_destroy
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
+from exceptions import ValidationError as ScopeValidationError
 from exceptions import get_exceptions_lazy
-
-# CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 
 # Issue #6559: Wire audit_record into session create/delete/export endpoints
@@ -62,14 +66,13 @@ from type_defs.common import Metadata
 # Import reusable chat utilities
 from utils.chat_utils import (
     create_chat_response,
-    create_error_response,
     generate_chat_session_id,
     generate_request_id,
     get_chat_history_manager,
     log_chat_event,
     validate_chat_session_id,
 )
-from utils.response_helpers import create_success_response
+from utils.response_helpers import create_error_response, create_success_response
 
 # ====================================================================
 # Router Configuration
@@ -217,53 +220,6 @@ def _validate_pagination_params(page: int, per_page: int) -> None:
         raise ValidationError("Invalid pagination parameters")
 
 
-async def _fetch_session_messages_or_raise(chat_history_manager, session_id: str, limit: int, offset: int = 0) -> List:
-    """
-    Fetch session messages and raise ResourceNotFoundError if session not found.
-
-    Issue #620.
-    Issue #1797: Granular exception mapping for session load failures.
-
-    Args:
-        chat_history_manager: Chat history manager instance
-        session_id: Session ID to fetch messages for
-        limit: Maximum messages to return
-        offset: Messages to skip, counting back from the newest (#15186)
-
-    Returns:
-        List of messages
-
-    Raises:
-        ResourceNotFoundError: If session does not exist
-        ValidationError: If session data is corrupted (ValueError)
-        InternalError: If session cannot be accessed (PermissionError)
-    """
-    (
-        AutoBotError,
-        InternalError,
-        ResourceNotFoundError,
-        ValidationError,
-        get_error_code,
-    ) = get_exceptions_lazy()
-
-    try:
-        messages = await chat_history_manager.get_session_messages(session_id, limit=limit, offset=offset)
-    except FileNotFoundError:
-        logger.warning("Session file not found for session %s", session_id)
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-    except PermissionError:
-        logger.error("Permission denied accessing session %s", session_id)
-        raise InternalError("Unable to access chat session")
-    except ValueError as exc:
-        logger.error("Corrupted session data for session %s: %s", session_id, exc)
-        raise ValidationError("Chat session data is corrupted")
-
-    if messages is None:
-        raise ResourceNotFoundError(f"Session {session_id} not found")
-
-    return messages
-
-
 def _validate_export_format_or_raise(export_format: str) -> None:
     """
     Validate export format and raise ValidationError if invalid.
@@ -359,7 +315,7 @@ async def get_session_messages(
 
     chat_history_manager = get_chat_history_manager(request)
 
-    messages = await _fetch_session_messages_or_raise(chat_history_manager, session_id, per_page, (page - 1) * per_page)
+    messages = await fetch_session_messages(request, chat_history_manager, session_id, per_page, (page - 1) * per_page)
     total_count = await chat_history_manager.get_session_message_count(session_id)
 
     return create_chat_response(
@@ -419,19 +375,8 @@ async def list_sessions(
     if scope in ("org", "team"):
         return await _list_scoped_sessions(request, request_id, chat_history_manager, scope, team_id)
 
-    # Default: list all sessions (fast mode)
-    sessions = await chat_history_manager.list_sessions_fast()
-
-    # #12685: exclude company/agent-scoped conversations (e.g. LLC CEO chat)
-    # from the ordinary user list — first-class scoping fields, not a title
-    # parse. See _is_agent_scoped_session for the migration story on sessions
-    # created before this fix.
-    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
-
-    # Filter to authenticated user's own sessions
-    username = current_user.get("username")
-    if username:
-        sessions = await _filter_user_sessions(sessions, username)
+    # Default: the caller's own ordinary sessions (fast mode)
+    sessions = await list_user_sessions(chat_history_manager, current_user.get("username"))
 
     # Issue #4352: Signal intentional empty to distinguish from API failure.
     # When an authenticated request returns 0 sessions, mark it explicitly so
@@ -475,41 +420,46 @@ def _is_agent_scoped_session(session: dict) -> bool:
     return bool(session.get("companyId")) or session.get("sessionKind") == "agent"
 
 
-async def _filter_user_sessions(sessions: list, username: str) -> list:
-    """Filter sessions to those owned by the user.
+async def list_user_sessions(chat_history_manager, username: str | None) -> list:
+    """The caller's own ordinary chat sessions — the one listing every route uses (#21653).
 
-    Uses Redis ownership data. Falls back to all sessions
-    if Redis is unavailable.
+    Shared by ``GET /chat/sessions`` (default scope) and ``/api/batch-jobs/chat-init``
+    so both apply the same ownership filter (``_filter_user_sessions``) and the same
+    agent-scoped exclusion. No role bypass: an administrator lists only their own.
+    Fails closed (#21664): a principal with no username owns nothing, so it gets ``[]``.
+    """
+    if not username:
+        return []
+    sessions = await chat_history_manager.list_sessions_fast()
+    # #12685: company/agent-scoped conversations (e.g. LLC CEO chat) are not ordinary
+    # user chats — first-class scoping fields, not a title parse.
+    sessions = [s for s in sessions if not _is_agent_scoped_session(s)]
+    return await _filter_user_sessions(sessions, username, chat_history_manager.get_session_owner)
 
-    Helper for list_sessions (#684).
+
+async def _filter_user_sessions(sessions: list, username: str, read_owner) -> list:
+    """Filter sessions to those owned by the user (#684).
+
+    Uses the owner index, rebuilt from the session files' durable owner through
+    *read_owner* when the Redis set is empty (``security.session_owner_index``), and
+    fails closed: an unavailable store raises, and a caller who owns nothing gets
+    ``[]`` (#21664). Sessions that predate ownership tracking stay unlisted until an
+    owner is assigned through the approval queue; nothing here assigns or deletes them.
     """
     from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_owner_index import owned_session_ids
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
         validator = _build_ownership_validator(redis)
-        user_session_ids = set(await validator.get_user_sessions(username))
+        candidate_ids = [s.get("id") for s in sessions if s.get("id")]
+        user_session_ids = await owned_session_ids(validator, username, candidate_ids, read_owner)
     except Exception as e:
-        # #12685: this used to `return sessions` — the UNFILTERED list — whenever
-        # the ownership lookup failed. On a tenancy filter that is the wrong
-        # direction to fail: a Redis blip silently exposed every session on the
-        # instance, including other companies' agent conversations. Surfacing an
-        # error lets the UI say "could not load your sessions" instead of
-        # showing someone else's.
+        # #12685: never the unfiltered list on a failed lookup; a 503 lets the UI say "could not
+        # load your sessions" (and carries no intentional_empty, so it keeps its local copy, #21664).
         logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
         raise OwnershipUnavailableError("Could not verify session ownership") from e
-
-    if not user_session_ids:
-        # No ownership records for this user. Kept as-is pending #12685's
-        # decision on pre-ownership legacy sessions: failing closed here would
-        # hide a user's own history on installs that predate ownership
-        # tracking. Logged so the exposure is visible rather than silent.
-        logger.warning(
-            "No ownership records for %s — returning the unfiltered session list (#12685)",
-            username,
-        )
-        return sessions
 
     return [s for s in sessions if s.get("id") in user_session_ids]
 
@@ -555,15 +505,8 @@ async def _list_scoped_sessions(
 
     # scope == "team"
     if not team_id:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ValidationError("team_id required for team scope")
-
+        raise ScopeValidationError("team_id required for team scope")
+    await require_team_member(user_data, team_id)  # #21667
     return await _list_team_sessions(team_id, validator, chat_history_manager, request_id)
 
 
@@ -583,11 +526,9 @@ async def _list_org_sessions(
     user_role = user_data.get("role", "")
     if not org_id:
         return create_chat_response(
-            data={"sessions": [], "count": 0, "scope": "org"},
-            message="User has no organization",
-            request_id=request_id,
+            data={"sessions": [], "count": 0, "scope": "org"}, message="User has no organization", request_id=request_id
         )
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         (
             AutoBotError,
             InternalError,
@@ -702,14 +643,12 @@ async def _register_session_ownership(
         return
     try:
         from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+        from security.session_owner_index import index_owner_or_unmark
 
-        redis = await get_redis_mgr(async_client=True, database="main")
-        validator = _build_ownership_validator(redis)
-        await validator.set_session_owner(
-            session_id=session_id,
-            username=user_data["username"],
-            org_id=user_data.get("org_id"),
-            team_id=team_id,
+        validator = _build_ownership_validator(await get_redis_mgr(async_client=True, database="main"))
+        # #21664: index it, or unmark the owner's index so their next list rebuilds and shows it
+        await index_owner_or_unmark(
+            validator, session_id, user_data["username"], org_id=user_data.get("org_id"), team_id=team_id
         )
     except Exception as e:
         logger.warning("Failed to register session ownership: %s", e)
@@ -744,17 +683,15 @@ async def _track_session_in_memory_graph(
         username = user_data.get("username", "anonymous")
 
         # Create user entity (idempotent - returns existing if found)
-        await memory_graph.create_user_entity(
-            user_id=user_id,
-            username=username,
-            metadata={"source": "session_creation"},
-        )
+        org_id = user_data.get("org_id") or None  # #18825: the principal's JWT org
+        await memory_graph.create_user_entity(user_id, username, {"source": "session_creation"}, org_id=org_id)
 
         # Create chat session entity linked to user
         await memory_graph.create_chat_session_entity(
             session_id=session_id,
             owner_id=user_id,
             title=session_title,
+            org_id=org_id,
             metadata={
                 "created_via": "api",
                 "request_id": request_id,
@@ -796,7 +733,7 @@ async def _reject_session_id_collision(chat_history_manager, session_id: str, us
             raise _session_id_taken_error()
         return
 
-    owner = ((existing.get("metadata") or {}) if isinstance(existing, dict) else {}).get("owner")
+    owner = owner_from_metadata((existing.get("metadata") or {}) if isinstance(existing, dict) else {})
     caller = (user_data or {}).get("username")
     if owner and caller and owner == caller:
         return  # the caller's own session — a retry, not a takeover
@@ -840,8 +777,8 @@ async def create_session(session_data: SessionCreate, request: Request):
     # so the frontend's locally-minted UUID survives the round-trip and
     # frontend/backend stay aligned. Falls back to server-mint when absent
     # (legacy callers, CLI, tests).
-    # SECURITY: Extract authenticated user and add to metadata as owner
-    user_data = get_auth_middleware().get_user_from_request(request)
+    # SECURITY: Extract authenticated user and add to metadata as owner; a revoked JWT is 401 (#18688)
+    user_data = await resolve_human_user(request)
 
     if session_data.id and validate_chat_session_id(session_data.id):
         session_id = session_data.id
@@ -854,7 +791,9 @@ async def create_session(session_data: SessionCreate, request: Request):
         session_id = generate_chat_session_id()
     session_title = session_data.title or DEFAULT_SESSION_TITLE
 
-    metadata = session_data.metadata or {}
+    # #20928: client metadata can't set server-controlled ownership keys; the one strip the PUT
+    # route also uses runs before the server adds its own.
+    metadata = strip_server_controlled(session_data.metadata)
     # #14020: one builder for every path that stamps ownership (#684 org/team
     # hierarchy included), so create and backfill cannot drift apart.
     metadata.update(build_owner_metadata(user_data, session_data.team_id))
@@ -926,7 +865,7 @@ async def update_session(
     session_id: str,
     session_data: SessionUpdate,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
 ):
     """Update a chat session"""
     request_id = generate_request_id()
@@ -946,22 +885,7 @@ async def update_session(
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
 
-    # Update session
-    updated_session = await chat_history_manager.update_session(
-        session_id=session_id,
-        title=session_data.title,
-        metadata=session_data.metadata,
-    )
-
-    if updated_session is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
-        raise ResourceNotFoundError(f"Session {session_id} not found")
+    updated_session = await apply_session_update(chat_history_manager, session_id, session_data)
 
     log_chat_event(
         "session_updated",
@@ -1244,7 +1168,7 @@ def _build_delete_session_response(
 async def delete_session(
     session_id: str,
     request: Request,
-    ownership: Dict = Depends(validate_session_ownership),  # SECURITY: Validate ownership
+    ownership: Dict = Depends(_sharing.validate_session_owner),  # SECURITY: Validate ownership
     file_action: str = "delete",
     file_options: str | None = None,
 ):
@@ -1255,6 +1179,7 @@ async def delete_session(
     """
     request_id = generate_request_id()
     log_request_context(request, "delete_session", request_id)
+    _sharing.require_owner(ownership)  # SECURITY: owner-only for every caller, incl. DELETE /chats/{id} (#21898)
 
     parsed_file_options = _validate_delete_session_params(session_id, file_action, file_options)
 
@@ -1429,7 +1354,7 @@ async def reset_chat(request: Request, reset_request: ChatResetRequest | None = 
         # resolves a path parameter. Reset clears another user's conversation,
         # so the caller must own it. Only reachable when an id was supplied; an
         # absent one mints a new session above, which has no owner to check.
-        await validate_session_ownership(session_id, request)  # SECURITY: caller must own the session
+        _sharing.require_owner(await validate_session_ownership(session_id, request))  # SECURITY: owner-only (#21898)
 
         if clear_context:
             await _clear_session_messages(chat_history_manager, session_id)
@@ -1490,78 +1415,6 @@ def _create_activity_unavailable_response(
     )
 
 
-async def _store_single_activity(
-    memory_graph: AutoBotMemoryGraph,
-    session_id: str,
-    activity: ActivityCreate,
-) -> Dict:
-    """
-    Store a single activity in memory graph.
-
-    Issue #665: Extracted helper for activity storage.
-
-    Returns:
-        Entity creation result dict
-    """
-    return await memory_graph.create_activity_entity(
-        activity_type=f"{activity.type}_activity",
-        session_id=session_id,
-        user_id=activity.user_id,
-        content=activity.content,
-        secrets_used=activity.secrets_used,
-        metadata={
-            "frontend_id": activity.activity_id,
-            "frontend_timestamp": activity.timestamp,
-            **(activity.metadata or {}),
-        },
-    )
-
-
-async def _process_activity_batch(
-    memory_graph: AutoBotMemoryGraph,
-    session_id: str,
-    activities: List[ActivityCreate],
-    request_id: str,
-) -> Dict:
-    """
-    Process a batch of activities and store them in memory graph.
-
-    Issue #620.
-
-    Args:
-        memory_graph: Memory graph instance for storage
-        session_id: Session ID for the activities
-        activities: List of activities to process
-        request_id: Request ID for logging
-
-    Returns:
-        Dict with stored_count, failed_count, and stored_ids
-    """
-    stored_count = 0
-    failed_count = 0
-    stored_ids: List[str] = []
-
-    for activity in activities:
-        try:
-            await _store_single_activity(memory_graph, session_id, activity)
-            stored_count += 1
-            stored_ids.append(activity.activity_id)
-        except Exception as activity_error:
-            logger.warning(
-                "[%s] Failed to store activity %s: %s",
-                request_id,
-                activity.activity_id,
-                activity_error,
-            )
-            failed_count += 1
-
-    return {
-        "stored_count": stored_count,
-        "failed_count": failed_count,
-        "stored_ids": stored_ids,
-    }
-
-
 @router.post("/chat/sessions/{session_id}/activities", response_model=DataResponse[ActivityAddData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1584,6 +1437,7 @@ async def add_session_activity(
     log_request_context(request, "add_session_activity", request_id)
 
     _validate_session_id_or_raise(session_id)
+    user_id, org_id = activity_principal(ownership)  # #18825: never activity_data.user_id
 
     memory_graph = _get_memory_graph_or_none(request)
     if not memory_graph:
@@ -1591,7 +1445,7 @@ async def add_session_activity(
         return _create_activity_unavailable_response(1, request_id, is_batch=False)
 
     try:
-        activity_entity = await _store_single_activity(memory_graph, session_id, activity_data)
+        activity_entity = await _store_single_activity(memory_graph, session_id, activity_data, user_id, org_id)
 
         log_chat_event(
             "activity_created",
@@ -1599,7 +1453,7 @@ async def add_session_activity(
             {
                 "activity_id": activity_data.activity_id,
                 "type": activity_data.type,
-                "user_id": activity_data.user_id,
+                "user_id": user_id,
                 "request_id": request_id,
             },
         )
@@ -1646,6 +1500,7 @@ async def add_session_activities_batch(
     log_request_context(request, "add_session_activities_batch", request_id)
 
     _validate_session_id_or_raise(session_id)
+    user_id, org_id = activity_principal(ownership)  # #18825: never the per-activity body user_id
 
     memory_graph = _get_memory_graph_or_none(request)
     total_activities = len(batch_data.activities)
@@ -1659,7 +1514,7 @@ async def add_session_activities_batch(
         return _create_activity_unavailable_response(total_activities, request_id, is_batch=True)
 
     # Process batch using extracted helper (Issue #620)
-    result = await _process_activity_batch(memory_graph, session_id, batch_data.activities, request_id)
+    result = await _process_activity_batch(memory_graph, session_id, batch_data.activities, request_id, user_id, org_id)
 
     log_chat_event(
         "activities_batch_created",
@@ -1693,34 +1548,27 @@ async def _fetch_activities_from_graph(
     limit: int,
     request_id: str,
 ):
-    """Helper for get_session_activities. Ref: #1088."""
-    try:
-        activities = await memory_graph.get_session_activities(
-            session_id=session_id,
-            activity_type=activity_type,
-            user_id=user_id,
-            limit=limit,
-        )
-        return create_chat_response(
-            data={
-                "activities": activities,
-                "total": len(activities),
-                "session_id": session_id,
-            },
-            message="Activities retrieved successfully",
-            request_id=request_id,
-        )
-    except Exception as graph_error:
-        logger.warning(
-            "[%s] Failed to retrieve activities: %s",
-            request_id,
-            graph_error,
-        )
-        return create_chat_response(
-            data={"activities": [], "total": 0},
-            message="Failed to retrieve activities",
-            request_id=request_id,
-        )
+    """Helper for get_session_activities. Ref: #1088.
+
+    The graph's parameter is ``activity_types`` (a list). Passing ``activity_type=`` raised a
+    TypeError that a blanket ``except`` turned into an empty 200, so this route never returned
+    an activity (#18825). Errors now reach the route's ``with_error_handling``.
+    """
+    activities = await memory_graph.get_session_activities(
+        session_id=session_id,
+        activity_types=[activity_type] if activity_type else None,
+        user_id=user_id,
+        limit=limit,
+    )
+    return create_chat_response(
+        data={
+            "activities": activities,
+            "total": len(activities),
+            "session_id": session_id,
+        },
+        message="Activities retrieved successfully",
+        request_id=request_id,
+    )
 
 
 @router.get("/chat/sessions/{session_id}/activities", response_model=DataResponse[SessionActivitiesData])
@@ -1773,84 +1621,6 @@ async def get_session_activities(
 # ====================================================================
 # Session Sharing (Issue #689)
 # ====================================================================
-
-
-async def _share_session_facts(
-    request: Request,
-    session_id: str,
-    share_with: list[str],
-    shared_by: str,
-    knowledge_facts: list[str] | None,
-) -> Dict:
-    """Share KB facts from a session with other users.
-
-    Helper for share_session (#689).
-    """
-    kb_manager = getattr(request.app.state, "kb_manager", None)
-    if not kb_manager:
-        return {"shared_count": 0, "errors": ["KB manager unavailable"]}
-
-    if knowledge_facts:
-        fact_ids = knowledge_facts
-    else:
-        fact_ids = await kb_manager.get_facts_by_session(session_id)
-
-    if not fact_ids:
-        return {"shared_count": 0, "errors": []}
-
-    return await kb_manager.share_facts(fact_ids, share_with, shared_by)
-
-
-@router.post("/chat/sessions/{session_id}/share", response_model=DataResponse[SessionShareData])
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="share_session",
-    error_code_prefix="CHAT_SESSIONS",
-)
-async def share_session(
-    session_id: str,
-    share_data: SessionShareRequest,
-    request: Request,
-    ownership: Dict = Depends(validate_session_ownership),
-):
-    """Share a conversation with other users, optionally including KB facts (#689)."""
-    request_id = generate_request_id()
-    log_request_context(request, "share_session", request_id)
-
-    _validate_session_id_or_raise(session_id)
-
-    user_data = ownership.get("user_data", {})
-    shared_by = user_data.get("username", "unknown")
-
-    # Share session access
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-    from security.session_ownership import SessionOwnershipValidator
-
-    redis = await get_redis_mgr(async_client=True, database="main")
-    validator = SessionOwnershipValidator(redis)
-    await validator.share_session(session_id, share_data.share_with, shared_by)
-
-    # Optionally share KB facts
-    facts_result = None
-    if share_data.include_knowledge:
-        facts_result = await _share_session_facts(
-            request,
-            session_id,
-            share_data.share_with,
-            shared_by,
-            share_data.knowledge_facts,
-        )
-
-    return create_chat_response(
-        data={
-            "session_id": session_id,
-            "shared_with": share_data.share_with,
-            "include_knowledge": share_data.include_knowledge,
-            "facts_shared": facts_result,
-        },
-        message="Session shared successfully",
-        request_id=request_id,
-    )
 
 
 @router.get("/chat/sessions/{session_id}/share/preview", response_model=DataResponse[SessionSharePreviewData])
@@ -1912,7 +1682,7 @@ async def clear_session_checkpoints(
     which removes the Redis-backed LangGraph checkpoint data.
     """
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         (
             _AutoBotError,
             _InternalError,
@@ -1933,6 +1703,10 @@ async def clear_session_checkpoints(
     except Exception:
         logger.exception("Failed to clear checkpoints for %s", session_id)
         return create_error_response(
-            error="Failed to clear checkpoints",
+            error_code="CHECKPOINT_CLEAR_FAILED",
+            message="Failed to clear checkpoints",
             status_code=500,
         )
+
+
+router.include_router(_sharing.router)

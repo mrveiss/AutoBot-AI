@@ -41,6 +41,7 @@ import pytest
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from tools.lint import _parse_cache as parse_cache
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: The five rungs every exact-subset fork carried.
@@ -70,20 +71,22 @@ PENDING_REASONS: dict[str, str] = {}
 #: ladder. Only enums the probe actually flags belong here: an entry it does not flag is
 #: exempting nothing, and `test_every_distinct_entry_is_still_flagged` fails on it.
 DISTINCT_VOCABULARIES = {
+    "autobot_shared/risk_tier.py::RiskTier": (
+        "grades how much scrutiny an approval request needs (low..critical, no info rung); it ranks "
+        "a requested action's blast radius, not a finding someone detected"
+    ),
     "autobot-backend/secure_sandbox_executor.py::SandboxSecurityLevel": (
         "configures how strictly a sandbox isolates a run (low/medium/high); it grades a "
         "setting the caller picks, not a finding someone detected"
     ),
 }
 
-#: Flagged by the value probe and NOT aliased, each with the concrete reason. `KnowledgePriority`
-#: and `MaintenancePriority` were aliased to the canonical `Priority`, and `WorkItemPriority` is
-#: derived from it (pinned in `llc/tests/test_work_item_priority_derived_18098.py`); they left this list.
-UNCLASSIFIED_VALUE_MATCHES = {
-    "autobot-backend/api/knowledge_grounding_models.py::ReviewTicketPriority": (
-        "file owned by issue-18086-claim-models (#18098); analysed SAFE to alias to Priority"
-    ),
-}
+#: Flagged by the value probe and NOT aliased, each with the concrete reason. `KnowledgePriority`,
+#: `MaintenancePriority` and `ReviewTicketPriority` were aliased to the canonical `Priority`
+#: (the last pinned in `autobot-backend/review_ticket_priority_alias_18086_test.py`), and
+#: `WorkItemPriority` is derived from it (pinned in `llc/tests/test_work_item_priority_derived_18098.py`);
+#: they left this list. Empty now: a new match is a fork to alias, not an entry to add.
+UNCLASSIFIED_VALUE_MATCHES: dict[str, str] = {}
 
 #: Named non-forks that overlap the canonical with a non-canonical tail, so the value probe
 #: must NOT flag them. Canonical has no `success` or `suggestion` rung. Asserted unflagged
@@ -116,12 +119,11 @@ def _discover(root: Path) -> list[str]:
     return [rel for rel in every if rel.startswith(prefixes)]
 
 
-#: Population 5,068 on 7139a853ce; `REACH.window()` = (4568, 5068, 4818), so the floor is pinned
-#: mid-window at 4,818 with 500 files of growth. Absolute, not relative: see ALLOWANCE_VERDICTS.
+#: The floor is computed from the base commit (#19676), with 500 files of growth.
+#: Absolute, not relative: see ALLOWANCE_VERDICTS.
 REACH = declare(
     "severity-enum-fork-scan",
     discover=_discover,
-    floor=4_818,
     growth=500,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared severity ladder",
@@ -233,7 +235,7 @@ def _iterates_enum(source: str, name: str) -> bool:
     these entries are held back.
     """
     over = {name, f"{name}.__members__"} | {f"{fn}({name})" for fn in ("list", "tuple", "sorted", "reversed")}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(parse_cache.parse(source)):
         iterables: list[ast.expr] = []
         if isinstance(node, (ast.For, ast.AsyncFor)):
             iterables.append(node.iter)
@@ -263,7 +265,7 @@ def _scan() -> _Scan:
     parsed = classes = 0
     for rel in REACH.examined(root):
         try:
-            tree = ast.parse((root / rel).read_text(encoding="utf-8"))
+            tree = parse_cache.parse((root / rel).read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             # Counted, not swallowed: a root that stopped parsing is a loss of reach,
             # and the floor below is what notices.
@@ -326,7 +328,7 @@ _MUST_NOT_DETECT = {
 @pytest.mark.parametrize("label", sorted(_MUST_DETECT))
 def test_the_detector_sees_every_spelling_of_an_enum_base(label: str) -> None:
     """Matched against synthetic source, so it does not depend on the tree."""
-    found = _enums_in_tree(ast.parse(_MUST_DETECT[label]))
+    found = _enums_in_tree(parse_cache.parse(_MUST_DETECT[label]))
     assert found, f"{label}: the detector missed this enum, so a fork spelled this way is invisible"
     assert found[0][0] == "R"
 
@@ -334,7 +336,7 @@ def test_the_detector_sees_every_spelling_of_an_enum_base(label: str) -> None:
 @pytest.mark.parametrize("label", sorted(_MUST_NOT_DETECT))
 def test_the_detector_rejects_what_is_not_an_enum(label: str) -> None:
     """The contrast half: without it, a detector that matches everything also passes."""
-    assert _enums_in_tree(ast.parse(_MUST_NOT_DETECT[label])) == [], f"{label}: falsely reported as an enum"
+    assert _enums_in_tree(parse_cache.parse(_MUST_NOT_DETECT[label])) == [], f"{label}: falsely reported as an enum"
 
 
 def test_the_subset_probe_catches_an_aliased_severity_fork() -> None:
@@ -348,13 +350,13 @@ def test_the_subset_probe_catches_an_aliased_severity_fork() -> None:
         "    INFO = 'info'\n    LOW = 'low'\n    MEDIUM = 'medium'\n"
         "    HIGH = 'high'\n    CRITICAL = 'critical'\n"
     )
-    found = _enums_in_tree(ast.parse(fork))
+    found = _enums_in_tree(parse_cache.parse(fork))
     assert found == [("Urgency", SEVERITY_SUBSET_PROBE)]
     assert SEVERITY_SUBSET_PROBE <= found[0][1], "the probe must match this fork"
 
     near_miss = fork.replace("    CRITICAL = 'critical'\n", "")
     assert (
-        not SEVERITY_SUBSET_PROBE <= _enums_in_tree(ast.parse(near_miss))[0][1]
+        not SEVERITY_SUBSET_PROBE <= _enums_in_tree(parse_cache.parse(near_miss))[0][1]
     ), "control: a four-rung ladder is not an exact subset and must not match"
 
 
@@ -370,7 +372,7 @@ def test_the_subset_probe_catches_a_ladder_written_with_auto() -> None:
         "    INFO = auto()\n    LOW = auto()\n    MEDIUM = auto()\n"
         "    HIGH = auto()\n    CRITICAL = auto()\n"
     )
-    found = _enums_in_tree(ast.parse(fork))
+    found = _enums_in_tree(parse_cache.parse(fork))
     assert found == [("Urgency", SEVERITY_SUBSET_PROBE)], f"auto() ladder not seen: {found}"
 
     # Control: enum machinery and annotations are not rungs.
@@ -378,7 +380,7 @@ def test_the_subset_probe_catches_a_ladder_written_with_auto() -> None:
         "from enum import Enum, auto\n\n\nclass R(Enum):\n"
         "    _order_ = 'INFO'\n    _ignore_ = 'x'\n    INFO = auto()\n"
     )
-    assert _enums_in_tree(ast.parse(machinery)) == [("R", frozenset({"INFO"}))]
+    assert _enums_in_tree(parse_cache.parse(machinery)) == [("R", frozenset({"INFO"}))]
 
 
 def test_the_iteration_probe_has_a_contrast_pair() -> None:
@@ -538,7 +540,7 @@ _VALUE_PROBE_CASES = {
 def test_the_value_probe_discriminates(label: str) -> None:
     """Both halves: shapes it must flag and shapes it must leave alone."""
     source, flagged = _VALUE_PROBE_CASES[label]
-    valued = [("m.py", name, vals) for name, vals in _enum_values_in_tree(ast.parse(_PROBE_HEADER + source))]
+    valued = [("m.py", name, vals) for name, vals in _enum_values_in_tree(parse_cache.parse(_PROBE_HEADER + source))]
     canonical = [(*CANONICAL.split("::")[:1], "Severity", _CANONICAL_PROBE_VALUES)]
     hits = _value_subset_hits(canonical + valued)
     assert bool(hits) is flagged, f"{label}: expected flagged={flagged}, got {sorted(hits)}"
