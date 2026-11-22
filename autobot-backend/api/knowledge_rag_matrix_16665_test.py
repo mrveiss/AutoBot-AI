@@ -17,7 +17,9 @@ from fastapi.testclient import TestClient
 
 from api import knowledge_rag
 from auth_middleware import get_current_user
-from knowledge.read_path_fakes_16665 import (
+from knowledge.search import SearchMixin
+from services.rag_service import RAGService
+from testkit.read_path_fakes_16665 import (
     PRIVATE_A,
     RESEARCH,
     SHARED,
@@ -26,8 +28,6 @@ from knowledge.read_path_fakes_16665 import (
     all_facts,
     quarantined_fact,
 )
-from knowledge.search import SearchMixin
-from services.rag_service import RAGService
 
 ALICE = {"user_id": "alice", "role": "user"}
 BOB = {"user_id": "bob", "role": "user"}

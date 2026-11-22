@@ -21,6 +21,8 @@ import warnings
 from enum import Enum
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.plugin_attribution import resolve_owner, scope_for
+
 from .base import PluginRegistry, PluginStatus
 
 logger = logging.getLogger(__name__)
@@ -178,7 +180,15 @@ def validate_hook_names(hook_names: List[str], plugin_name: str = "unknown") -> 
             )
 
 
-_INACTIVE_STATUSES = frozenset({PluginStatus.DISABLED, PluginStatus.UNLOADED, PluginStatus.ERROR})
+def is_plugin_active(plugin_name: str | None) -> bool:
+    """False when the owning plugin is known and not ENABLED (#19302).
+
+    Only an enabled plugin's callbacks and tools run. A name the registry does not know
+    is a host callback and is not gated. The loader registers a plugin (not ENABLED) before it
+    initialises, so a plugin still initialising is gated until the host records ENABLED.
+    """
+    plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
+    return plugin is None or plugin.status == PluginStatus.ENABLED
 
 
 class HookRegistry:
@@ -214,6 +224,7 @@ class HookRegistry:
             callback: Async or sync callable
             plugin_name: Plugin name for tracking (optional)
         """
+        plugin_name = resolve_owner(plugin_name)  # inside plugin context: the plugin itself, never another (#19302)
         if hook_name not in self._hooks:
             self._hooks[hook_name] = []
 
@@ -272,16 +283,6 @@ class HookRegistry:
             logger.info("Unregistered %d hook callback(s) for plugin '%s'", removed, plugin_name)
         return removed
 
-    @staticmethod
-    def _plugin_is_inactive(plugin_name: str | None) -> bool:
-        """True when the owning plugin is known and disabled, unloaded or errored (#19302).
-
-        LOADED plugins still fire: the backend load route never calls ``enable()``.
-        Strict "only ENABLED" gating (#19302 AC1) awaits an owner decision.
-        """
-        plugin = PluginRegistry().get_plugin(plugin_name) if plugin_name else None
-        return plugin is not None and plugin.status in _INACTIVE_STATUSES
-
     async def call_hook(
         self,
         hook_name: str,
@@ -306,15 +307,16 @@ class HookRegistry:
         for callback_info in self._hooks[hook_name]:
             callback = callback_info["callback"]
             plugin_name = callback_info["plugin_name"]
-            if self._plugin_is_inactive(plugin_name):
+            if not is_plugin_active(plugin_name):
                 continue
 
             try:
-                # Handle both async and sync callbacks
-                if asyncio.iscoroutinefunction(callback):
-                    result = await callback(*args, **kwargs)
-                else:
-                    result = callback(*args, **kwargs)
+                # Handle both async and sync callbacks; a tool it registers is attributed to its plugin (#19302)
+                with scope_for(plugin_name):
+                    if asyncio.iscoroutinefunction(callback):
+                        result = await callback(*args, **kwargs)
+                    else:
+                        result = callback(*args, **kwargs)
 
                 results.append(result)
 

@@ -478,7 +478,23 @@ else
     pass=$((pass + 1))
 fi
 
-_distinct_vars=$(git_tracked_files "$REPO_ROOT" -- '*.sh' | xargs grep -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' 2>/dev/null | sed -E 's/^\$\{?//' | sort -u)
+# One `git grep` process over the index, not `ls-files | xargs grep 2>/dev/null` (#21947): the
+# pipeline discarded stderr and every exit status, so a grep or git that failed under host load
+# (killed, EAGAIN, a transient index read error) produced a SHORT list that read as "the matcher
+# regressed". Here the exit status and stderr are kept and reported: 0 = matches, 1 = none, >1 = the
+# scan itself failed, which is never a verdict on the matcher.
+_scan_err="$(mktemp)"
+_scan_out=$(
+    unset "${GIT_ROOT_AMBIENT_VARS[@]}"
+    git -C "$REPO_ROOT" -c grep.lineNumber=false -c grep.column=false grep --no-color -ohE '\$\{?AUTOBOT_[A-Z0-9_]+' -- '*.sh' 2>"$_scan_err"
+)
+_scan_rc=$?
+if [ "$_scan_rc" -gt 1 ]; then
+    echo "FAIL: reach self-check's scan itself failed (git grep exit $_scan_rc): $(head -c 400 "$_scan_err")"
+    fail=$((fail + 1))
+fi
+rm -f "$_scan_err"
+_distinct_vars=$(printf '%s\n' "$_scan_out" | sed -E 's/^\$\{?//' | sort -u)
 _distinct_count=$(echo "$_distinct_vars" | grep -c . || true)
 # 59, not 61: #15127 retired
 # autobot-infrastructure/shared/scripts/utilities/load-env.sh, which was the only
