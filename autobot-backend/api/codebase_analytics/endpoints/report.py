@@ -1568,14 +1568,18 @@ async def _get_cross_language_analysis(
 
 
 async def _get_pattern_analysis(
-    project_root: Path | None = None,
+    project_root: Path,
 ) -> PatternAnalysisReport | None:
     """
     Get code pattern analysis for the project (Issue #208).
 
     #20513: the analysis scans the selected source's root and nothing else. The earlier #2655
-    shortcut (scan AutoBot's own backend directory when the root was the install's) is gone: the
-    analyzer's own deadline bounds a large tree.
+    shortcut (scan AutoBot's own backend directory when the root was the install's) is gone.
+
+    Bounds, as they are: only the clone-detection phase has a deadline of its own (``ANALYZER_TIMEOUT``).
+    The request is bounded at about 180 s by the outer ``wait_for`` below, which stops this coroutine from
+    waiting but not the executor threads, which keep walking the tree. A cooperative cancel token, like
+    ``_get_api_endpoint_analysis`` has, is #22094.
 
     Issue #12372: When a distinct source is resolved, scan that source's root
     instead of always defaulting to AutoBot's own backend directory --
@@ -1731,9 +1735,9 @@ async def _get_api_endpoint_analysis(
 
 async def _get_bug_prediction(
     project_root: str,
+    source_id: str,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
     use_semantic: bool = False,
-    source_id: str | None = None,
 ) -> PredictionResult | None:
     """
     Get bug prediction data for the project (Issue #505).
