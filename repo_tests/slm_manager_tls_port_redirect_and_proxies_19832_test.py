@@ -31,14 +31,17 @@ VHOST = ROLE / "templates" / "autobot-slm.conf.j2"
 TASKS = ROLE / "tasks" / "main.yml"
 GROUP_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
 _ROLE_REL = "autobot-slm-backend/ansible/roles/slm_manager"
+#: Declared as ONE path-qualified constant so the glob-reads guard sees the tree it reads, which the
+#: python path filter covers (`autobot-slm-backend/ansible/**`); a bare `*.yml` would look uncovered.
+_TASKS_GLOB = "autobot-slm-backend/ansible/roles/slm_manager/tasks/*.yml"
+_VHOST_REL = f"{_ROLE_REL}/templates/autobot-slm.conf.j2"
 
 
 def _scanned(root: Path) -> list[Path]:
     """The slm_manager task files and the SLM vhost: where a literal TLS port must not appear."""
-    role = root / _ROLE_REL
-    return (
-        [*sorted((role / "tasks").glob("*.yml")), role / "templates" / "autobot-slm.conf.j2"] if role.is_dir() else []
-    )
+    if not (root / _ROLE_REL).is_dir():
+        return []
+    return [*sorted(root.glob(_TASKS_GLOB)), root / _VHOST_REL]
 
 
 REACH = declare(
