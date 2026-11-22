@@ -200,3 +200,24 @@ def test_the_multi_line_callback_form_still_works():
     result = _au.summarize_playbook_failure(multi)
 
     assert "Service restart failed" in result
+
+
+def test_recap_line_regex_is_linear_and_matches_as_before():
+    """#21987 (py/polynomial-redos): blank-line runs are not rescanned from every line start."""
+    import re
+    import time
+
+    old = re.compile(r"^\s*(\S+)\s*:\s*ok=(\d+)\s+changed=\d+\s+unreachable=(\d+)\s+failed=(\d+)", re.MULTILINE)
+    samples = [
+        "PLAY RECAP ***\nnode1  : ok=3 changed=1 unreachable=0 failed=0\n",
+        "\n\n   node-2:ok=1\tchanged=0   unreachable=2 failed=1",
+        "fe80::1 : ok=1 changed=0 unreachable=0 failed=0",
+        "a : ok=1 changed=0 unreachable=0\nfailed=0",
+        "\x7f : ok=1 changed=0 unreachable=0 failed=0",
+    ]
+    for text in samples:
+        assert [m.groups() for m in _au._RECAP_LINE_RE.finditer(text)] == [m.groups() for m in old.finditer(text)]
+    for text in ("\n" * 50_000, "\x7f" * 50_000, ":" * 50_000, " \n" * 50_000 + "x"):
+        start = time.perf_counter()
+        list(_au._RECAP_LINE_RE.finditer(text))
+        assert time.perf_counter() - start < 2.0

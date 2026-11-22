@@ -26,12 +26,13 @@ import ast
 import re
 from pathlib import PurePosixPath
 
+from autobot_shared.regex_whitespace import NOT_WS, WS
 from autobot_shared.testfile_names import is_test_filename
 from tools.lint import _parse_cache as parse_cache
 
 HELPER_MODULE = "autobot_shared.isolated_git"
 _VERBS = frozenset({"init", "commit"})
-_SHELL_GIT = re.compile(r"\bgit\s+(?:-\S+\s+)*(?:init|commit)\b")
+_SHELL_GIT = re.compile(rf"\bgit{WS}+(?:-{NOT_WS}+{WS}+)*(?:init|commit)\b")
 _SKIP_PARTS = frozenset({"node_modules", ".git", ".worktrees", "__pycache__"})
 
 
