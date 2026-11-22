@@ -8,7 +8,7 @@ Composes existing modules (never recreates them, design §6):
   * ``services.research.router`` — topic-based source routing over the
     shared ``agent_loop.search.registry`` (#12625)
   * ``web_fetch.WebFetcher`` — fast-HTTP page fetch
-  * ``knowledge_base_factory.get_knowledge_base`` — the canonical KB facade
+  * ``knowledge_base_factory.get_knowledge_base_or_none`` — the canonical KB facade
   * ``services.research.extractor`` / ``synthesizer`` — the two new LLM steps
   * ``services.research.planner`` — sub-question decomposition, pruning,
     skip-known filtering (#12624)
@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from knowledge_base_factory import get_knowledge_base
+from knowledge_base_factory import get_knowledge_base_or_none
 from services.claim_verifier import ClaimVerifier, CorroborationResult
 from services.knowledge_grounding_models import KBSource
 from services.llm_service import get_llm_service
@@ -245,7 +245,13 @@ class ResearchOrchestrator:
         return [fact for fact in stored if fact is not None]
 
     async def _run_one_round(
-        self, kb: Any, llm: Any, question: str, budget: ResearchBudget, remaining_sources: int
+        self,
+        kb: Any,
+        llm: Any,
+        question: str,
+        budget: ResearchBudget,
+        remaining_sources: int,
+        user_id: str | None = None,
     ) -> Tuple[List[StoredFact], int]:
         """One planner round: decompose -> prune -> skip-known -> fetch (design §4.3).
 
@@ -254,7 +260,7 @@ class ResearchOrchestrator:
         """
         sub_questions = await decompose_question(llm, question)
         kept, _pruned = prune_low_value(sub_questions)
-        to_search, _skipped = await filter_skip_known(kb, kept)
+        to_search, _skipped = await filter_skip_known(kb, kept, user_id)
         landed: List[StoredFact] = []
         used = 0
         for sub in to_search:
@@ -270,7 +276,7 @@ class ResearchOrchestrator:
         return landed, used
 
     async def _plan_and_fetch(
-        self, kb: Any, llm: Any, question: str, budget: ResearchBudget
+        self, kb: Any, llm: Any, question: str, budget: ResearchBudget, user_id: str | None = None
     ) -> Tuple[List[StoredFact], int]:
         """Run the bounded round loop until saturation, the round cap, or the
         total-source budget stops it — whichever comes first (#12624; never
@@ -288,7 +294,7 @@ class ResearchOrchestrator:
                     "ResearchOrchestrator: total-source budget (%d) exhausted before round %d", max_total, round_num
                 )
                 break
-            landed, used = await self._run_one_round(kb, llm, question, budget, remaining)
+            landed, used = await self._run_one_round(kb, llm, question, budget, remaining, user_id)
             all_facts.extend(landed)
             sources_used += used
             round_progress.append(any(f.is_new for f in landed))
@@ -323,15 +329,20 @@ class ResearchOrchestrator:
                 contradictions.append(await _flag_contradiction(kb, fact, result))
         return contradictions, confidence_overrides
 
-    async def research(self, question: str, options: dict | None = None) -> ResearchResponse:
-        """Run the bounded planner-driven pipeline and return the full #12622 contract."""
+    async def research(
+        self, question: str, options: dict | None = None, user_id: str | None = None
+    ) -> ResearchResponse:
+        """Run the bounded planner-driven pipeline and return the full #12622 contract.
+
+        ``user_id`` is the asking user (#16665): the skip-known read only counts facts they may read.
+        """
         budget = _resolve_budget(options or {})
-        kb = await get_knowledge_base()
+        kb = await get_knowledge_base_or_none()
         if kb is None:
             return ResearchResponse(answer="Knowledge base unavailable; cannot perform research.", confidence=0.0)
 
         llm = await self._llm()
-        all_facts, sources_fetched = await self._plan_and_fetch(kb, llm, question, budget)
+        all_facts, sources_fetched = await self._plan_and_fetch(kb, llm, question, budget, user_id)
 
         synthesis = await synthesize_answer(llm, question, all_facts)
         cited_ids = {c.fact_id for c in synthesis.citations}

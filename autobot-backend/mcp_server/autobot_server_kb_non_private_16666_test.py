@@ -56,8 +56,8 @@ def test_only_non_private_unquarantined_facts_are_readable(metadata, readable):
 
 def test_a_caller_filter_narrows_the_where_and_never_replaces_it():
     where = non_private_where({"visibility": "private"})
-    assert where["$and"][:2] == non_private_where()["$and"]  # the non-private and quarantine clauses stay
-    assert where["$and"][2] == {"visibility": "private"}  # ANDed in: private AND non-private matches nothing
+    assert where["$and"][:-1] == non_private_where()["$and"]  # the non-private and quarantine clauses stay
+    assert where["$and"][-1] == {"visibility": "private"}  # ANDed in: private AND non-private matches nothing
 
 
 def test_the_post_filter_drops_what_the_where_should_have():

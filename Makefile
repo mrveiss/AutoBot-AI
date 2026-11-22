@@ -1,6 +1,6 @@
 # AutoBot Makefile — standard entry points for testing and coverage (#3285)
 # Requires: pytest, pytest-cov, pytest-asyncio installed in the active venv
-# Frontend targets require Node.js 20+ — run `make frontend-setup` once per fresh worktree
+# Frontend targets require Node.js 22 (repo-root .nvmrc) — run `make frontend-setup` once per fresh worktree
 
 .PHONY: test test-coverage test-backend test-frontend test-e2e frontend-setup lint-stylelint format format-check help canonical-check canonical-check-py canonical-check-fe canonical-check-infra canonical-audit
 

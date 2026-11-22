@@ -8,6 +8,17 @@ This module breaks the circular import between voice_bundle_user and voice_bundl
 by providing shared functionality that both modules depend on.
 """
 
+
+def voice_bundle_user_id(user: dict) -> str | None:
+    """The id a caller's voice bundle is keyed by: ``user_id``, else ``sub``, else ``username`` (#17325).
+
+    The one definition shared by the bundle endpoints and the realtime tool list/call handlers, so the bundle a
+    user sets is the bundle their realtime session resolves. ``None`` when the principal carries none of them.
+    """
+    value = user.get("user_id") or user.get("sub") or user.get("username")
+    return str(value) if value else None
+
+
 _tool_count_cache: dict[tuple[str, bool], int] = {}
 
 

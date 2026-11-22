@@ -16,12 +16,12 @@ are three different stories, and an audit trail that cannot tell them apart cann
 answer the only question anyone asks of it: why was this workspace taken from me?
 """
 
-import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from llc.services.workspace_lease import (
     WorkspaceCapacityExhausted,
     WorkspaceLeaseHeld,
@@ -29,7 +29,7 @@ from llc.services.workspace_lease import (
     release_for_run,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Written to a lease released because its run finished. Distinct from the stalled
 #: sweep's reason and from an expiry reclaim.

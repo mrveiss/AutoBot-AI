@@ -20,7 +20,7 @@ import pytest
 
 from agent_loop.loop import AgentLoop
 from agent_loop.types import AgentLoopConfig, LoopState, TaskContext
-from utils.error_boundaries.types import (
+from autobot_shared.error_boundaries.types import (
     ErrorSeverity,
     classify_error,
 )

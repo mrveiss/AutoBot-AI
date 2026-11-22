@@ -57,7 +57,7 @@ async def _call(history, chat_id, ownership=None):
             chat_id=chat_id,
             current_user={"username": "alice"},
             request=_request(),
-            ownership=ownership or {"authorized": True},
+            ownership=ownership or {"authorized": True, "reason": "owner_match"},
         )
 
 
@@ -88,7 +88,7 @@ async def test_a_missing_session_matches_the_canonical_route():
         with patch.object(chat_sessions, "get_chat_history_manager", return_value=history):
             with patch.object(chat_sessions, "_perform_all_session_cleanup", AsyncMock(return_value=({},) * 5)):
                 await chat_sessions.delete_session(
-                    session_id="nope", request=_request(), ownership={"authorized": True}
+                    session_id="nope", request=_request(), ownership={"authorized": True, "reason": "owner_match"}
                 )
     assert type(chat_exc.value) is type(canon_exc.value)
     assert getattr(chat_exc.value, "status_code", None) == getattr(canon_exc.value, "status_code", None)

@@ -28,6 +28,7 @@ import pytest
 
 from knowledge import fact_store
 from models.knowledge_fact import KnowledgeFact
+from testkit.fake_async_session import FakeAsyncSession
 
 NOW = datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc)
 OBSERVATION_COLUMNS = ("source_checked_at", "source_seen_at", "source_last_probe", "source_check_failures")
@@ -43,22 +44,9 @@ def _observed_fact(locator: str) -> KnowledgeFact:
     return row
 
 
-class _FakeSession:
-    def __init__(self, row):
-        self._row = row
-        self.committed = False
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def get(self, model, fact_id):
-        return self._row if self._row is not None and self._row.id == fact_id else None
-
-    async def commit(self):
-        self.committed = True
+def _session_serving(row):
+    """A session whose ``get`` serves *row* for its own id and nothing else."""
+    return FakeAsyncSession(on_get=lambda model, fact_id: row if row is not None and row.id == fact_id else None)
 
 
 @pytest.fixture
@@ -66,7 +54,7 @@ def row_factory(monkeypatch):
     """Installs a fake session factory and hands back the row it serves."""
 
     def _install(row):
-        monkeypatch.setattr(fact_store, "get_async_session_factory", lambda: lambda: _FakeSession(row))
+        monkeypatch.setattr(fact_store, "get_async_session_factory", lambda: lambda: _session_serving(row))
         return row
 
     return _install

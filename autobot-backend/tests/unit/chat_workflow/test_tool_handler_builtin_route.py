@@ -33,6 +33,16 @@ _DISPATCH_ARGS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _verifier_off(monkeypatch):
+    """Routing is tested in isolation: the pre-action verifier is its own suite's subject (#21844).
+
+    Unpatched, ``click``/``execute_command`` reach the real verifier, which asks whatever model the host's Ollama
+    has installed -- a verdict that depends on the machine, not on the routing table.
+    """
+    monkeypatch.setattr("autobot_shared.pre_action_verifier_guard.pre_action_verifier_enabled", lambda: False)
+
+
 def _mixin() -> ToolHandlerMixin:
     mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
     # Governance gates are covered by their own suites (GH#11145/11160/11177/11178);

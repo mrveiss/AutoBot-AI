@@ -11,7 +11,6 @@ and approval workflows.
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import html
 import inspect
@@ -26,13 +25,7 @@ from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import (
-    APPROVAL_CATEGORY_TOOLS,
-    BROWSER_ACTION_TOOLS,
-    BROWSER_INDEXED_TOOLS,
-    BROWSER_READ_TOOLS,
-    approval_category_for,
-)
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS, approval_category_for
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
     format_browser_action_text,
@@ -41,6 +34,13 @@ from chat_workflow.browser_tool_handler import (
     handle_browser_tool,
     record_browser_success,
     validate_browser_params,
+)
+from chat_workflow.command_execution_record import (
+    _create_execution_result,
+    _unsuccessful_approval_record,
+    approval_result_of,
+    command_params,
+    current_terminal_session,
 )
 from chat_workflow.compose_tool_handler import (
     build_compose_dispatch,
@@ -55,8 +55,15 @@ from chat_workflow.compose_tool_handler import (
     poll_compose_approval,
     reject_delegated_compose,
 )
+from chat_workflow.interpretation_turn_mixin import InterpretationTurnMixin
+from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
+from chat_workflow.step_outcome import exit_code_field
+from chat_workflow.tool_call_args import parse_tool_args
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
+from chat_workflow.tool_call_loop import stamp_call_fingerprint
 from chat_workflow.tool_dispatch_guards import (
+    COMMAND_APPROVED_KEY,
+    COMMAND_FORCE_APPROVAL_KEY,
     enforce_ai_line,
     enforce_config_protection,
     enforce_fact_forcing,
@@ -64,13 +71,17 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
+    is_held_message,
+    is_registered_tool,
     llc_scope_error,
+    unknown_tool_error,
 )
-from chat_workflow.tool_permission_gate import permission_denial
+from chat_workflow.tool_permission_gate import caller_identity, permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from services.remote_approval_sender import mirror_approval_request
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
+from web_search_schema import WEB_SEARCH_SCHEMA  # noqa: F401  (re-exported: the schema lives in one module, #21877)
 
 if TYPE_CHECKING:
     from .models import LLMIterationContext
@@ -210,31 +221,6 @@ _SPILL_MISS_ADVICE: dict[str, str] = {
 _SPILL_MISS_UNKNOWN_ADVICE = (
     "The read did not report why it failed. This may be transient — retrying once is reasonable."
 )
-
-WEB_SEARCH_SCHEMA: dict = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "fetch_full": {
-            "type": "boolean",
-            "description": (
-                "When true, fetches the full markdown of each result page "
-                "in addition to returning search snippets. Default false."
-            ),
-        },
-        "max_pages": {
-            "type": "integer",
-            "description": (
-                "Maximum number of search results to return. Applies to both "
-                "snippet mode (fetch_full=false) and full-fetch mode "
-                "(fetch_full=true). Default 5 (#7479)."
-            ),
-            "minimum": 1,
-            "maximum": 10,
-        },
-    },
-    "required": ["query"],
-}
 
 # Issue #7509: Web research tool schemas — scrape, crawl, map, extract.
 # Agents have admin-grade power: no server-side caps on depth/pages/robots.
@@ -644,7 +630,7 @@ def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) 
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
 # Exported (no leading underscore) so ToolRegistry can derive its list from this
 # single source of truth rather than maintaining a duplicate. Issue #2609.
-BROWSER_TOOL_NAMES: frozenset[str] = frozenset(BROWSER_ACTION_TOOLS + BROWSER_READ_TOOLS + BROWSER_INDEXED_TOOLS)
+BROWSER_TOOL_NAMES: frozenset[str] = frozenset(BROWSER_TOOLS)
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
 WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
@@ -770,25 +756,7 @@ _REPAIRABLE_ERROR_PATTERNS = (
 _CRITICAL_ERROR_PATTERNS = ["out of memory", "cannot allocate"]
 
 
-def _parse_tool_args(raw: str) -> dict:
-    """Parse tool call JSON args with a safe literal-parser fallback. (#4483)
-
-    LLMs occasionally produce near-valid JSON with trailing commas, single
-    quotes, or Python boolean/None literals that json.loads() rejects.
-    ast.literal_eval is safe: it only accepts Python literal structures and
-    raises ValueError/SyntaxError on anything else.
-    """
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        try:
-            result = ast.literal_eval(raw)  # noqa: S307 - literals only, safe
-            if isinstance(result, dict):
-                logger.warning("Tool args parsed via ast.literal_eval fallback" " — LLM produced near-valid JSON")
-                return result
-        except (ValueError, SyntaxError):
-            pass
-        raise
+_parse_tool_args = parse_tool_args  # canonical parser lives in tool_call_args.py (#21843)
 
 
 def _detect_and_store_security_output(command: str, output: str, session_id: str) -> None:
@@ -895,106 +863,10 @@ def _record_failed_step(
             "command": command,
             "stdout": result.get("stdout", ""),
             "stderr": stderr,
-            "return_code": result.get("return_code", 1),
+            **exit_code_field(result),  # a refused command has none (#21959)
             "status": "error",
             "error": error,
         }
-    )
-
-
-def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
-    """Create standardized execution result record (Issue #315: extracted).
-
-    Args:
-        command: The command that was executed
-        host: Target host
-        result: Execution result dict
-        approved: Whether user approved the command
-
-    Returns:
-        Standardized execution result dict for continuation loop
-    """
-    # #14141: `status` is derived from the exit code, not hardcoded. It used to
-    # be the literal "success" regardless of `return_code`, and this dict feeds
-    # `_format_execution_step`, which prints `- Status: {status}` straight into
-    # the model's continuation prompt. So a command that failed was reported to
-    # the model as having succeeded, with stderr as the only hint — and a test
-    # runner writes its failure report to *stdout*, so the model saw a
-    # full-looking report under "success" and no signal that the suite failed.
-    #
-    # Reachability, so nobody mistakes this for the protection: both call sites
-    # are gated on ``status == "success"`` upstream (`_handle_approved_command`
-    # at the approval branch, `_handle_successful_command` in
-    # `_dispatch_command_by_status`), so this mapping cannot currently observe a
-    # non-zero code. It is kept as a correct restatement of the invariant for
-    # the day a caller stops gating -- not deleted, because a dict feeding the
-    # model's prompt with a hardcoded "success" is exactly the defect that got
-    # filed. The single *reachable* decision is
-    # `command_executor._build_pty_result`, which every layer here propagates
-    # rather than re-derives; that is where the invariant is asserted.
-    return_code = result.get("return_code", 0)
-    return {
-        "command": command,
-        "host": host,
-        "stdout": result.get("stdout", ""),
-        "stderr": result.get("stderr", ""),
-        "return_code": return_code,
-        "status": _status_for_return_code(return_code),
-        "approved": approved,
-    }
-
-
-def _status_for_return_code(return_code: Any) -> str:
-    """Map an exit code to the status the model is shown (#14141).
-
-    Only an exit code that is *known* to be 0 reports success. `None` — the
-    shape an execution path produces when it never captured one — and anything
-    unparseable both report ``error``, because "we do not know whether that
-    worked" is far closer to failure than to success as far as the next turn is
-    concerned. Reporting an unknown outcome as success is the defect this
-    function exists to remove, and defaulting it would reintroduce it.
-    """
-    try:
-        return "success" if int(return_code) == 0 else "error"
-    except (TypeError, ValueError):
-        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
-        return "error"
-
-
-def _build_mcp_approval_message(
-    tool_name: str,
-    bridge: str,
-    raw_result: dict,
-    execution_results: list[dict[str, Any]],
-) -> WorkflowMessage:
-    """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
-    approval_msg = raw_result.get("message", "This operation requires approval.")
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": bridge,
-            "result": approval_msg,
-            "status": "approval_required",
-        }
-    )
-    logger.info(
-        "[Issue #2622] MCP approval required: tool=%s bridge=%s",
-        tool_name,
-        bridge,
-    )
-    return WorkflowMessage(
-        type="tool_result",
-        content=(
-            f"[{bridge}] **Approval required:** {approval_msg}\n"
-            "Ask the user to confirm, then retry with `approved: true` "
-            "in the arguments."
-        ),
-        metadata={
-            "tool_name": tool_name,
-            "bridge": bridge,
-            "mcp_dispatch": True,
-            "approval_required": True,
-        },
     )
 
 
@@ -1100,8 +972,12 @@ async def _try_mcp_dispatch(
     role: str = "user",
     session_id: str = "",
     max_schema_retries: int = _DEFAULT_SCHEMA_RETRIES,
+    ctx: "LLMIterationContext | None" = None,
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    #18430: a tool FOUND here is resolved against its AI line again, so one that registered after the seam looked
+    can never run unlined.
 
     Issue #4482: Validates arguments against the tool's input_schema before
     dispatch.  On failure the error is returned as a structured WorkflowMessage
@@ -1122,12 +998,13 @@ async def _try_mcp_dispatch(
     from services.mcp_dispatch import get_mcp_dispatcher
 
     dispatcher = get_mcp_dispatcher()
-    if not dispatcher._cache_loaded:
-        await dispatcher.refresh_tool_cache()
+    await dispatcher.ensure_loaded()
 
     tool = dispatcher.find_tool(tool_name)
     if tool is None:
         return None
+    if (held := await enforce_ai_line({**tool_call, "name": tool_name}, ctx, execution_results)) is not None:
+        return held
 
     arguments = tool_call.get("arguments", {})
 
@@ -1142,7 +1019,7 @@ async def _try_mcp_dispatch(
         return cancellation_message
 
     try:
-        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
+        mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role, **caller_identity(ctx, session_id))
         bridge = mcp_result.get("bridge", "unknown")
         success = mcp_result.get("success", False)
         raw_result = mcp_result.get("result", "")
@@ -1154,7 +1031,7 @@ async def _try_mcp_dispatch(
         result_text = str(raw_result)
 
         # Issue #4261: Wire AFTER_TOOL_EXECUTE hook to allow result modification
-        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {})
+        result_text = await _emit_after_tool_execute(tool_name, result_text, session_id, {}, success=bool(success))
 
         execution_results.append(
             {
@@ -1224,6 +1101,13 @@ async def _fetch_pages_concurrent(entries: list[dict], max_pages: int) -> list[d
     """
     capped = entries[:max_pages]
     return list(await asyncio.gather(*(_fetch_single_page(e) for e in capped)))
+
+
+def _wrap_untrusted_search_text(text: str, query: str) -> str:
+    """*text* sanitised and wrapped as untrusted web content for the model (``scrape_url`` does the same)."""
+    from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+    return sanitize_and_wrap_web_content(text, query)
 
 
 def _format_full_search_results(query: str, entries: list[dict]) -> str:
@@ -1321,7 +1205,7 @@ def _format_map_results(site_result) -> str:
     return "".join(lines)
 
 
-class ToolHandlerMixin:
+class ToolHandlerMixin(InterpretationTurnMixin):
     """Mixin for tool and command handling."""
 
     def _init_terminal_tool(self):
@@ -1448,7 +1332,13 @@ class ToolHandlerMixin:
             )
 
     async def _execute_terminal_command(
-        self, session_id: str, command: str, host: str = "main", description: str = ""
+        self,
+        session_id: str,
+        command: str,
+        host: str = "main",
+        description: str = "",
+        force_approval: bool = False,
+        person_approved: bool = False,
     ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
@@ -1458,6 +1348,7 @@ class ToolHandlerMixin:
             command: Command to execute
             host: Target host
             description: Command description
+            force_approval: The AI line held this call: a person decides it (#19951)
 
         Returns:
             Execution result
@@ -1477,7 +1368,11 @@ class ToolHandlerMixin:
                 return session_result
 
         result = await self.terminal_tool.execute_command(
-            conversation_id=session_id, command=command, description=description
+            conversation_id=session_id,
+            command=command,
+            description=description,
+            force_approval=force_approval,
+            person_approved=person_approved,
         )
 
         return result
@@ -1503,11 +1398,7 @@ class ToolHandlerMixin:
                 terminal_session_id,
             )
         except Exception as persist_error:
-            logger.error(
-                "Failed to persist approval request immediately: %s",
-                persist_error,
-                exc_info=True,
-            )
+            logger.error("Failed to persist approval request immediately: %s", persist_error, exc_info=True)
 
     def _check_empty_command_history(self, elapsed_time: float) -> tuple:
         """Handle empty command history case. Issue #620."""
@@ -1568,7 +1459,7 @@ class ToolHandlerMixin:
         if mismatch_result is not None:
             return mismatch_result
 
-        approval_result = last_command.get("result", {})
+        approval_result = approval_result_of(last_command)
         logger.info(
             "Completion detected! Command: %s, Status: %s, Approved by: %s",
             command,
@@ -1597,6 +1488,7 @@ class ToolHandlerMixin:
                 "requires_approval": True,
                 "terminal_session_id": terminal_session_id,
                 "conversation_id": session_id,
+                "command_id": result.get("command_id"),
             },
         )
 
@@ -1629,6 +1521,7 @@ class ToolHandlerMixin:
         command: str,
         max_wait_time: int = 3600,
         poll_interval: float = 0.5,
+        command_id: str | None = None,
     ):
         """Poll for approval status until approved/denied or timeout. Issue #620.
 
@@ -1638,10 +1531,9 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        # #13480: claim interpretation for this turn. The approve path skips its
-        # own interpretation while this is set, so the same command is not
-        # interpreted twice — two LLM calls, two persisted interpretations.
-        await self._claim_interpretation(terminal_session_id, True)
+        # #13480, #21202: register this turn as the interpreter. The worker that runs the command waits for it, so
+        # the result is interpreted once (one LLM call, one persisted message) whichever worker ran it.
+        turn_token = await self._begin_interpretation_turn(terminal_session_id, command_id)
 
         try:
             while elapsed_time < max_wait_time:
@@ -1657,6 +1549,7 @@ class ToolHandlerMixin:
                         session_info, command, elapsed_time, max_wait_time
                     )
                     if should_break:
+                        await self._settle_interpretation(terminal_session_id, command_id, turn_token, result_data)
                         yield (result_data, status_msg)
                         return
                 except Exception as check_error:
@@ -1664,29 +1557,11 @@ class ToolHandlerMixin:
 
             yield (None, None)
         finally:
-            # Load-bearing, and the reason this is a `finally` rather than a line
-            # after the loop: the claim MUST be released on every exit — timeout,
-            # decision, an exception, or the consumer closing this generator
-            # early (GeneratorExit runs finally). A leaked claim means the approve
-            # path keeps skipping while no turn is listening, so a late approval
-            # produces no interpretation at all — silently re-breaking #13479 in
-            # exactly the case it was filed for.
-            await self._claim_interpretation(terminal_session_id, False)
-
-    async def _claim_interpretation(self, terminal_session_id: str, live: bool) -> None:
-        """Mark/unmark this turn as the interpreter for a pending approval (#13480).
-
-        Never raises: failing to claim only costs a duplicate interpretation,
-        and failing to release is already guarded by the approve path treating an
-        absent marker as "interpret". Neither is worth failing the turn over.
-        """
-        service = getattr(self.terminal_tool, "agent_terminal_service", None)
-        if service is None or not hasattr(service, "set_live_turn_interpreting"):
-            return
-        try:
-            await service.set_live_turn_interpreting(terminal_session_id, live)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not %s interpretation claim: %s", "set" if live else "release", exc)
+            # Load-bearing, and the reason this is a `finally`: the token MUST be released on every exit --
+            # timeout, decision, an exception, or the consumer closing this generator early (GeneratorExit runs
+            # finally). A leaked token makes the command's worker wait out its hand-off deadline for a turn
+            # that is no longer listening.
+            await self._end_interpretation_turn(terminal_session_id, command_id, turn_token)
 
     async def _handle_pending_approval(
         self,
@@ -1742,7 +1617,9 @@ class ToolHandlerMixin:
             terminal_session_id,
         )
 
-        async for poll_result in self._poll_for_approval(terminal_session_id, command):
+        async for poll_result in self._poll_for_approval(
+            terminal_session_id, command, command_id=result.get("command_id")
+        ):
             approval_result, status_msg = poll_result
             if approval_result:
                 # Issue #4264: Fire APPROVAL_RECEIVED hook when approval decision is made
@@ -1801,7 +1678,8 @@ class ToolHandlerMixin:
             },
         )
 
-        async for interp_chunk in self._interpret_command_results(
+        async for interp_chunk in self._interpret_unless_elsewhere(
+            approval_result,
             command,
             approval_result.get("stdout", ""),
             approval_result.get("stderr", ""),
@@ -1921,7 +1799,8 @@ class ToolHandlerMixin:
         else:
             error_msg, additional_text = self._handle_approval_failure(command, approval_result)
             yield error_msg
-            yield (None, additional_text)
+            # #19951: the model's next prompt is built from these records, so without one it cannot know.
+            yield (_unsuccessful_approval_record(command, host, approval_result, additional_text), additional_text)
 
     async def _handle_direct_execution(
         self,
@@ -2041,13 +1920,6 @@ class ToolHandlerMixin:
         async for msg in self._collect_workflow_results(workflow_gen, execution_results, additional_response_parts):
             yield msg
 
-    def _extract_command_params(self, tool_call: dict[str, Any]) -> tuple[str, str, str]:
-        """Extract command parameters from tool call dict. Issue #620."""
-        command = tool_call["params"].get("command")
-        host = tool_call["params"].get("host", "main")
-        description = tool_call.get("description", "")
-        return command, host, description
-
     async def _dispatch_command_by_status(
         self,
         status: str,
@@ -2118,7 +1990,7 @@ class ToolHandlerMixin:
         Yields:
             WorkflowMessage items
         """
-        command, host, description = self._extract_command_params(tool_call)
+        command, host, description = command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for execute_command,
@@ -2132,33 +2004,31 @@ class ToolHandlerMixin:
             user_role=role,
         )
         if not should_execute:
-            logger.info(
-                "[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s",
-                command,
-                host,
-            )
+            logger.info("[Issue #4261] Execute command cancelled by BEFORE_TOOL_EXECUTE hook: %s on %s", command, host)
             yield WorkflowMessage(
                 type="error",
                 content=f"Command execution cancelled: {command}",
-                metadata={
-                    "command": command,
-                    "host": host,
-                    "cancelled_by_hook": True,
-                    "reason": "permission_denied",
-                },
+                metadata={"command": command, "host": host, "cancelled_by_hook": True, "reason": "permission_denied"},
             )
             return
 
         try:
             result = await self._execute_terminal_command(
-                session_id=session_id, command=command, host=host, description=description
+                session_id=session_id,
+                command=command,
+                host=host,
+                description=description,
+                force_approval=bool(tool_call.get(COMMAND_FORCE_APPROVAL_KEY)),
+                person_approved=bool(tool_call.get(COMMAND_APPROVED_KEY)),
             )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
             if result.get("status") == "success":
                 stdout = result.get("stdout", "")
-                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
+                stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {}, success=True)
 
+            # The card binds to the session this execution ran in, not the mapping another request can change.
+            terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id, result)
             async for msg in self._dispatch_command_by_status(
                 result.get("status"),
                 session_id,
@@ -2567,8 +2437,10 @@ class ToolHandlerMixin:
                 # with fetch_full mode).
                 results = await self._execute_web_search(query, max_pages, session_id)
 
+            # Search snippets and fetched pages are untrusted web text: wrapped as data, like scrape_url (#21877)
+            results = _wrap_untrusted_search_text(results, query)
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
-            results = await _emit_after_tool_execute("web_search", results, session_id, {})
+            results = await _emit_after_tool_execute("web_search", results, session_id, {}, success=True)
 
             execution_results.append({"tool": "web_search", "status": "success", "output": results})
             yield WorkflowMessage(
@@ -2993,7 +2865,7 @@ class ToolHandlerMixin:
         Orchestrates the two halves above: capture the live DOM snapshot,
         then run the goal-directed LLM sub-extraction over it.
         """
-        from web_fetch.extractors import extract_markdown
+        from web_fetch.profile import IngestProfile, extract_page
 
         goal = (params.get("goal") or "").strip()
         if not goal:
@@ -3003,8 +2875,8 @@ class ToolHandlerMixin:
         if not html_content:
             return "extract_content: no live page content — navigate to a page first."
 
-        _title, markdown = extract_markdown(html_content)
-        return await self._answer_goal_from_markdown(markdown, url, goal)
+        text = extract_page(html_content, IngestProfile.DOCUMENT, base_url=url or "").text
+        return await self._answer_goal_from_markdown(text, url, goal)
 
     async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
@@ -3176,24 +3048,8 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext" | None,
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
-        """Build error message for an unknown tool call (#2305, #2310)."""
-        # GH#11489: derive from the routing SSOT so the hint never drifts.
-        known_tools = sorted({"respond", "delegate"} | _UNIFORM_BUILTIN_TOOLS)
-        if ctx is not None:
-            ctx.consecutive_invalid_tool_calls += 1
-        consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
-        error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
-        logger.warning(
-            "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
-            tool_name,
-            consecutive,
-        )
-        execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
-        return WorkflowMessage(
-            type="error",
-            content=error_msg,
-            metadata={"message_type": "unknown_tool", "tool_name": tool_name},
-        )
+        """Build error message for an unknown tool call (#2305, #2310); see ``unknown_tool_error``."""
+        return unknown_tool_error(tool_name, ctx, execution_results, _UNIFORM_BUILTIN_TOOLS)
 
     # #14495: the six seam enforcers below moved to tool_dispatch_guards.py to
     # bring this file under its file-size ceiling (see that module's docstring
@@ -3266,7 +3122,10 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext" | None,
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage | None:
-        """Resolve the action's AI line (#18430); see ``tool_dispatch_guards.enforce_ai_line``."""
+        """Resolve the action's AI line (#18430); a name registered nowhere gets the unknown_tool error here."""
+        name, builtin = tool_call.get("name", ""), _BUILTIN_TOOL_SCHEMAS.keys() | _UNIFORM_BUILTIN_TOOLS
+        if not await is_registered_tool(name, builtin):
+            return self._build_unknown_tool_error(name, ctx, execution_results)  # explicit: never reaches MCP dispatch
         return await enforce_ai_line(tool_call, ctx, execution_results)
 
     def _enforce_peer_messages(self, ctx: "LLMIterationContext" | None) -> None:
@@ -3475,7 +3334,9 @@ class ToolHandlerMixin:
         """
         # Issue #2513: Check MCP registry before reporting unknown tool.
         # Issue #2629: Forward RBAC role so admin-only tools are enforced.
-        mcp_result = await _try_mcp_dispatch(tool_name, tool_call, execution_results, role=role, session_id=session_id)
+        mcp_result = await _try_mcp_dispatch(
+            tool_name, tool_call, execution_results, role=role, session_id=session_id, ctx=ctx
+        )
         if mcp_result is not None:
             yield mcp_result
             return
@@ -3660,19 +3521,17 @@ class ToolHandlerMixin:
     ):
         """Process all tool calls from LLM response.
 
-        Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
-        Issue #620: Refactored using Extract Method pattern.
         Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
-            WorkflowMessage for each stage of execution
-            Also yields execution_summary at end for Issue #352 continuation loop
+            WorkflowMessage for each stage, then execution_summary (#352)
             Finally yields (break_loop, response_content) tuple if respond tool used
         """
         execution_results = []
         additional_response_parts = []
         break_loop_requested = False
+        held = False
         respond_content = None
 
         # #13821: forward the authenticated role. #2629 wired `role` as far as
@@ -3685,6 +3544,7 @@ class ToolHandlerMixin:
         role = ctx.auth_role if ctx is not None else DEFAULT_AUTH_ROLE
 
         for tool_call in tool_calls:
+            results_before = len(execution_results)
             async for result in self._dispatch_tool_call(
                 tool_call,
                 session_id,
@@ -3700,8 +3560,13 @@ class ToolHandlerMixin:
                     break_loop_requested, respond_content = result
                 else:
                     yield result
+                    # #19951: a held call has no result, so another model call could only guess at one.
+                    held = held or is_held_message(result)
+            stamp_call_fingerprint(execution_results[results_before:], tool_call)  # #19715
+            if held:
+                break
 
         if execution_results:
             yield self._build_execution_summary(execution_results)
 
-        yield (break_loop_requested, respond_content)
+        yield (break_loop_requested or held, respond_content)

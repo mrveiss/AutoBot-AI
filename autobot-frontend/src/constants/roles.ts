@@ -25,12 +25,25 @@ export const ADMIN_ROLES = ['admin', 'superadmin'] as const satisfies readonly R
 export type AdminRole = (typeof ADMIN_ROLES)[number]
 
 /**
- * The roles an administrator may assign in the UI (#14937). The owner kept this to
- * admin/user/readonly: `set_user_role` is guarded by `require_platform_admin`, so
- * offering `superadmin` would let an admin grant a role above their own. The
- * backend's `RoleUpdateRequest` pattern accepts the same three.
+ * The highest administrative role (#19125). Platform-wide actions are gated on it
+ * alone on the backend with `require_role(Role.SUPERADMIN)` -- e.g. revoking the
+ * LLM sign-in token every org may share (#19241).
  */
-export const ASSIGNABLE_ROLES = ['admin', 'user', 'readonly'] as const satisfies readonly Role[]
+export const SUPERADMIN_ROLE = 'superadmin' as const satisfies Role
+
+export function isSuperadminRole(role: string | null | undefined): boolean {
+  return role === SUPERADMIN_ROLE
+}
+
+/**
+ * The roles an administrator may assign in the UI (#14937). `superadmin` is not offered:
+ * `set_user_role` is guarded by `require_platform_admin`, so it would let an admin grant
+ * a role above their own. `admin` is not offered either (#20670): the role route writes
+ * permission rows only and never changes platform admin status, which has its own route,
+ * `PUT /users/{id}/admin`, and its own control. The backend's `RoleUpdateRequest` still
+ * accepts `admin`, as a permission role.
+ */
+export const ASSIGNABLE_ROLES = ['user', 'readonly'] as const satisfies readonly Role[]
 
 /** The role a user record without one is treated as -- the least-privileged named role an account is created with. */
 export const DEFAULT_ROLE: Role = 'user'

@@ -69,9 +69,9 @@ def _repo_claiming_two(tmp_path: Path, occurrences: int) -> Path:
     return root
 
 
-def _run(root: Path, flag: str) -> subprocess.CompletedProcess:
+def _run(root: Path, *flags: str) -> subprocess.CompletedProcess:
     return subprocess.run(  # nosec B603  # fixed argv, no shell
-        ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), flag],
+        ["bash", str(root / "pipeline-scripts" / "detect-hardcoded-values.sh"), *flags],
         capture_output=True,
         text=True,
     )
@@ -117,3 +117,52 @@ def test_the_prune_the_audit_names_lowers_an_under_matched_entry_and_keeps_it(tm
     body = (root / "pipeline-scripts" / "hardcoded_values_baseline.txt").read_text(encoding="utf-8")
     assert [line for line in body.splitlines() if line[:1].isdigit()] == [f"1|{_KEY}"]
     assert _run(root, "--audit-baseline").returncode == 0
+
+
+def _scoped(root: Path, *paths: str) -> subprocess.CompletedProcess:
+    """A pre-push audit (#18808): only *paths* are scanned, only their entries audited."""
+    listing = root / "changed.txt"
+    listing.write_text("".join(f"{p}\n" for p in paths), encoding="utf-8")
+    return _run(root, "--audit-baseline", f"--paths-from={listing}")
+
+
+def test_a_scoped_audit_catches_the_over_claim_in_a_changed_file(tmp_path):
+    result = _scoped(_repo_claiming_two(tmp_path, 1), "autobot-backend/svc.py")
+
+    assert result.returncode == 1
+    assert "matched 1 of 2" in _audit_line(result)
+
+
+def test_a_scoped_audit_ignores_entries_for_files_it_did_not_scan(tmp_path):
+    result = _scoped(_repo_claiming_two(tmp_path, 1), "autobot-backend/other.py")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_scoped_audit_reports_a_deleted_files_entries_as_stale(tmp_path):
+    root = _repo_claiming_two(tmp_path, 2)
+    (root / "autobot-backend" / "svc.py").unlink()
+
+    result = _scoped(root, "autobot-backend/svc.py")
+
+    assert result.returncode == 1
+    assert "matched 0 of 2" in _audit_line(result)
+
+
+def test_only_the_audit_may_be_scoped(tmp_path):
+    """A scoped --json would under-report the verdict; a scoped prune would delete every other entry."""
+    root = _repo_claiming_two(tmp_path, 2)
+    listing = root / "changed.txt"
+    listing.write_text("autobot-backend/svc.py\n", encoding="utf-8")
+
+    for flag in ("--json", "--prune-baseline"):
+        result = _run(root, flag, f"--paths-from={listing}")
+        assert result.returncode == 1 and "needs --audit-baseline" in result.stderr, flag
+
+
+def test_a_scoped_audit_catches_a_new_value_in_a_changed_file(tmp_path):
+    """#19312 review: three occurrences against a baseline of two is a NEW finding, not an over-claim."""
+    result = _scoped(_repo_claiming_two(tmp_path, 3), "autobot-backend/svc.py")
+
+    assert result.returncode == 1
+    assert "not in pipeline-scripts/hardcoded_values_baseline.txt" in result.stdout

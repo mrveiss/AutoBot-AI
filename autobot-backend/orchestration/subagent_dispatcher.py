@@ -66,7 +66,7 @@ Provide an improved, complete result that addresses all gaps.
 
 
 @dataclass
-class SubagentTask:
+class SubagentDispatchTask:
     """Definition of a task for subagent execution."""
 
     task_id: str
@@ -90,11 +90,11 @@ class SubagentDispatcher:
         self.max_parallel = max_parallel
         self.active_subagents: Dict[str, asyncio.Task] = {}
 
-    async def spawn_parallel_tasks(self, tasks: List[SubagentTask]) -> Dict[str, Any]:
+    async def spawn_parallel_tasks(self, tasks: List[SubagentDispatchTask]) -> Dict[str, Any]:
         """Spawn multiple subagents for parallel execution.
 
         Args:
-            tasks: List of SubagentTask objects.
+            tasks: List of SubagentDispatchTask objects.
 
         Returns:
             Dictionary with results keyed by task_id.
@@ -121,7 +121,7 @@ class SubagentDispatcher:
 
         return results
 
-    async def _execute_task(self, task: SubagentTask) -> Any:
+    async def _execute_task(self, task: SubagentDispatchTask) -> Any:
         """Execute a single subagent task, optionally with a reflection pass."""
         try:
             if asyncio.iscoroutinefunction(task.func):
@@ -137,7 +137,7 @@ class SubagentDispatcher:
 
         return result
 
-    async def _reflection_pass(self, task: SubagentTask, result: Any) -> Any:
+    async def _reflection_pass(self, task: SubagentDispatchTask, result: Any) -> Any:
         """Run an optional score-and-revise reflection pass.
 
         Scores the result against the task description. If the score is below

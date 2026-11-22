@@ -96,7 +96,8 @@ def test_the_file_still_has_audit_writes_to_check():
     """Guard the guard: a rename or refactor that stops matching would make
     every assertion below pass against nothing."""
     handlers = _audit_write_handlers()
-    assert len(handlers) >= 13, f"expected the file's audit-write handlers, found {len(handlers)}"
+    # 12 since #20628 folded the OAuth and LDAP success writes into one helper (_audit_sso_login).
+    assert len(handlers) >= 12, f"expected the file's audit-write handlers, found {len(handlers)}"
 
 
 @pytest.mark.parametrize(

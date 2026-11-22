@@ -72,22 +72,23 @@ router = APIRouter(
 )
 
 # ---------------------------------------------------------------------------
-# Rate limiting — per-IP sliding window via shared IPRateLimiter (#7270/#7271)
+# Rate limiting — per-IP sliding window via the canonical RateLimiter (#7270/#7271)
 # ---------------------------------------------------------------------------
 #
 # #7270: pre-fix, this was an in-process dict with the same multi-worker
-# undercount that #6588 fixed for /v1/chat/completions. State is now shared
-# across all uvicorn workers via Redis sorted-set; the in-process fallback
-# is reserved for Redis outages only.
+# undercount that #6588 fixed for /v1/chat/completions. State is shared across
+# all uvicorn workers; LOCAL (per-worker enforcement) is reserved for Redis
+# outages only, so the control never turns off (#18087).
 
 from autobot_shared.proxy_utils import get_client_ip
-from autobot_shared.rate_limit import IPRateLimiter
+from autobot_shared.rate_limiter_window import WindowFailurePolicy, WindowQuota
 
-_a2a_limiter = IPRateLimiter(
-    key_prefix="ratelimit:a2a",
-    limit_env="AUTOBOT_A2A_RATE_LIMIT",
-    default_limit=30,
+_a2a_limiter = WindowQuota.for_scope(
+    "a2a",
+    policy=WindowFailurePolicy.LOCAL,
+    max_requests=30,
     window_seconds=60,
+    limit_env="AUTOBOT_A2A_RATE_LIMIT",
 )
 
 
@@ -314,6 +315,95 @@ async def get_task(task_id: str) -> Dict[str, Any]:
     return _task_response(task)
 
 
+_A2A_TERMINAL_STATES = {"completed", "failed", "cancelled"}
+
+
+async def _close_pubsub(pubsub, channel: str) -> None:
+    """Unsubscribe and close (helper for stream_task_events)."""
+    await pubsub.unsubscribe(channel)
+    await pubsub.close()
+
+
+async def _pubsub_reader(pubsub, queue: asyncio.Queue, task_id: str) -> None:
+    """Feed pub/sub messages into the queue (helper for stream_task_events)."""
+    try:
+        async for msg in pubsub.listen():
+            if msg["type"] == "message":
+                data = msg["data"]
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8")
+                await queue.put(data)
+                try:
+                    if json.loads(data).get("terminal"):
+                        await queue.put(None)  # sentinel — stop the loop
+                        return
+                except Exception:
+                    logger.debug("Could not parse pub/sub payload for task %s", task_id)
+    except Exception as exc:
+        logger.warning("pubsub listener error for task %s: %s", task_id, exc)
+        await queue.put(None)  # unblock the outer loop on Redis failure
+
+
+async def _task_event_generator(task_id: str, manager):
+    """SSE generator body for stream_task_events (helper for stream_task_events)."""
+    from autobot_shared.redis_client import get_async_redis_client
+
+    channel = f"a2a:events:{task_id}"
+
+    redis = await get_async_redis_client(database="main")
+    if redis is None:
+        yield 'data: {"event":"error","message":"Redis unavailable"}\n\n'
+        return
+
+    pubsub = redis.pubsub()
+    # Subscribe BEFORE reading current state so events published in the
+    # gap between subscribe and the snapshot are not lost.
+    await pubsub.subscribe(channel)
+
+    # Yield the current state immediately so the client is never blind.
+    # (Intentional: if a state_change event also arrives via pub/sub in
+    # this window, clients will receive the state twice — that is safe
+    # because state_change events are idempotent.)
+    current = manager.get_task(task_id)
+    if current is None:
+        yield 'data: {"event":"error","message":"Task expired"}\n\n'
+        await _close_pubsub(pubsub, channel)
+        return
+    initial_payload = json.dumps(
+        {
+            "event": "state_change",
+            "state": current.status.state.value,
+            "task_id": task_id,
+        }
+    )
+    yield f"data: {initial_payload}\n\n"
+    if current.status.state.value in _A2A_TERMINAL_STATES:
+        await _close_pubsub(pubsub, channel)
+        return
+
+    # Feed pub/sub messages into an asyncio.Queue so we can apply a
+    # heartbeat timeout without blocking the event loop.
+    queue: asyncio.Queue = asyncio.Queue()
+    reader_task = asyncio.create_task(_pubsub_reader(pubsub, queue, task_id))
+    try:
+        while True:
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=15.0)
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"
+                continue
+            if item is None:
+                break
+            yield f"data: {item}\n\n"
+    finally:
+        reader_task.cancel()
+        try:
+            await reader_task
+        except asyncio.CancelledError:
+            pass
+        await _close_pubsub(pubsub, channel)
+
+
 @router.get(
     "/tasks/{task_id}/stream",
     summary="Stream A2A task events (SSE)",
@@ -347,88 +437,7 @@ async def stream_task_events(task_id: str) -> StreamingResponse:
     if not task:
         raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found")
 
-    async def _event_generator():
-        from autobot_shared.redis_client import get_async_redis_client
-
-        _TERMINAL_STATES = {"completed", "failed", "cancelled"}
-        channel = f"a2a:events:{task_id}"
-
-        redis = await get_async_redis_client(database="main")
-        if redis is None:
-            yield 'data: {"event":"error","message":"Redis unavailable"}\n\n'
-            return
-
-        pubsub = redis.pubsub()
-        # Subscribe BEFORE reading current state so events published in the
-        # gap between subscribe and the snapshot are not lost.
-        await pubsub.subscribe(channel)
-
-        # Yield the current state immediately so the client is never blind.
-        # (Intentional: if a state_change event also arrives via pub/sub in
-        # this window, clients will receive the state twice — that is safe
-        # because state_change events are idempotent.)
-        current = manager.get_task(task_id)
-        if current is None:
-            yield 'data: {"event":"error","message":"Task expired"}\n\n'
-            await pubsub.unsubscribe(channel)
-            await pubsub.close()
-            return
-        initial_payload = json.dumps(
-            {
-                "event": "state_change",
-                "state": current.status.state.value,
-                "task_id": task_id,
-            }
-        )
-        yield f"data: {initial_payload}\n\n"
-        if current.status.state.value in _TERMINAL_STATES:
-            await pubsub.unsubscribe(channel)
-            await pubsub.close()
-            return
-
-        # Feed pub/sub messages into an asyncio.Queue so we can apply a
-        # heartbeat timeout without blocking the event loop.
-        queue: asyncio.Queue = asyncio.Queue()
-
-        async def _reader():
-            try:
-                async for msg in pubsub.listen():
-                    if msg["type"] == "message":
-                        data = msg["data"]
-                        if isinstance(data, bytes):
-                            data = data.decode("utf-8")
-                        await queue.put(data)
-                        try:
-                            if json.loads(data).get("terminal"):
-                                await queue.put(None)  # sentinel — stop the loop
-                                return
-                        except Exception:
-                            logger.debug("Could not parse pub/sub payload for task %s", task_id)
-            except Exception as exc:
-                logger.warning("pubsub listener error for task %s: %s", task_id, exc)
-                await queue.put(None)  # unblock the outer loop on Redis failure
-
-        reader_task = asyncio.create_task(_reader())
-        try:
-            while True:
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
-                except asyncio.TimeoutError:
-                    yield ": heartbeat\n\n"
-                    continue
-                if item is None:
-                    break
-                yield f"data: {item}\n\n"
-        finally:
-            reader_task.cancel()
-            try:
-                await reader_task
-            except asyncio.CancelledError:
-                pass
-            await pubsub.unsubscribe(channel)
-            await pubsub.close()
-
-    return StreamingResponse(_event_generator(), media_type="text/event-stream")
+    return StreamingResponse(_task_event_generator(task_id, manager), media_type="text/event-stream")
 
 
 @router.get(

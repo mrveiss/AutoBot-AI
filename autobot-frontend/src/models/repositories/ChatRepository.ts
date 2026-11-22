@@ -1,8 +1,12 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
+import { HttpError } from '@autobot/ui'
+import { toSessionDate, type ChatListEntry } from './sessionDates'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { clearStoredAuth } from '@/utils/authToken'
+import { storedMessageText } from '@/utils/attachmentNotice'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -180,7 +184,7 @@ export class ChatRepository {
         // Include attachments if provided
         const opts = options as SendMessageOptions
         if (opts.attachments && opts.attachments.length > 0) {
-          metadata.attachments = opts.attachments
+          metadata.attachments = opts.attachments.filter((id) => typeof id === 'string') // server ids only (#20195)
         }
 
         // Merge any explicit metadata
@@ -209,7 +213,7 @@ export class ChatRepository {
 
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
+        throw new HttpError(response.status, errorText)
       }
 
       // Check if response is SSE streaming
@@ -251,7 +255,7 @@ export class ChatRepository {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
       if (!response.body) {
         throw new Error('Streaming response has no readable body')
@@ -317,12 +321,12 @@ export class ChatRepository {
   }
 
   // Get chat sessions (alias for getChatList)
-  async getSessions(): Promise<ChatSession[]> {
+  async getSessions(): Promise<ChatListEntry[]> {
     return this.getChatList()
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  async getChatList(): Promise<ChatSession[]> {
+  async getChatList(): Promise<ChatListEntry[]> {
     try {
       const response = await this.get<{
         sessions?: BackendSessionEntry[]
@@ -334,16 +338,15 @@ export class ChatRepository {
       // Transform backend session format to frontend store format.
       // NOTE: the mapped objects use the store's camelCase/Date shape
       // (createdAt/updatedAt/isActive) rather than the declared `ChatSession`
-      // wire type — a pre-existing discrepancy that was masked while axios typed
-      // `.data` as `any` (#12363 Phase 2). Runtime shape is unchanged.
+      // wire type — masked while axios typed `.data` as `any` (#12363 Phase 2).
       return sessions.map((session: BackendSessionEntry) => ({
         id: session.id || session.chatId,
         title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
         messages: [], // Sessions list doesn't include messages - loaded separately
-        createdAt: new Date(session.createdAt || session.createdTime || Date.now()),
-        updatedAt: new Date(session.updatedAt || session.lastModified || Date.now()),
+        createdAt: toSessionDate(session.createdAt, session.createdTime),
+        updatedAt: toSessionDate(session.updatedAt, session.lastModified),
         isActive: false // Will be set by store when session is selected
-      })) as unknown as ChatSession[]
+      })) as unknown as ChatListEntry[]
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
       return [] // Return empty array on error to prevent app crash
@@ -382,11 +385,10 @@ export class ChatRepository {
         // Backend may save raw types like 'llm_response_chunk' which need mapping
         const rawType = msg.messageType || msg.type || 'message'
         const normalizedType = this.normalizeMessageType(rawType)
-
         const transformed = {
           id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
-          content: msg.text || msg.content || '',
+          content: storedMessageText(msg),
           timestamp: new Date(msg.timestamp || new Date().toISOString()),
           type: normalizedType,
           // CRITICAL FIX: Backend saves approval metadata in rawData, not metadata
@@ -437,7 +439,7 @@ export class ChatRepository {
     if (type.includes('utility')) return 'utility'
     if (type.includes('source')) return 'sources'
     if (type.includes('json')) return 'json'
-    if (type === 'command_approval_request') return 'command_approval_request'
+    if (type === 'command_approval_request' || type === 'human_question') return type // #21022: keep the stall card
     if (type === 'terminal_output' || type === 'terminal_command') return type
 
     // Default to 'message' for unrecognized types
@@ -611,9 +613,7 @@ export class ChatRepository {
         } catch {
           errorBody = await response.text().catch(() => undefined)
         }
-        const error = new Error(
-          `HTTP ${response.status}: ${response.statusText}`,
-        ) as Error & { response?: { status: number; data: unknown } }
+        const error: HttpError & { response?: { status: number; data: unknown } } = new HttpError(response.status, response.statusText)
         error.response = { status: response.status, data: errorBody }
         throw error
       }
@@ -647,8 +647,7 @@ export class ChatRepository {
       !window.location.pathname.includes('/login')
     ) {
       logger.warn('401 Unauthorized — clearing auth and redirecting to login')
-      localStorage.removeItem('autobot_auth')
-      localStorage.removeItem('autobot_user')
+      clearStoredAuth()
       const redirect = encodeURIComponent(window.location.pathname)
       window.location.href = `/login?redirect=${redirect}`
     }

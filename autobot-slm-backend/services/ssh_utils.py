@@ -22,20 +22,21 @@ from typing import Annotated
 
 from pydantic import AfterValidator
 
+from autobot_shared.logging_once import log_once
+
 logger = logging.getLogger(__name__)
 
-# Paths already warned about — warn once per path per process so a persistent
-# permissions misconfiguration degrades with a single actionable line instead
-# of replacing crash spam with log spam (#11793).
-_WARNED_PATHS: set = set()
 
+def _warn_key_unusable(path: str, detail: str) -> None:
+    """Log the not-usable WARNING for *path* at most once per process (#11793).
 
-def _warn_once(path: str, detail: str) -> None:
-    """Log the not-usable WARNING for *path* at most once per process."""
-    if path in _WARNED_PATHS:
-        return
-    _WARNED_PATHS.add(path)
-    logger.warning(
+    Once per path so a persistent permissions misconfiguration degrades with a single actionable
+    line instead of replacing crash spam with log spam.
+    """
+    log_once(
+        logger,
+        logging.WARNING,
+        path,
         "SSH key %s is not usable (%s); falling back to default ssh identity",
         path,
         detail,
@@ -76,6 +77,20 @@ def validate_ssh_host(host: object) -> str:
     raise InvalidSshDestination("ssh host must be an IP address or a hostname (no leading '-', whitespace or '@')")
 
 
+def validate_ssh_password(password: object) -> object:
+    """Return *password* when it encodes as UTF-8; raise otherwise (#18613).
+
+    A lone surrogate (e.g. U+D83D) would be written to the enrollment vars file as an escape
+    Ansible's YAML loader rejects, failing the run late with an opaque scanner error.
+    """
+    if isinstance(password, str):
+        try:
+            password.encode("utf-8")
+        except UnicodeEncodeError:
+            raise InvalidSshDestination("ssh password must be valid UTF-8 (it contains a lone surrogate character)")
+    return password
+
+
 def ssh_destination(user: object, host: object) -> str:
     """The validated ``user@host`` ssh destination; the one place that string is built."""
     return f"{validate_ssh_user(user)}@{validate_ssh_host(host)}"
@@ -103,6 +118,7 @@ def ssh_remote_path(user: object, host: object, path: str) -> str:
 # Pydantic field types: the node create/update/test-connection schemas reject a bad value with 422.
 SshUser = Annotated[str, AfterValidator(validate_ssh_user)]
 SshHost = Annotated[str, AfterValidator(validate_ssh_host)]
+SshPassword = Annotated[str, AfterValidator(validate_ssh_password)]
 
 
 def build_ssh_base_cmd(host: str, user: str, port: int, key) -> list:
@@ -155,7 +171,7 @@ def _ssh_key_usable(key_path) -> bool:
         if os.access(path, os.R_OK):
             return True
     except OSError as exc:  # PermissionError included — EACCES on parent dir
-        _warn_once(path, f"errno {exc.errno}: {exc.strerror or exc}")
+        _warn_key_unusable(path, f"errno {exc.errno}: {exc.strerror or exc}")
         return False
-    _warn_once(path, "exists but is not readable by the SLM process")
+    _warn_key_unusable(path, "exists but is not readable by the SLM process")
     return False

@@ -22,22 +22,9 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-hardcoded-values"
-
-
-def _test_git_env() -> dict[str, str]:
-    """#15273/#15246: env for every git subprocess this suite spawns.
-
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
-    GIT_DIR pointing at the worktree it is pushing (every checkout here is
-    one), and an unscrubbed `git init`/`git add`/`git diff --cached` in a
-    fixture then operates on THAT repository instead of tmp_path's --
-    reproduced: it staged ~20 bogus entries into the real worktree and
-    overwrote two tracked files' index blobs with 1-line test content.
-    """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
 
 
 def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.CompletedProcess:
@@ -46,7 +33,7 @@ def _run_hook_with_staged(tmp_path: Path, files: dict[str, str]) -> subprocess.C
 
     files: relative path -> file content
     """
-    env = _test_git_env()
+    env = isolated_git_env()
     subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, env=env)
     subprocess.run(["git", "config", "user.email", "test@test"], cwd=tmp_path, check=True, env=env)
     subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True, env=env)
@@ -123,7 +110,9 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/ssot_config.py": ("# This file IS the SSOT — IPs allowed\n" 'DEFAULT_REDIS = "172.16.168.23"\n'),
+                "autobot-backend/ssot_config.py": (
+                    "# This file IS the SSOT — IPs allowed\n" 'DEFAULT_REDIS = "172.16.168.23"\n'
+                ),
             },
         )
         assert result.returncode == 0, f"hook should allow ssot_config.py:\n{result.stdout}"
@@ -159,7 +148,9 @@ class TestAllowlistedContexts:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/db.py": ("import os\n" 'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'),
+                "autobot-backend/src/db.py": (
+                    "import os\n" 'host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")\n'
+                ),
             },
         )
         # NOTE: This test documents the CURRENT behavior of the hook —
@@ -208,7 +199,7 @@ class TestRepoTestsSupportModuleExemption:
     siblings -- scoped to the DIRECTORY so production code keeps exactly the
     exemption it had before and no more."""
 
-    _URL = 'http://backend.test:9999'
+    _URL = "http://backend.test:9999"
 
     def test_allows_literal_in_repo_tests_support_module(self, tmp_path: Path) -> None:
         # repo_tests/sdk_request_shared.py (#15265): a non-test-named helper
@@ -264,7 +255,9 @@ class TestWorkflowUrlExemption:
         """#15515: a composite action is a piece of a workflow; its pip index is not deployment config."""
         result = _run_hook_with_staged(
             tmp_path,
-            {"autobot-infrastructure/.github/actions/setup/action.yml": "          --extra-index-url https://download.pytorch.org/whl/cpu\n"},
+            {
+                "autobot-infrastructure/.github/actions/setup/action.yml": "          --extra-index-url https://download.pytorch.org/whl/cpu\n"
+            },
         )
         assert result.returncode == 0, result.stdout
 
@@ -296,7 +289,9 @@ class TestWorkflowUrlExemption:
     def test_still_blocks_an_autobot_ip_in_a_workflow(self, tmp_path: Path) -> None:
         result = _run_hook_with_staged(
             tmp_path,
-            {"autobot-infrastructure/.github/workflows/deploy.yml": "      - run: curl -fsS http://172.16.168.23/health\n"},
+            {
+                "autobot-infrastructure/.github/workflows/deploy.yml": "      - run: curl -fsS http://172.16.168.23/health\n"
+            },
         )
         assert result.returncode != 0
         assert "172.16.168.23" in result.stdout
@@ -563,7 +558,9 @@ class TestHardcodedRoles:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/types.ts": ("export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"),
+                "autobot-backend/src/types.ts": (
+                    "export interface Options {\n" "  role?: 'user' | 'assistant' | 'system'\n" "}\n"
+                ),
             },
         )
         assert result.returncode == 0
@@ -625,7 +622,9 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/q.py": ("def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'),
+                "autobot-backend/src/q.py": (
+                    "def a(docs):\n" '    return len(set(doc.get("category", "general") for doc in docs))\n'
+                ),
             },
         )
         assert result.returncode != 0
@@ -641,7 +640,9 @@ class TestHardcodedCategories:
         # the repo-wide audit: autobot-backend/agents/kb_librarian/librarian.py:50.
         result = _run_hook_with_staged(
             tmp_path,
-            {"autobot-backend/src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"},
+            {
+                "autobot-backend/src/q.py": "def c(tool_info):\n    return f\"- Category: {tool_info.get('category', 'general')}\"\n"
+            },
         )
         assert result.returncode != 0
         assert "general" in result.stdout
@@ -650,7 +651,9 @@ class TestHardcodedCategories:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/q.py": ("from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'),
+                "autobot-backend/src/q.py": (
+                    "from constants import CategoryDefaults\n" 'q = {"category": CategoryDefaults.GENERAL}\n'
+                ),
             },
         )
         assert result.returncode == 0
@@ -739,7 +742,9 @@ class TestHardcodedPaths:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/p.py": ("from autobot_shared.ssot_config import config\n" "BASE = config.path.base_dir\n"),
+                "autobot-backend/src/p.py": (
+                    "from autobot_shared.ssot_config import config\n" "BASE = config.path.base_dir\n"
+                ),
             },
         )
         assert result.returncode == 0
@@ -791,7 +796,9 @@ class TestHardcodedModelNames:
         result = _run_hook_with_staged(
             tmp_path,
             {
-                "autobot-backend/src/llm.py": ("from autobot_shared.ssot_config import config\n" "MODEL = config.llm.default_model\n"),
+                "autobot-backend/src/llm.py": (
+                    "from autobot_shared.ssot_config import config\n" "MODEL = config.llm.default_model\n"
+                ),
             },
         )
         assert result.returncode == 0
@@ -871,9 +878,7 @@ class TestHardcodedTimeouts:
 
 
 def _git(repo, *args):
-    return subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env()
-    )
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 @pytest.mark.skipif(not HOOK_PATH.exists(), reason="hook script missing at expected path")
@@ -900,6 +905,6 @@ class TestFailsClosedOnGitFailure:
         (tmp_path / ".git" / "index").write_text("garbage", encoding="utf-8")
 
         result = subprocess.run(
-            ["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=_test_git_env()
+            ["bash", str(HOOK_PATH)], cwd=tmp_path, capture_output=True, text=True, env=isolated_git_env()
         )
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"

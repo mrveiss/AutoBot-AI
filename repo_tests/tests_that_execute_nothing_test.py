@@ -70,6 +70,8 @@ the reader to fix the sweep rather than to write the zero down.
 
 from __future__ import annotations
 
+import functools
+
 from repo_tests.collected_test_model import (
     REPO_ROOT,
     empty_bodies,
@@ -101,7 +103,9 @@ from repo_tests.collected_test_model import (
 _EMPTY_BODIED: dict[str, tuple[int, int]] = {}
 
 
+@functools.lru_cache(maxsize=1)
 def _empty_by_tree() -> dict[str, list[str]]:
+    """Memoised (#20814): 2 tests read the same sweep."""
     counts: dict[str, list[str]] = {}
     for module in test_modules():
         relative = module.relative_to(REPO_ROOT)

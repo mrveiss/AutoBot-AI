@@ -29,13 +29,13 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.models.role import Role
-
 from ..models.activity import ActorType
 from ..models.role_credential import LLCRoleCredential
 from ..models.secret import LLCSecret
+from ._role_guard import ensure_role_in_company
 from .authz import require_company_admin
 from .base import LLCServiceBase
+from .company_os.errors import CompanyOsError, CompanyOsNotFound
 
 
 def _secret_company_key(company_id: uuid.UUID) -> str:
@@ -62,8 +62,6 @@ class RoleCredentialService(LLCServiceBase):
         actor: Optional[uuid.UUID],
         after: Optional[Dict[str, Any]],
     ) -> None:
-        if not self.activity_log:
-            return
         await self.activity_log.record(
             session=session,
             company_id=str(attachment.company_id),
@@ -77,9 +75,8 @@ class RoleCredentialService(LLCServiceBase):
         )
 
     async def _require_role(self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID) -> None:
-        result = await session.execute(select(Role.id).where(Role.id == role_id, Role.org_id == company_id))
-        if result.scalar_one_or_none() is None:
-            raise ValueError(f"role {role_id} does not exist in company {company_id}")
+        """Delegates to :func:`._role_guard.ensure_role_in_company` (#18557)."""
+        await ensure_role_in_company(session, company_id, role_id)
 
     async def _require_secret(self, session: AsyncSession, company_id: uuid.UUID, secret_id: uuid.UUID) -> None:
         """The secret must exist in this company and not be revoked.
@@ -97,9 +94,9 @@ class RoleCredentialService(LLCServiceBase):
         )
         row = result.first()
         if row is None:
-            raise ValueError(f"secret {secret_id} does not exist in company {company_id}")
+            raise CompanyOsNotFound(f"secret {secret_id} does not exist in company {company_id}")
         if row[0] is not None:
-            raise ValueError(f"secret {secret_id} is revoked and cannot be attached to a role")
+            raise CompanyOsError(f"secret {secret_id} is revoked and cannot be attached to a role")
 
     async def attach(
         self,
@@ -111,14 +108,14 @@ class RoleCredentialService(LLCServiceBase):
         actor_user_id: uuid.UUID,
     ) -> LLCRoleCredential:
         if company_id is None or role_id is None or secret_id is None:
-            raise ValueError("company_id, role_id and secret_id are all required")
+            raise CompanyOsError("company_id, role_id and secret_id are all required")
 
         await require_company_admin(session, company_id, actor_user_id)
         await self._require_role(session, company_id, role_id)
         await self._require_secret(session, company_id, secret_id)
 
         if await self.get(session, company_id, role_id, secret_id) is not None:
-            raise ValueError(f"secret {secret_id} is already attached to role {role_id}")
+            raise CompanyOsError(f"secret {secret_id} is already attached to role {role_id}")
 
         attachment = LLCRoleCredential(company_id=company_id, role_id=role_id, secret_id=secret_id)
         session.add(attachment)
@@ -186,6 +183,23 @@ class RoleCredentialService(LLCServiceBase):
             .order_by(LLCRoleCredential.secret_id)
         )
         return list(result.scalars().all())
+
+    async def active_secrets_for_role(
+        self, session: AsyncSession, company_id: uuid.UUID, role_id: uuid.UUID
+    ) -> List[tuple]:
+        """``(secret_id, name)`` of what :meth:`list_active_for_role` reaches, ordered by id."""
+        result = await session.execute(
+            select(LLCSecret.id, LLCSecret.name)
+            .join(LLCRoleCredential, LLCSecret.id == LLCRoleCredential.secret_id)
+            .where(
+                LLCRoleCredential.company_id == company_id,
+                LLCRoleCredential.role_id == role_id,
+                LLCSecret.company_id == _secret_company_key(company_id),
+                LLCSecret.revoked_at.is_(None),
+            )
+            .order_by(LLCSecret.id)
+        )
+        return [(row[0], row[1]) for row in result.all()]
 
     async def detach(
         self,
