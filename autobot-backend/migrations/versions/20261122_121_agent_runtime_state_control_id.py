@@ -24,15 +24,13 @@ down_revision: Union[str, None] = "20261121_120"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_TABLE = "agent_runtime_state"
-_COLUMN = "control_id"
-
 
 def upgrade() -> None:
-    if has_table(_TABLE) and not has_column(_TABLE, _COLUMN):
-        op.add_column(_TABLE, sa.Column(_COLUMN, sa.Uuid(as_uuid=True), nullable=True))
+    # Literal names: the probe ladder reads the table and column from this call (test_probe_ladder_selfcheck).
+    if has_table("agent_runtime_state") and not has_column("agent_runtime_state", "control_id"):
+        op.add_column("agent_runtime_state", sa.Column("control_id", sa.Uuid(as_uuid=True), nullable=True))
 
 
 def downgrade() -> None:
-    if has_table(_TABLE) and has_column(_TABLE, _COLUMN):
-        op.drop_column(_TABLE, _COLUMN)
+    if has_table("agent_runtime_state") and has_column("agent_runtime_state", "control_id"):
+        op.drop_column("agent_runtime_state", "control_id")
