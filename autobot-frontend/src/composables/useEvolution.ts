@@ -113,7 +113,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
       const data = await wrap(() =>
         ApiClient.post<EvolutionAnalysisResponse>(
           // #20513: the backend mines the selected source's checkout; there is no path to send
-          `${getApiBase()}/evolution/analyze?${new URLSearchParams(withSourceId()).toString()}`,
+          `/api/evolution/analyze?${new URLSearchParams(withSourceId()).toString()}`,
           request,
           { timeout: 120000 }
         )

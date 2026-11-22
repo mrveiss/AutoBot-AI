@@ -21,7 +21,6 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useCodeEvolutionData')
@@ -71,7 +70,7 @@ export function useCodeEvolutionData() {
   // #20513: every evolution route requires its source (the codebase/:sourceId parent); with none, no request is made
   const route = useRoute()
   const sourceId = computed(() => route.params.sourceId as string | undefined)
-  const scoped = (params: Record<string, string> = {}) => new URLSearchParams({ ...params, source_id: sourceId.value ?? '' }).toString()
+  const withSourceId = (url: string) => `${url}${url.includes('?') ? '&' : '?'}source_id=${encodeURIComponent(sourceId.value ?? '')}`
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -84,14 +83,14 @@ export function useCodeEvolutionData() {
     error.value = null
     if (!sourceId.value) return null
     try {
-      const params = scoped({
+      const params = new URLSearchParams({
         start_date: startDate,
         end_date: endDate,
         granularity,
         metrics: metrics.join(','),
       })
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<TimelineResult>(`${getApiBase()}/evolution/timeline?${params}`)
+      return await apiClient.get<TimelineResult>(withSourceId(`/api/evolution/timeline?${params}`))
     } catch (e) {
       logger.error('Failed to load evolution timeline:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -104,7 +103,7 @@ export function useCodeEvolutionData() {
     if (!sourceId.value) return null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<TrendsResult>(`${getApiBase()}/evolution/trends?${scoped({ days })}`)
+      return await apiClient.get<TrendsResult>(withSourceId(`/api/evolution/trends?days=${days}`))
     } catch (e) {
       logger.error('Failed to load evolution trends:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -117,7 +116,7 @@ export function useCodeEvolutionData() {
     if (!sourceId.value) return null
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
-      return await apiClient.get<PatternsResult>(`${getApiBase()}/evolution/patterns?${scoped()}`)
+      return await apiClient.get<PatternsResult>(withSourceId('/api/evolution/patterns'))
     } catch (e) {
       logger.error('Failed to load evolution patterns:', e)
       error.value = e instanceof Error ? e.message : 'Unknown error'
@@ -131,7 +130,7 @@ export function useCodeEvolutionData() {
     try {
       // Issue #552: backend uses /api/evolution/* not /api/analytics/evolution/*
       const response = await fetchWithAuth( // fetchWithAuth retained: binary blob response — exempt from Wave 5 (#6224)
-        `${getApiBase()}/evolution/export?${scoped({ format: 'csv', start_date: startDate, end_date: endDate })}`
+        withSourceId(`/api/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`)
       )
       if (!response.ok) {
         logger.warn('Failed to export evolution data: HTTP', response.status)
