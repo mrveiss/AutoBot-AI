@@ -341,6 +341,8 @@ def test_a_service_sync_target_overrides_the_deploy_one_for_its_own_role_only():
     manifest = _manifest(
         "autobot-db", services=[_svc("pg", slm_roles=["postgres"], sync_target="/data"), _svc("r", slm_roles=["redis"])]
     )
+    # Like the real autobot-database manifest: nothing is rsynced, so the deploy-level target is empty.
+    manifest.deploy.sync, manifest.deploy.sync_target = False, ""
     assert rms.sync_from_manifest("postgres", manifest, False, _PLACEHOLDERS)[1] == "/data"
     assert rms.sync_from_manifest("redis", manifest, False, _PLACEHOLDERS)[1] == ""
 
