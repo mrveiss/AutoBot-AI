@@ -82,21 +82,32 @@ def test_slm_api_proxies_to_the_configured_upstream(target: dict[str, str]) -> N
         assert f"proxy_set_header {header};" in api
 
 
-def test_slm_websocket_location_upgrades_and_precedes_the_generic_block() -> None:
+def test_slm_websocket_location_upgrades_to_its_own_upstream() -> None:
     out = _render(**_SEPARATE)
     ws = _block(out, "location ^~ /slm/api/ws/ ")
     assert "proxy_pass http://autobot_slm_backend/api/ws/;" in ws
     assert 'proxy_set_header Connection "upgrade";' in ws
     assert "proxy_read_timeout 86400;" in ws
-    assert out.index("location ^~ /slm/api/ws/ ") < out.index("location ^~ /slm/api/ ")
 
 
-def test_the_literal_host_and_port_are_not_in_the_template() -> None:
-    text = TEMPLATE.read_text(encoding="utf-8")
-    upstream = _block(text, "upstream autobot_slm_backend")
+def _literal_endpoints(rendered_block: str) -> list[str]:
+    """`proxy_pass` targets that are not the named upstream (an address or a port written in)."""
+    targets = re.findall(r"proxy_pass\s+(\S+);", rendered_block)
+    return [t for t in targets if not re.fullmatch(r"https?://autobot_slm_backend(/[\w/]*)?", t)]
+
+
+@pytest.mark.parametrize("loc", ["location ^~ /slm/api/ws/ ", "location ^~ /slm/api/ "])
+def test_the_rendered_proxy_pass_targets_the_named_upstream(loc: str) -> None:
+    for case in (_SEPARATE, _COLOCATED):
+        assert _literal_endpoints(_block(_render(**case), loc)) == []
+    upstream = _block(TEMPLATE.read_text(encoding="utf-8"), "upstream autobot_slm_backend")
     assert re.search(r"server \{\{ frontend_slm_backend_host \}\}:\{\{ frontend_slm_backend_port \}\}", upstream)
-    for loc in ("location ^~ /slm/api/ws/ ", "location ^~ /slm/api/ "):
-        assert not re.search(r"proxy_pass\s+\S*(\d+\.\d+\.\d+\.\d+|:\d+)", _block(text, loc))
+
+
+def test_the_literal_endpoint_detector_has_a_contrast_pair() -> None:
+    assert _literal_endpoints("proxy_pass http://autobot_slm_backend/api/;") == []
+    assert _literal_endpoints("proxy_pass http://203.0.113.9:8000/api/;") != []
+    assert _literal_endpoints("proxy_pass http://autobot_slm_backend:8000/api/;") != []
 
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -124,7 +135,16 @@ def test_the_port_does_not_resolve_only_through_common() -> None:
     assert isinstance(all_vars["slm_backend_port"], int)
 
 
+def _has_port_literal(text: str) -> bool:
+    """A `slm_backend`/`slm_backend_port` key whose value is a number, bare or quoted."""
+    return bool(re.search(r"""^\s*slm_backend(_port)?:\s*["']?\d+""", text, re.M))
+
+
 def test_slm_backend_port_has_exactly_one_literal_in_ansible() -> None:
     for rel in ("roles/slm_manager/defaults/main.yml", "roles/common/defaults/main.yml"):
-        text = (ANSIBLE / rel).read_text(encoding="utf-8")
-        assert not re.search(r"^\s*slm_backend(_port)?:\s*\d+", text, re.M), rel
+        assert not _has_port_literal((ANSIBLE / rel).read_text(encoding="utf-8")), rel
+
+
+def test_the_port_literal_detector_has_a_contrast_pair() -> None:
+    assert _has_port_literal('slm_backend_port: "8000"\n') and _has_port_literal("slm_backend_port: 8000\n")
+    assert not _has_port_literal('slm_backend_port: "{{ slm_backend_port }}"\n')

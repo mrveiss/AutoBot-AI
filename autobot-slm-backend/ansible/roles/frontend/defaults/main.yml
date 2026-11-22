@@ -61,7 +61,7 @@ frontend_backend_url: ""
 # slm_nginx_tls_port).
 frontend_slm_remote: false
 frontend_slm_backend_remote: "{{ frontend_slm_remote | bool }}"
-frontend_slm_backend_host: "{{ slm_host if (frontend_slm_backend_remote | bool) else '127.0.0.1' }}"
+frontend_slm_backend_host: "{{ slm_host if (frontend_slm_backend_remote | bool) else slm_loopback_ipv4 }}"
 frontend_slm_backend_port: "{{ slm_nginx_tls_port if (frontend_slm_backend_remote | bool) else slm_backend_port }}"
 frontend_slm_backend_protocol: "{{ 'https' if (frontend_slm_backend_remote | bool) else 'http' }}"
 # Upstream path prefix of /slm/api/: stripped to /api/ for uvicorn, kept for the SLM's nginx.

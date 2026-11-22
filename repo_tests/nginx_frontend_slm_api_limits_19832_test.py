@@ -73,7 +73,8 @@ def test_slm_locations_carry_the_slm_body_cap(loc: str) -> None:
 
 def test_the_slm_vhost_and_the_frontend_read_one_body_cap() -> None:
     vhost = VHOST.read_text(encoding="utf-8")
-    assert "client_max_body_size {{ slm_client_max_body_size }};" in vhost
+    active = re.findall(r"^\s*client_max_body_size\s+(.+?);", vhost, re.M)  # a commented-out line does not count
+    assert active and set(active) == {"{{ slm_client_max_body_size }}"}, active
     assert not re.search(r"client_max_body_size\s+10m", vhost), "the SLM cap has a second literal"
     assert yaml.safe_load(GROUP_VARS_ALL.read_text(encoding="utf-8"))["slm_client_max_body_size"] == "10m"
     defaults = yaml.safe_load(DEFAULTS.read_text(encoding="utf-8"))

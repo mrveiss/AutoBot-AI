@@ -21,10 +21,12 @@
     that:
       - slm_trusted_frontend_addrs | length > 0
       - (slm_trusted_frontend_addrs.split(',') | intersect(slm_trusted_proxies.split(','))) | length > 0
+      - "slm_trusted_frontend_addrs.split(',') | reject('match', '^([0-9]{1,3}[.]){3}[0-9]{1,3}$') | reject('search', ':') | list | length == 0"
     fail_msg: >-
       A frontend is deployed (frontend_slm_remote is true or the inventory has a `frontend`
       group) but slm_trusted_proxies has no frontend entry. Set frontend_host or give every
-      `frontend` group host an ansible_host; otherwise the SLM sees all clients as one address.
+      `frontend` group host an ansible_host, and make each one an IP address the SLM sees as the peer
+      (a DNS name is never trusted); otherwise the SLM sees all clients as one address.
     quiet: true
   when: (frontend_slm_remote | default(false) | bool) or (groups['frontend'] | default([]) | length > 0)
   tags: ['slm', 'config']

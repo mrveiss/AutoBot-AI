@@ -29,27 +29,33 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/load_backend_scheme_port.yml
   tags: ['always']
 
-# Only an explicit frontend_slm_remote: true needs the fleet CA; nothing is inferred (#19832).
+# The effective mode and host the template uses (frontend_slm_backend_*), on the nodes that render
+# the site: a co-located host skips the site, so it skips these too (#19832).
 - name: "Frontend | Stat the fleet CA the /slm/api proxy verifies the SLM against (#19832)"
   ansible.builtin.stat:
     path: "{{ frontend_slm_ca_cert }}"
+    follow: true
   register: _frontend_slm_ca_stat
   become: true
-  when: frontend_slm_remote | bool
+  when: (frontend_slm_backend_remote | bool) and not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
+# The host is an nginx `server` address and a `proxy_ssl_name`: an IPv6 literal would render
+# unbracketed (invalid), and anything in 127.0.0.0/8 or `localhost` is this node, not an SLM node.
 - name: "Frontend | Refuse to proxy to a remote SLM without its CA (#19832)"
   ansible.builtin.assert:
     that:
-      - _frontend_slm_ca_stat.stat.exists
-      - slm_host | default('') | length > 0
-      - slm_host | default('') not in ['127.0.0.1', '::1', 'localhost']
+      - _frontend_slm_ca_stat.stat.isreg | default(false)
+      - frontend_slm_backend_host | default('') | length > 0
+      - "frontend_slm_backend_host is not match('^(127\\.|localhost$)')"
+      - "':' not in frontend_slm_backend_host"
     fail_msg: >-
-      frontend_slm_remote is true, so /slm/api is proxied over HTTPS to slm_host with certificate
-      verification. That needs slm_host set to the SLM node (now: "{{ slm_host | default('') }}")
-      and the fleet CA {{ frontend_slm_ca_cert }} present here. Distribute it
+      The /slm/api proxy is remote, so it goes over HTTPS to the SLM node with certificate
+      verification. That needs slm_host set to an IPv4 address or DNS name of the SLM node, not
+      loopback and not an IPv6 literal (now: "{{ frontend_slm_backend_host | default('') }}"), and
+      the fleet CA {{ frontend_slm_ca_cert }} present here as a regular file. Distribute it
       (distribute-tls-certs.yml); verification is never switched off to get past this.
-  when: frontend_slm_remote | bool
+  when: (frontend_slm_backend_remote | bool) and not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Configure nginx"

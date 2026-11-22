@@ -33,7 +33,7 @@ OTHER_NODE = "198.51.100.7"
 
 
 def _env(hostvars: dict | None = None) -> jinja2.Environment:
-    env = jinja2.Environment(undefined=jinja2.Undefined)
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
     env.filters["bool"] = lambda v: v if isinstance(v, bool) else str(v).strip().lower() == "true"
     env.tests["match"] = lambda v, pat: re.match(pat, str(v)) is not None
     hv = hostvars or {}
@@ -52,15 +52,19 @@ def _resolve(defaults: dict, prefix: tuple[str, ...], ctx: dict) -> dict:
                 ctx[key] = raw
                 del pending[key]
                 continue
-            ctx[key] = env.from_string(raw).render(**ctx).strip()
+            try:
+                ctx[key] = env.from_string(raw).render(**ctx).strip()
+            except jinja2.UndefinedError:
+                continue  # a dependency is not resolved yet; retry after the others
             del pending[key]
+    assert not pending, f"unresolved defaults (a dependency is missing from the context): {sorted(pending)}"
     return ctx
 
 
 def _remote(**ctx) -> dict:
     # An inventory value outranks the role default, so it replaces the default here.
     defaults = {**FRONTEND_DEFAULTS, **{k: v for k, v in ctx.items() if k.startswith("frontend_slm_")}}
-    return _resolve(defaults, ("frontend_slm_",), {**GROUP_VARS, **ctx, "hostvars": {}})
+    return _resolve(defaults, ("frontend_slm_", "frontend_tls_cert_dir"), {**GROUP_VARS, **ctx, "hostvars": {}})
 
 
 # Facts ABSENT throughout (Play 2 of update-all-nodes.yml): ansible_facts is empty, and no address,
@@ -84,7 +88,7 @@ def test_unset_means_loopback_whatever_the_addresses_say(ansible_host, slm_host)
     assert FRONTEND_DEFAULTS["frontend_slm_remote"] is False
     assert str(out["frontend_slm_backend_remote"]) == "False"
     assert out["frontend_slm_backend_protocol"] == "http"
-    assert out["frontend_slm_backend_host"] == "127.0.0.1"
+    assert out["frontend_slm_backend_host"] == GROUP_VARS["slm_loopback_ipv4"]
     assert out["frontend_slm_upstream_prefix"] == "/api/"
 
 
@@ -122,7 +126,8 @@ def test_nothing_is_inferred_and_only_explicit_remote_can_fail_the_update() -> N
     by_name = {t["name"]: t for t in tasks if "name" in t}
     for needle in ("Stat the fleet CA", "Refuse to proxy to a remote SLM"):
         task = next(t for n, t in by_name.items() if needle in n)
-        assert task["when"] == "frontend_slm_remote | bool"
+        assert "frontend_slm_backend_remote | bool" in task["when"], "the effective mode, as the template reads it"
+        assert "slm_colocated_frontend" in task["when"], "a co-located host skips the site, so its preflight"
     assert_task = next(t for n, t in by_name.items() if "Refuse to proxy to a remote SLM" in n)
     assert "fleet CA" in assert_task["ansible.builtin.assert"]["fail_msg"]
 
@@ -157,3 +162,35 @@ def test_the_backend_unit_sets_the_variable_from_the_role_default() -> None:
     assert 'Environment="SLM_TRUSTED_PROXIES={{ slm_trusted_proxies }}"' in unit
     env_file_line = unit.index("EnvironmentFile=-{{ slm_credentials_dir }}")
     assert unit.index("SLM_TRUSTED_PROXIES") < env_file_line
+
+
+def _preflight_holds(host: str, ca: dict) -> bool:
+    """Evaluate the CA assertion's `that` list the way Ansible would, for one host and CA stat result."""
+    tasks = yaml.safe_load((FRONTEND / "tasks" / "code_only.yml").read_text(encoding="utf-8"))
+    task = next(t for t in tasks if "Refuse to proxy to a remote SLM" in t.get("name", ""))
+    env = _env()
+    ctx = {"frontend_slm_backend_host": host, "_frontend_slm_ca_stat": {"stat": ca}}
+    return all(env.compile_expression(cond)(**ctx) for cond in task["ansible.builtin.assert"]["that"])
+
+
+@pytest.mark.parametrize(
+    ("host", "ca", "ok"),
+    [
+        (OTHER_NODE, {"exists": True, "isreg": True}, True),
+        ("slm.example.test", {"exists": True, "isreg": True}, True),
+        (OTHER_NODE, {"exists": True, "isreg": False}, False),  # a dangling link or a directory
+        (OTHER_NODE, {"exists": False}, False),
+        ("127.0.0.2", {"exists": True, "isreg": True}, False),  # loopback range, not just 127.0.0.1
+        ("localhost", {"exists": True, "isreg": True}, False),
+        ("2001:db8::7", {"exists": True, "isreg": True}, False),  # unbracketed in `server` and proxy_ssl_name
+        ("", {"exists": True, "isreg": True}, False),
+    ],
+)
+def test_the_remote_preflight_checks_the_effective_host_and_a_regular_ca_file(host, ca, ok) -> None:
+    assert _preflight_holds(host, ca) is ok
+
+
+def test_the_ca_stat_follows_symlinks() -> None:
+    tasks = yaml.safe_load((FRONTEND / "tasks" / "code_only.yml").read_text(encoding="utf-8"))
+    stat = next(t for t in tasks if "Stat the fleet CA" in t.get("name", ""))
+    assert stat["ansible.builtin.stat"]["follow"] is True

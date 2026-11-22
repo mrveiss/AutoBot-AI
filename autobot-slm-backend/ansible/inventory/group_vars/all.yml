@@ -46,6 +46,9 @@ slm_backend_port: 8000
 slm_nginx_tls_port: 443
 # The port a browser assumes for https:// (the port-80 redirect omits it; #19832).
 slm_https_implicit_port: 443
+# Loopback addresses, named once: the trusted-proxy list and the frontend's same-machine upstream read these.
+slm_loopback_ipv4: "127.0.0.1"
+slm_loopback_ipv6: "::1"
 
 # Largest request body the SLM accepts at its edge: the slm_manager vhost's server-level cap and
 # the frontend site's /slm/api/ locations both read it, so a large SLM upload sees the same limit
@@ -610,7 +613,7 @@ slm_trusted_frontend_addrs: >-
       + (groups['frontend'] | default([]) | map('extract', hostvars, 'ansible_host') | select('defined') | list))
      | reject('equalto', '') | unique | join(',') }}
 slm_trusted_proxies: >-
-  {{ (['127.0.0.1', '::1', slm_host | default(''), ansible_host | default('')] + slm_trusted_frontend_addrs.split(','))
+  {{ ([slm_loopback_ipv4, slm_loopback_ipv6, slm_host | default(''), ansible_host | default('')] + slm_trusted_frontend_addrs.split(','))
      | reject('equalto', '') | unique | join(',') }}
 
 # ==========================================

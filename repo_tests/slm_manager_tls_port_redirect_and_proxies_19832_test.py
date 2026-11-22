@@ -11,22 +11,42 @@ as Ansible would), and nginx is not run: assertions are on rendered text and par
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import jinja2
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 ROLE = ANSIBLE / "roles" / "slm_manager"
 VHOST = ROLE / "templates" / "autobot-slm.conf.j2"
 TASKS = ROLE / "tasks" / "main.yml"
 GROUP_VARS = ANSIBLE / "inventory" / "group_vars" / "all.yml"
+_ROLE_REL = "autobot-slm-backend/ansible/roles/slm_manager"
+
+
+def _scanned(root: Path) -> list[Path]:
+    """The slm_manager task files and the SLM vhost: where a literal TLS port must not appear."""
+    role = root / _ROLE_REL
+    return (
+        [*sorted((role / "tasks").glob("*.yml")), role / "templates" / "autobot-slm.conf.j2"] if role.is_dir() else []
+    )
+
+
+REACH = declare(
+    "slm-manager-no-literal-tls-port-19832",
+    discover=_scanned,
+    floor=9,
+    roots=(_ROLE_REL,),
+    what="slm_manager task files plus the SLM vhost",
+)
 
 
 def test_no_literal_tls_port_in_slm_manager_tasks_or_vhost() -> None:
     """#19832: 443 appears nowhere in the role's tasks or the SLM vhost; slm_nginx_tls_port is the name."""
-    for path in (*sorted((ROLE / "tasks").glob("*.yml")), VHOST):
+    for path in REACH.examined(repo_root()):
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.lstrip().startswith("#"):
                 continue
@@ -65,6 +85,8 @@ def test_port_80_redirect_carries_a_non_default_tls_port(port: int) -> None:
 
 def _proxy_env() -> jinja2.Environment:
     env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+    env.tests["match"] = lambda v, pat: re.match(pat, str(v)) is not None
+    env.tests["search"] = lambda v, pat: re.search(pat, str(v)) is not None
     env.filters["extract"] = lambda key, mapping, attr: mapping[key].get(attr, jinja2.Undefined())
     return env
 
@@ -81,6 +103,8 @@ def test_trusted_proxies_carry_the_frontend_group_and_frontend_host() -> None:
         "slm_host": "192.0.2.10",
         "ansible_host": "192.0.2.10",
         "frontend_host": "192.0.2.60",
+        "slm_loopback_ipv4": "127.0.0.1",
+        "slm_loopback_ipv6": "::1",
     }
     ctx["slm_trusted_frontend_addrs"] = _resolve("slm_trusted_frontend_addrs", ctx)
     got = _resolve("slm_trusted_proxies", ctx).split(",")
@@ -113,6 +137,7 @@ def test_the_assert_passes_with_a_frontend_entry_and_fails_without_one() -> None
     assert _holds(task, ["192.0.2.50"], "127.0.0.1,192.0.2.10,192.0.2.50")
     assert not _holds(task, [], "127.0.0.1,192.0.2.10")
     assert not _holds(task, ["192.0.2.50"], "127.0.0.1,192.0.2.10")
+    assert not _holds(task, ["fe.example.test"], "127.0.0.1,fe.example.test"), "a DNS name is never trusted"
 
 
 def test_trusted_proxies_derive_from_the_frontend_address_list() -> None:

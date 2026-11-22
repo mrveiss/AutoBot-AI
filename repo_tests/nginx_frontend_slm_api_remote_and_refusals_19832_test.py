@@ -188,3 +188,48 @@ def test_the_internal_slm_api_is_denied_at_the_edge() -> None:
     out = _render("192.0.2.10")
     assert "return 404;" in _block(out, "location ^~ /slm/api/internal/ ")
     assert out.index("location ^~ /slm/api/internal/ ") < out.index("location ^~ /slm/api/ {")
+
+
+def _effective_location(out: str, path: str) -> str:
+    """The location nginx picks for `path`: exact, else the longest ^~ prefix, else the first regex, else the longest prefix."""
+    locs = re.findall(r"^\s*location\s+(=|\^~|~\*|~)?\s*(\S+)\s+\{", out, re.M)
+    exact = [f"= {p}" for m, p in locs if m == "=" and p == path]
+    if exact:
+        return exact[0]
+    prefixes = [(m, p) for m, p in locs if m in ("", "^~") and path.startswith(p)]
+    best = max(prefixes, key=lambda mp: len(mp[1]), default=None)
+    if best and best[0] == "^~":
+        return f"^~ {best[1]}"
+    for m, p in locs:
+        if m in ("~", "~*") and re.search(p, path, re.I if m == "~*" else 0):
+            return f"{m} {p}"
+    return f"{best[0]} {best[1]}".strip() if best else ""
+
+
+@pytest.mark.parametrize(
+    "path", [f"/slm/api/{p}" for p in REFUSED] + ["/slm/api/health/report.html", "/slm/api/health/x.js"]
+)
+def test_every_refused_route_is_handled_by_a_refusal_not_a_regex_or_the_proxy(path: str) -> None:
+    out = _render("192.0.2.10")
+    chosen = _effective_location(out, path)
+    assert chosen.startswith(("= /slm/api/", "^~ /slm/api/")) and chosen not in (
+        "^~ /slm/api/",
+        "^~ /slm/api/ws/",
+    ), chosen
+    assert "return 403;" in _block(out, f"location {chosen.replace('= ', '= ', 1)} ")
+
+
+@pytest.mark.parametrize("path", ["/slm/api/nodes/logo.png", "/slm/api/export/report.html", "/slm/api/files/app.js"])
+def test_a_proxied_slm_route_ending_in_an_asset_suffix_is_not_shadowed_by_a_static_regex(path: str) -> None:
+    assert _effective_location(_render("192.0.2.10"), path) == "^~ /slm/api/"
+
+
+def test_the_ws_prefix_beats_the_generic_prefix_and_the_static_regexes() -> None:
+    assert _effective_location(_render("192.0.2.10"), "/slm/api/ws/x.js") == "^~ /slm/api/ws/"
+
+
+def test_the_effective_location_detector_has_a_contrast_pair() -> None:
+    shadowed = "location ~ \\.html$ {\n}\nlocation /slm/api/ {\n}\n"
+    assert _effective_location(shadowed, "/slm/api/health/report.html").startswith("~")
+    protected = "location ~ \\.html$ {\n}\nlocation ^~ /slm/api/ {\n}\n"
+    assert _effective_location(protected, "/slm/api/health/report.html") == "^~ /slm/api/"
