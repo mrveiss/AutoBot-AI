@@ -16,8 +16,8 @@ edit to one ``manifest.yml`` is the only place those facts have to change.
 Phase 1 (#16025) derived the identifier, units, health and ports. Phase 2 derives ``source_paths`` and
 ``target_path`` from ``deploy.source`` / ``deploy.sync`` / ``deploy.sync_target`` (and a service's own
 ``sync_target``), for every role a manifest resolves to. ``sync_target`` is what the code-sync rsyncs INTO, which
-is not the manifest's ``destination`` (the install directory); the two disagree for several roles, and that
-discrepancy is tracked separately rather than settled here -- the fields hold exactly what the registry did.
+equals the manifest's ``destination`` (the install directory the unit runs from, #21974), except the service-level
+``sync_target`` of a data directory the role detector probes. A test pins the two together.
 Since #16025 AC1 the registry no longer restates the derived units, health port or health path: a manifest-backed role
 carries none of them in ``role_registry.py`` (only a role no manifest resolves to, or slm-frontend's ``nginx``
 fallback, keeps a literal unit). NOT derived, and still declared only in ``role_registry.py``:

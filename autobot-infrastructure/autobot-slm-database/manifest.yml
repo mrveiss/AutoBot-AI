@@ -7,7 +7,7 @@ deploy:
   source: autobot-slm-database/
   destination: /opt/autobot/autobot-slm-database/
   sync: false   # #16025: provisioned, no repo code of its own to rsync
-  sync_target: ""   # #16025: what role_registry rsyncs INTO (not `destination`)
+  sync_target: ""   # #16025: what role_registry rsyncs INTO; nothing is synced (`sync: false`)
   shared: false
   infrastructure: true
 

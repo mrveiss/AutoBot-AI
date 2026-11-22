@@ -84,6 +84,7 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.node_events import create_node_event, enrollment_details
 from services.reconciler import reconciler_service
+from services.role_removal_dir import role_removal_path
 from services.ssh_utils import build_ssh_base_cmd
 from services.temp_inventory import write_linked_inventory
 
@@ -1139,7 +1140,8 @@ async def remove_role_from_node(
         )
 
     # Look up the systemd service name and target path from Role table
-    service_name, target_path = await _get_role_service_and_path(db, role_name)
+    service_name = await _get_role_service(db, role_name)
+    target_path = await role_removal_path(db, node_id, role_name)  # #22030: own install dir, not the sync target
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
@@ -1224,13 +1226,10 @@ async def mark_dependency_for_removal(
     return {"status": "marked_for_removal", "dependency": dep_name}
 
 
-async def _get_role_service_and_path(db: AsyncSession, role_name: str) -> tuple[str | None, str | None]:
-    """Look up the systemd service name and target path for a role (first unit, #16025)."""
-    result = await db.execute(select(Role.systemd_service, Role.target_path).where(Role.name == role_name))
-    row = result.one_or_none()
-    if row is None:
-        return None, None
-    return (row[0][0] if row[0] else None), row[1]
+async def _get_role_service(db: AsyncSession, role_name: str) -> str | None:
+    """The role's first systemd unit (#16025); its directory comes from ``role_removal_path`` (#22030)."""
+    units = (await db.execute(select(Role.systemd_service).where(Role.name == role_name))).scalar_one_or_none()
+    return units[0] if units else None
 
 
 async def _run_role_removal(

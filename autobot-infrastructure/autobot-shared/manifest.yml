@@ -7,7 +7,7 @@ deploy_to_all: true
 deploy:
   source: autobot_shared/
   destination: /opt/autobot/autobot_shared/
-  sync_target: "{base_dir}/autobot_shared"   # #16025: what role_registry rsyncs INTO (not `destination`)
+  sync_target: "{base_dir}/autobot_shared"   # #16025, #21974: what role_registry rsyncs INTO; equals `destination`
   shared: false           # IS the shared component — no recursion
   infrastructure: false
 
